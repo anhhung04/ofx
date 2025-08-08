@@ -1,6 +1,8 @@
+import logging
 from typing import Type
 from typer import Exit
-from ofx.utils.log import logger
+
+logger = logging.getLogger("ofx")
 
 
 class BaseCommandHandler:
@@ -21,5 +23,5 @@ async def command_handler(HandlerClass: Type, *args, **kwargs):
         handler = HandlerClass(*args, **kwargs)
         await handler.run()
     except Exception as e:
-        logger.error(f"Error running command: {e}")
+        logger.error(e)
         raise Exit(code=1)
