@@ -16,7 +16,7 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
 )
-from jinja2 import Environment
+from jinja2 import Template
 from typing import Optional, Dict, Any
 from asyncstdlib import zip_longest
 
@@ -207,8 +207,7 @@ class WorkflowRunner(BaseRunner):
                 raise ValueError(f"Unsupported input type: {type}")
 
     def _resolve_template(self, string: str, vars: Dict[str, Any] = {}) -> str:
-        env = Environment(autoescape=True)
-        tmp = env.from_string(string)
+        tmp = Template(str(string))
         vars.update({"jobs": {**self._outputs, **self._workflow.jobs}})
         vars.update({"inputs": self._inputs})
         vars.update({"env": self._envs})

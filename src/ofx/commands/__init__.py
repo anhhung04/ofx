@@ -1,8 +1,9 @@
 import typer
 
-from ofx.commands import flow
 from ofx.settings import settings, BANNER
 from ofx.utils.log import reload_logging_config
+
+from ofx.commands import flow, dump
 
 app = typer.Typer()
 
@@ -24,3 +25,4 @@ def main_callback(
 
 
 app.add_typer(flow.app, name=flow.NAME, help=flow.HELP)
+app.add_typer(dump.app, name=dump.NAME, help=dump.HELP)
