@@ -1,6 +1,7 @@
+import re
+
 from pydantic import BaseModel, Field, model_validator
 from typing import Optional, Union, List, Dict, Any, Literal
-from typing_extensions import Self
 from ofx.models.job import Job
 from ofx.models import DefaultConfig
 
@@ -63,3 +64,13 @@ class Workflow(BaseModel):
         None, description="Default configuration for the workflow"
     )
     jobs: Dict[str, Job] = Field(..., description="List of jobs in the workflow")
+
+    @model_validator(mode="after")
+    def check_jobid_pattern(self):
+        """
+        Ensure that the job ID pattern is valid.
+        """
+        for job_id in self.jobs.keys():
+            if not re.match(r"^[a-zA-Z0-9_-]+$", job_id):
+                raise ValueError(f"Job {job_id} does not have a valid pattern defined.")
+        return self

@@ -2,11 +2,12 @@ import git
 import tempfile
 import json
 
+from collections import deque
 from enum import Enum
 from pathlib import Path
 from urllib.parse import urlparse
 
-from typing import Optional, Dict, Set
+from typing import Optional, Dict, Set, Tuple, List
 
 
 def is_remote_path(path: str) -> bool:
@@ -39,6 +40,82 @@ def clone_remote_repo(path: str) -> Optional[Path]:
         return Path(tmp_dir) / repo_name
     except Exception:
         return None
+
+
+def load_secrets(secrets_dir: Path) -> Dict[str, str]:
+    """
+    Load secrets from a YAML file in the specified directory.
+
+    Args:
+        secrets_dir (Path): The directory where the secrets file is located.
+
+    Returns:
+        Dict[str, str]: A dictionary containing the loaded secrets.
+    """
+    secrets = {}
+    for secret_file in secrets_dir.glob("*"):
+        content = secret_file.read_text()
+        try:
+            content = json.loads(content)
+        except:
+            pass
+        secrets[secret_file.name] = content
+    return secrets
+
+
+# kahn's algorithm
+def find_parallel_schedule(
+    jobs: List[str], dependencies: List[Tuple[str, str]]
+) -> List[Set[str]]:
+    """
+    Groups jobs into stages that can be run in parallel.
+
+    Returns:
+        A list of sets, where each set contains jobs that can be run concurrently.
+    """
+    # Step 1 & 2: Build graph and in-degrees (same as before)
+    graph: Dict[str, List[str]] = {job: [] for job in jobs}
+    in_degree: Dict[str, int] = {job: 0 for job in jobs}
+
+    for prereq, job in dependencies:
+        # Ensure dependencies are valid jobs
+        if prereq not in graph or job not in graph:
+            continue
+        graph[prereq].append(job)
+        in_degree[job] += 1
+
+    # Step 3: Initialize the queue
+    queue = deque([job for job in jobs if in_degree[job] == 0])
+
+    parallel_schedule = []
+    job_count = 0
+
+    # Step 4: Process jobs in stages
+    while queue:
+        # All jobs currently in the queue can be run in parallel
+        stage_size = len(queue)
+        current_stage: Set[str] = set()
+
+        for _ in range(stage_size):
+            current_job = queue.popleft()
+            current_stage.add(current_job)
+            job_count += 1
+
+            # Update neighbors
+            for next_job in graph[current_job]:
+                in_degree[next_job] -= 1
+                if in_degree[next_job] == 0:
+                    queue.append(next_job)
+
+        parallel_schedule.append(current_stage)
+
+    # Step 5: Check for cycles
+    if job_count != len(jobs):
+        raise ValueError(
+            "A circular dependency was detected. Cannot create a valid schedule."
+        )
+
+    return parallel_schedule
 
 
 # Generic singleton class

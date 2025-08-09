@@ -58,7 +58,7 @@ class JobRunner(BaseRunner):
                 yield {
                     "step": step.name,
                     "id": step_id,
-                    "output": output,
+                    "outputs": output,
                     "status": "success" if self._success else "failed",
                     "run_type": run_type,
                 }
@@ -88,6 +88,7 @@ class JobRunner(BaseRunner):
     async def _handle_command(self, step: Step):
         shell = step.shell or "/bin/bash"
         script = step.run.strip()
+        script = self._workflow_runner._resolve_template(script)
         args = [shell, "-c", script]
         try:
             output = subprocess.run(
@@ -117,6 +118,7 @@ class JobRunner(BaseRunner):
         script = step.script.strip()
         if re.match(r"\w+_.*\.py", script):
             script = open(Path(step.working_directory) / script).read().strip()
+        script = self._workflow_runner._resolve_template(script)
         python_executable = sys.executable
         enc_script = base64.b64encode(compress(script.encode(), 9)).decode()
         args = [

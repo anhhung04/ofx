@@ -6,7 +6,7 @@ from pydantic_settings import SettingsConfigDict
 
 from ofx.utils.log import reload_logging_config
 
-from pydantic import Field
+from pydantic import Field, BaseModel
 
 BASE_CONFIG_DIR = Path.home() / ".config" / "ofx"
 BASE_DATA_DIR = Path.home() / ".local" / "share" / "ofx"
@@ -35,6 +35,10 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(SECRETS_DIR, exist_ok=True)
 
 
+class SecretConfig(BaseModel):
+    pass
+
+
 class Settings(YamlBaseSettings):
     """
     Application settings for OFX.
@@ -43,6 +47,13 @@ class Settings(YamlBaseSettings):
     app_name: str = "Offensive Flow Executor"
     app_version: str = "0.1.0"
     app_branding: str = "ofx"
+    model_config = SettingsConfigDict(
+        yaml_file=CONFIG_FILE.absolute(),
+        secrets_dir=SECRETS_DIR.absolute(),
+        env_prefix=f"{app_branding.upper()}_",
+        env_file=".env",
+    )
+
     debug: bool = Field(default=False, description="Enable debug mode")
     grepable: bool = Field(
         default=False, description="Disable rich/color output for grep-friendly logs"
@@ -54,13 +65,6 @@ class Settings(YamlBaseSettings):
     timeout: int = Field(
         default=24 * 60 * 60,
         description="Timeout for running flows in seconds",
-    )
-
-    model_config = SettingsConfigDict(
-        yaml_file=CONFIG_FILE.absolute(),
-        secrets_dir=os.getenv("OFX_SECRETS", SECRETS_DIR.absolute()),
-        env_prefix=f"{app_branding.upper()}_",
-        env_file=".env",
     )
 
 

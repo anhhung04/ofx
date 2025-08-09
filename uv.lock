@@ -38,6 +38,15 @@ wheels = [
 ]
 
 [[package]]
+name = "asyncstdlib"
+version = "3.13.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/e1/72e388631c85233a2fd890d024fc20a8a9961dbba8614d78266636218f1f/asyncstdlib-3.13.1.tar.gz", hash = "sha256:f47564b9a3566f8f9172631d88c75fe074b0ce2127963b7265d310df9aeed03a", size = 49752, upload-time = "2025-03-09T07:52:51.587Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b9/4a/c86c045bc7bb0244044935ba80c83998f1fdee4f4cef64c6b078e043b0e6/asyncstdlib-3.13.1-py3-none-any.whl", hash = "sha256:a64da68176af1da8c699026cad98f70b184f82b4cb39739e0b9701a2a7541cf9", size = 43993, upload-time = "2025-03-09T07:52:50.108Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2025.8.3"
 source = { registry = "https://pypi.org/simple" }
@@ -223,6 +232,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "async-typer" },
+    { name = "asyncstdlib" },
     { name = "filelock" },
     { name = "gitpython" },
     { name = "httpx" },
@@ -236,6 +246,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "async-typer", specifier = ">=0.1.9" },
+    { name = "asyncstdlib", specifier = ">=3.13.1" },
     { name = "filelock", specifier = ">=3.18.0" },
     { name = "gitpython", specifier = ">=3.1.45" },
     { name = "httpx", specifier = ">=0.28.1" },

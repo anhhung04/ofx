@@ -2,9 +2,11 @@ import os
 import uuid
 import logging
 
-from ofx.runner.base import BaseRunner, RunnerStatus
+from ofx.runner.base import BaseRunner
 from ofx.runner.job import JobRunner
 from ofx.models.workflow import Workflow
+from ofx.settings import SECRETS_DIR
+from ofx.utils.misc import load_secrets, find_parallel_schedule
 
 from pathlib import Path
 from rich.progress import (
@@ -16,6 +18,8 @@ from rich.progress import (
 )
 from jinja2 import Environment
 from typing import Optional, Dict, Any
+from asyncstdlib import zip_longest
+
 
 logger = logging.getLogger("ofx")
 
@@ -34,13 +38,17 @@ class WorkflowRunner(BaseRunner):
         inputs: Dict[str, Any] = {},
         output: Optional[str] = None,
         is_reused: bool = False,
+        secrets: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(workflow.name)
         self._id = str(uuid.uuid4())
         self._workflow = workflow
         self._is_reused = is_reused
         self._inputs = inputs
-        self._output_path = Path(output) if output else None
+        self._output_path = Path(output) if output else Path.cwd() / "ofx_out"
+        self._default_secrets = load_secrets(SECRETS_DIR)
+        if secrets:
+            self._default_secrets.update(secrets)
         self._do_init()
 
     async def _do_run(self) -> Dict[str, Any]:
@@ -54,15 +62,13 @@ class WorkflowRunner(BaseRunner):
             TaskProgressColumn(),
             transient=self._is_reused,
         ) as progress:
-            self._status = RunnerStatus.RUNNING
             task_id = progress.add_task(
                 description=f"Preparing to run workflow '{self._workflow.name}'",
             )
-
-            total_steps = sum(len(j.steps) for j in self._workflow.jobs.values())
+            total_steps = self._planning_jobs()
             progress.update(
                 task_id,
-                description=f"Running {'sub' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]'",
+                description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]'",
                 total=total_steps,
             )
 
@@ -74,37 +80,69 @@ class WorkflowRunner(BaseRunner):
                         description=f"Workflow '[bold]{self._workflow.name}[/bold]' completed successfully.",
                     )
 
+    def _planning_jobs(self) -> int:
+        jobs = list(self._workflow.jobs.keys())
+        deps = []
+        for j_id, j in self._workflow.jobs.items():
+            if j.needs:
+                if isinstance(j.needs, str):
+                    j.needs = [j.needs]
+                for dep in j.needs:
+                    if dep not in jobs:
+                        raise ValueError(
+                            f"Job '{j.name}' depends on '{dep}', which is not defined in the workflow."
+                        )
+                    deps.append((dep, j_id))
+        self._schedule = find_parallel_schedule(jobs, deps)
+        total_steps = 0
+        for stage in self._schedule:
+            max_step = max(
+                [len(self._workflow.jobs[job_id].steps) for job_id in stage], default=0
+            )
+            total_steps += max_step
+        logger.debug(
+            f"Scheduled workflow '{self._workflow.name}' with stages: {self._schedule}"
+        )
+        return total_steps
+
     async def _update_progress(self):
         """Process the workflow steps and update progress."""
-        for job_id in self._workflow.jobs:
-            job = self._workflow.jobs[job_id]
-            job_runner = JobRunner(job)
-            job_runner.attach_manager(self._manager)
-            job_runner.attach_workflow(self)
-            self._outputs[job_id] = {}
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                transient=True,
-            ) as progress:
-                task_id = progress.add_task(
-                    description=f"Running job '{job.name}'",
-                    total=len(job.steps),
-                )
-                async for step_output in job_runner.run():
-                    if not self._outputs[job_id]:
-                        self._outputs[job_id] = []
-                    else:
-                        self._outputs[job_id].insert(step_output["id"], step_output)
-                    progress.advance(task_id)
-                    if progress.finished:
-                        progress.update(
-                            task_id,
-                            description=f"Job '[bold]{job.name}[/bold]' of flow '[bold]{self._workflow.name}[/bold]' completed successfully.",
-                        )
-                    yield True
+        for stage in self._schedule:
+            logger.debug(f"Running stage with jobs: {stage}")
+            async for _ in zip_longest(
+                *[self._run_job(job_id) for job_id in stage], fillvalue=None
+            ):
+                yield True
+
+    async def _run_job(self, job_id: str):
+        job = self._workflow.jobs[job_id]
+        job_runner = JobRunner(job)
+        job_runner.attach_manager(self._manager)
+        job_runner.attach_workflow(self)
+        self._outputs[job_id] = {}
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            transient=True,
+        ) as progress:
+            task_id = progress.add_task(
+                description=f"Running job '{job.name}'",
+                total=len(job.steps),
+            )
+            async for step_output in job_runner.run():
+                if not self._outputs[job_id]:
+                    self._outputs[job_id] = []
+                else:
+                    self._outputs[job_id].insert(step_output["id"], step_output)
+                progress.advance(task_id)
+                if progress.finished:
+                    progress.update(
+                        task_id,
+                        description=f"Job '[bold]{job.name}[/bold]' of flow '[bold]{self._workflow.name}[/bold]' completed successfully.",
+                    )
+                yield step_output
 
     async def _pre_run(self):
         if self._workflow.defaults:
@@ -116,6 +154,13 @@ class WorkflowRunner(BaseRunner):
         return {}
 
     def _do_init(self):
+        if not self._output_path.exists():
+            self._output_path.mkdir(parents=True, exist_ok=True)
+        self._stdout = logging.Logger("ofx.stdout-" + self._id)
+        self._stdout.addHandler(
+            logging.FileHandler(self._output_path / "stdout.log", mode="a+")
+        )
+
         if self._workflow.workflow_dispatch and not self._is_reused:
             self._inputs.update(
                 self._process_inputs(
@@ -168,6 +213,8 @@ class WorkflowRunner(BaseRunner):
         vars.update({"inputs": self._inputs})
         vars.update({"env": self._envs})
         vars.update({"self": self._workflow.model_dump()})
+        vars.update({"secrets": self._default_secrets})
+        vars.update({"output_path": self._output_path})
         return tmp.render(vars)
 
     @property
