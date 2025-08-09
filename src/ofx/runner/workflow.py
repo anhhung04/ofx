@@ -191,6 +191,8 @@ class WorkflowRunner(BaseRunner):
                 raise ValueError(
                     f"Input '{input_name}' has an invalid type. Expected {input_constraint.type}, got {type(input_value)}."
                 )
+            elif input_blueprint[input_name].default:
+                input_value = input_blueprint[input_name].default
             processed_inputs[input_name] = self._resolve_template(input_value)
         return processed_inputs
 

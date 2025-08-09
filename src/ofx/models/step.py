@@ -1,11 +1,15 @@
+import uuid
 from pydantic import BaseModel, Field
-from typing import Optional, Union, Dict, Any, Literal
+from typing import Union, Dict, Any, Literal
 
 
 class Step(BaseModel):
     name: str = Field(..., description="Name of the step")
-    id: Optional[str] = Field(None, description="Unique identifier for the step")
-    run_if: Optional[str] = Field(
+    id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        description="Unique identifier for the step",
+    )
+    run_if: Union[str,] = Field(
         None, description="Condition to run the step (e.g., 'success()', 'failure()')"
     )
     env: Dict[str, str] = Field(
@@ -18,24 +22,24 @@ class Step(BaseModel):
     timeout_minutes: int = Field(
         60 * 24, description="Timeout in minutes for the step execution"
     )
-    run: Optional[str] = Field(None, description="Command(s) to run in the step")
-    working_directory: Optional[str] = Field(
-        None, description="Working directory for the step execution"
+    run: Union[str, None] = Field(None, description="Command(s) to run in the step")
+    working_directory: str = Field(
+        ".", description="Working directory for the step execution"
     )
-    shell: Optional[str] = Field(
+    shell: Union[str, None] = Field(
         None, description="Shell to use for running commands in the step"
     )
-    uses: Optional[str] = Field(
+    uses: Union[str, None] = Field(
         None, description="Select a workflow to run as part of a step in the job"
     )
-    run_with: Optional[Dict[str, Any]] = Field(
+    run_with: Union[None, Dict[str, Any]] = Field(
         None,
         description="Define inputs for the step if it uses a reusable workflow",
     )
-    script: Optional[str] = Field(
+    script: Union[None, str] = Field(
         None, description="Script to run in the step (if applicable)"
     )
-    secrets: Optional[Union[Dict[str, str], Literal["inherit"]]] = Field(
+    secrets: Union[None, Union[Dict[str, str], Literal["inherit"]]] = Field(
         None,
         description="Secrets to pass to the step (key-value pairs) if it uses a reusable workflow",
     )
