@@ -33,6 +33,6 @@ publish:
     - uv pip install build
     - uv build
     - uv pip install twine
-    - twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*
+    - uv run twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*
   only:
     - tags
