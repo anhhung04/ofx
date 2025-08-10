@@ -70,6 +70,10 @@ class JobRunner(BaseRunner):
                 if not step.working_directory:
                     step.working_directory = os.getcwd()
                 output = await handler(step)
+                if isinstance(output, dict) and "stdout" in output:
+                    logger.info(
+                        f"Step '{step.name}' of job '{self._job.name}' produced outputs:\n{output['stdout']}"
+                    )
                 self._success = True
             except Exception as e:
                 logger.error(
@@ -146,7 +150,7 @@ class JobRunner(BaseRunner):
             logger.debug(f"Error running command [{step.name}]({self._job.name}): {e}")
         finally:
             if stderr:
-                raise RuntimeError(f"Command '{script}' failed with error: {stderr}")
+                raise RuntimeError(f"Command failed with error: {stderr}")
         outputs.update({"stdout": stdout, "stderr": stderr})
         return outputs
 
