@@ -1,0 +1,38 @@
+image: python:3.11-slim
+stages:
+  - test
+  - deploy
+
+variables:
+  UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+
+cache:
+  key:
+    files:
+      - pyproject.toml
+      - requirements.txt
+  paths:
+    - "$UV_CACHE_DIR"
+
+before_script:
+  - pip install uv
+
+test:
+  stage: test
+  script:
+    - uv venv
+    - uv pip install -e ".[test]" # Assumes test dependencies are in [project.optional-dependencies]
+    - uv run pytest
+  except:
+    - tags
+
+publish:
+  stage: deploy
+  script:
+    - uv venv
+    - uv pip install build
+    - uv build
+    - uv pip install twine
+    - twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*
+  only:
+    - tags
