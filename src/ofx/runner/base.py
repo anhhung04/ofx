@@ -56,8 +56,18 @@ class BaseRunner:
 
     @property
     def is_finished(self) -> bool:
-        return self._status in {RunnerStatus.COMPLETED, RunnerStatus.FAILED}
+        return self._status in {
+            RunnerStatus.COMPLETED,
+            RunnerStatus.FAILED,
+            RunnerStatus.CANCELED,
+        }
 
     @property
     def run_id(self) -> str:
         return self._id
+
+    def get_result(self) -> Dict[str, Any]:
+        """
+        Get the result of the workflow run.
+        """
+        return self._result

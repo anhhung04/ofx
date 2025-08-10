@@ -1,5 +1,4 @@
 import os
-import uuid
 import asyncio
 import yaml
 import httpx
@@ -110,13 +109,12 @@ class FlowRunManager(metaclass=MetaSingleton):
 
 
 class WorkflowRunner(BaseRunner):
-    _id: str = None
-
     _envs = {}
     _inputs = {}
-    _outputs = {}
+    _output_jobs = {}
     _is_reused: bool = False
     _manager: Optional[FlowRunManager] = None
+    _job_status = {}
 
     def __init__(
         self,
@@ -125,17 +123,22 @@ class WorkflowRunner(BaseRunner):
         output: Optional[str] = None,
         is_reused: bool = False,
         secrets: Optional[Dict[str, Any]] = None,
+        envs: Optional[Dict[str, str]] = None,
     ):
         super().__init__(workflow.name)
-        self._id = str(uuid.uuid4())
         self._workflow = workflow
         self._is_reused = is_reused
         self._inputs = inputs
         self._output_path = Path(output) if output else Path.cwd() / "out"
         self._default_secrets = load_secrets(SECRETS_DIR)
+        self._do_init()
         if secrets:
             self._default_secrets.update(secrets)
-        self._do_init()
+        if envs:
+            self._envs.update(envs)
+
+    async def get_job_status(self, job_id: str) -> RunnerStatus:
+        return self._job_status.get(job_id, RunnerStatus.IDLE)
 
     async def _do_run(self) -> Dict[str, Any]:
         logger.debug(
@@ -195,17 +198,20 @@ class WorkflowRunner(BaseRunner):
         """Process the workflow steps and update progress."""
         for stage in self._schedule:
             logger.debug(f"Running stage with jobs: {stage}")
-            async for _ in zip_longest(
+            async for job_res in zip_longest(
                 *[self._run_job(job_id) for job_id in stage], fillvalue=None
             ):
+                for i, jr in enumerate(job_res):
+                    if jr is False:
+                        self._job_status[stage[i]] = RunnerStatus.FAILED
                 yield True
 
     async def _run_job(self, job_id: str):
         job = self._workflow.jobs[job_id]
         job_runner = JobRunner(job)
         job_runner.attach_manager(self._manager)
-        job_runner.attach_workflow(self)
-        self._outputs[job_id] = {}
+        job_runner.attach_context_provider(self)  # Use the new method
+        self._output_jobs[job_id] = self._workflow.jobs.get(job_id).model_dump()
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -217,18 +223,21 @@ class WorkflowRunner(BaseRunner):
                 description=f"Running job '{job.name}'",
                 total=len(job.steps),
             )
-            async for step_output in job_runner.run():
-                if not self._outputs[job_id]:
-                    self._outputs[job_id] = []
-                else:
-                    self._outputs[job_id].insert(step_output["id"], step_output)
-                progress.advance(task_id)
-                if progress.finished:
-                    progress.update(
-                        task_id,
-                        description=f"Job '[bold]{job.name}[/bold]' of flow '[bold]{self._workflow.name}[/bold]' completed successfully.",
+            try:
+                async for step_output in job_runner.run():
+                    self._output_jobs[job_id]["steps"][step_output["id"]].update(
+                        step_output
                     )
-                yield step_output
+                    progress.advance(task_id)
+                    if progress.finished:
+                        progress.update(
+                            task_id,
+                            description=f"Job '[bold]{job.name}[/bold]' of flow '[bold]{self._workflow.name}[/bold]' completed successfully.",
+                        )
+                    yield step_output
+                yield True
+            except:
+                yield False
 
     async def _pre_run(self):
         if self._workflow.defaults:
@@ -241,7 +250,13 @@ class WorkflowRunner(BaseRunner):
             logger.error(
                 f"Workflow '{self._workflow.name}' failed with error: {self._error}"
             )
-        self._result["outputs"] = self._outputs
+        self._result["outputs"] = self._output_jobs
+        if self._is_reused and self._workflow.workflow_call:
+            self._result["outputs"] = {}
+            for k, v in self._workflow.workflow_call.outputs.items():
+                self._result["outputs"][k] = self._resolve_template(
+                    v, self._output_jobs
+                )
         self._result["workflow"] = self._workflow.model_dump()
         self._result["run_id"] = self._id
         self._result["status"] = self._status
@@ -272,6 +287,11 @@ class WorkflowRunner(BaseRunner):
         if self._workflow.workflow_call and self._is_reused:
             self._inputs.update(
                 self._process_inputs(self._inputs, self._workflow.workflow_call.inputs)
+            )
+            self._default_secrets.update(
+                self._process_inputs(
+                    self._default_secrets, self._workflow.workflow_call.secrets
+                )
             )
 
         self._envs = {**os.environ, **self._workflow.env}
@@ -324,13 +344,25 @@ class WorkflowRunner(BaseRunner):
 
     def _resolve_template(self, string: str, vars: Dict[str, Any] = {}) -> str:
         tmp = Template(str(string))
-        vars.update({"jobs": {**self._outputs, **self._workflow.jobs}})
+        vars.update({"jobs": {**self._output_jobs, **self._workflow.jobs}})
         vars.update({"inputs": self._inputs})
         vars.update({"env": self._envs})
         vars.update({"self": self._workflow.model_dump()})
         vars.update({"secrets": self._default_secrets})
         vars.update({"output_path": self._output_path})
         return tmp.render(vars)
+
+    def resolve_template(self, string: str, vars: Dict[str, Any] = {}) -> str:
+        """Public method for template resolution"""
+        return self._resolve_template(string, vars)
+
+    def get_default_secrets(self) -> Dict[str, Any]:
+        """Get default secrets"""
+        return self._default_secrets
+
+    def get_output_path(self) -> Path:
+        """Get output path"""
+        return self._output_path
 
     @property
     def run_id(self) -> str:

@@ -21,7 +21,7 @@ class StrategyConfig(BaseModel):
 class Job(BaseModel):
     name: str = Field(..., description="Name of the job")
     needs: Union[str, List[str]] = Field(
-        "",
+        [],
         description="Job dependencies (other jobs that must complete before this one)",
     )
     run_if: str = Field(
