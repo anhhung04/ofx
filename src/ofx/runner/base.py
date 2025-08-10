@@ -17,7 +17,7 @@ class BaseRunner:
 
     def __init__(self, name: str):
         self._status = RunnerStatus.IDLE
-        self._result = None
+        self._result = {}
         self._error = None
         self._id = f"{name}-{str(uuid.uuid4())}"
 

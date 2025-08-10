@@ -1,12 +1,21 @@
 import os
 import uuid
+import asyncio
+import yaml
+import httpx
 import logging
 
-from ofx.runner.base import BaseRunner
+from ofx.runner.base import BaseRunner, RunnerStatus
 from ofx.runner.job import JobRunner
 from ofx.models.workflow import Workflow
-from ofx.settings import SECRETS_DIR
-from ofx.utils.misc import load_secrets, find_parallel_schedule
+from ofx.settings import SECRETS_DIR, DEFAULT_WORKFLOWS_DIR, settings
+from ofx.utils.misc import (
+    load_secrets,
+    find_parallel_schedule,
+    is_remote_path,
+    clone_remote_repo,
+    MetaSingleton,
+)
 
 from pathlib import Path
 from rich.progress import (
@@ -25,12 +34,89 @@ logger = logging.getLogger("ofx")
 
 
 class WorkflowRunner(BaseRunner):
+    pass
+
+
+class FlowRunManager(metaclass=MetaSingleton):
+    _flows = {}
+    _flows_dirs = [DEFAULT_WORKFLOWS_DIR.absolute()]
+    _results = {}
+
+    def add(
+        self,
+        workflow_name: str,
+        **kwargs,
+    ):
+        flow = self.find_flow(workflow_name)
+        runner = WorkflowRunner(workflow=flow, **kwargs)
+        runner.attach_manager(self)
+        bg_task = asyncio.create_task(runner.run())
+        self._flows[runner.run_id] = {
+            "runner": runner,
+            "task": bg_task,
+        }
+        return runner.run_id
+
+    async def wait(self, task_id: Optional[str] = None):
+        """
+        Wait for all running flows to complete.
+        """
+        if not self._flows or task_id not in self._flows:
+            return
+        task = self._flows.get(task_id, {}).get("task")
+        if not task:
+            raise ValueError(f"Task with ID {task_id} not found.")
+        await asyncio.wait_for(task, timeout=settings.timeout)
+
+    @property
+    def flows(self):
+        return self._flows
+
+    def get_runner(self, id: str):
+        return self._flows.get(id)
+
+    def add_workflow_dir(self, path: str):
+        if path not in self._flows_dirs:
+            self._flows_dirs.append(path)
+
+    def find_flow(self, workflow_name: str) -> Optional[WorkflowRunner]:
+        found_workflow = None
+        for dir in self._flows_dirs:
+            path = Path(dir) / f"{workflow_name.rstrip('.yml')}.yml"
+            if path.exists():
+                found_workflow = Workflow.model_validate(
+                    yaml.safe_load(path.read_text().strip())
+                )
+                break
+        else:
+            if Path(workflow_name).exists():
+                found_workflow = Workflow.model_validate(
+                    yaml.safe_load(Path(workflow_name).read_text().strip())
+                )
+            elif is_remote_path(workflow_name):
+                found_workflow = Workflow.model_validate(
+                    yaml.safe_load(httpx.get(path).text.strip())
+                )
+        if found_workflow is None:
+            git_path = clone_remote_repo(workflow_name)
+            if not git_path:
+                raise RuntimeError(f"Workflow {workflow_name} not found.")
+            self.add_workflow_dir(git_path.absolute())
+            found_workflow = Workflow.model_validate(
+                yaml.safe_load((git_path / "main.yml").read_text().strip())
+            )
+        assert found_workflow is not None, f"Workflow {workflow_name} not found."
+        return found_workflow
+
+
+class WorkflowRunner(BaseRunner):
     _id: str = None
 
     _envs = {}
     _inputs = {}
     _outputs = {}
     _is_reused: bool = False
+    _manager: Optional[FlowRunManager] = None
 
     def __init__(
         self,
@@ -45,7 +131,7 @@ class WorkflowRunner(BaseRunner):
         self._workflow = workflow
         self._is_reused = is_reused
         self._inputs = inputs
-        self._output_path = Path(output) if output else Path.cwd() / "ofx_out"
+        self._output_path = Path(output) if output else Path.cwd() / "out"
         self._default_secrets = load_secrets(SECRETS_DIR)
         if secrets:
             self._default_secrets.update(secrets)
@@ -77,7 +163,7 @@ class WorkflowRunner(BaseRunner):
                 if progress.finished:
                     progress.update(
                         task_id,
-                        description=f"Workflow '[bold]{self._workflow.name}[/bold]' completed successfully.",
+                        description=f"Workflow '[bold]{self._workflow.name}[/bold]' completed.",
                     )
 
     def _planning_jobs(self) -> int:
@@ -88,7 +174,7 @@ class WorkflowRunner(BaseRunner):
                 if isinstance(j.needs, str):
                     j.needs = [j.needs]
                 for dep in j.needs:
-                    if dep not in jobs:
+                    if dep and dep not in jobs:
                         raise ValueError(
                             f"Job '{j.name}' depends on '{dep}', which is not defined in the workflow."
                         )
@@ -151,7 +237,17 @@ class WorkflowRunner(BaseRunner):
         logger.debug(f"Resolved workflow: {self._workflow.model_dump()}")
 
     async def _post_run(self) -> Dict[str, Any]:
-        return {}
+        if self._status == RunnerStatus.FAILED:
+            logger.error(
+                f"Workflow '{self._workflow.name}' failed with error: {self._error}"
+            )
+        self._result["outputs"] = self._outputs
+        self._result["workflow"] = self._workflow.model_dump()
+        self._result["run_id"] = self._id
+        self._result["status"] = self._status
+        self._result["inputs"] = self._inputs
+        self._result["envs"] = self._envs
+        self._result["output_path"] = str(self._output_path)
 
     def _do_init(self):
         if not self._output_path.exists():
@@ -159,6 +255,12 @@ class WorkflowRunner(BaseRunner):
         self._stdout = logging.Logger("ofx.stdout-" + self._id)
         self._stdout.addHandler(
             logging.FileHandler(self._output_path / "stdout.log", mode="a+")
+        )
+        logger.debug(
+            f"Workflow '{self._workflow.name}' dispatch inputs: {self._workflow.workflow_dispatch.inputs}"
+        )
+        logger.debug(
+            f"Workflow '{self._workflow.name}' call inputs: {self._workflow.workflow_call.inputs}"
         )
 
         if self._workflow.workflow_dispatch and not self._is_reused:
@@ -172,10 +274,22 @@ class WorkflowRunner(BaseRunner):
                 self._process_inputs(self._inputs, self._workflow.workflow_call.inputs)
             )
 
+        self._envs = {**os.environ, **self._workflow.env}
+        logger.debug(
+            f"Initialized workflow runner for '{self._workflow.name}' with ID '{self._id}'"
+        )
+        logger.debug(f"Workflow inputs: {self._inputs}")
+        logger.debug(f"Workflow environment: {self._envs}")
+        logger.debug(f"Workflow output path: {self._output_path}")
+        logger.debug(f"Workflow default secrets: {self._default_secrets}")
+
     def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
     ) -> Dict[str, Any]:
         """Process and validate inputs against the workflow's input constraints."""
+        logger.debug(
+            f"Processing inputs from workflow {'dispath' if self._is_reused else 'call'}: {req_inputs} with blueprint: {input_blueprint}"
+        )
         processed_inputs = {}
         for input_name, input_value in req_inputs.items():
             if input_name not in input_blueprint:

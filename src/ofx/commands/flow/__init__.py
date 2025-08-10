@@ -1,10 +1,8 @@
 import typer
-from async_typer import AsyncTyper
-from ofx.commands.flow.run import FlowRunHandler
-from ofx.utils.command import command_handler
-from ofx.settings import settings
-
 from typing import Optional, List
+from async_typer import AsyncTyper
+
+from ofx.commands.flow.run import FlowRunHandler
 
 app = AsyncTyper()
 
@@ -12,21 +10,24 @@ NAME = "flow"
 
 HELP = "Manage and run workflows in the OFX system"
 
-
 @app.async_command()
 async def run(
-    workflow_name: str,
+    workflow_name: str = typer.Argument(..., help="Name of the workflow to run"),
     input: Optional[List[str]] = typer.Option(
         None,
-        "--input",
         "-i",
-        help="Input parameters for the workflow, in the format key=value",
+        "--input",
+        help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
     ),
     output: Optional[str] = typer.Option(
         None,
-        "--output",
         "-o",
-        help="Output path for the workflow results",
+        "--output",
+        help="Output path for the workflow results. If not specified, defaults to the current directory.",
     ),
 ):
-    await command_handler(FlowRunHandler, workflow_name, input, output)
+    await FlowRunHandler(
+        workflow_name=workflow_name,
+        input=input,
+        output=output,
+    ).run()

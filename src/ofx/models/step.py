@@ -32,14 +32,14 @@ class Step(BaseModel):
     uses: Union[str, None] = Field(
         None, description="Select a workflow to run as part of a step in the job"
     )
-    run_with: Union[None, Dict[str, Any]] = Field(
-        None,
+    run_with: Dict[str, Any] = Field(
+        {},
         description="Define inputs for the step if it uses a reusable workflow",
     )
     script: Union[None, str] = Field(
         None, description="Script to run in the step (if applicable)"
     )
-    secrets: Union[None, Union[Dict[str, str], Literal["inherit"]]] = Field(
-        None,
+    secrets: Union[Union[Dict[str, str], Literal["inherit"]]] = Field(
+        {},
         description="Secrets to pass to the step (key-value pairs) if it uses a reusable workflow",
     )

@@ -79,11 +79,19 @@ class JobRunner(BaseRunner):
             k: self._workflow_runner._resolve_template(v) if isinstance(v, str) else v
             for k, v in step.run_with.items()
         }
+        if step.secrets == "inherit":
+            step.secrets = self._workflow_runner.secrets
         task_id = self._manager.add(
-            workflow_name=step.uses, inputs=inputs, is_reused=True
+            workflow_name=step.uses,
+            inputs=inputs,
+            is_reused=True,
+            output=self._workflow_runner._output_path,
+            secrets={
+                **step.secrets,
+            },
         )
         await self._manager.wait(task_id)
-        self._result = self._manager.get_runner(task_id).result
+        self._result = self._manager.get_runner(task_id)["task"].result
 
     async def _handle_command(self, step: Step):
         shell = step.shell or "/bin/bash"
