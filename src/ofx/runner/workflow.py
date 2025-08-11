@@ -332,15 +332,15 @@ class WorkflowRunner(BaseRunner):
 
     def _check_input_type(self, value: Any, input_type: str) -> bool:
         """Parse input value based on the specified type."""
-        match input_type:
-            case "string":
-                return isinstance(value, str)
-            case "number":
-                return isinstance(value, (int, float))
-            case "boolean":
-                return isinstance(value, bool)
-            case _:
-                raise ValueError(f"Unsupported input type: {type}")
+        if input_type is "string":
+            return isinstance(value, str)
+        elif input_type is "number":
+            return isinstance(value, (int, float))
+        elif input_type is "boolean":
+            return isinstance(value, bool)
+        raise ValueError(
+            f"Unsupported input type '{input_type}' for value '{value}'. Supported types are: string, number, boolean."
+        )
 
     def _resolve_template(self, string: str, vars: Dict[str, Any] = {}) -> str:
         tmp = Template(str(string))

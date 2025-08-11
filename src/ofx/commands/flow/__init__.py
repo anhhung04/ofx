@@ -10,16 +10,17 @@ NAME = "flow"
 
 HELP = "Manage and run workflows in the OFX system"
 
+
 @app.async_command()
 async def run(
-    workflow_name: str = typer.Argument(..., help="Name of the workflow to run"),
-    input: Optional[List[str]] = typer.Option(
+    workflow_name=typer.Argument(..., help="Name of the workflow to run"),
+    input=typer.Option(
         None,
         "-i",
         "--input",
         help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
     ),
-    output: Optional[str] = typer.Option(
+    output=typer.Option(
         None,
         "-o",
         "--output",

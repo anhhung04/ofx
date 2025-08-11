@@ -28,10 +28,17 @@ test = [
   "pytest-cov",
   "pytest-asyncio",
 ]
+build = ["setuptools", "cython"]
+compile = ["cchardet"]
 
 [project.scripts]
-ofx = "ofx:main"
+ofx = "ofx.main:main"
 
 [build-system]
-requires = ["uv_build>=0.8.4,<0.9.0"]
-build-backend = "uv_build"
+requires = [ "cython", "setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+no-build-isolation-package = ["cchardet"]
+package = true
+compile-bytecode = true

@@ -15,6 +15,7 @@ cache:
     - "$UV_CACHE_DIR"
 
 before_script:
+  - apt-get update && apt-get install -y build-essential
   - pip install uv
 
 test:
@@ -30,9 +31,7 @@ publish:
   stage: deploy
   script:
     - uv venv
-    - uv pip install build
     - uv build
-    - uv pip install twine
-    - TWINE_PASSWORD=${CI_JOB_TOKEN} TWINE_USERNAME=gitlab-ci-token uv run twine upload --repository-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi dist/*
+    - UV_PUBLISH_PASSWORD=${CI_JOB_TOKEN} UV_PUBLISH_USERNAME=gitlab-ci-token uv publish --publish-url ${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/pypi
   only:
     - tags
