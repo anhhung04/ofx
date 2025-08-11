@@ -1,8 +1,8 @@
 import typer
-from typing import Optional, List
 from async_typer import AsyncTyper
 
 from ofx.commands.flow.run import FlowRunHandler
+from typing import List
 
 app = AsyncTyper()
 
@@ -10,16 +10,17 @@ NAME = "flow"
 
 HELP = "Manage and run workflows in the OFX system"
 
+
 @app.async_command()
 async def run(
-    workflow_name: str = typer.Argument(..., help="Name of the workflow to run"),
-    input: Optional[List[str]] = typer.Option(
-        None,
+    workflow_name=typer.Argument(..., help="Name of the workflow to run"),
+    input: List[str] = typer.Option(
+        [],
         "-i",
         "--input",
         help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
     ),
-    output: Optional[str] = typer.Option(
+    output=typer.Option(
         None,
         "-o",
         "--output",

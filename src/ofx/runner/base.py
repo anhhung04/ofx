@@ -20,14 +20,18 @@ class BaseRunner:
         self._result = {}
         self._error = None
         self._id = f"{name}-{str(uuid.uuid4())}"
+        self._success = False
+        self._progress = 0.0
 
-    async def run(self) -> Dict[str, Any]:
+    async def run(self):
         """Run the workflow and return the result."""
-        await self._pre_run()
-        self._status = RunnerStatus.RUNNING
         try:
+            await self._pre_run()
+            self._status = RunnerStatus.RUNNING
             await self._do_run()
             self._status = RunnerStatus.COMPLETED
+            self._success = True
+            self._progress = 1.0
         except Exception as e:
             self._status = RunnerStatus.FAILED
             self._error = str(e)

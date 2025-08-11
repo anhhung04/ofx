@@ -1,8 +1,12 @@
 import json
 import logging
 
+from ofx.settings import settings
 from ofx.runner.workflow import FlowRunManager
-from typing import Optional, List
+
+from notifiers.logging import NotificationHandler
+from tabulate import tabulate
+from typing import Optional, List, Any, Dict
 
 logger = logging.getLogger("ofx")
 
@@ -21,10 +25,23 @@ class FlowRunHandler:
 
     async def run(self):
         self._process_inputs()
-        task_id = self.manager.add(
-            self.workflow_name, inputs=self.input, output=self.output
+        input_display = self._render_input_as_table() if self.input else "None"
+        logger.info(
+            f"Starting to run workflow: '{self.workflow_name}'\nwith input: {input_display}\nto output: '{self.output if self.output else '$PWD/out'}'"
         )
-        await self.manager.wait(task_id)
+        if settings.notify_provider:
+            logger.info(f"Using notification provider: {settings.notify_provider}")
+            if settings.notify_config:
+                hdlr = NotificationHandler(
+                    settings.notify_provider,
+                    defaults=json.loads(settings.notify_config),
+                )
+                hdlr.set_name("ofx.notification")
+                logger.addHandler(hdlr)
+            else:
+                logger.warning("No notification configuration provided.")
+        self.manager.add(self.workflow_name, inputs=self.input, output=self.output)
+        await self.manager.wait()
 
     def _process_inputs(self):
         processed_inputs = {}
@@ -46,3 +63,26 @@ class FlowRunHandler:
                 processed_inputs[key] = processed_inputs[key][0]
         logger.debug(f"Processed inputs: {processed_inputs}")
         self.input = processed_inputs
+
+    def _render_input_as_table(self) -> str:
+        """Renders the input data as a nicely formatted table if it contains any input."""
+        if not self.input:
+            return "None"
+
+        # Convert input dictionary to a list of [key, value] pairs for tabulation
+        table_data = []
+        for key, value in self.input.items():
+            # Handle complex values by converting them to JSON strings
+            if isinstance(value, (dict, list)):
+                try:
+                    formatted_value = json.dumps(value)
+                except:
+                    formatted_value = str(value)
+            else:
+                formatted_value = str(value)
+
+            table_data.append([key, formatted_value])
+
+        return "\n" + tabulate(
+            table_data, headers=["Parameter", "Value"], tablefmt="grid"
+        )

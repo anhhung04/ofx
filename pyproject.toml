@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
 authors = [
@@ -14,12 +14,14 @@ dependencies = [
     "gitpython>=3.1.45",
     "httpx>=0.28.1",
     "jinja2>=3.1.6",
+    "notifiers>=1.3.6",
     "pydantic>=2.11.7",
+    "pydantic-file-secrets>=0.4.4",
     "pydantic-settings>=2.10.1",
-    "pydantic-settings-yaml>=0.2.0",
+    "pyyaml>=6.0.2",
     "syncer>=2.0.3",
+    "tabulate>=0.9.0",
     "typer>=0.16.0",
-    "typer-di>=0.1.3",
 ]
 
 [project.optional-dependencies]
@@ -28,10 +30,17 @@ test = [
   "pytest-cov",
   "pytest-asyncio",
 ]
+build = ["setuptools", "cython"]
+compile = ["cchardet"]
 
 [project.scripts]
-ofx = "ofx:main"
+ofx = "ofx:MainApp.main"
 
 [build-system]
-requires = ["uv_build>=0.8.4,<0.9.0"]
-build-backend = "uv_build"
+requires = [ "cython", "setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+no-build-isolation-package = ["cchardet"]
+package = true
+compile-bytecode = true

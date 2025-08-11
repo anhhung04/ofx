@@ -10,3 +10,5 @@ wheels/
 .venv
 *out/
 .vscode/
+*.c
+*.so

@@ -17,7 +17,7 @@
                 "run",
                 "test",
             ],
-            "cwd": "${workspaceFolder}/src/ofx",
+            "cwd": "${workspaceFolder}",
         }
     ]
 }

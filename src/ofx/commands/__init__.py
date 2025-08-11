@@ -3,7 +3,7 @@ import typer
 from ofx.settings import settings, BANNER
 from ofx.utils.log import reload_logging_config
 
-from ofx.commands import flow, dump
+from ofx.commands import flow, dump, asset
 
 app = typer.Typer()
 
@@ -24,5 +24,10 @@ def main_callback(
         typer.echo(BANNER, err=True, color=True)
 
 
-app.add_typer(flow.app, name=flow.NAME, help=flow.HELP)
-app.add_typer(dump.app, name=dump.NAME, help=dump.HELP)
+def add_app(sub_app):
+    app.add_typer(sub_app.app, name=sub_app.NAME, help=sub_app.HELP)
+
+
+add_app(flow)
+add_app(dump)
+add_app(asset)

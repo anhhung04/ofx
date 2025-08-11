@@ -9,14 +9,14 @@ from ofx.models import DefaultConfig
 class WorkflowInput(BaseModel):
     required: bool = Field(default=False, description="Whether the input is required")
     default: Any = Field(None, description="Default value for the input parameter")
-    type: Union[Literal["string"], Literal["number"], Literal["boolean"]] = Field(
+    type: Union[Literal["string", "number", "array", "object", "boolean"]] = Field(
         "string", description="Type of the input parameter (e.g., 'string', 'number')"
     )
 
 
 class WorkflowSecret(BaseModel):
     required: bool = Field(default=False, description="Whether the secret is required")
-    type: Union[Literal["string"], Literal["number"], Literal["boolean"]] = Field(
+    type: Union[Literal["string", "number", "array", "object", "boolean"]] = Field(
         "string", description="Type of the secret (e.g., 'string', 'number')"
     )
 

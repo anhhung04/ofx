@@ -7,11 +7,10 @@ def reload_logging_config(settings):
     This is useful if settings are changed at runtime.
     """
     for handler in logging.getLogger("ofx").handlers:
-        if handler.name == "console":
+        if handler.name == "console" or handler.name == "ofx.notification":
             logging.getLogger("ofx").removeHandler(handler)
 
     if settings.grepable:
-        # Plain logging handler for grepable output
         log_handler = logging.StreamHandler()
         formatter = logging.Formatter("%(levelname)s: %(message)s")
         log_handler.setFormatter(formatter)

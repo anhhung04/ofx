@@ -1,5 +1,4 @@
 import typer
-import json
 from typing import Dict, Any, List
 from rich.console import Console
 from rich.table import Table
