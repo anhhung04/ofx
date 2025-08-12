@@ -485,7 +485,7 @@ class JobRunner(BaseRunner):
             self._job.defaults.run.shell,
             self._context_provider.workflow.defaults.run.shell,
         ]:
-            if s != default_shell:
+            if s and s != default_shell:
                 shell = s
                 break
         script = step.run.strip()
