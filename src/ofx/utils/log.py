@@ -18,7 +18,7 @@ def reload_logging_config(settings):
         from rich.logging import RichHandler
 
         log_handler = RichHandler(
-            rich_tracebacks=True,
+            rich_tracebacks=settings.debug,
             show_time=True,
             show_level=True,
             show_path=settings.debug,
