@@ -22,8 +22,7 @@ test:
   stage: test
   script:
     - uv venv
-    - uv pip install -e ".[test]" # Assumes test dependencies are in [project.optional-dependencies]
-    - uv run pytest
+    - uv run  --with pytest,pytest-asyncio pytest
   except:
     - tags
 
