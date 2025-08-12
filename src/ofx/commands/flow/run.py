@@ -6,7 +6,7 @@ from ofx.runner.workflow import FlowRunManager
 
 from notifiers.logging import NotificationHandler
 from tabulate import tabulate
-from typing import Optional, List, Any, Dict
+from typing import Optional, List
 
 logger = logging.getLogger("ofx")
 

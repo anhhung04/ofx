@@ -55,6 +55,9 @@ class Workflow(BaseModel):
         default_factory=lambda: WorkflowCall(),
         description="Workflow call configuration for reusable workflows",
     )
+    tools: Union[None, Dict[str, Any]] = Field(
+        None, description="Needed tools for the workflow"
+    )
     tags: List[str] = Field([], description="Tags associated with the workflow")
     defaults: DefaultConfig = Field(
         default_factory=lambda: DefaultConfig(),
