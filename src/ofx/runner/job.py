@@ -52,22 +52,15 @@ class JobRunner(BaseRunner):
         """
         try:
             async for step_output in self._process_steps():
-                # Store output for reference by other steps/jobs
                 step_name = step_output["step"].name
                 step_id = step_output["id"]
-
-                # Log step output summary (details are already logged in _process_steps)
                 logger.debug(
                     self._produce_log(
                         f"(step '{step_name}') -> completed with status: {step_output['status'].value}"
                     )
                 )
-
-                # Store step output and update progress
                 self._step_outputs.insert(step_id, step_output)
-                self._processed_steps += 1
 
-                # Handle step failure
                 if (
                     step_output["status"] == RunnerStatus.FAILED
                     and not step_output["step"].continue_on_error
@@ -80,7 +73,6 @@ class JobRunner(BaseRunner):
                         )
                     )
         except Exception as e:
-            # Catch any unexpected exceptions during execution
             if not isinstance(e, RuntimeError):
                 logger.error(
                     self._produce_log(
@@ -122,9 +114,7 @@ class JobRunner(BaseRunner):
 
             if unmet_deps:
                 raise RuntimeError(
-                    self._produce_log(
-                        f"Job cannot run because dependencies are not met: {unmet_deps}"
-                    )
+                    f"Job cannot run because dependencies are not met: {unmet_deps}"
                 )
 
             logger.debug(
@@ -132,11 +122,11 @@ class JobRunner(BaseRunner):
             )
 
         if self._job.run_if:
-            raw_cond = self._job.run_if
+            raw_cond = str(self._job.run_if)
             self._job.run_if = self._context_provider.resolve_template(self._job.run_if)
             logger.debug(
                 self._produce_log(
-                    f"Resolved run_if condition: '{self._job.run_if}' from raw condition: '{raw_cond}'"
+                    f"Resolved run_if condition: '{str(self._job.run_if)}' from raw condition: '{raw_cond}'"
                 )
             )
             if not eval(str(self._job.run_if)):
@@ -145,6 +135,7 @@ class JobRunner(BaseRunner):
                         f"Job cannot run because condition '{raw_cond}' is not met"
                     )
                 )
+        logger.debug(self._produce_log("Pre-run validation completed successfully"))
 
     async def _post_run(self):
         """
@@ -191,23 +182,15 @@ class JobRunner(BaseRunner):
             dict: The result of each step execution including status and outputs
         """
         for step_id, step in enumerate(self._job.steps):
-            step_name = step.name or f"step_{step_id}"
+            step_name = step.name if step.name else f"step_{step_id}"
             logger.debug(self._produce_log(f"Processing step {step_id}: '{step_name}'"))
 
             if step_id > 0 and step.run_if:
-                raw_cond = step.run_if
-                step.run_if = self._context_provider.resolve_template(
-                    step.run_if,
-                    vars={
-                        "success": lambda: self._step_outputs[step_id - 1].get("status")
-                        == RunnerStatus.COMPLETED,
-                        "failure": lambda: self._step_outputs[step_id - 1].get("status")
-                        == RunnerStatus.FAILED,
-                    },
-                )
+                raw_cond = str(step.run_if)
+                step.run_if = self._context_provider.resolve_template(step.run_if)
                 logger.debug(
                     self._produce_log(
-                        f"Resolved run_if condition: '{step.run_if}' from raw condition: '{raw_cond}'"
+                        f"Resolved run_if condition: '{str(step.run_if)}' from raw condition: '{raw_cond}'"
                     )
                 )
                 if not eval(str(step.run_if)):
@@ -232,7 +215,6 @@ class JobRunner(BaseRunner):
                 }
                 continue
 
-            # Execute the step
             output = {}
             stderr = ""
             start_time = time.time()
@@ -605,7 +587,7 @@ class JobRunner(BaseRunner):
                         )
                     )
 
-    def _produce_log(self, message: str) -> str:
+    def _produce_log(self, message: Any) -> str:
         """
         Format a log message with job context information.
 
@@ -619,14 +601,14 @@ class JobRunner(BaseRunner):
         job_id = self._job_id
         status = self._status.value.upper()
 
-        # If context provider exists, use its log formatting
+        message_str = str(message)
+
         if hasattr(self, "_context_provider"):
             return self._context_provider._produce_log(
-                f"(job '{job_id}' - '{job_name}')[{status}] -> {message}"
+                f"(job '{job_id}' - '{job_name}')[{status}] -> {message_str}"
             )
 
-        # Fallback formatting if context provider not available
-        return f"[Job '{job_id}' - '{job_name}'][{status}] -> {message}"
+        return f"[Job '{job_id}' - '{job_name}'][{status}] -> {message_str}"
 
     @property
     def processed_steps(self) -> int:

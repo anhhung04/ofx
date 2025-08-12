@@ -293,9 +293,7 @@ class WorkflowRunner(BaseRunner):
                                 if not result:
                                     raise RuntimeError(f"Job '{job_id}' failed")
                                 logger.debug(
-                                    self._produce_log(
-                                        f"Job '{job_id}' completed successfully"
-                                    )
+                                    self._produce_log(f"Job '{job_id}' completed")
                                 )
                             except Exception as e:
                                 logger.error(
@@ -532,7 +530,10 @@ class WorkflowRunner(BaseRunner):
         self._result["inputs"] = self._inputs
         self._result["envs"] = self._envs
         self._result["output_path"] = str(self._output_path)
-        if len(os.listdir(self._output_path.absolute())) == 0:
+        if (
+            self._output_path.exists()
+            and len(os.listdir(self._output_path.absolute())) == 0
+        ):
             os.rmdir(self._output_path)
         else:
             logger.info(self._produce_log(f"output dir: {self._output_path}"))
@@ -766,12 +767,18 @@ class WorkflowRunner(BaseRunner):
             # Return the original value if template resolution fails
             return value
 
-    def _produce_log(self, message: str) -> str:
-        return f"[{'sub-' if self._is_reused else ''}workflow '{self._workflow.name}']({self._status.value.upper()}) -> {message}"
+    def _produce_log(self, message: Any) -> str:
+        message_str = str(message)
+        return f"[{'sub-' if self._is_reused else ''}workflow '{self._workflow.name}']({self._status.value.upper()}) -> {message_str}"
 
-    def resolve_template(self, string: str, vars: Dict[str, Any] = {}) -> str:
+    def resolve_template(self, value: Any, vars: Dict[str, Any] = {}) -> Any:
         """Public method for template resolution"""
-        return self._resolve_template(string, vars)
+        logger.debug(
+            self._produce_log(
+                f"Resolving template for value: {str(value)} with vars: {vars}"
+            )
+        )
+        return self._resolve_template(value, vars)
 
     def get_default_secrets(self) -> Dict[str, Any]:
         """Get default secrets"""
