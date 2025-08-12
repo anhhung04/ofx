@@ -625,35 +625,26 @@ class WorkflowRunner(BaseRunner):
             )
         )
 
-        processed_inputs = {}
-
-        # Process each input
-        for input_name, input_value in req_inputs.items():
-            # Check if the input is defined in the blueprint
-            if input_name not in input_blueprint:
+        for key, contrain in input_blueprint.items():
+            if key not in req_inputs and contrain.required:
                 raise ValueError(
-                    f"Input '{input_name}' is not defined in the workflow."
+                    f"Input '{key}' is required but not provided in the inputs."
                 )
-
-            input_constraint = input_blueprint[input_name]
-
-            # Check if required input is missing
-            if input_constraint.required and input_value is None:
-                raise ValueError(f"Input '{input_name}' is required but not provided.")
-
-            # Validate input type if a value was provided
-            if input_value is not None:
-                if not self._check_input_type(input_value, input_constraint.type):
+            if key in req_inputs:
+                value = req_inputs[key]
+                if not self._check_input_type(value, contrain.type):
                     raise ValueError(
-                        f"Input '{input_name}' has an invalid type. Expected {input_constraint.type}, "
-                        f"got {type(input_value).__name__}."
+                        f"Input '{key}' has invalid type: {type(value).__name__}. "
+                        f"Expected type: {contrain.type}."
                     )
-            # Use default value if no value was provided but default exists
-            elif input_blueprint[input_name].default is not None:
-                input_value = input_blueprint[input_name].default
-
-            # Process template variables in the input value
-            processed_inputs[input_name] = self._resolve_template(input_value)
+            else:
+                if contrain.default is not None:
+                    req_inputs[key] = contrain.default
+                else:
+                    req_inputs[key] = None
+        for key, value in req_inputs.items():
+            req_inputs[key] = self._resolve_template(value)
+        processed_inputs = {}
 
         return processed_inputs
 
