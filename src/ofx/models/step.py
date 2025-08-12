@@ -9,8 +9,8 @@ class Step(BaseModel):
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for the step",
     )
-    run_if: Union[str,] = Field(
-        None, description="Condition to run the step (e.g., 'success()', 'failure()')"
+    run_if: Union[str, bool] = Field(
+        True, description="Condition to run the step (e.g., 'success()', 'failure()')"
     )
     env: Dict[str, str] = Field(
         default={},

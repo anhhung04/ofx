@@ -4,6 +4,8 @@ import yaml
 import httpx
 import time
 import logging
+import shutil
+import shlex
 
 from ofx.runner.base import BaseRunner, RunnerStatus
 from ofx.runner.job import JobRunner
@@ -466,7 +468,32 @@ class WorkflowRunner(BaseRunner):
     async def _pre_run(self):
         if self._workflow.defaults:
             working_directory = self._workflow.defaults.run.working_directory
-            os.chdir(Path(working_directory).absolute())
+            os.chdir(Path(working_directory))
+        tools = self._workflow.tools
+        if tools:
+            for tool_bin, install_cmd in tools.items():
+                install_cmd = self._resolve_template(install_cmd)
+                if not shutil.which(tool_bin):
+                    logger.info(
+                        self._produce_log(
+                            f"Installing tool '{tool_bin}' with command: {install_cmd}"
+                        )
+                    )
+                    shell = "/bin/bash" if os.name != "nt" else "cmd.exe"
+                    result = JobRunner._execute_subprocess(
+                        args=[shell, "-c", install_cmd],
+                        executable=shell,
+                        step=None,
+                        env=self._envs,
+                    )
+                    if result.get("exit_code") != 0:
+                        raise RuntimeError(
+                            f"Failed to install tool '{tool_bin}': {result.get('stderr', '')}"
+                        )
+                else:
+                    logger.debug(
+                        self._produce_log(f"Tool '{tool_bin}' is already installed")
+                    )
         logger.debug(
             self._produce_log(f"resolved workflow: {self._workflow.model_dump()}")
         )
@@ -684,7 +711,7 @@ class WorkflowRunner(BaseRunner):
                 return value
 
             # Set up template with all available variables
-            template = Template(string_value)
+            template = Template(string_value, autoescape=True)
             template_vars = {
                 "jobs": {**self._workflow.jobs, **self._output_jobs},
                 "inputs": self._inputs,
@@ -692,6 +719,11 @@ class WorkflowRunner(BaseRunner):
                 "self": self._workflow.model_dump(),
                 "secrets": self._default_secrets,
                 "output_path": self._output_path,
+                "sudo": "sudo" if os.geteuid() != 0 and shutil.which("sudo") else "",
+                "run_id": self._id,
+                "fapt": 'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then apt-get update; fi && apt-fast install -y --no-install-recommends',
+                "uv_install": "uv tool install",
+                "go_install": "go install -v",
             }
 
             # Add custom variables if provided

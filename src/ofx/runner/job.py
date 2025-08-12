@@ -131,6 +131,21 @@ class JobRunner(BaseRunner):
                 self._produce_log(f"All dependencies satisfied: {self._job.needs}")
             )
 
+        if self._job.run_if:
+            raw_cond = self._job.run_if
+            self._job.run_if = self._context_provider.resolve_template(self._job.run_if)
+            logger.debug(
+                self._produce_log(
+                    f"Resolved run_if condition: '{self._job.run_if}' from raw condition: '{raw_cond}'"
+                )
+            )
+            if not eval(str(self._job.run_if)):
+                raise RuntimeError(
+                    self._produce_log(
+                        f"Job cannot run because condition '{raw_cond}' is not met"
+                    )
+                )
+
     async def _post_run(self):
         """
         Perform post-run tasks and prepare the final result.
@@ -179,7 +194,29 @@ class JobRunner(BaseRunner):
             step_name = step.name or f"step_{step_id}"
             logger.debug(self._produce_log(f"Processing step {step_id}: '{step_name}'"))
 
-            # Determine the type of step and get the appropriate handler
+            if step_id > 0 and step.run_if:
+                raw_cond = step.run_if
+                step.run_if = self._context_provider.resolve_template(
+                    step.run_if,
+                    vars={
+                        "success": lambda: self._step_outputs[step_id - 1].get("status")
+                        == RunnerStatus.COMPLETED,
+                        "failure": lambda: self._step_outputs[step_id - 1].get("status")
+                        == RunnerStatus.FAILED,
+                    },
+                )
+                logger.debug(
+                    self._produce_log(
+                        f"Resolved run_if condition: '{step.run_if}' from raw condition: '{raw_cond}'"
+                    )
+                )
+                if not eval(str(step.run_if)):
+                    raise RuntimeError(
+                        self._produce_log(
+                            f"Step '{step_name}' cannot run because condition '{raw_cond}' is not met"
+                        )
+                    )
+
             try:
                 run_type = self._parse_run_type(step)
                 handler = getattr(self, f"_handle_{run_type.value}")
@@ -386,8 +423,9 @@ class JobRunner(BaseRunner):
             )
             raise
 
+    @staticmethod
     def _execute_subprocess(
-        self, args: list, executable: str, step: Step
+        args: list, executable: str, step: Step, env: Dict[str, Any] = {}
     ) -> Dict[str, Any]:
         """
         Execute a subprocess with proper error handling and output capturing.
@@ -409,10 +447,8 @@ class JobRunner(BaseRunner):
 
         try:
             # Build environment with proper variable inheritance
-            env = {**os.environ}
-            if hasattr(self._job, "env") and self._job.env:
-                env.update(self._job.env)
-            if step.env:
+            env = {**os.environ, **env}
+            if step and step.env:
                 env.update(step.env)
 
             # Execute the subprocess
@@ -421,11 +457,11 @@ class JobRunner(BaseRunner):
                 executable=executable,
                 cwd=(
                     Path(step.working_directory).absolute()
-                    if step.working_directory
+                    if step and step.working_directory
                     else Path.cwd()
                 ),
                 env=env,
-                timeout=step.timeout_minutes * 60,
+                timeout=(step.timeout_minutes * 60 if step else 60 * 24),
                 capture_output=True,
             )
 
@@ -489,7 +525,7 @@ class JobRunner(BaseRunner):
 
         # Execute the command
         args = [shell, "-c", script]
-        return self._execute_subprocess(args, shell, step)
+        return self._execute_subprocess(args, shell, step, self._job.env)
 
     async def _handle_script(self, step: Step):
         """
@@ -549,7 +585,9 @@ class JobRunner(BaseRunner):
             )
 
             # Execute the script using our common subprocess executor
-            return self._execute_subprocess(args, python_executable, step)
+            return self._execute_subprocess(
+                args, python_executable, step, self._job.env
+            )
 
         except Exception as e:
             # Make sure we propagate the correct error

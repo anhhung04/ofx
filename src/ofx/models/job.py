@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Union
+
 from ofx.models.step import Step
 from ofx.models import DefaultConfig
 
@@ -10,8 +11,8 @@ class Job(BaseModel):
         [],
         description="Job dependencies (other jobs that must complete before this one)",
     )
-    run_if: str = Field(
-        "", description="Condition to run the job (e.g., 'success()', 'failure()')"
+    run_if: Union[str, bool] = Field(
+        True, description="Condition to run the job (e.g., 'success()', 'failure()')"
     )
     env: Dict[str, str] = Field(
         default={},
