@@ -14,7 +14,7 @@ from ofx.models.step import Step
 from enum import Enum
 from pathlib import Path
 from zlib import compress
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger("ofx")
 
@@ -226,18 +226,9 @@ class JobRunner(BaseRunner):
                 # Log output if available (truncate long output to avoid log spam)
                 if isinstance(output, dict) and "stdout" in output and output["stdout"]:
                     stdout = output["stdout"]
-                    if len(stdout) > 1000:
-                        logger.info(
-                            self._produce_log(
-                                f"(step '{step_name}') -> stdout (truncated):\n{stdout[:1000]}...\n[output truncated, total length: {len(stdout)} chars]"
-                            )
-                        )
-                    else:
-                        logger.info(
-                            self._produce_log(
-                                f"(step '{step_name}') -> stdout:\n{stdout}"
-                            )
-                        )
+                    logger.info(
+                        self._produce_log(f"(step '{step_name}') -> stdout:\n{stdout}")
+                    )
 
                 _success = output.get("status", True) is not False
 
@@ -361,10 +352,12 @@ class JobRunner(BaseRunner):
         try:
             # Get output path from context provider
             output_path = str(self._context_provider.get_output_path().absolute())
-
+            wf_base_dir = self._context_provider.workflow.defaults.workflows_base_dir
+            if wf_base_dir:
+                workflow_name = Path(wf_base_dir) / workflow_name
             # Add the sub-workflow to the manager
             task_id = self._manager.add(
-                workflow_name=workflow_name,
+                workflow_name=str(workflow_name),
                 inputs=inputs,
                 is_reused=True,
                 output=output_path,
@@ -405,9 +398,8 @@ class JobRunner(BaseRunner):
             )
             raise
 
-    @staticmethod
     def _execute_subprocess(
-        args: list, executable: str, step: Step, env: Dict[str, Any] = {}
+        self, args: list, executable: str, step: Step, env: Dict[str, Any] = {}
     ) -> Dict[str, Any]:
         """
         Execute a subprocess with proper error handling and output capturing.
@@ -437,11 +429,7 @@ class JobRunner(BaseRunner):
             output = subprocess.run(
                 args,
                 executable=executable,
-                cwd=(
-                    Path(step.working_directory).absolute()
-                    if step and step.working_directory
-                    else Path.cwd()
-                ),
+                cwd=self._resolve_working_dir(step),
                 env=env,
                 timeout=(step.timeout_minutes * 60 if step else 60 * 24),
                 capture_output=True,
@@ -490,7 +478,16 @@ class JobRunner(BaseRunner):
         Returns:
             Dict containing the command output
         """
-        shell = step.shell or "/bin/bash"
+        default_shell = "/bin/bash"
+        shell = default_shell
+        for s in [
+            step.shell,
+            self._job.defaults.run.shell,
+            self._context_provider.workflow.defaults.run.shell,
+        ]:
+            if s != default_shell:
+                shell = s
+                break
         script = step.run.strip()
 
         # Process any template variables in the command
@@ -554,7 +551,6 @@ class JobRunner(BaseRunner):
                     )
                 args = [python_executable, tmp_file]
             else:
-                # For smaller scripts, execute directly
                 args = [
                     python_executable,
                     "-Wignore",
@@ -610,6 +606,27 @@ class JobRunner(BaseRunner):
 
         return f"[Job '{job_id}' - '{job_name}'][{status}] -> {message_str}"
 
+    def _resolve_working_dir(self, step: Step) -> Path:
+        """
+        Resolve the working directory for a step.
+
+        Args:
+            step: The step configuration
+
+        Returns:
+            Path: The resolved working directory
+        """
+        step_path = Path(step.working_directory)
+        if step_path.is_absolute():
+            return step_path
+        job_path = Path(self._job.defaults.run.working_directory)
+        if job_path.is_absolute():
+            return job_path / step_path
+        workflow_path = Path(
+            self._context_provider.workflow.defaults.run.working_directory
+        )
+        return workflow_path / job_path / step_path
+
     @property
     def processed_steps(self) -> int:
         """
@@ -629,15 +646,3 @@ class JobRunner(BaseRunner):
             int: The total number of steps
         """
         return len(self._job.steps) if self._job and hasattr(self._job, "steps") else 0
-
-    @property
-    def progress_percentage(self) -> float:
-        """
-        Calculate the job progress as a percentage.
-
-        Returns:
-            float: The percentage of completion (0-100)
-        """
-        if self.total_steps == 0:
-            return 100.0
-        return (self.processed_steps / self.total_steps) * 100.0

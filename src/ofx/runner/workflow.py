@@ -5,7 +5,7 @@ import httpx
 import time
 import logging
 import shutil
-import shlex
+import subprocess
 
 from ofx.runner.base import BaseRunner, RunnerStatus
 from ofx.runner.job import JobRunner
@@ -478,16 +478,15 @@ class WorkflowRunner(BaseRunner):
                         )
                     )
                     shell = "/bin/bash" if os.name != "nt" else "cmd.exe"
-                    result = JobRunner._execute_subprocess(
-                        args=[shell, "-c", install_cmd],
-                        executable=shell,
-                        step=None,
-                        env=self._envs,
-                    )
-                    if result.get("exit_code") != 0:
-                        raise RuntimeError(
-                            f"Failed to install tool '{tool_bin}': {result.get('stderr', '')}"
+                    try:
+                        result = subprocess.run(
+                            args=[shell, "-c", install_cmd],
+                            executable=shell,
+                            env=self._envs,
+                            check=True,
                         )
+                    except Exception as e:
+                        RuntimeError(f"Failed to install tool '{tool_bin}': {e}")
                 else:
                     logger.debug(
                         self._produce_log(f"Tool '{tool_bin}' is already installed")
@@ -792,3 +791,8 @@ class WorkflowRunner(BaseRunner):
     def run_id(self) -> str:
         """Unique identifier for the workflow run."""
         return self._id
+
+    @property
+    def workflow(self) -> Workflow:
+        """Get the workflow being executed."""
+        return self._workflow
