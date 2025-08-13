@@ -3,6 +3,7 @@ from async_typer import AsyncTyper
 
 from ofx.commands.flow.run import FlowRunHandler
 from ofx.commands.flow.validate import ValidateHandler
+from ofx.commands.flow.update import UpdateHandler
 from typing import List, Annotated, Optional
 
 app = AsyncTyper()
@@ -51,3 +52,11 @@ def validate(
     Validate a workflow configuration.
     """
     ValidateHandler().run(workflow_name=workflow_name)
+
+
+@app.command()
+def update():
+    """
+    Update the workflow configuration.
+    """
+    UpdateHandler().run()
