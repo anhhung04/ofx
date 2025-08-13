@@ -7,7 +7,7 @@ import sys
 import tempfile
 import logging
 import time
-from ofx.runner.base import BaseRunner, RunnerStatus
+from ofx.runner.base import BaseRunner, RunnerStatus, RunContext
 from ofx.models.job import Job
 from ofx.models.step import Step
 
@@ -33,12 +33,13 @@ class JobRunner(BaseRunner):
     script running, and sub-workflow invocation.
     """
 
-    def __init__(self, job_id: str, job: Job):
-        super().__init__(job.name)
+    def __init__(self, job_id: str, job: Job, ctx: RunContext):
+        super().__init__(job.name, ctx)
         self._job = job
         self._job_id = job_id
         self._processed_steps = 0
-        self._step_outputs = []  # Initialize as instance attribute, not class attribute
+        self._step_outputs = []
+        self._registered_steps_outputs = {}
 
     async def _do_run(self):
         """
@@ -53,14 +54,14 @@ class JobRunner(BaseRunner):
         try:
             async for step_output in self._process_steps():
                 step_name = step_output["step"].name
-                step_id = step_output["id"]
+                step_id = step_output["index"]
                 logger.debug(
                     self._produce_log(
                         f"(step '{step_name}') -> completed with status: {step_output['status'].value}"
                     )
                 )
                 self._step_outputs.insert(step_id, step_output)
-
+                self._processed_steps += 1
                 if (
                     step_output["status"] == RunnerStatus.FAILED
                     and not step_output["step"].continue_on_error
@@ -146,17 +147,23 @@ class JobRunner(BaseRunner):
         """
         if not self._success:
             logger.error(self._produce_log(f"Job failed with error: {self._error}"))
-        else:
-            logger.debug(self._produce_log("Job completed successfully"))
-
-        # Prepare the final result with all job details
+        outputs = {
+            "steps": self._step_outputs,
+        }
+        outputs.update(
+            {
+                k: self._context_provider.resolve_template(v)
+                for k, v in self._ctx.outputs.items()
+            }
+        )
+        self._status = RunnerStatus.COMPLETED if self._success else RunnerStatus.FAILED
         self._result = {
             "job_name": self._job.name,
             "job_id": self._job_id,
             "status": self._status,
             "processed_steps": self._processed_steps,
             "total_steps": len(self._job.steps),
-            "outputs": self._step_outputs,
+            "outputs": outputs,
             "error": self._error,
         }
 
@@ -181,25 +188,10 @@ class JobRunner(BaseRunner):
         Yields:
             dict: The result of each step execution including status and outputs
         """
-        for step_id, step in enumerate(self._job.steps):
-            step_name = step.name if step.name else f"step_{step_id}"
-            logger.debug(self._produce_log(f"Processing step {step_id}: '{step_name}'"))
-
-            if step_id > 0 and step.run_if:
-                raw_cond = str(step.run_if)
-                step.run_if = self._context_provider.resolve_template(step.run_if)
-                logger.debug(
-                    self._produce_log(
-                        f"Resolved run_if condition: '{str(step.run_if)}' from raw condition: '{raw_cond}'"
-                    )
-                )
-                if not eval(str(step.run_if)):
-                    raise RuntimeError(
-                        self._produce_log(
-                            f"Step '{step_name}' cannot run because condition '{raw_cond}' is not met"
-                        )
-                    )
-
+        for step_index, step in enumerate(self._job.steps):
+            step = self._preprocess_step(step_index, step)
+            step_name = step.name
+            step_id = step.id
             try:
                 run_type = self._parse_run_type(step)
                 handler = getattr(self, f"_handle_{run_type.value}")
@@ -207,6 +199,7 @@ class JobRunner(BaseRunner):
                 logger.error(self._produce_log(f"Invalid step configuration: {e}"))
                 yield {
                     "step": step,
+                    "index": step_index,
                     "id": step_id,
                     "outputs": {},
                     "status": RunnerStatus.FAILED,
@@ -220,35 +213,40 @@ class JobRunner(BaseRunner):
             start_time = time.time()
 
             try:
-                # Execute the appropriate handler for this step type
                 output = await handler(step)
-
-                # Log output if available (truncate long output to avoid log spam)
                 if isinstance(output, dict) and "stdout" in output and output["stdout"]:
                     stdout = output["stdout"]
+                    if len(stdout) > 2000:
+                        stdout = stdout[:2000] + "... [truncated]"
                     logger.info(
                         self._produce_log(f"(step '{step_name}') -> stdout:\n{stdout}")
                     )
 
                 _success = output.get("status", True) is not False
-
             except Exception as e:
                 stderr = str(e)
                 _success = False
                 logger.error(self._produce_log(f"(step '{step_name}') -> error: {e}"))
 
             finally:
-                # Calculate execution time
                 execution_time = time.time() - start_time
-
-                # Yield the step result
+                step_status = (
+                    RunnerStatus.COMPLETED if _success else RunnerStatus.FAILED
+                )
+                self._registered_steps_outputs[step_id] = {**step.model_dump()}
+                self._registered_steps_outputs[step_id].update(
+                    {
+                        "outputs": output,
+                        "status": step_status,
+                        run_type: run_type,
+                    }
+                )
                 yield {
                     "step": step,
                     "id": step_id,
+                    "index": step_index,
                     "outputs": output,
-                    "status": (
-                        RunnerStatus.COMPLETED if _success else RunnerStatus.FAILED
-                    ),
+                    "status": step_status,
                     "run_type": run_type,
                     "error": stderr,
                     "execution_time": execution_time,
@@ -259,6 +257,38 @@ class JobRunner(BaseRunner):
                         f"Step '{step_name}' completed in {execution_time:.2f}s with status: {_success}"
                     )
                 )
+
+    def _preprocess_step(self, step_id: int, step: Step) -> Step:
+        step_name = (
+            self._resolve_template_with_step(step.name)
+            if step.name
+            else f"step_{step_id}"
+        )
+        step.name = step_name
+        logger.debug(self._produce_log(f"Processing step {step_id}: '{step_name}'"))
+        if step_id > 0 and step.run_if:
+            raw_cond = str(step.run_if)
+            step.run_if = self._resolve_template_with_step(step.run_if)
+            logger.debug(
+                self._produce_log(
+                    f"Resolved run_if condition: '{str(step.run_if)}' from raw condition: '{raw_cond}'"
+                )
+            )
+            if not eval(str(step.run_if)):
+                raise RuntimeError(
+                    self._produce_log(
+                        f"Step '{step_name}' cannot run because condition '{raw_cond}' is not met"
+                    )
+                )
+        step.env = {k: self._resolve_template_with_step(v) for k, v in step.env.items()}
+        step.secrets = {
+            k: self._resolve_template_with_step(v) for k, v in step.secrets.items()
+        }
+        step.working_directory = self._resolve_template_with_step(
+            step.working_directory
+        )
+        step.id = self._resolve_template_with_step(step.id)
+        return step
 
     def _parse_run_type(self, step: Step) -> RunType:
         """
@@ -274,20 +304,12 @@ class JobRunner(BaseRunner):
             ValueError: If the step doesn't define a valid run type
         """
         step_name = step.name or "unnamed step"
-
-        # Check for script step (Python code)
         if step.script:
             return RunType.SCRIPT
-
-        # Check for command step (shell command)
         elif step.run:
             return RunType.COMMAND
-
-        # Check for workflow step (reusable workflow)
         elif step.uses:
             return RunType.WORKFLOW
-
-        # Invalid step configuration
         else:
             raise ValueError(
                 self._produce_log(
@@ -313,7 +335,7 @@ class JobRunner(BaseRunner):
             RuntimeError: If the sub-workflow execution fails
         """
         step_name = step.name or "workflow step"
-        workflow_name = step.uses
+        workflow_name = self._resolve_template_with_step(step.uses)
 
         logger.debug(
             self._produce_log(
@@ -321,53 +343,32 @@ class JobRunner(BaseRunner):
             )
         )
 
-        # Process inputs with template resolution
-        inputs = {}
-        for key, value in step.run_with.items():
-            try:
-                if isinstance(value, str):
-                    # Process string inputs through template resolution
-                    inputs[key] = self._context_provider.resolve_template(value)
-                else:
-                    # Pass through non-string values unchanged
-                    inputs[key] = value
-            except Exception as e:
-                logger.error(
-                    self._produce_log(
-                        f"Error resolving template for input '{key}': {e}"
-                    )
-                )
-                # Use original value as fallback
-                inputs[key] = value
+        inputs = {
+            k: self._resolve_template_with_step(v) for k, v in step.inputs.items()
+        }
 
-        # Handle secrets based on configuration
         secrets = {}
         if step.secrets == "inherit":
-            # Inherit all secrets from parent workflow
-            secrets = self._context_provider.get_default_secrets()
+            secrets = self._ctx.secrets.copy()
         elif isinstance(step.secrets, dict):
-            # Use specific secrets provided in step definition
             secrets = step.secrets
 
         try:
-            # Get output path from context provider
             output_path = str(self._context_provider.get_output_path().absolute())
             wf_base_dir = self._context_provider.workflow.defaults.workflows_base_dir
             if wf_base_dir:
                 workflow_name = Path(wf_base_dir) / workflow_name
-            # Add the sub-workflow to the manager
             task_id = self._manager.add(
                 workflow_name=str(workflow_name),
-                inputs=inputs,
+                ctx=RunContext(
+                    inputs=inputs,
+                    envs={**self._ctx.envs, **step.env},
+                    secrets=secrets,
+                    output_path=output_path,
+                ),
                 is_reused=True,
-                output=output_path,
-                secrets=secrets,
             )
-
-            # Wait for the sub-workflow to complete
             await self._manager.wait(task_id)
-
-            # Get the workflow runner
             flow_data = self._manager.get_runner(task_id)
             flow_runner = flow_data.get("runner", None) if flow_data else None
 
@@ -375,22 +376,15 @@ class JobRunner(BaseRunner):
                 raise RuntimeError(
                     f"Sub-workflow runner not found for task ID: {task_id}"
                 )
-
-            # Get the result and validate status
             result = flow_runner.get_result()
             status = result.get("status", RunnerStatus.IDLE)
-
             if status != RunnerStatus.COMPLETED:
                 error_msg = result.get("error", "Unknown error")
                 raise RuntimeError(
                     f"Sub-workflow '{workflow_name}' failed: {error_msg}"
                 )
-
-            # Return the outputs from the workflow
             return result.get("outputs", {})
-
         except Exception as e:
-            # Log workflow execution error with context
             logger.error(
                 self._produce_log(
                     f"(step '{step_name}') -> failed to execute sub-workflow '{workflow_name}': {e}"
@@ -420,12 +414,10 @@ class JobRunner(BaseRunner):
         stdout = ""
 
         try:
-            # Build environment with proper variable inheritance
             env = {**os.environ, **env}
             if step and step.env:
                 env.update(step.env)
 
-            # Execute the subprocess
             output = subprocess.run(
                 args,
                 executable=executable,
@@ -434,18 +426,14 @@ class JobRunner(BaseRunner):
                 timeout=(step.timeout_minutes * 60 if step else 60 * 24),
                 capture_output=True,
             )
-
-            # Process output
             try:
                 stderr = output.stderr.decode("utf-8").strip()
                 stdout = output.stdout.decode("utf-8").strip()
             except UnicodeDecodeError:
-                # Fallback to base64 encoding if output is binary
                 stderr = base64.b64encode(output.stderr).decode("utf-8")
                 stdout = base64.b64encode(output.stdout).decode("utf-8")
                 outputs["binary_output"] = True
 
-            # Check for failure
             if output.returncode != 0:
                 stderr = stderr or f"Command failed with exit code {output.returncode}"
                 raise RuntimeError(f"Command failed: {stderr}")
@@ -490,9 +478,8 @@ class JobRunner(BaseRunner):
                 break
         script = step.run.strip()
 
-        # Process any template variables in the command
         try:
-            script = self._context_provider.resolve_template(script)
+            script = self._resolve_template_with_step(script)
         except Exception as e:
             raise RuntimeError(f"Failed to resolve template in command: {e}")
 
@@ -502,7 +489,6 @@ class JobRunner(BaseRunner):
             )
         )
 
-        # Execute the command
         args = [shell, "-c", script]
         return self._execute_subprocess(args, shell, step, self._job.env)
 
@@ -524,23 +510,18 @@ class JobRunner(BaseRunner):
         run_in_file = False
 
         try:
-            # If script is a filename, load its content
             if re.match(r"\w+_.*\.py", script):
                 script_path = Path(step.working_directory or ".") / script
                 if not script_path.exists():
                     raise FileNotFoundError(f"Script file not found: {script_path}")
                 script = script_path.read_text().strip()
 
-            # Process template variables in the script
-            script = self._context_provider.resolve_template(script)
+            script = self._resolve_template_with_step(script)
 
-            # Get Python executable
             python_executable = sys.executable
 
-            # Compress the script for efficient transmission
             enc_script = base64.b64encode(compress(script.encode(), 9)).decode()
 
-            # For large scripts, use a temporary file instead of command line
             if len(enc_script) > 10000:
                 run_in_file = True
                 tmp_file = tempfile.mktemp(suffix=".py", dir=tempfile.gettempdir())
@@ -562,17 +543,13 @@ class JobRunner(BaseRunner):
                 self._produce_log(f"(step '{step.name}') -> executing Python script")
             )
 
-            # Execute the script using our common subprocess executor
             return self._execute_subprocess(
                 args, python_executable, step, self._job.env
             )
-
         except Exception as e:
-            # Make sure we propagate the correct error
             raise RuntimeError(f"Script execution failed: {str(e)}")
 
         finally:
-            # Clean up temporary file if used
             if run_in_file and tmp_file and os.path.exists(tmp_file):
                 try:
                     os.remove(tmp_file)
@@ -626,6 +603,11 @@ class JobRunner(BaseRunner):
             self._context_provider.workflow.defaults.run.working_directory
         )
         return workflow_path / job_path / step_path
+
+    def _resolve_template_with_step(self, value: Any) -> Any:
+        return self._context_provider.resolve_template(
+            value, {"steps": self._registered_steps_outputs}
+        )
 
     @property
     def processed_steps(self) -> int:

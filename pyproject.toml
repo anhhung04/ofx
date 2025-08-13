@@ -34,7 +34,7 @@ build = ["setuptools", "cython"]
 compile = ["cchardet"]
 
 [project.scripts]
-ofx = "ofx:MainApp.main"
+ofx = "ofx:main"
 
 [build-system]
 requires = [ "cython", "setuptools", "wheel"]

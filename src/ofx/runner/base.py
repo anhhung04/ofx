@@ -1,6 +1,10 @@
 import uuid
 from enum import Enum
-from typing import Dict, Any
+from pathlib import Path
+
+from ofx.models import DefaultConfig
+from pydantic import BaseModel, Field
+from typing import Dict, Any, Optional
 
 
 class RunnerStatus(Enum):
@@ -12,16 +16,44 @@ class RunnerStatus(Enum):
     FAILED = "failed"
 
 
+class RunContext(BaseModel):
+    inputs: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Inputs for the workflow run, can be used to pass parameters",
+    )
+    outputs: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Outputs from the workflow run, can be used to capture results",
+    )
+    secrets: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Secrets for the workflow run, can be used to pass sensitive information",
+    )
+    envs: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Environment variables for the workflow run",
+    )
+    defaults: DefaultConfig = Field(
+        default_factory=DefaultConfig,
+        description="Default configuration for the workflow run",
+    )
+    output_path: Path = Field(
+        default=Path.cwd() / "out",
+        description="Path to store output files",
+    )
+
+
 class BaseRunner:
     _manager = None
 
-    def __init__(self, name: str):
-        self._status = RunnerStatus.IDLE
-        self._result = {}
-        self._error = None
+    def __init__(self, name: str, ctx: RunContext):
         self._id = f"{name}-{str(uuid.uuid4())}"
+        self._status = RunnerStatus.IDLE
+        self._error = None
         self._success = False
         self._progress = 0.0
+        self._result = {}
+        self._ctx = ctx
 
     async def run(self):
         """Run the workflow and return the result."""
@@ -45,10 +77,6 @@ class BaseRunner:
         raise NotImplementedError("Subclasses should implement this method.")
 
     async def _post_run(self):
-        raise NotImplementedError("Subclasses should implement this method.")
-
-    def _update_progress(self) -> bool:
-        """Update the progress of the runner."""
         raise NotImplementedError("Subclasses should implement this method.")
 
     def attach_manager(self, manager):

@@ -1,22 +1,17 @@
 import os
 import asyncio
-import yaml
-import httpx
 import time
 import logging
 import shutil
 import subprocess
 
-from ofx.runner.base import BaseRunner, RunnerStatus
+from ofx.runner.base import BaseRunner, RunnerStatus, RunContext
 from ofx.runner.job import JobRunner
 from ofx.models.workflow import Workflow
-from ofx.settings import SECRETS_DIR, DEFAULT_WORKFLOWS_DIR, settings
+from ofx.settings import SECRETS_DIR, settings
 from ofx.utils.misc import (
     load_secrets,
     find_parallel_schedule,
-    is_remote_path,
-    clone_remote_repo,
-    MetaSingleton,
 )
 
 from pathlib import Path
@@ -26,9 +21,10 @@ from rich.progress import (
     TextColumn,
     BarColumn,
     TaskProgressColumn,
+    TimeElapsedColumn,
 )
 from jinja2 import Template
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
 processor = ThreadPoolExecutor(max_workers=(settings.workers * 2))
@@ -38,182 +34,30 @@ logger = logging.getLogger("ofx")
 
 
 class WorkflowRunner(BaseRunner):
-    pass
 
-
-class FlowRunManager(metaclass=MetaSingleton):
-    _flows = {}
-    _flows_dirs = [DEFAULT_WORKFLOWS_DIR.absolute()]
-    _results = {}
-
-    def add(
-        self,
-        workflow_name: str,
-        **kwargs,
-    ):
-        flow = self.find_flow(workflow_name)
-        runner = WorkflowRunner(workflow=flow, **kwargs)
-        runner.attach_manager(self)
-        bg_task = asyncio.create_task(runner.run())
-        run_id = runner.run_id
-        self._flows[run_id] = {
-            "runner": runner,
-            "task": bg_task,
-        }
-        return run_id
-
-    async def wait(self, task_id: Optional[str] = None):
-        """
-        Wait for all running flows to complete or for a specific task if task_id is provided.
-
-        Args:
-            task_id: Optional ID of the specific task to wait for
-
-        Raises:
-            ValueError: If the task_id is provided but not found
-            TimeoutError: If waiting for the task exceeds the configured timeout
-        """
-        if not self._flows:
-            logger.debug("No flows to wait for")
-            return
-
-        # Early return if the specified task doesn't exist
-        if task_id is not None and task_id not in self._flows:
-            logger.warning(f"Task with ID {task_id} not found in flow manager")
-            return
-
-        # Get the specific task or None if waiting for all tasks
-        task = self._flows.get(task_id, {}).get("task") if task_id else None
-
-        # Validate task existence if a specific ID was provided
-        if task_id and not task:
-            raise ValueError(
-                f"Task with ID {task_id} not found or not properly initialized"
-            )
-
-        try:
-            if task:
-                # Wait for the specific task with timeout
-                await asyncio.wait_for(task, timeout=settings.timeout)
-            else:
-                # Wait for all tasks
-                tasks = [flow_data["task"] for flow_data in self._flows.values()]
-                await asyncio.gather(*tasks, return_exceptions=True)
-        except asyncio.TimeoutError:
-            logger.error(
-                f"Timeout waiting for task {task_id or 'all tasks'} to complete"
-            )
-            raise TimeoutError(
-                f"Workflow execution timed out after {settings.timeout} seconds"
-            )
-        except Exception as e:
-            logger.error(
-                f"Error while waiting for task {task_id or 'all tasks'}: {str(e)}"
-            )
-            raise
-
-    @property
-    def flows(self):
-        return self._flows
-
-    def get_runner(self, id: str):
-        return self._flows.get(id)
-
-    def add_workflow_dir(self, path: str):
-        if path not in self._flows_dirs:
-            self._flows_dirs.append(path)
-
-    def find_flow(self, workflow_name: str) -> Workflow:
-        """
-        Find and load a workflow from local directories, file path, URL, or git repository.
-
-        Args:
-            workflow_name: Name, path, URL, or git repository of the workflow
-
-        Returns:
-            Workflow: The loaded workflow
-
-        Raises:
-            RuntimeError: If the workflow cannot be found or loaded
-        """
-        # Try to find workflow in configured directories
-        for directory in self._flows_dirs:
-            path = Path(directory) / f"{workflow_name.rstrip('.yml')}.yml"
-            if path.exists():
-                try:
-                    return Workflow.model_validate(
-                        yaml.safe_load(path.read_text().strip())
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to load workflow from {path}: {e}")
-                    raise RuntimeError(f"Failed to load workflow from {path}: {e}")
-
-        # Try to load workflow from direct file path
-        if Path(workflow_name).exists():
-            try:
-                return Workflow.model_validate(
-                    yaml.safe_load(Path(workflow_name).read_text().strip())
-                )
-            except Exception as e:
-                logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
-                raise RuntimeError(
-                    f"Failed to load workflow from file {workflow_name}: {e}"
-                )
-
-        # Try to load workflow from URL
-        if is_remote_path(workflow_name):
-            try:
-                response = httpx.get(workflow_name)
-                response.raise_for_status()
-                return Workflow.model_validate(yaml.safe_load(response.text.strip()))
-            except Exception as e:
-                logger.error(f"Failed to fetch workflow from {workflow_name}: {e}")
-                raise RuntimeError(
-                    f"Failed to fetch workflow from {workflow_name}: {e}"
-                )
-
-        # Try to clone and load workflow from git repository
-        git_path = clone_remote_repo(workflow_name)
-        if not git_path:
-            raise RuntimeError(f"Workflow {workflow_name} not found.")
-
-        self.add_workflow_dir(git_path.absolute())
-        try:
-            return Workflow.model_validate(
-                yaml.safe_load((git_path / "main.yml").read_text().strip())
-            )
-        except Exception as e:
-            logger.error(f"Failed to load workflow from git repo {workflow_name}: {e}")
-            raise RuntimeError(
-                f"Failed to load workflow from git repo {workflow_name}: {e}"
-            )
-
-
-class WorkflowRunner(BaseRunner):
     def __init__(
         self,
         workflow: Workflow,
-        inputs: Dict[str, Any] = {},
-        output: Optional[str] = None,
-        secrets: Optional[Dict[str, Any]] = None,
-        envs: Optional[Dict[str, str]] = None,
+        ctx: RunContext,
+        output_path: Path = Path.cwd(),
         is_reused: bool = False,
     ):
-        super().__init__(workflow.name)
+        super().__init__(workflow.name, ctx)
         self._workflow = workflow
         self._is_reused = is_reused
-        self._inputs = inputs
-        self._output_path = Path(output) if output else Path.cwd() / "out"
+        self._inputs = ctx.inputs
         self._default_secrets = load_secrets(SECRETS_DIR)
-        self._output_jobs = {}
+        self._envs = {}
         self._job_status = {}
+        self._output_jobs = {}
+        self._output_path = output_path
         self._total_steps = 0
         self._completed_steps = 0
         self._do_init()
-        if secrets:
-            self._default_secrets.update(secrets)
-        if envs:
-            self._envs.update(envs)
+        if ctx.secrets:
+            self._default_secrets.update(ctx.secrets)
+        if ctx.envs:
+            self._envs.update(ctx.envs)
 
     def get_job_status(self, job_id: str) -> RunnerStatus:
         return self._job_status.get(job_id).status
@@ -243,21 +87,15 @@ class WorkflowRunner(BaseRunner):
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
+            TimeElapsedColumn(),
             transient=self._is_reused,
         ) as progress:
             # Initialize progress tracking
+            self._planning_jobs()
             task_id = progress.add_task(
-                description=f"Preparing to run workflow '{self._workflow.name}'",
-            )
-
-            # Plan job execution
-            total_steps = self._planning_jobs()
-            progress.update(
-                task_id,
                 description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]'",
-                total=total_steps,
+                total=self._total_steps,
             )
-
             # Execute jobs stage by stage
             for stage_num, stage in enumerate(self._schedule):
                 logger.debug(
@@ -319,14 +157,14 @@ class WorkflowRunner(BaseRunner):
                     progress.update(
                         task_id,
                         description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]' - Stage {stage_num + 1}/{len(self._schedule)}",
-                        completed=min(self._completed_steps, total_steps),
+                        completed=min(self._completed_steps, self._total_steps),
                     )
 
             # Mark workflow as completed
             progress.update(
                 task_id,
                 description=f"{'Sub-' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]' completed",
-                completed=total_steps,
+                completed=self._total_steps,
             )
 
     def _planning_jobs(self) -> int:
@@ -386,16 +224,20 @@ class WorkflowRunner(BaseRunner):
 
         # Set up the job runner
         job = self._workflow.jobs[job_id]
-        job_runner = JobRunner(job_id, job)
+        job_runner = JobRunner(
+            job_id,
+            job,
+            ctx=RunContext(
+                inputs=self._inputs, envs=self._envs, secrets=self.get_default_secrets()
+            ),
+        )
         job_runner.attach_manager(self._manager)
         job_runner.attach_context_provider(self)
 
-        # Initialize output and status tracking
         self._output_jobs[job_id] = {"steps": job_runner._step_outputs}
         self._job_status[job_id] = job_runner
 
         try:
-            # Run and monitor the job execution
             self._run_and_monitor_job(job_id)
             return True
         except Exception as e:
@@ -417,51 +259,44 @@ class WorkflowRunner(BaseRunner):
         """
         job_runner = self._job_status[job_id]
         job = job_runner._job
+        total_steps = len(job.steps)
 
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
             TaskProgressColumn(),
+            TimeElapsedColumn(),
             transient=True,
         ) as progress:
-            # Create a progress task for this job
             progress_task_id = progress.add_task(
                 description=f"Running job '{job.name}'",
-                total=len(job.steps),
+                total=total_steps,
             )
-
-            # Submit the job for execution
             job_task = processor.submit(asyncio.run, job_runner.run())
-
-            # Monitor job progress
             try:
                 while not job_task.done():
-                    # Update progress bar with current step count
                     progress.update(
                         progress_task_id,
                         completed=job_runner.processed_steps,
                         description=f"Running job '{job.name}'",
                     )
                     time.sleep(0.1)
-
-                # Update progress to completed
                 progress.update(
                     progress_task_id,
-                    completed=len(job.steps),
+                    completed=total_steps,
                     description=f"Finished job '{job.name}'",
                 )
-
-                # Return the job result (may raise an exception)
                 return job_task.result()
-
             except Exception as e:
-                # Update progress to show failure
                 progress.update(
                     progress_task_id,
                     description=f"Failed job '{job.name}': {str(e)}",
+                    completed=total_steps,
                 )
-                raise
+                raise RuntimeError(
+                    self._produce_log(f"Job '{job.name}' failed when polling: {str(e)}")
+                )
 
     async def _pre_run(self):
         if self._workflow.defaults:
@@ -491,6 +326,17 @@ class WorkflowRunner(BaseRunner):
                     logger.debug(
                         self._produce_log(f"Tool '{tool_bin}' is already installed")
                     )
+        for job_id, job in self._workflow.jobs.items():
+            self.workflow.jobs[job_id].name = self._resolve_template(job.name)
+            self.workflow.jobs[job_id].needs = [
+                self._resolve_template(dep) for dep in job.needs
+            ]
+            for i, step in enumerate(job.steps):
+                self.workflow.jobs[job_id].steps[i].name = self._resolve_template(
+                    step.name
+                )
+                self.workflow.jobs[job_id].steps[i].id = self._resolve_template(step.id)
+
         logger.debug(
             self._produce_log(f"resolved workflow: {self._workflow.model_dump()}")
         )
@@ -498,6 +344,7 @@ class WorkflowRunner(BaseRunner):
     async def _post_run(self) -> Dict[str, Any]:
         if self._status == RunnerStatus.FAILED or not self._success:
             logger.error(self._produce_log(f"error: {self._error}"))
+        self._status = RunnerStatus.COMPLETED if self._success else RunnerStatus.FAILED
         self._result["outputs"] = self._output_jobs
         if self._is_reused and self._workflow.workflow_call:
             self._result["outputs"] = {}
@@ -599,8 +446,11 @@ class WorkflowRunner(BaseRunner):
                         self._workflow.workflow_call.secrets or {},
                     )
                 )
-
-        # Set up environment variables by combining OS environment with workflow-specific env
+        for key, value in self._workflow.env.items():
+            self._envs[key] = self._resolve_template(value)
+        self._workflow.defaults.workflows_base_dir = self._resolve_template(
+            self._workflow.defaults.workflows_base_dir
+        )
         self._envs = {**os.environ, **self._workflow.env}
 
     def _process_inputs(
@@ -638,10 +488,7 @@ class WorkflowRunner(BaseRunner):
                         f"Expected type: {contrain.type}."
                     )
             else:
-                if contrain.default is not None:
-                    req_inputs[key] = contrain.default
-                else:
-                    req_inputs[key] = None
+                req_inputs[key] = contrain.default
         for key, value in req_inputs.items():
             req_inputs[key] = self._resolve_template(value)
         processed_inputs = {}
@@ -748,13 +595,17 @@ class WorkflowRunner(BaseRunner):
                     )
                     return result
 
+            logger.debug(
+                self._produce_log(
+                    f"Resolved template for value '{value}' to '{result}'"
+                )
+            )
             return result
 
         except Exception as e:
             logger.error(
                 self._produce_log(f"Error resolving template for value '{value}': {e}")
             )
-            # Return the original value if template resolution fails
             return value
 
     def _produce_log(self, message: Any) -> str:
@@ -765,7 +616,7 @@ class WorkflowRunner(BaseRunner):
         """Public method for template resolution"""
         logger.debug(
             self._produce_log(
-                f"Resolving template for value: {str(value)} with vars: {vars}"
+                f"Resolving template for value '{str(value)}' with vars: {vars}"
             )
         )
         return self._resolve_template(value, vars)

@@ -2,10 +2,9 @@ import typer
 
 from ofx.settings import settings, BANNER
 from ofx.utils.log import reload_logging_config
-
 from ofx.commands import flow, dump, asset
 
-app = typer.Typer()
+app = typer.Typer(pretty_exceptions_show_locals=False)
 
 
 @app.callback()
@@ -31,3 +30,14 @@ def add_app(sub_app):
 add_app(flow)
 add_app(dump)
 add_app(asset)
+
+
+def main():
+    """
+    Main entry point for the OFX CLI application.
+    """
+    try:
+        app()
+    except Exception as e:
+        typer.secho(f"🚨 Error: {e}", fg=typer.colors.RED, bold=True)
+        return typer.Exit(code=1)

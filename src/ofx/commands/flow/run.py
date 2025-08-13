@@ -2,7 +2,7 @@ import json
 import logging
 
 from ofx.settings import settings
-from ofx.runner.workflow import FlowRunManager
+from ofx.runner.manager import FlowRunManager
 
 from notifiers.logging import NotificationHandler
 from tabulate import tabulate

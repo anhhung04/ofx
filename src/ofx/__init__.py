@@ -1,12 +1,7 @@
-from ofx.commands import app as main
+from ofx.commands import main
 from ofx._version import __version__
 
-
-class MainApp:
-    @classmethod
-    def main(cls):
-        main()
-
+__all__ = ["__version__", "main"]
 
 if __name__ == "__main__":
     main()

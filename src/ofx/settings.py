@@ -6,7 +6,7 @@ from pydantic_settings import SettingsConfigDict, BaseSettings
 from ofx.utils.log import reload_logging_config
 
 from pydantic import Field
-from typing import Union, Literal, Optional
+from typing import Union, Literal, Optional, Dict, Any
 
 BASE_DATA_DIR = Path.home() / ".local" / "share" / "ofx"
 TEMP_DIR = Path(tempfile.gettempdir()) / ".ofx"
@@ -59,7 +59,7 @@ class Settings(BaseSettings):
         default=None,
         description="Notification provider to use for alerts (e.g., 'slack', 'email')",
     )
-    notify_config: Optional[str] = Field(
+    notify_config: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Configuration for the notification provider",
     )
