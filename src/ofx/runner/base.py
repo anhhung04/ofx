@@ -21,10 +21,6 @@ class RunContext(BaseModel):
         default_factory=dict,
         description="Inputs for the workflow run, can be used to pass parameters",
     )
-    outputs: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Outputs from the workflow run, can be used to capture results",
-    )
     secrets: Dict[str, Any] = Field(
         default_factory=dict,
         description="Secrets for the workflow run, can be used to pass sensitive information",

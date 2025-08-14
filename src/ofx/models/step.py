@@ -29,6 +29,9 @@ class Step(BaseModel):
     shell: Union[str, None] = Field(
         None, description="Shell to use for running commands in the step"
     )
+    log_stdout: bool = Field(
+        False, description="Whether to capture standard output of the step"
+    )
     uses: Union[str, None] = Field(
         None, description="Select a workflow to run as part of a step in the job"
     )

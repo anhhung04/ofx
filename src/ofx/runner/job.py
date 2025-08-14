@@ -1,5 +1,4 @@
 import os
-import uuid
 import subprocess
 import base64
 import re
@@ -7,6 +6,7 @@ import sys
 import tempfile
 import logging
 import time
+import shlex
 from ofx.runner.base import BaseRunner, RunnerStatus, RunContext
 from ofx.models.job import Job
 from ofx.models.step import Step
@@ -152,8 +152,8 @@ class JobRunner(BaseRunner):
         }
         outputs.update(
             {
-                k: self._context_provider.resolve_template(v)
-                for k, v in self._ctx.outputs.items()
+                k: self._resolve_template_with_step(v)
+                for k, v in self._job.outputs.items()
             }
         )
         self._status = RunnerStatus.COMPLETED if self._success else RunnerStatus.FAILED
@@ -214,7 +214,12 @@ class JobRunner(BaseRunner):
 
             try:
                 output = await handler(step)
-                if isinstance(output, dict) and "stdout" in output and output["stdout"]:
+                if (
+                    isinstance(output, dict)
+                    and "stdout" in output
+                    and output["stdout"]
+                    and step.log_stdout
+                ):
                     stdout = output["stdout"]
                     if len(stdout) > 2000:
                         stdout = stdout[:2000] + "... [truncated]"
@@ -413,6 +418,7 @@ class JobRunner(BaseRunner):
         stderr = ""
         stdout = ""
 
+        args = shlex.join(args)
         try:
             env = {**os.environ, **env}
             if step and step.env:
@@ -425,6 +431,7 @@ class JobRunner(BaseRunner):
                 env=env,
                 timeout=(step.timeout_minutes * 60 if step else 60 * 24),
                 capture_output=True,
+                shell=True,
             )
             try:
                 stderr = output.stderr.decode("utf-8").strip()
@@ -605,9 +612,16 @@ class JobRunner(BaseRunner):
         return workflow_path / job_path / step_path
 
     def _resolve_template_with_step(self, value: Any) -> Any:
-        return self._context_provider.resolve_template(
-            value, {"steps": self._registered_steps_outputs}
+        vars = {
+            "steps": self._registered_steps_outputs,
+            "needs": {
+                k: self._context_provider._output_jobs[k] for k in self._job.needs
+            },
+        }
+        logger.debug(
+            self._produce_log(f"Resolving template for step with vars: {vars}")
         )
+        return self._context_provider.resolve_template(value, vars)
 
     @property
     def processed_steps(self) -> int:

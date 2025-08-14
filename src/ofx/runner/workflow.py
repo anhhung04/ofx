@@ -239,6 +239,9 @@ class WorkflowRunner(BaseRunner):
 
         try:
             self._run_and_monitor_job(job_id)
+            self._output_jobs[job_id]["outputs"] = job_runner.get_result().get(
+                "outputs", {}
+            )
             return True
         except Exception as e:
             logger.error(job_runner._produce_log(f"Job execution failed: {e}"))
@@ -282,12 +285,6 @@ class WorkflowRunner(BaseRunner):
                         description=f"Running job '{job.name}'",
                     )
                     time.sleep(0.1)
-                progress.update(
-                    progress_task_id,
-                    completed=total_steps,
-                    description=f"Finished job '{job.name}'",
-                )
-                return job_task.result()
             except Exception as e:
                 progress.update(
                     progress_task_id,
@@ -297,6 +294,12 @@ class WorkflowRunner(BaseRunner):
                 raise RuntimeError(
                     self._produce_log(f"Job '{job.name}' failed when polling: {str(e)}")
                 )
+            progress.update(
+                progress_task_id,
+                completed=total_steps,
+                description=f"Finished job '{job.name}'",
+            )
+            return job_task.result()
 
     async def _pre_run(self):
         if self._workflow.defaults:
@@ -314,7 +317,7 @@ class WorkflowRunner(BaseRunner):
                     )
                     shell = "/bin/bash" if os.name != "nt" else "cmd.exe"
                     try:
-                        result = subprocess.run(
+                        _ = subprocess.run(
                             args=[shell, "-c", install_cmd],
                             executable=shell,
                             env=self._envs,
@@ -451,7 +454,8 @@ class WorkflowRunner(BaseRunner):
         self._workflow.defaults.workflows_base_dir = self._resolve_template(
             self._workflow.defaults.workflows_base_dir
         )
-        self._envs = {**os.environ, **self._workflow.env}
+        self._envs = os.environ.copy()
+        self._envs.update(self._workflow.env)
 
     def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
@@ -541,17 +545,16 @@ class WorkflowRunner(BaseRunner):
             return value
 
         try:
-            # Convert to string for template processing
             string_value = str(value)
-
-            # Skip template processing if there are no template markers
             if "{{" not in string_value and "{%" not in string_value:
                 return value
-
-            # Set up template with all available variables
-            template = Template(string_value, autoescape=True)
+            template = Template(
+                string_value, variable_start_string="${{", variable_end_string="}}"
+            )
+            jobs = {k: v.model_dump() for k, v in self._workflow.jobs.items()}
+            jobs.update(self._output_jobs)
             template_vars = {
-                "jobs": {**self._workflow.jobs, **self._output_jobs},
+                "jobs": jobs,
                 "inputs": self._inputs,
                 "env": self._envs,
                 "self": self._workflow.model_dump(),
@@ -597,14 +600,16 @@ class WorkflowRunner(BaseRunner):
 
             logger.debug(
                 self._produce_log(
-                    f"Resolved template for value '{value}' to '{result}'"
+                    f"Resolved template for value \n----\n{value}\n----\n to: \n----\n{result}\n----\n"
                 )
             )
             return result
 
         except Exception as e:
             logger.error(
-                self._produce_log(f"Error resolving template for value '{value}': {e}")
+                self._produce_log(
+                    f"Error resolving template for value \n----\n{value}\n----\n: {e}"
+                )
             )
             return value
 
@@ -616,7 +621,7 @@ class WorkflowRunner(BaseRunner):
         """Public method for template resolution"""
         logger.debug(
             self._produce_log(
-                f"Resolving template for value '{str(value)}' with vars: {vars}"
+                f"Resolving template for value \n----\n{str(value)}\n----\n with vars: {vars}"
             )
         )
         return self._resolve_template(value, vars)
