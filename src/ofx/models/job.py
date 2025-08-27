@@ -26,3 +26,10 @@ class Job(BaseModel):
         description="Default configuration for the job",
     )
     steps: List[Step] = Field(..., description="List of steps in the job")
+    jid: str = Field(
+        default="",
+        description="Job identifier in the workflow",
+    )
+
+    def __str__(self):
+        return f"Job(name='{self.name}', id={self.jid})"

@@ -19,6 +19,8 @@ class InitHandler(metaclass=MetaSingleton):
 
     def run(self):
         typer.echo("Unpacking workflows...")
+        if not DEFAULT_WORKFLOWS_DIR.exists():
+            DEFAULT_WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
         if len(os.listdir(DEFAULT_WORKFLOWS_DIR)) == 0:
             typer.echo(
                 f"Workflows will be unpacked to: {DEFAULT_WORKFLOWS_DIR}",
