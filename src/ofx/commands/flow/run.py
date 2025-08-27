@@ -1,14 +1,19 @@
+import os
 import json
 import logging
 
+from ofx.settings import settings, SECRETS_DIR
+from ofx.utils.misc import load_secrets
+from ofx.runner.workflow import WorkflowRunner
+from ofx.runner.base import RunContext
 from ofx.settings import settings
-from ofx.runner.manager import FlowRunManager
 
+from pathlib import Path
 from notifiers.logging import NotificationHandler
 from tabulate import tabulate
 from typing import Optional, List
 
-logger = logging.getLogger("ofx")
+logger = logging.getLogger(settings.app_branding)
 
 
 class FlowRunHandler:
@@ -20,14 +25,13 @@ class FlowRunHandler:
     ):
         self.workflow_name = workflow_name
         self.input = input
-        self.output = output
-        self.manager = FlowRunManager()
+        self.output = Path(output) if output else Path.cwd() / "out"
 
     async def run(self):
         self._process_inputs()
         input_display = self._render_input_as_table() if self.input else "None"
         logger.info(
-            f"Starting to run workflow: '{self.workflow_name}'\nwith input: {input_display}\nto output: '{self.output if self.output else '$PWD/out'}'"
+            f"Starting to run workflow: '{self.workflow_name}' with input: {input_display}\nto output: '{self.output}'"
         )
         if settings.notify_provider:
             logger.info(f"Using notification provider: {settings.notify_provider}")
@@ -36,12 +40,23 @@ class FlowRunHandler:
                     settings.notify_provider,
                     defaults=json.loads(settings.notify_config),
                 )
+                hdlr.setLevel(logging.INFO)
                 hdlr.set_name("ofx.notification")
                 logger.addHandler(hdlr)
             else:
                 logger.warning("No notification configuration provided.")
-        self.manager.add(self.workflow_name, inputs=self.input, output=self.output)
-        await self.manager.wait()
+        runner = WorkflowRunner(
+            WorkflowRunner.find_flow(self.workflow_name),
+            ctx=RunContext(
+                inputs=self.input or {},
+                output_path=self.output,
+                secrets=load_secrets(SECRETS_DIR),
+                envs=os.environ.copy(),
+            ),
+        )
+        _ = await runner.run()
+        assert runner.is_success, f"Workflow '{self.workflow_name}' failed."
+        return runner.get_result()
 
     def _process_inputs(self):
         processed_inputs = {}

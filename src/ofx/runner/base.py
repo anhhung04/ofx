@@ -1,10 +1,21 @@
 import uuid
+import logging
+import shutil
+import os
+
 from enum import Enum
 from pathlib import Path
+from jinja2 import Template
 
 from ofx.models import DefaultConfig
+from ofx.models.step import Step
+from ofx.models.workflow import Workflow
+from ofx.models.job import Job
+from ofx.settings import settings
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, AsyncGenerator, Optional
+
+logger = logging.getLogger(settings.app_branding)
 
 
 class RunnerStatus(Enum):
@@ -29,54 +40,199 @@ class RunContext(BaseModel):
         default_factory=dict,
         description="Environment variables for the workflow run",
     )
-    defaults: DefaultConfig = Field(
-        default_factory=DefaultConfig,
-        description="Default configuration for the workflow run",
-    )
-    output_path: Path = Field(
+    output_path: Path | str = Field(
         default=Path.cwd() / "out",
         description="Path to store output files",
+    )
+    vars: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional context variables for the workflow run",
+    )
+
+
+class RunSignal(str, Enum):
+    PAUSE = "pause"
+    RESUME = "resume"
+    CANCEL = "cancel"
+
+
+class RunResult(BaseModel):
+    status: RunnerStatus
+    error: Optional[str] = None
+    outputs: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Outputs produced by the run",
+    )
+    name: str = Field(..., description="Name of the run")
+    run_id: str = Field(..., description="Unique identifier for the run")
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional metadata for the run",
     )
 
 
 class BaseRunner:
-    _manager = None
-
-    def __init__(self, name: str, ctx: RunContext):
+    def __init__(
+        self, name: Any, ctx: RunContext, parent: Optional["BaseRunner"] = None
+    ):
+        name = str(name)
         self._id = f"{name}-{str(uuid.uuid4())}"
         self._status = RunnerStatus.IDLE
         self._error = None
-        self._success = False
-        self._progress = 0.0
-        self._result = {}
         self._ctx = ctx
+        self._parent = parent
+        self._model = None
+        self._result = RunResult(status=self.status, run_id=self._id, name=name)
 
     async def run(self):
         """Run the workflow and return the result."""
         try:
+            self._ctx.vars.update({"self": self._model})
             await self._pre_run()
             self._status = RunnerStatus.RUNNING
-            await self._do_run()
-            self._status = RunnerStatus.COMPLETED
-            self._success = True
-            self._progress = 1.0
+            if type(self._do_run) is AsyncGenerator:
+                async for _ in self._do_run():
+                    signal = await self._receive_signal()
+                    if signal is RunSignal.CANCEL:
+                        self._status = RunnerStatus.CANCELED
+                        break
+                    elif signal is RunSignal.PAUSE:
+                        self._status = RunnerStatus.PAUSED
+                        while True:
+                            signal = await self._receive_signal()
+                            if signal is RunSignal.RESUME:
+                                self._status = RunnerStatus.RUNNING
+                                break
+                            elif signal is RunSignal.CANCEL:
+                                self._status = RunnerStatus.CANCELED
+                                break
+                        if self._status is RunnerStatus.CANCELED:
+                            break
+                else:
+                    self._status = RunnerStatus.COMPLETED
+            else:
+                await self._do_run()
+                self._status = RunnerStatus.COMPLETED
         except Exception as e:
-            self._status = RunnerStatus.FAILED
             self._error = str(e)
-        await self._post_run()
-        return self._result
+        if self._error and self._status != RunnerStatus.CANCELED:
+            self._status = RunnerStatus.FAILED
+        try:
+            await self._post_run()
+        except Exception as e:
+            logger.error(self._produce_log(f"Error in post-run: {e}"))
+            self._status = RunnerStatus.FAILED
+        return self.get_result()
 
     async def _do_run(self):
-        raise NotImplementedError("Subclasses should implement this method.")
+        raise NotImplementedError("Subclasses should implement _do_run method.")
 
     async def _pre_run(self):
-        raise NotImplementedError("Subclasses should implement this method.")
+        raise NotImplementedError("Subclasses should implement _pre_run method.")
 
     async def _post_run(self):
-        raise NotImplementedError("Subclasses should implement this method.")
+        raise NotImplementedError("Subclasses should implement _post_run method.")
 
-    def attach_manager(self, manager):
-        self._manager = manager
+    async def _receive_signal(self, **kwargs):
+        return RunSignal.RESUME
+
+    def _resolve_template(self, value: Any) -> Any:
+        """
+        Resolve Jinja2 templates in string values and convert back to the original type.
+
+        Args:
+            value: The value that may contain a template
+            vars: Additional variables to include in the template context
+
+        Returns:
+            The resolved value, maintaining the original type if possible
+        """
+        if value is None or not isinstance(value, (str, int, float, bool, dict, list)):
+            return value
+        if type(value) is dict:
+            return {k: self._resolve_template(v) for k, v in value.items()}
+        elif type(value) is list:
+            return [self._resolve_template(v) for v in value]
+        try:
+            string_value = str(value)
+            sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
+            SUPPORT_FUNCS = {
+                "sudo": sudo,
+                "run_id": self._id,
+                "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
+                "uv_install": "uv tool install",
+                "go_install": "go install -v",
+                "file_read": lambda path: (
+                    Path(path).read_text() if Path(path).exists() else None
+                ),
+                "file_exists": lambda path: Path(path).exists(),
+            }
+            if "${{" not in string_value and "{%" not in string_value:
+                return value
+            template = Template(
+                string_value, variable_start_string="${{", variable_end_string="}}"
+            )
+            template_vars = self.ctx_vars.model_dump(exclude={"vars"})
+            template_vars.update(SUPPORT_FUNCS)
+
+            if self.ctx_vars.vars:
+                template_vars.update(self._ctx.vars)
+
+            # Render the template
+            result = template.render(template_vars)
+
+            # Convert back to the original type if possible
+            if isinstance(value, bool):
+                return result.lower() in ("true", "yes", "1", "t", "y")
+            elif isinstance(value, int):
+                try:
+                    return int(result)
+                except ValueError:
+                    logger.warning(
+                        self._produce_log(
+                            f"Could not convert template result '{result}' back to integer"
+                        )
+                    )
+                    return result
+            elif isinstance(value, float):
+                try:
+                    return float(result)
+                except ValueError:
+                    logger.warning(
+                        self._produce_log(
+                            f"Could not convert template result '{result}' back to float"
+                        )
+                    )
+                    return result
+
+            logger.debug(
+                self._produce_log(
+                    f"Resolved template for value \n----\n{value}\n----\n to: \n----\n{result}\n----\n"
+                )
+            )
+            return result
+
+        except Exception as e:
+            logger.error(
+                self._produce_log(
+                    f"Error resolving template for value \n----\n{value}\n----\n: {e}"
+                )
+            )
+            return value
+
+    def _resolve_template_fields(self, fields: list[str]):
+        if not self._model:
+            return
+        for field in fields:
+            resolved_value = self._resolve_template(getattr(self._model, field))
+            setattr(self._model, field, resolved_value)
+
+    def _produce_log(self, message: Any) -> str:
+        raise NotImplementedError("Subclasses should implement _produce_log method.")
+
+    @property
+    def model(self) -> Workflow | Job | Step | None:
+        return self._model
 
     @property
     def status(self) -> RunnerStatus:
@@ -91,11 +247,28 @@ class BaseRunner:
         }
 
     @property
+    def is_success(self) -> bool:
+        return self._status == RunnerStatus.COMPLETED and self._error is None
+
+    @property
     def run_id(self) -> str:
         return self._id
 
-    def get_result(self) -> Dict[str, Any]:
+    def get_result(self) -> RunResult:
         """
         Get the result of the workflow run.
         """
+        self._result.status = self.status
+        self._result.error = self._error
         return self._result
+
+    @property
+    def ctx_vars(self) -> RunContext:
+        """
+        Get the context variables for the workflow run.
+        """
+        return self._ctx
+
+    @property
+    def parent(self) -> "BaseRunner":
+        return self._parent

@@ -3,15 +3,18 @@ import asyncio
 import time
 import logging
 import shutil
-import subprocess
+import yaml
+import httpx
 
-from ofx.runner.base import BaseRunner, RunnerStatus, RunContext
+from ofx.runner.base import BaseRunner, RunnerStatus, RunContext, RunResult
 from ofx.runner.job import JobRunner
 from ofx.models.workflow import Workflow
-from ofx.settings import SECRETS_DIR, settings
+from ofx.models.job import Job
+from ofx.settings import settings, DEFAULT_WORKFLOWS_DIR
 from ofx.utils.misc import (
-    load_secrets,
     find_parallel_schedule,
+    is_remote_path,
+    clone_remote_repo,
 )
 
 from pathlib import Path
@@ -23,44 +26,30 @@ from rich.progress import (
     TaskProgressColumn,
     TimeElapsedColumn,
 )
-from jinja2 import Template
 from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
+
 
 processor = ThreadPoolExecutor(max_workers=(settings.workers * 2))
 
 
-logger = logging.getLogger("ofx")
+logger = logging.getLogger(settings.app_branding)
 
 
 class WorkflowRunner(BaseRunner):
+    flows_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
 
     def __init__(
         self,
         workflow: Workflow,
         ctx: RunContext,
-        output_path: Path = Path.cwd(),
-        is_reused: bool = False,
+        parent: BaseRunner | None = None,
     ):
-        super().__init__(workflow.name, ctx)
-        self._workflow = workflow
-        self._is_reused = is_reused
-        self._inputs = ctx.inputs
-        self._default_secrets = load_secrets(SECRETS_DIR)
-        self._envs = {}
-        self._job_status = {}
-        self._output_jobs = {}
-        self._output_path = output_path
-        self._total_steps = 0
-        self._completed_steps = 0
-        self._do_init()
-        if ctx.secrets:
-            self._default_secrets.update(ctx.secrets)
-        if ctx.envs:
-            self._envs.update(ctx.envs)
-
-    def get_job_status(self, job_id: str) -> RunnerStatus:
-        return self._job_status.get(job_id).status
+        super().__init__(workflow, ctx, parent)
+        self._model = workflow
+        self._is_reused = self._parent is not None
+        self._job_registry: Dict[str, Any] = {}
+        self._processor = processor
 
     async def _do_run(self):
         """
@@ -75,13 +64,6 @@ class WorkflowRunner(BaseRunner):
         Raises:
             RuntimeError: If any job fails during execution
         """
-        logger.debug(
-            self._produce_log(
-                f"Starting workflow with inputs: {self._inputs}, "
-                f"environment: {self._envs}, output path: {self._output_path}"
-            )
-        )
-
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -90,81 +72,67 @@ class WorkflowRunner(BaseRunner):
             TimeElapsedColumn(),
             transient=self._is_reused,
         ) as progress:
-            # Initialize progress tracking
-            self._planning_jobs()
-            task_id = progress.add_task(
-                description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]'",
-                total=self._total_steps,
+            total_steps = self._planning_jobs()
+            progress_id = progress.add_task(
+                description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]'",
+                total=total_steps,
+                visible=(not settings.grepable),
             )
-            # Execute jobs stage by stage
-            for stage_num, stage in enumerate(self._schedule):
-                logger.debug(
-                    self._produce_log(f"Running stage {stage_num + 1}: {stage}")
-                )
-
-                # Submit all jobs in this stage for parallel execution
-                futures = [processor.submit(self._run_job, job_id) for job_id in stage]
-                future_to_job_id = {
-                    futures[i]: job_id for i, job_id in enumerate(stage)
+            for idx, stage in enumerate(self._schedule):
+                logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
+                futures = {
+                    self._processor.submit(self._run_job, job_id): job_id
+                    for job_id in stage
                 }
                 completed_jobs = set()
-
-                # Wait for all jobs in this stage to complete
                 while len(completed_jobs) < len(stage):
-                    # Wait for the next job to complete
                     done, _ = wait(
-                        [
-                            f
-                            for f in futures
-                            if future_to_job_id[f] not in completed_jobs
-                        ],
+                        [f for f in futures.keys() if futures[f] not in completed_jobs],
                         timeout=0.1,
                         return_when=FIRST_COMPLETED,
                     )
-
-                    # Process completed jobs
-                    for future in done:
-                        job_id = future_to_job_id[future]
+                    for f in done:
+                        job_id = futures[f]
                         if job_id not in completed_jobs:
                             try:
-                                result = future.result()
+                                result = f.result()
                                 if not result:
-                                    raise RuntimeError(f"Job '{job_id}' failed")
+                                    raise RuntimeError(
+                                        f"Failed when polling job '{job_id}'"
+                                    )
                                 logger.debug(
                                     self._produce_log(f"Job '{job_id}' completed")
                                 )
                             except Exception as e:
-                                logger.error(
-                                    self._produce_log(
-                                        f"Job '{job_id}' failed with error: {e}"
-                                    )
-                                )
                                 raise RuntimeError(
-                                    self._produce_log(f"Job '{job_id}' failed: {e}")
+                                    self._produce_log(
+                                        f"Failed when polling job '{job_id}': {e}"
+                                    )
                                 )
                             finally:
                                 completed_jobs.add(job_id)
 
-                    # Update progress tracking
                     current_steps_completed = sum(
-                        self._job_status[jid].processed_steps for jid in stage
+                        self._job_registry[jid]["runner"].processed_steps
+                        for jid in stage
                     )
                     self._completed_steps = max(
                         self._completed_steps, current_steps_completed
                     )
-
-                    # Update progress bar
                     progress.update(
-                        task_id,
-                        description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]' - Stage {stage_num + 1}/{len(self._schedule)}",
-                        completed=min(self._completed_steps, self._total_steps),
+                        progress_id,
+                        description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]' - Stage {idx + 1}/{len(self._schedule)}",
+                        completed=min(self._completed_steps, total_steps),
+                        refresh=True,
+                        visible=(not settings.grepable),
                     )
 
-            # Mark workflow as completed
             progress.update(
-                task_id,
-                description=f"{'Sub-' if self._is_reused else ''}workflow '[bold]{self._workflow.name}[/bold]' completed",
-                completed=self._total_steps,
+                progress_id,
+                description=f"{'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]' completed",
+                completed=total_steps,
+                refresh=True,
+                visible=(not settings.grepable),
             )
 
     def _planning_jobs(self) -> int:
@@ -177,37 +145,26 @@ class WorkflowRunner(BaseRunner):
         Raises:
             ValueError: If a job depends on another job that doesn't exist
         """
-        # Get all job IDs
-        jobs = list(self._workflow.jobs.keys())
-        deps = []
-
-        # Process job dependencies
-        for job_id, job in self._workflow.jobs.items():
+        jobs = self.model.jobs
+        job_keys = list(jobs.keys())
+        deps_relationships = []
+        for job_id, job in jobs.items():
             if job.needs:
-                # Normalize needs to always be a list
                 if isinstance(job.needs, str):
                     job.needs = [job.needs]
-
-                # Validate and record dependencies
-                for dependency in job.needs:
-                    if dependency and dependency not in jobs:
+                for dep in job.needs:
+                    if dep and dep not in job_keys:
                         raise ValueError(
-                            f"Job '{job.name}' depends on '{dependency}', which is not defined in the workflow."
+                            f"Job '{job.name}' depends on '{dep}', which is not defined in the workflow."
                         )
-                    deps.append((dependency, job_id))
+                    deps_relationships.append((dep, job_id))
+        self._schedule = find_parallel_schedule(job_keys, deps_relationships)
 
-        # Generate execution schedule using topological sort
-        self._schedule = find_parallel_schedule(jobs, deps)
-
-        # Calculate total steps across all jobs
         self._total_steps = sum(
-            sum(len(self._workflow.jobs[job_id].steps) for job_id in stage)
-            for stage in self._schedule
+            sum(len(jobs[job_id].steps) for job_id in stage) for stage in self._schedule
         )
-
         logger.debug(self._produce_log(f"Execution stages: {self._schedule}"))
         self._completed_steps = 0
-
         return self._total_steps
 
     def _run_job(self, job_id: str) -> bool:
@@ -220,34 +177,34 @@ class WorkflowRunner(BaseRunner):
         Returns:
             bool: True if job completed successfully, False otherwise
         """
-        logger.debug(self._produce_log(f"Running job: {job_id}"))
-
-        # Set up the job runner
-        job = self._workflow.jobs[job_id]
-        job_runner = JobRunner(
-            job_id,
-            job,
-            ctx=RunContext(
-                inputs=self._inputs, envs=self._envs, secrets=self.get_default_secrets()
-            ),
+        job = self.model.jobs[job_id]
+        logger.debug(self._produce_log(f"starting job: {job}"))
+        self._job_registry[job_id] = self._resolve_template(
+            job.model_dump(exclude={"outputs", "steps"})
         )
-        job_runner.attach_manager(self._manager)
-        job_runner.attach_context_provider(self)
-
-        self._output_jobs[job_id] = {"steps": job_runner._step_outputs}
-        self._job_status[job_id] = job_runner
-
+        self._ctx.vars.update({"jobs": self._job_registry})
+        job_runner = JobRunner(
+            job,
+            self.ctx_vars,
+            parent=self,
+        )
+        self._job_registry[job_id]["runner"] = job_runner
         try:
-            self._run_and_monitor_job(job_id)
-            self._output_jobs[job_id]["outputs"] = job_runner.get_result().get(
-                "outputs", {}
+            self._run_and_monitor_job(job)
+            job_result = job_runner.get_result()
+            self._job_registry[job_id].update(job_result.model_dump())
+            self._job_registry[job_id]["steps"] = {}
+            self._job_registry[job_id]["steps"].update(
+                job_result.outputs.get("steps", {})
             )
+            self._ctx.vars.update({"jobs": self._job_registry})
+            logger.info(self._produce_log(f"done: {job}"))
             return True
         except Exception as e:
             logger.error(job_runner._produce_log(f"Job execution failed: {e}"))
             return False
 
-    def _run_and_monitor_job(self, job_id: str):
+    def _run_and_monitor_job(self, job: Job):
         """
         Run a job asynchronously and monitor its progress with a progress bar.
 
@@ -260,9 +217,12 @@ class WorkflowRunner(BaseRunner):
         Raises:
             Any exception raised during job execution
         """
-        job_runner = self._job_status[job_id]
-        job = job_runner._job
-        total_steps = len(job.steps)
+        job_id = job.jid
+        job_runner: JobRunner = self._job_registry[job_id]["runner"]
+        if not job_runner:
+            raise ValueError(f"Job with ID '{job_id}' not found.")
+        job_name = job.name
+        total_steps = job_runner.total_steps
 
         with Progress(
             SpinnerColumn(),
@@ -271,191 +231,140 @@ class WorkflowRunner(BaseRunner):
             TaskProgressColumn(),
             TimeElapsedColumn(),
             transient=True,
-        ) as progress:
-            progress_task_id = progress.add_task(
-                description=f"Running job '{job.name}'",
+        ) as job_progress:
+            running_msg = f"Running job '[bold]{job_name}[/bold]'"
+            progress_task_id = job_progress.add_task(
+                description=running_msg,
                 total=total_steps,
+                visible=(not settings.grepable),
             )
-            job_task = processor.submit(asyncio.run, job_runner.run())
-            try:
-                while not job_task.done():
-                    progress.update(
-                        progress_task_id,
-                        completed=job_runner.processed_steps,
-                        description=f"Running job '{job.name}'",
-                    )
-                    time.sleep(0.1)
-            except Exception as e:
-                progress.update(
+            job_task = self._processor.submit(asyncio.run, job_runner.run())
+            while True:
+                done, _ = wait([job_task], timeout=0.1, return_when=FIRST_COMPLETED)
+                if len(done) > 0:
+                    _ = job_task.result()
+                    break
+                job_progress.update(
                     progress_task_id,
-                    description=f"Failed job '{job.name}': {str(e)}",
-                    completed=total_steps,
+                    completed=job_runner.processed_steps,
+                    description=running_msg,
+                    refresh=True,
+                    visible=(not settings.grepable),
                 )
-                raise RuntimeError(
-                    self._produce_log(f"Job '{job.name}' failed when polling: {str(e)}")
-                )
-            progress.update(
-                progress_task_id,
-                completed=total_steps,
-                description=f"Finished job '{job.name}'",
-            )
-            return job_task.result()
 
     async def _pre_run(self):
-        if self._workflow.defaults:
-            working_directory = self._workflow.defaults.run.working_directory
-            os.chdir(Path(working_directory))
-        tools = self._workflow.tools
-        if tools:
-            for tool_bin, install_cmd in tools.items():
-                install_cmd = self._resolve_template(install_cmd)
-                if not shutil.which(tool_bin):
-                    logger.info(
-                        self._produce_log(
-                            f"Installing tool '{tool_bin}' with command: {install_cmd}"
-                        )
-                    )
-                    shell = "/bin/bash" if os.name != "nt" else "cmd.exe"
-                    try:
-                        _ = subprocess.run(
-                            args=[shell, "-c", install_cmd],
-                            executable=shell,
-                            env=self._envs,
-                            check=True,
-                        )
-                    except Exception as e:
-                        RuntimeError(f"Failed to install tool '{tool_bin}': {e}")
-                else:
-                    logger.debug(
-                        self._produce_log(f"Tool '{tool_bin}' is already installed")
-                    )
-        for job_id, job in self._workflow.jobs.items():
-            self.workflow.jobs[job_id].name = self._resolve_template(job.name)
-            self.workflow.jobs[job_id].needs = [
-                self._resolve_template(dep) for dep in job.needs
-            ]
-            for i, step in enumerate(job.steps):
-                self.workflow.jobs[job_id].steps[i].name = self._resolve_template(
-                    step.name
-                )
-                self.workflow.jobs[job_id].steps[i].id = self._resolve_template(step.id)
-
+        if not self.ctx_vars.output_path.exists():
+            self.ctx_vars.output_path.mkdir(parents=True, exist_ok=True)
+        if self.model.defaults:
+            os.chdir(self.model.defaults.run.working_directory)
         logger.debug(
-            self._produce_log(f"resolved workflow: {self._workflow.model_dump()}")
+            self._produce_log(f"Workflow Dispatch: {self.model.workflow_dispatch}")
         )
+        logger.debug(self._produce_log(f"Workflow Call: {self.model.workflow_call}"))
+        if self.model.workflow_dispatch and not self._is_reused:
+            self._ctx.inputs.update(
+                self._process_inputs(
+                    self._ctx.inputs, self.model.workflow_dispatch.inputs
+                )
+            )
+        if self.model.workflow_call and self._is_reused:
+            self._ctx.inputs.update(
+                self._process_inputs(self._ctx.inputs, self.model.workflow_call.inputs)
+            )
+            self._ctx.secrets.update(
+                self._process_inputs(
+                    self._ctx.secrets, self.model.workflow_call.secrets
+                )
+            )
+        self._model.defaults.workflows_base_dir = self._resolve_template(
+            self.model.defaults.workflows_base_dir
+        )
+        WorkflowRunner.add_workflow_dir(
+            self._model.defaults.workflows_base_dir.absolute()
+        )
+
+        self._resolve_template_fields(
+            ["name", "tools", "env", "description", "tags", "schedule"]
+        )
+        for job_id, job in self.model.jobs.items():
+            self._model.jobs[job_id].name = self._resolve_template(job.name)
+
+        logger.debug(self._produce_log(f"Resolved workflow: {self.model.model_dump()}"))
+
+        self._ctx.envs.update(self.model.env)
+        logger.debug(self._produce_log(f"Processed context: {self.ctx_vars}"))
+        await self._install_tools()
 
     async def _post_run(self) -> Dict[str, Any]:
-        if self._status == RunnerStatus.FAILED or not self._success:
+        if self._status != RunnerStatus.COMPLETED and self._error:
             logger.error(self._produce_log(f"error: {self._error}"))
-        self._status = RunnerStatus.COMPLETED if self._success else RunnerStatus.FAILED
-        self._result["outputs"] = self._output_jobs
-        if self._is_reused and self._workflow.workflow_call:
-            self._result["outputs"] = {}
-            for k, v in self._workflow.workflow_call.outputs.items():
-                self._result["outputs"][k] = self._resolve_template(
-                    v, self._output_jobs
+        self._result.outputs.update(self._job_registry)
+        if self._is_reused and self.model.workflow_call:
+            if not self.is_success:
+                raise RuntimeError(
+                    self._produce_log(
+                        f"Reusable workflow '{self.model.name}' failed. Cannot retrieve outputs."
+                    )
                 )
-        self._result["workflow"] = self._workflow.model_dump()
-        self._result["run_id"] = self._id
+            self._result.outputs = {
+                k: self._resolve_template(v)
+                for k, v in self.model.workflow_call.outputs.items()
+            }
         logger.debug(
             self._produce_log(
-                f"job execution status: {[(job._job.name, job.status) for job in self._job_status.values()]}"
+                f"job execution status: {[(job['name'], job['status']) for job in self._job_registry.values()]}"
             )
         )
-        self._result["status"] = (
+        self._status = (
             self._status
             if not self._is_reused
             else (
                 RunnerStatus.COMPLETED
                 if all(
                     [
-                        job.status == RunnerStatus.COMPLETED
-                        for job in self._job_status.values()
+                        job["status"] == RunnerStatus.COMPLETED
+                        for job in self._job_registry.values()
                     ]
                 )
                 else RunnerStatus.FAILED
             )
         )
-        self._result["inputs"] = self._inputs
-        self._result["envs"] = self._envs
-        self._result["output_path"] = str(self._output_path)
         if (
-            self._output_path.exists()
-            and len(os.listdir(self._output_path.absolute())) == 0
+            self.ctx_vars.output_path.exists()
+            and len(os.listdir(self.ctx_vars.output_path.absolute())) == 0
         ):
-            os.rmdir(self._output_path)
+            os.rmdir(self.ctx_vars.output_path)
         else:
-            logger.info(self._produce_log(f"output dir: {self._output_path}"))
-        logger.debug(self._produce_log(f"result: {self._result}"))
+            logger.info(self._produce_log(f"output dir: {self.ctx_vars.output_path}"))
+        logger.debug(self._produce_log(f"result: {self.get_result()}"))
+        if not self._is_reused:
+            self._processor.shutdown(wait=True)
 
-    def _do_init(self):
-        """
-        Initialize the workflow runner by:
-        1. Creating the output directory if it doesn't exist
-        2. Processing workflow inputs based on dispatch or call type
-        3. Setting up environment variables
-        """
-        # Ensure output directory exists
-        if not self._output_path.exists():
-            self._output_path.mkdir(parents=True, exist_ok=True)
+    async def _install_tools(self):
+        from ofx.runner.step import CommandRunner
 
-        # Log workflow input configurations
-        logger.debug(
-            self._produce_log(
-                f"Workflow dispatch inputs: "
-                f"{self._workflow.workflow_dispatch.inputs if hasattr(self._workflow, 'workflow_dispatch') else None}"
-            )
-        )
-        logger.debug(
-            self._produce_log(
-                f"Workflow call inputs: "
-                f"{self._workflow.workflow_call.inputs if hasattr(self._workflow, 'workflow_call') else None}"
-            )
-        )
-
-        # Process workflow dispatch inputs (for top-level workflows)
-        if (
-            hasattr(self._workflow, "workflow_dispatch")
-            and self._workflow.workflow_dispatch
-            and not self._is_reused
-        ):
-            self._inputs.update(
-                self._process_inputs(
-                    self._inputs, self._workflow.workflow_dispatch.inputs or {}
-                )
-            )
-
-        # Process workflow call inputs (for sub-workflows)
-        if (
-            hasattr(self._workflow, "workflow_call")
-            and self._workflow.workflow_call
-            and self._is_reused
-        ):
-            # Process regular inputs
-            self._inputs.update(
-                self._process_inputs(
-                    self._inputs, self._workflow.workflow_call.inputs or {}
-                )
-            )
-
-            # Process secrets if specified
-            if (
-                hasattr(self._workflow.workflow_call, "secrets")
-                and self._workflow.workflow_call.secrets
-            ):
-                self._default_secrets.update(
-                    self._process_inputs(
-                        self._default_secrets,
-                        self._workflow.workflow_call.secrets or {},
+        tools = self.model.tools
+        if not tools:
+            return
+        for tool_bin, install_cmd in tools.items():
+            if not shutil.which(tool_bin):
+                logger.warning(
+                    self._produce_log(
+                        f"Installing tool '{tool_bin}' with command: {install_cmd}"
                     )
                 )
-        for key, value in self._workflow.env.items():
-            self._envs[key] = self._resolve_template(value)
-        self._workflow.defaults.workflows_base_dir = self._resolve_template(
-            self._workflow.defaults.workflows_base_dir
-        )
-        self._envs = os.environ.copy()
-        self._envs.update(self._workflow.env)
+                runner = CommandRunner(
+                    install_cmd,
+                    RunContext(
+                        envs=self.ctx_vars.envs,
+                    ),
+                )
+                _ = await runner.run()
+                assert runner.is_success, f"Failed to install tool '{tool_bin}'"
+            else:
+                logger.debug(
+                    self._produce_log(f"Tool '{tool_bin}' is already installed")
+                )
 
     def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
@@ -529,117 +438,92 @@ class WorkflowRunner(BaseRunner):
             f"Supported types are: string, number, boolean, array, object."
         )
 
-    def _resolve_template(self, value: Any, vars: Dict[str, Any] = {}) -> Any:
-        """
-        Resolve Jinja2 templates in string values and convert back to the original type.
-
-        Args:
-            value: The value that may contain a template
-            vars: Additional variables to include in the template context
-
-        Returns:
-            The resolved value, maintaining the original type if possible
-        """
-        # Skip template processing for non-string types and None
-        if value is None or not isinstance(value, (str, int, float, bool)):
-            return value
-
-        try:
-            string_value = str(value)
-            if "{{" not in string_value and "{%" not in string_value:
-                return value
-            template = Template(
-                string_value, variable_start_string="${{", variable_end_string="}}"
-            )
-            jobs = {k: v.model_dump() for k, v in self._workflow.jobs.items()}
-            jobs.update(self._output_jobs)
-            template_vars = {
-                "jobs": jobs,
-                "inputs": self._inputs,
-                "env": self._envs,
-                "self": self._workflow.model_dump(),
-                "secrets": self._default_secrets,
-                "output_path": self._output_path,
-                "sudo": "sudo" if os.geteuid() != 0 and shutil.which("sudo") else "",
-                "run_id": self._id,
-                "fapt": 'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then apt-get update; fi && apt-fast install -y --no-install-recommends',
-                "uv_install": "uv tool install",
-                "go_install": "go install -v",
-            }
-
-            # Add custom variables if provided
-            if vars:
-                template_vars.update(vars)
-
-            # Render the template
-            result = template.render(template_vars)
-
-            # Convert back to the original type if possible
-            if isinstance(value, bool):
-                return result.lower() in ("true", "yes", "1", "t", "y")
-            elif isinstance(value, int):
-                try:
-                    return int(result)
-                except ValueError:
-                    logger.warning(
-                        self._produce_log(
-                            f"Could not convert template result '{result}' back to integer"
-                        )
-                    )
-                    return result
-            elif isinstance(value, float):
-                try:
-                    return float(result)
-                except ValueError:
-                    logger.warning(
-                        self._produce_log(
-                            f"Could not convert template result '{result}' back to float"
-                        )
-                    )
-                    return result
-
-            logger.debug(
-                self._produce_log(
-                    f"Resolved template for value \n----\n{value}\n----\n to: \n----\n{result}\n----\n"
-                )
-            )
-            return result
-
-        except Exception as e:
-            logger.error(
-                self._produce_log(
-                    f"Error resolving template for value \n----\n{value}\n----\n: {e}"
-                )
-            )
-            return value
-
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        return f"[{'sub-' if self._is_reused else ''}workflow '{self._workflow.name}']({self._status.value.upper()}) -> {message_str}"
-
-    def resolve_template(self, value: Any, vars: Dict[str, Any] = {}) -> Any:
-        """Public method for template resolution"""
-        logger.debug(
-            self._produce_log(
-                f"Resolving template for value \n----\n{str(value)}\n----\n with vars: {vars}"
-            )
-        )
-        return self._resolve_template(value, vars)
-
-    def get_default_secrets(self) -> Dict[str, Any]:
-        """Get default secrets"""
-        return self._default_secrets
+        msg = f"({'sub-' if self._is_reused else ''}workflow '{self.model.name}')[{self._status.value.upper()}] -> {message_str}"
+        if self.parent:
+            return self.parent._produce_log(msg)
+        return msg
 
     def get_output_path(self) -> Path:
         """Get output path"""
-        return self._output_path
+        return self.ctx_vars.output_path
+
+    @staticmethod
+    def add_workflow_dir(path: str):
+        if path not in WorkflowRunner.flows_dirs:
+            WorkflowRunner.flows_dirs.append(path)
+
+    @staticmethod
+    def find_flow(workflow_name: str) -> Workflow:
+        """
+        Find and load a workflow from local directories, file path, URL, or git repository.
+
+        Args:
+            workflow_name: Name, path, URL, or git repository of the workflow
+
+        Returns:
+            Workflow: The loaded workflow
+
+        Raises:
+            RuntimeError: If the workflow cannot be found or loaded
+        """
+        for directory in WorkflowRunner.flows_dirs:
+            path = Path(directory) / f"{workflow_name.rstrip('.yml')}.yml"
+            if path.exists():
+                try:
+                    return Workflow.model_validate(
+                        yaml.safe_load(path.read_text().strip())
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to load workflow from {path}: {e}")
+                    raise RuntimeError(f"Failed to load workflow from {path}: {e}")
+
+        if Path(workflow_name).exists():
+            try:
+                return Workflow.model_validate(
+                    yaml.safe_load(Path(workflow_name).read_text().strip())
+                )
+            except Exception as e:
+                logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
+                raise RuntimeError(
+                    f"Failed to load workflow from file {workflow_name}: {e}"
+                )
+
+        if is_remote_path(workflow_name):
+            try:
+                response = httpx.get(workflow_name)
+                response.raise_for_status()
+                return Workflow.model_validate(yaml.safe_load(response.text.strip()))
+            except Exception as e:
+                logger.error(f"Failed to fetch workflow from {workflow_name}: {e}")
+                raise RuntimeError(
+                    f"Failed to fetch workflow from {workflow_name}: {e}"
+                )
+
+        git_path = clone_remote_repo(workflow_name)
+        if not git_path:
+            raise RuntimeError(f"Workflow {workflow_name} not found.")
+
+        WorkflowRunner.add_workflow_dir(git_path.absolute())
+        try:
+            return Workflow.model_validate(
+                yaml.safe_load((git_path / "main.yml").read_text().strip())
+            )
+        except Exception as e:
+            logger.error(f"Failed to load workflow from git repo {workflow_name}: {e}")
+            raise RuntimeError(
+                f"Failed to load workflow from git repo {workflow_name}: {e}"
+            )
+
+    def get_job_status(self, job_id: str) -> RunnerStatus:
+        return self._job_registry.get(job_id).get("status")
+
+    def get_job_from_registry(
+        self, job_id: str
+    ) -> Dict[str, JobRunner | Dict[str, Any]] | None:
+        return self._job_registry.get(job_id)
 
     @property
-    def run_id(self) -> str:
-        """Unique identifier for the workflow run."""
-        return self._id
-
-    @property
-    def workflow(self) -> Workflow:
-        """Get the workflow being executed."""
-        return self._workflow
+    def model(self) -> Workflow:
+        return self._model

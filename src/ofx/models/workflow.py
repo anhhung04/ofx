@@ -47,12 +47,12 @@ class Workflow(BaseModel):
     env: Dict[str, str] = Field(
         default={}, description="Environment variables for the workflow"
     )
-    workflow_dispatch: WorkflowDispatch = Field(
-        default_factory=lambda: WorkflowDispatch(),
+    workflow_dispatch: Union[None, WorkflowDispatch] = Field(
+        None,
         description="Workflow dispatch configuration for manual triggers",
     )
-    workflow_call: WorkflowCall = Field(
-        default_factory=lambda: WorkflowCall(),
+    workflow_call: Union[None, WorkflowCall] = Field(
+        None,
         description="Workflow call configuration for reusable workflows",
     )
     tools: Union[None, Dict[str, Any]] = Field(
@@ -64,6 +64,9 @@ class Workflow(BaseModel):
         description="Default configuration for the workflow",
     )
     jobs: Dict[str, Job] = Field(..., description="List of jobs in the workflow")
+
+    def __str__(self):
+        return f"Workflow(name='{self.name}', jobs='{list(self.jobs.keys())}')"
 
     @model_validator(mode="after")
     def check_jobid_pattern(self):
@@ -80,5 +83,7 @@ class Workflow(BaseModel):
                     raise ValueError(
                         f"Job {job_id} has a dependency on {dep}, which does not exist."
                     )
-
+            self.jobs[job_id].jid = job_id
+            for idx, step in enumerate(self.jobs[job_id].steps):
+                step.step_index = idx
         return self

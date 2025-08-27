@@ -6,7 +6,9 @@ from pydantic_settings import SettingsConfigDict, BaseSettings
 from ofx.utils.log import reload_logging_config
 
 from pydantic import Field
-from typing import Union, Literal, Optional, Dict, Any
+from typing import Literal, Optional, Dict, Any
+
+BASE_DIR = Path(__file__).parent.absolute()
 
 BASE_DATA_DIR = Path.home() / ".local" / "share" / "ofx"
 TEMP_DIR = Path(tempfile.gettempdir()) / ".ofx"
@@ -52,12 +54,16 @@ class Settings(BaseSettings):
         description="Timeout for running flows in seconds",
     )
 
-    notify_provider: Union[
-        None,
-        Literal["telegram", "discord", "slack", "pushover"],
-    ] = Field(
-        default=None,
-        description="Notification provider to use for alerts (e.g., 'slack', 'email')",
+    daemon_port: int = Field(
+        default=8642,
+        description="Port for the OFX daemon to listen on",
+    )
+
+    notify_provider: Optional[Literal["telegram", "discord", "slack", "pushover"]] = (
+        Field(
+            default=None,
+            description="Notification provider to use for alerts (e.g., 'slack', 'email')",
+        )
     )
     notify_config: Optional[Dict[str, Any]] = Field(
         default=None,

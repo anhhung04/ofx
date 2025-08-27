@@ -2,9 +2,10 @@ import yaml
 import logging
 
 from ofx.models.workflow import Workflow
+from ofx.settings import settings
 from pathlib import Path
 
-logger = logging.getLogger("ofx")
+logger = logging.getLogger(settings.app_branding)
 
 
 class ValidateHandler:

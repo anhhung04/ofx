@@ -19,6 +19,7 @@ dependencies = [
     "pydantic-file-secrets>=0.4.4",
     "pydantic-settings>=2.10.1",
     "pyyaml>=6.0.2",
+    "requests>=2.32.4",
     "syncer>=2.0.3",
     "tabulate>=0.9.0",
     "typer>=0.16.0",

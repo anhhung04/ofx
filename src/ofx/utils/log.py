@@ -6,10 +6,12 @@ def reload_logging_config(settings):
     Reloads the logging configuration based on the current settings.
     This is useful if settings are changed at runtime.
     """
-    for handler in logging.getLogger("ofx").handlers:
-        if handler.name == "console" or handler.name == "ofx.notification":
-            logging.getLogger("ofx").removeHandler(handler)
+    pre_logger = logging.getLogger(settings.app_branding)
+    for handler in logging.getLogger(settings.app_branding).handlers:
+        if handler.name == "ofx.console" or handler.name == "ofx.notification":
+            pre_logger.removeHandler(handler)
 
+    log_handler = None
     if settings.grepable:
         log_handler = logging.StreamHandler()
         formatter = logging.Formatter("%(levelname)s: %(message)s")
@@ -22,17 +24,14 @@ def reload_logging_config(settings):
             show_time=True,
             show_level=True,
             show_path=settings.debug,
+            log_time_format="[%X]",
         )
-
-    log_handler.set_name("console")
-    logger = logging.getLogger("ofx")
+    log_handler.set_name("ofx.console")
 
     if settings.debug:
+        pre_logger.setLevel(logging.DEBUG)
         log_handler.setLevel(logging.DEBUG)
-        logger.setLevel(logging.DEBUG)
     else:
-        logger.setLevel(logging.INFO)
         log_handler.setLevel(logging.INFO)
-
-    logger.addHandler(log_handler)
-    logger.propagate = False
+        pre_logger.setLevel(logging.INFO)
+    pre_logger.addHandler(log_handler)

@@ -4,7 +4,7 @@ from typing import Union, Dict, Any, Literal
 
 
 class Step(BaseModel):
-    name: str = Field(..., description="Name of the step")
+    name: str = Field(default="unknown step", description="Name of the step")
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for the step",
@@ -19,7 +19,7 @@ class Step(BaseModel):
     continue_on_error: bool = Field(
         default=False, description="Continue execution even if the step fails"
     )
-    timeout_minutes: int = Field(
+    timeout: int = Field(
         60 * 24, description="Timeout in minutes for the step execution"
     )
     run: Union[str, None] = Field(None, description="Command(s) to run in the step")
@@ -29,7 +29,7 @@ class Step(BaseModel):
     shell: Union[str, None] = Field(
         None, description="Shell to use for running commands in the step"
     )
-    log_stdout: bool = Field(
+    log_stdout: bool | str = Field(
         False, description="Whether to capture standard output of the step"
     )
     uses: Union[str, None] = Field(
@@ -46,3 +46,9 @@ class Step(BaseModel):
         {},
         description="Secrets to pass to the step (key-value pairs) if it uses a reusable workflow",
     )
+    step_index: int = Field(
+        -1, description="Index of the step in the job (set during execution)"
+    )
+
+    def __str__(self):
+        return f"Step(name='{self.name}', id={self.id})"
