@@ -1,7 +1,6 @@
 image: python:3.11-slim
 stages:
   - test
-  - bump
   - deploy
 
 variables:
@@ -26,24 +25,6 @@ test:
     - uv run  --with pytest,pytest-asyncio pytest
   except:
     - tags
-
-bump_version:
-  stage: bump
-  script:
-    - git config user.email "ci@gitlab.com"
-    - git config user.name "GitLab CI"
-    - NEW_VERSION=$(semantic-release version --print 2>/dev/null)
-    - NEW_TAG=$(semantic-release version --print-tag 2>/dev/null)
-    - echo "Bumping version to $NEW_VERSION"
-    - echo "New tag is $NEW_TAG"
-    - sed -i "s/__version__ = \".*\"/__version__ = \"$NEW_VERSION\"/" ./src/ofx/_version.py
-    - git add ./src/ofx/_version.py
-    - git commit -m "Bump version to $NEW_VERSION [skip ci]"
-    - git push origin HEAD:$CI_COMMIT_REF_NAME
-    - git tag -a $NEW_TAG -m "Version $NEW_VERSION"
-    - git push origin $NEW_TAG
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "main" && $CI_PIPELINE_SOURCE == "merge_request_event"'
 
 publish:
   stage: deploy
