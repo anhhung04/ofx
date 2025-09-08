@@ -5,6 +5,7 @@ import tempfile
 import shlex
 import logging
 
+from datetime import datetime
 from zlib import compress
 from pathlib import Path
 from enum import Enum
@@ -12,7 +13,7 @@ from typing import Any
 
 from ofx.models.step import Step
 from ofx.runner.base import BaseRunner, RunContext, RunnerStatus
-from ofx.settings import settings, BASE_DIR
+from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -33,7 +34,7 @@ class CommandRunner(BaseRunner):
         shell: str | None = None,
         working_dir: Path | None = None,
         timeout_minutes: int = 1440,
-        parent: BaseRunner | None = None,
+        parent: "BaseRunner | None" = None,
     ):
         super().__init__("command", ctx, parent)
         self._cmd = cmd
@@ -44,7 +45,7 @@ class CommandRunner(BaseRunner):
     async def _do_run(self):
         stderr = ""
         stdout = ""
-        if not Path(self._shell).exists():
+        if not self._shell or not Path(self._shell).exists():
             raise RuntimeError(f"Shell not found: {self._shell}")
         args = [self._shell, "-c", self._cmd]
         try:
@@ -107,13 +108,19 @@ class CommandRunner(BaseRunner):
         if self._shell:
             return self._shell
         if self.parent and self.parent.parent:
-            parent_shell = getattr(self.parent.parent.model.defaults.run, "shell", None)
+            grandparent = self.parent.parent
+            if not hasattr(grandparent, "model"):
+                return DEFAULT_SHELL
+            grandparent_model = grandparent.model
+            if not hasattr(grandparent_model, "defaults"):
+                return DEFAULT_SHELL
+            parent_shell = getattr(grandparent_model.defaults.run, "shell", None)  # type: ignore
             if parent_shell:
                 return parent_shell
             else:
                 if hasattr(self.parent.parent.parent, "model"):
                     grandparent_shell = getattr(
-                        self.parent.parent.parent.model.defaults.run, "shell", None
+                        self.parent.parent.parent.model.defaults.run, "shell", None  # type: ignore
                     )
                     if grandparent_shell:
                         return grandparent_shell
@@ -199,6 +206,14 @@ class StepRunner(BaseRunner):
         if self.model.log_stdout:
             stdout = self._result.outputs.get("stdout", "")
             if isinstance(stdout, str) and len(stdout) > 2000:
+                tmp_file = (
+                    self.ctx_vars.output_path
+                    / f"stdout_{self.model.name.replace(' ','-')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                )
+                logger.info(
+                    f"Saving output to {tmp_file} because it exceeds 2000 characters."
+                )
+                tmp_file.write_text(stdout)
                 stdout = stdout[:2000] + "\n...[truncated]"
             logger.info(self._produce_log(f"stdout:\n{stdout}\n"))
         logger.debug(self._produce_log(f"result: {self._result}"))
@@ -208,11 +223,11 @@ class StepRunner(BaseRunner):
             from ofx.runner.workflow import WorkflowRunner
 
             runner = WorkflowRunner(
-                WorkflowRunner.find_flow(self._model.uses),
+                WorkflowRunner.find_flow(self._model.uses or ""),
                 RunContext(
                     inputs=self._resolve_template(self._model.run_with),
                     envs=self.ctx_vars.envs,
-                    output_path=self.parent.parent.ctx_vars.output_path,
+                    output_path=self.parent.parent.ctx_vars.output_path,  # type: ignore
                     secrets=(
                         self.ctx_vars.secrets
                         if self.model.secrets == "inherit"
@@ -222,6 +237,9 @@ class StepRunner(BaseRunner):
                 parent=self,
             )
         elif self._run_type is RunType.SCRIPT:
+            assert (
+                self.model.script is not None
+            ), "Script cannot be None for SCRIPT run type"
             runner = ScriptRunner(
                 self.model.script,
                 self.ctx_vars.model_copy(),
@@ -231,6 +249,7 @@ class StepRunner(BaseRunner):
                 timeout_minutes=self.model.timeout,
             )
         elif self._run_type is RunType.COMMAND:
+            assert self.model.run is not None, "Run cannot be None for COMMAND run type"
             runner = CommandRunner(
                 self.model.run,
                 self.ctx_vars.model_copy(),
@@ -296,10 +315,10 @@ class StepRunner(BaseRunner):
         step_path = Path(step.working_directory)
         if step_path.is_absolute():
             return step_path
-        job_path = Path(self.parent.model.defaults.run.working_directory)
+        job_path = Path(self.parent.model.defaults.run.working_directory)  # type: ignore
         if job_path.is_absolute():
             return job_path / step_path
-        workflow_path = Path(self.parent.parent.model.defaults.run.working_directory)
+        workflow_path = Path(self.parent.parent.model.defaults.run.working_directory)  # type: ignore
         return workflow_path / job_path / step_path
 
     @property

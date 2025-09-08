@@ -2,7 +2,7 @@ import typer
 
 from ofx.settings import settings, BANNER
 from ofx.utils.log import reload_logging_config
-from ofx.commands import flow, dump, asset
+from ofx.commands import flow, dump, asset, project, api
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 
@@ -30,6 +30,8 @@ def add_app(sub_app):
 add_app(flow)
 add_app(dump)
 add_app(asset)
+add_app(project)
+add_app(api)
 
 
 def main():

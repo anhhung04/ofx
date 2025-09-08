@@ -4,7 +4,7 @@ from typing import Union, Dict, Any, Literal
 
 
 class Step(BaseModel):
-    name: str = Field(default="unknown step", description="Name of the step")
+    name: str = Field(..., description="Name of the step")
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for the step",
@@ -42,7 +42,7 @@ class Step(BaseModel):
     script: Union[None, str] = Field(
         None, description="Script to run in the step (if applicable)"
     )
-    secrets: Union[Union[Dict[str, str], Literal["inherit"]]] = Field(
+    secrets: Union[Dict[str, str], Literal["inherit"]] = Field(
         {},
         description="Secrets to pass to the step (key-value pairs) if it uses a reusable workflow",
     )

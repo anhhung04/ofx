@@ -19,7 +19,7 @@ class DefaultConfig(BaseModel):
         default_factory=RunConfig,
         description="Default run configuration for the workflow",
     )
-    workflows_base_dir: str | Path = Field(
-        DEFAULT_WORKFLOWS_DIR,
+    workflows_base_dir: Path = Field(
+        default=DEFAULT_WORKFLOWS_DIR,
         description="Base directory for workflows (if applicable)",
     )

@@ -24,21 +24,21 @@ class FlowRunHandler:
         output: Optional[str] = None,
     ):
         self.workflow_name = workflow_name
-        self.input = input
+        self.preprocess_input = input
         self.output = Path(output) if output else Path.cwd() / "out"
 
     async def run(self):
         self._process_inputs()
         input_display = self._render_input_as_table() if self.input else "None"
         logger.info(
-            f"Starting to run workflow: '{self.workflow_name}' with input: {input_display}\nto output: '{self.output}'"
+            f"Starting to run workflow: '{self.workflow_name}' with input: {input_display}\nto output: '{self.output.as_posix()}'"
         )
         if settings.notify_provider:
             logger.info(f"Using notification provider: {settings.notify_provider}")
             if settings.notify_config:
                 hdlr = NotificationHandler(
                     settings.notify_provider,
-                    defaults=json.loads(settings.notify_config),
+                    defaults=settings.notify_config,
                 )
                 hdlr.setLevel(logging.INFO)
                 hdlr.set_name("ofx.notification")
@@ -48,7 +48,7 @@ class FlowRunHandler:
         runner = WorkflowRunner(
             WorkflowRunner.find_flow(self.workflow_name),
             ctx=RunContext(
-                inputs=self.input or {},
+                inputs=self.input,
                 output_path=self.output,
                 secrets=load_secrets(SECRETS_DIR),
                 envs=os.environ.copy(),
@@ -60,7 +60,7 @@ class FlowRunHandler:
 
     def _process_inputs(self):
         processed_inputs = {}
-        for inp in self.input or []:
+        for inp in self.preprocess_input or []:
             try:
                 key, value = inp.split("=", 1)
             except:

@@ -11,15 +11,9 @@ class UpdateHandler:
             self._update_workflows(DEFAULT_WORKFLOWS_DIR)
 
     def _update_workflows(self, wf_path: Path):
-        want_update = typer.confirm(
-            f"Do you want to update the workflow configuration at '{wf_path}'?"
-        )
+        want_update = typer.confirm(f"Do you want to update workflows at '{wf_path}'?")
         if not want_update:
             return
-        try:
-            repo = git.Repo(wf_path)
-            repo.remotes.origin.pull()
-            typer.echo(f"Workflow configuration at '{wf_path}' updated successfully.")
-        except git.exc.GitCommandError as e:
-            typer.echo(f"Failed to update workflow configuration: {e}")
-            return
+        repo = git.Repo(wf_path)
+        repo.remotes.origin.pull()
+        typer.echo(f"Workflows at '{wf_path}' updated successfully.")

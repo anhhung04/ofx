@@ -1,0 +1,491 @@
+{
+  "$defs": {
+    "DefaultConfig": {
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/RunConfig",
+          "description": "Default run configuration for the workflow"
+        },
+        "workflows_base_dir": {
+          "default": "/home/hah4/.local/share/ofx/workflows",
+          "description": "Base directory for workflows (if applicable)",
+          "format": "path",
+          "title": "Workflows Base Dir",
+          "type": "string"
+        }
+      },
+      "title": "DefaultConfig",
+      "type": "object"
+    },
+    "Job": {
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name of the job",
+          "title": "Name"
+        },
+        "needs": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": [],
+          "description": "Job dependencies (other jobs that must complete before this one)",
+          "title": "Needs"
+        },
+        "run_if": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "default": true,
+          "description": "Condition to run the job (e.g., 'success()', 'failure()')",
+          "title": "Run If"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "A map of variables that are available to all steps in the job",
+          "title": "Env",
+          "type": "object"
+        },
+        "outputs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Outputs of the job (key-value pairs)",
+          "title": "Outputs",
+          "type": "object"
+        },
+        "defaults": {
+          "$ref": "#/$defs/DefaultConfig",
+          "description": "Default configuration for the job"
+        },
+        "steps": {
+          "description": "List of steps in the job",
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "jid": {
+          "default": "",
+          "description": "Job identifier in the workflow",
+          "title": "Jid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "title": "Job",
+      "type": "object"
+    },
+    "RunConfig": {
+      "properties": {
+        "shell": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Shell to use for running commands in the workflow",
+          "title": "Shell"
+        },
+        "working_directory": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "format": "path",
+              "type": "string"
+            }
+          ],
+          "default": "/home/hah4/code/ofx",
+          "description": "Working directory for the workflow execution",
+          "title": "Working Directory"
+        }
+      },
+      "title": "RunConfig",
+      "type": "object"
+    },
+    "Step": {
+      "properties": {
+        "name": {
+          "description": "Name of the step",
+          "title": "Name",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unique identifier for the step",
+          "title": "Id",
+          "type": "string"
+        },
+        "run_if": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "default": true,
+          "description": "Condition to run the step (e.g., 'success()', 'failure()')",
+          "title": "Run If"
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Environment variables for the step",
+          "title": "Env",
+          "type": "object"
+        },
+        "continue_on_error": {
+          "default": false,
+          "description": "Continue execution even if the step fails",
+          "title": "Continue On Error",
+          "type": "boolean"
+        },
+        "timeout": {
+          "default": 1440,
+          "description": "Timeout in minutes for the step execution",
+          "title": "Timeout",
+          "type": "integer"
+        },
+        "run": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Command(s) to run in the step",
+          "title": "Run"
+        },
+        "working_directory": {
+          "default": ".",
+          "description": "Working directory for the step execution",
+          "title": "Working Directory",
+          "type": "string"
+        },
+        "shell": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Shell to use for running commands in the step",
+          "title": "Shell"
+        },
+        "log_stdout": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": false,
+          "description": "Whether to capture standard output of the step",
+          "title": "Log Stdout"
+        },
+        "uses": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Select a workflow to run as part of a step in the job",
+          "title": "Uses"
+        },
+        "run_with": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "Define inputs for the step if it uses a reusable workflow",
+          "title": "Run With",
+          "type": "object"
+        },
+        "script": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Script to run in the step (if applicable)",
+          "title": "Script"
+        },
+        "secrets": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "const": "inherit",
+              "type": "string"
+            }
+          ],
+          "default": {},
+          "description": "Secrets to pass to the step (key-value pairs) if it uses a reusable workflow",
+          "title": "Secrets"
+        },
+        "step_index": {
+          "default": -1,
+          "description": "Index of the step in the job (set during execution)",
+          "title": "Step Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Step",
+      "type": "object"
+    },
+    "WorkflowCall": {
+      "properties": {
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowInput"
+          },
+          "default": {},
+          "description": "Inputs for the reusable workflow",
+          "title": "Inputs",
+          "type": "object"
+        },
+        "outputs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "description": "Outputs of the reusable workflow",
+          "title": "Outputs",
+          "type": "object"
+        },
+        "secrets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowSecret"
+          },
+          "default": {},
+          "description": "Secrets to pass to the reusable workflow (key-value pairs)",
+          "title": "Secrets",
+          "type": "object"
+        }
+      },
+      "title": "WorkflowCall",
+      "type": "object"
+    },
+    "WorkflowDispatch": {
+      "properties": {
+        "inputs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkflowInput"
+          },
+          "default": {},
+          "description": "Inputs for the workflow dispatch event",
+          "title": "Inputs",
+          "type": "object"
+        }
+      },
+      "title": "WorkflowDispatch",
+      "type": "object"
+    },
+    "WorkflowInput": {
+      "properties": {
+        "required": {
+          "default": false,
+          "description": "Whether the input is required",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "default": {
+          "default": null,
+          "description": "Default value for the input parameter",
+          "title": "Default"
+        },
+        "type": {
+          "default": "string",
+          "description": "Type of the input parameter (e.g., 'string', 'number')",
+          "enum": [
+            "string",
+            "number",
+            "array",
+            "object",
+            "boolean"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowInput",
+      "type": "object"
+    },
+    "WorkflowSecret": {
+      "properties": {
+        "required": {
+          "default": false,
+          "description": "Whether the secret is required",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "type": {
+          "default": "string",
+          "description": "Type of the secret (e.g., 'string', 'number')",
+          "enum": [
+            "string",
+            "number",
+            "array",
+            "object",
+            "boolean"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "WorkflowSecret",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "name": {
+      "description": "Name of the workflow",
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "default": "No provided description",
+      "description": "Description of the workflow",
+      "title": "Description",
+      "type": "string"
+    },
+    "schedule": {
+      "default": "",
+      "description": "Cron schedule for the workflow",
+      "title": "Schedule",
+      "type": "string"
+    },
+    "env": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "description": "Environment variables for the workflow",
+      "title": "Env",
+      "type": "object"
+    },
+    "workflow_dispatch": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkflowDispatch"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Workflow dispatch configuration for manual triggers"
+    },
+    "workflow_call": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkflowCall"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Workflow call configuration for reusable workflows"
+    },
+    "tools": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Needed tools for the workflow",
+      "title": "Tools"
+    },
+    "tags": {
+      "default": [],
+      "description": "Tags associated with the workflow",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+    },
+    "defaults": {
+      "$ref": "#/$defs/DefaultConfig",
+      "description": "Default configuration for the workflow"
+    },
+    "jobs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Job"
+      },
+      "description": "List of jobs in the workflow",
+      "title": "Jobs",
+      "type": "object"
+    }
+  },
+  "required": [
+    "name",
+    "jobs"
+  ],
+  "title": "Workflow",
+  "type": "object"
+}

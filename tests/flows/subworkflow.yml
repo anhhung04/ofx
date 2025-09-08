@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=workflow.schema.json
+name: Subworkflow Test
+
+description: A test flow that uses a subworkflow
+
+jobs:
+  test_subworkflow:
+    name: Subworkflow Job
+    steps:
+      - name: Run Subworkflow Step
+        log_stdout: true
+        script: |
+          from ofx.api import file
+          print(file.read_file("/etc/passwd"))

@@ -29,19 +29,19 @@ class AppSettings(BaseSettings):
     )
 
 
-# --- Attempt to load settings ---
-try:
-    print("🚀 Attempting to load settings...")
-    settings = AppSettings()
-    print("\n✅ SUCCESS! Settings loaded correctly.")
-    print(f"   -> Loaded from file: '{settings.secret_from_file}'")
-    print(f"   -> Loaded from .env: '{settings.secret_from_env}'")
-except ValidationError as e:
-    print("\n❌ FAILURE! Pydantic could not load the settings.")
-    print(e)
-finally:
-    # --- Cleanup ---
-    print("\n🧹 Cleaning up test environment...")
-    os.remove(SECRETS_DIR / "secret_from_file")
-    os.rmdir(SECRETS_DIR)
-    os.remove(ENV_FILE)
+def test_secrets():
+    try:
+        print("🚀 Attempting to load settings...")
+        settings = AppSettings()  # type: ignore
+        print("\n✅ SUCCESS! Settings loaded correctly.")
+        print(f"   -> Loaded from file: '{settings.secret_from_file}'")
+        print(f"   -> Loaded from .env: '{settings.secret_from_env}'")
+    except ValidationError as e:
+        print("\n❌ FAILURE! Pydantic could not load the settings.")
+        print(e)
+    finally:
+        # --- Cleanup ---
+        print("\n🧹 Cleaning up test environment...")
+        os.remove(SECRETS_DIR / "secret_from_file")
+        os.rmdir(SECRETS_DIR)
+        os.remove(ENV_FILE)

@@ -15,7 +15,7 @@
             "args": [
                 "flow",
                 "run",
-                "test",
+                "./tests/flows/test",
             ],
             "cwd": "${workspaceFolder}",
         }

@@ -7,7 +7,6 @@ from enum import Enum
 from pathlib import Path
 from jinja2 import Template
 
-from ofx.models import DefaultConfig
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
 from ofx.models.job import Job
@@ -40,7 +39,7 @@ class RunContext(BaseModel):
         default_factory=dict,
         description="Environment variables for the workflow run",
     )
-    output_path: Path | str = Field(
+    output_path: Path = Field(
         default=Path.cwd() / "out",
         description="Path to store output files",
     )
@@ -91,7 +90,7 @@ class BaseRunner:
             await self._pre_run()
             self._status = RunnerStatus.RUNNING
             if type(self._do_run) is AsyncGenerator:
-                async for _ in self._do_run():
+                async for _ in self._do_run():  # type: ignore
                     signal = await self._receive_signal()
                     if signal is RunSignal.CANCEL:
                         self._status = RunnerStatus.CANCELED
@@ -270,5 +269,5 @@ class BaseRunner:
         return self._ctx
 
     @property
-    def parent(self) -> "BaseRunner":
+    def parent(self) -> "BaseRunner | None":
         return self._parent

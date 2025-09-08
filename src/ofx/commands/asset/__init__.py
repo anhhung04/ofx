@@ -14,4 +14,4 @@ def init():
     """
     Init new OFX asserts
     """
-    InitHandler().run()
+    InitHandler().run()  # type: ignore

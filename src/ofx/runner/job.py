@@ -69,7 +69,7 @@ class JobRunner(BaseRunner):
             unmet_deps = []
             for job_id in self.model.needs:
                 try:
-                    if self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED:
+                    if self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED:  # type: ignore
                         unmet_deps.append(job_id)
                 except Exception as e:
                     logger.error(
@@ -90,7 +90,7 @@ class JobRunner(BaseRunner):
             {
                 "steps": self._step_registry,
                 "needs": {
-                    jid: self.parent.get_job_from_registry(jid)
+                    jid: self.parent.get_job_from_registry(jid)  # type: ignore
                     for jid in self.model.needs
                 },
             }
@@ -111,7 +111,9 @@ class JobRunner(BaseRunner):
             for key, value in self.model.outputs.items():
                 self._result.outputs[key] = self._resolve_template(value)
         logger.debug(
-            self._produce_log(f"job '{self._model.name}' result: {self._result}")
+            self._produce_log(
+                f"job '{self.model.name or self.model.jid}' result: {self._result}"
+            )
         )
 
     def _produce_log(self, message: Any) -> str:
@@ -127,9 +129,10 @@ class JobRunner(BaseRunner):
         job_name = self._model.name
         job_id = self._model.jid
         status = self._status.value.upper()
+        name = job_name if job_name else job_id
 
         message_str = str(message)
-        msg = f"(job '{job_id}' - '{job_name}')[{status}] -> {message_str}"
+        msg = f"(job '{name}')[{status}] -> {message_str}"
 
         if self.parent:
             return self.parent._produce_log(msg)

@@ -129,7 +129,7 @@ class WorkflowRunner(BaseRunner):
 
             progress.update(
                 progress_id,
-                description=f"{'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]' completed",
+                description=f"{'Sub-w' if self._is_reused else 'W'}orkflow '[bold]{self.model.name}[/bold]' completed",
                 completed=total_steps,
                 refresh=True,
                 visible=(not settings.grepable),
@@ -221,7 +221,7 @@ class WorkflowRunner(BaseRunner):
         job_runner: JobRunner = self._job_registry[job_id]["runner"]
         if not job_runner:
             raise ValueError(f"Job with ID '{job_id}' not found.")
-        job_name = job.name
+        job_name = job.name or job_id
         total_steps = job_runner.total_steps
 
         with Progress(
@@ -276,8 +276,8 @@ class WorkflowRunner(BaseRunner):
                     self._ctx.secrets, self.model.workflow_call.secrets
                 )
             )
-        self._model.defaults.workflows_base_dir = self._resolve_template(
-            self.model.defaults.workflows_base_dir
+        self._model.defaults.workflows_base_dir = Path(
+            self._resolve_template(self.model.defaults.workflows_base_dir)
         )
         WorkflowRunner.add_workflow_dir(
             self._model.defaults.workflows_base_dir.absolute()
@@ -295,7 +295,7 @@ class WorkflowRunner(BaseRunner):
         logger.debug(self._produce_log(f"Processed context: {self.ctx_vars}"))
         await self._install_tools()
 
-    async def _post_run(self) -> Dict[str, Any]:
+    async def _post_run(self):
         if self._status != RunnerStatus.COMPLETED and self._error:
             logger.error(self._produce_log(f"error: {self._error}"))
         self._result.outputs.update(self._job_registry)
@@ -334,8 +334,6 @@ class WorkflowRunner(BaseRunner):
             and len(os.listdir(self.ctx_vars.output_path.absolute())) == 0
         ):
             os.rmdir(self.ctx_vars.output_path)
-        else:
-            logger.info(self._produce_log(f"output dir: {self.ctx_vars.output_path}"))
         logger.debug(self._produce_log(f"result: {self.get_result()}"))
         if not self._is_reused:
             self._processor.shutdown(wait=True)
@@ -450,9 +448,9 @@ class WorkflowRunner(BaseRunner):
         return self.ctx_vars.output_path
 
     @staticmethod
-    def add_workflow_dir(path: str):
+    def add_workflow_dir(path: Path | str):
         if path not in WorkflowRunner.flows_dirs:
-            WorkflowRunner.flows_dirs.append(path)
+            WorkflowRunner.flows_dirs.append(Path(path).absolute())
 
     @staticmethod
     def find_flow(workflow_name: str) -> Workflow:
@@ -468,27 +466,35 @@ class WorkflowRunner(BaseRunner):
         Raises:
             RuntimeError: If the workflow cannot be found or loaded
         """
+        logger.debug(
+            f"Searching for workflow: {workflow_name} in {WorkflowRunner.flows_dirs}"
+        )
+
+        if Path(workflow_name).exists():
+            try:
+                flow = Workflow.model_validate(
+                    yaml.safe_load(Path(workflow_name).read_text().strip())
+                )
+                WorkflowRunner.add_workflow_dir(Path(workflow_name).parent.absolute())
+                return flow
+            except Exception as e:
+                logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
+                raise RuntimeError(
+                    f"Failed to load workflow from file {workflow_name}: {e}"
+                )
+
         for directory in WorkflowRunner.flows_dirs:
-            path = Path(directory) / f"{workflow_name.rstrip('.yml')}.yml"
+            path = directory / f"{workflow_name.rstrip('.yml')}.yml"
             if path.exists():
                 try:
+                    if path.parent.exists():
+                        WorkflowRunner.add_workflow_dir(path.parent.absolute())
                     return Workflow.model_validate(
                         yaml.safe_load(path.read_text().strip())
                     )
                 except Exception as e:
                     logger.error(f"Failed to load workflow from {path}: {e}")
                     raise RuntimeError(f"Failed to load workflow from {path}: {e}")
-
-        if Path(workflow_name).exists():
-            try:
-                return Workflow.model_validate(
-                    yaml.safe_load(Path(workflow_name).read_text().strip())
-                )
-            except Exception as e:
-                logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
-                raise RuntimeError(
-                    f"Failed to load workflow from file {workflow_name}: {e}"
-                )
 
         if is_remote_path(workflow_name):
             try:
@@ -517,7 +523,7 @@ class WorkflowRunner(BaseRunner):
             )
 
     def get_job_status(self, job_id: str) -> RunnerStatus:
-        return self._job_registry.get(job_id).get("status")
+        return self._job_registry.get(job_id, {}).get("status")
 
     def get_job_from_registry(
         self, job_id: str
