@@ -1,5 +1,6 @@
 import os
 import git
+from git.exc import GitCommandError
 import typer
 import json
 
@@ -39,8 +40,7 @@ class InitHandler(metaclass=MetaSingleton):
                     DEFAULT_WORKFLOWS_DIR,
                     depth=1,
                 )
-                typer.echo("Workflow unpacked successfully.")
-            except git.exc.GitError as e:
+            except GitCommandError as e:
                 typer.echo(f"Failed to clone workflow: {e}", err=True)
                 raise typer.Exit(code=1)
         else:

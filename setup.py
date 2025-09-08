@@ -64,7 +64,9 @@ setup(
         "build_py": build_py,
     },
     package_dir={"": "src"},
-    package_data={"ofx": ["data/*.yml", "data/**/*.yml"]},
+    package_data={
+        "ofx": ["data/*.yml", "data/**/*.yml"],
+    },
 )
 
 for root, dirs, files in os.walk("src/ofx"):

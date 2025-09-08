@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=workflow.schema.json
+name: Test Flows
+
+description: Flow tests for OFX CLI
+
+jobs:
+  test:
+    name: Run Flow Tests
+    steps:
+      - name: Test Command
+        log_stdout: true
+        run: |
+          echo "This is command test output"
+      - name: Run Flow Tests in Docker
+        uses: subworkflow

@@ -1,7 +1,13 @@
 import typer
+import json
+import logging
 from typing import Dict, Any, List
 from rich.console import Console
 from rich.table import Table
+
+from pathlib import Path
+from typing import Annotated, Optional
+from ofx.settings import BASE_DATA_DIR, settings
 
 from ofx.models.workflow import *
 from ofx.models.job import *
@@ -12,6 +18,8 @@ NAME = "dump"
 HELP = "Dump the workflow configuration and outputs."
 
 app = typer.Typer()
+
+logger = logging.getLogger(settings.app_branding)
 
 
 def get_property_type(prop_info: Dict[str, Any]) -> str:
@@ -43,8 +51,8 @@ def get_property_default(prop_info: Dict[str, Any]) -> str:
 def extract_schema_properties(
     schema: Dict[str, Any],
     parent_name: str = "",
-    properties_list: List[Dict[str, str]] = None,
-    definitions: Dict[str, Any] = None,
+    properties_list: List[Dict[str, str]] = [],
+    definitions: Dict[str, Any] = {},
 ) -> List[Dict[str, str]]:
     """
     Extract all properties from a schema into a flat list,
@@ -167,3 +175,28 @@ def dump_workflow():
 
     console.print("\n[bold]Workflow Model Schema[/]\n", style="cyan")
     display_schema_table(schema, "Workflow Properties", console)
+
+
+@app.command("schema")
+def dump_schema(
+    output: Annotated[
+        Optional[str],
+        typer.Option(
+            "-o", "--output", help="Output format - 'json' for raw JSON schema"
+        ),
+    ] = None,
+):
+    """
+    Dump the workflow model schema in JSON or rich formatted table.
+
+    Args:
+        format: Output format - 'json' for raw JSON schema or 'table' for formatted table
+    """
+    if not output:
+        output = (BASE_DATA_DIR / "workflow_schema.json").as_posix()
+    output_path = Path(output)
+    schema = Workflow.model_json_schema()
+    if not output_path.parent.exists():
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(schema, indent=2))
+    logger.info(f"Workflow schema written to {output_path}")
