@@ -1,26 +1,8 @@
 import typer
 
-from ofx.settings import settings, BANNER
-from ofx.utils.log import reload_logging_config
-from ofx.commands import flow, dump, asset, project, api
+from ofx.commands import api, asset, dump, flow, project
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
-
-
-@app.callback()
-def main_callback(
-    grepable: bool = typer.Option(
-        False,
-        "--grepable",
-        "-g",
-        help="Output in grep-friendly (plain) format, disables rich formatting and color logs.",
-    )
-):
-    global settings
-    settings.grepable = grepable
-    reload_logging_config(settings)
-    if not settings.grepable:
-        typer.echo(BANNER, err=True, color=True)
 
 
 def add_app(sub_app):

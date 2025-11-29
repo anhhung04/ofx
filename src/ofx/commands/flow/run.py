@@ -1,17 +1,15 @@
-import os
 import json
 import logging
-
-from ofx.settings import settings, SECRETS_DIR
-from ofx.utils.misc import load_secrets
-from ofx.runner.workflow import WorkflowRunner
-from ofx.runner.base import RunContext
-from ofx.settings import settings
-
+import os
 from pathlib import Path
-from notifiers.logging import NotificationHandler
+from typing import List, Optional
+
 from tabulate import tabulate
-from typing import Optional, List
+
+from ofx.runner.base import RunContext
+from ofx.runner.workflow import WorkflowRunner
+from ofx.settings import SECRETS_DIR, settings
+from ofx.utils.misc import load_secrets
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -33,18 +31,6 @@ class FlowRunHandler:
         logger.info(
             f"Starting to run workflow: '{self.workflow_name}' with input: {input_display}\nto output: '{self.output.as_posix()}'"
         )
-        if settings.notify_provider:
-            logger.info(f"Using notification provider: {settings.notify_provider}")
-            if settings.notify_config:
-                hdlr = NotificationHandler(
-                    settings.notify_provider,
-                    defaults=settings.notify_config,
-                )
-                hdlr.setLevel(logging.INFO)
-                hdlr.set_name("ofx.notification")
-                logger.addHandler(hdlr)
-            else:
-                logger.warning("No notification configuration provided.")
         runner = WorkflowRunner(
             WorkflowRunner.find_flow(self.workflow_name),
             ctx=RunContext(

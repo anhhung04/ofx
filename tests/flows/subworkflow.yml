@@ -10,5 +10,7 @@ jobs:
       - name: Run Subworkflow Step
         log_stdout: true
         script: |
+          import time
           from ofx.api import file
+          time.sleep(5)
           print(file.read_file("/etc/passwd"))

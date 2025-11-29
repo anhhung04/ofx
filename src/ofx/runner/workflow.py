@@ -1,34 +1,33 @@
-import os
 import asyncio
-import time
 import logging
+import os
 import shutil
-import yaml
-import httpx
-
-from ofx.runner.base import BaseRunner, RunnerStatus, RunContext, RunResult
-from ofx.runner.job import JobRunner
-from ofx.models.workflow import Workflow
-from ofx.models.job import Job
-from ofx.settings import settings, DEFAULT_WORKFLOWS_DIR
-from ofx.utils.misc import (
-    find_parallel_schedule,
-    is_remote_path,
-    clone_remote_repo,
-)
-
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
+from typing import Any, Dict
+
+import httpx
+import yaml
 from rich.progress import (
+    BarColumn,
     Progress,
     SpinnerColumn,
-    TextColumn,
-    BarColumn,
     TaskProgressColumn,
+    TextColumn,
     TimeElapsedColumn,
 )
-from typing import Dict, Any
-from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
 
+from ofx.models.job import Job
+from ofx.models.workflow import Workflow
+from ofx.runner.base import BaseRunner, RunContext, RunnerStatus, RunResult
+from ofx.runner.job import JobRunner
+from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings
+from ofx.utils.misc import (
+    clone_remote_repo,
+    find_parallel_schedule,
+    is_remote_path,
+)
 
 processor = ThreadPoolExecutor(max_workers=(settings.workers * 2))
 
@@ -76,7 +75,6 @@ class WorkflowRunner(BaseRunner):
             progress_id = progress.add_task(
                 description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]'",
                 total=total_steps,
-                visible=(not settings.grepable),
             )
             for idx, stage in enumerate(self._schedule):
                 logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
@@ -124,7 +122,6 @@ class WorkflowRunner(BaseRunner):
                         description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]' - Stage {idx + 1}/{len(self._schedule)}",
                         completed=min(self._completed_steps, total_steps),
                         refresh=True,
-                        visible=(not settings.grepable),
                     )
 
             progress.update(
@@ -132,7 +129,6 @@ class WorkflowRunner(BaseRunner):
                 description=f"{'Sub-w' if self._is_reused else 'W'}orkflow '[bold]{self.model.name}[/bold]' completed",
                 completed=total_steps,
                 refresh=True,
-                visible=(not settings.grepable),
             )
 
     def _planning_jobs(self) -> int:
@@ -236,7 +232,6 @@ class WorkflowRunner(BaseRunner):
             progress_task_id = job_progress.add_task(
                 description=running_msg,
                 total=total_steps,
-                visible=(not settings.grepable),
             )
             job_task = self._processor.submit(asyncio.run, job_runner.run())
             while True:
@@ -249,7 +244,6 @@ class WorkflowRunner(BaseRunner):
                     completed=job_runner.processed_steps,
                     description=running_msg,
                     refresh=True,
-                    visible=(not settings.grepable),
                 )
 
     async def _pre_run(self):

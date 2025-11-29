@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/src/ofx/__init__.py",
             "console": "integratedTerminal",
-            "python": "${command:python.interpreterPath}",
+            "python": "${workspaceFolder}/.venv/bin/python",
             "justMyCode": false,
             "args": [
                 "flow",

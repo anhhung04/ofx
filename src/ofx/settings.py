@@ -1,12 +1,12 @@
 import os
 import tempfile
 from pathlib import Path
-from pydantic_settings import SettingsConfigDict, BaseSettings
-
-from ofx.utils.log import reload_logging_config
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import Field
-from typing import Literal, Optional, Dict, Any
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from ofx.utils.log import reload_logging_config
 
 BASE_DIR = Path(__file__).parent.absolute()
 
@@ -42,9 +42,6 @@ class Settings(BaseSettings):
     app_branding: str = "ofx"
 
     debug: bool = Field(default=False, description="Enable debug mode")
-    grepable: bool = Field(
-        default=False, description="Disable rich/color output for grep-friendly logs"
-    )
     workers: int = Field(
         default=4,
         description="Number of concurrent workers for running flows",
@@ -52,22 +49,6 @@ class Settings(BaseSettings):
     timeout: int = Field(
         default=24 * 60 * 60,
         description="Timeout for running flows in seconds",
-    )
-
-    daemon_port: int = Field(
-        default=8642,
-        description="Port for the OFX daemon to listen on",
-    )
-
-    notify_provider: Optional[Literal["telegram", "discord", "slack", "pushover"]] = (
-        Field(
-            default=None,
-            description="Notification provider to use for alerts (e.g., 'slack', 'email')",
-        )
-    )
-    notify_config: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Configuration for the notification provider",
     )
 
     model_config = SettingsConfigDict(

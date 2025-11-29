@@ -1,0 +1,42 @@
+{
+    "name": "OFX Development Container",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-azuretools.vscode-docker"
+            ],
+            "settings": {
+                "python.languageServer": "Pylance",
+                "python.analysis.typeCheckingMode": "basic",
+                "editor.formatOnSave": true,
+                "editor.codeActionsOnSave": {
+                    "source.organizeImports": "explicit"
+                },
+                "[python]": {
+                    "editor.defaultFormatter": "charliermarsh.ruff"
+                }
+            }
+        }
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {
+            "moby": false
+        }
+    },
+    "containerEnv": {
+        "CODON_DIR": "/opt/codon",
+        "CODON_PYTHON": "/usr/bin/python3.12"
+    },
+    "forwardPorts": [],
+    "postCreateCommand": "uv sync",
+    "remoteUser": "vscode"
+}
