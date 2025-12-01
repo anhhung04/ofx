@@ -1,6 +1,7 @@
 import typer
 
 from ofx.commands import api, asset, dump, flow, project
+from ofx.settings import BANNER
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 
@@ -21,6 +22,7 @@ def main():
     Main entry point for the OFX CLI application.
     """
     try:
+        typer.echo(BANNER)
         app()
     except Exception as e:
         typer.secho(f"🚨 Error: {e}", fg=typer.colors.RED, bold=True)

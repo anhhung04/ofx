@@ -14,6 +14,7 @@ BASE_DATA_DIR = Path.home() / ".local" / "share" / "ofx"
 TEMP_DIR = Path(tempfile.gettempdir()) / ".ofx"
 SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
+DEFAULT_PROJECTS_PATH = Path.home() / "ofx-projects"
 
 BANNER = """
 \033[1;31m      .--.

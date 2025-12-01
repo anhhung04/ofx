@@ -26,6 +26,8 @@ dependencies = [
     "cryptography>=43.0.0",
     "pwntools>=4.10.0",
     "python-nmap>=0.0.1",
+    "boto3>=1.41.5",
+    "webdavclient3>=3.14.6",
 ]
 
 [project.optional-dependencies]

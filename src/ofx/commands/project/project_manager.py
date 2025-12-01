@@ -1,0 +1,75 @@
+import shutil
+from pathlib import Path
+from typing import List
+
+from ofx.settings import DEFAULT_PROJECTS_PATH
+
+
+class ProjectManager:
+    DEFAULT_PROJECT_PATH = DEFAULT_PROJECTS_PATH
+
+    @classmethod
+    def _get_default_path(cls) -> Path:
+        """Get default project path as Path object."""
+        if isinstance(cls.DEFAULT_PROJECT_PATH, Path):
+            return cls.DEFAULT_PROJECT_PATH
+        return Path(cls.DEFAULT_PROJECT_PATH)
+
+    @classmethod
+    def resolve_path(cls, project_arg: str) -> str:
+        """Resolve project path from name, relative, or absolute path."""
+        project_path = Path(project_arg)
+
+        if project_path.is_absolute():
+            return str(project_path.resolve())
+
+        candidate = cls._get_default_path() / project_arg
+        if candidate.exists():
+            return str(candidate)
+
+        rel_path = Path.cwd() / project_arg
+        if rel_path.exists():
+            return str(rel_path.resolve())
+
+        return str(candidate)
+
+    @classmethod
+    def list_projects(cls) -> List[str]:
+        """List all projects in the default project path."""
+        default_path = cls._get_default_path()
+        if not default_path.exists():
+            return []
+        return [
+            item.name
+            for item in default_path.iterdir()
+            if item.is_dir() and not item.name.startswith(".")
+        ]
+
+    @classmethod
+    def create_project(cls, name: str) -> str:
+        """Create a new project directory with auto-initialized git repo."""
+        import git
+
+        safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in name)
+        project_path = cls._get_default_path() / safe_name
+        project_path.mkdir(parents=True, exist_ok=True)
+
+        # Auto-initialize git repository
+        try:
+            git.Repo.init(str(project_path), initial_branch="main")
+            # Create initial .gitignore
+            gitignore_path = project_path / ".gitignore"
+            gitignore_path.write_text(".ofx-encryption-key\n*.enc\n")
+        except Exception:
+            pass  # Silently continue if git init fails
+
+        return str(project_path)
+
+    @classmethod
+    def delete_project(cls, name: str) -> bool:
+        """Delete a project by name."""
+        project_path = cls._get_default_path() / name
+        if project_path.exists() and project_path.is_dir():
+            shutil.rmtree(project_path)
+            return True
+        return False
