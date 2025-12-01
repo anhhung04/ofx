@@ -10,19 +10,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     ca-certificates \
     git \
-    patchelf \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install Nuitka
+RUN pip install build cython
 
 WORKDIR /build
 
 COPY pyproject.toml setup.py README.md ./
 COPY src/ ./src/
 
-RUN pip install -e .
-RUN mkdir dist
-RUN nuitka --mode=onefile --output-filename=dist/ofx src/ofx
+RUN python -m build --wheel
 
 FROM scratch AS export
-COPY --from=builder /build/dist/ofx /ofx
+COPY --from=builder /build/dist/*.tar.gz /
+COPY --from=builder /build/dist/*.whl /
