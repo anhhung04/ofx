@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 mcr.microsoft.com/devcontainers/python:3.12
+FROM --platform=linux/amd64 mcr.microsoft.com/devcontainers/python:3.14
 
 ENV UV_LINK_MODE=copy
 

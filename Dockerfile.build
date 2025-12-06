@@ -1,26 +1,22 @@
-FROM python:3.12-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    UV_COMPILE_BYTECODE=1 \
+    PYTHON_GIL=0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    python3-dev \
     ca-certificates \
     git \
     && rm -rf /var/lib/apt/lists/*
-
-RUN pip install build cython
 
 WORKDIR /build
 
 COPY pyproject.toml setup.py README.md ./
 COPY src/ ./src/
 
-RUN python -m build --wheel
+RUN --mount=type=cache,target=/root/.cache/uv uv build --python=3.13+freethreaded --wheel --out-dir /build/dist
 
 FROM scratch AS export
-COPY --from=builder /build/dist/*.tar.gz /
 COPY --from=builder /build/dist/*.whl /

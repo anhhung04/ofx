@@ -2,10 +2,9 @@ import asyncio
 import logging
 import os
 import shutil
-import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+import threading
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import httpx
 import yaml
@@ -20,7 +19,7 @@ from rich.progress import (
 
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.base import BaseRunner, RunContext, RunnerStatus, RunResult
+from ofx.runner.base import BaseRunner, RunContext, RunnerStatus
 from ofx.runner.job import JobRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings
 from ofx.utils.misc import (
@@ -28,9 +27,6 @@ from ofx.utils.misc import (
     find_parallel_schedule,
     is_remote_path,
 )
-
-processor = ThreadPoolExecutor(max_workers=(settings.workers * 2))
-
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -48,7 +44,9 @@ class WorkflowRunner(BaseRunner):
         self._model = workflow
         self._is_reused = self._parent is not None
         self._job_registry: Dict[str, Any] = {}
-        self._processor = processor
+        self._job_threads: Dict[str, threading.Thread] = {}
+        self._job_results: Dict[str, bool] = {}
+        self._job_errors: Dict[str, Exception] = {}
 
     async def _do_run(self):
         """
@@ -69,7 +67,7 @@ class WorkflowRunner(BaseRunner):
             BarColumn(),
             TaskProgressColumn(),
             TimeElapsedColumn(),
-            transient=self._is_reused,
+            transient=self._is_reused or not self.is_finished,
         ) as progress:
             total_steps = self._planning_jobs()
             progress_id = progress.add_task(
@@ -78,41 +76,23 @@ class WorkflowRunner(BaseRunner):
             )
             for idx, stage in enumerate(self._schedule):
                 logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
-                futures = {
-                    self._processor.submit(self._run_job, job_id): job_id
-                    for job_id in stage
-                }
-                completed_jobs = set()
-                while len(completed_jobs) < len(stage):
-                    done, _ = wait(
-                        [f for f in futures.keys() if futures[f] not in completed_jobs],
-                        timeout=0.1,
-                        return_when=FIRST_COMPLETED,
-                    )
-                    for f in done:
-                        job_id = futures[f]
-                        if job_id not in completed_jobs:
-                            try:
-                                result = f.result()
-                                if not result:
-                                    raise RuntimeError(
-                                        f"Failed when polling job '{job_id}'"
-                                    )
-                                logger.debug(
-                                    self._produce_log(f"Job '{job_id}' completed")
-                                )
-                            except Exception as e:
-                                raise RuntimeError(
-                                    self._produce_log(
-                                        f"Failed when polling job '{job_id}': {e}"
-                                    )
-                                )
-                            finally:
-                                completed_jobs.add(job_id)
 
+                for job_id in stage:
+                    thread = threading.Thread(
+                        target=self._run_job_wrapper,
+                        args=(job_id,),
+                        name=f"job-{job_id}",
+                        daemon=False,
+                    )
+                    self._job_threads[job_id] = thread
+                    thread.start()
+
+                while any(self._job_threads[jid].is_alive() for jid in stage):
                     current_steps_completed = sum(
                         self._job_registry[jid]["runner"].processed_steps
                         for jid in stage
+                        if jid in self._job_registry
+                        and "runner" in self._job_registry[jid]
                     )
                     self._completed_steps = max(
                         self._completed_steps, current_steps_completed
@@ -123,6 +103,21 @@ class WorkflowRunner(BaseRunner):
                         completed=min(self._completed_steps, total_steps),
                         refresh=True,
                     )
+                    await asyncio.sleep(0.05)
+
+                for job_id in stage:
+                    self._job_threads[job_id].join()
+
+                for job_id in stage:
+                    if job_id in self._job_errors:
+                        raise RuntimeError(
+                            self._produce_log(
+                                f"Failed when running job '{job_id}': {self._job_errors[job_id]}"
+                            )
+                        )
+                    if not self._job_results.get(job_id, False):
+                        raise RuntimeError(self._produce_log(f"Job '{job_id}' failed"))
+                    logger.debug(self._produce_log(f"Job '{job_id}' completed"))
 
             progress.update(
                 progress_id,
@@ -162,6 +157,20 @@ class WorkflowRunner(BaseRunner):
         logger.debug(self._produce_log(f"Execution stages: {self._schedule}"))
         self._completed_steps = 0
         return self._total_steps
+
+    def _run_job_wrapper(self, job_id: str):
+        """
+        Wrapper for _run_job to capture results and errors in thread context.
+
+        Args:
+            job_id: The ID of the job to run
+        """
+        try:
+            result = self._run_job(job_id)
+            self._job_results[job_id] = result
+        except Exception as e:
+            self._job_errors[job_id] = e
+            self._job_results[job_id] = False
 
     def _run_job(self, job_id: str) -> bool:
         """
@@ -233,18 +242,38 @@ class WorkflowRunner(BaseRunner):
                 description=running_msg,
                 total=total_steps,
             )
-            job_task = self._processor.submit(asyncio.run, job_runner.run())
-            while True:
-                done, _ = wait([job_task], timeout=0.1, return_when=FIRST_COMPLETED)
-                if len(done) > 0:
-                    _ = job_task.result()
-                    break
+
+            # Store result and error in thread-safe way
+            job_result: list[Optional[Any]] = [None]
+            job_error: list[Optional[Exception]] = [None]
+
+            def run_job_thread():
+                try:
+                    job_result[0] = asyncio.run(job_runner.run())
+                except Exception as e:
+                    job_error[0] = e
+
+            job_thread = threading.Thread(
+                target=run_job_thread, name=f"monitor-{job_id}", daemon=False
+            )
+            job_thread.start()
+
+            # Monitor progress while thread runs
+            while job_thread.is_alive():
                 job_progress.update(
                     progress_task_id,
                     completed=job_runner.processed_steps,
                     description=running_msg,
                     refresh=True,
                 )
+                asyncio.run(asyncio.sleep(0.05))
+
+            # Wait for thread to complete
+            job_thread.join()
+
+            # Check for errors
+            if job_error[0]:
+                raise job_error[0]
 
     async def _pre_run(self):
         if not self.ctx_vars.output_path.exists():
@@ -329,8 +358,17 @@ class WorkflowRunner(BaseRunner):
         ):
             os.rmdir(self.ctx_vars.output_path)
         logger.debug(self._produce_log(f"result: {self.get_result()}"))
+
+        # Clean up completed threads
         if not self._is_reused:
-            self._processor.shutdown(wait=True)
+            for job_id, thread in self._job_threads.items():
+                if thread.is_alive():
+                    logger.warning(
+                        self._produce_log(
+                            f"Thread for job '{job_id}' still running, waiting..."
+                        )
+                    )
+                    thread.join(timeout=5.0)
 
     async def _install_tools(self):
         from ofx.runner.step import CommandRunner

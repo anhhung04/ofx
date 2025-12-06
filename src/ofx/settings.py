@@ -1,7 +1,6 @@
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,9 +11,11 @@ BASE_DIR = Path(__file__).parent.absolute()
 
 BASE_DATA_DIR = Path.home() / ".local" / "share" / "ofx"
 TEMP_DIR = Path(tempfile.gettempdir()) / ".ofx"
+SECRETS_STORE = Path(os.getenv("OFX_SECRETS_STORE", BASE_DATA_DIR / "secrets.enc"))
 SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
 DEFAULT_PROJECTS_PATH = Path.home() / "ofx-projects"
+ORG_DATA_DIR = Path(__file__) / "data"
 
 BANNER = """
 \033[1;31m      .--.

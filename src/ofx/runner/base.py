@@ -1,18 +1,18 @@
-import uuid
 import logging
-import shutil
 import os
-
+import shutil
+import uuid
 from enum import Enum
 from pathlib import Path
-from jinja2 import Template
+from typing import Any, Dict, Optional
 
+from jinja2 import Template
+from pydantic import BaseModel, Field
+
+from ofx.models.job import Job
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
-from ofx.models.job import Job
 from ofx.settings import settings
-from pydantic import BaseModel, Field
-from typing import Dict, Any, AsyncGenerator, Optional
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -20,8 +20,6 @@ logger = logging.getLogger(settings.app_branding)
 class RunnerStatus(Enum):
     IDLE = "idle"
     RUNNING = "running"
-    PAUSED = "paused"
-    CANCELED = "canceled"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -49,12 +47,6 @@ class RunContext(BaseModel):
     )
 
 
-class RunSignal(str, Enum):
-    PAUSE = "pause"
-    RESUME = "resume"
-    CANCEL = "cancel"
-
-
 class RunResult(BaseModel):
     status: RunnerStatus
     error: Optional[str] = None
@@ -77,49 +69,36 @@ class BaseRunner:
         name = str(name)
         self._id = f"{name}-{str(uuid.uuid4())}"
         self._status = RunnerStatus.IDLE
-        self._error = None
         self._ctx = ctx
         self._parent = parent
+        self._error = None
         self._model = None
         self._result = RunResult(status=self.status, run_id=self._id, name=name)
 
     async def run(self):
         """Run the workflow and return the result."""
         try:
-            self._ctx.vars.update({"self": self._model})
+            self._status = RunnerStatus.IDLE
+            self._ctx.vars.update({"self": self.model})
             await self._pre_run()
-            self._status = RunnerStatus.RUNNING
-            if type(self._do_run) is AsyncGenerator:
-                async for _ in self._do_run():  # type: ignore
-                    signal = await self._receive_signal()
-                    if signal is RunSignal.CANCEL:
-                        self._status = RunnerStatus.CANCELED
-                        break
-                    elif signal is RunSignal.PAUSE:
-                        self._status = RunnerStatus.PAUSED
-                        while True:
-                            signal = await self._receive_signal()
-                            if signal is RunSignal.RESUME:
-                                self._status = RunnerStatus.RUNNING
-                                break
-                            elif signal is RunSignal.CANCEL:
-                                self._status = RunnerStatus.CANCELED
-                                break
-                        if self._status is RunnerStatus.CANCELED:
-                            break
-                else:
-                    self._status = RunnerStatus.COMPLETED
-            else:
-                await self._do_run()
-                self._status = RunnerStatus.COMPLETED
         except Exception as e:
-            self._error = str(e)
-        if self._error and self._status != RunnerStatus.CANCELED:
+            self._error = f"Pre-run error: {str(e)}"
             self._status = RunnerStatus.FAILED
+            return self.get_result()
+
+        try:
+            self._status = RunnerStatus.RUNNING
+            await self._do_run()
+        except Exception as e:
+            self._error = f"Run error: {str(e)}"
+            self._status = RunnerStatus.FAILED
+            return self.get_result()
+
         try:
             await self._post_run()
+            self._status = RunnerStatus.COMPLETED
         except Exception as e:
-            logger.error(self._produce_log(f"Error in post-run: {e}"))
+            self._error = f"Post-run error: {str(e)}"
             self._status = RunnerStatus.FAILED
         return self.get_result()
 
@@ -131,9 +110,6 @@ class BaseRunner:
 
     async def _post_run(self):
         raise NotImplementedError("Subclasses should implement _post_run method.")
-
-    async def _receive_signal(self, **kwargs):
-        return RunSignal.RESUME
 
     def _resolve_template(self, value: Any) -> Any:
         """
@@ -177,10 +153,8 @@ class BaseRunner:
             if self.ctx_vars.vars:
                 template_vars.update(self._ctx.vars)
 
-            # Render the template
             result = template.render(template_vars)
 
-            # Convert back to the original type if possible
             if isinstance(value, bool):
                 return result.lower() in ("true", "yes", "1", "t", "y")
             elif isinstance(value, int):
@@ -220,10 +194,10 @@ class BaseRunner:
             return value
 
     def _resolve_template_fields(self, fields: list[str]):
-        if not self._model:
+        if not self.model:
             return
         for field in fields:
-            resolved_value = self._resolve_template(getattr(self._model, field))
+            resolved_value = self._resolve_template(getattr(self.model, field))
             setattr(self._model, field, resolved_value)
 
     def _produce_log(self, message: Any) -> str:
@@ -242,7 +216,6 @@ class BaseRunner:
         return self._status in {
             RunnerStatus.COMPLETED,
             RunnerStatus.FAILED,
-            RunnerStatus.CANCELED,
         }
 
     @property

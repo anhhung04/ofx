@@ -1,13 +1,12 @@
-import git
-import tempfile
 import json
-
+import tempfile
 from collections import deque
 from enum import Enum
 from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
-from typing import Optional, Dict, Set, Tuple, List
+import git
 
 
 def is_remote_path(path: str) -> bool:
@@ -42,24 +41,20 @@ def clone_remote_repo(path: str) -> Optional[Path]:
         return None
 
 
-def load_secrets(secrets_dir: Path) -> Dict[str, str]:
-    """
-    Load secrets from a YAML file in the specified directory.
+def load_secrets(secrets_dir: Path = None) -> Dict[str, str]:
+    from ofx.utils.secrets import SecretManager
 
-    Args:
-        secrets_dir (Path): The directory where the secrets file is located.
+    secrets = SecretManager.list()
 
-    Returns:
-        Dict[str, str]: A dictionary containing the loaded secrets.
-    """
-    secrets = {}
-    for secret_file in secrets_dir.glob("*"):
-        content = secret_file.read_text()
-        try:
-            content = json.loads(content)
-        except:
-            pass
-        secrets[secret_file.name] = content
+    if not secrets and secrets_dir and secrets_dir.exists():
+        for secret_file in secrets_dir.glob("*"):
+            content = secret_file.read_text()
+            try:
+                content = json.loads(content)
+            except:
+                pass
+            secrets[secret_file.name] = content
+
     return secrets
 
 

@@ -11,13 +11,8 @@ def reload_logging_config(settings):
     branding = settings.app_branding
     pre_logger = logging.getLogger(branding)
     for handler in logging.getLogger(branding).handlers:
-        if (
-            handler.name == f"{branding}.console"
-            or handler.name == f"{branding}.notification"
-        ):
+        if handler.name == f"{branding}.console":
             pre_logger.removeHandler(handler)
-
-    log_handler = None
 
     log_handler = RichHandler(
         rich_tracebacks=settings.debug,

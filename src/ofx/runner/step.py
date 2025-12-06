@@ -1,15 +1,14 @@
-import sys
 import base64
-import subprocess
-import tempfile
-import shlex
 import logging
-
+import shlex
+import subprocess
+import sys
+import tempfile
 from datetime import datetime
-from zlib import compress
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 from typing import Any
+from zlib import compress
 
 from ofx.models.step import Step
 from ofx.runner.base import BaseRunner, RunContext, RunnerStatus
@@ -88,7 +87,7 @@ class CommandRunner(BaseRunner):
         self._shell = self._resolve_shell()
 
     async def _post_run(self):
-        if self.status != RunnerStatus.COMPLETED or self._error:
+        if self._error:
             logger.error(self._produce_log(f"Command failed: {self._error}"))
         logger.debug(
             self._produce_log(
@@ -120,7 +119,9 @@ class CommandRunner(BaseRunner):
             else:
                 if hasattr(self.parent.parent.parent, "model"):
                     grandparent_shell = getattr(
-                        self.parent.parent.parent.model.defaults.run, "shell", None  # type: ignore
+                        self.parent.parent.parent.model.defaults.run,
+                        "shell",
+                        None,  # type: ignore
                     )
                     if grandparent_shell:
                         return grandparent_shell
@@ -128,7 +129,6 @@ class CommandRunner(BaseRunner):
 
 
 class ScriptRunner(CommandRunner):
-
     def __init__(
         self,
         script: str,
@@ -146,7 +146,7 @@ class ScriptRunner(CommandRunner):
             self._run_in_file = True
             self._tmp_file = tempfile.mktemp(suffix=".py")
             with open(self._tmp_file, "w") as f:
-                f.write(f"import base64,zlib\n")
+                f.write("import base64,zlib\n")
                 f.write(
                     f"exec(zlib.decompress(base64.b64decode('{enc_script}')).decode('utf-8'))\n"
                 )
@@ -168,10 +168,10 @@ class ScriptRunner(CommandRunner):
         )
 
     async def _post_run(self):
+        if self._error:
+            logger.error(self._produce_log(f"Script failed: {self._error}"))
         if self._run_in_file and self._tmp_file and Path(self._tmp_file).exists():
             Path(self._tmp_file).unlink()
-        if self.status != RunnerStatus.COMPLETED or self._error:
-            logger.error(self._produce_log(f"Script failed: {self._error}"))
 
 
 class StepRunner(BaseRunner):
@@ -208,7 +208,7 @@ class StepRunner(BaseRunner):
             if isinstance(stdout, str) and len(stdout) > 2000:
                 tmp_file = (
                     self.ctx_vars.output_path
-                    / f"stdout_{self.model.name.replace(' ','-')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                    / f"stdout_{self.model.name.replace(' ', '-')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 )
                 logger.info(
                     f"Saving output to {tmp_file} because it exceeds 2000 characters."
@@ -237,9 +237,9 @@ class StepRunner(BaseRunner):
                 parent=self,
             )
         elif self._run_type is RunType.SCRIPT:
-            assert (
-                self.model.script is not None
-            ), "Script cannot be None for SCRIPT run type"
+            assert self.model.script is not None, (
+                "Script cannot be None for SCRIPT run type"
+            )
             runner = ScriptRunner(
                 self.model.script,
                 self.ctx_vars.model_copy(),

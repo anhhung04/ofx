@@ -1,6 +1,9 @@
-import requests
+import httpx
 
-__all__ = ["fetch", "post"]
+__all__ = ["fetch", "post", "requests"]
+
+requests = httpx
+
 
 def fetch(url: str, **kwargs) -> str:
     """Send a GET request to a URL and return the response text.

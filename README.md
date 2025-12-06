@@ -17,6 +17,9 @@ A powerful workflow execution framework with lifecycle hooks and flexible execut
 OFX now includes comprehensive red teaming APIs to reduce scripting overhead by 80-90%:
 
 ### Reconnaissance APIs
+- **Search Engines**: Fofa, Shodan, ZoomEye for asset discovery
+- **OOB Testing**: CEye, Interactsh for DNS/HTTP callback verification
+- **HTTP Server**: PHTTPServer for hosting payloads with SSL support
 - **PortScanner**: Fast port discovery with service detection
 - **ServiceGrabber**: Banner grabbing and HTTP information gathering
 - **DNSResolver**: DNS enumeration with A, MX, NS, TXT record resolution
@@ -28,6 +31,7 @@ OFX now includes comprehensive red teaming APIs to reduce scripting overhead by 
 - **BinaryAnalyzer**: Security property analysis (PIE, NX, Canary, RELRO)
 - **PayloadBuilder**: Shellcode and ROP gadget generation
 - **ProcessRunner**: Local binary execution with I/O control
+- **Network Utilities**: Shell binding (TCP/Telnet), reverse shells, shellcode generation
 
 ### Post-Exploitation APIs
 - **FileUtils**: File operations (read, write, copy, delete, find)
@@ -39,13 +43,22 @@ OFX now includes comprehensive red teaming APIs to reduce scripting overhead by 
 ### Quick Example
 
 ```python
-from ofx.api import PortScanner, ServiceGrabber
+from ofx.api import Fofa, CEye, PHTTPServer
 
-# Scan target
-scanner = PortScanner("192.168.1.1")
-for port in scanner.scan_common_ports():
-    grabber = ServiceGrabber("192.168.1.1", port)
-    print(f"Port {port}: {grabber.grab_banner()}")
+# Asset discovery
+fofa = Fofa(user="email@example.com", token="your_token")
+targets = fofa.search('app="Apache"', pages=2)
+
+# OOB callback testing
+ceye = CEye(token="your_token")
+payload = ceye.build_request("test_data", type='dns')
+# Check if callback received
+if ceye.verify_request(payload['flag'], type='dns'):
+    print("Callback received!")
+
+# Host payloads
+server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080, use_https=True)
+server.start(daemon=True)
 ```
 
 **For detailed API documentation**, see [REDTEAMING_API.md](REDTEAMING_API.md) or start with [QUICKREF.md](QUICKREF.md) for a quick reference card.

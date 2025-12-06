@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -23,7 +24,9 @@ class FlowRunHandler:
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input
-        self.output = Path(output) if output else Path.cwd() / "out"
+        self.output = (
+            Path(output) if output else Path(tempfile.mkdtemp(prefix="ofx")) / "results"
+        )
 
     async def run(self):
         self._process_inputs()
@@ -40,8 +43,11 @@ class FlowRunHandler:
                 envs=os.environ.copy(),
             ),
         )
-        _ = await runner.run()
-        assert runner.is_success, f"Workflow '{self.workflow_name}' failed."
+        res = await runner.run()
+        if res.status.value != "completed":
+            logger.error(
+                f"Workflow run failed with status: {res.status}, error: {res.error}"
+            )
         return runner.get_result()
 
     def _process_inputs(self):
@@ -49,7 +55,7 @@ class FlowRunHandler:
         for inp in self.preprocess_input or []:
             try:
                 key, value = inp.split("=", 1)
-            except:
+            except Exception:
                 raise ValueError(f"Invalid input format: {inp}. Expected key=value.")
             try:
                 value = json.loads(value)

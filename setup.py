@@ -10,7 +10,17 @@ from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py as _build_py
 
-EXCLUDE_FILES = []
+
+def get_exclude_files(root_dir):
+    exclude_files = []
+    for root, dirs, files in os.walk(root_dir):
+        for filename in files:
+            file_path = os.path.join(root, filename)
+            exclude_files.append(file_path)
+    return exclude_files
+
+
+EXCLUDE_FILES = get_exclude_files("src/ofx/data")
 
 
 def get_ext_paths(root_dir, exclude_files):
@@ -19,7 +29,7 @@ def get_ext_paths(root_dir, exclude_files):
 
     for root, dirs, files in os.walk(root_dir):
         for filename in files:
-            if os.path.splitext(filename)[1] != ".py":
+            if os.path.splitext(filename)[1] != ".py" or "__pycache__" in root:
                 continue
 
             file_path = os.path.join(root, filename)
@@ -56,7 +66,10 @@ setup(
     packages=find_packages(),
     ext_modules=cythonize(
         get_ext_paths("src/ofx", EXCLUDE_FILES),
-        compiler_directives={"language_level": 3},
+        compiler_directives={
+            "language_level": 3,
+        },
+        nthreads=os.cpu_count() or 1,
     ),
     # Register our custom commands
     cmdclass={
@@ -64,8 +77,9 @@ setup(
     },
     package_dir={"": "src"},
     package_data={
-        "ofx": ["data/*.yml", "data/**/*.yml"],
+        "ofx": ["data/*", "data/**/*"],
     },
+    extra_compile_args=["-O3"],
 )
 
 for root, dirs, files in os.walk("src/ofx"):

@@ -1,11 +1,14 @@
-import typer
+from typing import Annotated, List, Optional
 
-from typing import List, Annotated, Optional
+import typer
 from async_typer import AsyncTyper
 
 app = AsyncTyper()
 
 NAME = "flow"
+
+
+ALIAS = ["x", "task"]
 
 HELP = "Manage and run workflows in the OFX system"
 

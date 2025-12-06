@@ -32,10 +32,6 @@
             "moby": false
         }
     },
-    "containerEnv": {
-        "CODON_DIR": "/opt/codon",
-        "CODON_PYTHON": "/usr/bin/python3.12"
-    },
     "forwardPorts": [],
     "postCreateCommand": "uv sync",
     "remoteUser": "vscode"

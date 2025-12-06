@@ -1,29 +1,88 @@
-import typer
-import inspect
-from typing import (
-    List,
-    Dict,
-    Any,
-    get_type_hints,
-    ForwardRef,
-    Union,
-    Annotated,
-    Optional,
-)
 import importlib
+import inspect
 from pathlib import Path
-from rich.tree import Tree
-from rich.panel import Panel
-from rich.text import Text
-from rich.table import Table
-from rich.console import Console
-from rich.syntax import Syntax
+from typing import (
+    Annotated,
+    Any,
+    Dict,
+    ForwardRef,
+    List,
+    Optional,
+    Union,
+    get_type_hints,
+)
+
+import typer
 from pydantic import BaseModel
+from rich.console import Console
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
+from rich.text import Text
+from rich.tree import Tree
 
 app = typer.Typer()
 
 NAME = "api"
 HELP = "Interact with the OFX API."
+
+
+def discover_api_modules() -> Dict[str, Dict[str, str]]:
+    """Auto-discover all API modules from ofx.api package."""
+    try:
+        api_package = importlib.import_module("ofx.api")
+        api_file = api_package.__file__
+        if not api_file:
+            return {}
+
+        api_path = Path(api_file).parent
+
+        modules: Dict[str, Dict[str, str]] = {}
+        for file in api_path.glob("*.py"):
+            if file.name == "__init__.py":
+                continue
+
+            module_name = file.stem
+            module_path = f"ofx.api.{module_name}"
+
+            # Try to import and check if it has __all__ or public functions
+            try:
+                mod = importlib.import_module(module_path)
+                # Check if module has __all__ or any public functions
+                if hasattr(mod, "__all__") or any(
+                    not name.startswith("_") and callable(getattr(mod, name))
+                    for name in dir(mod)
+                ):
+                    # Get module docstring for description
+                    doc = inspect.getdoc(mod) or f"{module_name.title()} utilities"
+                    modules[module_name] = {
+                        "path": module_path,
+                        "description": doc.split("\n")[0],  # First line only
+                    }
+            except Exception:
+                continue
+
+        # Also check for subpackages
+        for subdir in api_path.iterdir():
+            if subdir.is_dir() and not subdir.name.startswith("_"):
+                init_file = subdir / "__init__.py"
+                if init_file.exists():
+                    module_name = subdir.name
+                    module_path = f"ofx.api.{module_name}"
+                    try:
+                        mod = importlib.import_module(module_path)
+                        if hasattr(mod, "__all__"):
+                            doc = inspect.getdoc(mod) or f"{module_name.title()} module"
+                            modules[module_name] = {
+                                "path": module_path,
+                                "description": doc.split("\n")[0],
+                            }
+                    except Exception:
+                        continue
+
+        return modules
+    except Exception:
+        return {}
 
 
 def format_type(type_hint: Any, model_registry: Dict[str, Any]) -> str:
@@ -82,6 +141,77 @@ def get_model_schema(
     return schema
 
 
+def get_method_info(cls, method_name: str) -> Optional[Dict[str, Any]]:
+    """Get detailed information about a specific class method."""
+    try:
+        method = getattr(cls, method_name)
+        if not callable(method):
+            return None
+
+        doc = inspect.getdoc(method) or ""
+        sig = inspect.signature(method)
+
+        try:
+            type_hints = get_type_hints(method)
+        except Exception:
+            type_hints = getattr(method, "__annotations__", {})
+
+        # Process parameters
+        parameters = []
+        model_schemas = {}
+        for param_name, param in sig.parameters.items():
+            if param_name in ("self", "cls", "return"):
+                continue
+
+            param_hint = type_hints.get(param_name, Any)
+            param_type = format_type(param_hint, model_schemas)
+
+            if param.kind == param.VAR_KEYWORD:
+                parameters.append(
+                    {
+                        "name": f"**{param_name}",
+                        "type": "Any",
+                        "default": "",
+                        "required": False,
+                    }
+                )
+            elif param.kind == param.VAR_POSITIONAL:
+                parameters.append(
+                    {
+                        "name": f"*{param_name}",
+                        "type": "Any",
+                        "default": "",
+                        "required": False,
+                    }
+                )
+            else:
+                default = "" if param.default is param.empty else str(param.default)
+                parameters.append(
+                    {
+                        "name": param_name,
+                        "type": param_type,
+                        "default": default,
+                        "required": param.default is param.empty,
+                    }
+                )
+
+        # Get return type
+        return_type_hint = type_hints.get("return", Any)
+        return_type = format_type(return_type_hint, model_schemas)
+
+        return {
+            "name": method_name,
+            "type": "method",
+            "doc": doc,
+            "parameters": parameters,
+            "return_type": return_type,
+            "models": model_schemas,
+            "class_name": cls.__name__,
+        }
+    except Exception:
+        return None
+
+
 def get_module_functions(module) -> List[Dict[str, Any]]:
     """Get all public functions from a module with their documentation."""
     functions = []
@@ -89,12 +219,14 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
     # Get functions from __all__ if available
     all_names = getattr(module, "__all__", None)
 
-    # Create lookup of functions in the module
+    # Create lookup of functions and classes in the module
     func_lookup = dict(inspect.getmembers(module, inspect.isfunction))
+    class_lookup = dict(inspect.getmembers(module, inspect.isclass))
 
-    # If __all__ is defined, use only functions from __all__
+    # If __all__ is defined, use only items from __all__
     if all_names is not None:
         for name in all_names:
+            # Handle functions
             if name in func_lookup:
                 func = func_lookup[name]
                 doc = inspect.getdoc(func) or ""
@@ -157,12 +289,130 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                 functions.append(
                     {
                         "name": name,
+                        "type": "function",
                         "doc": doc,
                         "parameters": parameters,
                         "return_type": return_type,
                         "models": model_schemas,
                     }
                 )
+
+            # Handle classes
+            elif name in class_lookup:
+                cls = class_lookup[name]
+                doc = inspect.getdoc(cls) or ""
+
+                # Get __init__ signature if available
+                methods = []
+                try:
+                    if hasattr(cls, "__init__"):
+                        init_func = cls.__init__
+                        sig = inspect.signature(init_func)
+                        try:
+                            type_hints = get_type_hints(init_func)
+                        except Exception:
+                            type_hints = getattr(init_func, "__annotations__", {})
+
+                        # Process __init__ parameters
+                        parameters = []
+                        model_schemas = {}
+                        for param_name, param in sig.parameters.items():
+                            if param_name in ("self", "return"):
+                                continue
+
+                            param_hint = type_hints.get(param_name, Any)
+                            param_type = format_type(param_hint, model_schemas)
+
+                            if param.kind == param.VAR_KEYWORD:
+                                parameters.append(
+                                    {
+                                        "name": f"**{param_name}",
+                                        "type": "Any",
+                                        "default": "",
+                                        "required": False,
+                                    }
+                                )
+                            elif param.kind == param.VAR_POSITIONAL:
+                                parameters.append(
+                                    {
+                                        "name": f"*{param_name}",
+                                        "type": "Any",
+                                        "default": "",
+                                        "required": False,
+                                    }
+                                )
+                            else:
+                                default = (
+                                    ""
+                                    if param.default is param.empty
+                                    else str(param.default)
+                                )
+                                parameters.append(
+                                    {
+                                        "name": param_name,
+                                        "type": param_type,
+                                        "default": default,
+                                        "required": param.default is param.empty,
+                                    }
+                                )
+
+                        # Get public methods with full signatures
+                        for method_name, method in inspect.getmembers(
+                            cls, inspect.isfunction
+                        ):
+                            if not method_name.startswith("_") or method_name in (
+                                "__init__",
+                                "__call__",
+                            ):
+                                if method_name == "__init__":
+                                    continue
+                                method_doc = inspect.getdoc(method) or ""
+
+                                # Get method signature
+                                try:
+                                    method_sig = inspect.signature(method)
+                                    method_type_hints = get_type_hints(method)
+                                    return_type_hint = method_type_hints.get(
+                                        "return", Any
+                                    )
+                                    method_return_type = format_type(
+                                        return_type_hint, {}
+                                    )
+                                except Exception:
+                                    method_return_type = "Any"
+
+                                methods.append(
+                                    {
+                                        "name": method_name,
+                                        "doc": method_doc.split("\n")[0]
+                                        if method_doc
+                                        else "",
+                                        "return_type": method_return_type,
+                                    }
+                                )
+
+                        functions.append(
+                            {
+                                "name": name,
+                                "type": "class",
+                                "doc": doc,
+                                "parameters": parameters,
+                                "methods": methods,
+                                "models": model_schemas,
+                            }
+                        )
+                except Exception:
+                    # If we can't get __init__ signature, just add basic class info
+                    functions.append(
+                        {
+                            "name": name,
+                            "type": "class",
+                            "doc": doc,
+                            "parameters": [],
+                            "methods": [],
+                            "models": {},
+                        }
+                    )
 
     return sorted(functions, key=lambda x: x["name"])
 
@@ -209,18 +459,26 @@ def format_model(schema: List[Dict[str, Any]]) -> Table:
 def create_function_tree(
     functions: List[Dict[str, Any]], category: str, full_detail: bool = True
 ) -> Tree:
-    """Create a tree structure for functions in a category."""
+    """Create a tree structure for functions and classes in a category."""
     tree = Tree(f"[bold blue]{category}")
 
     if not functions:
-        tree.add("[yellow]No public functions available in this module[/yellow]")
+        tree.add(
+            "[yellow]No public functions or classes available in this module[/yellow]"
+        )
         return tree
 
     for func in functions:
-        # Create function node
-        func_name = (
-            f"[bold cyan]{func['name']}[/bold cyan] -> [green]{func['return_type']}"
-        )
+        # Create node based on type
+        if func.get("type") == "class":
+            func_name = (
+                f"[bold magenta]{func['name']}[/bold magenta] [dim](class)[/dim]"
+            )
+        elif func.get("type") == "method":
+            class_name = func.get("class_name", "")
+            func_name = f"[bold magenta]{class_name}.{func['name']}[/bold magenta] -> [green]{func.get('return_type', 'Any')}"
+        else:
+            func_name = f"[bold cyan]{func['name']}[/bold cyan] -> [green]{func.get('return_type', 'Any')}"
 
         if not full_detail:
             tree.add(func_name)
@@ -260,18 +518,46 @@ def create_function_tree(
                     )
                 )
 
-        # Add parameters
+        # Add parameters (for functions, class __init__, and methods)
         if func["parameters"]:
+            if func.get("type") == "class":
+                param_title = "__init__ Parameters"
+            elif func.get("type") == "method":
+                param_title = "Method Parameters"
+            else:
+                param_title = "Parameters"
+
             func_tree.add(
                 Panel(
                     format_parameters(func["parameters"]),
-                    title="Parameters",
+                    title=param_title,
                     border_style="yellow",
                 )
             )
 
+        # Add methods (for classes)
+        if func.get("type") == "class" and func.get("methods"):
+            methods_table = Table(
+                show_header=True, header_style="bold magenta", title="Public Methods"
+            )
+            methods_table.add_column("Method", style="cyan", justify="left")
+            methods_table.add_column("Returns", style="green", justify="left")
+            methods_table.add_column("Description", style="white", justify="left")
+
+            for method in func["methods"]:
+                return_type = method.get("return_type", "Any")
+                methods_table.add_row(method["name"], return_type, method["doc"])
+
+            func_tree.add(
+                Panel(
+                    methods_table,
+                    title="Methods",
+                    border_style="green",
+                )
+            )
+
         # Add models
-        if func["models"]:
+        if func.get("models"):
             model_tree = Tree("Models")
             func_tree.add(model_tree)
             for model_name, schema in func["models"].items():
@@ -306,70 +592,116 @@ def docs(
     List documentation for the OFX API in a beautiful format.
 
     Displays function signatures, descriptions, parameters, and examples in a rich
-    tree structure. Can optionally save the output to a file.
+    tree structure. Automatically discovers all API modules.
     """
     console = Console()
 
-    # Import all API modules
-    modules = {
-        "creds": "ofx.api.creds",
-        "file": "ofx.api.file",
-        "http": "ofx.api.http",
-        "strings": "ofx.api.strings",
-    }
-
-    descriptions = {
-        "creds": "Credential and host management operations",
-        "file": "File handling and path manipulation utilities",
-        "http": "HTTP request and response handling",
-        "strings": "String manipulation and formatting utilities",
-    }
+    # Auto-discover all API modules
+    discovered = discover_api_modules()
+    modules = {name: info["path"] for name, info in discovered.items()}
+    descriptions = {name: info["description"] for name, info in discovered.items()}
 
     if list_modules:
         console.print("\n[bold blue]Available API Modules:[/bold blue]")
         table = Table(show_header=True, header_style="bold magenta")
-        table.add_column("Module", style="cyan")
+        table.add_column("Module", style="cyan", no_wrap=True)
         table.add_column("Description", style="green")
 
         for mod_name in sorted(modules.keys()):
-            table.add_row(mod_name, descriptions[mod_name])
+            table.add_row(mod_name, descriptions.get(mod_name, ""))
 
         console.print(table)
+        console.print(f"\n[dim]Total: {len(modules)} modules[/dim]")
         console.print(
-            "\nUse [cyan]--module[/cyan] option to view detailed documentation for a specific module"
+            "\nUse [cyan]--module MODULE[/cyan] to view detailed documentation"
         )
         return
 
-    imported_modules = {}
-    for name, module_path in modules.items():
-        try:
-            imported_modules[name] = importlib.import_module(module_path)
-        except ImportError as e:
-            console.print(
-                f"[red]Error:[/red] Failed to import module '{name}': {str(e)}"
-            )
-            raise typer.Exit(1)
+    if not module:
+        console.print("\n[yellow]No module specified.[/yellow]")
+        console.print("\nUse one of the following options:")
+        console.print(
+            "  • [cyan]--list[/cyan] or [cyan]-l[/cyan] to list all available modules"
+        )
+        console.print(
+            "  • [cyan]--module MODULE[/cyan] or [cyan]-m MODULE[/cyan] to view specific module documentation"
+        )
+        console.print("\nExample:")
+        console.print("  [dim]$ ofx api docs --list[/dim]")
+        console.print("  [dim]$ ofx api docs --module webshell[/dim]")
+        return
 
-    if module:
-        if module not in modules:
-            console.print(f"[red]Error:[/red] Module '{module}' not found")
-            raise typer.Exit(1)
-        imported_modules = {module: imported_modules[module]}
+    imported_modules = {}
+    if module not in modules:
+        console.print(f"[red]Error:[/red] Module '{module}' not found")
+        console.print(f"\nAvailable modules: {', '.join(sorted(modules.keys()))}")
+        console.print("\nUse [cyan]--list[/cyan] to see all modules with descriptions")
+        raise typer.Exit(1)
+
+    try:
+        imported_modules[module] = importlib.import_module(modules[module])
+    except ImportError as e:
+        console.print(f"[red]Error:[/red] Failed to import module '{module}': {str(e)}")
+        raise typer.Exit(1)
 
     try:
         for mod_name, mod in imported_modules.items():
             functions = get_module_functions(mod)
 
             if function:
-                functions = [f for f in functions if f["name"] == function]
-                if not functions:
-                    console.print(
-                        f"[red]Error:[/red] Function '{function}' not found in module '{mod_name}'"
-                    )
-                    continue
+                # Check if function is in format ClassName.method_name
+                if "." in function:
+                    class_name, method_name = function.split(".", 1)
 
-            # Show full detail if a function is specified, or if no module is specified.
-            # Otherwise (module specified, no function), show summary.
+                    # Find the class
+                    class_func = next(
+                        (
+                            f
+                            for f in functions
+                            if f["name"] == class_name and f.get("type") == "class"
+                        ),
+                        None,
+                    )
+                    if not class_func:
+                        console.print(
+                            f"[red]Error:[/red] Class '{class_name}' not found in module '{mod_name}'"
+                        )
+                        continue
+
+                    # Get the class from the module
+                    cls = getattr(mod, class_name, None)
+                    if not cls:
+                        console.print(
+                            f"[red]Error:[/red] Could not load class '{class_name}'"
+                        )
+                        continue
+
+                    # Get method info
+                    method_info = get_method_info(cls, method_name)
+                    if not method_info:
+                        console.print(
+                            f"[red]Error:[/red] Method '{method_name}' not found in class '{class_name}'"
+                        )
+                        available_methods = [
+                            m["name"] for m in class_func.get("methods", [])
+                        ]
+                        if available_methods:
+                            console.print(
+                                f"Available methods: {', '.join(available_methods)}"
+                            )
+                        continue
+
+                    # Create a function entry for the method
+                    functions = [method_info]
+                else:
+                    # Filter for specific function or class
+                    functions = [f for f in functions if f["name"] == function]
+                    if not functions:
+                        console.print(
+                            f"[red]Error:[/red] Function or class '{function}' not found in module '{mod_name}'"
+                        )
+                        continue
+
             show_details = function is not None or module is None
 
             tree = create_function_tree(

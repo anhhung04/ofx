@@ -1,4 +1,4 @@
-.PHONY: help install dev test clean build-nukita docker-nukita docker-build dist
+.PHONY: help install dev test clean  dist
 
 help:
 	@echo "OFX Makefile Commands:"
@@ -6,10 +6,7 @@ help:
 	@echo "  make dev           - Install with dev dependencies"
 	@echo "  make test          - Run tests"
 	@echo "  make clean         - Remove build artifacts"
-	@echo "  make build-nukita  - Compile Python files with Nukita"
-	@echo "  make docker-nukita - Build Docker image with Nukita"
-	@echo "  make docker-build  - Build standard Docker image"
-	@echo "  make dist - Export compiled binary from Docker"
+	@echo "  make dist - Export compiled package from Docker"
 
 install:
 	uv sync --no-dev
@@ -22,10 +19,11 @@ test:
 
 clean:
 	rm -rf build/ dist/ *.egg-info .pytest_cache .coverage htmlcov/
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
-	find . -type f -name "*.pyo" -delete
-	find . -type f -name "*.codon" -delete
+	find ./src -type d -name __pycache__ -exec rm -rf {} +
+	find ./src -type f -name "*.pyc" -delete
+	find ./src -type f -name "*.pyo" -delete
+	find ./src -type f -name "*.c" -delete
+	find ./src -type f -name "*.so" -delete
 
 dist:
 	@echo "Exporting distribution from Docker build..."

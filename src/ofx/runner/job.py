@@ -1,12 +1,11 @@
 import logging
 import time
-
-from ofx.runner.base import BaseRunner, RunnerStatus, RunContext
-from ofx.runner.step import StepRunner
-from ofx.models.job import Job
-from ofx.settings import settings
-
 from typing import Any
+
+from ofx.models.job import Job
+from ofx.runner.base import BaseRunner, RunContext, RunnerStatus
+from ofx.runner.step import StepRunner
+from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -103,7 +102,7 @@ class JobRunner(BaseRunner):
         This method collects job execution results and prepares the final output
         for retrieval by the workflow manager.
         """
-        if self.status != RunnerStatus.COMPLETED or self._error:
+        if self._error:
             logger.error(self._produce_log(f"job failed: {self._error}"))
         self._ctx.vars.update({"steps": self._step_registry})
         self._result.outputs.update({"steps": self._step_registry})
