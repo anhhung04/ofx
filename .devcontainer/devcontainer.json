@@ -33,6 +33,5 @@
         }
     },
     "forwardPorts": [],
-    "postCreateCommand": "uv sync",
     "remoteUser": "vscode"
 }
