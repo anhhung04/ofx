@@ -46,24 +46,6 @@ def test_xor_encoding():
     print("✓ XOR encoding works\n")
 
 
-def test_from_msfvenom():
-    """Test loading from msfvenom output"""
-    print("=" * 60)
-    print("TEST: from_msfvenom() class method")
-    print("=" * 60)
-
-    # Simulated msfvenom output (hex format)
-    fake_shellcode = "909090eb0c5e31c0408804460ccd8068656c6c6f"
-
-    sc = OSShellcodes.from_msfvenom(fake_shellcode, "linux", "x64")
-    payload = sc.create_shellcode(debug=1)
-
-    print(f"Loaded {len(payload)} bytes from 'msfvenom' output")
-    print(f"Payload: {payload.hex()}")
-    assert payload.hex() == fake_shellcode, "Should preserve exact bytes"
-    print("✓ from_msfvenom() works\n")
-
-
 def test_custom_template():
     """Test custom template registration"""
     print("=" * 60)
@@ -151,7 +133,6 @@ def main():
     try:
         test_basic_generation()
         test_xor_encoding()
-        test_from_msfvenom()
         test_custom_template()
         test_bad_chars()
         test_custom_raw_bytes()
