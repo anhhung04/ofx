@@ -1,0 +1,41 @@
+name: Build and Publish to Gitea Package Registry
+
+on:
+  push:
+    tags:
+      - "v*" # Trigger on version tags like v1.0.0
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine setuptools wheel cython
+
+      - name: Build package
+        run: |
+          python -m build --wheel
+
+      - name: Publish to Gitea Package Registry
+        env:
+          TWINE_USERNAME: ${{ github.actor }}
+          TWINE_PASSWORD: ${{ github.token }}
+        run: |
+          python -m twine upload \
+            --repository-url https://d66c8e.runswith.cc/api/packages/${{ github.repository_owner }}/pypi \
+            --verbose \
+            dist/*

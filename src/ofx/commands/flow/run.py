@@ -76,10 +76,8 @@ class FlowRunHandler:
         if not self.input:
             return "None"
 
-        # Convert input dictionary to a list of [key, value] pairs for tabulation
         table_data = []
         for key, value in self.input.items():
-            # Handle complex values by converting them to JSON strings
             if isinstance(value, (dict, list)):
                 try:
                     formatted_value = json.dumps(value)

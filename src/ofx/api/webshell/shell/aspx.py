@@ -39,21 +39,17 @@ class AspxShell(WebShell):
         Returns:
             ASPX webshell code
         """
-        # Check for custom template
         custom = self._get_custom_template("aspx")
         if custom:
             return self.apply_template(custom)
 
-        # Use authentication template if secret header is configured
         if self.secret_header and self.secret_value and self.encoder == "default":
             template = ASPX_TEMPLATES["auth"]
             code = self.apply_template(template)
-        # Use built-in template based on encoder
         elif self.encoder in ASPX_TEMPLATES:
             template = ASPX_TEMPLATES[self.encoder]
             code = self.apply_template(template)
         else:
-            # Default fallback
             template = ASPX_TEMPLATES["default"]
             code = self.apply_template(template)
 

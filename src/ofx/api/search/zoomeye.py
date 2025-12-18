@@ -16,7 +16,40 @@ def is_ipv6_address_format(address: str) -> bool:
 
 
 class ZoomEye:
+    """ZoomEye cyberspace search engine client.
+
+    ZoomEye (知道创宇) is a Chinese cyberspace search engine for discovering
+    internet-connected devices. Supports both domestic (api.zoomeye.org) and
+    international (api.zoomeye.ai) endpoints.
+
+    Attributes:
+        token: ZoomEye API key
+        url: Base URL for ZoomEye API (zoomeye.org or zoomeye.ai)
+        conf_path: Path to config file storing credentials
+        points: Available search points
+        zoomeye_points: ZoomEye-specific points balance
+        plan: Subscription plan type (free, developer, etc.)
+
+    Example:
+        >>> zoomeye = ZoomEye()
+        ZoomEye Url: https://api.zoomeye.org
+        ZoomEye API token: (input will hidden)
+        >>> results = zoomeye.search('app:"Apache httpd"', pages=2)
+        >>> for url in results:
+        ...     print(url)
+        http://192.168.1.1:80
+    """
+
     def __init__(self, conf_path: Path | None = None, token: str | None = None):
+        """Initialize ZoomEye client with credential management.
+
+        Loads API token and server URL from config file if available, prompts
+        for input if needed. Automatically validates token on initialization.
+
+        Args:
+            conf_path: Path to config file (default: ~/.local/share/ofx/config.ini)
+            token: ZoomEye API key (optional, will prompt if not provided)
+        """
         self.url = None
         self.headers = {
             "User-Agent": "curl/7.80.0",
@@ -44,6 +77,14 @@ class ZoomEye:
         self.check_token()
 
     def token_is_available(self) -> bool:
+        """Verify if current ZoomEye API token is valid.
+
+        Makes a test API call to check if token is correct and retrieves
+        subscription plan details and available points.
+
+        Returns:
+            True if token is valid, False otherwise
+        """
         if self.token:
             try:
                 self.headers["API-KEY"] = self.token
@@ -64,6 +105,15 @@ class ZoomEye:
         return False
 
     def check_token(self) -> bool:
+        """Ensure valid ZoomEye credentials are available.
+
+        If current credentials are invalid, prompts user for API URL and token
+        until valid credentials are provided. Guides users to select correct
+        server (mainland China vs international). Saves valid credentials to config.
+
+        Returns:
+            True when valid credentials are confirmed
+        """
         if self.token and self.url:
             if self.token_is_available():
                 return True
@@ -84,6 +134,11 @@ class ZoomEye:
                 )
 
     def write_conf(self) -> None:
+        """Save ZoomEye credentials to config file.
+
+        Creates config directory if needed and persists API token and server URL
+        to config.ini in INI format.
+        """
         if not self.parser.has_section("ZoomEye"):
             self.parser.add_section("ZoomEye")
         try:
@@ -98,6 +153,25 @@ class ZoomEye:
     def search(
         self, dork: str, pages: int = 2, pagesize: int = 20, search_type: str = "v4"
     ) -> set[str]:
+        """Search ZoomEye for assets matching a query.
+
+        Executes a ZoomEye search query and retrieves matching results across
+        multiple pages. Query syntax follows ZoomEye's query language.
+
+        Args:
+            dork: ZoomEye query string (e.g., 'app:"nginx" +country:"CN"')
+            pages: Number of pages to retrieve (default: 2)
+            pagesize: Results per page, max 20 (default: 20)
+            search_type: IP version filter - 'v4' or 'v6' (default: 'v4')
+
+        Returns:
+            Set of unique URLs/endpoints matching the query
+
+        Example:
+            >>> results = zoomeye.search('device:"router"', pages=3, search_type='v4')
+            >>> results
+            {'http://192.168.1.1:80', 'https://10.0.0.1:443', ...}
+        """
         search_result = set()
 
         try:

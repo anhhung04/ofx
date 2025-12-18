@@ -112,7 +112,6 @@ class OSShellcodes:
 
         shellcode_str: str = shellcode_input.strip()
 
-        # C-style format: "\\xfc\\x48\\x83..."
         if "\\x" in shellcode_str:
             shellcode_str = shellcode_str.replace('"', "").replace("'", "")
             shellcode_str = (
@@ -121,12 +120,10 @@ class OSShellcodes:
             hex_values = shellcode_str.split("\\x")[1:]
             return bytes([int(h[:2], 16) for h in hex_values if h])
 
-        # Raw hex string: "fc4883e4f0e8..."
         elif all(c in "0123456789abcdefABCDEF" for c in shellcode_str.replace(" ", "")):
             shellcode_str = shellcode_str.replace(" ", "")
             return bytes.fromhex(shellcode_str)
 
-        # Python byte literal: b"\\xfc\\x48..."
         elif shellcode_str.startswith('b"') or shellcode_str.startswith("b'"):
             return ast.literal_eval(shellcode_str)
 
@@ -185,7 +182,6 @@ class OSShellcodes:
         dll_inj_funcs = dll_inj_funcs or []
         shell_args = shell_args or {}
 
-        # Force Docker assembly compilation if requested
         if use_docker_compile:
             from .assembler import get_assembly_compiler
 
@@ -201,7 +197,6 @@ class OSShellcodes:
             if debug:
                 logger.debug(f"Docker assembly: {len(shellcode)} bytes")
 
-        # Force msfvenom if requested
         elif use_msfvenom:
             from .msfvenom import get_msfvenom_generator
 
@@ -221,14 +216,12 @@ class OSShellcodes:
             if debug:
                 logger.debug(f"Msfvenom: {len(shellcode)} bytes")
 
-        # Use custom shellcode if provided
         elif self.custom_shellcode:
             shellcode = self.custom_shellcode
             self.binary_path = ""
             if debug:
                 logger.debug(f"Custom: {len(shellcode)} bytes")
 
-        # Generate from template (auto tries msfvenom, falls back to Docker)
         else:
             generator = ShellGenerator(self.OS_TARGET, self.OS_TARGET_ARCH)
             shellcode, self.binary_path = generator.get_shellcode(
@@ -243,7 +236,6 @@ class OSShellcodes:
                 use_precompiled=use_precompiled,
             )
 
-        # Apply encoding if requested
         if encode:
             if encode.lower() == "xor":
                 logger.info(f"Encoding with XOR key: 0x{encode_key:02x}")
@@ -254,13 +246,11 @@ class OSShellcodes:
             else:
                 logger.warning(f"Unknown encoding type: {encode}")
 
-        # Check for bad characters
         if self.BADCHARS:
             shellcode, has_bad = remove_bad_chars(shellcode, self.BADCHARS)
             if has_bad and debug:
                 logger.warning("Bad characters detected in shellcode!")
 
-        # Create executable if requested and not already created
         if make_exe and not self.binary_path:
             exe_gen = ShellcodeToExe(
                 shellcode,

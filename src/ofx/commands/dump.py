@@ -54,35 +54,28 @@ def extract_schema_properties(
     properties_list: List[Dict[str, str]] = [],
     definitions: Dict[str, Any] = {},
 ) -> List[Dict[str, str]]:
-    """
-    Extract all properties from a schema into a flat list,
-    using dot notation for nested properties.
-    """
+    """Extract all properties from a schema into a flat list,"""
     if properties_list is None:
         properties_list = []
 
     if definitions is None and "$defs" in schema:
         definitions = schema.get("$defs", {})
 
-    # Process properties
     properties = schema.get("properties", {})
     required = schema.get("required", [])
 
     for prop_name, prop_info in properties.items():
         full_name = f"{parent_name}.{prop_name}" if parent_name else prop_name
 
-        # Basic property info
         prop_type = get_property_type(prop_info)
         prop_required = "Yes" if prop_name in required else "No"
         prop_default = get_property_default(prop_info)
         prop_desc = prop_info.get("description", "")
 
-        # Handle enum values
         if "enum" in prop_info:
             enum_values = ", ".join([f"'{v}'" for v in prop_info["enum"]])
             prop_desc += f" (Values: {enum_values})"
 
-        # Add to list
         properties_list.append(
             {
                 "name": full_name,
@@ -93,7 +86,6 @@ def extract_schema_properties(
             }
         )
 
-        # Handle reference to another schema
         if "$ref" in prop_info and definitions:
             ref_name = prop_info["$ref"].split("/")[-1]
             ref_schema = definitions.get(ref_name)
@@ -102,7 +94,6 @@ def extract_schema_properties(
                     ref_schema, full_name, properties_list, definitions
                 )
 
-        # Handle array items
         elif prop_info.get("type") == "array" and "items" in prop_info:
             items_info = prop_info["items"]
             if "$ref" in items_info and definitions:
@@ -113,13 +104,11 @@ def extract_schema_properties(
                         ref_schema, f"{full_name}[]", properties_list, definitions
                     )
 
-        # Handle nested object
         elif prop_info.get("type") == "object" and "properties" in prop_info:
             extract_schema_properties(
                 prop_info, full_name, properties_list, definitions
             )
 
-        # Handle dictionary
         elif prop_info.get("type") == "object" and "additionalProperties" in prop_info:
             add_props = prop_info["additionalProperties"]
             if isinstance(add_props, dict) and "$ref" in add_props and definitions:
@@ -135,12 +124,9 @@ def extract_schema_properties(
 
 
 def display_schema_table(schema: Dict[str, Any], title: str, console: Console) -> None:
-    """
-    Display the schema properties in a tabular format with dot notation for nested objects.
-    """
+    """Display the schema properties in a tabular format with dot notation for nested objects"""
     properties_list = extract_schema_properties(schema)
 
-    # Create the table
     table = Table(title=title, expand=True)
     table.add_column("Property", style="cyan", no_wrap=True)
     table.add_column("Type", style="green")
@@ -148,7 +134,6 @@ def display_schema_table(schema: Dict[str, Any], title: str, console: Console) -
     table.add_column("Default", style="yellow")
     table.add_column("Description", style="blue", max_width=60, overflow="fold")
 
-    # Add rows to the table
     for prop in properties_list:
         table.add_row(
             prop["name"],
@@ -158,18 +143,12 @@ def display_schema_table(schema: Dict[str, Any], title: str, console: Console) -
             prop["description"],
         )
 
-    # Display the table
     console.print(table)
 
 
 @app.command("flow")
 def dump_workflow():
-    """
-    Dump the workflow model schema in JSON or rich formatted table.
-
-    Args:
-        format: Output format - 'json' for raw JSON schema or 'table' for formatted table
-    """
+    """Dump the workflow model schema in JSON or rich formatted table"""
     schema = Workflow.model_json_schema()
     console = Console()
 
@@ -186,12 +165,7 @@ def dump_schema(
         ),
     ] = None,
 ):
-    """
-    Dump the workflow model schema in JSON or rich formatted table.
-
-    Args:
-        format: Output format - 'json' for raw JSON schema or 'table' for formatted table
-    """
+    """Dump the workflow model schema in JSON or rich formatted table"""
     if not output:
         output = (BASE_DATA_DIR / "workflow_schema.json").as_posix()
     output_path = Path(output)

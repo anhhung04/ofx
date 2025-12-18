@@ -2,10 +2,7 @@ import logging
 
 
 def reload_logging_config(settings):
-    """
-    Reloads the logging configuration based on the current settings.
-    This is useful if settings are changed at runtime.
-    """
+    """Reloads the logging configuration based on the current settings"""
     from rich.logging import RichHandler
 
     branding = settings.app_branding

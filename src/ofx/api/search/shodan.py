@@ -16,7 +16,37 @@ def is_ipv6_address_format(address: str) -> bool:
 
 
 class Shodan:
+    """Shodan search engine client for internet-connected device discovery.
+
+    Shodan is a search engine for finding specific devices connected to the internet.
+    This client provides automated authentication, credential management, and search
+    capabilities with credit tracking.
+
+    Attributes:
+        token: Shodan API key
+        url: Base URL for Shodan API (https://api.shodan.io)
+        conf_path: Path to config file storing credentials
+        credits: Available search credits from account
+
+    Example:
+        >>> shodan = Shodan()
+        Shodan API Token: (input will hidden)
+        >>> results = shodan.search('port:22 country:"US"', pages=1)
+        >>> for host in results:
+        ...     print(host)
+        192.168.1.1:22
+    """
+
     def __init__(self, conf_path: Path | None = None, token: str | None = None):
+        """Initialize Shodan client with credential management.
+
+        Loads API token from config file if available, prompts for input if needed.
+        Automatically validates token on initialization.
+
+        Args:
+            conf_path: Path to config file (default: ~/.local/share/ofx/config.ini)
+            token: Shodan API key (optional, will prompt if not provided)
+        """
         self.url = "https://api.shodan.io"
         self.headers = {"User-Agent": "curl/7.80.0"}
         self.credits = 0
@@ -38,6 +68,14 @@ class Shodan:
         self.check_token()
 
     def token_is_available(self) -> bool:
+        """Verify if current Shodan API token is valid.
+
+        Makes a test API call to check if token is correct and retrieves
+        available search credits.
+
+        Returns:
+            True if token is valid, False otherwise
+        """
         if self.token:
             try:
                 resp = requests.get(
@@ -52,6 +90,14 @@ class Shodan:
         return False
 
     def check_token(self) -> bool:
+        """Ensure valid Shodan API token is available.
+
+        If current token is invalid, prompts user for API token until valid
+        credentials are provided. Saves valid token to config.
+
+        Returns:
+            True when valid token is confirmed
+        """
         if self.token_is_available():
             return True
 
@@ -67,6 +113,11 @@ class Shodan:
                 )
 
     def write_conf(self) -> None:
+        """Save Shodan API token to config file.
+
+        Creates config directory if needed and persists API token to config.ini
+        in INI format.
+        """
         if not self.parser.has_section("Shodan"):
             self.parser.add_section("Shodan")
         try:
@@ -78,6 +129,23 @@ class Shodan:
             logger.error(str(ex))
 
     def search(self, dork: str, pages: int = 1) -> set[str]:
+        """Search Shodan for hosts matching a query.
+
+        Executes a Shodan search query and retrieves matching hosts across
+        multiple pages. Query syntax follows Shodan's search filters.
+
+        Args:
+            dork: Shodan query string (e.g., 'port:80 country:"US" apache')
+            pages: Number of pages to retrieve (default: 1)
+
+        Returns:
+            Set of unique IP:port combinations matching the query
+
+        Example:
+            >>> results = shodan.search('product:"MySQL" country:"CN"', pages=2)
+            >>> results
+            {'192.168.1.1:3306', '[2001:db8::1]:3306', ...}
+        """
         resource = "host"
         dork_encoded = urllib.parse.quote(dork)
         search_result = set()

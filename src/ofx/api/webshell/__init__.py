@@ -43,17 +43,13 @@ from ofx.api.webshell.shell.jsp import JspShell
 from ofx.api.webshell.shell.php import PhpShell
 
 __all__ = [
-    # Base class
     "WebShell",
-    # Language-specific shells
     "PhpShell",
     "JspShell",
     "AspShell",
     "AspxShell",
-    # Factory and Client
     "WebShellCodeFactory",
     "WebShellClient",
-    # Convenience function
     "generate_webshell",
 ]
 

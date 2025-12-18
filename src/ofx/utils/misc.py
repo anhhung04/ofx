@@ -10,28 +10,12 @@ import git
 
 
 def is_remote_path(path: str) -> bool:
-    """
-    Check if the given path is a remote URL (http or https).
-
-    Args:
-        path (str): The path to check.
-
-    Returns:
-        bool: True if the path is a remote URL, False otherwise.
-    """
+    """Check if the given path is a remote URL (http or https)"""
     return urlparse(path).scheme in ["http", "https"]
 
 
 def clone_remote_repo(path: str) -> Optional[Path]:
-    """
-    Check if the given path is a Git repository.
-
-    Args:
-        path (str): The path to check.
-
-    Returns:
-        Optional[Path]: The path to the cloned repository if it is a Git repository, None otherwise.
-    """
+    """Check if the given path is a Git repository"""
     try:
         tmp_dir = tempfile.mkdtemp(prefix=".ofx_")
         repo_name = Path(path).name
@@ -58,36 +42,25 @@ def load_secrets(secrets_dir: Path = None) -> Dict[str, str]:
     return secrets
 
 
-# kahn's algorithm
 def find_parallel_schedule(
     jobs: List[str], dependencies: List[Tuple[str, str]]
 ) -> List[Set[str]]:
-    """
-    Groups jobs into stages that can be run in parallel.
-
-    Returns:
-        A list of sets, where each set contains jobs that can be run concurrently.
-    """
-    # Step 1 & 2: Build graph and in-degrees (same as before)
+    """Groups jobs into stages that can be run in parallel"""
     graph: Dict[str, List[str]] = {job: [] for job in jobs}
     in_degree: Dict[str, int] = {job: 0 for job in jobs}
 
     for prereq, job in dependencies:
-        # Ensure dependencies are valid jobs
         if prereq not in graph or job not in graph:
             continue
         graph[prereq].append(job)
         in_degree[job] += 1
 
-    # Step 3: Initialize the queue
     queue = deque([job for job in jobs if in_degree[job] == 0])
 
     parallel_schedule = []
     job_count = 0
 
-    # Step 4: Process jobs in stages
     while queue:
-        # All jobs currently in the queue can be run in parallel
         stage_size = len(queue)
         current_stage: Set[str] = set()
 
@@ -96,7 +69,6 @@ def find_parallel_schedule(
             current_stage.add(current_job)
             job_count += 1
 
-            # Update neighbors
             for next_job in graph[current_job]:
                 in_degree[next_job] -= 1
                 if in_degree[next_job] == 0:
@@ -104,7 +76,6 @@ def find_parallel_schedule(
 
         parallel_schedule.append(current_stage)
 
-    # Step 5: Check for cycles
     if job_count != len(jobs):
         raise ValueError(
             "A circular dependency was detected. Cannot create a valid schedule."
@@ -113,7 +84,6 @@ def find_parallel_schedule(
     return parallel_schedule
 
 
-# Generic singleton class
 class MetaSingleton(type):
     """Metaclass to create a singleton class"""
 
@@ -127,14 +97,11 @@ class MetaSingleton(type):
                 raise RuntimeError(
                     f"Singleton {cls.__name__} is already being spawned. Recursive error detected."
                 )
-            # Spawning new singleton
             MetaSingleton.__spawning.add(cls)
-            # If the instance does not already exist, it is created
             MetaSingleton.__instances[cls] = super(MetaSingleton, cls).__call__(
                 *args, **kwargs
             )
             MetaSingleton.__spawning.remove(cls)
-        # Return the desired object
         return MetaSingleton.__instances[cls]
 
 

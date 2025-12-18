@@ -121,7 +121,7 @@ class CommandRunner(BaseRunner):
                     grandparent_shell = getattr(
                         self.parent.parent.parent.model.defaults.run,
                         "shell",
-                        None,  # type: ignore
+                        None,
                     )
                     if grandparent_shell:
                         return grandparent_shell
@@ -227,7 +227,7 @@ class StepRunner(BaseRunner):
                 RunContext(
                     inputs=self._resolve_template(self._model.run_with),
                     envs=self.ctx_vars.envs,
-                    output_path=self.parent.parent.ctx_vars.output_path,  # type: ignore
+                    output_path=self.parent.parent.ctx_vars.output_path,
                     secrets=(
                         self.ctx_vars.secrets
                         if self.model.secrets == "inherit"
@@ -273,18 +273,7 @@ class StepRunner(BaseRunner):
         return msg
 
     def _parse_run_type(self) -> RunType:
-        """
-        Determine the run type of a step based on its configuration.
-
-        Args:
-            step: The step to analyze
-
-        Returns:
-            RunType: The determined run type (SCRIPT, COMMAND, or WORKFLOW)
-
-        Raises:
-            ValueError: If the step doesn't define a valid run type
-        """
+        """Determine the run type of a step based on its configuration"""
         step = self._model
         step_name = step.name
         if step.script:
@@ -302,23 +291,15 @@ class StepRunner(BaseRunner):
             )
 
     def _resolve_working_dir(self) -> Path:
-        """
-        Resolve the working directory for a step.
-
-        Args:
-            step: The step configuration
-
-        Returns:
-            Path: The resolved working directory
-        """
+        """Resolve the working directory for a step"""
         step = self._model
         step_path = Path(step.working_directory)
         if step_path.is_absolute():
             return step_path
-        job_path = Path(self.parent.model.defaults.run.working_directory)  # type: ignore
+        job_path = Path(self.parent.model.defaults.run.working_directory)
         if job_path.is_absolute():
             return job_path / step_path
-        workflow_path = Path(self.parent.parent.model.defaults.run.working_directory)  # type: ignore
+        workflow_path = Path(self.parent.parent.model.defaults.run.working_directory)
         return workflow_path / job_path / step_path
 
     @property

@@ -70,9 +70,7 @@ class Workflow(BaseModel):
 
     @model_validator(mode="after")
     def check_jobid_pattern(self):
-        """
-        Ensure that the job ID pattern is valid.
-        """
+        """Ensure that the job ID pattern is valid"""
         for job_id in self.jobs.keys():
             if not re.match(r"^[a-zA-Z0-9_-]+$", job_id):
                 raise ValueError(f"Job {job_id} does not have a valid pattern defined.")

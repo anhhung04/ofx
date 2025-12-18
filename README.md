@@ -17,6 +17,7 @@ A powerful workflow execution framework with lifecycle hooks and flexible execut
 OFX now includes comprehensive red teaming APIs to reduce scripting overhead by 80-90%:
 
 ### Reconnaissance APIs
+
 - **Search Engines**: Fofa, Shodan, ZoomEye for asset discovery
 - **OOB Testing**: CEye, Interactsh for DNS/HTTP callback verification
 - **HTTP Server**: PHTTPServer for hosting payloads with SSL support
@@ -27,6 +28,7 @@ OFX now includes comprehensive red teaming APIs to reduce scripting overhead by 
 - **NetworkScanner**: Live host discovery via ping sweep
 
 ### Exploitation APIs
+
 - **RemoteTarget**: Socket connections with context manager support
 - **BinaryAnalyzer**: Security property analysis (PIE, NX, Canary, RELRO)
 - **PayloadBuilder**: Shellcode and ROP gadget generation
@@ -34,6 +36,7 @@ OFX now includes comprehensive red teaming APIs to reduce scripting overhead by 
 - **Network Utilities**: Shell binding (TCP/Telnet), reverse shells, shellcode generation
 
 ### Post-Exploitation APIs
+
 - **FileUtils**: File operations (read, write, copy, delete, find)
 - **ProcessUtils**: Command execution and subprocess management
 - **CryptoUtils**: Hashing, HMAC, Base64/Hex encoding
@@ -74,10 +77,11 @@ Hooks **conditionally propagate** from child to parent scope: **Step → Job →
 **Key behavior**: Propagation only occurs when hooks are explicitly defined at a level:
 
 - **Step with hooks** → Step executes, then propagates to Job → then Workflow
-- **Step without hooks** → Job hooks execute, then propagate to Workflow  
+- **Step without hooks** → Job hooks execute, then propagate to Workflow
 - **Job without hooks** → Only Workflow hooks execute
 
 This prevents unnecessary duplicate executions while enabling hierarchical composition:
+
 - Global logging at workflow level (always available)
 - Job-specific notifications that bubble up to workflow
 - Step-specific error handling that propagates through the chain
@@ -97,7 +101,7 @@ hooks:
   on_start:
     script: "print('Workflow starting!')"
     language: python
-  
+
   on_success:
     script: "echo 'Success!'"
     language: shell
@@ -147,7 +151,7 @@ from ofx.runner.loaders import WorkflowLoader
 async def main():
     # Load workflow
     workflow = WorkflowLoader.find_flow("my_workflow")
-    
+
     # Create runner (executor managed automatically)
     runner = WorkflowRunner(
         workflow,
@@ -158,7 +162,7 @@ async def main():
             envs=os.environ.copy(),
         ),
     )
-    
+
     # Run and get result
     result = await runner.run()
     print(f"Status: {result.status}")
@@ -177,12 +181,13 @@ async def run_multiple():
     with ThreadPoolExecutor(max_workers=4) as executor:
         runner1 = WorkflowRunner(workflow1, ctx1, executor=executor)
         runner2 = WorkflowRunner(workflow2, ctx2, executor=executor)
-        
+
         result1 = await runner1.run()
         result2 = await runner2.run()
 ```
 
 See `examples/module_usage.py` for complete examples including:
+
 - Standalone execution (automatic lifecycle)
 - Shared executor patterns
 - Application-level orchestrators
@@ -205,3 +210,29 @@ The runner module is organized into focused components:
 ```bash
 pytest tests/
 ```
+
+## Contributing
+
+We use automated semantic versioning based on PR titles. When creating a Pull Request, use one of these prefixes:
+
+- `feat:` - New features (minor version bump)
+- `fix:` - Bug fixes (patch version bump)
+- `breaking:` or `major:` - Breaking changes (major version bump)
+- `chore:`, `docs:`, `refactor:`, `perf:`, `test:` - Other changes (patch version bump)
+
+**Example PR titles:**
+
+- `feat: add new tool installation system`
+- `fix: resolve PATH update issue`
+- `breaking: change default tool directory`
+
+See [Version Management Documentation](docs/VERSION_MANAGEMENT.md) for detailed guidelines.
+
+### Development Workflow
+
+1. Fork and clone the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Make your changes and commit
+4. Run tests: `pytest tests/`
+5. Push and create a PR with a semantic title
+6. Version will be automatically bumped on merge

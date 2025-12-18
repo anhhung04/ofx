@@ -54,14 +54,12 @@ class ProjectManager:
         project_path = cls._get_default_path() / safe_name
         project_path.mkdir(parents=True, exist_ok=True)
 
-        # Auto-initialize git repository
         try:
             git.Repo.init(str(project_path), initial_branch="main")
-            # Create initial .gitignore
             gitignore_path = project_path / ".gitignore"
             gitignore_path.write_text(".ofx-encryption-key\n*.enc\n")
         except Exception:
-            pass  # Silently continue if git init fails
+            pass
 
         return str(project_path)
 

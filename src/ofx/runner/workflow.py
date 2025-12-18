@@ -49,18 +49,7 @@ class WorkflowRunner(BaseRunner):
         self._job_errors: Dict[str, Exception] = {}
 
     async def _do_run(self):
-        """
-        Execute the workflow by running its jobs in stages according to their dependencies.
-
-        This method handles:
-        1. Planning the execution stages
-        2. Running jobs in parallel within each stage
-        3. Tracking progress and updating the progress bar
-        4. Error handling for job failures
-
-        Raises:
-            RuntimeError: If any job fails during execution
-        """
+        """Execute the workflow by running its jobs in stages according to their dependencies"""
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -127,15 +116,7 @@ class WorkflowRunner(BaseRunner):
             )
 
     def _planning_jobs(self) -> int:
-        """
-        Plan the job execution by organizing them in stages based on dependencies.
-
-        Returns:
-            int: The total number of steps across all jobs
-
-        Raises:
-            ValueError: If a job depends on another job that doesn't exist
-        """
+        """Plan the job execution by organizing them in stages based on dependencies"""
         jobs = self.model.jobs
         job_keys = list(jobs.keys())
         deps_relationships = []
@@ -159,12 +140,7 @@ class WorkflowRunner(BaseRunner):
         return self._total_steps
 
     def _run_job_wrapper(self, job_id: str):
-        """
-        Wrapper for _run_job to capture results and errors in thread context.
-
-        Args:
-            job_id: The ID of the job to run
-        """
+        """Wrapper for _run_job to capture results and errors in thread context"""
         try:
             result = self._run_job(job_id)
             self._job_results[job_id] = result
@@ -173,15 +149,7 @@ class WorkflowRunner(BaseRunner):
             self._job_results[job_id] = False
 
     def _run_job(self, job_id: str) -> bool:
-        """
-        Set up and run a job with the given job_id.
-
-        Args:
-            job_id: The ID of the job to run
-
-        Returns:
-            bool: True if job completed successfully, False otherwise
-        """
+        """Set up and run a job with the given job_id"""
         job = self.model.jobs[job_id]
         logger.debug(self._produce_log(f"starting job: {job}"))
         self._job_registry[job_id] = self._resolve_template(
@@ -210,18 +178,7 @@ class WorkflowRunner(BaseRunner):
             return False
 
     def _run_and_monitor_job(self, job: Job):
-        """
-        Run a job asynchronously and monitor its progress with a progress bar.
-
-        Args:
-            job_id: The ID of the job to run and monitor
-
-        Returns:
-            The result of the job execution
-
-        Raises:
-            Any exception raised during job execution
-        """
+        """Run a job asynchronously and monitor its progress with a progress bar"""
         job_id = job.jid
         job_runner: JobRunner = self._job_registry[job_id]["runner"]
         if not job_runner:
@@ -243,7 +200,6 @@ class WorkflowRunner(BaseRunner):
                 total=total_steps,
             )
 
-            # Store result and error in thread-safe way
             job_result: list[Optional[Any]] = [None]
             job_error: list[Optional[Exception]] = [None]
 
@@ -258,7 +214,6 @@ class WorkflowRunner(BaseRunner):
             )
             job_thread.start()
 
-            # Monitor progress while thread runs
             while job_thread.is_alive():
                 job_progress.update(
                     progress_task_id,
@@ -268,10 +223,8 @@ class WorkflowRunner(BaseRunner):
                 )
                 asyncio.run(asyncio.sleep(0.05))
 
-            # Wait for thread to complete
             job_thread.join()
 
-            # Check for errors
             if job_error[0]:
                 raise job_error[0]
 
@@ -359,7 +312,6 @@ class WorkflowRunner(BaseRunner):
             os.rmdir(self.ctx_vars.output_path)
         logger.debug(self._produce_log(f"result: {self.get_result()}"))
 
-        # Clean up completed threads
         if not self._is_reused:
             for job_id, thread in self._job_threads.items():
                 if thread.is_alive():
@@ -399,19 +351,7 @@ class WorkflowRunner(BaseRunner):
     def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
     ) -> Dict[str, Any]:
-        """
-        Process and validate inputs against the workflow's input constraints.
-
-        Args:
-            req_inputs: The inputs provided by the user
-            input_blueprint: The input constraints defined in the workflow
-
-        Returns:
-            Dict containing processed and validated inputs
-
-        Raises:
-            ValueError: If inputs are missing, have invalid types, or are not defined
-        """
+        """Process and validate inputs against the workflow's input constraints"""
         logger.debug(
             self._produce_log(
                 f"Processing inputs: {req_inputs} with blueprint: {input_blueprint}"
@@ -439,19 +379,7 @@ class WorkflowRunner(BaseRunner):
         return processed_inputs
 
     def _check_input_type(self, value: Any, input_type: str) -> bool:
-        """
-        Validate that a value matches the expected type.
-
-        Args:
-            value: The value to check
-            input_type: The expected type name ('string', 'number', or 'boolean')
-
-        Returns:
-            bool: True if the value matches the expected type, False otherwise
-
-        Raises:
-            ValueError: If the input_type is not supported
-        """
+        """Validate that a value matches the expected type"""
         if input_type == "string":
             return isinstance(value, str)
         elif input_type == "number":
@@ -486,18 +414,7 @@ class WorkflowRunner(BaseRunner):
 
     @staticmethod
     def find_flow(workflow_name: str) -> Workflow:
-        """
-        Find and load a workflow from local directories, file path, URL, or git repository.
-
-        Args:
-            workflow_name: Name, path, URL, or git repository of the workflow
-
-        Returns:
-            Workflow: The loaded workflow
-
-        Raises:
-            RuntimeError: If the workflow cannot be found or loaded
-        """
+        """Find and load a workflow from local directories, file path, URL, or git repository"""
         logger.debug(
             f"Searching for workflow: {workflow_name} in {WorkflowRunner.flows_dirs}"
         )

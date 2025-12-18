@@ -43,3 +43,8 @@ ofx = "ofx:main"
 [build-system]
 requires = ["setuptools>=61.0.0", "cython>=0.29"]
 build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]

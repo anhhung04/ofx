@@ -10,9 +10,7 @@ logger = logging.getLogger(settings.app_branding)
 
 class ValidateHandler:
     def run(self, workflow_name: str):
-        """
-        Validate a workflow configuration.
-        """
+        """Validate a workflow configuration"""
         logger.info(f"Validating workflow: {workflow_name}")
         src_object = yaml.safe_load(
             Path(f"{workflow_name.rstrip('.yml')}.yml").read_text()

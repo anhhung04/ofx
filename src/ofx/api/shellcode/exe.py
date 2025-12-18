@@ -46,14 +46,14 @@ class ShellcodeToExe:
             if self.target_arch == "X86":
                 exe_data = self._create_win_x86_exe()
                 filepath = self.path / f"{self.filename}.exe"
-            else:  # X64
+            else:
                 exe_data = self._create_win_x86_64_exe()
                 filepath = self.path / f"{self.filename}.exe"
-        else:  # LINUX
+        else:
             if self.target_arch == "X86":
                 exe_data = self._create_linux_x86_exe()
                 filepath = self.path / self.filename
-            else:  # X64
+            else:
                 exe_data = self._create_linux_x86_64_exe()
                 filepath = self.path / self.filename
 
@@ -64,7 +64,6 @@ class ShellcodeToExe:
 
     def _create_win_x86_exe(self) -> bytes:
         """Create Windows x86 PE executable"""
-        # MZ/PE header for x86 Windows executable
         header = (
             b"\x4d\x5a\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00"
             b"\xb8\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00"
@@ -101,7 +100,6 @@ class ShellcodeToExe:
 
     def _create_win_x86_64_exe(self) -> bytes:
         """Create Windows x64 PE executable"""
-        # MZ/PE header for x64 Windows executable
         header = (
             b"\x4d\x5a\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00"
             b"\xb8\x00\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00"
@@ -133,7 +131,6 @@ class ShellcodeToExe:
 
     def _create_linux_x86_exe(self) -> bytes:
         """Create Linux x86 ELF executable"""
-        # ELF header for x86 Linux executable
         header = (
             b"\x7f\x45\x4c\x46\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             b"\x02\x00\x03\x00\x01\x00\x00\x00\x60\x80\x04\x08\x34\x00\x00\x00"
@@ -146,7 +143,6 @@ class ShellcodeToExe:
 
     def _create_linux_x86_64_exe(self) -> bytes:
         """Create Linux x64 ELF executable"""
-        # ELF header for x64 Linux executable
         header = (
             b"\x7f\x45\x4c\x46\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00"
             b"\x02\x00\x3e\x00\x01\x00\x00\x00\x80\x00\x40\x00\x00\x00\x00\x00"

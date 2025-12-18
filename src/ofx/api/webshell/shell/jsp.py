@@ -39,21 +39,17 @@ class JspShell(WebShell):
         Returns:
             JSP webshell code
         """
-        # Check for custom template
         custom = self._get_custom_template("jsp")
         if custom:
             return self.apply_template(custom)
 
-        # Use authentication template if secret header is configured
         if self.secret_header and self.secret_value and self.encoder == "default":
             template = JSP_TEMPLATES["auth"]
             code = self.apply_template(template)
-        # Use built-in template based on encoder
         elif self.encoder in JSP_TEMPLATES:
             template = JSP_TEMPLATES[self.encoder]
             code = self.apply_template(template)
         else:
-            # Default fallback
             template = JSP_TEMPLATES["default"]
             code = self.apply_template(template)
 

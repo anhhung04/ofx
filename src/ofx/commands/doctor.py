@@ -16,7 +16,6 @@ console = Console()
 NAME = "doctor"
 HELP = "Check system dependencies and required tools."
 
-# Essential tools required for OFX
 ESSENTIAL_TOOLS = {
     "git": {
         "check": "git --version",
@@ -38,7 +37,6 @@ ESSENTIAL_TOOLS = {
     },
 }
 
-# Optional but recommended tools
 RECOMMENDED_TOOLS = {
     "uv": {
         "check": "uv --version",
@@ -70,21 +68,10 @@ RECOMMENDED_TOOLS = {
 def check_tool(
     tool_name: str, config: Dict
 ) -> Tuple[bool, Optional[str], Optional[str]]:
-    """
-    Check if a tool is installed and get its version.
-
-    Args:
-        tool_name: Name of the tool to check
-        config: Tool configuration dict with check command
-
-    Returns:
-        Tuple of (is_installed, version, error_message)
-    """
-    # First check if binary exists in PATH
+    """Check if a tool is installed and get its version"""
     if not shutil.which(tool_name):
         return False, None, f"{tool_name} not found in PATH"
 
-    # Try to get version
     check_cmd = config.get("check")
     if check_cmd:
         try:
@@ -138,14 +125,9 @@ def check(
         True, "--recommended/--essential", help="Check recommended tools"
     ),
 ):
-    """
-    Check system dependencies and required tools.
-
-    This command verifies that all necessary tools are installed and accessible.
-    """
+    """Check system dependencies and required tools"""
     console.print("\n[bold cyan]🔍 OFX System Doctor[/bold cyan]\n")
 
-    # Check essential tools
     console.print("[bold]Essential Tools:[/bold]")
     essential_table = Table(show_header=True, header_style="bold magenta")
     essential_table.add_column("Tool", style="cyan", width=12)
@@ -174,7 +156,6 @@ def check(
 
     console.print(essential_table)
 
-    # Check recommended tools if requested
     if check_recommended:
         console.print("\n[bold]Recommended Tools:[/bold]")
         recommended_table = Table(show_header=True, header_style="bold magenta")
@@ -202,7 +183,6 @@ def check(
 
         console.print(recommended_table)
 
-    # Check Python packages
     console.print("\n[bold]Python Dependencies:[/bold]")
     packages = check_python_packages()
     pkg_table = Table(show_header=True, header_style="bold magenta")
@@ -219,7 +199,6 @@ def check(
 
     console.print(pkg_table)
 
-    # Show verbose information
     if verbose:
         console.print("\n[bold]System Information:[/bold]")
         info_table = Table(show_header=False)
@@ -246,7 +225,6 @@ def check(
             if len(path_dirs) > 10:
                 console.print(f"  ... and {len(path_dirs) - 10} more")
 
-    # Summary
     console.print()
     if all_essential_ok and all_packages_ok:
         console.print(
@@ -276,12 +254,7 @@ def install_help(
         None, help="Specific tool to show installation help for"
     ),
 ):
-    """
-    Show installation instructions for tools.
-
-    Args:
-        tool: Optional specific tool name to show help for
-    """
+    """Show installation instructions for tools"""
     console.print("\n[bold cyan]📦 Tool Installation Help[/bold cyan]\n")
 
     all_tools = {**ESSENTIAL_TOOLS, **RECOMMENDED_TOOLS}
@@ -303,7 +276,6 @@ def install_help(
             )
         )
     else:
-        # Show all essential tools
         console.print("[bold]Essential Tools:[/bold]\n")
         for tool_name, config in ESSENTIAL_TOOLS.items():
             console.print(f"[cyan]• {tool_name}[/cyan]: {config['description']}")

@@ -538,6 +538,11 @@ test = [
     { name = "pytest-cov" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "async-typer", specifier = ">=0.1.9" },
@@ -568,6 +573,9 @@ requires-dist = [
     { name = "webdavclient3", specifier = ">=3.14.6" },
 ]
 provides-extras = ["test"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8.4.1" }]
 
 [[package]]
 name = "packaging"

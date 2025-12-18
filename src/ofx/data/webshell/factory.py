@@ -17,7 +17,6 @@ from .generators import (
 class WebShellFactory:
     """Factory for generating various webshell operation code snippets."""
 
-    # Language to generator mapping
     _GENERATORS = {
         "python": PythonGenerator,
         "php": PhpGenerator,
@@ -31,7 +30,6 @@ class WebShellFactory:
         "ruby": RubyGenerator,
     }
 
-    # Languages that support reverse shells
     _REVERSE_SHELL_LANGUAGES = {
         "python",
         "bash",
@@ -42,7 +40,6 @@ class WebShellFactory:
         "java",
     }
 
-    # Languages that support webshell operations
     _WEBSHELL_LANGUAGES = {"python", "php", "jsp", "java", "aspx", "asp"}
 
     @staticmethod

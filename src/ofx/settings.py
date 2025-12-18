@@ -36,9 +36,7 @@ os.makedirs(SECRETS_DIR, exist_ok=True)
 
 
 class Settings(BaseSettings):
-    """
-    Application settings for OFX.
-    """
+    """Application settings for OFX"""
 
     app_name: str = "Offensive Flow Executor"
     app_branding: str = "ofx"

@@ -1,0 +1,34 @@
+name: Test Default Tool Directory
+description: Test that tools are installed to TOOLS_BIN_DIR by default
+
+tools:
+  # Tool without custom install_dir - should go to TOOLS_BIN_DIR
+  default_tool:
+    install: "echo '#!/bin/bash\necho \"default tool works\"' > $TOOLS_BIN_DIR/default_tool && chmod +x $TOOLS_BIN_DIR/default_tool"
+    check: "test -x $TOOLS_BIN_DIR/default_tool"
+    post_install: "echo 'Default tool installed to $TOOLS_BIN_DIR'"
+
+  # Tool with custom install_dir
+  custom_tool:
+    install: "mkdir -p $INSTALL_DIR && echo '#!/bin/bash\necho \"custom tool works\"' > $INSTALL_DIR/custom_tool && chmod +x $INSTALL_DIR/custom_tool"
+    install_dir: "/tmp/custom_tools"
+    check: "test -x /tmp/custom_tools/custom_tool"
+
+jobs:
+  test:
+    name: Test Tools
+    steps:
+      - name: Verify TOOLS_BIN_DIR
+        run: |
+          echo "TOOLS_BIN_DIR: $TOOLS_BIN_DIR"
+          echo "TOOLS_DIR: $TOOLS_DIR"
+          ls -la $TOOLS_BIN_DIR/
+
+      - name: Test Default Tool
+        run: |
+          which default_tool || echo "default_tool not in PATH yet"
+          $TOOLS_BIN_DIR/default_tool
+
+      - name: Test Custom Tool
+        run: |
+          /tmp/custom_tools/custom_tool

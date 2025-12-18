@@ -68,7 +68,7 @@ class JobRunner(BaseRunner):
             unmet_deps = []
             for job_id in self.model.needs:
                 try:
-                    if self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED:  # type: ignore
+                    if self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED:
                         unmet_deps.append(job_id)
                 except Exception as e:
                     logger.error(
@@ -89,19 +89,14 @@ class JobRunner(BaseRunner):
             {
                 "steps": self._step_registry,
                 "needs": {
-                    jid: self.parent.get_job_from_registry(jid)  # type: ignore
+                    jid: self.parent.get_job_from_registry(jid)
                     for jid in self.model.needs
                 },
             }
         )
 
     async def _post_run(self):
-        """
-        Perform post-run tasks and prepare the final result.
-
-        This method collects job execution results and prepares the final output
-        for retrieval by the workflow manager.
-        """
+        """Perform post-run tasks and prepare the final result"""
         if self._error:
             logger.error(self._produce_log(f"job failed: {self._error}"))
         self._ctx.vars.update({"steps": self._step_registry})
@@ -116,15 +111,7 @@ class JobRunner(BaseRunner):
         )
 
     def _produce_log(self, message: Any) -> str:
-        """
-        Format a log message with job context information.
-
-        Args:
-            message: The message to format
-
-        Returns:
-            str: Formatted log message with job context
-        """
+        """Format a log message with job context information"""
         job_name = self._model.name
         job_id = self._model.jid
         status = self._status.value.upper()
@@ -139,22 +126,12 @@ class JobRunner(BaseRunner):
 
     @property
     def processed_steps(self) -> int:
-        """
-        Get the number of processed steps.
-
-        Returns:
-            int: The number of steps that have been processed
-        """
+        """Get the number of processed steps"""
         return self._processed_steps
 
     @property
     def total_steps(self) -> int:
-        """
-        Get the total number of steps in the job.
-
-        Returns:
-            int: The total number of steps
-        """
+        """Get the total number of steps in the job"""
         return len(self.model.steps)
 
     @property

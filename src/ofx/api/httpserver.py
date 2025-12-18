@@ -137,10 +137,17 @@ class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
         self.__running.set()
 
     def _gen_cert(self, filepath: Path) -> None:
-        """Generate a self-signed SSL certificate.
+        """Generate a self-signed SSL certificate for HTTPS.
+
+        Creates a 2048-bit RSA key and X.509 certificate valid for 365 days,
+        with localhost and *.localhost as Subject Alternative Names.
 
         Args:
-            filepath: Path where the certificate will be saved
+            filepath: Path where the PEM-encoded certificate and key will be saved
+
+        Note:
+            The generated certificate is self-signed and will trigger browser
+            warnings. For production use, obtain a properly signed certificate.
         """
         import datetime
 
@@ -197,14 +204,22 @@ class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
             f.write(cert.public_bytes(serialization.Encoding.PEM))
 
     def start(self, daemon: bool = True) -> None:
-        """Start the HTTP server in a separate thread.
+        """Start the HTTP/HTTPS server in a background thread.
+
+        Checks port availability, starts the server thread, and waits for
+        the server to become ready (up to 10 retry attempts).
 
         Args:
-            daemon: Run as daemon thread (default: True)
+            daemon: Run as daemon thread that exits when main program exits (default: True)
 
-        The server will check if the port is available and start
-        listening for connections. Automatically detects when the
-        server is ready.
+        Raises:
+            Logs error if port is already occupied and returns without starting
+
+        Example:
+            >>> server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)
+            >>> server.start()
+            [INFO] Starting httpd on http://0.0.0.0:8080
+            >>> # Server is now running in background
         """
         if self.server_locked:
             logger.info(f"Httpd serve has been started on {self.url}")
@@ -238,10 +253,14 @@ class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
             detect_count -= 1
 
     def run(self) -> None:
-        """Main server loop (called by threading.Thread.start()).
+        """Internal server loop executed in background thread.
 
-        Runs the HTTP/HTTPS server and handles SSL context if needed.
-        This method should not be called directly; use start() instead.
+        Initializes HTTPServer instance, wraps socket with SSL if HTTPS is enabled,
+        and runs the server's serve_forever() loop. Handles cleanup on exit.
+
+        Warning:
+            This method is called automatically by threading.Thread.start().
+            Do not call directly. Use start() method instead.
         """
         try:
             while self.__running.is_set():
@@ -277,15 +296,36 @@ class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
             logger.error(str(ex))
 
     def pause(self) -> None:
-        """Pause the HTTP server without stopping the thread."""
+        """Pause the HTTP server without terminating the thread.
+
+        Temporarily halts request handling while keeping the thread alive.
+        Use resume() to restart request handling.
+
+        Example:
+            >>> server.pause()
+            >>> # Server stops accepting requests
+            >>> server.resume()
+            >>> # Server resumes accepting requests
+        """
         self.__flag.clear()
 
     def resume(self) -> None:
-        """Resume a paused HTTP server."""
+        """Resume a paused HTTP server to continue handling requests.
+
+        Restarts request handling after a pause() call.
+        """
         self.__flag.set()
 
     def stop(self) -> None:
-        """Stop the HTTP server and cleanup resources."""
+        """Stop the HTTP server and release all resources.
+
+        Performs graceful shutdown: signals thread to exit, waits 1-3 seconds
+        for cleanup, and closes server socket.
+
+        Example:
+            >>> server.stop()
+            [INFO] Stop httpd server on http://0.0.0.0:8080
+        """
         self.__flag.set()
         self.__running.clear()
         time.sleep(random.randint(1, 3))

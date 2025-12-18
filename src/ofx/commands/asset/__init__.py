@@ -11,7 +11,5 @@ HELP = "Manage OFX assets."
 
 @app.command()
 def init():
-    """
-    Init new OFX asserts
-    """
-    InitHandler().run()  # type: ignore
+    """Init new OFX asserts"""
+    InitHandler().run()

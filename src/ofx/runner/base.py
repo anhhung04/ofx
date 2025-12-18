@@ -112,16 +112,7 @@ class BaseRunner:
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
     def _resolve_template(self, value: Any) -> Any:
-        """
-        Resolve Jinja2 templates in string values and convert back to the original type.
-
-        Args:
-            value: The value that may contain a template
-            vars: Additional variables to include in the template context
-
-        Returns:
-            The resolved value, maintaining the original type if possible
-        """
+        """Resolve Jinja2 templates in string values and convert back to the original type"""
         if value is None or not isinstance(value, (str, int, float, bool, dict, list)):
             return value
         if type(value) is dict:
@@ -227,18 +218,14 @@ class BaseRunner:
         return self._id
 
     def get_result(self) -> RunResult:
-        """
-        Get the result of the workflow run.
-        """
+        """Get the result of the workflow run"""
         self._result.status = self.status
         self._result.error = self._error
         return self._result
 
     @property
     def ctx_vars(self) -> RunContext:
-        """
-        Get the context variables for the workflow run.
-        """
+        """Get the context variables for the workflow run"""
         return self._ctx
 
     @property

@@ -50,9 +50,7 @@ def validate(
         str, typer.Argument(..., help="Name of the workflow to validate")
     ],
 ):
-    """
-    Validate a workflow configuration.
-    """
+    """Validate a workflow configuration"""
     from ofx.commands.flow.validate import ValidateHandler
 
     ValidateHandler().run(workflow_name=workflow_name)
@@ -60,9 +58,7 @@ def validate(
 
 @app.command()
 def update():
-    """
-    Update the workflow configuration.
-    """
+    """Update the workflow configuration"""
     from ofx.commands.flow.update import UpdateHandler
 
     UpdateHandler().run()

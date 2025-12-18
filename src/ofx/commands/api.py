@@ -45,15 +45,12 @@ def discover_api_modules() -> Dict[str, Dict[str, str]]:
             module_name = file.stem
             module_path = f"ofx.api.{module_name}"
 
-            # Try to import and check if it has __all__ or public functions
             try:
                 mod = importlib.import_module(module_path)
-                # Check if module has __all__ or any public functions
                 if hasattr(mod, "__all__") or any(
                     not name.startswith("_") and callable(getattr(mod, name))
                     for name in dir(mod)
                 ):
-                    # Get module docstring for description
                     doc = inspect.getdoc(mod) or f"{module_name.title()} utilities"
                     modules[module_name] = {
                         "path": module_path,
@@ -62,7 +59,6 @@ def discover_api_modules() -> Dict[str, Dict[str, str]]:
             except Exception:
                 continue
 
-        # Also check for subpackages
         for subdir in api_path.iterdir():
             if subdir.is_dir() and not subdir.name.startswith("_"):
                 init_file = subdir / "__init__.py"
@@ -122,7 +118,7 @@ def get_model_schema(
     ):
         return []
 
-    model_registry[model.__name__] = []  # Placeholder to prevent recursion loops
+    model_registry[model.__name__] = []
 
     schema = []
     for name, field in model.model_fields.items():
@@ -156,7 +152,6 @@ def get_method_info(cls, method_name: str) -> Optional[Dict[str, Any]]:
         except Exception:
             type_hints = getattr(method, "__annotations__", {})
 
-        # Process parameters
         parameters = []
         model_schemas = {}
         for param_name, param in sig.parameters.items():
@@ -195,7 +190,6 @@ def get_method_info(cls, method_name: str) -> Optional[Dict[str, Any]]:
                     }
                 )
 
-        # Get return type
         return_type_hint = type_hints.get("return", Any)
         return_type = format_type(return_type_hint, model_schemas)
 
@@ -216,17 +210,13 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
     """Get all public functions from a module with their documentation."""
     functions = []
 
-    # Get functions from __all__ if available
     all_names = getattr(module, "__all__", None)
 
-    # Create lookup of functions and classes in the module
     func_lookup = dict(inspect.getmembers(module, inspect.isfunction))
     class_lookup = dict(inspect.getmembers(module, inspect.isclass))
 
-    # If __all__ is defined, use only items from __all__
     if all_names is not None:
         for name in all_names:
-            # Handle functions
             if name in func_lookup:
                 func = func_lookup[name]
                 doc = inspect.getdoc(func) or ""
@@ -234,10 +224,8 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                 try:
                     type_hints = get_type_hints(func)
                 except Exception:
-                    # If type hints can't be resolved, fall back to annotations
                     type_hints = getattr(func, "__annotations__", {})
 
-                # Process parameters
                 parameters = []
                 model_schemas = {}
                 for param_name, param in sig.parameters.items():
@@ -247,7 +235,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                     param_hint = type_hints.get(param_name, Any)
                     param_type = format_type(param_hint, model_schemas)
 
-                    # Special handling for **kwargs
                     if param.kind == param.VAR_KEYWORD:
                         parameters.append(
                             {
@@ -257,7 +244,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                                 "required": False,
                             }
                         )
-                    # Special handling for *args
                     elif param.kind == param.VAR_POSITIONAL:
                         parameters.append(
                             {
@@ -267,7 +253,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                                 "required": False,
                             }
                         )
-                    # Normal parameters
                     else:
                         default = (
                             "" if param.default is param.empty else str(param.default)
@@ -282,7 +267,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                             }
                         )
 
-                # Get return type
                 return_type_hint = type_hints.get("return", Any)
                 return_type = format_type(return_type_hint, model_schemas)
 
@@ -297,12 +281,10 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                     }
                 )
 
-            # Handle classes
             elif name in class_lookup:
                 cls = class_lookup[name]
                 doc = inspect.getdoc(cls) or ""
 
-                # Get __init__ signature if available
                 methods = []
                 try:
                     if hasattr(cls, "__init__"):
@@ -313,7 +295,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                         except Exception:
                             type_hints = getattr(init_func, "__annotations__", {})
 
-                        # Process __init__ parameters
                         parameters = []
                         model_schemas = {}
                         for param_name, param in sig.parameters.items():
@@ -356,7 +337,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                                     }
                                 )
 
-                        # Get public methods with full signatures
                         for method_name, method in inspect.getmembers(
                             cls, inspect.isfunction
                         ):
@@ -368,7 +348,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                                     continue
                                 method_doc = inspect.getdoc(method) or ""
 
-                                # Get method signature
                                 try:
                                     method_sig = inspect.signature(method)
                                     method_type_hints = get_type_hints(method)
@@ -402,7 +381,6 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                             }
                         )
                 except Exception:
-                    # If we can't get __init__ signature, just add basic class info
                     functions.append(
                         {
                             "name": name,
@@ -469,7 +447,6 @@ def create_function_tree(
         return tree
 
     for func in functions:
-        # Create node based on type
         if func.get("type") == "class":
             func_name = (
                 f"[bold magenta]{func['name']}[/bold magenta] [dim](class)[/dim]"
@@ -486,18 +463,14 @@ def create_function_tree(
 
         func_tree = tree.add(func_name)
 
-        # Add description
         if func["doc"]:
-            # Split into description and examples
             parts = func["doc"].split("Example:")
             description = parts[0].strip()
             example = parts[1].strip() if len(parts) > 1 else None
 
-            # Clean up the description by removing indentation
             description_lines = [line.strip() for line in description.split("\n")]
             description = "\n".join(line for line in description_lines if line)
 
-            # Add description
             func_tree.add(
                 Panel(
                     Text(description, style="white"),
@@ -506,7 +479,6 @@ def create_function_tree(
                 )
             )
 
-            # Add example if present
             if example:
                 example_lines = [line.strip() for line in example.split("\n")]
                 example = "\n".join(line for line in example_lines if line)
@@ -518,7 +490,6 @@ def create_function_tree(
                     )
                 )
 
-        # Add parameters (for functions, class __init__, and methods)
         if func["parameters"]:
             if func.get("type") == "class":
                 param_title = "__init__ Parameters"
@@ -535,7 +506,6 @@ def create_function_tree(
                 )
             )
 
-        # Add methods (for classes)
         if func.get("type") == "class" and func.get("methods"):
             methods_table = Table(
                 show_header=True, header_style="bold magenta", title="Public Methods"
@@ -556,7 +526,6 @@ def create_function_tree(
                 )
             )
 
-        # Add models
         if func.get("models"):
             model_tree = Tree("Models")
             func_tree.add(model_tree)
@@ -596,7 +565,6 @@ def docs(
     """
     console = Console()
 
-    # Auto-discover all API modules
     discovered = discover_api_modules()
     modules = {name: info["path"] for name, info in discovered.items()}
     descriptions = {name: info["description"] for name, info in discovered.items()}
@@ -649,11 +617,9 @@ def docs(
             functions = get_module_functions(mod)
 
             if function:
-                # Check if function is in format ClassName.method_name
                 if "." in function:
                     class_name, method_name = function.split(".", 1)
 
-                    # Find the class
                     class_func = next(
                         (
                             f
@@ -668,7 +634,6 @@ def docs(
                         )
                         continue
 
-                    # Get the class from the module
                     cls = getattr(mod, class_name, None)
                     if not cls:
                         console.print(
@@ -676,7 +641,6 @@ def docs(
                         )
                         continue
 
-                    # Get method info
                     method_info = get_method_info(cls, method_name)
                     if not method_info:
                         console.print(
@@ -691,10 +655,8 @@ def docs(
                             )
                         continue
 
-                    # Create a function entry for the method
                     functions = [method_info]
                 else:
-                    # Filter for specific function or class
                     functions = [f for f in functions if f["name"] == function]
                     if not functions:
                         console.print(
