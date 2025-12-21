@@ -5,7 +5,7 @@ import sysconfig
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "src", "ofx")))
 
-from _version import __version__
+from ofx._version import __version__
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py as _build_py
