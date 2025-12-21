@@ -6,7 +6,7 @@ from ofx.runner.step import StepRunner
 from ofx.models.job import Job
 from ofx.settings import settings
 
-from typing import Any
+from typing import Any, Dict
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -15,7 +15,7 @@ class JobRunner(BaseRunner):
     def __init__(self, job: Job, ctx: RunContext, parent: BaseRunner | None = None):
         super().__init__(job, ctx, parent)
         self._model = job
-        self._step_registry = {}
+        self._step_registry: Dict[str, Any] = {}
         self._processed_steps = 0
 
     async def _do_run(self):
@@ -45,7 +45,7 @@ class JobRunner(BaseRunner):
             step_name = step.name
             step_id = step.step_index
             dump_model = result.model_dump()
-            self._step_registry[step_id] = dump_model
+            self._step_registry[str(step_id)] = dump_model
             if step.id:
                 self._step_registry[step.id] = dump_model
             self._processed_steps += 1
@@ -54,11 +54,14 @@ class JobRunner(BaseRunner):
                 self._error = result.error
                 raise RuntimeError(
                     self._produce_log(
-                        f"(step '{step_name}') -> job execution stopped due to step failure: {self._error}"
+                        f"(step '{step_name}') -> job execution stopped due to step failure:\n {self._error}"
                     )
                 )
 
     async def _pre_run(self):
+        # Register hooks from model
+        self._register_hooks_from_model()
+        
         self._resolve_template_fields(["name", "needs", "run_if", "env"])
         for idx, step in enumerate(self._model.steps):
             self._model.steps[idx].name = self._resolve_template(step.name)
@@ -84,7 +87,7 @@ class JobRunner(BaseRunner):
                     f"Job cannot run because dependencies are not met: {unmet_deps}"
                 )
 
-        if not eval(str(self._model.run_if)):
+        if not self._safe_eval(self._model.run_if, "job run_if"):
             raise RuntimeError(self._produce_log(f"Job condition is not met"))
         self._ctx.vars.update(
             {
@@ -95,18 +98,18 @@ class JobRunner(BaseRunner):
                 },
             }
         )
+        
+        # Execute pre_run hooks
+        await self._execute_pre_run_hooks()
 
     async def _post_run(self):
-        """
-        Perform post-run tasks and prepare the final result.
-
-        This method collects job execution results and prepares the final output
-        for retrieval by the workflow manager.
-        """
         if self.status != RunnerStatus.COMPLETED or self._error:
             logger.error(self._produce_log(f"job failed: {self._error}"))
         self._ctx.vars.update({"steps": self._step_registry})
         self._result.outputs.update({"steps": self._step_registry})
+        
+        # Execute post_run hooks
+        await self._execute_post_run_hooks()
         if self.model.outputs:
             for key, value in self.model.outputs.items():
                 self._result.outputs[key] = self._resolve_template(value)
@@ -117,45 +120,18 @@ class JobRunner(BaseRunner):
         )
 
     def _produce_log(self, message: Any) -> str:
-        """
-        Format a log message with job context information.
-
-        Args:
-            message: The message to format
-
-        Returns:
-            str: Formatted log message with job context
-        """
-        job_name = self._model.name
-        job_id = self._model.jid
-        status = self._status.value.upper()
-        name = job_name if job_name else job_id
-
-        message_str = str(message)
-        msg = f"(job '{name}')[{status}] -> {message_str}"
-
+        job_name = self._model.name or self._model.jid
+        msg = f"('{job_name}') -> {message}"
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
 
     @property
     def processed_steps(self) -> int:
-        """
-        Get the number of processed steps.
-
-        Returns:
-            int: The number of steps that have been processed
-        """
         return self._processed_steps
 
     @property
     def total_steps(self) -> int:
-        """
-        Get the total number of steps in the job.
-
-        Returns:
-            int: The total number of steps
-        """
         return len(self.model.steps)
 
     @property

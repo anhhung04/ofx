@@ -1,0 +1,130 @@
+name: Context Flow Test
+description: Test input/output/context propagation through workflow → job → step
+
+# Test workflow-level inputs and context
+hooks:
+  pre_run: |
+    def hook(inputs, context):
+        print(f"[WORKFLOW PRE_RUN] Initial inputs: {inputs}")
+        print(f"[WORKFLOW PRE_RUN] Context envs: {context.envs}")
+        # Modify inputs at workflow level
+        inputs['workflow_level'] = 'workflow_value'
+        inputs['modified_at'] = 'workflow'
+        return inputs
+
+  post_run: |
+    def hook(outputs):
+        print(f"[WORKFLOW POST_RUN] Final outputs keys: {list(outputs.keys())}")
+        outputs['workflow_post_processed'] = True
+        return outputs
+
+env:
+  WORKFLOW_ENV: "workflow_global"
+  SHARED_ENV: "from_workflow"
+
+jobs:
+  context-flow-test:
+    name: Context Flow Test Job
+
+    env:
+      JOB_ENV: "job_specific"
+      SHARED_ENV: "from_job" # Override workflow env
+
+    outputs:
+      job_output: "${{ steps.1.outputs.stdout }}"
+      workflow_input_check: "${{ inputs.workflow_level }}"
+
+    hooks:
+      pre_run: |
+        def hook(inputs, context):
+            print(f"[JOB PRE_RUN] Received inputs: {inputs}")
+            print(f"[JOB PRE_RUN] Has workflow_level: {'workflow_level' in inputs}")
+            print(f"[JOB PRE_RUN] Context envs: {context.envs}")
+            # Add job-level data
+            inputs['job_level'] = 'job_value'
+            inputs['modified_at'] = 'job'  # Override
+            return inputs
+
+      on_iter_step: |
+        def hook(step_index, inputs):
+            print(f"[ON_ITER_STEP {step_index}] Inputs available: {list(inputs.keys())}")
+
+      post_run: |
+        def hook(outputs):
+            print(f"[JOB POST_RUN] Job outputs: {outputs}")
+            return outputs
+
+    steps:
+      - name: Check Input Propagation
+        hooks:
+          before_step: |
+            def hook(inputs, context):
+                print(f"[STEP 0 BEFORE] Inputs received: {inputs}")
+                print(f"[STEP 0 BEFORE] - workflow_level: {inputs.get('workflow_level')}")
+                print(f"[STEP 0 BEFORE] - job_level: {inputs.get('job_level')}")
+                print(f"[STEP 0 BEFORE] - modified_at: {inputs.get('modified_at')}")
+                print(f"[STEP 0 BEFORE] Context envs: {list(context.envs.keys())}")
+                # Step-level input modification
+                inputs['step_level'] = 'step_value'
+                return inputs
+
+          after_step: |
+            def hook(outputs):
+                print(f"[STEP 0 AFTER] Command outputs: {list(outputs.keys())}")
+                outputs['step_processed'] = True
+                return outputs
+
+        env:
+          STEP_ENV: "step_specific"
+          SHARED_ENV: "from_step" # Override job env
+
+        run: |
+          echo "=== Environment Variables ==="
+          echo "WORKFLOW_ENV: $WORKFLOW_ENV"
+          echo "JOB_ENV: $JOB_ENV"
+          echo "STEP_ENV: $STEP_ENV"
+          echo "SHARED_ENV: $SHARED_ENV"
+          echo ""
+          echo "=== Expected: ==="
+          echo "WORKFLOW_ENV should be: workflow_global"
+          echo "JOB_ENV should be: job_specific"
+          echo "STEP_ENV should be: step_specific"
+          echo "SHARED_ENV should be: from_step (step overrides job overrides workflow)"
+
+        log_stdout: true
+
+      - name: Check Context Access
+        run: |
+          echo "Testing context vars access"
+          echo "This step should have access to previous step outputs"
+        log_stdout: true
+
+      - name: Output Generation
+        hooks:
+          after_step: |
+            def hook(outputs):
+                print(f"[STEP 2 AFTER] Generated outputs for job")
+                outputs['final_check'] = 'completed'
+                return outputs
+
+        run: echo "Final step output"
+        log_stdout: true
+
+  context-consumer:
+    name: Consumer Job
+    needs: context-flow-test
+
+    hooks:
+      pre_run: |
+        def hook(context):
+            print(f"[CONSUMER PRE_RUN] Context vars available: {list(context.vars.keys())}")
+            if 'jobs' in context.vars:
+                print(f"[CONSUMER PRE_RUN] Available jobs: {list(context.vars['jobs'].keys())}")
+                producer_job = context.vars['jobs'].get('context-flow-test', {})
+                print(f"[CONSUMER PRE_RUN] Producer job status: {producer_job.get('status')}")
+                print(f"[CONSUMER PRE_RUN] Producer job outputs: {list(producer_job.get('outputs', {}).keys())}")
+
+    steps:
+      - name: Access Previous Job Outputs
+        run: echo "Checking if we can access previous job via needs"
+        log_stdout: true

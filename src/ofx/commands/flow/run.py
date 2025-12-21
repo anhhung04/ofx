@@ -1,13 +1,14 @@
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
 from tabulate import tabulate
 
 from ofx.runner.base import RunContext
-from ofx.runner.workflow import WorkflowRunner
+from ofx.runner import WorkflowRunner
 from ofx.settings import SECRETS_DIR, settings
 from ofx.utils.misc import load_secrets
 
@@ -23,7 +24,7 @@ class FlowRunHandler:
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input
-        self.output = Path(output) if output else Path.cwd() / "out"
+        self.output = Path(output) if output else Path(tempfile.mkdtemp(prefix="ofx_"))
 
     async def run(self):
         self._process_inputs()
