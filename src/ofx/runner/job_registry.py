@@ -2,7 +2,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
-from ofx.runner.base import RunnerStatus
+from ofx.runner.runner import RunnerStatus
 
 
 @dataclass

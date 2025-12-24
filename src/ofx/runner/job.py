@@ -1,9 +1,12 @@
+"""Job runner for orchestrating step execution"""
+
 import logging
 import time
 from typing import Any
 
 from ofx.models.job import Job
-from ofx.runner.base import BaseRunner, RunContext, RunnerStatus
+from ofx.runner.base import BaseRunner
+from ofx.runner.models import RunContext, RunnerStatus
 from ofx.runner.step import StepRunner
 from ofx.settings import settings
 
@@ -22,18 +25,10 @@ class JobRunner(BaseRunner):
             step_runner = StepRunner(
                 step,
                 RunContext(
-                    inputs={
-                        **self.ctx_vars.inputs,
-                        **self._resolve_template(step.run_with),
-                    },
+                    inputs={**self.ctx_vars.inputs, **self._resolve_template(step.run_with)},
                     envs={**self.ctx_vars.envs, **self._resolve_template(step.env)},
                     output_path=self.ctx_vars.output_path,
-                    secrets={
-                        **self.ctx_vars.secrets,
-                        **self._resolve_template(
-                            step.secrets if step.secrets != "inherit" else {}
-                        ),
-                    },
+                    secrets={**self.ctx_vars.secrets, **self._resolve_template(step.secrets if step.secrets != "inherit" else {})},
                     vars=self.ctx_vars.vars,
                 ),
                 self,
@@ -51,11 +46,7 @@ class JobRunner(BaseRunner):
             if not step_runner.is_success and not step.continue_on_error:
                 self._status = RunnerStatus.FAILED
                 self._error = result.error
-                raise RuntimeError(
-                    self._produce_log(
-                        f"(step '{step_name}') -> job execution stopped due to step failure: {self._error}"
-                    )
-                )
+                raise RuntimeError(self._produce_log(f"(step '{step_name}') -> job execution stopped due to step failure: {self._error}"))
 
     async def _pre_run(self):
         self._resolve_template_fields(["name", "needs", "run_if", "env"])
@@ -68,35 +59,21 @@ class JobRunner(BaseRunner):
             unmet_deps = []
             for job_id in self.model.needs:
                 try:
-                    if self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED:
+                    if self.parent and hasattr(self.parent, "get_job_status") and self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED:
                         unmet_deps.append(job_id)
                 except Exception as e:
-                    logger.error(
-                        self._produce_log(
-                            f"Error checking dependency status for {job_id}: {e}"
-                        )
-                    )
+                    logger.error(self._produce_log(f"Error checking dependency status for {job_id}: {e}"))
                     unmet_deps.append(job_id)
-
             if len(unmet_deps) > 0:
-                raise RuntimeError(
-                    f"Job cannot run because dependencies are not met: {unmet_deps}"
-                )
-
+                raise RuntimeError(f"Job cannot run because dependencies are not met: {unmet_deps}")
         if not eval(str(self._model.run_if)):
             raise RuntimeError(self._produce_log(f"Job condition is not met"))
-        self._ctx.vars.update(
-            {
-                "steps": self._step_registry,
-                "needs": {
-                    jid: self.parent.get_job_from_registry(jid)
-                    for jid in self.model.needs
-                },
-            }
-        )
+        self._ctx.vars.update({
+            "steps": self._step_registry,
+            "needs": {jid: self.parent.get_job_from_registry(jid) if self.parent and hasattr(self.parent, "get_job_from_registry") else None for jid in self.model.needs},
+        })
 
     async def _post_run(self):
-        """Perform post-run tasks and prepare the final result"""
         if self._error:
             logger.error(self._produce_log(f"job failed: {self._error}"))
         self._ctx.vars.update({"steps": self._step_registry})
@@ -104,36 +81,27 @@ class JobRunner(BaseRunner):
         if self.model.outputs:
             for key, value in self.model.outputs.items():
                 self._result.outputs[key] = self._resolve_template(value)
-        logger.debug(
-            self._produce_log(
-                f"job '{self.model.name or self.model.jid}' result: {self._result}"
-            )
-        )
+        logger.debug(self._produce_log(f"job '{self.model.name or self.model.jid}' result: {self._result}"))
 
     def _produce_log(self, message: Any) -> str:
-        """Format a log message with job context information"""
         job_name = self._model.name
         job_id = self._model.jid
         status = self._status.value.upper()
         name = job_name if job_name else job_id
-
         message_str = str(message)
         msg = f"(job '{name}')[{status}] -> {message_str}"
-
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
 
     @property
     def processed_steps(self) -> int:
-        """Get the number of processed steps"""
         return self._processed_steps
-
+    
     @property
     def total_steps(self) -> int:
-        """Get the total number of steps in the job"""
         return len(self.model.steps)
-
+    
     @property
     def model(self) -> Job:
         return self._model

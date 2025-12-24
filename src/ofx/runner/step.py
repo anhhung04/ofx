@@ -1,177 +1,20 @@
-import base64
+"""Step runner for executing workflow steps"""
+
 import logging
-import shlex
-import subprocess
-import sys
-import tempfile
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
-from typing import Any
-from zlib import compress
+from typing import Any, TYPE_CHECKING
 
 from ofx.models.step import Step
-from ofx.runner.base import BaseRunner, RunContext, RunnerStatus
+from ofx.runner.base import BaseRunner
+from ofx.runner.command import CommandRunner, ScriptRunner
+from ofx.runner.models import RunContext, RunType, RunnerStatus
 from ofx.settings import settings
 
+if TYPE_CHECKING:
+    from ofx.runner.workflow import WorkflowRunner
+
 logger = logging.getLogger(settings.app_branding)
-
-DEFAULT_SHELL = "/bin/bash"
-
-
-class RunType(Enum):
-    SCRIPT = "script"
-    COMMAND = "command"
-    WORKFLOW = "workflow"
-
-
-class CommandRunner(BaseRunner):
-    def __init__(
-        self,
-        cmd: str,
-        ctx: RunContext,
-        shell: str | None = None,
-        working_dir: Path | None = None,
-        timeout_minutes: int = 1440,
-        parent: "BaseRunner | None" = None,
-    ):
-        super().__init__("command", ctx, parent)
-        self._cmd = cmd
-        self._shell = shell
-        self._cwd = working_dir or Path.cwd()
-        self._timeout_minutes = timeout_minutes
-
-    async def _do_run(self):
-        stderr = ""
-        stdout = ""
-        if not self._shell or not Path(self._shell).exists():
-            raise RuntimeError(f"Shell not found: {self._shell}")
-        args = [self._shell, "-c", self._cmd]
-        try:
-            output = subprocess.run(
-                args,
-                cwd=self._cwd,
-                env=self.ctx_vars.envs,
-                timeout=self._timeout_minutes * 60,
-                capture_output=True,
-            )
-            try:
-                stderr = output.stderr.decode("utf-8").strip()
-                stdout = output.stdout.decode("utf-8").strip()
-            except UnicodeDecodeError:
-                stderr = base64.b64encode(output.stderr).decode("utf-8")
-                stdout = base64.b64encode(output.stdout).decode("utf-8")
-                self._result.outputs["binary_output"] = True
-
-            if output.returncode != 0:
-                stderr = stderr or f"Command failed with exit code {output.returncode}"
-                raise RuntimeError(f"Command failed: {stderr}")
-
-        except subprocess.TimeoutExpired:
-            stderr = f"Command timed out after {self._timeout_minutes} minutes"
-            raise RuntimeError(stderr)
-
-        except Exception as e:
-            if not stderr:
-                stderr = str(e)
-            raise RuntimeError(f"Command error: {stderr}")
-        self._result.outputs.update(
-            {
-                "stdout": stdout,
-                "stderr": stderr,
-                "exit_code": output.returncode if "output" in locals() else None,
-            }
-        )
-
-    async def _pre_run(self):
-        self._shell = self._resolve_shell()
-
-    async def _post_run(self):
-        if self._error:
-            logger.error(self._produce_log(f"Command failed: {self._error}"))
-        logger.debug(
-            self._produce_log(
-                f"cmd result: \n---\n{self.get_result()}\n---\n with context: \n---\n{self.ctx_vars}\n---"
-            )
-        )
-
-    def _produce_log(self, message: Any) -> str:
-        msg = str(message)
-        if self.parent:
-            return self.parent._produce_log(
-                f"(command)[{self.status.value.upper()}] -> {msg}"
-            )
-        return f"(command)[{self.status.value.upper()}] -> {msg}"
-
-    def _resolve_shell(self) -> str:
-        if self._shell:
-            return self._shell
-        if self.parent and self.parent.parent:
-            grandparent = self.parent.parent
-            if not hasattr(grandparent, "model"):
-                return DEFAULT_SHELL
-            grandparent_model = grandparent.model
-            if not hasattr(grandparent_model, "defaults"):
-                return DEFAULT_SHELL
-            parent_shell = getattr(grandparent_model.defaults.run, "shell", None)  # type: ignore
-            if parent_shell:
-                return parent_shell
-            else:
-                if hasattr(self.parent.parent.parent, "model"):
-                    grandparent_shell = getattr(
-                        self.parent.parent.parent.model.defaults.run,
-                        "shell",
-                        None,
-                    )
-                    if grandparent_shell:
-                        return grandparent_shell
-        return DEFAULT_SHELL
-
-
-class ScriptRunner(CommandRunner):
-    def __init__(
-        self,
-        script: str,
-        ctx: RunContext,
-        shell: str | None = None,
-        working_dir: Path | None = None,
-        timeout_minutes: int = 1440,
-        parent: BaseRunner | None = None,
-    ):
-        self._tmp_file = None
-        self._run_in_file = False
-        enc_script = base64.b64encode(compress(script.encode(), 9)).decode()
-        python_executable = sys.executable or "python3"
-        if len(enc_script) > 2000:
-            self._run_in_file = True
-            self._tmp_file = tempfile.mktemp(suffix=".py")
-            with open(self._tmp_file, "w") as f:
-                f.write("import base64,zlib\n")
-                f.write(
-                    f"exec(zlib.decompress(base64.b64decode('{enc_script}')).decode('utf-8'))\n"
-                )
-            args = [python_executable, self._tmp_file]
-        else:
-            args = [
-                python_executable,
-                "-Wignore",
-                "-c",
-                f"import base64,zlib;exec(zlib.decompress(base64.b64decode('{enc_script}')).decode('utf-8'))",
-            ]
-        super().__init__(
-            cmd=shlex.join(args),
-            shell=shell,
-            working_dir=working_dir,
-            timeout_minutes=timeout_minutes,
-            parent=parent,
-            ctx=ctx,
-        )
-
-    async def _post_run(self):
-        if self._error:
-            logger.error(self._produce_log(f"Script failed: {self._error}"))
-        if self._run_in_file and self._tmp_file and Path(self._tmp_file).exists():
-            Path(self._tmp_file).unlink()
 
 
 class StepRunner(BaseRunner):
@@ -195,9 +38,7 @@ class StepRunner(BaseRunner):
                 "working_directory",
             ]
         )
-
         self._result.metadata.update({"step": self._model})
-
         if not bool(eval(str(self._model.run_if))):
             self._status = RunnerStatus.CANCELED
             raise Exception("Step skipped due to run_if condition")
@@ -221,13 +62,16 @@ class StepRunner(BaseRunner):
     async def _do_run(self):
         if self._run_type is RunType.WORKFLOW:
             from ofx.runner.workflow import WorkflowRunner
-
+            output_path = Path.cwd()
+            parent = getattr(self, 'parent', None)
+            if parent and getattr(parent, 'parent', None):
+                output_path = getattr(parent.parent.ctx_vars, 'output_path', Path.cwd())
             runner = WorkflowRunner(
                 WorkflowRunner.find_flow(self._model.uses or ""),
                 RunContext(
                     inputs=self._resolve_template(self._model.run_with),
                     envs=self.ctx_vars.envs,
-                    output_path=self.parent.parent.ctx_vars.output_path,
+                    output_path=output_path,
                     secrets=(
                         self.ctx_vars.secrets
                         if self.model.secrets == "inherit"
@@ -273,7 +117,6 @@ class StepRunner(BaseRunner):
         return msg
 
     def _parse_run_type(self) -> RunType:
-        """Determine the run type of a step based on its configuration"""
         step = self._model
         step_name = step.name
         if step.script:
@@ -291,15 +134,29 @@ class StepRunner(BaseRunner):
             )
 
     def _resolve_working_dir(self) -> Path:
-        """Resolve the working directory for a step"""
         step = self._model
         step_path = Path(step.working_directory)
         if step_path.is_absolute():
             return step_path
-        job_path = Path(self.parent.model.defaults.run.working_directory)
+        # Try to get job_path from parent
+        job_path = Path.cwd()
+        parent = getattr(self, 'parent', None)
+        if parent and hasattr(parent, 'model'):
+            job_model = getattr(parent, 'model', None)
+            job_defaults = getattr(job_model, 'defaults', None)
+            if job_defaults and hasattr(job_defaults, 'run'):
+                job_path = Path(getattr(job_defaults.run, 'working_directory', Path.cwd()))
         if job_path.is_absolute():
             return job_path / step_path
-        workflow_path = Path(self.parent.parent.model.defaults.run.working_directory)
+        # Try to get workflow_path from parent's parent
+        workflow_path = Path.cwd()
+        if parent and getattr(parent, 'parent', None):
+            workflow_parent = parent.parent
+            if hasattr(workflow_parent, 'model'):
+                wf_model = getattr(workflow_parent, 'model', None)
+                wf_defaults = getattr(wf_model, 'defaults', None)
+                if wf_defaults and hasattr(wf_defaults, 'run'):
+                    workflow_path = Path(getattr(wf_defaults.run, 'working_directory', Path.cwd()))
         return workflow_path / job_path / step_path
 
     @property

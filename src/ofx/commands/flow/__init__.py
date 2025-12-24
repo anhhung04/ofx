@@ -62,3 +62,27 @@ def update():
     from ofx.commands.flow.update import UpdateHandler
 
     UpdateHandler().run()
+
+
+@app.async_command()
+async def tools(
+    workflow_name: Annotated[
+        Optional[str],
+        typer.Argument(help="Name of the workflow to install tools from"),
+    ] = None,
+    all: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            "-a",
+            help="Install tools from all workflows in the workflow directories",
+        ),
+    ] = False,
+):
+    """Install tools configured in workflow(s)"""
+    from ofx.commands.flow.tools import ToolsInstallHandler
+
+    await ToolsInstallHandler(
+        workflow_name=workflow_name,
+        all_workflows=all,
+    ).run()

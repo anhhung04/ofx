@@ -1,71 +1,30 @@
+"""Base runner class for workflow, job, and step execution"""
+
 import logging
 import os
 import shutil
 import uuid
-from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 from jinja2 import Template
-from pydantic import BaseModel, Field
 
+from ofx.models.workflow import Workflow
 from ofx.models.job import Job
 from ofx.models.step import Step
-from ofx.models.workflow import Workflow
-from ofx.settings import settings
+from ofx.runner.models import RunnerStatus, RunContext, RunResult
+from ofx.settings import settings, TOOLS_DIR, TOOLS_BIN_DIR
+
+if TYPE_CHECKING:
+    from ofx.runner.base import BaseRunner
 
 logger = logging.getLogger(settings.app_branding)
 
 
-class RunnerStatus(Enum):
-    IDLE = "idle"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-
-class RunContext(BaseModel):
-    inputs: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Inputs for the workflow run, can be used to pass parameters",
-    )
-    secrets: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Secrets for the workflow run, can be used to pass sensitive information",
-    )
-    envs: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Environment variables for the workflow run",
-    )
-    output_path: Path = Field(
-        default=Path.cwd() / "out",
-        description="Path to store output files",
-    )
-    vars: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional context variables for the workflow run",
-    )
-
-
-class RunResult(BaseModel):
-    status: RunnerStatus
-    error: Optional[str] = None
-    outputs: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Outputs produced by the run",
-    )
-    name: str = Field(..., description="Name of the run")
-    run_id: str = Field(..., description="Unique identifier for the run")
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional metadata for the run",
-    )
-
-
 class BaseRunner:
-    def __init__(
-        self, name: Any, ctx: RunContext, parent: Optional["BaseRunner"] = None
-    ):
+    """Abstract base class for all runners (workflow, job, step, command)"""
+
+    def __init__(self, name: Any, ctx: RunContext, parent: Optional["BaseRunner"] = None):
         name = str(name)
         self._id = f"{name}-{str(uuid.uuid4())}"
         self._status = RunnerStatus.IDLE
@@ -75,8 +34,8 @@ class BaseRunner:
         self._model = None
         self._result = RunResult(status=self.status, run_id=self._id, name=name)
 
-    async def run(self):
-        """Run the workflow and return the result."""
+    async def run(self) -> RunResult:
+        """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
         try:
             self._status = RunnerStatus.IDLE
             self._ctx.vars.update({"self": self.model})
@@ -84,22 +43,26 @@ class BaseRunner:
         except Exception as e:
             self._error = f"Pre-run error: {str(e)}"
             self._status = RunnerStatus.FAILED
+            logger.error(self._produce_log(self._error))
             return self.get_result()
-
+        
         try:
             self._status = RunnerStatus.RUNNING
             await self._do_run()
         except Exception as e:
             self._error = f"Run error: {str(e)}"
             self._status = RunnerStatus.FAILED
+            logger.error(self._produce_log(self._error))
             return self.get_result()
-
+        
         try:
             await self._post_run()
             self._status = RunnerStatus.COMPLETED
         except Exception as e:
             self._error = f"Post-run error: {str(e)}"
             self._status = RunnerStatus.FAILED
+            logger.error(self._produce_log(self._error))
+        
         return self.get_result()
 
     async def _do_run(self):
@@ -112,84 +75,71 @@ class BaseRunner:
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
     def _resolve_template(self, value: Any) -> Any:
-        """Resolve Jinja2 templates in string values and convert back to the original type"""
+        """Resolve Jinja2 templates in values recursively"""
         if value is None or not isinstance(value, (str, int, float, bool, dict, list)):
             return value
-        if type(value) is dict:
+        if isinstance(value, dict):
             return {k: self._resolve_template(v) for k, v in value.items()}
-        elif type(value) is list:
+        if isinstance(value, list):
             return [self._resolve_template(v) for v in value]
+        string_value = str(value)
+        if "${{" not in string_value and "{%" not in string_value:
+            return value
+        
         try:
-            string_value = str(value)
             sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
+            # Ensure tools directories exist
+            TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+            TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
+            
             SUPPORT_FUNCS = {
                 "sudo": sudo,
                 "run_id": self._id,
+                "tools_dir": str(TOOLS_DIR.absolute()),
+                "tools_bin_dir": str(TOOLS_BIN_DIR.absolute()),
                 "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
-                "uv_install": "uv tool install",
-                "go_install": "go install -v",
-                "file_read": lambda path: (
-                    Path(path).read_text() if Path(path).exists() else None
-                ),
+                "uv_install": f"uv tool install --python-preference managed --force --reinstall --install-dir {TOOLS_DIR}",
+                "go_install": f"GOBIN={TOOLS_BIN_DIR} go install -v",
+                "file_read": lambda path: (Path(path).read_text() if Path(path).exists() else None),
                 "file_exists": lambda path: Path(path).exists(),
             }
-            if "${{" not in string_value and "{%" not in string_value:
-                return value
-            template = Template(
-                string_value, variable_start_string="${{", variable_end_string="}}"
-            )
+            
+            template = Template(string_value, variable_start_string="${{", variable_end_string="}}")
             template_vars = self.ctx_vars.model_dump(exclude={"vars"})
             template_vars.update(SUPPORT_FUNCS)
-
             if self.ctx_vars.vars:
                 template_vars.update(self._ctx.vars)
-
+            
             result = template.render(template_vars)
-
             if isinstance(value, bool):
                 return result.lower() in ("true", "yes", "1", "t", "y")
             elif isinstance(value, int):
                 try:
                     return int(result)
                 except ValueError:
-                    logger.warning(
-                        self._produce_log(
-                            f"Could not convert template result '{result}' back to integer"
-                        )
-                    )
+                    logger.warning(self._produce_log(f"Could not convert template result '{result}' back to integer"))
                     return result
             elif isinstance(value, float):
                 try:
                     return float(result)
                 except ValueError:
-                    logger.warning(
-                        self._produce_log(
-                            f"Could not convert template result '{result}' back to float"
-                        )
-                    )
+                    logger.warning(self._produce_log(f"Could not convert template result '{result}' back to float"))
                     return result
-
-            logger.debug(
-                self._produce_log(
-                    f"Resolved template for value \n----\n{value}\n----\n to: \n----\n{result}\n----\n"
-                )
-            )
+            
+            logger.debug(self._produce_log(f"Resolved template: {value} -> {result}"))
             return result
-
         except Exception as e:
-            logger.error(
-                self._produce_log(
-                    f"Error resolving template for value \n----\n{value}\n----\n: {e}"
-                )
-            )
+            logger.error(self._produce_log(f"Error resolving template for value '{value}': {e}"))
             return value
 
-    def _resolve_template_fields(self, fields: list[str]):
+    def _resolve_template_fields(self, fields: list[str]) -> None:
+        """Resolve templates in specific model fields"""
         if not self.model:
             return
         for field in fields:
-            resolved_value = self._resolve_template(getattr(self.model, field))
-            setattr(self._model, field, resolved_value)
+            if hasattr(self.model, field):
+                resolved_value = self._resolve_template(getattr(self.model, field))
+                setattr(self._model, field, resolved_value)
 
     def _produce_log(self, message: Any) -> str:
         raise NotImplementedError("Subclasses should implement _produce_log method.")
@@ -204,10 +154,7 @@ class BaseRunner:
 
     @property
     def is_finished(self) -> bool:
-        return self._status in {
-            RunnerStatus.COMPLETED,
-            RunnerStatus.FAILED,
-        }
+        return self._status in {RunnerStatus.COMPLETED, RunnerStatus.FAILED}
 
     @property
     def is_success(self) -> bool:
@@ -218,16 +165,22 @@ class BaseRunner:
         return self._id
 
     def get_result(self) -> RunResult:
-        """Get the result of the workflow run"""
         self._result.status = self.status
         self._result.error = self._error
         return self._result
 
     @property
     def ctx_vars(self) -> RunContext:
-        """Get the context variables for the workflow run"""
         return self._ctx
 
     @property
     def parent(self) -> "BaseRunner | None":
         return self._parent
+    
+    def get_job_status(self, job_id: str) -> Optional[RunnerStatus]:
+        """Get job status from registry (WorkflowRunner override)"""
+        return None
+    
+    def get_job_from_registry(self, job_id: str) -> Optional[dict[str, Any]]:
+        """Get job from registry (WorkflowRunner override)"""
+        return None

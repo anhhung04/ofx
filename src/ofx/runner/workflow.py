@@ -1,3 +1,5 @@
+"""Workflow runner for parallel job execution and workflow orchestration"""
+
 import asyncio
 import logging
 import os
@@ -17,16 +19,13 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.base import BaseRunner, RunContext, RunnerStatus
+from ofx.runner.base import BaseRunner
+from ofx.runner.command import CommandRunner
 from ofx.runner.job import JobRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings
-from ofx.utils.misc import (
-    clone_remote_repo,
-    find_parallel_schedule,
-    is_remote_path,
-)
+from ofx.runner.models import RunContext, RunnerStatus
+from ofx.settings import settings, DEFAULT_WORKFLOWS_DIR, TOOLS_DIR, TOOLS_BIN_DIR
+from ofx.utils.misc import clone_remote_repo, find_parallel_schedule, is_remote_path
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -177,7 +176,7 @@ class WorkflowRunner(BaseRunner):
             logger.error(job_runner._produce_log(f"Job execution failed: {e}"))
             return False
 
-    def _run_and_monitor_job(self, job: Job):
+    def _run_and_monitor_job(self, job):
         """Run a job asynchronously and monitor its progress with a progress bar"""
         job_id = job.jid
         job_runner: JobRunner = self._job_registry[job_id]["runner"]
@@ -323,13 +322,25 @@ class WorkflowRunner(BaseRunner):
                     thread.join(timeout=5.0)
 
     async def _install_tools(self):
-        from ofx.runner.step import CommandRunner
-
         tools = self.model.tools
         if not tools:
             return
+        
+        # Ensure tools directories exist
+        TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+        TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Add tools bin directory to PATH for this workflow
+        workflow_envs = self.ctx_vars.envs.copy()
+        current_path = workflow_envs.get("PATH", os.environ.get("PATH", ""))
+        if str(TOOLS_BIN_DIR) not in current_path:
+            workflow_envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
+            self._ctx.envs.update(workflow_envs)
+        
         for tool_bin, install_cmd in tools.items():
-            if not shutil.which(tool_bin):
+            # Check if tool exists in tools_bin_dir or system PATH
+            tool_path = TOOLS_BIN_DIR / tool_bin
+            if not (tool_path.exists() or shutil.which(tool_bin)):
                 logger.warning(
                     self._produce_log(
                         f"Installing tool '{tool_bin}' with command: {install_cmd}"
@@ -338,11 +349,14 @@ class WorkflowRunner(BaseRunner):
                 runner = CommandRunner(
                     install_cmd,
                     RunContext(
-                        envs=self.ctx_vars.envs,
+                        envs=workflow_envs,
                     ),
                 )
                 _ = await runner.run()
                 assert runner.is_success, f"Failed to install tool '{tool_bin}'"
+                logger.info(
+                    self._produce_log(f"Tool '{tool_bin}' installed to {TOOLS_DIR}")
+                )
             else:
                 logger.debug(
                     self._produce_log(f"Tool '{tool_bin}' is already installed")
@@ -374,9 +388,8 @@ class WorkflowRunner(BaseRunner):
                 req_inputs[key] = contrain.default
         for key, value in req_inputs.items():
             req_inputs[key] = self._resolve_template(value)
-        processed_inputs = {}
 
-        return processed_inputs
+        return req_inputs
 
     def _check_input_type(self, value: Any, input_type: str) -> bool:
         """Validate that a value matches the expected type"""

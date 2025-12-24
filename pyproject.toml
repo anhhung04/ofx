@@ -1,9 +1,9 @@
 [project]
 name = "ofx"
-dynamic = ["version"]
+version = "0.0.1"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "async-typer>=0.1.9",
     "asyncstdlib>=3.13.1",
