@@ -21,6 +21,17 @@ class WorkflowSecret(BaseModel):
     )
 
 
+class ToolConfig(BaseModel):
+    """Configuration for tool installation and verification"""
+    install: str = Field(..., description="Command to install the tool")
+    check: Union[None, str] = Field(
+        None, description="Command to check if tool is already installed (exit 0 = installed)"
+    )
+    post_install: Union[None, str] = Field(
+        None, description="Command to run after successful installation"
+    )
+
+
 class WorkflowCall(BaseModel):
     inputs: Dict[str, WorkflowInput] = Field(
         default={}, description="Inputs for the reusable workflow"
@@ -55,8 +66,8 @@ class Workflow(BaseModel):
         None,
         description="Workflow call configuration for reusable workflows",
     )
-    tools: Union[None, Dict[str, Any]] = Field(
-        None, description="Needed tools for the workflow"
+    tools: Union[None, Dict[str, Union[str, ToolConfig]]] = Field(
+        None, description="Tools configuration - can be simple command string or ToolConfig object"
     )
     tags: List[str] = Field([], description="Tags associated with the workflow")
     defaults: DefaultConfig = Field(

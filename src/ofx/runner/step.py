@@ -44,19 +44,18 @@ class StepRunner(BaseRunner):
             raise Exception("Step skipped due to run_if condition")
 
     async def _post_run(self):
-        if self.model.log_stdout:
-            stdout = self._result.outputs.get("stdout", "")
-            if isinstance(stdout, str) and len(stdout) > 2000:
+        stdout = self._result.outputs.get("stdout", "")
+        if stdout and isinstance(stdout, str):
+            logger.info(self._produce_log(f"stdout:\n{stdout}"))
+            if self.model.log_stdout:
                 tmp_file = (
                     self.ctx_vars.output_path
-                    / f"stdout_{self.model.name.replace(' ', '-')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                    / f"stdout_{self.parent.model.jid}_{self.model.name.replace(' ', '-')}__{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 )
                 logger.info(
-                    f"Saving output to {tmp_file} because it exceeds 2000 characters."
+                    self._produce_log(f"Saving output of '{self.parent.model.jid}'[{self.model.step_index}] to {tmp_file}")
                 )
                 tmp_file.write_text(stdout)
-                stdout = stdout[:2000] + "\n...[truncated]"
-            logger.info(self._produce_log(f"stdout:\n{stdout}\n"))
         logger.debug(self._produce_log(f"result: {self._result}"))
 
     async def _do_run(self):
@@ -111,7 +110,8 @@ class StepRunner(BaseRunner):
 
     def _produce_log(self, message: Any) -> str:
         msg = str(message)
-        msg = f"(step '{self._model.name}')[{self.status.value.upper()}] -> {msg}"
+        step_idx = self._model.step_index if hasattr(self._model, 'step_index') else '?'
+        msg = f"'step{step_idx}' › {msg}"
         if self.parent:
             return self.parent._produce_log(msg)
         return msg

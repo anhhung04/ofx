@@ -88,20 +88,27 @@ class BaseRunner:
         
         try:
             sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
-            # Ensure tools directories exist
-            TOOLS_DIR.mkdir(parents=True, exist_ok=True)
-            TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
-            
             SUPPORT_FUNCS = {
                 "sudo": sudo,
                 "run_id": self._id,
                 "tools_dir": str(TOOLS_DIR.absolute()),
                 "tools_bin_dir": str(TOOLS_BIN_DIR.absolute()),
                 "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
-                "uv_install": f"uv tool install --python-preference managed --force --reinstall --install-dir {TOOLS_DIR}",
-                "go_install": f"GOBIN={TOOLS_BIN_DIR} go install -v",
+                "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
+                "go_install": lambda pkg: f"GO111MODULE=on GOBIN={TOOLS_BIN_DIR} go install {pkg}@latest",
+                "cargo_install": lambda name: f"cargo install --root {TOOLS_DIR} {name}",
+                "npm_install": lambda name: f"npm install -g --prefix {TOOLS_DIR} {name}",
+                "static_install": lambda url, name=None: (
+                    f"curl -fSsL {url} -o {TOOLS_BIN_DIR / (name if name else Path(url).name)} && chmod +x {TOOLS_BIN_DIR / (name if name else Path(url).name)}"
+                ),
                 "file_read": lambda path: (Path(path).read_text() if Path(path).exists() else None),
+                "file_write": lambda path, content: Path(path).write_text(content),
                 "file_exists": lambda path: Path(path).exists(),
+                "env": lambda var, default="": os.getenv(var, default),
+                "str": str,
+                "int": int,
+                "float": float,
+                "bool": lambda v: str(v).lower() in ("true", "yes", "1", "t", "y"),
             }
             
             template = Template(string_value, variable_start_string="${{", variable_end_string="}}")

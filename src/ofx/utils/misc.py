@@ -5,9 +5,23 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
+from ofx.settings import TOOLS_BIN_DIR
 
 import git
+import os
 
+def populate_env(alt_env={}) -> Dict[str, str]:
+    """Populate environment variables including tools bin directory"""
+    envs = os.environ.copy()
+    tools_bin_path = TOOLS_BIN_DIR.absolute().as_posix()
+    current_path = envs.get("PATH", "")
+    if tools_bin_path not in current_path:
+        envs["PATH"] = f"{tools_bin_path}{os.pathsep}{current_path}"
+    # Set UV_TOOL_BIN_DIR for uv tool installations
+    envs["UV_TOOL_BIN_DIR"] = tools_bin_path
+    for k, v in alt_env.items():
+        envs[k] = v
+    return envs
 
 def is_remote_path(path: str) -> bool:
     """Check if the given path is a remote URL (http or https)"""

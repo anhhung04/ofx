@@ -1,22 +1,22 @@
 name: Test Tool Installation
-description: Test flexible tool configuration
+description: Test tool installation using template functions
+
+defaults:
+  run:
+    shell: /bin/bash
 
 tools:
-  # Simple string format (backward compatible)
-  jq:
-    install: "echo 'Installing jq (simulated)' && echo 'jq installed'"
-    check: "echo 'jq 1.6'"
+  # Tool with full ToolConfig
+  test_tool:
+    install: "printf '#!/bin/bash\\necho test tool works' > ${{ tools_bin_dir }}/test_tool && chmod +x ${{ tools_bin_dir }}/test_tool"
+    check: "test -x ${{ tools_bin_dir }}/test_tool"
+    post_install: "echo 'test_tool installed successfully to ${{ tools_bin_dir }}'"
 
-  # Tool with custom install directory
-  # Available environment variables:
-  #   $INSTALL_DIR - custom install directory (if specified)
-  #   $TOOLS_DIR - ofx tools directory (~/Tools)
-  #   $TOOLS_BIN_DIR - ofx tools bin directory (~/Tools/bin)
+  # Tool with custom check and post-install
   custom_tool:
-    install: "mkdir -p $INSTALL_DIR && echo 'tool installed' > $INSTALL_DIR/custom_tool && chmod +x $INSTALL_DIR/custom_tool"
-    install_dir: "/tmp/custom_tools"
-    check: "ls /tmp/custom_tools/custom_tool"
-    post_install: "echo 'Post-install: Setting up configuration'"
+    install: "mkdir -p /tmp/custom_tools && printf '#!/bin/bash\\necho custom tool works' > /tmp/custom_tools/custom_tool && chmod +x /tmp/custom_tools/custom_tool"
+    check: "test -x /tmp/custom_tools/custom_tool"
+    post_install: "echo 'Custom tool setup complete'"
 
 jobs:
   test:
@@ -26,5 +26,13 @@ jobs:
         run: |
           echo "Tools are ready!"
           echo "PATH: $PATH"
-          echo "TOOLS_DIR: $TOOLS_DIR"
-          echo "TOOLS_BIN_DIR: $TOOLS_BIN_DIR"
+          echo "TOOLS_DIR: ${{ tools_dir }}"
+          echo "TOOLS_BIN_DIR: ${{ tools_bin_dir }}"
+
+      - name: Test test_tool
+        run: |
+          test_tool || echo "test_tool executed"
+
+      - name: Test custom tool
+        run: |
+          /tmp/custom_tools/custom_tool

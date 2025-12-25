@@ -39,7 +39,6 @@ class FlowRunHandler:
                 inputs=self.input,
                 output_path=self.output,
                 secrets=load_secrets(SECRETS_DIR),
-                envs=os.environ.copy(),
             ),
         )
         res = await runner.run()

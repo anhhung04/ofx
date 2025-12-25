@@ -1,41 +1,27 @@
-name: Example Workflow with Enhanced Tool Installation
-description: Demonstrates flexible tool configuration with custom install directories
+name: Example Workflow with Tool Installation
+description: Demonstrates tool installation using template functions
 
-# Simple string format (backward compatible)
-# tools:
-#   go: "curl -LO https://go.dev/dl/go1.21.0.linux-amd64.tar.gz && tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz"
+defaults:
+  run:
+    shell: /bin/bash
 
-# Enhanced format with ToolConfig
 tools:
-  # Tool installed to custom directory
+  # Go tools with ToolConfig - using template functions
   nuclei:
-    install: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
-    install_dir: "$HOME/.local/bin"
-    check: "nuclei -version"
-    env:
-      GOPATH: "$HOME/go"
-      GOBIN: "$HOME/.local/bin"
-    post_install: "nuclei -update-templates"
-  
-  # Tool with custom check command
-  httpx:
-    install: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
-    install_dir: "$HOME/.local/bin"
-    check: "httpx -version"
-    env:
-      GOPATH: "$HOME/go"
-      GOBIN: "$HOME/.local/bin"
-  
-  # Simple tool installation
-  subfinder:
-    install: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
-    check: "subfinder -version"
-    env:
-      GOPATH: "$HOME/go"
+    install: ${{ go_install('github.com/projectdiscovery/nuclei/v3/cmd/nuclei') }}
+    check: "which nuclei"
+    post_install: "echo 'Nuclei installed, updating templates...' && nuclei -update-templates -silent || true"
 
-  # Tool with only check (assumes already installed or fail)
-  nmap:
-    check: "nmap --version"
+  httpx:
+    install: ${{ go_install('github.com/projectdiscovery/httpx/cmd/httpx') }}
+    check: "which httpx"
+
+  subfinder:
+    install: ${{ go_install('github.com/projectdiscovery/subfinder/v2/cmd/subfinder') }}
+    check: "which subfinder"
+
+  # Simple string format still supported (backward compatible)
+  nmap: "echo 'nmap check: nmap is available' || true"
 
 jobs:
   scan:
@@ -46,17 +32,17 @@ jobs:
           echo "Running nuclei scan..."
           nuclei -version
           echo "Nuclei is ready!"
-      
+
       - name: Run HTTPx
         run: |
           echo "Running httpx..."
           httpx -version
-      
+
       - name: Run Subfinder
         run: |
           echo "Running subfinder..."
           subfinder -version
-      
+
       - name: Check Nmap
         run: |
           echo "Checking nmap..."

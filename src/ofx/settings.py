@@ -36,6 +36,8 @@ BANNER = """
 os.makedirs(BASE_DATA_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(SECRETS_DIR, exist_ok=True)
+TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class Settings(BaseSettings):

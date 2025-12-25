@@ -19,7 +19,7 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from ofx.models.workflow import Workflow
+from ofx.models.workflow import Workflow, ToolConfig
 from ofx.runner.base import BaseRunner
 from ofx.runner.command import CommandRunner
 from ofx.runner.job import JobRunner
@@ -46,73 +46,98 @@ class WorkflowRunner(BaseRunner):
         self._job_threads: Dict[str, threading.Thread] = {}
         self._job_results: Dict[str, bool] = {}
         self._job_errors: Dict[str, Exception] = {}
+        self._progress: Optional[Progress] = None
+        self._progress_id: Optional[Any] = None
 
     async def _do_run(self):
         """Execute the workflow by running its jobs in stages according to their dependencies"""
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-            transient=self._is_reused or not self.is_finished,
-        ) as progress:
-            total_steps = self._planning_jobs()
-            progress_id = progress.add_task(
-                description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]'",
-                total=total_steps,
+        if not self._is_reused:
+            # Create progress bar for main workflows
+            self._progress = Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TaskProgressColumn(),
+                TimeElapsedColumn(),
+                transient=False,
             )
-            for idx, stage in enumerate(self._schedule):
-                logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
+        
+        try:
+            if self._progress:
+                self._progress.start()
+                workflow_prefix = "⚙"
+                total_steps = self._planning_jobs()
+                self._progress_id = self._progress.add_task(
+                    description=f"{workflow_prefix} [bold]{self.model.name}[/bold]",
+                    total=total_steps,
+                )
+            else:
+                self._planning_jobs()
+            
+            await self._execute_workflow()
+            
+            if self._progress and self._progress_id is not None:
+                self._progress.update(
+                    self._progress_id,
+                    description=f"✓ [bold]{self.model.name}[/bold]",
+                    completed=self._total_steps,
+                    refresh=True,
+                )
+        finally:
+            if self._progress:
+                self._progress.stop()
 
-                for job_id in stage:
-                    thread = threading.Thread(
-                        target=self._run_job_wrapper,
-                        args=(job_id,),
-                        name=f"job-{job_id}",
-                        daemon=False,
-                    )
-                    self._job_threads[job_id] = thread
-                    thread.start()
+    async def _execute_workflow(self):
+        """Execute workflow jobs in stages"""
+        for idx, stage in enumerate(self._schedule):
+            logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
+            current_jobs = ", ".join(stage)
 
-                while any(self._job_threads[jid].is_alive() for jid in stage):
-                    current_steps_completed = sum(
-                        self._job_registry[jid]["runner"].processed_steps
-                        for jid in stage
-                        if jid in self._job_registry
-                        and "runner" in self._job_registry[jid]
-                    )
-                    self._completed_steps = max(
-                        self._completed_steps, current_steps_completed
-                    )
-                    progress.update(
-                        progress_id,
-                        description=f"Running {'sub-' if self._is_reused else ''}workflow '[bold]{self.model.name}[/bold]' - Stage {idx + 1}/{len(self._schedule)}",
-                        completed=min(self._completed_steps, total_steps),
+            for job_id in stage:
+                thread = threading.Thread(
+                    target=self._run_job_wrapper,
+                    args=(job_id,),
+                    name=f"job-{job_id}",
+                    daemon=False,
+                )
+                self._job_threads[job_id] = thread
+                thread.start()
+
+            while any(self._job_threads[jid].is_alive() for jid in stage):
+                current_steps_completed = sum(
+                    self._job_registry[jid]["runner"].processed_steps
+                    for jid in stage
+                    if jid in self._job_registry
+                    and "runner" in self._job_registry[jid]
+                )
+                self._completed_steps = max(
+                    self._completed_steps, current_steps_completed
+                )
+                
+                if self._progress and self._progress_id is not None:
+                    workflow_prefix = "⚙"
+                    self._progress.update(
+                        self._progress_id,
+                        description=f"{workflow_prefix} [bold]{self.model.name}[/bold] → {current_jobs}",
+                        completed=min(self._completed_steps, self._total_steps),
                         refresh=True,
                     )
-                    await asyncio.sleep(0.05)
+                
+                await asyncio.sleep(0.05)
 
-                for job_id in stage:
-                    self._job_threads[job_id].join()
+            for job_id in stage:
+                self._job_threads[job_id].join()
 
-                for job_id in stage:
-                    if job_id in self._job_errors:
-                        raise RuntimeError(
-                            self._produce_log(
-                                f"Failed when running job '{job_id}': {self._job_errors[job_id]}"
-                            )
+            for job_id in stage:
+                if job_id in self._job_errors:
+                    raise RuntimeError(
+                        self._produce_log(
+                            f"Failed when running job '{job_id}': {self._job_errors[job_id]}"
                         )
-                    if not self._job_results.get(job_id, False):
-                        raise RuntimeError(self._produce_log(f"Job '{job_id}' failed"))
-                    logger.debug(self._produce_log(f"Job '{job_id}' completed"))
-
-            progress.update(
-                progress_id,
-                description=f"{'Sub-w' if self._is_reused else 'W'}orkflow '[bold]{self.model.name}[/bold]' completed",
-                completed=total_steps,
-                refresh=True,
-            )
+                    )
+                if not self._job_results.get(job_id, False):
+                    raise RuntimeError(self._produce_log(f"Job '{job_id}' failed"))
+                logger.debug(self._produce_log(f"Job '{job_id}' completed"))
 
     def _planning_jobs(self) -> int:
         """Plan the job execution by organizing them in stages based on dependencies"""
@@ -162,7 +187,16 @@ class WorkflowRunner(BaseRunner):
         )
         self._job_registry[job_id]["runner"] = job_runner
         try:
-            self._run_and_monitor_job(job)
+            # Determine if this is the last job in the current stage
+            current_stage_jobs = []
+            current_stage_idx = 0
+            for idx, stage in enumerate(self._schedule):
+                if job_id in stage:
+                    current_stage_jobs = list(stage)
+                    current_stage_idx = idx
+                    break
+            
+            self._run_and_monitor_job(job, current_stage_idx, current_stage_jobs)
             job_result = job_runner.get_result()
             self._job_registry[job_id].update(job_result.model_dump())
             self._job_registry[job_id]["steps"] = {}
@@ -170,20 +204,20 @@ class WorkflowRunner(BaseRunner):
                 job_result.outputs.get("steps", {})
             )
             self._ctx.vars.update({"jobs": self._job_registry})
-            logger.info(self._produce_log(f"done: {job}"))
             return True
         except Exception as e:
             logger.error(job_runner._produce_log(f"Job execution failed: {e}"))
             return False
 
-    def _run_and_monitor_job(self, job):
+    def _run_and_monitor_job(self, job, stage_idx, stage_jobs):
         """Run a job asynchronously and monitor its progress with a progress bar"""
         job_id = job.jid
         job_runner: JobRunner = self._job_registry[job_id]["runner"]
         if not job_runner:
             raise ValueError(f"Job with ID '{job_id}' not found.")
-        job_name = job.name or job_id
         total_steps = job_runner.total_steps
+
+        indicator = "  ↳ " if self._is_reused else "→ "
 
         with Progress(
             SpinnerColumn(),
@@ -193,9 +227,8 @@ class WorkflowRunner(BaseRunner):
             TimeElapsedColumn(),
             transient=True,
         ) as job_progress:
-            running_msg = f"Running job '[bold]{job_name}[/bold]'"
             progress_task_id = job_progress.add_task(
-                description=running_msg,
+                description=f"{indicator}[bold]{job_id}[/bold]",
                 total=total_steps,
             )
 
@@ -214,10 +247,24 @@ class WorkflowRunner(BaseRunner):
             job_thread.start()
 
             while job_thread.is_alive():
+                current_step_idx = job_runner.processed_steps
+                current_step_name = ""
+                
+                if hasattr(job_runner, 'model') and hasattr(job_runner.model, 'steps'):
+                    steps = job_runner.model.steps
+                    if current_step_idx < len(steps):
+                        step = steps[current_step_idx]
+                        if hasattr(step, 'uses') and step.uses:
+                            current_step_name = f" → {step.name or step.uses}"
+                        elif current_step_idx < total_steps:
+                            current_step_name = f" (step {current_step_idx + 1}/{total_steps})"
+                elif current_step_idx < total_steps:
+                    current_step_name = f" (step {current_step_idx + 1}/{total_steps})"
+                
                 job_progress.update(
                     progress_task_id,
                     completed=job_runner.processed_steps,
-                    description=running_msg,
+                    description=f"{indicator}[bold]{job_id}[/bold]{current_step_name}",
                     refresh=True,
                 )
                 asyncio.run(asyncio.sleep(0.05))
@@ -325,22 +372,43 @@ class WorkflowRunner(BaseRunner):
         tools = self.model.tools
         if not tools:
             return
-        
-        # Ensure tools directories exist
-        TOOLS_DIR.mkdir(parents=True, exist_ok=True)
-        TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # Add tools bin directory to PATH for this workflow
+
         workflow_envs = self.ctx_vars.envs.copy()
         current_path = workflow_envs.get("PATH", os.environ.get("PATH", ""))
         if str(TOOLS_BIN_DIR) not in current_path:
             workflow_envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
             self._ctx.envs.update(workflow_envs)
         
-        for tool_bin, install_cmd in tools.items():
-            # Check if tool exists in tools_bin_dir or system PATH
-            tool_path = TOOLS_BIN_DIR / tool_bin
-            if not (tool_path.exists() or shutil.which(tool_bin)):
+        for tool_bin, tool_config in tools.items():
+            # Convert simple string to ToolConfig
+            if isinstance(tool_config, str):
+                tool_config = ToolConfig(install=tool_config)
+            elif isinstance(tool_config, dict):
+                tool_config = ToolConfig(**tool_config)
+            
+            # Resolve templates in all commands
+            install_cmd = self._resolve_template(tool_config.install)
+            check_cmd = self._resolve_template(tool_config.check) if tool_config.check else None
+            post_install_cmd = self._resolve_template(tool_config.post_install) if tool_config.post_install else None
+            
+            # Check if tool is already installed
+            tool_exists = False
+            if check_cmd:
+                # Use custom check command
+                logger.debug(self._produce_log(f"Checking tool '{tool_bin}' with: {check_cmd}"))
+                check_runner = CommandRunner(
+                    check_cmd,
+                    RunContext(envs=workflow_envs),
+                )
+                check_result = await check_runner.run()
+                tool_exists = check_result.status.value == "completed" and check_result.outputs.get("exit_code") == 0
+            else:
+                # Default check: look in TOOLS_BIN_DIR or system PATH
+                tool_path = TOOLS_BIN_DIR / tool_bin
+                tool_exists = tool_path.exists() or shutil.which(tool_bin) is not None
+            
+            if not tool_exists:
+                # Install the tool
                 logger.warning(
                     self._produce_log(
                         f"Installing tool '{tool_bin}' with command: {install_cmd}"
@@ -348,15 +416,42 @@ class WorkflowRunner(BaseRunner):
                 )
                 runner = CommandRunner(
                     install_cmd,
-                    RunContext(
-                        envs=workflow_envs,
-                    ),
+                    RunContext(envs=workflow_envs),
                 )
-                _ = await runner.run()
-                assert runner.is_success, f"Failed to install tool '{tool_bin}'"
+                result = await runner.run()
+                if not result.status.value == "completed":
+                    raise RuntimeError(f"Failed to install tool '{tool_bin}': {result.error}")
+                
                 logger.info(
-                    self._produce_log(f"Tool '{tool_bin}' installed to {TOOLS_DIR}")
+                    self._produce_log(f"Tool '{tool_bin}' installed successfully")
                 )
+                
+                # Run post-install command if specified
+                if post_install_cmd:
+                    logger.info(
+                        self._produce_log(
+                            f"Running post-install for '{tool_bin}'"
+                        )
+                    )
+                    post_runner = CommandRunner(
+                        post_install_cmd,
+                        RunContext(envs=workflow_envs),
+                    )
+                    post_result = await post_runner.run()
+                    if post_result.status.value == "completed":
+                        # Log post-install output if available
+                        if post_result.outputs.get("stdout"):
+                            logger.info(
+                                self._produce_log(
+                                    f"Post-install output for '{tool_bin}': {post_result.outputs['stdout']}"
+                                )
+                            )
+                    else:
+                        logger.warning(
+                            self._produce_log(
+                                f"Post-install failed for '{tool_bin}': {post_result.error}"
+                            )
+                        )
             else:
                 logger.debug(
                     self._produce_log(f"Tool '{tool_bin}' is already installed")
@@ -411,10 +506,10 @@ class WorkflowRunner(BaseRunner):
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        msg = f"({'sub-' if self._is_reused else ''}workflow '{self.model.name}')[{self._status.value.upper()}] -> {message_str}"
+        prefix = f"'{self.model.name}'"
         if self.parent:
-            return self.parent._produce_log(msg)
-        return msg
+            return self.parent._produce_log(f"{prefix} › {message_str}")
+        return f"{prefix} › {message_str}"
 
     def get_output_path(self) -> Path:
         """Get output path"""

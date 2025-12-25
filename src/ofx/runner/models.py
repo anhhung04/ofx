@@ -1,11 +1,10 @@
 """Runner models and enums"""
-import os
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Optional
+from ofx.utils.misc import populate_env
 
 from pydantic import BaseModel, Field
-
 
 class RunnerStatus(Enum):
     """Status of a runner execution"""
@@ -22,12 +21,11 @@ class RunType(Enum):
     COMMAND = "command"
     WORKFLOW = "workflow"
 
-
 class RunContext(BaseModel):
     """Execution context for runners"""
     inputs: Dict[str, Any] = Field(default_factory=dict)
     secrets: Dict[str, Any] = Field(default_factory=dict)
-    envs: Dict[str, Any] = Field(default_factory=lambda: os.environ.copy())
+    envs: Dict[str, Any] = Field(default_factory=populate_env)
     output_path: Path = Field(default=Path.cwd() / "out")
     vars: Dict[str, Any] = Field(default_factory=dict)
 

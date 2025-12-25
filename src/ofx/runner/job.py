@@ -84,12 +84,8 @@ class JobRunner(BaseRunner):
         logger.debug(self._produce_log(f"job '{self.model.name or self.model.jid}' result: {self._result}"))
 
     def _produce_log(self, message: Any) -> str:
-        job_name = self._model.name
-        job_id = self._model.jid
-        status = self._status.value.upper()
-        name = job_name if job_name else job_id
         message_str = str(message)
-        msg = f"(job '{name}')[{status}] -> {message_str}"
+        msg = f"'{self._model.jid}' › {message_str}"
         if self.parent:
             return self.parent._produce_log(msg)
         return msg

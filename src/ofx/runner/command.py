@@ -96,10 +96,8 @@ class CommandRunner(BaseRunner):
     def _produce_log(self, message: Any) -> str:
         msg = str(message)
         if self.parent:
-            return self.parent._produce_log(
-                f"(command)[{self.status.value.upper()}] -> {msg}"
-            )
-        return f"(command)[{self.status.value.upper()}] -> {msg}"
+            return self.parent._produce_log(msg)
+        return msg
 
     def _resolve_shell(self) -> str:
         """Resolve shell path from hierarchy or use default /bin/bash"""
