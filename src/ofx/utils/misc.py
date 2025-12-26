@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 import os
 import tempfile
@@ -11,21 +12,32 @@ import git
 
 from ofx.settings import TOOLS_BIN_DIR
 
-def populate_env(alt_env={}) -> Dict[str, str]:
-    """Populate environment variables including tools bin directory"""
+# Cache the tools bin path to avoid repeated Path operations
+_TOOLS_BIN_PATH = TOOLS_BIN_DIR.absolute().as_posix()
+
+def populate_env(alt_env=None) -> Dict[str, str]:
+    """Populate environment variables including tools bin directory.
+    
+    Optimized to cache and reuse paths.
+    """
+    if alt_env is None:
+        alt_env = {}
+    
     envs = os.environ.copy()
-    tools_bin_path = TOOLS_BIN_DIR.absolute().as_posix()
     current_path = envs.get("PATH", "")
-    if tools_bin_path not in current_path:
-        envs["PATH"] = f"{tools_bin_path}{os.pathsep}{current_path}"
+    if _TOOLS_BIN_PATH not in current_path:
+        envs["PATH"] = f"{_TOOLS_BIN_PATH}{os.pathsep}{current_path}"
     # Set UV_TOOL_BIN_DIR for uv tool installations
-    envs["UV_TOOL_BIN_DIR"] = tools_bin_path
-    for k, v in alt_env.items():
-        envs[k] = v
+    envs["UV_TOOL_BIN_DIR"] = _TOOLS_BIN_PATH
+    envs.update(alt_env)
     return envs
 
+@lru_cache(maxsize=128)
 def is_remote_path(path: str) -> bool:
-    """Check if the given path is a remote URL (http or https)"""
+    """Check if the given path is a remote URL (http or https).
+    
+    Cached for repeated checks.
+    """
     return urlparse(path).scheme in ["http", "https"]
 
 
@@ -60,7 +72,11 @@ def load_secrets(secrets_dir: Path = None) -> Dict[str, str]:
 def find_parallel_schedule(
     jobs: List[str], dependencies: List[Tuple[str, str]]
 ) -> List[Set[str]]:
-    """Groups jobs into stages that can be run in parallel"""
+    """Groups jobs into stages that can be run in parallel.
+    
+    Uses topological sorting with BFS for optimal parallelization.
+    """
+    # Pre-allocate with dict comprehension for better performance
     graph: Dict[str, List[str]] = {job: [] for job in jobs}
     in_degree: Dict[str, int] = {job: 0 for job in jobs}
 

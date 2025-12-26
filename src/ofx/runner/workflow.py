@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 import httpx
 import yaml
@@ -122,7 +122,7 @@ class WorkflowRunner(BaseRunner):
                         refresh=True,
                     )
                 
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.1)  # Reduced polling frequency for better CPU efficiency
 
             for job_id in stage:
                 self._job_threads[job_id].join()

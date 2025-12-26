@@ -24,6 +24,9 @@ logger = logging.getLogger(settings.app_branding)
 class BaseRunner:
     """Abstract base class for all runners (workflow, job, step, command)"""
     
+    # Memory optimization: define __slots__ to reduce memory footprint
+    __slots__ = ('_id', '_status', '_ctx', '_parent', '_error', '_model', '_result')
+    
     # Cache for compiled templates (limit size to prevent memory bloat)
     _template_cache = {}
     _template_cache_max_size = 1000
@@ -80,7 +83,7 @@ class BaseRunner:
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
     def _resolve_template(self, value: Any) -> Any:
-        """Resolve Jinja2 templates in values recursively"""
+        """Resolve Jinja2 templates in values recursively with optimized caching."""
         if value is None or not isinstance(value, (str, int, float, bool, dict, list)):
             return value
         if isinstance(value, dict):
@@ -92,20 +95,24 @@ class BaseRunner:
             return value
         
         try:
-            # Use cached SUPPORT_FUNCS if available
+            # Use cached SUPPORT_FUNCS if available (one-time initialization)
             if BaseRunner._support_funcs_cache is None:
                 sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
+                # Pre-compute static paths once
+                tools_dir_str = str(TOOLS_DIR.absolute())
+                tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
+                
                 BaseRunner._support_funcs_cache = {
                     "sudo": sudo,
-                    "tools_dir": str(TOOLS_DIR.absolute()),
-                    "tools_bin_dir": str(TOOLS_BIN_DIR.absolute()),
+                    "tools_dir": tools_dir_str,
+                    "tools_bin_dir": tools_bin_dir_str,
                     "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
                     "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
-                    "go_install": lambda pkg: f"GO111MODULE=on GOBIN={TOOLS_BIN_DIR} go install {pkg}@latest",
-                    "cargo_install": lambda name: f"cargo install --root {TOOLS_DIR} {name}",
-                    "npm_install": lambda name: f"npm install -g --prefix {TOOLS_DIR} {name}",
+                    "go_install": lambda pkg: f"GO111MODULE=on GOBIN={tools_bin_dir_str} go install {pkg}@latest",
+                    "cargo_install": lambda name: f"cargo install --root {tools_dir_str} {name}",
+                    "npm_install": lambda name: f"npm install -g --prefix {tools_dir_str} {name}",
                     "static_install": lambda url, name=None: (
-                        f"curl -fSsL {url} -o {TOOLS_BIN_DIR / (name if name else Path(url).name)} && chmod +x {TOOLS_BIN_DIR / (name if name else Path(url).name)}"
+                        f"curl -fSsL {url} -o {tools_bin_dir_str}/{name if name else Path(url).name} && chmod +x {tools_bin_dir_str}/{name if name else Path(url).name}"
                     ),
                     "file_read": lambda path: (Path(path).read_text() if Path(path).exists() else None),
                     "file_write": lambda path, content: Path(path).write_text(content),

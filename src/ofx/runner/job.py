@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import Any
+from typing import Any, Dict
 
 from ofx.models.job import Job
 from ofx.runner.base import BaseRunner
@@ -17,7 +17,7 @@ class JobRunner(BaseRunner):
     def __init__(self, job: Job, ctx: RunContext, parent: BaseRunner | None = None):
         super().__init__(job, ctx, parent)
         self._model = job
-        self._step_registry = {}
+        self._step_registry: Dict[str, Any] = {}
         self._processed_steps = 0
 
     async def _do_run(self):
@@ -68,9 +68,13 @@ class JobRunner(BaseRunner):
                 raise RuntimeError(f"Job cannot run because dependencies are not met: {unmet_deps}")
         if not eval(str(self._model.run_if)):
             raise RuntimeError(self._produce_log(f"Job condition is not met"))
+        # Pre-fetch needs to avoid repeated attribute checks
+        needs_data = {}
+        if self.model.needs and self.parent and hasattr(self.parent, "get_job_from_registry"):
+            needs_data = {jid: self.parent.get_job_from_registry(jid) for jid in self.model.needs}
         self._ctx.vars.update({
             "steps": self._step_registry,
-            "needs": {jid: self.parent.get_job_from_registry(jid) if self.parent and hasattr(self.parent, "get_job_from_registry") else None for jid in self.model.needs},
+            "needs": needs_data,
         })
 
     async def _post_run(self):

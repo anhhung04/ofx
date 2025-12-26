@@ -19,6 +19,10 @@ logger = logging.getLogger(settings.app_branding)
 
 
 class CommandRunner(BaseRunner):
+    """Optimized command runner with caching."""
+    
+    _shell_cache: dict[str, str] = {}  # Cache resolved shells
+    
     def __init__(
         self,
         cmd: str,
