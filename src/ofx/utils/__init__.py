@@ -8,9 +8,3 @@ try:
     __all__ = ["async_lru_cache", "cached_path_resolve", "cached_which"]
 except ImportError:
     __all__ = []
-
-
-class Utils:
-    """A placeholder class for utility functions."""
-
-    pass
