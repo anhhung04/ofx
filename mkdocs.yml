@@ -83,6 +83,7 @@ nav:
       - Hooks System: guide/hooks.md
       - Templates: guide/templates.md
       - Secrets & Inputs: guide/secrets-inputs.md
+      - Extending Data Modules: guide/extending-data-modules.md
   - Red Teaming APIs:
       - Overview: api/overview.md
   - CLI Reference:
