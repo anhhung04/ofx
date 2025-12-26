@@ -3,7 +3,7 @@ Binary shellcode templates using msfvenom or Docker assembly compilation.
 
 Two generation methods:
 1. Msfvenom: Professional templates (requires msfvenom CLI)
-2. Docker Assembly: Compile editable .asm files from data/shellcodes/
+2. Docker Assembly: Compile editable .asm files from data/shellcode/
 """
 
 import logging

@@ -41,6 +41,13 @@ from ofx.api.webshell.shell.asp import AspShell
 from ofx.api.webshell.shell.aspx import AspxShell
 from ofx.api.webshell.shell.jsp import JspShell
 from ofx.api.webshell.shell.php import PhpShell
+from ofx.api.webshell.connectors import (
+    get_registry,
+    get_connector,
+    get_available_connectors,
+)
+
+# Lazy connector discovery - will run on first use
 
 __all__ = [
     "WebShell",
@@ -51,6 +58,9 @@ __all__ = [
     "WebShellCodeFactory",
     "WebShellClient",
     "generate_webshell",
+    "get_registry",
+    "get_connector",
+    "get_available_connectors",
 ]
 
 
@@ -61,6 +71,7 @@ def generate_webshell(
     secret_header: Optional[str] = None,
     secret_value: Optional[str] = None,
     inline: bool = False,
+    connector_name: Optional[str] = None,
 ) -> str:
     """
     Generate an AntSword-compatible webshell for the specified language.
@@ -76,6 +87,7 @@ def generate_webshell(
         secret_header: Optional HTTP header name for authentication (e.g., 'X-Auth-Token')
         secret_value: Optional HTTP header value for authentication
         inline: Remove whitespace for inline usage (default: False)
+        connector_name: Optional connector to use (default: auto-select best available)
 
     Returns:
         Webshell code as string
@@ -92,7 +104,29 @@ def generate_webshell(
         ...     secret_value='secret123',
         ...     inline=True
         ... )
+        >>>
+        >>> # Use specific connector
+        >>> shell = generate_webshell('php', password='x', connector_name='template')
     """
+    # Use connector if specified
+    if connector_name:
+        connector = get_connector(connector_name)
+        if connector is None:
+            raise ValueError(f"Connector '{connector_name}' not found")
+        
+        if not connector.is_available():
+            raise RuntimeError(f"Connector '{connector_name}' is not available")
+        
+        return connector.generate(
+            language=language,
+            password=password,
+            encoder=encoder,
+            secret_header=secret_header,
+            secret_value=secret_value,
+            inline=inline,
+        )
+    
+    # Default: use template connector (backward compatible)
     language = language.lower()
 
     shells = {

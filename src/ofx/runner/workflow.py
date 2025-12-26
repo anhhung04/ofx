@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import os
-import shutil
 import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -19,12 +18,12 @@ from rich.progress import (
     TimeElapsedColumn,
 )
 
-from ofx.models.workflow import Workflow, ToolConfig
+from ofx.models.workflow import Workflow
 from ofx.runner.base import BaseRunner
-from ofx.runner.command import CommandRunner
 from ofx.runner.job import JobRunner
 from ofx.runner.models import RunContext, RunnerStatus
-from ofx.settings import settings, DEFAULT_WORKFLOWS_DIR, TOOLS_DIR, TOOLS_BIN_DIR
+from ofx.runner.tool_installer import ToolInstallerRunner
+from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings, TOOLS_BIN_DIR, TOOLS_DIR
 from ofx.utils.misc import clone_remote_repo, find_parallel_schedule, is_remote_path
 
 logger = logging.getLogger(settings.app_branding)
@@ -369,93 +368,22 @@ class WorkflowRunner(BaseRunner):
                     thread.join(timeout=5.0)
 
     async def _install_tools(self):
+        """Install workflow tools using ToolInstallerRunner"""
         tools = self.model.tools
         if not tools:
             return
-
-        workflow_envs = self.ctx_vars.envs.copy()
-        current_path = workflow_envs.get("PATH", os.environ.get("PATH", ""))
-        if str(TOOLS_BIN_DIR) not in current_path:
-            workflow_envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
-            self._ctx.envs.update(workflow_envs)
         
-        for tool_bin, tool_config in tools.items():
-            # Convert simple string to ToolConfig
-            if isinstance(tool_config, str):
-                tool_config = ToolConfig(install=tool_config)
-            elif isinstance(tool_config, dict):
-                tool_config = ToolConfig(**tool_config)
-            
-            # Resolve templates in all commands
-            install_cmd = self._resolve_template(tool_config.install)
-            check_cmd = self._resolve_template(tool_config.check) if tool_config.check else None
-            post_install_cmd = self._resolve_template(tool_config.post_install) if tool_config.post_install else None
-            
-            # Check if tool is already installed
-            tool_exists = False
-            if check_cmd:
-                # Use custom check command
-                logger.debug(self._produce_log(f"Checking tool '{tool_bin}' with: {check_cmd}"))
-                check_runner = CommandRunner(
-                    check_cmd,
-                    RunContext(envs=workflow_envs),
-                )
-                check_result = await check_runner.run()
-                tool_exists = check_result.status.value == "completed" and check_result.outputs.get("exit_code") == 0
-            else:
-                # Default check: look in TOOLS_BIN_DIR or system PATH
-                tool_path = TOOLS_BIN_DIR / tool_bin
-                tool_exists = tool_path.exists() or shutil.which(tool_bin) is not None
-            
-            if not tool_exists:
-                # Install the tool
-                logger.warning(
-                    self._produce_log(
-                        f"Installing tool '{tool_bin}' with command: {install_cmd}"
-                    )
-                )
-                runner = CommandRunner(
-                    install_cmd,
-                    RunContext(envs=workflow_envs),
-                )
-                result = await runner.run()
-                if not result.status.value == "completed":
-                    raise RuntimeError(f"Failed to install tool '{tool_bin}': {result.error}")
-                
-                logger.info(
-                    self._produce_log(f"Tool '{tool_bin}' installed successfully")
-                )
-                
-                # Run post-install command if specified
-                if post_install_cmd:
-                    logger.info(
-                        self._produce_log(
-                            f"Running post-install for '{tool_bin}'"
-                        )
-                    )
-                    post_runner = CommandRunner(
-                        post_install_cmd,
-                        RunContext(envs=workflow_envs),
-                    )
-                    post_result = await post_runner.run()
-                    if post_result.status.value == "completed":
-                        # Log post-install output if available
-                        if post_result.outputs.get("stdout"):
-                            logger.info(
-                                self._produce_log(
-                                    f"Post-install output for '{tool_bin}': {post_result.outputs['stdout']}"
-                                )
-                            )
-                    else:
-                        logger.warning(
-                            self._produce_log(
-                                f"Post-install failed for '{tool_bin}': {post_result.error}"
-                            )
-                        )
-            else:
-                logger.debug(
-                    self._produce_log(f"Tool '{tool_bin}' is already installed")
-                )
+        # Use ToolInstallerRunner to handle tool installation
+        installer = ToolInstallerRunner(
+            tools=tools,
+            ctx=RunContext(envs=self.ctx_vars.envs.copy()),
+            parent=self,
+            show_console=False,  # Don't show console output in workflow context
+        )
+        await installer.run()
+        
+        # Update our context with the updated PATH from installer
+        self._ctx.envs.update(installer.ctx_vars.envs)
 
     def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict

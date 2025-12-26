@@ -1,6 +1,6 @@
 import typer
 
-from ofx.commands import api, asset, doctor, dump, flow, project, secret
+from ofx.commands import asset, docs, doctor, dump, flow, project, secret
 from ofx.settings import BANNER
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
@@ -28,7 +28,7 @@ add_app(flow)
 add_app(dump)
 add_app(asset)
 add_app(project)
-add_app(api)
+add_app(docs)
 add_app(doctor)
 add_app(secret)
 

@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from tabulate import tabulate
 
-from ofx.runner.runner import RunContext, WorkflowRunner
+from ofx.runner import RunContext, WorkflowRunner
 from ofx.settings import SECRETS_DIR, settings
 from ofx.utils.misc import load_secrets
 

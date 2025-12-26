@@ -1,5 +1,5 @@
 """
-Shellcode generator with custom template support.
+Shellcode generator with custom template support and connector integration.
 """
 
 import ipaddress
@@ -8,6 +8,7 @@ from typing import Callable, Optional
 
 from ofx.settings import settings
 
+from .connectors import get_registry
 from .templates import SHELLCODE_TEMPLATES
 
 logger = logging.getLogger(settings.app_branding)
@@ -44,15 +45,22 @@ class ShellGenerator:
 
     _custom_templates: dict[str, Callable[[str, int], bytes] | bytes] = {}
 
-    def __init__(self, os_target: str, os_target_arch: str):
+    def __init__(
+        self,
+        os_target: str,
+        os_target_arch: str,
+        connector: Optional[object] = None,
+    ):
         """Initialize shellcode generator for specific platform.
 
         Args:
             os_target: Target OS ('linux', 'windows')
             os_target_arch: Target architecture ('x86', 'x64')
+            connector: Optional shellcode connector (uses best available if None)
         """
         self.OS_TARGET = os_target.upper()
         self.OS_TARGET_ARCH = os_target_arch.upper()
+        self.connector = connector
 
     @classmethod
     def register_template(
@@ -164,6 +172,9 @@ class ShellGenerator:
         dll_inj_funcs: list[str] | None = None,
         shell_args: dict | None = None,
         use_precompiled: bool = True,
+        bad_chars: Optional[list[str]] = None,
+        encoder: Optional[str] = None,
+        iterations: int = 1,
     ) -> tuple[bytes, str]:
         """Generate shellcode with optional executable wrapping.
 
@@ -206,9 +217,21 @@ class ShellGenerator:
 
         self._validate_settings(connectback_ip, connectback_port)
 
-        shellcode = self._generate_shellcode(
-            shellcode_type, connectback_ip, connectback_port
+        # Try connector-based generation first
+        shellcode = self._generate_with_connector(
+            shellcode_type,
+            connectback_ip,
+            connectback_port,
+            bad_chars,
+            encoder,
+            iterations,
         )
+        
+        # Fall back to template-based generation
+        if shellcode is None:
+            shellcode = self._generate_shellcode(
+                shellcode_type, connectback_ip, connectback_port
+            )
 
         filepath = ""
 
@@ -232,6 +255,57 @@ class ShellGenerator:
                 logger.debug(f"Executable created: {filepath}")
 
         return shellcode, filepath
+
+    def _generate_with_connector(
+        self,
+        shellcode_type: str,
+        ip: str,
+        port: int,
+        bad_chars: Optional[list[str]] = None,
+        encoder: Optional[str] = None,
+        iterations: int = 1,
+    ) -> Optional[bytes]:
+        """Try to generate shellcode using a connector.
+        
+        Args:
+            shellcode_type: Type of shellcode
+            ip: IP address
+            port: Port number
+            bad_chars: Bad characters to avoid
+            encoder: Encoder name
+            iterations: Encoding iterations
+        
+        Returns:
+            Shellcode bytes or None if connector generation fails
+        """
+        # Use provided connector or get best available
+        connector = self.connector
+        if connector is None:
+            registry = get_registry()
+            connector = registry.get_best_available_connector()
+        
+        if connector is None or not connector.is_available():
+            logger.debug("No connector available, falling back to templates")
+            return None
+        
+        try:
+            logger.info(f"Generating shellcode with connector: {connector.name}")
+            shellcode = connector.generate(
+                os_target=self.OS_TARGET.lower(),
+                arch=self.OS_TARGET_ARCH.lower(),
+                shell_type=shellcode_type,
+                ip=ip,
+                port=port,
+                bad_chars=bad_chars,
+                encoder=encoder,
+                iterations=iterations,
+            )
+            return shellcode
+        except Exception as e:
+            logger.warning(
+                f"Connector {connector.name} failed: {e}. Falling back to templates."
+            )
+            return None
 
     def _generate_shellcode(self, shellcode_type: str, ip: str, port: int) -> bytes:
         """Generate raw shellcode from templates.

@@ -16,9 +16,9 @@ SECRETS_STORE = Path(os.getenv("OFX_SECRETS_STORE", BASE_DATA_DIR / "secrets.enc
 SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
 DEFAULT_PROJECTS_PATH = Path.home() / "ofx-projects"
-ORG_DATA_DIR = Path(__file__) / "data"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
+DATA_DIR = Path(__file__).parent / "data"
 
 BANNER = """
 \033[1;31m      .--.

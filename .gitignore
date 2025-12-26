@@ -13,6 +13,9 @@ wheels/
 *.c
 *.so
 
+# Documentation build output
+src/ofx/data/site/
+
 out/
 
 .pytest_cache/

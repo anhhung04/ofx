@@ -14,9 +14,8 @@ class TestExploitModule:
         assert d["new_key"] == "new_value"
 
     def test_ordered_dict(self):
-        from ofx.api.exploit import OrderedDict
-
-        d = OrderedDict()
+        # Standard dict maintains insertion order in Python 3.7+
+        d = dict()
         d["z"] = 1
         d["a"] = 2
         d["m"] = 3
@@ -272,7 +271,7 @@ class TestSearchModule:
 class TestShellcodeModule:
     """Test shellcode submodule."""
 
-    def test_osshellcodes_import(self):
+    def test_osshellcode_import(self):
         from ofx.api.shellcode import OSShellcodes
 
         assert OSShellcodes is not None

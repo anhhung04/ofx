@@ -9,14 +9,14 @@ from ofx.models import DefaultConfig
 class WorkflowInput(BaseModel):
     required: bool = Field(default=False, description="Whether the input is required")
     default: Any = Field(None, description="Default value for the input parameter")
-    type: Union[Literal["string", "number", "array", "object", "boolean"]] = Field(
+    type: Literal["string", "number", "array", "object", "boolean"] = Field(
         "string", description="Type of the input parameter (e.g., 'string', 'number')"
     )
 
 
 class WorkflowSecret(BaseModel):
     required: bool = Field(default=False, description="Whether the secret is required")
-    type: Union[Literal["string", "number", "array", "object", "boolean"]] = Field(
+    type: Literal["string", "number", "array", "object", "boolean"] = Field(
         "string", description="Type of the secret (e.g., 'string', 'number')"
     )
 
@@ -85,9 +85,10 @@ class Workflow(BaseModel):
         for job_id in self.jobs.keys():
             if not re.match(r"^[a-zA-Z0-9_-]+$", job_id):
                 raise ValueError(f"Job {job_id} does not have a valid pattern defined.")
+            needs = self.jobs[job_id].needs
             if isinstance(self.jobs[job_id].needs, str):
-                self.jobs[job_id].needs = [self.jobs[job_id].needs]
-            for dep in self.jobs[job_id].needs:
+                needs = [self.jobs[job_id].needs]
+            for dep in needs:
                 if dep and dep not in self.jobs:
                     raise ValueError(
                         f"Job {job_id} has a dependency on {dep}, which does not exist."

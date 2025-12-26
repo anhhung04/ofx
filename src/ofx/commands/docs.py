@@ -1,5 +1,8 @@
+"""Documentation server commands for OFX"""
+import http.server
 import importlib
 import inspect
+import socketserver
 from pathlib import Path
 from typing import (
     Annotated,
@@ -22,9 +25,10 @@ from rich.text import Text
 from rich.tree import Tree
 
 app = typer.Typer()
+console = Console()
 
-NAME = "api"
-HELP = "Interact with the OFX API."
+NAME = "docs"
+HELP = "Documentation server and API reference"
 
 
 def discover_api_modules() -> Dict[str, Dict[str, str]]:
@@ -54,7 +58,7 @@ def discover_api_modules() -> Dict[str, Dict[str, str]]:
                     doc = inspect.getdoc(mod) or f"{module_name.title()} utilities"
                     modules[module_name] = {
                         "path": module_path,
-                        "description": doc.split("\n")[0],  # First line only
+                        "description": doc.split("\n")[0],
                     }
             except Exception:
                 continue
@@ -542,7 +546,7 @@ def create_function_tree(
 
 
 @app.command()
-def docs(
+def api(
     module: Annotated[
         Optional[str],
         typer.Option("--module", "-m", help="Optional API module name to document"),
@@ -558,13 +562,11 @@ def docs(
     ] = False,
 ):
     """
-    List documentation for the OFX API in a beautiful format.
+    Display OFX API documentation in a beautiful format.
 
-    Displays function signatures, descriptions, parameters, and examples in a rich
-    tree structure. Automatically discovers all API modules.
+    Shows function signatures, descriptions, parameters, and examples
+    for all available Red Team APIs.
     """
-    console = Console()
-
     discovered = discover_api_modules()
     modules = {name: info["path"] for name, info in discovered.items()}
     descriptions = {name: info["description"] for name, info in discovered.items()}
@@ -595,8 +597,8 @@ def docs(
             "  • [cyan]--module MODULE[/cyan] or [cyan]-m MODULE[/cyan] to view specific module documentation"
         )
         console.print("\nExample:")
-        console.print("  [dim]$ ofx api docs --list[/dim]")
-        console.print("  [dim]$ ofx api docs --module webshell[/dim]")
+        console.print("  [dim]$ ofx docs api --list[/dim]")
+        console.print("  [dim]$ ofx docs api --module webshell[/dim]")
         return
 
     imported_modules = {}
@@ -681,4 +683,49 @@ def docs(
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {str(e)}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
+    port: int = typer.Option(8888, "--port", "-p", help="Port to bind to"),
+):
+    """
+    Serve the documentation using Python HTTP server.
+    
+    Serves pre-built static HTML/CSS/JS files.
+    """
+    try:
+        package_dir = Path(__file__).parent.parent
+        site_dir = package_dir / "data" / "site"
+        
+        index_file = site_dir / "index.html"
+        if not index_file.exists():
+            console.print(f"[red]❌ index.html not found in {site_dir}[/red]")
+            raise typer.Exit(1)
+        
+        console.print(f"[cyan]🚀 Documentation available at http://{host}:{port}[/cyan]")
+        console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+        
+        # Create HTTP server handler
+        class Handler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=str(site_dir), **kwargs)
+        
+        # Start server
+        with socketserver.TCPServer((host, port), Handler) as httpd:
+            httpd.serve_forever()
+        
+    except KeyboardInterrupt:
+        console.print("\n[yellow]📡 Documentation server stopped[/yellow]")
+    except OSError as e:
+        if "Address already in use" in str(e):
+            console.print(f"[red]❌ Port {port} is already in use[/red]")
+            console.print(f"Try a different port: [cyan]ofx docs serve --port {port + 1}[/cyan]")
+        else:
+            console.print(f"[red]❌ Error: {e}[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]❌ Error: {e}[/red]")
         raise typer.Exit(1)

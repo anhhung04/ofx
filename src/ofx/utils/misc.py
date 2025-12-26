@@ -1,14 +1,15 @@
 import json
+import os
 import tempfile
 from collections import deque
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
-from ofx.settings import TOOLS_BIN_DIR
 
 import git
-import os
+
+from ofx.settings import TOOLS_BIN_DIR
 
 def populate_env(alt_env={}) -> Dict[str, str]:
     """Populate environment variables including tools bin directory"""

@@ -23,6 +23,11 @@ logger = logging.getLogger(settings.app_branding)
 
 class BaseRunner:
     """Abstract base class for all runners (workflow, job, step, command)"""
+    
+    # Cache for compiled templates (limit size to prevent memory bloat)
+    _template_cache = {}
+    _template_cache_max_size = 1000
+    _support_funcs_cache = None
 
     def __init__(self, name: Any, ctx: RunContext, parent: Optional["BaseRunner"] = None):
         name = str(name)
@@ -87,31 +92,46 @@ class BaseRunner:
             return value
         
         try:
-            sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
-            SUPPORT_FUNCS = {
-                "sudo": sudo,
-                "run_id": self._id,
-                "tools_dir": str(TOOLS_DIR.absolute()),
-                "tools_bin_dir": str(TOOLS_BIN_DIR.absolute()),
-                "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
-                "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
-                "go_install": lambda pkg: f"GO111MODULE=on GOBIN={TOOLS_BIN_DIR} go install {pkg}@latest",
-                "cargo_install": lambda name: f"cargo install --root {TOOLS_DIR} {name}",
-                "npm_install": lambda name: f"npm install -g --prefix {TOOLS_DIR} {name}",
-                "static_install": lambda url, name=None: (
-                    f"curl -fSsL {url} -o {TOOLS_BIN_DIR / (name if name else Path(url).name)} && chmod +x {TOOLS_BIN_DIR / (name if name else Path(url).name)}"
-                ),
-                "file_read": lambda path: (Path(path).read_text() if Path(path).exists() else None),
-                "file_write": lambda path, content: Path(path).write_text(content),
-                "file_exists": lambda path: Path(path).exists(),
-                "env": lambda var, default="": os.getenv(var, default),
-                "str": str,
-                "int": int,
-                "float": float,
-                "bool": lambda v: str(v).lower() in ("true", "yes", "1", "t", "y"),
-            }
+            # Use cached SUPPORT_FUNCS if available
+            if BaseRunner._support_funcs_cache is None:
+                sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
+                BaseRunner._support_funcs_cache = {
+                    "sudo": sudo,
+                    "tools_dir": str(TOOLS_DIR.absolute()),
+                    "tools_bin_dir": str(TOOLS_BIN_DIR.absolute()),
+                    "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
+                    "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
+                    "go_install": lambda pkg: f"GO111MODULE=on GOBIN={TOOLS_BIN_DIR} go install {pkg}@latest",
+                    "cargo_install": lambda name: f"cargo install --root {TOOLS_DIR} {name}",
+                    "npm_install": lambda name: f"npm install -g --prefix {TOOLS_DIR} {name}",
+                    "static_install": lambda url, name=None: (
+                        f"curl -fSsL {url} -o {TOOLS_BIN_DIR / (name if name else Path(url).name)} && chmod +x {TOOLS_BIN_DIR / (name if name else Path(url).name)}"
+                    ),
+                    "file_read": lambda path: (Path(path).read_text() if Path(path).exists() else None),
+                    "file_write": lambda path, content: Path(path).write_text(content),
+                    "file_exists": lambda path: Path(path).exists(),
+                    "env": lambda var, default="": os.getenv(var, default),
+                    "str": str,
+                    "int": int,
+                    "float": float,
+                    "bool": lambda v: str(v).lower() in ("true", "yes", "1", "t", "y"),
+                }
             
-            template = Template(string_value, variable_start_string="${{", variable_end_string="}}")
+            # Add run_id dynamically (unique per runner instance)
+            SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()
+            SUPPORT_FUNCS["run_id"] = self._id
+            
+            # Use template cache for repeated templates
+            if string_value not in BaseRunner._template_cache:
+                # Clear cache if it gets too large (simple LRU-like behavior)
+                if len(BaseRunner._template_cache) >= BaseRunner._template_cache_max_size:
+                    BaseRunner._template_cache.clear()
+                    
+                BaseRunner._template_cache[string_value] = Template(
+                    string_value, variable_start_string="${{", variable_end_string="}}"
+                )
+            
+            template = BaseRunner._template_cache[string_value]
             template_vars = self.ctx_vars.model_dump(exclude={"vars"})
             template_vars.update(SUPPORT_FUNCS)
             if self.ctx_vars.vars:

