@@ -12,7 +12,6 @@ ALIAS = ["x", "task"]
 
 HELP = "Manage and run workflows in the OFX system"
 
-
 @app.async_command()
 async def run(
     workflow_name: Annotated[
