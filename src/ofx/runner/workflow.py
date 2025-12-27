@@ -179,21 +179,30 @@ class WorkflowRunner(BaseRunner):
             job.model_dump(exclude={"outputs", "steps"})
         )
         self._ctx.vars.update({"jobs": self._job_registry})
+        
+        # Determine if this job is in a single-job stage (allows interactive)
+        current_stage_jobs = []
+        current_stage_idx = 0
+        for idx, stage in enumerate(self._schedule):
+            if job_id in stage:
+                current_stage_jobs = list(stage)
+                current_stage_idx = idx
+                break
+        
+        # Allow interactive mode only if this is the only job in the stage
+        is_single_job_stage = len(current_stage_jobs) == 1
+        
+        # Create context with interactive capability flag
+        job_ctx = self.ctx_vars.model_copy()
+        job_ctx.allow_interactive = is_single_job_stage
+        
         job_runner = JobRunner(
             job,
-            self.ctx_vars,
+            job_ctx,
             parent=self,
         )
         self._job_registry[job_id]["runner"] = job_runner
         try:
-            # Determine if this is the last job in the current stage
-            current_stage_jobs = []
-            current_stage_idx = 0
-            for idx, stage in enumerate(self._schedule):
-                if job_id in stage:
-                    current_stage_jobs = list(stage)
-                    current_stage_idx = idx
-                    break
             
             self._run_and_monitor_job(job, current_stage_idx, current_stage_jobs)
             job_result = job_runner.get_result()

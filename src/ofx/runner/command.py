@@ -31,12 +31,14 @@ class CommandRunner(BaseRunner):
         working_dir: Path | None = None,
         timeout_minutes: int = 1440,
         parent: "BaseRunner | None" = None,
+        interactive: bool = False,
     ):
         super().__init__("command", ctx, parent)
         self._cmd = cmd
         self._shell = shell
         self._cwd = working_dir or Path.cwd()
         self._timeout_minutes = timeout_minutes
+        self._interactive = interactive
 
     async def _do_run(self):
         """Execute a shell command and capture output"""
@@ -50,22 +52,39 @@ class CommandRunner(BaseRunner):
         args = [self._shell, "-c", self._cmd]
         
         try:
-            output = subprocess.run(
-                args,
-                cwd=self._cwd,
-                env=self.ctx_vars.envs,
-                timeout=self._timeout_minutes * 60,
-                capture_output=True,
-            )
-            exit_code = output.returncode
-            
-            try:
-                stderr = output.stderr.decode("utf-8").strip()
-                stdout = output.stdout.decode("utf-8").strip()
-            except UnicodeDecodeError:
-                stderr = base64.b64encode(output.stderr).decode("utf-8")
-                stdout = base64.b64encode(output.stdout).decode("utf-8")
-                self._result.outputs["binary_output"] = True
+            if self._interactive:
+                # Interactive mode: passthrough stdin/stdout/stderr
+                logger.info(self._produce_log("Running in interactive mode (stdin/stdout connected)"))
+                output = subprocess.run(
+                    args,
+                    cwd=self._cwd,
+                    env=self.ctx_vars.envs,
+                    timeout=self._timeout_minutes * 60,
+                    stdin=None,  # Inherit from parent
+                    stdout=None,  # Inherit from parent
+                    stderr=None,  # Inherit from parent
+                )
+                exit_code = output.returncode
+                stdout = "[Interactive mode - output shown above]"
+                stderr = ""
+            else:
+                # Normal mode: capture output
+                output = subprocess.run(
+                    args,
+                    cwd=self._cwd,
+                    env=self.ctx_vars.envs,
+                    timeout=self._timeout_minutes * 60,
+                    capture_output=True,
+                )
+                exit_code = output.returncode
+                
+                try:
+                    stderr = output.stderr.decode("utf-8").strip()
+                    stdout = output.stdout.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    stderr = base64.b64encode(output.stderr).decode("utf-8")
+                    stdout = base64.b64encode(output.stdout).decode("utf-8")
+                    self._result.outputs["binary_output"] = True
             
             if output.returncode != 0:
                 stderr = stderr or f"Command failed with exit code {output.returncode}"
@@ -131,6 +150,7 @@ class ScriptRunner(CommandRunner):
         working_dir: Path | None = None,
         timeout_minutes: int = 1440,
         parent: BaseRunner | None = None,
+        interactive: bool = False,
     ):
         self._tmp_file = None
         self._run_in_file = False
@@ -159,6 +179,7 @@ class ScriptRunner(CommandRunner):
             timeout_minutes=timeout_minutes,
             parent=parent,
             ctx=ctx,
+            interactive=interactive,
         )
 
     async def _post_run(self):

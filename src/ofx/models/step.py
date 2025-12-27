@@ -57,6 +57,10 @@ class Step(BaseModel):
         default={},
         description="Lifecycle hooks with Python code (e.g., before_step, after_step, on_retry, on_skip, on_timeout)",
     )
+    interactive: bool = Field(
+        default=False,
+        description="Enable interactive mode (stdin/stdout passthrough). Only works in single-job stages."
+    )
     step_index: int = Field(
         -1, description="Index of the step in the job (set during execution)"
     )

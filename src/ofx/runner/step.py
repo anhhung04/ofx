@@ -59,6 +59,15 @@ class StepRunner(BaseRunner):
         logger.debug(self._produce_log(f"result: {self._result}"))
 
     async def _do_run(self):
+        # Check if interactive mode is requested and allowed
+        is_interactive = self.model.interactive and self.ctx_vars.allow_interactive
+        
+        if is_interactive and self._run_type == RunType.WORKFLOW:
+            logger.warning(self._produce_log(
+                "Interactive mode is not supported for workflow steps (uses). Ignoring interactive flag."
+            ))
+            is_interactive = False
+        
         if self._run_type is RunType.WORKFLOW:
             from ofx.runner.workflow import WorkflowRunner
             output_path = Path.cwd()
@@ -90,6 +99,7 @@ class StepRunner(BaseRunner):
                 working_dir=self._resolve_working_dir(),
                 parent=self,
                 timeout_minutes=self.model.timeout,
+                interactive=is_interactive,
             )
         elif self._run_type is RunType.COMMAND:
             assert self.model.run is not None, "Run cannot be None for COMMAND run type"
@@ -100,6 +110,7 @@ class StepRunner(BaseRunner):
                 working_dir=self._resolve_working_dir(),
                 parent=self,
                 timeout_minutes=self.model.timeout,
+                interactive=is_interactive,
             )
         res = await runner.run()
         self._status = res.status

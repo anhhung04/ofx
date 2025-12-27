@@ -1,0 +1,29 @@
+name: Interactive Step Demo
+description: Demonstrates interactive mode in single-job stages
+
+jobs:
+  # This job is alone in its stage - interactive mode works!
+  interactive_shell:
+    steps:
+      - name: Interactive Bash Session
+        run: bash
+        interactive: true
+        timeout: 5
+      
+      - name: Normal Command
+        run: echo "Back to normal execution"
+  
+  # This job depends on the first - also alone in its stage
+  interactive_python:
+    needs: interactive_shell
+    steps:
+      - name: Interactive Python REPL
+        run: python3
+        interactive: true
+        timeout: 5
+      
+      - name: Show Result
+        run: echo "Interactive session completed"
+
+# Note: If you have multiple jobs in the same stage, 
+# interactive mode will be automatically disabled to avoid conflicts

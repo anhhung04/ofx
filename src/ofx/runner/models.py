@@ -28,6 +28,7 @@ class RunContext(BaseModel):
     envs: Dict[str, Any] = Field(default_factory=populate_env)
     output_path: Path = Field(default=Path.cwd() / "out")
     vars: Dict[str, Any] = Field(default_factory=dict)
+    allow_interactive: bool = Field(default=False, description="Whether interactive mode is allowed (single job in stage)")
 
 
 class RunResult(BaseModel):
