@@ -5,8 +5,12 @@ jobs:
   # This job is alone in its stage - interactive mode works!
   interactive_shell:
     steps:
-      - name: Interactive Bash Session
-        run: bash
+      - name: Interactive Command
+        run: |
+          echo "Starting interactive test..."
+          read -p "Enter your name: " name
+          echo "Hello, $name!"
+          echo "Interactive command completed"
         interactive: true
         timeout: 5
       
@@ -17,8 +21,11 @@ jobs:
   interactive_python:
     needs: interactive_shell
     steps:
-      - name: Interactive Python REPL
-        run: python3
+      - name: Interactive Python Script
+        run: |
+          name = input("What's your favorite color? ")
+          print(f"Nice! {name} is a great color!")
+        language: python
         interactive: true
         timeout: 5
       

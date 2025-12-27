@@ -225,6 +225,34 @@ class WorkflowRunner(BaseRunner):
             raise ValueError(f"Job with ID '{job_id}' not found.")
         total_steps = job_runner.total_steps
 
+        # Check if any step in this job has interactive mode
+        has_interactive_step = any(
+            getattr(step, 'interactive', False) 
+            for step in job_runner.model.steps
+        )
+        
+        # If interactive and allowed, run without progress bars
+        if has_interactive_step and job_runner.ctx_vars.allow_interactive:
+            logger.info(self._produce_log(f"Running job '{job_id}' with interactive steps (progress hidden)"))
+            job_result: list[Optional[Any]] = [None]
+            job_error: list[Optional[Exception]] = [None]
+
+            def run_job_thread():
+                try:
+                    job_result[0] = asyncio.run(job_runner.run())
+                except Exception as e:
+                    job_error[0] = e
+
+            job_thread = threading.Thread(
+                target=run_job_thread, name=f"monitor-{job_id}", daemon=False
+            )
+            job_thread.start()
+            job_thread.join()
+
+            if job_error[0]:
+                raise job_error[0]
+            return
+
         indicator = "  ↳ " if self._is_reused else "→ "
 
         with Progress(
