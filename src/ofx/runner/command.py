@@ -53,19 +53,19 @@ class CommandRunner(BaseRunner):
         
         try:
             if self._interactive:
-                # Interactive mode: passthrough stdin/stdout/stderr
-                logger.info(self._produce_log("Running in interactive mode (stdin/stdout connected)"))
+                # Interactive mode: direct TTY passthrough
+                logger.info(self._produce_log("Running in interactive mode (stdin/stdout connected to terminal)"))
                 output = subprocess.run(
                     args,
                     cwd=self._cwd,
                     env=self.ctx_vars.envs,
                     timeout=self._timeout_minutes * 60,
-                    stdin=None,  # Inherit from parent
-                    stdout=None,  # Inherit from parent
-                    stderr=None,  # Inherit from parent
+                    stdin=sys.stdin,   # Direct terminal input
+                    stdout=sys.stdout, # Direct terminal output
+                    stderr=sys.stderr, # Direct terminal errors
                 )
                 exit_code = output.returncode
-                stdout = "[Interactive mode - output shown above]"
+                stdout = "[Interactive mode - output shown in real-time]"
                 stderr = ""
             else:
                 # Normal mode: capture output
