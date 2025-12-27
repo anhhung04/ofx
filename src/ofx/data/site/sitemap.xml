@@ -2,46 +2,62 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://ofx.readthedocs.io/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/advanced/performance/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/exploitation/</loc>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/api/overview/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/post-exploitation/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/reconnaissance/</loc>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/cli/commands/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/getting-started/concepts/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/getting-started/quickstart/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/extending-data-modules/</loc>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/guide/hooks/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/guide/jobs-steps/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/guide/secrets-inputs/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/guide/templates/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/guide/workflows/</loc>
-         <lastmod>2025-12-26</lastmod>
+         <lastmod>2025-12-27</lastmod>
     </url>
 </urlset>

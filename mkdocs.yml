@@ -91,3 +91,5 @@ nav:
       - Post-Exploitation: api/post-exploitation.md
   - CLI Reference:
       - Commands: cli/commands.md
+  - Advanced:
+      - Performance: advanced/performance.md

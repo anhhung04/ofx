@@ -522,7 +522,7 @@ def test_invalid_arch():
 
 ## Additional Resources
 
-- [Shellcode API Documentation](../api/overview.md#shellcode)
-- [Webshell API Documentation](../api/overview.md#webshell)
+- [Shellcode API Documentation](../api/exploitation.md#shellcode-generation)
+- [Webshell API Documentation](../api/exploitation.md#webshell-apis)
 - [Workflow Integration](workflows.md)
 - [Template System](templates.md)
