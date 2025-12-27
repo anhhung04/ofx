@@ -1,121 +1,99 @@
 # Offensive Flow Executor (OFX)
 
-A powerful workflow execution framework with lifecycle hooks and flexible execution strategies, optimized for red teaming operations with comprehensive exploitation, reconnaissance, and post-exploitation APIs.
+**A workflow execution framework for red teaming operations.**
 
-## Features
+Automate complex attack chains with YAML workflows, lifecycle hooks, and built-in APIs for exploitation, reconnaissance, and post-exploitation.
 
-- **Workflow Orchestration**: Execute complex multi-job workflows with dependencies
-- **Lifecycle Hooks**: Inject custom logic at any point in the execution lifecycle (inspired by [secator](https://docs.freelabz.com/in-depth/concepts/runners))
-- **Flexible Execution**: Support for commands, scripts, and nested workflows
-- **Template Support**: Jinja2 templating for dynamic configuration
-- **Design Patterns**: Built with Template Method, Strategy, Factory, and Composition patterns
-- **Async/Await**: Full async support for efficient parallel execution
-- **Red Teaming APIs**: 15+ classes for exploitation, reconnaissance, and post-exploitation with minimal boilerplate
+## Key Features
 
-## Red Teaming Enhancement
+- **YAML Workflows**: Define multi-step operations with job dependencies and parallel execution
+- **Lifecycle Hooks**: Execute custom code at any workflow stage (start, success, failure, etc.)
+- **Red Teaming APIs**: Pre-built classes for common tasks - reduce scripting by 80%
+- **Template Engine**: Dynamic configuration using Jinja2
+- **Async Execution**: Run jobs in parallel for faster operations
 
-OFX now includes comprehensive red teaming APIs to reduce scripting overhead by 80-90%:
+## Red Teaming APIs
 
-### Reconnaissance APIs
+Pre-built APIs to eliminate boilerplate code:
 
-- **Search Engines**: Fofa, Shodan, ZoomEye for asset discovery
-- **OOB Testing**: CEye, Interactsh for DNS/HTTP callback verification
-- **HTTP Server**: PHTTPServer for hosting payloads with SSL support
-- **PortScanner**: Fast port discovery with service detection
-- **ServiceGrabber**: Banner grabbing and HTTP information gathering
-- **DNSResolver**: DNS enumeration with A, MX, NS, TXT record resolution
-- **SubdomainEnumerator**: Wildcard-aware subdomain discovery
-- **NetworkScanner**: Live host discovery via ping sweep
+**Reconnaissance**
+- Search engines (Fofa, Shodan, ZoomEye)
+- OOB testing (CEye, Interactsh)
+- Network scanning (ports, services, subdomains)
+- HTTP server for payload hosting
 
-### Exploitation APIs
+**Exploitation**
+- Binary analysis (PIE, NX, Canary detection)
+- Shellcode generation and encoding
+- Remote connections and process execution
+- ROP gadget building
 
-- **RemoteTarget**: Socket connections with context manager support
-- **BinaryAnalyzer**: Security property analysis (PIE, NX, Canary, RELRO)
-- **PayloadBuilder**: Shellcode and ROP gadget generation
-- **ProcessRunner**: Local binary execution with I/O control
-- **Network Utilities**: Shell binding (TCP/Telnet), reverse shells, shellcode generation
+**Post-Exploitation**
+- File operations and data transfer
+- Credential management
+- Encoding/hashing utilities
 
-### Post-Exploitation APIs
-
-- **FileUtils**: File operations (read, write, copy, delete, find)
-- **ProcessUtils**: Command execution and subprocess management
-- **CryptoUtils**: Hashing, HMAC, Base64/Hex encoding
-- **DataTransformer**: Format conversions and data manipulation
-- **CredentialManager**: Secure credential storage and retrieval
-
-### Quick Example
+**Example:**
 
 ```python
-from ofx.api import Fofa, CEye, PHTTPServer
+from ofx.api import Fofa, PortScanner, PHTTPServer
 
-# Asset discovery
-fofa = Fofa(user="email@example.com", token="your_token")
+# Find targets
+fofa = Fofa(user="email", token="token")
 targets = fofa.search('app="Apache"', pages=2)
 
-# OOB callback testing
-ceye = CEye(token="your_token")
-payload = ceye.build_request("test_data", type='dns')
-# Check if callback received
-if ceye.verify_request(payload['flag'], type='dns'):
-    print("Callback received!")
+# Scan services
+scanner = PortScanner()
+results = scanner.scan(targets[0]['ip'], ports=[80, 443, 8080])
 
-# Host payloads
-server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080, use_https=True)
+# Host payload
+server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)
 server.start(daemon=True)
 ```
 
-**For detailed API documentation**, see [REDTEAMING_API.md](REDTEAMING_API.md) or start with [QUICKREF.md](QUICKREF.md) for a quick reference card.
+See [API Documentation](docs/api/overview.md) for complete reference.
 
-## Hook System
+## Lifecycle Hooks
 
-OFX includes a comprehensive hook system that allows you to execute custom code at various lifecycle points:
+Execute custom code at any workflow stage:
 
-### Hook Propagation
+**Available Hooks:** `on_start`, `on_success`, `on_failure`, `on_error`, `on_end`, `on_line`, `before_run`, `after_run`
 
-Hooks **conditionally propagate** from child to parent scope: **Step → Job → Workflow**
-
-**Key behavior**: Propagation only occurs when hooks are explicitly defined at a level:
-
-- **Step with hooks** → Step executes, then propagates to Job → then Workflow
-- **Step without hooks** → Job hooks execute, then propagate to Workflow
-- **Job without hooks** → Only Workflow hooks execute
-
-This prevents unnecessary duplicate executions while enabling hierarchical composition:
-
-- Global logging at workflow level (always available)
-- Job-specific notifications that bubble up to workflow
-- Step-specific error handling that propagates through the chain
-
-### Available Hooks
-
-- **Lifecycle**: `before_init`, `on_init`, `on_start`, `on_iter`, `on_end`, `before_run`, `after_run`
-- **Status**: `on_success`, `on_failure`, `on_error`, `on_cancel`
-- **Commands**: `on_cmd`, `on_cmd_done`, `on_line`
-
-### Quick Example
+**Hook Propagation:** Step → Job → Workflow (only when explicitly defined)
 
 ```yaml
-name: My Workflow
+name: Example Workflow
 
 hooks:
   on_start:
-    script: "print('Workflow starting!')"
+    run: echo "Starting workflow"
+    language: shell
+  
+  on_failure:
+    run: |
+      import requests
+      requests.post("https://alerts.com/webhook", 
+                   json={"status": "failed", "workflow": "{{ workflow.name }}"})
     language: python
 
-  on_success:
-    script: "echo 'Success!'"
-    language: shell
-
 jobs:
-  build:
+  test:
     steps:
-      - name: Build
-        run: make build
+      - name: Run Tests
+        run: pytest
         hooks:
           on_line:
-            script: "print('Output:', line)"
+            run: print("Test output:", line)
             language: python
 ```
+
+**How it works:**
+- Hooks defined at step level execute first, then propagate to job, then workflow
+- If a step has no hooks, job-level hooks run
+- If job has no hooks, only workflow-level hooks run
+- Prevents duplicate executions while enabling hierarchical composition
+
+See [Hooks Guide](docs/guide/hooks.md) for advanced patterns.
 
 ## Installation
 
@@ -125,114 +103,137 @@ pip install -e .
 
 ## Quick Start
 
-### Command Line
+### 1. Create a Workflow
 
-```bash
-# Run a workflow
-ofx flow run ./my_workflow.yml
+Create `recon.yml`:
 
-# Run with inputs
-ofx flow run ./my_workflow.yml --input key=value
+```yaml
+name: Web Reconnaissance
 
-# Run with secrets
-ofx flow run ./my_workflow.yml --secret API_KEY=xxx
+jobs:
+  discover:
+    steps:
+      - name: Port Scan
+        run: |
+          from ofx.api.network import PortScanner
+          scanner = PortScanner()
+          results = scanner.scan("{{ inputs.target }}", ports=[80, 443, 8080])
+          print(f"open_ports={[r['port'] for r in results if r['status'] == 'open']}")
+        language: python
+        outputs:
+          ports: "{{ step.open_ports }}"
+      
+      - name: Grab Banners
+        run: |
+          from ofx.api.network import ServiceGrabber
+          grabber = ServiceGrabber()
+          for port in {{ steps.0.outputs.ports }}:
+              info = grabber.grab("{{ inputs.target }}", port)
+              print(f"Port {port}: {info.get('banner', 'No banner')}")
+        language: python
+
+hooks:
+  on_success:
+    run: echo "Recon completed successfully"
+    language: shell
 ```
 
-### As a Module
+### 2. Run the Workflow
 
-OFX can be used as a module in your Python applications:
+```bash
+# Basic execution
+ofx flow run recon.yml --input target=example.com
+
+# With secrets
+ofx flow run recon.yml --input target=example.com --secret API_KEY=xxx
+```
+
+### 3. Use as Python Module
 
 ```python
 import asyncio
-from pathlib import Path
 from ofx.runner import WorkflowRunner, RunContext
 from ofx.runner.loaders import WorkflowLoader
 
 async def main():
-    # Load workflow
-    workflow = WorkflowLoader.find_flow("my_workflow")
-
-    # Create runner (executor managed automatically)
+    workflow = WorkflowLoader.find_flow("recon")
     runner = WorkflowRunner(
         workflow,
-        ctx=RunContext(
-            inputs={"key": "value"},
-            output_path=Path("./output"),
-            secrets={},
-            envs=os.environ.copy(),
-        ),
+        ctx=RunContext(inputs={"target": "example.com"})
     )
-
-    # Run and get result
     result = await runner.run()
     print(f"Status: {result.status}")
 
 asyncio.run(main())
 ```
 
-#### Advanced: Shared Executor
+## How It Works
 
-For running multiple workflows efficiently, share a `ThreadPoolExecutor`:
-
-```python
-from concurrent.futures import ThreadPoolExecutor
-
-async def run_multiple():
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        runner1 = WorkflowRunner(workflow1, ctx1, executor=executor)
-        runner2 = WorkflowRunner(workflow2, ctx2, executor=executor)
-
-        result1 = await runner1.run()
-        result2 = await runner2.run()
+**Architecture:**
+```
+WorkflowRunner
+  ├── JobRunner (parallel/sequential execution)
+  │     └── StepRunner (commands, scripts, Python code)
+  ├── Hook System (lifecycle event injection)
+  └── Template Engine (Jinja2 variable resolution)
 ```
 
-See `examples/module_usage.py` for complete examples including:
+**Execution Flow:**
+1. Load workflow YAML
+2. Resolve templates with inputs/secrets
+3. Execute jobs (respecting dependencies)
+4. Run steps within each job
+5. Trigger hooks at each lifecycle stage
+6. Collect outputs and results
 
-- Standalone execution (automatic lifecycle)
-- Shared executor patterns
-- Application-level orchestrators
-- Custom executor configuration
+**Core Components:**
+- `runner/`: Workflow, job, and step execution
+- `models/`: Workflow, job, step data models  
+- `api/`: Red teaming API modules
+- `commands/`: CLI commands
+- `utils/`: Helpers for logging, secrets, caching
 
-## Architecture
+See [Architecture Guide](docs/advanced/architecture.md) for details.
 
-The runner module is organized into focused components:
+## Documentation
 
-- `context.py` - Execution context and result models
-- `hooks.py` - Hook system with lifecycle management
-- `template.py` - Jinja2 template resolution
-- `base_runner.py` - Abstract base runner with Template Method pattern
-- `managers.py` - Orchestration (dependencies, scheduling, job execution)
-- `loaders.py` - Workflow loading from files, URLs, git repos
-- `workflow.py`, `job.py`, `step.py` - Concrete runner implementations
+- [Quick Start Guide](docs/getting-started/quickstart.md)
+- [Workflow Syntax](docs/guide/workflows.md)
+- [Hook System](docs/guide/hooks.md)
+- [Template Variables](docs/guide/templates.md)
+- [API Reference](docs/api/overview.md)
+- [Extending Data Modules](docs/guide/extending-data-modules.md)
 
 ## Testing
 
 ```bash
+# Run all tests
 pytest tests/
+
+# Run specific test
+pytest tests/test_flowrun.py
+
+# With coverage
+pytest --cov=ofx tests/
 ```
 
 ## Contributing
 
-We use automated semantic versioning based on PR titles. When creating a Pull Request, use one of these prefixes:
+Contributions welcome! Please use semantic commit messages:
 
-- `feat:` - New features (minor version bump)
-- `fix:` - Bug fixes (patch version bump)
-- `breaking:` or `major:` - Breaking changes (major version bump)
-- `chore:`, `docs:`, `refactor:`, `perf:`, `test:` - Other changes (patch version bump)
+- `feat:` - New features
+- `fix:` - Bug fixes
+- `breaking:` - Breaking changes
+- `docs:`, `test:`, `refactor:`, `chore:` - Other changes
 
-**Example PR titles:**
+**Workflow:**
+1. Fork and create a feature branch
+2. Make changes and add tests
+3. Run `pytest tests/`
+4. Submit PR with semantic title
 
-- `feat: add new tool installation system`
-- `fix: resolve PATH update issue`
-- `breaking: change default tool directory`
+Version bumps are automatic based on PR titles.
 
-See [Version Management Documentation](docs/VERSION_MANAGEMENT.md) for detailed guidelines.
+## License
 
-### Development Workflow
-
-1. Fork and clone the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes and commit
-4. Run tests: `pytest tests/`
-5. Push and create a PR with a semantic title
-6. Version will be automatically bumped on merge
+See LICENSE file for details.
