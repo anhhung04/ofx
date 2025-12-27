@@ -2,6 +2,12 @@
 
 OFX provides comprehensive red teaming APIs to reduce scripting overhead by 80-90%.
 
+## Quick Navigation
+
+- **[Reconnaissance APIs](reconnaissance.md)** - Search engines, OOB testing, network scanning, HTTP server
+- **[Exploitation APIs](exploitation.md)** - HTTP client, shellcode generation, webshells, binary exploitation  
+- **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation
+
 ## Categories
 
 ### :material-radar: Reconnaissance
@@ -100,7 +106,29 @@ encoded = CryptoUtils.base64_encode(data)
 
 ## Next Steps
 
-### View API Documentation
+### Detailed API Documentation
+
+Explore comprehensive guides with usage examples:
+
+- **[Reconnaissance APIs](reconnaissance.md)**
+  - FOFA, Shodan, ZoomEye search engines
+  - CEye, Interactsh OOB testing
+  - Port scanning, service detection, DNS enumeration
+  - HTTP server for payload hosting
+  
+- **[Exploitation APIs](exploitation.md)**
+  - HTTP client with connection pooling
+  - Shellcode generation and encoding
+  - WebShell factory and client
+  - Binary exploitation utilities
+
+- **[Post-Exploitation APIs](post-exploitation.md)**
+  - File read/write operations
+  - String and data utilities
+  - URL parsing and IP resolution
+  - User agent generation
+
+### CLI Documentation Browser
 
 Use the built-in API documentation command to explore all available APIs:
 

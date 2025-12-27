@@ -86,5 +86,8 @@ nav:
       - Extending Data Modules: guide/extending-data-modules.md
   - Red Teaming APIs:
       - Overview: api/overview.md
+      - Reconnaissance: api/reconnaissance.md
+      - Exploitation: api/exploitation.md
+      - Post-Exploitation: api/post-exploitation.md
   - CLI Reference:
       - Commands: cli/commands.md
