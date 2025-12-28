@@ -78,7 +78,7 @@ A **step** is the smallest unit of execution within a job.
 2. **Python Script**
 ```yaml
 - name: Python code
-  language: python
+  script:
   script: |
     print("Hello from Python")
 ```

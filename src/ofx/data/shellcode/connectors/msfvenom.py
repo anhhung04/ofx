@@ -1,9 +1,3 @@
-"""Msfvenom connector for shellcode generation.
-
-This connector uses Metasploit Framework's msfvenom tool to generate
-professional-grade shellcode with encoding, bad character avoidance,
-and multiple platform support.
-"""
 
 import logging
 import shutil
@@ -317,7 +311,12 @@ class MsfvenomConnector(ShellcodeConnector):
         logger.debug(f"Executing custom msfvenom: {' '.join(cmd)}")
         
         try:
-            result = subprocess.run(cmd, capture_output=True, check=True, timeout=30)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                check=True,
+                timeout=30,
+            )
             shellcode = result.stdout
             
             if not shellcode:

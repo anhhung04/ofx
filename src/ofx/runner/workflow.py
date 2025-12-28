@@ -50,8 +50,11 @@ class WorkflowRunner(BaseRunner):
 
     async def _do_run(self):
         """Execute the workflow by running its jobs in stages according to their dependencies"""
-        if not self._is_reused:
-            # Create progress bar for main workflows
+        # Detect if workflow has interactive steps to skip progress bars entirely
+        has_interactive = self._has_interactive_steps()
+        
+        if not self._is_reused and not has_interactive:
+            # Create progress bar only for non-interactive workflows
             self._progress = Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -91,6 +94,9 @@ class WorkflowRunner(BaseRunner):
         for idx, stage in enumerate(self._schedule):
             logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
             current_jobs = ", ".join(stage)
+            
+            # Check if any job in this stage has interactive steps
+            stage_has_interactive = self._stage_has_interactive(stage)
 
             for job_id in stage:
                 thread = threading.Thread(
@@ -113,6 +119,7 @@ class WorkflowRunner(BaseRunner):
                     self._completed_steps, current_steps_completed
                 )
                 
+                # Update progress only if progress bar exists (non-interactive workflow)
                 if self._progress and self._progress_id is not None:
                     workflow_prefix = "⚙"
                     self._progress.update(
@@ -206,11 +213,10 @@ class WorkflowRunner(BaseRunner):
             
             self._run_and_monitor_job(job, current_stage_idx, current_stage_jobs)
             job_result = job_runner.get_result()
-            self._job_registry[job_id].update(job_result.model_dump())
-            self._job_registry[job_id]["steps"] = {}
-            self._job_registry[job_id]["steps"].update(
-                job_result.outputs.get("steps", {})
-            )
+            # Optimize: batch registry updates to avoid multiple dict operations
+            result_dump = job_result.model_dump()
+            self._job_registry[job_id].update(result_dump)
+            self._job_registry[job_id]["steps"] = result_dump["outputs"].get("steps", {})
             self._ctx.vars.update({"jobs": self._job_registry})
             return True
         except Exception as e:
@@ -219,6 +225,7 @@ class WorkflowRunner(BaseRunner):
 
     def _run_and_monitor_job(self, job, stage_idx, stage_jobs):
         """Run a job asynchronously and monitor its progress with a progress bar"""
+        # Cache job_id to avoid repeated attribute access
         job_id = job.jid
         job_runner: JobRunner = self._job_registry[job_id]["runner"]
         if not job_runner:
@@ -303,7 +310,8 @@ class WorkflowRunner(BaseRunner):
                     description=f"{indicator}[bold]{job_id}[/bold]{current_step_name}",
                     refresh=True,
                 )
-                asyncio.run(asyncio.sleep(0.05))
+                # Optimize: reduce polling interval from 0.05s to 0.1s
+                asyncio.run(asyncio.sleep(0.1))
 
             job_thread.join()
 
@@ -551,6 +559,21 @@ class WorkflowRunner(BaseRunner):
         self, job_id: str
     ) -> Dict[str, JobRunner | Dict[str, Any]] | None:
         return self._job_registry.get(job_id)
+
+    def _has_interactive_steps(self) -> bool:
+        """Check if workflow contains any interactive steps in single-job stages"""
+        for job in self.model.jobs.values():
+            if any(getattr(step, 'interactive', False) for step in job.steps):
+                return True
+        return False
+    
+    def _stage_has_interactive(self, stage: Set[str]) -> bool:
+        """Check if a stage has interactive steps (only in single-job stages)"""
+        if len(stage) != 1:
+            return False
+        job_id = list(stage)[0]
+        job = self.model.jobs[job_id]
+        return any(getattr(step, 'interactive', False) for step in job.steps)
 
     @property
     def model(self) -> Workflow:

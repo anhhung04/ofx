@@ -29,7 +29,6 @@ class Step(BaseModel):
     max_attempts: int = Field(
         1, description="Maximum number of retry attempts for the step (default: 1, no retries)"
     )
-    run: Optional[str] = Field(None, description="Command(s) to run in the step")
     working_directory: str = Field(
         ".", description="Working directory for the step execution"
     )
@@ -42,12 +41,13 @@ class Step(BaseModel):
     uses: Optional[str] = Field(
         None, description="Select a workflow to run as part of a step in the job"
     )
+    run: Optional[str] = Field(None, description="Command(s) to run in the step")
+    script: Optional[str] = Field(
+        None, description="Script to run in the step (if applicable)"
+    )
     run_with: Dict[str, Any] = Field(
         {},
         description="Define inputs for the step if it uses a reusable workflow",
-    )
-    script: Optional[str] = Field(
-        None, description="Script to run in the step (if applicable)"
     )
     secrets: Union[Dict[str, str], Literal["inherit"]] = Field(
         {},

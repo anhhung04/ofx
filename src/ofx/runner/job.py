@@ -22,15 +22,16 @@ class JobRunner(BaseRunner):
 
     async def _do_run(self):
         for step in self.model.steps:
+            # Optimize: use model_copy with update instead of creating new RunContext
+            step_ctx = self.ctx_vars.model_copy(update={
+                "inputs": {**self.ctx_vars.inputs, **self._resolve_template(step.run_with)},
+                "envs": {**self.ctx_vars.envs, **self._resolve_template(step.env)},
+                "secrets": {**self.ctx_vars.secrets, **self._resolve_template(step.secrets if step.secrets != "inherit" else {})},
+            })
+            
             step_runner = StepRunner(
                 step,
-                RunContext(
-                    inputs={**self.ctx_vars.inputs, **self._resolve_template(step.run_with)},
-                    envs={**self.ctx_vars.envs, **self._resolve_template(step.env)},
-                    output_path=self.ctx_vars.output_path,
-                    secrets={**self.ctx_vars.secrets, **self._resolve_template(step.secrets if step.secrets != "inherit" else {})},
-                    vars=self.ctx_vars.vars,
-                ),
+                step_ctx,
                 self,
             )
             start_time = time.time()
@@ -38,8 +39,10 @@ class JobRunner(BaseRunner):
             result.metadata.update({"duration": int(time.time() - start_time)})
             step_name = step.name
             step_id = step.step_index
+            # Cache the model dump to avoid duplicate serialization
             dump_model = result.model_dump()
             self._step_registry[step_id] = dump_model
+            # Reuse the same dump if step has custom ID
             if step.id:
                 self._step_registry[step.id] = dump_model
             self._processed_steps += 1

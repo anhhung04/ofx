@@ -410,7 +410,7 @@ def format_parameters(params: List[Dict[str, Any]]) -> Table:
     table.add_column("Default", style="blue", justify="left")
 
     for param in params:
-        required = "[green]✓[/green]" if param["required"] else "[red]✗[/red]"
+        required = "[green][OK][/green]" if param["required"] else "[red][FAIL][/red]"
         default = param["default"] if param["default"] else "[dim]-[/dim]"
         table.add_row(param["name"], param["type"], required, default)
 
@@ -427,7 +427,7 @@ def format_model(schema: List[Dict[str, Any]]) -> Table:
     table.add_column("Description", style="white", justify="left")
 
     for field in schema:
-        required = "[green]✓[/green]" if field["required"] else "[red]✗[/red]"
+        required = "[green][OK][/green]" if field["required"] else "[red][FAIL][/red]"
         default = (
             str(field["default"]) if field["default"] is not None else "[dim]-[/dim]"
         )
@@ -702,10 +702,10 @@ def serve(
         
         index_file = site_dir / "index.html"
         if not index_file.exists():
-            console.print(f"[red]❌ index.html not found in {site_dir}[/red]")
+            console.print(f"[red][ERROR] index.html not found in {site_dir}[/red]")
             raise typer.Exit(1)
         
-        console.print(f"[cyan]🚀 Documentation available at http://{host}:{port}[/cyan]")
+        console.print(f"[cyan]Documentation available at http://{host}:{port}[/cyan]")
         console.print("[dim]Press Ctrl+C to stop[/dim]\n")
         
         # Create HTTP server handler
@@ -718,14 +718,15 @@ def serve(
             httpd.serve_forever()
         
     except KeyboardInterrupt:
-        console.print("\n[yellow]📡 Documentation server stopped[/yellow]")
+        httpd.server_close()
+        console.print("\n[yellow]Documentation server stopped[/yellow]")
     except OSError as e:
         if "Address already in use" in str(e):
-            console.print(f"[red]❌ Port {port} is already in use[/red]")
+            console.print(f"[red][ERROR] Port {port} is already in use[/red]")
             console.print(f"Try a different port: [cyan]ofx docs serve --port {port + 1}[/cyan]")
         else:
-            console.print(f"[red]❌ Error: {e}[/red]")
+            console.print(f"[red][ERROR] Error: {e}[/red]")
         raise typer.Exit(1)
     except Exception as e:
-        console.print(f"[red]❌ Error: {e}[/red]")
+        console.print(f"[red][ERROR] Error: {e}[/red]")
         raise typer.Exit(1)

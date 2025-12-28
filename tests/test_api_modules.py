@@ -205,7 +205,7 @@ class TestNetworkModule:
 
         from ofx.api.network import reverse_shell
 
-        assert asyncio.iscoroutinefunction(reverse_shell)
+        assert callable(reverse_shell) and not asyncio.iscoroutinefunction(reverse_shell)
 
 
 class TestHttpServerModule:

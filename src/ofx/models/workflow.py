@@ -54,7 +54,6 @@ class Workflow(BaseModel):
     description: str = Field(
         "No provided description", description="Description of the workflow"
     )
-    schedule: str = Field("", description="Cron schedule for the workflow")
     env: Dict[str, str] = Field(
         default={}, description="Environment variables for the workflow"
     )

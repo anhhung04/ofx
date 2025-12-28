@@ -240,7 +240,7 @@ hooks:
     script: |
       print(f"Starting workflow at {datetime.now()}")
       print(f"Target: {ctx.inputs['target']}")
-    language: python
+    script:
   
   on_success:
     script: echo "Workflow completed successfully!"
@@ -250,7 +250,7 @@ hooks:
     script: |
       import sys
       print(f"Error occurred: {error}", file=sys.stderr)
-    language: python
+    script:
 
 jobs:
   # ... job definitions

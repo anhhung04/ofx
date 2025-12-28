@@ -116,7 +116,7 @@ steps:
       print(f"Scanning {ctx.inputs['target']}")
       print(f"Ports: {ctx.inputs['ports']}")
       print(f"Type: {ctx.inputs['scan_type']}")
-    language: python
+    script:
 ```
 
 ### Input Validation
@@ -140,7 +140,7 @@ jobs:
             sys.exit(1)
           
           print(f"✓ Valid target: {target}")
-        language: python
+        script:
       
       - name: Validate ports
         script: |
@@ -276,7 +276,7 @@ steps:
       )
       
       print(response.json())
-    language: python
+    script:
 ```
 
 ### Secret Security
@@ -397,7 +397,7 @@ jobs:
             sys.exit(1)
           
           print("✓ All inputs valid")
-        language: python
+        script:
   
   main_work:
     needs: [validate_inputs]

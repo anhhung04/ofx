@@ -230,3 +230,92 @@ class SecretManager:
             "count": len(SecretManager.list(store_path)),
         }
         return info
+
+    @staticmethod
+    def backup(output_path: Path, store_path: Optional[Path] = None) -> int:
+        """Create an encrypted backup of all secrets with metadata"""
+        store = SecretStore.get_instance(store_path)
+        secrets = store.export_unencrypted()
+
+        if not secrets:
+            return 0
+
+        # Create backup data with metadata
+        from datetime import datetime
+        backup_data = {
+            "metadata": {
+                "version": "1.0",
+                "created": datetime.now().isoformat(),
+                "count": len(secrets),
+                "type": "ofx-secret-backup"
+            },
+            "secrets": secrets
+        }
+
+        # Encrypt and save
+        json_data = json.dumps(backup_data, indent=2).encode()
+        encrypted_data = store._get_cipher().encrypt(json_data)
+        output_path.write_bytes(encrypted_data)
+        output_path.chmod(0o600)
+
+        return len(secrets)
+
+    @staticmethod
+    def restore(backup_path: Path, overwrite: bool = False, store_path: Optional[Path] = None) -> int:
+        """Restore secrets from an encrypted backup"""
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        store = SecretStore.get_instance(store_path)
+
+        # Decrypt backup
+        encrypted_data = backup_path.read_bytes()
+        decrypted_data = store._get_cipher().decrypt(encrypted_data)
+        backup_data = json.loads(decrypted_data.decode())
+
+        # Validate backup format
+        if not isinstance(backup_data, dict) or "secrets" not in backup_data:
+            raise ValueError("Invalid backup file format")
+
+        secrets = backup_data["secrets"]
+        existing = store.list()
+
+        # Import secrets
+        imported = 0
+        for name, value in secrets.items():
+            if name not in existing or overwrite:
+                store.set(name, value)
+                imported += 1
+
+        return imported
+
+    @staticmethod
+    def get_backup_info(backup_path: Path, store_path: Optional[Path] = None) -> Dict[str, Any]:
+        """Get information about a backup file without restoring it"""
+        if not backup_path.exists():
+            raise FileNotFoundError(f"Backup file not found: {backup_path}")
+
+        store = SecretStore.get_instance(store_path)
+
+        # Decrypt backup to read metadata
+        encrypted_data = backup_path.read_bytes()
+        decrypted_data = store._get_cipher().decrypt(encrypted_data)
+        backup_data = json.loads(decrypted_data.decode())
+
+        # Validate backup format
+        if not isinstance(backup_data, dict) or "metadata" not in backup_data:
+            raise ValueError("Invalid backup file format")
+
+        metadata = backup_data["metadata"]
+        secrets = backup_data.get("secrets", {})
+
+        from datetime import datetime
+        created = datetime.fromisoformat(metadata["created"])
+
+        return {
+            "created": created,
+            "count": metadata.get("count", len(secrets)),
+            "size": backup_path.stat().st_size,
+            "version": metadata.get("version", "unknown"),
+            "secrets": secrets
+        }

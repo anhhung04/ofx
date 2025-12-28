@@ -9,6 +9,18 @@
          <lastmod>2025-12-27</lastmod>
     </url>
     <url>
+         <loc>https://ofx.readthedocs.io/advanced/performance/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/advanced/performance/troubleshooting/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/advanced/performance/tuning/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
          <loc>https://ofx.readthedocs.io/api/exploitation/</loc>
          <lastmod>2025-12-27</lastmod>
     </url>
@@ -25,7 +37,67 @@
          <lastmod>2025-12-27</lastmod>
     </url>
     <url>
+         <loc>https://ofx.readthedocs.io/api/exploitation/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/exploitation/http/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/exploitation/shellcode/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/exploitation/webshell/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/post-exploitation/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/post-exploitation/file/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/post-exploitation/utils/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/post-exploitation/workflow/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/reconnaissance/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/reconnaissance/fofa/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/reconnaissance/shodan/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/api/reconnaissance/zoomeye/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
          <loc>https://ofx.readthedocs.io/cli/commands/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/cli/commands/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/cli/commands/init/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/cli/commands/run/</loc>
          <lastmod>2025-12-27</lastmod>
     </url>
     <url>
@@ -37,11 +109,31 @@
          <lastmod>2025-12-27</lastmod>
     </url>
     <url>
+         <loc>https://ofx.readthedocs.io/getting-started/concepts/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/getting-started/concepts/architecture/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/getting-started/quickstart/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/getting-started/quickstart/examples/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
          <loc>https://ofx.readthedocs.io/guide/extending-data-modules/</loc>
          <lastmod>2025-12-27</lastmod>
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/guide/hooks/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/</loc>
          <lastmod>2025-12-27</lastmod>
     </url>
     <url>
@@ -58,6 +150,114 @@
     </url>
     <url>
          <loc>https://ofx.readthedocs.io/guide/workflows/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/extending-data-modules/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/extending-data-modules/custom-connectors/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/extending-data-modules/data-directory/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/hooks/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/hooks/examples/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/hooks/lifecycle/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/best-practices/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/detection/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/error-handling/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/examples/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/limitations/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/interactive-mode/usage/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/jobs-steps/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/jobs-steps/jobs/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/jobs-steps/outputs/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/jobs-steps/steps/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/secrets-inputs/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/secrets-inputs/inputs/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/secrets-inputs/secrets/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/templates/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/templates/examples/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/templates/jinja/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/workflows/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/workflows/dependencies/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/workflows/examples/</loc>
+         <lastmod>2025-12-27</lastmod>
+    </url>
+    <url>
+         <loc>https://ofx.readthedocs.io/guide/workflows/stages/</loc>
          <lastmod>2025-12-27</lastmod>
     </url>
 </urlset>

@@ -1,10 +1,10 @@
 """Command and script runners for executing shell commands and Python scripts"""
 
+import asyncio
 import base64
 import logging
 import shlex
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -49,48 +49,67 @@ class CommandRunner(BaseRunner):
         if not self._shell or not Path(self._shell).exists():
             raise RuntimeError(f"Shell not found: {self._shell}")
         
-        args = [self._shell, "-c", self._cmd]
-        
         try:
             if self._interactive:
                 # Interactive mode: direct TTY passthrough
                 logger.info(self._produce_log("Running in interactive mode (stdin/stdout connected to terminal)"))
-                output = subprocess.run(
-                    args,
+                proc = await asyncio.create_subprocess_shell(
+                    self._cmd,
+                    executable=self._shell,
                     cwd=self._cwd,
                     env=self.ctx_vars.envs,
-                    timeout=self._timeout_minutes * 60,
-                    stdin=sys.stdin,   # Direct terminal input
-                    stdout=sys.stdout, # Direct terminal output
-                    stderr=sys.stderr, # Direct terminal errors
+                    stdin=sys.stdin,
+                    stdout=sys.stdout,
+                    stderr=sys.stderr,
                 )
-                exit_code = output.returncode
+                
+                try:
+                    exit_code = await asyncio.wait_for(proc.wait(), self._timeout_minutes * 60)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes")
+                
                 stdout = "[Interactive mode - output shown in real-time]"
                 stderr = ""
             else:
                 # Normal mode: capture output
-                output = subprocess.run(
-                    args,
+                proc = await asyncio.create_subprocess_shell(
+                    self._cmd,
+                    executable=self._shell,
                     cwd=self._cwd,
                     env=self.ctx_vars.envs,
-                    timeout=self._timeout_minutes * 60,
-                    capture_output=True,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                exit_code = output.returncode
                 
                 try:
-                    stderr = output.stderr.decode("utf-8").strip()
-                    stdout = output.stdout.decode("utf-8").strip()
+                    stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), self._timeout_minutes * 60)
+                    exit_code = proc.returncode
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    await proc.wait()
+                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes")
+
+                try:
+                    stderr = stderr_bytes.decode("utf-8").strip()
+                    stdout = stdout_bytes.decode("utf-8").strip()
                 except UnicodeDecodeError:
-                    stderr = base64.b64encode(output.stderr).decode("utf-8")
-                    stdout = base64.b64encode(output.stdout).decode("utf-8")
+                    stderr = base64.b64encode(stderr_bytes).decode("utf-8")
+                    stdout = base64.b64encode(stdout_bytes).decode("utf-8")
                     self._result.outputs["binary_output"] = True
             
-            if output.returncode != 0:
-                stderr = stderr or f"Command failed with exit code {output.returncode}"
-                raise RuntimeError(f"Command failed: {stderr}")
+            # In interactive mode, treat exit 0, 130 (SIGINT), and 127 (exit/quit/command not found) as clean exits
+            if self._interactive:
+                if exit_code not in (0, 130, 127):
+                    stderr = stderr or f"Command failed with exit code {exit_code}"
+                    raise RuntimeError(f"Command failed: {stderr}")
+            else:
+                if exit_code != 0:
+                    stderr = stderr or f"Command failed with exit code {exit_code}"
+                    raise RuntimeError(f"Command failed: {stderr}")
                 
-        except subprocess.TimeoutExpired:
+        except asyncio.TimeoutError:
             raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes")
         except RuntimeError:
             raise

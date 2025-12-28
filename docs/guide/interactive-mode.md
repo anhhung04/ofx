@@ -1,62 +1,20 @@
-# Interactive Mode
-
-OFX supports interactive mode for steps, allowing stdin/stdout passthrough for interactive commands like shells, REPLs, or tools that require user input.
-
-## Overview
-
-Interactive mode is **automatically enabled** when:
-1. A step has `interactive: true` flag set
-2. The job containing the step is **alone in its execution stage** (no parallel jobs)
-
-This prevents conflicts from multiple jobs trying to use stdin/stdout simultaneously.
-
-## Basic Usage
-
-### Interactive Shell
-
-```yaml
-name: Interactive Shell Example
-
 jobs:
-  shell_session:
-    steps:
-      - name: Start Bash Shell
-        run: bash
-        interactive: true
-        timeout: 10  # Optional timeout in minutes
-```
-
-### Interactive Python REPL
-
-```yaml
-name: Python REPL Example
-
 jobs:
-  python_session:
-    steps:
-      - name: Start Python REPL
-        run: python3
-        interactive: true
-        
-      - name: Continue After REPL
-        run: echo "Session completed"
-```
-
-### Interactive Tool
-
-```yaml
-name: Run Interactive Tool
-
 jobs:
-  exploit_tool:
-    steps:
-      - name: Use Metasploit Console
-        run: msfconsole
-        interactive: true
-        timeout: 30
-```
 
-## How It Works
+# Interactive Mode Documentation
+
+This documentation has been split into multiple focused modules for easier searching and referencing:
+
+- [Overview](interactive-mode/index.md)
+- [Usage](interactive-mode/usage.md)
+- [Detection & Execution](interactive-mode/detection.md)
+- [Limitations](interactive-mode/limitations.md)
+- [Examples](interactive-mode/examples.md)
+- [Best Practices](interactive-mode/best-practices.md)
+- [Error Handling & Troubleshooting](interactive-mode/error-handling.md)
+
+Please see the above pages for details, YAML examples, and troubleshooting tips.
 
 ### Single-Job Stage Detection
 
@@ -310,6 +268,31 @@ jobs:
       - run: ./cleanup.sh
 ```
 
+## Error Handling & Exit Codes
+
+OFX handles interactive shell exits gracefully:
+
+- **Exit (exit/quit/close shell):** Exiting the shell (typing `exit`, `Ctrl+D`, or closing the terminal) is treated as a clean exit. The workflow continues to the next step or job.
+- **Ctrl+C (SIGINT):** Pressing `Ctrl+C` in an interactive session (exit code 130) is also treated as a clean exit.
+- **Command Not Found (127):** If you type a command that does not exist, the shell will show an error, but exiting the shell itself is not an error.
+- **Other Errors:** Any other nonzero exit code is treated as a failure and will stop the job unless `continue_on_error: true` is set.
+
+### Example: Handling Shell Exit
+
+```yaml
+jobs:
+  interactive_shell:
+    steps:
+      - name: Start Interactive Bash
+        run: bash
+        interactive: true
+        timeout: 10
+      - name: After Shell
+        run: echo "Shell session ended cleanly!"
+```
+
+If you type `exit` or press `Ctrl+D` in the shell, the workflow will continue to the next step. If you run an invalid command, you'll see an error, but you can still exit cleanly.
+
 ## Troubleshooting
 
 ### Interactive Mode Not Working
@@ -346,6 +329,12 @@ Look for log messages indicating parallel execution. If jobs run in parallel, ad
   run: python3 -i  # -i flag for interactive
   interactive: true
 ```
+
+### Shell Exit Handling
+
+**Problem:** Exiting the shell with `exit` or `Ctrl+D` causes an error in the workflow.
+
+**Solution:** As of vX.Y.Z, OFX treats exit codes 0, 127, and 130 as clean exits in interactive mode. You can safely exit the shell and the workflow will continue. Only unexpected errors will stop the workflow.
 
 ## See Also
 

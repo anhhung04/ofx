@@ -61,8 +61,8 @@ markdown_extensions:
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: "twemoji"
+      emoji_generator: "to_svg"
   - tables
   - toc:
       permalink: true
@@ -75,22 +75,69 @@ plugins:
 nav:
   - Home: index.md
   - Getting Started:
-      - Quick Start: getting-started/quickstart.md
-      - Basic Concepts: getting-started/concepts.md
+      - Quick Start: getting-started/quickstart/index.md
+      - Quickstart Examples: getting-started/quickstart/examples.md
+      - Basic Concepts: getting-started/concepts/index.md
+      - Architecture: getting-started/concepts/architecture.md
   - User Guide:
-      - Workflows: guide/workflows.md
-      - Jobs & Steps: guide/jobs-steps.md
-      - Hooks System: guide/hooks.md
-      - Templates: guide/templates.md
-      - Secrets & Inputs: guide/secrets-inputs.md
-      - Interactive Mode: guide/interactive-mode.md
-      - Extending Data Modules: guide/extending-data-modules.md
+      - Workflows:
+          - Overview: guide/workflows/index.md
+          - Dependencies: guide/workflows/dependencies.md
+          - Stages: guide/workflows/stages.md
+          - Examples: guide/workflows/examples.md
+      - Jobs & Steps:
+          - Overview: guide/jobs-steps/index.md
+          - Jobs: guide/jobs-steps/jobs.md
+          - Steps: guide/jobs-steps/steps.md
+          - Outputs: guide/jobs-steps/outputs.md
+      - Hooks System:
+          - Overview: guide/hooks/index.md
+          - Lifecycle: guide/hooks/lifecycle.md
+          - Examples: guide/hooks/examples.md
+      - Templates:
+          - Overview: guide/templates/index.md
+          - Jinja Templates: guide/templates/jinja.md
+          - Examples: guide/templates/examples.md
+      - Secrets & Inputs:
+          - Overview: guide/secrets-inputs/index.md
+          - Secrets: guide/secrets-inputs/secrets.md
+          - Inputs: guide/secrets-inputs/inputs.md
+      - Interactive Mode:
+          - Overview: guide/interactive-mode/index.md
+          - Usage: guide/interactive-mode/usage.md
+          - Detection & Execution: guide/interactive-mode/detection.md
+          - Limitations: guide/interactive-mode/limitations.md
+          - Examples: guide/interactive-mode/examples.md
+          - Best Practices: guide/interactive-mode/best-practices.md
+          - Error Handling & Troubleshooting: guide/interactive-mode/error-handling.md
+      - Extending Data Modules:
+          - Overview: guide/extending-data-modules/index.md
+          - Custom Connectors: guide/extending-data-modules/custom-connectors.md
+          - Data Directory: guide/extending-data-modules/data-directory.md
   - Red Teaming APIs:
       - Overview: api/overview.md
-      - Reconnaissance: api/reconnaissance.md
-      - Exploitation: api/exploitation.md
-      - Post-Exploitation: api/post-exploitation.md
+      - Reconnaissance:
+          - Overview: api/reconnaissance/index.md
+          - FOFA: api/reconnaissance/fofa.md
+          - Shodan: api/reconnaissance/shodan.md
+          - ZoomEye: api/reconnaissance/zoomeye.md
+      - Exploitation:
+          - Overview: api/exploitation/index.md
+          - Shellcode: api/exploitation/shellcode.md
+          - Webshell: api/exploitation/webshell.md
+          - HTTP Client: api/exploitation/http.md
+      - Post-Exploitation:
+          - Overview: api/post-exploitation/index.md
+          - File Operations: api/post-exploitation/file.md
+          - Utilities: api/post-exploitation/utils.md
+          - Workflow Integration: api/post-exploitation/workflow.md
   - CLI Reference:
-      - Commands: cli/commands.md
+      - Commands:
+          - Overview: cli/commands/index.md
+          - Run: cli/commands/run.md
+          - Init: cli/commands/init.md
   - Advanced:
-      - Performance: advanced/performance.md
+      - Performance:
+          - Overview: advanced/performance/index.md
+          - Tuning: advanced/performance/tuning.md
+          - Troubleshooting: advanced/performance/troubleshooting.md

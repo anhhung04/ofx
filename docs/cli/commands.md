@@ -8,7 +8,7 @@ OFX provides a comprehensive command-line interface for workflow execution, proj
 |---------|-------------|---------|
 | **flow** (x, task) | run, validate, update, tools | Execute and manage workflows |
 | **project** | init, sync, list, remove | Manage Red Team projects |
-| **secret** | set, get, list, delete, export, import, clear, store, migrate | Manage encrypted secrets |
+| **secret** | set, get, list, search, delete, export, import, backup, restore, history, clear, store, migrate | Manage encrypted secrets |
 | **dump** | schema, flow | Display workflow schemas and configurations |
 | **docs** | serve, api | Access documentation and API reference |
 | **asset** | init | Initialize OFX assets |
@@ -317,21 +317,70 @@ ofx secret get AWS_CREDENTIALS --show
 
 ### secret list
 
-List all stored secrets.
+List all stored secrets with optional filtering and searching.
 
 ```bash
-ofx secret list
+ofx secret list [options]
 ```
+
+**Options:**
+- `-f, --filter <type>` - Filter by type (string, json, api-key, password, token)
+- `-s, --search <pattern>` - Search in secret names (case-insensitive)
+- `--show-values` - Show secret values (WARNING: displays sensitive data)
 
 **Output:**
 - Secret names
-- Value types (String, JSON)
+- Value types (string, json, api-key, password, token)
 
 **Examples:**
 
 ```bash
 # List all secrets
 ofx secret list
+
+# Filter by type
+ofx secret list --filter json
+ofx secret list --filter password
+
+# Search by name pattern
+ofx secret list --search api
+ofx secret list --search "*token*"
+
+# Show values (use with caution)
+ofx secret list --show-values
+```
+
+### secret search
+
+Search for secrets by name pattern with wildcard support.
+
+```bash
+ofx secret search <pattern> [options]
+```
+
+**Arguments:**
+- `pattern` (required) - Search pattern (supports wildcards: `*` and `?`)
+
+**Options:**
+- `--show-values` - Show secret values (WARNING: displays sensitive data)
+
+**Description:**
+Performs pattern matching on secret names using wildcards. `*` matches any sequence of characters, `?` matches any single character.
+
+**Examples:**
+
+```bash
+# Search for all secrets containing "api"
+ofx secret search "*api*"
+
+# Search for secrets starting with "aws"
+ofx secret search "aws*"
+
+# Search for exact match
+ofx secret search "github_token"
+
+# Show values for matching secrets
+ofx secret search "*key*" --show-values
 ```
 
 ### secret delete
@@ -412,6 +461,96 @@ ofx secret import secrets_backup.json --merge
 
 # Import without confirmation
 ofx secret import secrets_backup.json --force
+```
+
+### secret backup
+
+Create an encrypted backup of all secrets with timestamp.
+
+```bash
+ofx secret backup [options]
+```
+
+**Options:**
+- `-o, --output <path>` - Output file path (default: auto-generated with timestamp)
+- `--plain` - Export without encryption (not recommended)
+
+**Description:**
+Creates a timestamped, encrypted backup of all secrets. The backup includes metadata like creation time and can be restored later. Backups are stored in the OFX secrets directory by default.
+
+**Examples:**
+
+```bash
+# Create backup with auto-generated name
+ofx secret backup
+
+# Create backup with custom name
+ofx secret backup --output my_backup.json
+
+# Create unencrypted backup (not recommended)
+ofx secret backup --plain --output plain_backup.json
+```
+
+### secret restore
+
+Restore secrets from a backup file with conflict resolution.
+
+```bash
+ofx secret restore <file> [options]
+```
+
+**Arguments:**
+- `file` (required) - Path to backup file
+
+**Options:**
+- `--strategy <mode>` - Conflict resolution strategy (skip, overwrite, rename)
+- `-f, --force` - Skip confirmation prompts
+
+**Description:**
+Restores secrets from a backup file. Supports different conflict resolution strategies when secrets already exist.
+
+**Examples:**
+
+```bash
+# Restore with default strategy (overwrite)
+ofx secret restore backup_20241227_143022.json
+
+# Skip existing secrets
+ofx secret restore backup.json --strategy skip
+
+# Rename conflicting secrets
+ofx secret restore backup.json --strategy rename
+
+# Force restore without confirmation
+ofx secret restore backup.json --force
+```
+
+### secret history
+
+View backup history and manage backup files.
+
+```bash
+ofx secret history [options]
+```
+
+**Options:**
+- `--clean` - Remove old backup files (keep last 10)
+- `--list` - Show detailed backup information
+
+**Description:**
+Displays information about existing backups, including creation time, size, and status. Can also clean up old backups.
+
+**Examples:**
+
+```bash
+# Show backup history
+ofx secret history
+
+# Show detailed backup info
+ofx secret history --list
+
+# Clean old backups
+ofx secret history --clean
 ```
 
 ### secret clear

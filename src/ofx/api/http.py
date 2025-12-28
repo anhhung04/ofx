@@ -7,7 +7,6 @@ Optimized for red teaming operations with:
 - Custom headers and timeouts
 """
 
-import asyncio
 import time
 from typing import Any, Dict, Optional
 from functools import lru_cache
@@ -20,7 +19,6 @@ from ofx.exceptions import APIError, TimeoutError as OFXTimeoutError
 
 # Singleton HTTP clients with connection pooling
 _http_client: Optional[httpx.Client] = None
-_async_http_client: Optional[httpx.AsyncClient] = None
 
 
 def get_http_client(
@@ -43,35 +41,12 @@ def get_http_client(
     return _http_client
 
 
-def get_async_http_client(
-    timeout: int = 30,
-    max_connections: int = 100,
-    max_keepalive_connections: int = 20,
-) -> httpx.AsyncClient:
-    """Get or create a reusable async HTTP client with connection pooling."""
-    global _async_http_client
-    if _async_http_client is None:
-        limits = httpx.Limits(
-            max_connections=max_connections,
-            max_keepalive_connections=max_keepalive_connections,
-        )
-        _async_http_client = httpx.AsyncClient(
-            timeout=timeout,
-            limits=limits,
-            follow_redirects=True,
-        )
-    return _async_http_client
-
-
 def close_http_clients():
     """Close all HTTP clients and free resources."""
-    global _http_client, _async_http_client
+    global _http_client
     if _http_client:
         _http_client.close()
         _http_client = None
-    if _async_http_client:
-        asyncio.create_task(_async_http_client.aclose())
-        _async_http_client = None
 
 
 class RateLimiter:
@@ -88,14 +63,6 @@ class RateLimiter:
         elapsed = now - self.last_call
         if elapsed < self.min_interval:
             time.sleep(self.min_interval - elapsed)
-        self.last_call = time.time()
-    
-    async def await_wait(self):
-        """Async version of wait."""
-        now = time.time()
-        elapsed = now - self.last_call
-        if elapsed < self.min_interval:
-            await asyncio.sleep(self.min_interval - elapsed)
         self.last_call = time.time()
 
 
@@ -176,46 +143,6 @@ def fetch(
     return _fetch()
 
 
-async def fetch_async(
-    url: str,
-    max_retries: int = 3,
-    timeout: int = 30,
-    rate_limit: Optional[float] = None,
-    **kwargs
-) -> str:
-    """Async version of fetch with retry logic and connection pooling."""
-    client = get_async_http_client(timeout=timeout)
-    
-    if rate_limit:
-        limiter = get_rate_limiter(rate_limit)
-        await limiter.await_wait()
-    
-    last_exception = None
-    backoff_factor = 2.0
-    
-    for attempt in range(max_retries + 1):
-        try:
-            response = await client.get(url, **kwargs)
-            response.raise_for_status()
-            return response.text
-        except httpx.TimeoutException as e:
-            last_exception = OFXTimeoutError(f"Request to {url} timed out", timeout_seconds=timeout)
-        except httpx.HTTPStatusError as e:
-            last_exception = APIError(
-                f"HTTP {e.response.status_code} error for {url}",
-                status_code=e.response.status_code,
-                response=e.response.text
-            )
-        except httpx.RequestError as e:
-            last_exception = APIError(f"Request failed: {str(e)}")
-        
-        if attempt < max_retries:
-            wait_time = backoff_factor ** attempt
-            await asyncio.sleep(wait_time)
-    
-    raise last_exception
-
-
 def post(
     url: str,
     data: Dict[str, Any] | str,
@@ -262,11 +189,9 @@ requests = httpx
 
 __all__ = [
     "fetch",
-    "fetch_async",
     "post",
     "requests",
     "get_http_client",
-    "get_async_http_client",
     "close_http_clients",
     "RateLimiter",
     "retry_with_backoff",
