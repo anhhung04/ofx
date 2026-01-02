@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import Any, Dict
+from typing import Any
 
 from ofx.models.job import Job
 from ofx.runner.base import BaseRunner
@@ -17,18 +17,18 @@ class JobRunner(BaseRunner):
     def __init__(self, job: Job, ctx: RunContext, parent: BaseRunner | None = None):
         super().__init__(job, ctx, parent)
         self._model = job
-        self._step_registry: Dict[str, Any] = {}
+        self._step_registry: dict[str, Any] = {}
         self._processed_steps = 0
 
     async def _do_run(self):
         for step in self.model.steps:
             # Optimize: use model_copy with update instead of creating new RunContext
             step_ctx = self.ctx_vars.model_copy(update={
-                "inputs": {**self.ctx_vars.inputs, **self._resolve_template(step.run_with)},
-                "envs": {**self.ctx_vars.envs, **self._resolve_template(step.env)},
-                "secrets": {**self.ctx_vars.secrets, **self._resolve_template(step.secrets if step.secrets != "inherit" else {})},
+                "inputs": self.ctx_vars.inputs | await self._resolve_template(step.run_with),
+                "envs": self.ctx_vars.envs | await self._resolve_template(step.env),
+                "secrets": self.ctx_vars.secrets | await self._resolve_template(step.secrets if step.secrets != "inherit" else {}),
             })
-            
+
             step_runner = StepRunner(
                 step,
                 step_ctx,
@@ -52,10 +52,10 @@ class JobRunner(BaseRunner):
                 raise RuntimeError(self._produce_log(f"(step '{step_name}') -> job execution stopped due to step failure: {self._error}"))
 
     async def _pre_run(self):
-        self._resolve_template_fields(["name", "needs", "run_if", "env"])
+        await self._resolve_template_fields(["name", "needs", "run_if", "env"])
         for idx, step in enumerate(self._model.steps):
-            self._model.steps[idx].name = self._resolve_template(step.name)
-            self._model.steps[idx].id = self._resolve_template(step.id)
+            self._model.steps[idx].name = await self._resolve_template(step.name)
+            self._model.steps[idx].id = await self._resolve_template(step.id)
         self._ctx.envs.update(self.model.env)
         logger.debug(self._produce_log(f"Resolved job: {self.model.model_dump()}"))
         if self.model.needs:
@@ -70,7 +70,7 @@ class JobRunner(BaseRunner):
             if len(unmet_deps) > 0:
                 raise RuntimeError(f"Job cannot run because dependencies are not met: {unmet_deps}")
         if not eval(str(self._model.run_if)):
-            raise RuntimeError(self._produce_log(f"Job condition is not met"))
+            raise RuntimeError(self._produce_log("Job condition is not met"))
         # Pre-fetch needs to avoid repeated attribute checks
         needs_data = {}
         if self.model.needs and self.parent and hasattr(self.parent, "get_job_from_registry"):
@@ -87,7 +87,7 @@ class JobRunner(BaseRunner):
         self._result.outputs.update({"steps": self._step_registry})
         if self.model.outputs:
             for key, value in self.model.outputs.items():
-                self._result.outputs[key] = self._resolve_template(value)
+                self._result.outputs[key] = await self._resolve_template(value)
         logger.debug(self._produce_log(f"job '{self.model.name or self.model.jid}' result: {self._result}"))
 
     def _produce_log(self, message: Any) -> str:
@@ -100,11 +100,11 @@ class JobRunner(BaseRunner):
     @property
     def processed_steps(self) -> int:
         return self._processed_steps
-    
+
     @property
     def total_steps(self) -> int:
         return len(self.model.steps)
-    
+
     @property
     def model(self) -> Job:
         return self._model

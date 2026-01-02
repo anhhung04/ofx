@@ -4,7 +4,6 @@ import asyncio
 import base64
 import logging
 import shlex
-import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -20,9 +19,9 @@ logger = logging.getLogger(settings.app_branding)
 
 class CommandRunner(BaseRunner):
     """Optimized command runner with caching."""
-    
+
     _shell_cache: dict[str, str] = {}  # Cache resolved shells
-    
+
     def __init__(
         self,
         cmd: str,
@@ -45,10 +44,10 @@ class CommandRunner(BaseRunner):
         stderr = ""
         stdout = ""
         exit_code = None
-        
+
         if not self._shell or not Path(self._shell).exists():
-            raise RuntimeError(f"Shell not found: {self._shell}")
-        
+            raise RuntimeError(f"Shell not found: {self._shell}") from None
+
         try:
             if self._interactive:
                 # Interactive mode: direct TTY passthrough
@@ -62,14 +61,14 @@ class CommandRunner(BaseRunner):
                     stdout=sys.stdout,
                     stderr=sys.stderr,
                 )
-                
+
                 try:
                     exit_code = await asyncio.wait_for(proc.wait(), self._timeout_minutes * 60)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes")
-                
+                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+
                 stdout = "[Interactive mode - output shown in real-time]"
                 stderr = ""
             else:
@@ -82,39 +81,63 @@ class CommandRunner(BaseRunner):
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                
+
                 try:
                     stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), self._timeout_minutes * 60)
                     exit_code = proc.returncode
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes")
+                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+
+                # Apply output size limits to prevent memory exhaustion
+                max_size = self.ctx_vars.get("max_output_size", 10 * 1024 * 1024)  # 10MB default
 
                 try:
                     stderr = stderr_bytes.decode("utf-8").strip()
                     stdout = stdout_bytes.decode("utf-8").strip()
+
+                    # Truncate outputs if they exceed the limit
+                    if len(stdout_bytes) > max_size:
+                        stdout = stdout_bytes[:max_size].decode("utf-8", errors="ignore") + "\n... [OUTPUT TRUNCATED]"
+                        self._result.outputs["output_truncated"] = True
+
+                    if len(stderr_bytes) > max_size:
+                        stderr = stderr_bytes[:max_size].decode("utf-8", errors="ignore") + "\n... [STDERR TRUNCATED]"
+                        self._result.outputs["stderr_truncated"] = True
+
                 except UnicodeDecodeError:
-                    stderr = base64.b64encode(stderr_bytes).decode("utf-8")
-                    stdout = base64.b64encode(stdout_bytes).decode("utf-8")
-                    self._result.outputs["binary_output"] = True
-            
+                    # Handle binary output
+                    if len(stdout_bytes) > max_size:
+                        stdout = base64.b64encode(stdout_bytes[:max_size]).decode("utf-8") + "... [BINARY OUTPUT TRUNCATED]"
+                        self._result.outputs["binary_output"] = True
+                        self._result.outputs["output_truncated"] = True
+                    else:
+                        stdout = base64.b64encode(stdout_bytes).decode("utf-8")
+                        self._result.outputs["binary_output"] = True
+
+                    if len(stderr_bytes) > max_size:
+                        stderr = base64.b64encode(stderr_bytes[:max_size]).decode("utf-8") + "... [BINARY STDERR TRUNCATED]"
+                        self._result.outputs["stderr_truncated"] = True
+                    else:
+                        stderr = base64.b64encode(stderr_bytes).decode("utf-8")
+
             # In interactive mode, treat exit 0, 130 (SIGINT), and 127 (exit/quit/command not found) as clean exits
             if self._interactive:
                 if exit_code not in (0, 130, 127):
                     stderr = stderr or f"Command failed with exit code {exit_code}"
-                    raise RuntimeError(f"Command failed: {stderr}")
+                    raise RuntimeError(f"Command failed: {stderr}") from None
             else:
                 if exit_code != 0:
                     stderr = stderr or f"Command failed with exit code {exit_code}"
-                    raise RuntimeError(f"Command failed: {stderr}")
-                
-        except asyncio.TimeoutError:
-            raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes")
+                    raise RuntimeError(f"Command failed: {stderr}") from None
+
+        except TimeoutError:
+            raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
         except RuntimeError:
             raise
         except Exception as e:
-            raise RuntimeError(f"Command error: {str(e)}")
+            raise RuntimeError(f"Command error: {str(e)}") from e
         finally:
             # Always update outputs, even on error
             self._result.outputs.update({
@@ -145,7 +168,7 @@ class CommandRunner(BaseRunner):
         """Resolve shell path from hierarchy or use default /bin/bash"""
         if self._shell:
             return self._shell
-        
+
         parent = getattr(self, 'parent', None)
         if parent and getattr(parent, 'parent', None):
             grandparent = parent.parent
@@ -156,7 +179,7 @@ class CommandRunner(BaseRunner):
                     parent_shell = getattr(defaults.run, 'shell', None)
                     if parent_shell:
                         return parent_shell
-        
+
         return "/bin/bash"
 
 
@@ -168,7 +191,7 @@ class ScriptRunner(CommandRunner):
         shell: str | None = None,
         working_dir: Path | None = None,
         timeout_minutes: int = 1440,
-        parent: BaseRunner | None = None,
+        parent: "BaseRunner | None" = None,
         interactive: bool = False,
     ):
         self._tmp_file = None

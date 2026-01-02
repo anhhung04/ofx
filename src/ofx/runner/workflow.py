@@ -3,9 +3,9 @@
 import asyncio
 import logging
 import os
-import threading
+from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Optional, Set
+from typing import Any
 
 import httpx
 import yaml
@@ -23,7 +23,7 @@ from ofx.runner.base import BaseRunner
 from ofx.runner.job import JobRunner
 from ofx.runner.models import RunContext, RunnerStatus
 from ofx.runner.tool_installer import ToolInstallerRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings, TOOLS_BIN_DIR, TOOLS_DIR
+from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings
 from ofx.utils.misc import clone_remote_repo, find_parallel_schedule, is_remote_path
 
 logger = logging.getLogger(settings.app_branding)
@@ -41,18 +41,17 @@ class WorkflowRunner(BaseRunner):
         super().__init__(workflow, ctx, parent)
         self._model = workflow
         self._is_reused = self._parent is not None
-        self._job_registry: Dict[str, Any] = {}
-        self._job_threads: Dict[str, threading.Thread] = {}
-        self._job_results: Dict[str, bool] = {}
-        self._job_errors: Dict[str, Exception] = {}
-        self._progress: Optional[Progress] = None
-        self._progress_id: Optional[Any] = None
+        self._job_registry: dict[str, Any] = {}
+        self._job_results: dict[str, bool] = {}
+        self._job_errors: dict[str, Exception] = {}
+        self._progress: Progress | None = None
+        self._progress_id: Any | None = None
 
     async def _do_run(self):
         """Execute the workflow by running its jobs in stages according to their dependencies"""
         # Detect if workflow has interactive steps to skip progress bars entirely
         has_interactive = self._has_interactive_steps()
-        
+
         if not self._is_reused and not has_interactive:
             # Create progress bar only for non-interactive workflows
             self._progress = Progress(
@@ -63,7 +62,7 @@ class WorkflowRunner(BaseRunner):
                 TimeElapsedColumn(),
                 transient=False,
             )
-        
+
         try:
             if self._progress:
                 self._progress.start()
@@ -75,9 +74,9 @@ class WorkflowRunner(BaseRunner):
                 )
             else:
                 self._planning_jobs()
-            
+
             await self._execute_workflow()
-            
+
             if self._progress and self._progress_id is not None:
                 self._progress.update(
                     self._progress_id,
@@ -91,59 +90,104 @@ class WorkflowRunner(BaseRunner):
 
     async def _execute_workflow(self):
         """Execute workflow jobs in stages"""
+        # Create semaphore to limit concurrent jobs based on settings
+        semaphore = asyncio.Semaphore(self._ctx.get("workers", 4))
+
+        completed_steps_before_stage = 0
         for idx, stage in enumerate(self._schedule):
             logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
-            current_jobs = ", ".join(stage)
-            
-            # Check if any job in this stage has interactive steps
-            stage_has_interactive = self._stage_has_interactive(stage)
 
+            # Create job runners for the stage
+            job_runners = {}
             for job_id in stage:
-                thread = threading.Thread(
-                    target=self._run_job_wrapper,
-                    args=(job_id,),
-                    name=f"job-{job_id}",
-                    daemon=False,
+                job = self.model.jobs[job_id]
+                self._job_registry[job_id] = self._resolve_template(
+                    job.model_dump(exclude={"outputs", "steps"})
                 )
-                self._job_threads[job_id] = thread
-                thread.start()
+                self._ctx.vars.update({"jobs": self._job_registry})
+                is_single_job_stage = len(stage) == 1
+                job_ctx = self.ctx_vars.model_copy(
+                    update={"allow_interactive": is_single_job_stage}
+                )
 
-            while any(self._job_threads[jid].is_alive() for jid in stage):
-                current_steps_completed = sum(
-                    self._job_registry[jid]["runner"].processed_steps
-                    for jid in stage
-                    if jid in self._job_registry
-                    and "runner" in self._job_registry[jid]
-                )
-                self._completed_steps = max(
-                    self._completed_steps, current_steps_completed
-                )
-                
-                # Update progress only if progress bar exists (non-interactive workflow)
-                if self._progress and self._progress_id is not None:
-                    workflow_prefix = "⚙"
+                runner = JobRunner(job, job_ctx, parent=self)
+                job_runners[job_id] = runner
+                self._job_registry[job_id]["runner"] = runner
+
+            # Run jobs concurrently with semaphore limiting
+            async def run_job_with_limit(job_id: str, runner: JobRunner):
+                async with semaphore:
+                    return await self._run_and_monitor_job(job_id, runner)
+
+            stage_tasks = {
+                job_id: asyncio.create_task(run_job_with_limit(job_id, runner))
+                for job_id, runner in job_runners.items()
+            }
+
+            # Monitor overall stage progress if progress bar is active
+            if self._progress and self._progress_id is not None:
+                while not all(task.done() for task in stage_tasks.values()):
+                    current_steps_in_stage = sum(
+                        runner.processed_steps for runner in job_runners.values()
+                    )
+                    self._completed_steps = (
+                        completed_steps_before_stage + current_steps_in_stage
+                    )
+
                     self._progress.update(
                         self._progress_id,
-                        description=f"{workflow_prefix} [bold]{self.model.name}[/bold] → {current_jobs}",
+                        description=f"⚙ [bold]{self.model.name}[/bold] → {', '.join(stage)}",
                         completed=min(self._completed_steps, self._total_steps),
                         refresh=True,
                     )
-                
-                await asyncio.sleep(0.1)  # Reduced polling frequency for better CPU efficiency
+                    await asyncio.sleep(0.1)
 
-            for job_id in stage:
-                self._job_threads[job_id].join()
+            # Wait for stage to complete and gather results
+            results = await asyncio.gather(*stage_tasks.values(), return_exceptions=True)
 
-            for job_id in stage:
-                if job_id in self._job_errors:
-                    raise RuntimeError(
-                        self._produce_log(
-                            f"Failed when running job '{job_id}': {self._job_errors[job_id]}"
-                        )
+            stage_failed = False
+            failed_jobs_info = []
+
+            stage_steps = 0
+            for job_id, result in zip(stage_tasks.keys(), results, strict=False):
+                runner = job_runners[job_id]
+                stage_steps += runner.total_steps
+
+                job_result = runner.get_result()
+
+                if isinstance(result, Exception):
+                    self._job_errors[job_id] = result
+                    self._job_results[job_id] = False
+                    stage_failed = True
+                    failed_jobs_info.append(f"'{job_id}': {result}")
+                elif not runner.is_success:
+                    error = job_result.error or "Unknown error"
+                    self._job_errors[job_id] = RuntimeError(error)
+                    self._job_results[job_id] = False
+                    stage_failed = True
+                    failed_jobs_info.append(f"'{job_id}': {error}")
+                else:
+                    logger.debug(
+                        self._produce_log(f"Job '{job_id}' completed successfully")
                     )
-                if not self._job_results.get(job_id, False):
-                    raise RuntimeError(self._produce_log(f"Job '{job_id}' failed"))
-                logger.debug(self._produce_log(f"Job '{job_id}' completed"))
+
+                # Always update registry with the job's result
+                self._job_registry[job_id].update(job_result.model_dump())
+                self._job_registry[job_id]["steps"] = job_result.outputs.get(
+                    "steps", {}
+                )
+
+            # Update context with all job results from the stage
+            self._ctx.vars.update({"jobs": self._job_registry})
+
+            completed_steps_before_stage += stage_steps
+
+            if stage_failed:
+                # After processing all jobs in the stage, raise a single error if any failed
+                error_summary = ", ".join(failed_jobs_info)
+                raise RuntimeError(
+                    f"One or more jobs failed in stage {idx + 1}: {error_summary}"
+                )
 
     def _planning_jobs(self) -> int:
         """Plan the job execution by organizing them in stages based on dependencies"""
@@ -169,99 +213,16 @@ class WorkflowRunner(BaseRunner):
         self._completed_steps = 0
         return self._total_steps
 
-    def _run_job_wrapper(self, job_id: str):
-        """Wrapper for _run_job to capture results and errors in thread context"""
-        try:
-            result = self._run_job(job_id)
-            self._job_results[job_id] = result
-        except Exception as e:
-            self._job_errors[job_id] = e
-            self._job_results[job_id] = False
-
-    def _run_job(self, job_id: str) -> bool:
-        """Set up and run a job with the given job_id"""
-        job = self.model.jobs[job_id]
-        logger.debug(self._produce_log(f"starting job: {job}"))
-        self._job_registry[job_id] = self._resolve_template(
-            job.model_dump(exclude={"outputs", "steps"})
-        )
-        self._ctx.vars.update({"jobs": self._job_registry})
-        
-        # Determine if this job is in a single-job stage (allows interactive)
-        current_stage_jobs = []
-        current_stage_idx = 0
-        for idx, stage in enumerate(self._schedule):
-            if job_id in stage:
-                current_stage_jobs = list(stage)
-                current_stage_idx = idx
-                break
-        
-        # Allow interactive mode only if this is the only job in the stage
-        is_single_job_stage = len(current_stage_jobs) == 1
-        
-        # Create context with interactive capability flag
-        job_ctx = self.ctx_vars.model_copy()
-        job_ctx.allow_interactive = is_single_job_stage
-        
-        job_runner = JobRunner(
-            job,
-            job_ctx,
-            parent=self,
-        )
-        self._job_registry[job_id]["runner"] = job_runner
-        try:
-            
-            self._run_and_monitor_job(job, current_stage_idx, current_stage_jobs)
-            job_result = job_runner.get_result()
-            # Optimize: batch registry updates to avoid multiple dict operations
-            result_dump = job_result.model_dump()
-            self._job_registry[job_id].update(result_dump)
-            self._job_registry[job_id]["steps"] = result_dump["outputs"].get("steps", {})
-            self._ctx.vars.update({"jobs": self._job_registry})
-            return True
-        except Exception as e:
-            logger.error(job_runner._produce_log(f"Job execution failed: {e}"))
-            return False
-
-    def _run_and_monitor_job(self, job, stage_idx, stage_jobs):
+    async def _run_and_monitor_job(self, job_id: str, job_runner: JobRunner):
         """Run a job asynchronously and monitor its progress with a progress bar"""
-        # Cache job_id to avoid repeated attribute access
-        job_id = job.jid
-        job_runner: JobRunner = self._job_registry[job_id]["runner"]
-        if not job_runner:
-            raise ValueError(f"Job with ID '{job_id}' not found.")
         total_steps = job_runner.total_steps
+        has_interactive_step = any(getattr(step, 'interactive', False) for step in job_runner.model.steps)
 
-        # Check if any step in this job has interactive mode
-        has_interactive_step = any(
-            getattr(step, 'interactive', False) 
-            for step in job_runner.model.steps
-        )
-        
-        # If interactive and allowed, run without progress bars
         if has_interactive_step and job_runner.ctx_vars.allow_interactive:
             logger.info(self._produce_log(f"Running job '{job_id}' with interactive steps (progress hidden)"))
-            job_result: list[Optional[Any]] = [None]
-            job_error: list[Optional[Exception]] = [None]
-
-            def run_job_thread():
-                try:
-                    job_result[0] = asyncio.run(job_runner.run())
-                except Exception as e:
-                    job_error[0] = e
-
-            job_thread = threading.Thread(
-                target=run_job_thread, name=f"monitor-{job_id}", daemon=False
-            )
-            job_thread.start()
-            job_thread.join()
-
-            if job_error[0]:
-                raise job_error[0]
-            return
+            return await job_runner.run()
 
         indicator = "  ↳ " if self._is_reused else "→ "
-
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -270,53 +231,29 @@ class WorkflowRunner(BaseRunner):
             TimeElapsedColumn(),
             transient=True,
         ) as job_progress:
-            progress_task_id = job_progress.add_task(
-                description=f"{indicator}[bold]{job_id}[/bold]",
-                total=total_steps,
-            )
+            task_id = job_progress.add_task(f"{indicator}[bold]{job_id}[/bold]", total=total_steps)
 
-            job_result: list[Optional[Any]] = [None]
-            job_error: list[Optional[Exception]] = [None]
+            run_task = asyncio.create_task(job_runner.run())
 
-            def run_job_thread():
-                try:
-                    job_result[0] = asyncio.run(job_runner.run())
-                except Exception as e:
-                    job_error[0] = e
+            while not run_task.done():
+                processed = job_runner.processed_steps
+                step_name = ""
+                if processed < len(job_runner.model.steps):
+                    current_step = job_runner.model.steps[processed]
+                    step_name = f" → {current_step.name or current_step.uses or f'step {processed + 1}'}"
 
-            job_thread = threading.Thread(
-                target=run_job_thread, name=f"monitor-{job_id}", daemon=False
-            )
-            job_thread.start()
-
-            while job_thread.is_alive():
-                current_step_idx = job_runner.processed_steps
-                current_step_name = ""
-                
-                if hasattr(job_runner, 'model') and hasattr(job_runner.model, 'steps'):
-                    steps = job_runner.model.steps
-                    if current_step_idx < len(steps):
-                        step = steps[current_step_idx]
-                        if hasattr(step, 'uses') and step.uses:
-                            current_step_name = f" → {step.name or step.uses}"
-                        elif current_step_idx < total_steps:
-                            current_step_name = f" (step {current_step_idx + 1}/{total_steps})"
-                elif current_step_idx < total_steps:
-                    current_step_name = f" (step {current_step_idx + 1}/{total_steps})"
-                
                 job_progress.update(
-                    progress_task_id,
-                    completed=job_runner.processed_steps,
-                    description=f"{indicator}[bold]{job_id}[/bold]{current_step_name}",
+                    task_id,
+                    completed=processed,
+                    description=f"{indicator}[bold]{job_id}[/bold]{step_name}",
                     refresh=True,
                 )
-                # Optimize: reduce polling interval from 0.05s to 0.1s
-                asyncio.run(asyncio.sleep(0.1))
+                await asyncio.sleep(0.1)
 
-            job_thread.join()
+            # Ensure final update of progress bar
+            job_progress.update(task_id, completed=job_runner.processed_steps, description=f"{indicator}[bold]{job_id}[/bold] ✓", refresh=True)
 
-            if job_error[0]:
-                raise job_error[0]
+            return await run_task
 
     async def _pre_run(self):
         if not self.ctx_vars.output_path.exists():
@@ -387,10 +324,8 @@ class WorkflowRunner(BaseRunner):
             else (
                 RunnerStatus.COMPLETED
                 if all(
-                    [
-                        job["status"] == RunnerStatus.COMPLETED
+                    job["status"] == RunnerStatus.COMPLETED
                         for job in self._job_registry.values()
-                    ]
                 )
                 else RunnerStatus.FAILED
             )
@@ -402,22 +337,12 @@ class WorkflowRunner(BaseRunner):
             os.rmdir(self.ctx_vars.output_path)
         logger.debug(self._produce_log(f"result: {self.get_result()}"))
 
-        if not self._is_reused:
-            for job_id, thread in self._job_threads.items():
-                if thread.is_alive():
-                    logger.warning(
-                        self._produce_log(
-                            f"Thread for job '{job_id}' still running, waiting..."
-                        )
-                    )
-                    thread.join(timeout=5.0)
-
     async def _install_tools(self):
         """Install workflow tools using ToolInstallerRunner"""
         tools = self.model.tools
         if not tools:
             return
-        
+
         # Use ToolInstallerRunner to handle tool installation
         installer = ToolInstallerRunner(
             tools=tools,
@@ -426,13 +351,13 @@ class WorkflowRunner(BaseRunner):
             show_console=False,  # Don't show console output in workflow context
         )
         await installer.run()
-        
+
         # Update our context with the updated PATH from installer
         self._ctx.envs.update(installer.ctx_vars.envs)
 
     def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Process and validate inputs against the workflow's input constraints"""
         logger.debug(
             self._produce_log(
@@ -494,6 +419,7 @@ class WorkflowRunner(BaseRunner):
             WorkflowRunner.flows_dirs.append(Path(path).absolute())
 
     @staticmethod
+    @lru_cache(maxsize=32)
     def find_flow(workflow_name: str) -> Workflow:
         """Find and load a workflow from local directories, file path, URL, or git repository"""
         logger.debug(
@@ -511,7 +437,7 @@ class WorkflowRunner(BaseRunner):
                 logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
                 raise RuntimeError(
                     f"Failed to load workflow from file {workflow_name}: {e}"
-                )
+                ) from e
 
         for directory in WorkflowRunner.flows_dirs:
             path = directory / f"{workflow_name.rstrip('.yml')}.yml"
@@ -524,7 +450,7 @@ class WorkflowRunner(BaseRunner):
                     )
                 except Exception as e:
                     logger.error(f"Failed to load workflow from {path}: {e}")
-                    raise RuntimeError(f"Failed to load workflow from {path}: {e}")
+                    raise RuntimeError(f"Failed to load workflow from {path}: {e}") from e
 
         if is_remote_path(workflow_name):
             try:
@@ -535,11 +461,11 @@ class WorkflowRunner(BaseRunner):
                 logger.error(f"Failed to fetch workflow from {workflow_name}: {e}")
                 raise RuntimeError(
                     f"Failed to fetch workflow from {workflow_name}: {e}"
-                )
+                ) from e
 
         git_path = clone_remote_repo(workflow_name)
         if not git_path:
-            raise RuntimeError(f"Workflow {workflow_name} not found.")
+            raise RuntimeError(f"Workflow {workflow_name} not found.") from None
 
         WorkflowRunner.add_workflow_dir(git_path.absolute())
         try:
@@ -550,14 +476,14 @@ class WorkflowRunner(BaseRunner):
             logger.error(f"Failed to load workflow from git repo {workflow_name}: {e}")
             raise RuntimeError(
                 f"Failed to load workflow from git repo {workflow_name}: {e}"
-            )
+            ) from e
 
     def get_job_status(self, job_id: str) -> RunnerStatus:
         return self._job_registry.get(job_id, {}).get("status")
 
     def get_job_from_registry(
         self, job_id: str
-    ) -> Dict[str, JobRunner | Dict[str, Any]] | None:
+    ) -> dict[str, JobRunner | dict[str, Any]] | None:
         return self._job_registry.get(job_id)
 
     def _has_interactive_steps(self) -> bool:
@@ -566,8 +492,8 @@ class WorkflowRunner(BaseRunner):
             if any(getattr(step, 'interactive', False) for step in job.steps):
                 return True
         return False
-    
-    def _stage_has_interactive(self, stage: Set[str]) -> bool:
+
+    def _stage_has_interactive(self, stage: set[str]) -> bool:
         """Check if a stage has interactive steps (only in single-job stages)"""
         if len(stage) != 1:
             return False

@@ -2,7 +2,6 @@
 
 import base64
 import logging
-from typing import Dict, Optional
 
 import httpx
 
@@ -41,8 +40,8 @@ class WebShellClient:
         url: str,
         password: str = "pass",
         encoder: str = "default",
-        secret_header: Optional[str] = None,
-        secret_value: Optional[str] = None,
+        secret_header: str | None = None,
+        secret_value: str | None = None,
         timeout: int = 30,
         verify_ssl: bool = True,
     ):
@@ -83,7 +82,7 @@ class WebShellClient:
         else:
             return code
 
-    def _build_headers(self) -> Dict[str, str]:
+    def _build_headers(self) -> dict[str, str]:
         """Construct HTTP headers with optional secret header authentication.
 
         Returns:
@@ -240,7 +239,7 @@ class WebShellClient:
         logger.info(f"Uploaded {local_path} to {remote_path}")
         return result
 
-    def get_system_info(self) -> Dict[str, str]:
+    def get_system_info(self) -> dict[str, str]:
         """Retrieve system information from the target server.
 
         Gathers OS, hostname, current user, working directory, and PHP version.

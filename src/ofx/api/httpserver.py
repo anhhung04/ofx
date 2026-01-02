@@ -25,7 +25,7 @@ class PHTTPSingleton(type):
 
     def __call__(cls, *args, **kwargs):
         if cls._instance is None:
-            cls._instance = super(PHTTPSingleton, cls).__call__(*args, **kwargs)
+            cls._instance = super().__call__(*args, **kwargs)
         return cls._instance
 
 
@@ -44,8 +44,7 @@ class BaseRequestHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         logger.info(
-            "%s - - [%s] %s\n"
-            % (self.address_string(), self.log_date_time_string(), format % args)
+            f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
         )
 
 

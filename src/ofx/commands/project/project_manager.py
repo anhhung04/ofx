@@ -1,6 +1,5 @@
 import shutil
 from pathlib import Path
-from typing import List
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
 
@@ -34,7 +33,7 @@ class ProjectManager:
         return str(candidate)
 
     @classmethod
-    def list_projects(cls) -> List[str]:
+    def list_projects(cls) -> list[str]:
         """List all projects in the default project path."""
         default_path = cls._get_default_path()
         if not default_path.exists():

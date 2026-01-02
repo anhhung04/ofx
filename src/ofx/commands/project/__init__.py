@@ -1,13 +1,8 @@
 from typing import Annotated, Optional
 
 import typer
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
 from .project_manager import ProjectManager
-
-console = Console()
 
 app = typer.Typer()
 
@@ -26,8 +21,18 @@ def init(
     ] = False,
 ):
     """Init new OFX project"""
-    base = ProjectManager.create_project(name)
-    console.print(f"[bold green]✓[/] Creating project: [cyan]{name}[/]")
+    from rich.panel import Panel
+
+    from ofx.settings import get_console
+    console = get_console()
+
+    with console.status(f"[bold green]Creating project '{name}'...[/]", spinner="dots"):
+        base = ProjectManager.create_project(name)
+        # Simulate a short delay if needed, or just let it finish immediately
+        # Adding a small sleep just for the spinner to be visible if the operation is instant is optional but nice for UX
+        # import time; time.sleep(0.5)
+
+    console.print(f"[bold green]✓[/] Project created: [cyan]{name}[/]")
     console.print(f"[dim]Location: {base}[/]")
 
     from ofx.commands.project.init import InitHandler
@@ -161,9 +166,10 @@ def init(
         elif remote_type == "none":
             remote_type = None
 
-    InitHandler(
-        base, is_multiphase, remote_type, remote_config, encrypt, encryption_key
-    ).run()
+    with console.status("[bold green]Initializing project...[/]", spinner="dots"):
+        InitHandler(
+            base, is_multiphase, remote_type, remote_config, encrypt, encryption_key
+        ).run()
 
     console.print(
         Panel(
@@ -188,7 +194,7 @@ def sync(
         ),
     ] = "git",
     remote_config: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--remote-config", "-c", help="Remote config as JSON"),
     ] = None,
     encrypt: Annotated[
@@ -196,7 +202,7 @@ def sync(
         typer.Option("--encrypt", "-e", help="Encrypt files before syncing"),
     ] = False,
     encryption_key: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--encryption-key",
             help="Encryption key (or set OFX_ENCRYPTION_KEY env var)",
@@ -204,29 +210,44 @@ def sync(
     ] = None,
 ):
     """Sync local project with remote storage (git by default)"""
+    from ofx.settings import get_console
+    console = get_console()
     path = ProjectManager.resolve_path(project)
-    console.print(f"[bold blue]⟳[/] Syncing project: [cyan]{project}[/]")
+
+    console.print(f"[bold blue]⟳[/] Preparing sync for project: [cyan]{project}[/]")
     console.print(f"[dim]Remote type: {remote_type}[/]")
     if encrypt:
         console.print("[dim]Encryption: enabled[/]")
 
     from ofx.commands.project.sync import SyncProjectHandler
 
-    SyncProjectHandler(
-        path,
-        remote_type=remote_type,
-        remote_config=remote_config,
-        encrypt=encrypt,
-        encryption_key=encryption_key,
-    ).run()
+    with console.status("[bold green]Syncing...[/]", spinner="dots"):
+        SyncProjectHandler(
+            path,
+            remote_type=remote_type,
+            remote_config=remote_config,
+            encrypt=encrypt,
+            encryption_key=encryption_key,
+        ).run()
 
-    console.print("[bold green]✓[/] Sync completed successfully")
+    from rich.panel import Panel
+    console.print(
+        Panel(
+            f"[bold green]Sync completed successfully![/]\nProject: {project}",
+            border_style="green",
+            title="✅ Sync Status"
+        )
+    )
 
 
 @app.command(name="list")
 @app.command(name="ls", hidden=True)
 def list():
     """List all projects in default project path"""
+    from rich.table import Table
+
+    from ofx.settings import get_console
+    console = get_console()
     projects = ProjectManager.list_projects()
 
     if not projects:
@@ -238,6 +259,8 @@ def list():
         title=f"OFX Projects ({len(projects)})",
         show_header=True,
         header_style="bold cyan",
+        expand=True,
+        border_style="cyan"
     )
     table.add_column("#", style="dim", width=4)
     table.add_column("Project Name", style="cyan")
@@ -254,6 +277,8 @@ def list():
 @app.command(name="rm", hidden=True)
 def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     """Remove a project by name"""
+    from ofx.settings import get_console
+    console = get_console()
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():

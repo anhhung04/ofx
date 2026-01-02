@@ -5,15 +5,17 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
+import aiofiles
+import aiofiles.os as aio_os
 from jinja2 import Template
 
-from ofx.models.workflow import Workflow
 from ofx.models.job import Job
 from ofx.models.step import Step
-from ofx.runner.models import RunnerStatus, RunContext, RunResult
-from ofx.settings import settings, TOOLS_DIR, TOOLS_BIN_DIR
+from ofx.models.workflow import Workflow
+from ofx.runner.models import RunContext, RunnerStatus, RunResult
+from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR, settings
 
 if TYPE_CHECKING:
     from ofx.runner.base import BaseRunner
@@ -21,12 +23,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(settings.app_branding)
 
 
+async def _read_file(path: str) -> str | None:
+    if await aio_os.path.exists(path):
+        async with aiofiles.open(path) as f:
+            return await f.read()
+    return None
+
+async def _write_file(path: str, content: str):
+    async with aiofiles.open(path, 'w') as f:
+        await f.write(content)
+
+
 class BaseRunner:
     """Abstract base class for all runners (workflow, job, step, command)"""
-    
+
     # Memory optimization: define __slots__ to reduce memory footprint
     __slots__ = ('_id', '_status', '_ctx', '_parent', '_error', '_model', '_result')
-    
+
     # Cache for compiled templates (limit size to prevent memory bloat)
     _template_cache = {}
     _template_cache_max_size = 1000
@@ -49,28 +62,28 @@ class BaseRunner:
             self._ctx.vars.update({"self": self.model})
             await self._pre_run()
         except Exception as e:
-            self._error = f"Pre-run error: {str(e)}"
+            self._error = f"Pre-run error ({type(e).__name__}): {e}"
             self._status = RunnerStatus.FAILED
             logger.error(self._produce_log(self._error))
             return self.get_result()
-        
+
         try:
             self._status = RunnerStatus.RUNNING
             await self._do_run()
         except Exception as e:
-            self._error = f"Run error: {str(e)}"
+            self._error = f"Run error ({type(e).__name__}): {e}"
             self._status = RunnerStatus.FAILED
             logger.error(self._produce_log(self._error))
             return self.get_result()
-        
+
         try:
             await self._post_run()
             self._status = RunnerStatus.COMPLETED
         except Exception as e:
-            self._error = f"Post-run error: {str(e)}"
+            self._error = f"Post-run error ({type(e).__name__}): {e}"
             self._status = RunnerStatus.FAILED
             logger.error(self._produce_log(self._error))
-        
+
         return self.get_result()
 
     async def _do_run(self):
@@ -82,18 +95,18 @@ class BaseRunner:
     async def _post_run(self):
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
-    def _resolve_template(self, value: Any) -> Any:
+    async def _resolve_template(self, value: Any) -> Any:
         """Resolve Jinja2 templates in values recursively with optimized caching."""
         if value is None or not isinstance(value, (str, int, float, bool, dict, list)):
             return value
         if isinstance(value, dict):
-            return {k: self._resolve_template(v) for k, v in value.items()}
+            return {k: await self._resolve_template(v) for k, v in value.items()}
         if isinstance(value, list):
-            return [self._resolve_template(v) for v in value]
+            return [await self._resolve_template(v) for v in value]
         string_value = str(value)
         if "${{" not in string_value and "{%" not in string_value:
             return value
-        
+
         try:
             # Use cached SUPPORT_FUNCS if available (one-time initialization)
             if BaseRunner._support_funcs_cache is None:
@@ -101,7 +114,7 @@ class BaseRunner:
                 # Pre-compute static paths once
                 tools_dir_str = str(TOOLS_DIR.absolute())
                 tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
-                
+
                 BaseRunner._support_funcs_cache = {
                     "sudo": sudo,
                     "tools_dir": tools_dir_str,
@@ -114,37 +127,40 @@ class BaseRunner:
                     "static_install": lambda url, name=None: (
                         f"curl -fSsL {url} -o {tools_bin_dir_str}/{name if name else Path(url).name} && chmod +x {tools_bin_dir_str}/{name if name else Path(url).name}"
                     ),
-                    "file_read": lambda path: (Path(path).read_text() if Path(path).exists() else None),
-                    "file_write": lambda path, content: Path(path).write_text(content),
-                    "file_exists": lambda path: Path(path).exists(),
-                    "env": lambda var, default="": os.getenv(var, default),
+                    "file_read": _read_file,
+                    "file_write": _write_file,
+                    "file_exists": aio_os.path.exists,
+                    "env": os.getenv,
                     "str": str,
                     "int": int,
                     "float": float,
                     "bool": lambda v: str(v).lower() in ("true", "yes", "1", "t", "y"),
                 }
-            
+
             # Add run_id dynamically (unique per runner instance)
             SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()
             SUPPORT_FUNCS["run_id"] = self._id
-            
+
             # Use template cache for repeated templates
             if string_value not in BaseRunner._template_cache:
                 # Clear cache if it gets too large (simple LRU-like behavior)
                 if len(BaseRunner._template_cache) >= BaseRunner._template_cache_max_size:
                     BaseRunner._template_cache.clear()
-                    
+
                 BaseRunner._template_cache[string_value] = Template(
-                    string_value, variable_start_string="${{", variable_end_string="}}"
+                    string_value,
+                    variable_start_string="${{",
+                    variable_end_string="}}",
+                    enable_async=True
                 )
-            
+
             template = BaseRunner._template_cache[string_value]
             template_vars = self.ctx_vars.model_dump(exclude={"vars"})
             template_vars.update(SUPPORT_FUNCS)
             if self.ctx_vars.vars:
                 template_vars.update(self._ctx.vars)
-            
-            result = template.render(template_vars)
+
+            result = await template.render_async(template_vars)
             if isinstance(value, bool):
                 return result.lower() in ("true", "yes", "1", "t", "y")
             elif isinstance(value, int):
@@ -159,20 +175,20 @@ class BaseRunner:
                 except ValueError:
                     logger.warning(self._produce_log(f"Could not convert template result '{result}' back to float"))
                     return result
-            
+
             logger.debug(self._produce_log(f"Resolved template: {value} -> {result}"))
             return result
         except Exception as e:
             logger.error(self._produce_log(f"Error resolving template for value '{value}': {e}"))
             return value
 
-    def _resolve_template_fields(self, fields: list[str]) -> None:
+    async def _resolve_template_fields(self, fields: list[str]) -> None:
         """Resolve templates in specific model fields"""
         if not self.model:
             return
         for field in fields:
             if hasattr(self.model, field):
-                resolved_value = self._resolve_template(getattr(self.model, field))
+                resolved_value = await self._resolve_template(getattr(self.model, field))
                 setattr(self._model, field, resolved_value)
 
     def _produce_log(self, message: Any) -> str:
@@ -210,11 +226,11 @@ class BaseRunner:
     @property
     def parent(self) -> "BaseRunner | None":
         return self._parent
-    
-    def get_job_status(self, job_id: str) -> Optional[RunnerStatus]:
+
+    def get_job_status(self, job_id: str) -> RunnerStatus | None:
         """Get job status from registry (WorkflowRunner override)"""
         return None
-    
-    def get_job_from_registry(self, job_id: str) -> Optional[dict[str, Any]]:
+
+    def get_job_from_registry(self, job_id: str) -> dict[str, Any] | None:
         """Get job from registry (WorkflowRunner override)"""
         return None

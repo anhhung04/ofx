@@ -14,7 +14,7 @@ def __getattr__(name: str) -> Any:
     """Lazy load API modules on demand."""
     if name in _loading:
         raise AttributeError(f"Circular import detected for 'ofx.api.{name}'")
-    
+
     _loading.add(name)
     try:
         if name == "http":
@@ -41,7 +41,7 @@ def __getattr__(name: str) -> Any:
             from ofx.api import webshell as module
         else:
             raise AttributeError(f"module 'ofx.api' has no attribute '{name}'")
-        
+
         # Cache in sys.modules to prevent re-import
         setattr(sys.modules[__name__], name, module)
         return module

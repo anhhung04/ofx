@@ -3,7 +3,6 @@ Base class for webshell generation with custom template support.
 """
 
 import logging
-from typing import Optional
 
 from ofx.settings import settings
 
@@ -40,8 +39,8 @@ class WebShell:
         self,
         password: str = "pass",
         encoder: str = "default",
-        secret_header: Optional[str] = None,
-        secret_value: Optional[str] = None,
+        secret_header: str | None = None,
+        secret_value: str | None = None,
         prefix: str = "",
         suffix: str = "",
     ):
@@ -158,6 +157,6 @@ class WebShell:
         """List all registered custom templates"""
         return list(cls._custom_templates.keys())
 
-    def _get_custom_template(self, language: str) -> Optional[str]:
+    def _get_custom_template(self, language: str) -> str | None:
         """Get custom template if registered"""
         return self._custom_templates.get(language.lower())

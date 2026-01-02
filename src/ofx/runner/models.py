@@ -1,10 +1,12 @@
 """Runner models and enums"""
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Optional
-from ofx.utils.misc import populate_env
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+from ofx.utils.misc import populate_env
+
 
 class RunnerStatus(Enum):
     """Status of a runner execution"""
@@ -23,19 +25,19 @@ class RunType(Enum):
 
 class RunContext(BaseModel):
     """Execution context for runners"""
-    inputs: Dict[str, Any] = Field(default_factory=dict)
-    secrets: Dict[str, Any] = Field(default_factory=dict)
-    envs: Dict[str, Any] = Field(default_factory=populate_env)
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    secrets: dict[str, Any] = Field(default_factory=dict)
+    envs: dict[str, Any] = Field(default_factory=populate_env)
     output_path: Path = Field(default=Path.cwd() / "out")
-    vars: Dict[str, Any] = Field(default_factory=dict)
+    vars: dict[str, Any] = Field(default_factory=dict)
     allow_interactive: bool = Field(default=False, description="Whether interactive mode is allowed (single job in stage)")
 
 
 class RunResult(BaseModel):
     """Result of a runner execution"""
     status: RunnerStatus
-    error: Optional[str] = None
-    outputs: Dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    outputs: dict[str, Any] = Field(default_factory=dict)
     name: str = Field(...)
     run_id: str = Field(...)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)

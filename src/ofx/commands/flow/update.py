@@ -1,8 +1,9 @@
+from pathlib import Path
+
 import git
 import typer
 
 from ofx.settings import DEFAULT_WORKFLOWS_DIR
-from pathlib import Path
 
 
 class UpdateHandler:

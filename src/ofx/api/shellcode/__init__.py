@@ -33,16 +33,17 @@ Example:
 
 import ast
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 from ofx.settings import settings
 
 from .base import ShellCode
+from .connectors import get_registry
 from .encoder import encode_alphanum, encode_xor, remove_bad_chars
 from .exe import ShellcodeToExe
 from .generator import ShellGenerator
-from .connectors import get_registry
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -69,7 +70,7 @@ class OSShellcodes:
         connect_back_port: int = 5555,
         bad_chars: list[str] | None = None,
         custom_shellcode: bytes | str | None = None,
-        connector: Optional[object] = None,
+        connector: object | None = None,
     ):
         """
         Initialize shellcode generator.
@@ -170,7 +171,7 @@ class OSShellcodes:
         use_docker_compile: bool = False,
         msfvenom_encoder: str | None = None,
         msfvenom_iterations: int = 1,
-        connector_name: Optional[str] = None,
+        connector_name: str | None = None,
     ) -> bytes:
         """
         Create shellcode with optional encoding and executable generation.
@@ -218,7 +219,7 @@ class OSShellcodes:
         # Handle legacy use_msfvenom parameter
         if use_msfvenom and connector_name is None:
             connector_name = "msfvenom"
-        
+
         # Warn about deprecated Docker option
         if use_docker_compile:
             logger.warning(

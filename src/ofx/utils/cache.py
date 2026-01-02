@@ -1,50 +1,57 @@
 """Caching utilities for performance optimization."""
+from collections.abc import Callable
 from functools import lru_cache, wraps
-from typing import Any, Callable, TypeVar
-import asyncio
+from typing import Any, TypeVar
 
 T = TypeVar('T')
 
 
 def async_lru_cache(maxsize: int = 128):
     """LRU cache decorator for async functions."""
-    def decorator(func: Callable) -> Callable:
-        cache = {}
-        cache_order = []
-        
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        cache: dict[Any, T] = {}
+        cache_order: list[Any] = []
+
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> T:
             # Create a hashable key from args and kwargs
             key = (args, tuple(sorted(kwargs.items())))
-            
+
             if key in cache:
                 # Move to end (most recently used)
                 cache_order.remove(key)
                 cache_order.append(key)
                 return cache[key]
-            
+
             # Execute function
             result = await func(*args, **kwargs)
-            
+
             # Store in cache
             cache[key] = result
             cache_order.append(key)
-            
+
             # Evict oldest if cache is full
             if len(cache) > maxsize:
                 oldest = cache_order.pop(0)
                 del cache[oldest]
-            
+
             return result
-        
-        wrapper.cache_clear = lambda: (cache.clear(), cache_order.clear())
-        wrapper.cache_info = lambda: {
-            'hits': 0,  # Could be tracked if needed
-            'misses': 0,
-            'maxsize': maxsize,
-            'currsize': len(cache)
-        }
-        
+
+        def cache_clear() -> None:
+            cache.clear()
+            cache_order.clear()
+
+        def cache_info() -> dict[str, Any]:
+            return {
+                'hits': 0,  # Could be tracked if needed
+                'misses': 0,
+                'maxsize': maxsize,
+                'currsize': len(cache)
+            }
+
+        wrapper.cache_clear = cache_clear
+        wrapper.cache_info = cache_info
+
         return wrapper
     return decorator
 

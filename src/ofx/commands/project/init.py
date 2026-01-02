@@ -1,14 +1,13 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-import git
-
-from ofx.settings import settings
+from ofx.settings import get_console, settings
 from ofx.utils.misc import MetaSingleton
 
 logger = logging.getLogger(settings.app_branding)
+console = get_console()
 
 ENGAGEMENT_FILE_STRUCTURE = [
     ("evidence", ["creds", "data", "screenshots"]),
@@ -19,7 +18,7 @@ ENGAGEMENT_FILE_STRUCTURE = [
     "exploits",
     "post-exploits",
 ]
-DIRECTORY_STRUCTURE: List[str | Tuple[str, List]] = [
+DIRECTORY_STRUCTURE: list[str | tuple[str, list]] = [
     ("ept", ENGAGEMENT_FILE_STRUCTURE),
     ("ipt", ENGAGEMENT_FILE_STRUCTURE + ["lateral-movement"]),
 ]
@@ -30,10 +29,10 @@ class InitHandler(metaclass=MetaSingleton):
         self,
         base: str,
         is_multiphase: bool,
-        remote_type: Optional[str] = None,
-        remote_config: Optional[Dict[str, Any]] = None,
+        remote_type: str | None = None,
+        remote_config: dict[str, Any] | None = None,
         encrypt: bool = False,
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
     ):
         self._base_path = Path(base)
         self._is_multiphase = is_multiphase
@@ -44,20 +43,20 @@ class InitHandler(metaclass=MetaSingleton):
 
     def run(self):
         if self._is_multiphase:
-            logger.info(
-                f"Initializing multi-phase project at: {self._base_path.absolute()}"
+            console.print(
+                f"✅ Initializing multi-phase project at: {self._base_path.absolute()}"
             )
             self._make_dir(self._base_path, DIRECTORY_STRUCTURE)
         else:
-            logger.info(
-                f"Initializing single-phase project at: {self._base_path.absolute()}"
+            console.print(
+                f"✅ Initializing single-phase project at: {self._base_path.absolute()}"
             )
             self._make_dir(self._base_path, ENGAGEMENT_FILE_STRUCTURE)
 
         if self._remote_type:
             self._setup_remote_storage()
 
-        logger.info("Project initialization complete.")
+        console.print("✅ Project initialization complete.")
 
     def _setup_remote_storage(self) -> None:
         """Setup remote storage based on type."""
@@ -72,11 +71,12 @@ class InitHandler(metaclass=MetaSingleton):
 
     def _setup_git(self) -> None:
         """Setup git remote for existing repository."""
+        import git
         git_url = self._remote_config.get("url")
         branch = self._remote_config.get("branch", "main")
 
         if not git_url:
-            logger.warning("Git URL not provided, skipping git remote setup.")
+            console.print("⚠️ Git URL not provided, skipping git remote setup.")
             return
 
         if self._encrypt:
@@ -126,13 +126,13 @@ class InitHandler(metaclass=MetaSingleton):
 
             try:
                 origin.push(refspec=f"{branch}:{branch}", set_upstream=True)
-                logger.info("Pushed initial commit to remote repository.")
+                console.print("✅ Pushed initial commit to remote repository.")
             except Exception as e:
-                logger.warning(f"Could not push to remote: {e}")
-                logger.info("You may need to push manually later.")
+                console.print(f"⚠️ Could not push to remote: {e}")
+                console.print("You may need to push manually later.")
 
         except Exception as e:
-            logger.error(f"Failed to setup Git remote: {e}")
+            console.print(f"❌ Failed to setup Git remote: {e}")
 
     def _setup_ssh(self) -> None:
         """Setup SSH storage configuration."""
@@ -165,7 +165,7 @@ class InitHandler(metaclass=MetaSingleton):
 
         from .storage import SSHHandler
 
-        handler = SSHHandler(self._remote_config)
+        SSHHandler(self._remote_config)
         logger.info("SSH key setup complete")
 
     def _setup_s3(self) -> None:
@@ -226,7 +226,7 @@ class InitHandler(metaclass=MetaSingleton):
         logger.info(f"WebDAV storage configuration saved to {config_file}")
         logger.info("WebDAV will sync git repository using bundle files")
 
-    def _make_dir(self, base: Path, items: List[str | Tuple[str, List]]) -> None:
+    def _make_dir(self, base: Path, items: list[str | tuple[str, list]]) -> None:
         base.mkdir(parents=True, exist_ok=True)
         for item in items:
             if not isinstance(item, str):

@@ -1,7 +1,8 @@
 import uuid
-from pydantic import BaseModel, Field
-from typing import Union, Dict, Any, Literal, Optional, TYPE_CHECKING
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Optional
+
+from pydantic import BaseModel, Field, model_validator
 
 if TYPE_CHECKING:
     from ofx.models import DefaultConfig
@@ -13,11 +14,11 @@ class Step(BaseModel):
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for the step",
     )
-    run_if: Union[str, bool] = Field(
+    run_if: str | bool = Field(
         True, description="Condition to run the step (e.g., 'success()', 'failure()')"
     )
-    env: Dict[str, str] = Field(
-        default={},
+    env: dict[str, str] = Field(
+        default_factory=dict,
         description="Environment variables for the step",
     )
     continue_on_error: bool = Field(
@@ -26,35 +27,38 @@ class Step(BaseModel):
     timeout: int = Field(
         60 * 24, description="Timeout in minutes for the step execution"
     )
-    max_attempts: int = Field(
-        1, description="Maximum number of retry attempts for the step (default: 1, no retries)"
+    retry: int = Field(
+        0, description="Number of retry attempts on failure (default: 0, no retries)"
+    )
+    retry_delay: int = Field(
+        5, description="Delay in seconds between retry attempts (default: 5)"
     )
     working_directory: str = Field(
         ".", description="Working directory for the step execution"
     )
-    shell: Optional[str] = Field(
+    shell: str | None = Field(
         None, description="Shell to use for running commands in the step"
     )
     log_stdout: bool | str = Field(
         False, description="Whether to capture standard output of the step"
     )
-    uses: Optional[str] = Field(
+    uses: str | None = Field(
         None, description="Select a workflow to run as part of a step in the job"
     )
-    run: Optional[str] = Field(None, description="Command(s) to run in the step")
-    script: Optional[str] = Field(
+    run: str | None = Field(None, description="Command(s) to run in the step")
+    script: str | None = Field(
         None, description="Script to run in the step (if applicable)"
     )
-    run_with: Dict[str, Any] = Field(
-        {},
+    run_with: dict[str, Any] = Field(
+        default_factory=dict,
         description="Define inputs for the step if it uses a reusable workflow",
     )
-    secrets: Union[Dict[str, str], Literal["inherit"]] = Field(
-        {},
+    secrets: dict[str, str] | Literal["inherit"] = Field(
+        default_factory=dict,
         description="Secrets to pass to the step (key-value pairs) if it uses a reusable workflow",
     )
-    hooks: Dict[str, str] = Field(
-        default={},
+    hooks: dict[str, str] = Field(
+        default_factory=dict,
         description="Lifecycle hooks with Python code (e.g., before_step, after_step, on_retry, on_skip, on_timeout)",
     )
     interactive: bool = Field(
@@ -64,6 +68,20 @@ class Step(BaseModel):
     step_index: int = Field(
         -1, description="Index of the step in the job (set during execution)"
     )
+
+    @model_validator(mode="after")
+    def check_run_type(cls, values):
+        """Ensure that exactly one of 'run', 'script', or 'uses' is defined."""
+        defined_fields = sum(
+            1
+            for field in ["run", "script", "uses"]
+            if getattr(values, field) is not None
+        )
+        if defined_fields != 1:
+            raise ValueError(
+                f"Step '{values.name}' must have exactly one of 'run', 'script', or 'uses' defined."
+            )
+        return values
 
     def get_shell(self, job_defaults: Optional["DefaultConfig"] = None, workflow_defaults: Optional["DefaultConfig"] = None) -> str | None:
         """Get shell from step, job defaults, or workflow defaults."""
@@ -80,19 +98,19 @@ class Step(BaseModel):
         step_path = Path(self.working_directory)
         if step_path.is_absolute():
             return step_path
-        
+
         # Get job working directory
         if job_defaults and job_defaults.run.working_directory:
             job_path = Path(job_defaults.run.working_directory)
             if job_path.is_absolute():
                 return job_path / step_path
-        
+
         # Get workflow working directory
         if workflow_defaults and workflow_defaults.run.working_directory:
             workflow_path = Path(workflow_defaults.run.working_directory)
             job_rel_path = Path(job_defaults.run.working_directory) if job_defaults else Path(".")
             return workflow_path / job_rel_path / step_path
-        
+
         return Path.cwd() / step_path
 
     def __str__(self):

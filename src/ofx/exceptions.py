@@ -3,6 +3,8 @@
 Provides specific exception types for better error handling and debugging.
 """
 
+from typing import Any
+
 
 class OFXError(Exception):
     """Base exception for all OFX errors."""
@@ -11,8 +13,8 @@ class OFXError(Exception):
 
 class WorkflowError(OFXError):
     """Raised when workflow execution fails."""
-    
-    def __init__(self, message: str, workflow_name: str = None, job_id: str = None):
+
+    def __init__(self, message: str, workflow_name: str | None = None, job_id: str | None = None):
         self.workflow_name = workflow_name
         self.job_id = job_id
         super().__init__(message)
@@ -20,8 +22,8 @@ class WorkflowError(OFXError):
 
 class JobError(OFXError):
     """Raised when job execution fails."""
-    
-    def __init__(self, message: str, job_id: str = None, step_id: str = None):
+
+    def __init__(self, message: str, job_id: str | None = None, step_id: str | None = None):
         self.job_id = job_id
         self.step_id = step_id
         super().__init__(message)
@@ -29,8 +31,8 @@ class JobError(OFXError):
 
 class StepError(OFXError):
     """Raised when step execution fails."""
-    
-    def __init__(self, message: str, step_id: str = None, exit_code: int = None):
+
+    def __init__(self, message: str, step_id: str | None = None, exit_code: int | None = None):
         self.step_id = step_id
         self.exit_code = exit_code
         super().__init__(message)
@@ -48,24 +50,24 @@ class ConfigurationError(OFXError):
 
 class DependencyError(OFXError):
     """Raised when workflow dependencies cannot be resolved."""
-    
-    def __init__(self, message: str, missing_deps: list = None):
+
+    def __init__(self, message: str, missing_deps: list[Any] | None = None):
         self.missing_deps = missing_deps or []
         super().__init__(message)
 
 
 class TimeoutError(OFXError):
     """Raised when operation times out."""
-    
-    def __init__(self, message: str, timeout_seconds: int = None):
+
+    def __init__(self, message: str, timeout_seconds: int | None = None):
         self.timeout_seconds = timeout_seconds
         super().__init__(message)
 
 
 class APIError(OFXError):
     """Raised when API operations fail."""
-    
-    def __init__(self, message: str, status_code: int = None, response: str = None):
+
+    def __init__(self, message: str, status_code: int | None = None, response: str | None = None):
         self.status_code = status_code
         self.response = response
         super().__init__(message)
@@ -78,7 +80,7 @@ class SecretError(OFXError):
 
 class ToolError(OFXError):
     """Raised when tool installation or execution fails."""
-    
-    def __init__(self, message: str, tool_name: str = None):
+
+    def __init__(self, message: str, tool_name: str | None = None):
         self.tool_name = tool_name
         super().__init__(message)

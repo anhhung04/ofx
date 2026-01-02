@@ -2,7 +2,6 @@
 ASP.NET webshell generation for AntSword protocol compatibility.
 """
 
-from typing import Optional
 
 from ofx.api.webshell.base import WebShell
 from ofx.data.webshell.templates import ASPX_TEMPLATES
@@ -15,8 +14,8 @@ class AspxShell(WebShell):
         self,
         password: str = "pass",
         encoder: str = "default",
-        secret_header: Optional[str] = None,
-        secret_value: Optional[str] = None,
+        secret_header: str | None = None,
+        secret_value: str | None = None,
     ):
         """
         Initialize ASPX webshell generator.

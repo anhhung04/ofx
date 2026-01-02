@@ -2,7 +2,6 @@ import ast
 import logging
 import socket
 import urllib.parse
-from ipaddress import ip_address
 
 from faker import Faker
 

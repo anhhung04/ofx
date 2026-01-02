@@ -1,37 +1,24 @@
 """Documentation server commands for OFX"""
-import http.server
 import importlib
 import inspect
-import socketserver
 from pathlib import Path
 from typing import (
     Annotated,
     Any,
-    Dict,
     ForwardRef,
-    List,
-    Optional,
     Union,
     get_type_hints,
 )
 
 import typer
-from pydantic import BaseModel
-from rich.console import Console
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.table import Table
-from rich.text import Text
-from rich.tree import Tree
 
 app = typer.Typer()
-console = Console()
 
 NAME = "docs"
 HELP = "Documentation server and API reference"
 
 
-def discover_api_modules() -> Dict[str, Dict[str, str]]:
+def discover_api_modules() -> dict[str, dict[str, str]]:
     """Auto-discover all API modules from ofx.api package."""
     try:
         api_package = importlib.import_module("ofx.api")
@@ -41,7 +28,7 @@ def discover_api_modules() -> Dict[str, Dict[str, str]]:
 
         api_path = Path(api_file).parent
 
-        modules: Dict[str, Dict[str, str]] = {}
+        modules: dict[str, dict[str, str]] = {}
         for file in api_path.glob("*.py"):
             if file.name == "__init__.py":
                 continue
@@ -85,8 +72,10 @@ def discover_api_modules() -> Dict[str, Dict[str, str]]:
         return {}
 
 
-def format_type(type_hint: Any, model_registry: Dict[str, Any]) -> str:
+def format_type(type_hint: Any, model_registry: dict[str, Any]) -> str:
     """Format a type hint into a string, recursively handling nested models."""
+    from pydantic import BaseModel
+
     if isinstance(type_hint, str):
         return type_hint
     if isinstance(type_hint, ForwardRef):
@@ -112,9 +101,11 @@ def format_type(type_hint: Any, model_registry: Dict[str, Any]) -> str:
 
 
 def get_model_schema(
-    model: Any, model_registry: Dict[str, Any]
-) -> List[Dict[str, Any]]:
+    model: Any, model_registry: dict[str, Any]
+) -> list[dict[str, Any]]:
     """Get the schema of a Pydantic model and update the model registry."""
+    from pydantic import BaseModel
+
     if (
         not inspect.isclass(model)
         or not issubclass(model, BaseModel)
@@ -141,7 +132,7 @@ def get_model_schema(
     return schema
 
 
-def get_method_info(cls, method_name: str) -> Optional[Dict[str, Any]]:
+def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
     """Get detailed information about a specific class method."""
     try:
         method = getattr(cls, method_name)
@@ -210,7 +201,7 @@ def get_method_info(cls, method_name: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_module_functions(module) -> List[Dict[str, Any]]:
+def get_module_functions(module) -> list[dict[str, Any]]:
     """Get all public functions from a module with their documentation."""
     functions = []
 
@@ -353,7 +344,7 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
                                 method_doc = inspect.getdoc(method) or ""
 
                                 try:
-                                    method_sig = inspect.signature(method)
+                                    inspect.signature(method)
                                     method_type_hints = get_type_hints(method)
                                     return_type_hint = method_type_hints.get(
                                         "return", Any
@@ -399,10 +390,16 @@ def get_module_functions(module) -> List[Dict[str, Any]]:
     return sorted(functions, key=lambda x: x["name"])
 
 
-def format_parameters(params: List[Dict[str, Any]]) -> Table:
+def format_parameters(params: list[dict[str, Any]]):
     """Format parameters into a rich Table."""
+    from rich.table import Table
+
     table = Table(
-        show_header=True, header_style="bold magenta", title="Function Parameters"
+        show_header=True,
+        header_style="bold magenta",
+        title="Function Parameters",
+        expand=True,
+        border_style="cyan"
     )
     table.add_column("Parameter", style="cyan", justify="left")
     table.add_column("Type", style="green", justify="left")
@@ -417,9 +414,16 @@ def format_parameters(params: List[Dict[str, Any]]) -> Table:
     return table
 
 
-def format_model(schema: List[Dict[str, Any]]) -> Table:
+def format_model(schema: list[dict[str, Any]]):
     """Format a model schema into a rich Table."""
-    table = Table(show_header=True, header_style="bold magenta")
+    from rich.table import Table
+
+    table = Table(
+        show_header=True,
+        header_style="bold magenta",
+        expand=True,
+        border_style="cyan"
+    )
     table.add_column("Field", style="cyan", justify="left")
     table.add_column("Type", style="green", justify="left")
     table.add_column("Required", style="yellow", justify="center", width=10)
@@ -439,9 +443,14 @@ def format_model(schema: List[Dict[str, Any]]) -> Table:
 
 
 def create_function_tree(
-    functions: List[Dict[str, Any]], category: str, full_detail: bool = True
-) -> Tree:
+    functions: list[dict[str, Any]], category: str, full_detail: bool = True
+):
     """Create a tree structure for functions and classes in a category."""
+    from rich.panel import Panel
+    from rich.syntax import Syntax
+    from rich.text import Text
+    from rich.tree import Tree
+
     tree = Tree(f"[bold blue]{category}")
 
     if not functions:
@@ -511,6 +520,7 @@ def create_function_tree(
             )
 
         if func.get("type") == "class" and func.get("methods"):
+            from rich.table import Table
             methods_table = Table(
                 show_header=True, header_style="bold magenta", title="Public Methods"
             )
@@ -548,11 +558,11 @@ def create_function_tree(
 @app.command()
 def api(
     module: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--module", "-m", help="Optional API module name to document"),
     ] = None,
     function: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--function", "-f", help="The specific function to display details for"
         ),
@@ -567,13 +577,25 @@ def api(
     Shows function signatures, descriptions, parameters, and examples
     for all available Red Team APIs.
     """
+    from rich.panel import Panel
+    from rich.table import Table
+
+    from ofx.settings import get_console
+
+    console = get_console()
+
     discovered = discover_api_modules()
     modules = {name: info["path"] for name, info in discovered.items()}
     descriptions = {name: info["description"] for name, info in discovered.items()}
 
     if list_modules:
         console.print("\n[bold blue]Available API Modules:[/bold blue]")
-        table = Table(show_header=True, header_style="bold magenta")
+        table = Table(
+            show_header=True,
+            header_style="bold magenta",
+            expand=True,
+            border_style="cyan"
+        )
         table.add_column("Module", style="cyan", no_wrap=True)
         table.add_column("Description", style="green")
 
@@ -588,7 +610,7 @@ def api(
         return
 
     if not module:
-        console.print("\n[yellow]No module specified.[/yellow]")
+        console.print("\n⚠️ No module specified.")
         console.print("\nUse one of the following options:")
         console.print(
             "  • [cyan]--list[/cyan] or [cyan]-l[/cyan] to list all available modules"
@@ -603,7 +625,7 @@ def api(
 
     imported_modules = {}
     if module not in modules:
-        console.print(f"[red]Error:[/red] Module '{module}' not found")
+        console.print(f"❌ Module '{module}' not found")
         console.print(f"\nAvailable modules: {', '.join(sorted(modules.keys()))}")
         console.print("\nUse [cyan]--list[/cyan] to see all modules with descriptions")
         raise typer.Exit(1)
@@ -611,8 +633,8 @@ def api(
     try:
         imported_modules[module] = importlib.import_module(modules[module])
     except ImportError as e:
-        console.print(f"[red]Error:[/red] Failed to import module '{module}': {str(e)}")
-        raise typer.Exit(1)
+        console.print(f"❌ Failed to import module '{module}': {str(e)}")
+        raise typer.Exit(1) from e
 
     try:
         for mod_name, mod in imported_modules.items():
@@ -632,21 +654,21 @@ def api(
                     )
                     if not class_func:
                         console.print(
-                            f"[red]Error:[/red] Class '{class_name}' not found in module '{mod_name}'"
+                            f"❌ Class '{class_name}' not found in module '{mod_name}'"
                         )
                         continue
 
                     cls = getattr(mod, class_name, None)
                     if not cls:
                         console.print(
-                            f"[red]Error:[/red] Could not load class '{class_name}'"
+                            f"❌ Could not load class '{class_name}'"
                         )
                         continue
 
                     method_info = get_method_info(cls, method_name)
                     if not method_info:
                         console.print(
-                            f"[red]Error:[/red] Method '{method_name}' not found in class '{class_name}'"
+                            f"❌ Method '{method_name}' not found in class '{class_name}'"
                         )
                         available_methods = [
                             m["name"] for m in class_func.get("methods", [])
@@ -662,7 +684,7 @@ def api(
                     functions = [f for f in functions if f["name"] == function]
                     if not functions:
                         console.print(
-                            f"[red]Error:[/red] Function or class '{function}' not found in module '{mod_name}'"
+                            f"❌ Function or class '{function}' not found in module '{mod_name}'"
                         )
                         continue
 
@@ -682,8 +704,8 @@ def api(
             console.print(tree)
 
     except Exception as e:
-        console.print(f"[red]Error:[/red] {str(e)}")
-        raise typer.Exit(1)
+        console.print(f"❌ {str(e)}")
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -693,40 +715,45 @@ def serve(
 ):
     """
     Serve the documentation using Python HTTP server.
-    
+
     Serves pre-built static HTML/CSS/JS files.
     """
+    import http.server
+    import socketserver
+
+    from ofx.settings import get_console
+
+    console = get_console()
+
     try:
         package_dir = Path(__file__).parent.parent
         site_dir = package_dir / "data" / "site"
-        
+
         index_file = site_dir / "index.html"
         if not index_file.exists():
-            console.print(f"[red][ERROR] index.html not found in {site_dir}[/red]")
+            console.print(f"❌ index.html not found in {site_dir}")
             raise typer.Exit(1)
-        
-        console.print(f"[cyan]Documentation available at http://{host}:{port}[/cyan]")
+
+        console.print(f"✅ Documentation available at http://{host}:{port}")
         console.print("[dim]Press Ctrl+C to stop[/dim]\n")
-        
-        # Create HTTP server handler
+
         class Handler(http.server.SimpleHTTPRequestHandler):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, directory=str(site_dir), **kwargs)
-        
-        # Start server
+
         with socketserver.TCPServer((host, port), Handler) as httpd:
             httpd.serve_forever()
-        
+
     except KeyboardInterrupt:
         httpd.server_close()
-        console.print("\n[yellow]Documentation server stopped[/yellow]")
+        console.print("\n[OK] Documentation server stopped")
     except OSError as e:
         if "Address already in use" in str(e):
-            console.print(f"[red][ERROR] Port {port} is already in use[/red]")
+            console.print(f"❌ Port {port} is already in use")
             console.print(f"Try a different port: [cyan]ofx docs serve --port {port + 1}[/cyan]")
         else:
-            console.print(f"[red][ERROR] Error: {e}[/red]")
-        raise typer.Exit(1)
+            console.print(f"❌ Error: {e}")
+        raise typer.Exit(1) from None
     except Exception as e:
-        console.print(f"[red][ERROR] Error: {e}[/red]")
-        raise typer.Exit(1)
+        console.print(f"❌ Error: {e}")
+        raise typer.Exit(1) from e

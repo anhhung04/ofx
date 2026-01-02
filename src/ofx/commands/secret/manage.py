@@ -1,29 +1,24 @@
-import fnmatch
 import getpass
 import json
 import logging
 from pathlib import Path
-from typing import Optional
 
 import typer
-from rich.console import Console
-from rich.table import Table
 
 from ofx.settings import SECRETS_DIR, settings
 from ofx.utils.secrets import SecretManager
 
 app = typer.Typer()
 logger = logging.getLogger(settings.app_branding)
-console = Console()
 
 
 @app.command("set")
 def set_secret(
     name: str = typer.Argument(..., help="Secret name"),
-    value: Optional[str] = typer.Option(
+    value: str | None = typer.Option(
         None, "--value", "-v", help="Secret value (if not provided, will prompt)"
     ),
-    file: Optional[Path] = typer.Option(
+    file: Path | None = typer.Option(
         None, "--file", "-f", help="Read secret value from file"
     ),
 ):
@@ -35,7 +30,7 @@ def set_secret(
     """
     if file:
         if not file.exists():
-            typer.secho(f"[ERROR] File not found: {file}", fg=typer.colors.RED)
+            typer.secho(f"❌ File not found: {file}", fg=typer.colors.RED)
             raise typer.Exit(code=1)
         secret_value = file.read_text().strip()
     elif value:
@@ -49,7 +44,7 @@ def set_secret(
         pass
 
     SecretManager.set(name, secret_value)
-    typer.secho(f"[OK] Secret '{name}' saved to encrypted store", fg=typer.colors.GREEN)
+    typer.secho(f"✅ Secret '{name}' saved to encrypted store", fg=typer.colors.GREEN)
 
 
 @app.command("get")
@@ -66,7 +61,7 @@ def get_secret(
     value = SecretManager.get(name)
 
     if value is None:
-        typer.secho(f"[ERROR] Secret '{name}' not found", fg=typer.colors.RED)
+        typer.secho(f"❌ Secret '{name}' not found", fg=typer.colors.RED)
         raise typer.Exit(code=1)
 
     if show:
@@ -81,10 +76,10 @@ def get_secret(
 
 @app.command("list")
 def list_secrets(
-    filter_type: Optional[str] = typer.Option(
+    filter_type: str | None = typer.Option(
         None, "--filter", "-f", help="Filter by type (string, json, api-key, password, token)"
     ),
-    search: Optional[str] = typer.Option(
+    search: str | None = typer.Option(
         None, "--search", "-s", help="Search in secret names"
     ),
     show_values: bool = typer.Option(
@@ -97,6 +92,10 @@ def list_secrets(
     Supports filtering by secret type and searching within secret names.
     Use --show-values with caution as it displays sensitive data.
     """
+    from rich.table import Table
+
+    from ofx.settings import get_console
+    console = get_console()
     secrets = SecretManager.list()
 
     if not secrets:
@@ -142,7 +141,7 @@ def list_secrets(
 
     if show_values:
         typer.secho(
-            "\n[WARN] WARNING: Secret values are displayed above!",
+            "\n⚠️ WARNING: Secret values are displayed above!",
             fg=typer.colors.YELLOW,
             bold=True,
         )
@@ -161,13 +160,18 @@ def search_secrets(
     ? matches any single character. Search is case-insensitive.
     Use --show-values with caution as it displays sensitive data.
     """
+    import fnmatch
+
+    from rich.table import Table
+
+    from ofx.settings import get_console
+    console = get_console()
     secrets = SecretManager.list()
 
     if not secrets:
         typer.secho("No secrets found", fg=typer.colors.YELLOW)
         return
 
-    import fnmatch
     matches = {}
 
     for name, value in secrets.items():
@@ -198,7 +202,7 @@ def search_secrets(
 
     if show_values:
         typer.secho(
-            "\n[WARN] WARNING: Secret values are displayed above!",
+            "\n⚠️ WARNING: Secret values are displayed above!",
             fg=typer.colors.YELLOW,
             bold=True,
         )
@@ -260,7 +264,7 @@ def delete_secret(
     --force is used. This action cannot be undone.
     """
     if not SecretManager.exists(name):
-        typer.secho(f"[ERROR] Secret '{name}' not found", fg=typer.colors.RED)
+        typer.secho(f"❌ Secret '{name}' not found", fg=typer.colors.RED)
         raise typer.Exit(code=1)
 
     if not force:
@@ -270,7 +274,7 @@ def delete_secret(
             raise typer.Exit()
 
     SecretManager.delete(name)
-    typer.secho(f"[OK] Secret '{name}' deleted", fg=typer.colors.GREEN)
+    typer.secho(f"✅ Secret '{name}' deleted", fg=typer.colors.GREEN)
 
 
 @app.command("export")
@@ -291,9 +295,9 @@ def export_secrets(
         typer.secho("No secrets to export", fg=typer.colors.YELLOW)
         raise typer.Exit()
 
-    typer.secho(f"[OK] Exported {count} secrets to {output}", fg=typer.colors.GREEN)
+    typer.secho(f"✅ Exported {count} secrets to {output}", fg=typer.colors.GREEN)
     typer.secho(
-        "[WARN] WARNING: Exported file contains unencrypted secrets!",
+        "⚠️ WARNING: Exported file contains unencrypted secrets!",
         fg=typer.colors.YELLOW,
         bold=True,
     )
@@ -314,13 +318,13 @@ def import_secrets(
     try:
         imported = SecretManager.import_from_file(file, overwrite)
     except FileNotFoundError as e:
-        typer.secho(f"[ERROR] {e}", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        typer.secho(f"❌ {e}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from e
     except ValueError as e:
-        typer.secho(f"[ERROR] {e}", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
+        typer.secho(f"❌ {e}", fg=typer.colors.RED)
+        raise typer.Exit(code=1) from e
 
-    typer.secho(f"[OK] Imported {imported} secrets", fg=typer.colors.GREEN)
+    typer.secho(f"✅ Imported {imported} secrets", fg=typer.colors.GREEN)
 
 
 @app.command("clear")
@@ -345,7 +349,7 @@ def clear_secrets(
             raise typer.Exit()
 
     SecretManager.clear()
-    typer.secho("[OK] All secrets cleared", fg=typer.colors.GREEN)
+    typer.secho("✅ All secrets cleared", fg=typer.colors.GREEN)
 
 
 @app.command("store")
@@ -371,7 +375,7 @@ def show_store_location():
 
 @app.command("backup")
 def backup_secrets(
-    output_file: Optional[Path] = typer.Option(
+    output_file: Path | None = typer.Option(
         None, "--output", "-o", help="Output file path (default: auto-generated)"
     ),
     force: bool = typer.Option(
@@ -405,7 +409,7 @@ def backup_secrets(
     try:
         # Create encrypted backup
         count = SecretManager.backup(output_file)
-        typer.secho(f"[OK] Created encrypted backup: {output_file}", fg=typer.colors.GREEN)
+        typer.secho(f"✅ Created encrypted backup: {output_file}", fg=typer.colors.GREEN)
         typer.secho(f"[INFO] Backed up {count} secrets", fg=typer.colors.CYAN)
 
         # Show file info
@@ -413,8 +417,8 @@ def backup_secrets(
         typer.secho(f"[SIZE] File size: {_format_file_size(file_size)}", fg=typer.colors.CYAN)
 
     except Exception as e:
-        typer.secho(f"[ERROR] Backup failed: {e}", fg=typer.colors.RED)
-        raise typer.Exit(1)
+        typer.secho(f"❌ Backup failed: {e}", fg=typer.colors.RED)
+        raise typer.Exit(1) from e
 
 
 @app.command("restore")
@@ -433,6 +437,10 @@ def restore_secrets(
     Supports conflict resolution when secrets already exist.
     Use --dry-run to preview what would be restored without making changes.
     """
+    from rich.table import Table
+
+    from ofx.settings import get_console
+    console = get_console()
     if not backup_file.exists():
         typer.secho(f"❌ Backup file not found: {backup_file}", fg=typer.colors.RED)
         raise typer.Exit(1)
@@ -470,7 +478,7 @@ def restore_secrets(
                 conflicts.append(name)
 
         if conflicts:
-            typer.secho(f"\n[WARN] {len(conflicts)} secrets already exist and would be skipped:", fg=typer.colors.YELLOW)
+            typer.secho(f"\n⚠️ {len(conflicts)} secrets already exist and would be skipped:", fg=typer.colors.YELLOW)
             for name in conflicts[:5]:  # Show first 5
                 typer.secho(f"   • {name}", fg=typer.colors.YELLOW)
             if len(conflicts) > 5:
@@ -482,20 +490,20 @@ def restore_secrets(
 
         # Perform restore
         restored_count = SecretManager.restore(backup_file, overwrite)
-        typer.secho(f"[OK] Restored {restored_count} secrets from backup", fg=typer.colors.GREEN)
+        typer.secho(f"✅ Restored {restored_count} secrets from backup", fg=typer.colors.GREEN)
 
         if conflicts:
             skipped_count = len(conflicts)
             typer.secho(f"[SKIP] Skipped {skipped_count} existing secrets", fg=typer.colors.YELLOW)
 
     except Exception as e:
-        typer.secho(f"[ERROR] Restore failed: {e}", fg=typer.colors.RED)
-        raise typer.Exit(1)
+        typer.secho(f"❌ Restore failed: {e}", fg=typer.colors.RED)
+        raise typer.Exit(1) from e
 
 
 @app.command("history")
 def show_backup_history(
-    directory: Optional[Path] = typer.Option(
+    directory: Path | None = typer.Option(
         None, "--directory", "-d", help="Directory to scan for backups (default: current directory)"
     ),
 ):
@@ -505,11 +513,15 @@ def show_backup_history(
     and displays them in a table with creation date, secret count, and file size.
     Only shows valid backup files with .enc extension.
     """
+    from rich.table import Table
+
+    from ofx.settings import get_console
+    console = get_console()
     if directory is None:
         directory = Path.cwd()
 
     if not directory.exists():
-        typer.secho(f"[ERROR] Directory not found: {directory}", fg=typer.colors.RED)
+        typer.secho(f"❌ Directory not found: {directory}", fg=typer.colors.RED)
         raise typer.Exit(1)
 
     # Find backup files (files ending with .enc that contain backup data)
@@ -523,7 +535,7 @@ def show_backup_history(
                 'count': info['count'],
                 'size': info['size']
             })
-        except:
+        except (KeyError, ValueError, TypeError):
             # Skip files that aren't valid backups
             continue
 
@@ -578,7 +590,7 @@ def migrate_from_files(
     migrated = SecretManager.migrate_from_directory(SECRETS_DIR)
 
     typer.secho(
-        f"[OK] Migrated {migrated} secrets to encrypted store", fg=typer.colors.GREEN
+        f"✅ Migrated {migrated} secrets to encrypted store", fg=typer.colors.GREEN
     )
     typer.secho(
         f"Legacy files remain in {SECRETS_DIR} (delete manually if desired)",

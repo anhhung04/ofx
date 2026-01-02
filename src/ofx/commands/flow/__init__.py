@@ -1,4 +1,4 @@
-from typing import Annotated, List, Optional
+from typing import Annotated, Optional
 
 import typer
 from async_typer import AsyncTyper
@@ -18,7 +18,7 @@ async def run(
         str, typer.Argument(..., help="Name of the workflow to run")
     ],
     input: Annotated[
-        Optional[List[str]],
+        list[str] | None,
         typer.Option(
             "-i",
             "--input",
@@ -26,13 +26,20 @@ async def run(
         ),
     ] = None,
     output: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "-o",
             "--output",
             help="Output path for the workflow results. If not specified, defaults to the current directory.",
         ),
     ] = None,
+    profile: Annotated[
+        bool,
+        typer.Option(
+            "--profile",
+            help="Enable performance profiling and output timing information.",
+        ),
+    ] = False,
 ):
     from ofx.commands.flow.run import FlowRunHandler
 
@@ -40,6 +47,7 @@ async def run(
         workflow_name=workflow_name,
         input=input,
         output=output,
+        profile=profile,
     ).run()
 
 
@@ -63,25 +71,32 @@ def update():
     UpdateHandler().run()
 
 
-@app.async_command()
-async def tools(
+@app.command()
+def visualize(
     workflow_name: Annotated[
-        Optional[str],
-        typer.Argument(help="Name of the workflow to install tools from"),
-    ] = None,
-    all: Annotated[
-        bool,
+        str, typer.Argument(..., help="Name of the workflow to visualize")
+    ],
+    output: Annotated[
+        str | None,
         typer.Option(
-            "--all",
-            "-a",
-            help="Install tools from all workflows in the workflow directories",
+            "-o",
+            "--output",
+            help="Output path for the visualization file. If not specified, displays in terminal.",
         ),
-    ] = False,
+    ] = None,
+    format: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="Output format for visualization (dot, png, svg, pdf). Default is dot.",
+        ),
+    ] = "dot",
 ):
-    """Install tools configured in workflow(s)"""
-    from ofx.commands.flow.tools import ToolsInstallHandler
+    """Visualize workflow as a directed acyclic graph (DAG)"""
+    from ofx.commands.flow.visualize import VisualizeHandler
 
-    await ToolsInstallHandler(
+    VisualizeHandler(
         workflow_name=workflow_name,
-        all_workflows=all,
+        output=output,
+        format=format,
     ).run()

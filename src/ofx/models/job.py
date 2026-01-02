@@ -1,36 +1,37 @@
-from pydantic import BaseModel, Field, model_validator
-from typing import Union, List, Dict, Union, Optional
 from pathlib import Path
+from typing import Optional
 
-from ofx.models.step import Step
+from pydantic import BaseModel, Field, model_validator
+
 from ofx.models import DefaultConfig
+from ofx.models.step import Step
 
 
 class Job(BaseModel):
-    name: Optional[str] = Field(None, description="Name of the job")
-    needs: Union[str, List[str]] = Field(
-        [],
+    name: str | None = Field(None, description="Name of the job")
+    needs: str | list[str] = Field(
+        default_factory=list,
         description="Job dependencies (other jobs that must complete before this one)",
     )
-    run_if: Union[str, bool] = Field(
+    run_if: str | bool = Field(
         True, description="Condition to run the job (e.g., 'success()', 'failure()')"
     )
-    env: Dict[str, str] = Field(
-        default={},
+    env: dict[str, str] = Field(
+        default_factory=dict,
         description="A map of variables that are available to all steps in the job",
     )
-    outputs: Dict[str, str] = Field(
-        {}, description="Outputs of the job (key-value pairs)"
+    outputs: dict[str, str] = Field(
+        default_factory=dict, description="Outputs of the job (key-value pairs)"
     )
     defaults: DefaultConfig = Field(
         default_factory=DefaultConfig,
         description="Default configuration for the job",
     )
-    hooks: Dict[str, str] = Field(
-        default={},
+    hooks: dict[str, str] = Field(
+        default_factory=dict,
         description="Lifecycle hooks with Python code (e.g., pre_run, post_run, on_iter_step)",
     )
-    steps: List[Step] = Field(..., description="List of steps in the job")
+    steps: list[Step] = Field(..., min_length=1, description="List of steps in the job")
     jid: str = Field(
         default="",
         description="Job identifier in the workflow",
@@ -44,7 +45,7 @@ class Job(BaseModel):
         elif self.needs is None:
             self.needs = []
         return self
-    
+
     def __str__(self):
         return f"Job(name='{self.name}', id={self.jid})"
 

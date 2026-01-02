@@ -3,7 +3,6 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -19,9 +18,9 @@ class SyncProjectHandler:
         self,
         path: str,
         remote_type: str = "git",
-        remote_config: Optional[str] = None,
+        remote_config: str | None = None,
         encrypt: bool = False,
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
     ):
         self._project_path = Path(path)
         self._remote_type = remote_type

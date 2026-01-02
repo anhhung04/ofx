@@ -1,6 +1,6 @@
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any
 
 from ofx.runner import RunnerStatus
 
@@ -11,16 +11,16 @@ class JobEntry:
     name: str
     status: RunnerStatus = RunnerStatus.IDLE
 
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    runner: Optional[Any] = None
+    runner: Any | None = None
 
-    result: Optional[bool] = None
-    error: Optional[Exception] = None
-    outputs: Dict[str, Any] = field(default_factory=dict)
-    steps: Dict[str, Any] = field(default_factory=dict)
+    result: bool | None = None
+    error: Exception | None = None
+    outputs: dict[str, Any] = field(default_factory=dict)
+    steps: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "job_id": self.job_id,
             "name": self.name,
@@ -56,11 +56,11 @@ class JobEntry:
 
 class JobRegistry:
     def __init__(self):
-        self._entries: Dict[str, JobEntry] = {}
+        self._entries: dict[str, JobEntry] = {}
         self._lock = threading.Lock()
 
     def register(
-        self, job_id: str, name: str, metadata: Optional[Dict[str, Any]] = None
+        self, job_id: str, name: str, metadata: dict[str, Any] | None = None
     ) -> JobEntry:
         with self._lock:
             entry = JobEntry(
@@ -90,7 +90,7 @@ class JobRegistry:
                 self._entries[job_id].status = RunnerStatus.FAILED
 
     def update_outputs(
-        self, job_id: str, outputs: Dict[str, Any], steps: Dict[str, Any]
+        self, job_id: str, outputs: dict[str, Any], steps: dict[str, Any]
     ) -> None:
         with self._lock:
             if job_id in self._entries:
@@ -99,26 +99,26 @@ class JobRegistry:
                 if self._entries[job_id].result:
                     self._entries[job_id].status = RunnerStatus.COMPLETED
 
-    def get_entry(self, job_id: str) -> Optional[JobEntry]:
+    def get_entry(self, job_id: str) -> JobEntry | None:
         with self._lock:
             return self._entries.get(job_id)
 
-    def get_runner(self, job_id: str) -> Optional[Any]:
+    def get_runner(self, job_id: str) -> Any | None:
         with self._lock:
             entry = self._entries.get(job_id)
             return entry.runner if entry else None
 
-    def get_status(self, job_id: str) -> Optional[RunnerStatus]:
+    def get_status(self, job_id: str) -> RunnerStatus | None:
         with self._lock:
             entry = self._entries.get(job_id)
             return entry.status if entry else None
 
-    def get_result(self, job_id: str) -> Optional[bool]:
+    def get_result(self, job_id: str) -> bool | None:
         with self._lock:
             entry = self._entries.get(job_id)
             return entry.result if entry else None
 
-    def get_error(self, job_id: str) -> Optional[Exception]:
+    def get_error(self, job_id: str) -> Exception | None:
         with self._lock:
             entry = self._entries.get(job_id)
             return entry.error if entry else None
@@ -141,11 +141,11 @@ class JobRegistry:
         with self._lock:
             return job_id in self._entries
 
-    def to_dict(self) -> Dict[str, Dict[str, Any]]:
+    def to_dict(self) -> dict[str, dict[str, Any]]:
         with self._lock:
             return {job_id: entry.to_dict() for job_id, entry in self._entries.items()}
 
-    def get_all_entries(self) -> Dict[str, JobEntry]:
+    def get_all_entries(self) -> dict[str, JobEntry]:
         with self._lock:
             return dict(self._entries)
 

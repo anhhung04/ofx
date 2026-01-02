@@ -6,15 +6,6 @@ import subprocess
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
-import boto3
-import git
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from webdav3.client import Client as WebDAVClient
 
 
 class SSHHandler:
@@ -151,7 +142,7 @@ class SSHHandler:
             if result.stdout:
                 logger.debug(result.stdout)
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"SSH sync failed: {e.stderr}")
+            raise RuntimeError(f"SSH sync failed: {e.stderr}") from e
 
     def upload(self, local_path: str, remote_path: str) -> None:
         remote_file = f"{self.user}@{self.host}:{self.remote_path}/{remote_path}"
@@ -173,11 +164,15 @@ class SSHHandler:
                 capture_output=True,
             )
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"SCP upload failed: {e.stderr}")
+            raise RuntimeError(f"SCP upload failed: {e.stderr}") from e
 
 
 class EncryptionHandler:
     def __init__(self, key: str):
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA512(),
             length=32,
@@ -188,6 +183,7 @@ class EncryptionHandler:
         self.key = kdf.derive(key.encode())
 
     def encrypt_file(self, file_path: str) -> bytes:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         with open(file_path, "rb") as f:
             data = f.read()
 
@@ -198,6 +194,7 @@ class EncryptionHandler:
         return nonce + ciphertext
 
     def decrypt_file(self, encrypted_data: bytes) -> bytes:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         nonce = encrypted_data[:12]
         ciphertext = encrypted_data[12:]
 
@@ -207,14 +204,16 @@ class EncryptionHandler:
         return plaintext
 
     def encrypt_data(self, data: bytes) -> bytes:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         nonce = os.urandom(12)
         aesgcm = AESGCM(self.key)
         ciphertext = aesgcm.encrypt(nonce, data, None)
         return nonce + ciphertext
 
     def setup_git_filters(
-        self, repo_path: Path, patterns: Optional[list] = None
+        self, repo_path: Path, patterns: list | None = None
     ) -> None:
+        import git
         if patterns is None:
             patterns = ["*"]
 
@@ -247,9 +246,9 @@ class GitHandler:
     def __init__(
         self,
         project_path: str,
-        config: Optional[dict] = None,
+        config: dict | None = None,
         encrypt: bool = False,
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
     ):
         self.project_path = Path(project_path)
         self.config = config or {}
@@ -263,13 +262,14 @@ class GitHandler:
             self.encryptor = None
 
     def sync(self) -> None:
+        import git
         try:
             repo = git.Repo(self.project_path)
         except (git.InvalidGitRepositoryError, git.NoSuchPathError):
             raise RuntimeError(
                 f"No git repository found at {self.project_path}. "
                 "Initialize with 'ofx project init' or create project first."
-            )
+            ) from None
 
         try:
             if self.encrypt and self.encryptor:
@@ -311,18 +311,19 @@ class GitHandler:
                 logger.info("No local changes to push")
 
         except Exception as e:
-            raise RuntimeError(f"Git sync failed: {e}")
+            raise RuntimeError(f"Git sync failed: {e}") from e
 
 
 class S3Handler:
     def __init__(
         self,
         bucket: str,
-        aws_access_key_id: Optional[str] = None,
-        aws_secret_access_key: Optional[str] = None,
-        region_name: Optional[str] = None,
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+        region_name: str | None = None,
         prefix: str = "",
     ):
+        import boto3
         self.bucket = bucket
         self.prefix = prefix.strip("/")
         self.s3 = boto3.client(
@@ -333,12 +334,13 @@ class S3Handler:
         )
 
     def sync(self, local_path: Path) -> None:
+        import git
         logger = logging.getLogger("ofx")
 
         try:
             repo = git.Repo(local_path)
         except (git.InvalidGitRepositoryError, git.NoSuchPathError):
-            raise RuntimeError(f"No git repository found at {local_path}")
+            raise RuntimeError(f"No git repository found at {local_path}") from None
 
         bundle_key = f"{self.prefix}/repo.bundle" if self.prefix else "repo.bundle"
         refs_key = f"{self.prefix}/refs.json" if self.prefix else "refs.json"
@@ -373,9 +375,10 @@ class S3Handler:
         except Exception as e:
             if os.path.exists(bundle_path):
                 os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to sync to S3: {e}")
+            raise RuntimeError(f"Failed to sync to S3: {e}") from e
 
     def fetch(self, local_path: Path) -> None:
+        import git
         logger = logging.getLogger("ofx")
 
         bundle_key = f"{self.prefix}/repo.bundle" if self.prefix else "repo.bundle"
@@ -410,7 +413,7 @@ class S3Handler:
         except Exception as e:
             if os.path.exists(bundle_path):
                 os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to fetch from S3: {e}")
+            raise RuntimeError(f"Failed to fetch from S3: {e}") from e
 
     def upload(self, local_path: str, remote_path: str) -> None:
         key = f"{self.prefix}/{remote_path}" if self.prefix else remote_path
@@ -423,16 +426,18 @@ class S3Handler:
 
 class WebDAVHandler:
     def __init__(self, webdav_options: dict):
+        from webdav3.client import Client as WebDAVClient
         self.client = WebDAVClient(webdav_options)
         self.base_path = webdav_options.get("webdav_root", "/")
 
     def sync(self, local_path: Path) -> None:
+        import git
         logger = logging.getLogger("ofx")
 
         try:
             repo = git.Repo(local_path)
         except (git.InvalidGitRepositoryError, git.NoSuchPathError):
-            raise RuntimeError(f"No git repository found at {local_path}")
+            raise RuntimeError(f"No git repository found at {local_path}") from None
 
         bundle_path_remote = f"{self.base_path}/repo.bundle".replace("//", "/")
         refs_path_remote = f"{self.base_path}/refs.json".replace("//", "/")
@@ -469,9 +474,10 @@ class WebDAVHandler:
         except Exception as e:
             if os.path.exists(bundle_path):
                 os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to sync to WebDAV: {e}")
+            raise RuntimeError(f"Failed to sync to WebDAV: {e}") from e
 
     def fetch(self, local_path: Path) -> None:
+        import git
         logger = logging.getLogger("ofx")
 
         bundle_path_remote = f"{self.base_path}/repo.bundle".replace("//", "/")
@@ -508,7 +514,7 @@ class WebDAVHandler:
         except Exception as e:
             if os.path.exists(bundle_path):
                 os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to fetch from WebDAV: {e}")
+            raise RuntimeError(f"Failed to fetch from WebDAV: {e}") from e
 
     def upload(self, local_path: str, remote_path: str) -> None:
         self.client.upload_sync(remote_path=remote_path, local_path=local_path)

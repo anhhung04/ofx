@@ -64,7 +64,6 @@ steps:
   - script: |
       import requests
       response = requests.get('https://example.com')
-    script:
 ```
 
 #### pip_install
@@ -196,7 +195,6 @@ steps:
       )
       
       print(response.json())
-    script:
 ```
 
 ### Tool Installation and Usage
@@ -239,7 +237,6 @@ steps:
       
       with open('${{ ctx.output_path }}/reports/report_${{ ctx.run_id }}.json', 'w') as f:
         json.dump(report_data, f)
-    script:
 ```
 
 ### Environment Configuration
@@ -300,7 +297,6 @@ steps:
       
       with open(result_file, 'w') as f:
         json.dump(data, f, indent=2)
-    script:
 ```
 
 ### Template in Shell Scripts
@@ -351,7 +347,6 @@ steps:
       if not re.match(r'^[a-zA-Z0-9.-]+$', target):
         print(f"Invalid target format: {target}")
         sys.exit(1)
-    script:
 ```
 
 ### 3. Use Meaningful Names

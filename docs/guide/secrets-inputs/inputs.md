@@ -38,4 +38,4 @@ inputs:
 
 ## See Also
 - [Secrets](secrets.md)
-- [Inputs CLI Reference](../../cli/commands.md#run)
+- [Inputs CLI Reference](../../cli/commands/run.md)

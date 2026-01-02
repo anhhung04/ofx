@@ -35,11 +35,7 @@ dist:
 
 docs:
 	@echo "Building documentation..."
-	@if ! uv run python -c "import mkdocs" 2>/dev/null; then \
-		echo "Error: mkdocs not found. Install with: uv pip install mkdocs mkdocs-material"; \
-		exit 1; \
-	fi
-	uv run mkdocs build -f mkdocs.yml -d src/ofx/data/site
+	uv run --extra docs mkdocs build -f mkdocs.yml -d src/ofx/data/site
 	@echo "Documentation built successfully in: src/ofx/data/site/"
 	@echo "To serve locally, run: uv run ofx docs serve"
 

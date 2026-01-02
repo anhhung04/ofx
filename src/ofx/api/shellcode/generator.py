@@ -4,7 +4,7 @@ Shellcode generator with custom template support and connector integration.
 
 import ipaddress
 import logging
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from ofx.settings import settings
 
@@ -49,7 +49,7 @@ class ShellGenerator:
         self,
         os_target: str,
         os_target_arch: str,
-        connector: Optional[object] = None,
+        connector: object | None = None,
     ):
         """Initialize shellcode generator for specific platform.
 
@@ -126,7 +126,7 @@ class ShellGenerator:
 
     def _get_custom_template(
         self, shellcode_type: str
-    ) -> Optional[Callable[[str, int], bytes] | bytes]:
+    ) -> Callable[[str, int], bytes] | bytes | None:
         """
         Get custom template if registered.
 
@@ -156,7 +156,7 @@ class ShellGenerator:
             addr = gethostbyname(addr)
             ipaddress.ip_address(addr)
         except (ValueError, OSError) as e:
-            raise ValueError(f"IP address {addr} is not valid: {e}")
+            raise ValueError(f"IP address {addr} is not valid: {e}") from e
 
         if not 0 <= port <= 65535:
             raise ValueError(f"PORT {port} is not valid (must be 0-65535)")
@@ -172,8 +172,8 @@ class ShellGenerator:
         dll_inj_funcs: list[str] | None = None,
         shell_args: dict | None = None,
         use_precompiled: bool = True,
-        bad_chars: Optional[list[str]] = None,
-        encoder: Optional[str] = None,
+        bad_chars: list[str] | None = None,
+        encoder: str | None = None,
         iterations: int = 1,
     ) -> tuple[bytes, str]:
         """Generate shellcode with optional executable wrapping.
@@ -226,7 +226,7 @@ class ShellGenerator:
             encoder,
             iterations,
         )
-        
+
         # Fall back to template-based generation
         if shellcode is None:
             shellcode = self._generate_shellcode(
@@ -261,12 +261,12 @@ class ShellGenerator:
         shellcode_type: str,
         ip: str,
         port: int,
-        bad_chars: Optional[list[str]] = None,
-        encoder: Optional[str] = None,
+        bad_chars: list[str] | None = None,
+        encoder: str | None = None,
         iterations: int = 1,
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         """Try to generate shellcode using a connector.
-        
+
         Args:
             shellcode_type: Type of shellcode
             ip: IP address
@@ -274,7 +274,7 @@ class ShellGenerator:
             bad_chars: Bad characters to avoid
             encoder: Encoder name
             iterations: Encoding iterations
-        
+
         Returns:
             Shellcode bytes or None if connector generation fails
         """
@@ -283,11 +283,11 @@ class ShellGenerator:
         if connector is None:
             registry = get_registry()
             connector = registry.get_best_available_connector()
-        
+
         if connector is None or not connector.is_available():
             logger.debug("No connector available, falling back to templates")
             return None
-        
+
         try:
             logger.info(f"Generating shellcode with connector: {connector.name}")
             shellcode = connector.generate(
@@ -347,7 +347,7 @@ class ShellGenerator:
             raise ValueError(
                 f"Unsupported OS/ARCH/TYPE combination: {self.OS_TARGET}/{self.OS_TARGET_ARCH}/{shellcode_type}. "
                 f"Available: {self._list_available_templates()}"
-            )
+            ) from None
 
     def _list_available_templates(self) -> str:
         """List all available built-in templates"""

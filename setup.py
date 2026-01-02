@@ -25,6 +25,7 @@ EXCLUDE_FILES = get_exclude_files("src/ofx/data")
 
 def get_ext_paths(root_dir, exclude_files):
     """get filepaths for compilation"""
+    return []
     paths = []
 
     for root, dirs, files in os.walk(root_dir):

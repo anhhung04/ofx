@@ -7,7 +7,7 @@ Two generation methods:
 """
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 from ofx.settings import settings
 
@@ -22,7 +22,7 @@ def _generate_with_msfvenom(os: str, arch: str, type: str, ip: str, port: int) -
         return get_msfvenom_generator().generate(os, arch, type, ip, port, format="raw")
     except RuntimeError as e:
         if "msfvenom not found" in str(e):
-            logger.warning(f"Msfvenom not available, using Docker assembly compilation")
+            logger.warning("Msfvenom not available, using Docker assembly compilation")
             from .assembler import get_assembly_compiler
 
             return get_assembly_compiler().compile(os, arch, type, ip, port)

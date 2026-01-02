@@ -4,6 +4,7 @@ from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from rich.theme import Theme
 
 from ofx.utils.log import reload_logging_config
 
@@ -33,11 +34,62 @@ BANNER = """
 > Handing over to the next generation of red teamers
 """
 
+# Rich theme for red team aesthetic
+RICH_THEME = Theme({
+    # Status indicators
+    "success": "bold green",
+    "error": "bold red",
+    "warning": "bold yellow",
+    "info": "bold cyan",
+
+    # Text styles
+    "header": "bold red on black",
+    "subheader": "bold magenta",
+    "dim": "dim white",
+    "bright": "bold white",
+
+    # Table styles
+    "table.header": "bold red",
+    "table.border": "red",
+    "table.row": "white",
+
+    # Panel styles
+    "panel.border": "red",
+    "panel.header": "bold red",
+
+    # Tree styles
+    "tree": "red",
+    "tree.line": "red",
+
+    # Progress styles
+    "progress.description": "cyan",
+    "progress.percentage": "green",
+    "progress.bar": "red",
+
+    # Specific colors for red team theme
+    "danger": "bold red on black",
+    "alert": "bold yellow on black",
+    "good": "bold green",
+    "neutral": "white",
+    "muted": "dim bright_black",
+
+    # Command output styles
+    "command": "bold cyan",
+    "output": "green",
+    "stderr": "red",
+})
+
 os.makedirs(BASE_DATA_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(SECRETS_DIR, exist_ok=True)
 TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def get_console():
+    """Get a Rich console with the red team theme applied."""
+    from rich.console import Console
+    return Console(theme=RICH_THEME)
 
 
 class Settings(BaseSettings):
@@ -54,6 +106,10 @@ class Settings(BaseSettings):
     timeout: int = Field(
         default=24 * 60 * 60,
         description="Timeout for running flows in seconds",
+    )
+    max_output_size: int = Field(
+        default=10 * 1024 * 1024,  # 10MB
+        description="Maximum output size in bytes before truncation",
     )
 
     model_config = SettingsConfigDict(

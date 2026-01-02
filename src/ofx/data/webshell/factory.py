@@ -4,7 +4,6 @@ from .generators import (
     AspGenerator,
     AspxGenerator,
     BashGenerator,
-    JavaGenerator,
     JspGenerator,
     PerlGenerator,
     PhpGenerator,

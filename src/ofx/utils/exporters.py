@@ -11,17 +11,18 @@ import csv
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
+
 from jinja2 import Template
 
 
 class ResultExporter:
     """Base class for result exporters."""
-    
-    def __init__(self, results: Dict[str, Any]):
+
+    def __init__(self, results: dict[str, Any]):
         self.results = results
         self.timestamp = datetime.now()
-    
+
     def export(self, output_path: Path) -> None:
         """Export results to specified path."""
         raise NotImplementedError
@@ -29,7 +30,7 @@ class ResultExporter:
 
 class JSONExporter(ResultExporter):
     """Export results as JSON."""
-    
+
     def export(self, output_path: Path, indent: int = 2) -> None:
         """Export results to JSON file."""
         output_path = Path(output_path).with_suffix('.json')
@@ -39,26 +40,26 @@ class JSONExporter(ResultExporter):
 
 class CSVExporter(ResultExporter):
     """Export results as CSV (flattened structure)."""
-    
+
     def export(self, output_path: Path) -> None:
         """Export results to CSV file."""
         output_path = Path(output_path).with_suffix('.csv')
-        
+
         # Flatten nested structure for CSV
         rows = self._flatten_results(self.results)
-        
+
         if not rows:
             return
-        
+
         with open(output_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=rows[0].keys())
             writer.writeheader()
             writer.writerows(rows)
-    
-    def _flatten_results(self, data: Dict, prefix: str = '') -> List[Dict]:
+
+    def _flatten_results(self, data: dict, prefix: str = '') -> list[dict]:
         """Flatten nested dictionary structure."""
         rows = []
-        
+
         def flatten(d: Any, parent_key: str = ''):
             if isinstance(d, dict):
                 for k, v in d.items():
@@ -70,18 +71,18 @@ class CSVExporter(ResultExporter):
             elif isinstance(d, list):
                 for i, item in enumerate(d):
                     flatten(item, f"{parent_key}[{i}]")
-        
+
         row = {}
         flatten(data)
         if row:
             rows.append(row)
-        
+
         return rows
 
 
 class HTMLExporter(ResultExporter):
     """Export results as HTML report."""
-    
+
     HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -189,14 +190,14 @@ class HTMLExporter(ResultExporter):
         <div class="job {{ job.status|lower }}">
             <h3>{{ job.name or job_id }}</h3>
             <p>Status: <span class="status {{ job.status|lower }}">{{ job.status }}</span></p>
-            
+
             {% if job.steps %}
             <div class="steps">
                 {% for step_id, step in job.steps.items() %}
                 <div class="step">
                     <strong>{{ step.name }}</strong>
                     <span class="status {{ step.status|lower }}">{{ step.status }}</span>
-                    
+
                     {% if step.outputs %}
                     <details>
                         <summary>Outputs</summary>
@@ -239,11 +240,11 @@ class HTMLExporter(ResultExporter):
 </body>
 </html>
     """
-    
+
     def export(self, output_path: Path) -> None:
         """Export results to HTML file."""
         output_path = Path(output_path).with_suffix('.html')
-        
+
         template = Template(self.HTML_TEMPLATE)
         html = template.render(
             workflow_name=self.results.get('name', 'Workflow'),
@@ -254,18 +255,18 @@ class HTMLExporter(ResultExporter):
             outputs=self.results.get('outputs', {}),
             metadata=self.results.get('metadata', {}),
         )
-        
+
         with open(output_path, 'w') as f:
             f.write(html)
 
 
 class MarkdownExporter(ResultExporter):
     """Export results as Markdown."""
-    
+
     def export(self, output_path: Path) -> None:
         """Export results to Markdown file."""
         output_path = Path(output_path).with_suffix('.md')
-        
+
         md_lines = [
             f"# Workflow Report: {self.results.get('name', 'Workflow')}",
             "",
@@ -274,7 +275,7 @@ class MarkdownExporter(ResultExporter):
             f"**Run ID:** `{self.results.get('run_id', 'N/A')}`",
             "",
         ]
-        
+
         # Add jobs section
         jobs = self.results.get('outputs', {}).get('jobs', {})
         if jobs:
@@ -283,7 +284,7 @@ class MarkdownExporter(ResultExporter):
                 md_lines.append(f"### {job.get('name', job_id)}")
                 md_lines.append(f"**Status:** {job.get('status', 'unknown')}")
                 md_lines.append("")
-                
+
                 steps = job.get('steps', {})
                 if steps:
                     md_lines.append("#### Steps")
@@ -291,37 +292,37 @@ class MarkdownExporter(ResultExporter):
                     for step_id, step in steps.items():
                         md_lines.append(f"- **{step.get('name', step_id)}**: {step.get('status', 'unknown')}")
                     md_lines.append("")
-        
+
         # Add outputs section
         outputs = self.results.get('outputs', {})
         if outputs:
             md_lines.extend(["## Outputs", "", "```json"])
             md_lines.append(json.dumps(outputs, indent=2, default=str))
             md_lines.extend(["```", ""])
-        
+
         with open(output_path, 'w') as f:
             f.write('\n'.join(md_lines))
 
 
 def export_results(
-    results: Dict[str, Any],
+    results: dict[str, Any],
     output_path: Path,
-    formats: List[str] = None
-) -> List[Path]:
+    formats: list[str] | None = None
+) -> list[Path]:
     """Export results in multiple formats.
-    
+
     Args:
         results: Workflow execution results
         output_path: Base path for output files (without extension)
         formats: List of formats to export ('json', 'csv', 'html', 'markdown')
                 If None, exports all formats
-    
+
     Returns:
         List of generated file paths
     """
     if formats is None:
         formats = ['json', 'html', 'markdown']
-    
+
     exporters = {
         'json': JSONExporter,
         'csv': CSVExporter,
@@ -329,9 +330,9 @@ def export_results(
         'markdown': MarkdownExporter,
         'md': MarkdownExporter,
     }
-    
+
     exported_files = []
-    
+
     for fmt in formats:
         fmt = fmt.lower()
         if fmt in exporters:
@@ -340,7 +341,7 @@ def export_results(
             exported_files.append(
                 Path(output_path).with_suffix(f'.{fmt if fmt != "markdown" else "md"}')
             )
-    
+
     return exported_files
 
 

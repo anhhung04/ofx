@@ -1,9 +1,10 @@
 import re
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
-from typing import Union, List, Dict, Any, Literal
-from ofx.models.job import Job
+
 from ofx.models import DefaultConfig
+from ofx.models.job import Job
 
 
 class WorkflowInput(BaseModel):
@@ -24,28 +25,28 @@ class WorkflowSecret(BaseModel):
 class ToolConfig(BaseModel):
     """Configuration for tool installation and verification"""
     install: str = Field(..., description="Command to install the tool")
-    check: Union[None, str] = Field(
+    check: None | str = Field(
         None, description="Command to check if tool is already installed (exit 0 = installed)"
     )
-    post_install: Union[None, str] = Field(
+    post_install: None | str = Field(
         None, description="Command to run after successful installation"
     )
 
 
 class WorkflowCall(BaseModel):
-    inputs: Dict[str, WorkflowInput] = Field(
-        default={}, description="Inputs for the reusable workflow"
+    inputs: dict[str, WorkflowInput] = Field(
+        default_factory=dict, description="Inputs for the reusable workflow"
     )
-    outputs: Dict[str, str] = Field({}, description="Outputs of the reusable workflow")
-    secrets: Dict[str, WorkflowSecret] = Field(
-        {},
+    outputs: dict[str, str] = Field(default_factory=dict, description="Outputs of the reusable workflow")
+    secrets: dict[str, WorkflowSecret] = Field(
+        default_factory=dict,
         description="Secrets to pass to the reusable workflow (key-value pairs)",
     )
 
 
 class WorkflowDispatch(BaseModel):
-    inputs: Dict[str, WorkflowInput] = Field(
-        default={}, description="Inputs for the workflow dispatch event"
+    inputs: dict[str, WorkflowInput] = Field(
+        default_factory=dict, description="Inputs for the workflow dispatch event"
     )
 
 
@@ -54,45 +55,76 @@ class Workflow(BaseModel):
     description: str = Field(
         "No provided description", description="Description of the workflow"
     )
-    env: Dict[str, str] = Field(
-        default={}, description="Environment variables for the workflow"
+    env: dict[str, str] = Field(
+        default_factory=dict, description="Environment variables for the workflow"
     )
-    workflow_dispatch: Union[None, WorkflowDispatch] = Field(
+    workflow_dispatch: None | WorkflowDispatch = Field(
         None,
         description="Workflow dispatch configuration for manual triggers",
     )
-    workflow_call: Union[None, WorkflowCall] = Field(
+    workflow_call: None | WorkflowCall = Field(
         None,
         description="Workflow call configuration for reusable workflows",
     )
-    tools: Union[None, Dict[str, Union[str, ToolConfig]]] = Field(
+    tools: None | dict[str, str | ToolConfig] = Field(
         None, description="Tools configuration - can be simple command string or ToolConfig object"
     )
-    tags: List[str] = Field([], description="Tags associated with the workflow")
+    tags: list[str] = Field(default_factory=list, description="Tags associated with the workflow")
     defaults: DefaultConfig = Field(
-        default_factory=lambda: DefaultConfig(),
+        default_factory=DefaultConfig,
         description="Default configuration for the workflow",
     )
-    jobs: Dict[str, Job] = Field(..., description="List of jobs in the workflow")
+    jobs: dict[str, Job] = Field(..., min_length=1, description="List of jobs in the workflow")
 
     def __str__(self):
         return f"Workflow(name='{self.name}', jobs='{list(self.jobs.keys())}')"
 
     @model_validator(mode="after")
-    def check_jobid_pattern(self):
-        """Ensure that the job ID pattern is valid"""
-        for job_id in self.jobs.keys():
+    def validate_jobs(self):
+        """
+        Ensure that the job definitions are valid:
+        - Job IDs have a valid pattern.
+        - Job dependencies exist.
+        - There are no circular dependencies.
+        - jid and step_index are populated.
+        """
+        job_keys = self.jobs.keys()
+        for job_id, job in self.jobs.items():
             if not re.match(r"^[a-zA-Z0-9_-]+$", job_id):
-                raise ValueError(f"Job {job_id} does not have a valid pattern defined.")
-            needs = self.jobs[job_id].needs
-            if isinstance(self.jobs[job_id].needs, str):
-                needs = [self.jobs[job_id].needs]
+                raise ValueError(f"Job ID '{job_id}' does not have a valid pattern. Use letters, numbers, hyphens, and underscores.")
+
+            # Check if dependencies exist
+            needs = job.needs
+            if isinstance(needs, str):
+                needs = [needs]
             for dep in needs:
-                if dep and dep not in self.jobs:
+                if dep and dep not in job_keys:
                     raise ValueError(
-                        f"Job {job_id} has a dependency on {dep}, which does not exist."
+                        f"Job '{job_id}' has a dependency on '{dep}', which does not exist."
                     )
+
+            # Populate internal fields
             self.jobs[job_id].jid = job_id
-            for idx, step in enumerate(self.jobs[job_id].steps):
+            for idx, step in enumerate(job.steps):
                 step.step_index = idx
+
+        # Check for circular dependencies
+        graph = {job_id: set(job.needs) for job_id, job in self.jobs.items()}
+        path = set()
+        visited = set()
+
+        def visit(vertex):
+            path.add(vertex)
+            for neighbour in graph.get(vertex, set()):
+                if neighbour in path:
+                    raise ValueError(f"Circular dependency detected in jobs: {path}")
+                if neighbour not in visited:
+                    visit(neighbour)
+            path.remove(vertex)
+            visited.add(vertex)
+
+        for job_id in job_keys:
+            if job_id not in visited:
+                visit(job_id)
+
         return self

@@ -36,16 +36,16 @@ from typing import Optional
 
 from ofx.api.webshell.base import WebShell
 from ofx.api.webshell.client import WebShellClient
+from ofx.api.webshell.connectors import (
+    get_available_connectors,
+    get_connector,
+    get_registry,
+)
 from ofx.api.webshell.factory import WebShellCodeFactory
 from ofx.api.webshell.shell.asp import AspShell
 from ofx.api.webshell.shell.aspx import AspxShell
 from ofx.api.webshell.shell.jsp import JspShell
 from ofx.api.webshell.shell.php import PhpShell
-from ofx.api.webshell.connectors import (
-    get_registry,
-    get_connector,
-    get_available_connectors,
-)
 
 # Lazy connector discovery - will run on first use
 
@@ -68,10 +68,10 @@ def generate_webshell(
     language: str,
     password: str = "pass",
     encoder: str = "default",
-    secret_header: Optional[str] = None,
-    secret_value: Optional[str] = None,
+    secret_header: str | None = None,
+    secret_value: str | None = None,
     inline: bool = False,
-    connector_name: Optional[str] = None,
+    connector_name: str | None = None,
 ) -> str:
     """
     Generate an AntSword-compatible webshell for the specified language.
@@ -113,10 +113,10 @@ def generate_webshell(
         connector = get_connector(connector_name)
         if connector is None:
             raise ValueError(f"Connector '{connector_name}' not found")
-        
+
         if not connector.is_available():
             raise RuntimeError(f"Connector '{connector_name}' is not available")
-        
+
         return connector.generate(
             language=language,
             password=password,
@@ -125,7 +125,7 @@ def generate_webshell(
             secret_value=secret_value,
             inline=inline,
         )
-    
+
     # Default: use template connector (backward compatible)
     language = language.lower()
 

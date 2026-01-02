@@ -7,13 +7,13 @@ class AspxGenerator:
     @staticmethod
     def read_file(file_path: str, encoding: str = "utf-8") -> str:
         """Generate ASPX code to read file."""
-        return f"""System.IO.File.ReadAllText(@"{file_path}", 
+        return f"""System.IO.File.ReadAllText(@"{file_path}",
     System.Text.Encoding.GetEncoding("{encoding}"))"""
 
     @staticmethod
     def write_file(file_path: str, content: str, encoding: str = "utf-8") -> str:
         """Generate ASPX code to write file."""
-        return f"""System.IO.File.WriteAllText(@"{file_path}", 
+        return f"""System.IO.File.WriteAllText(@"{file_path}",
     "{content}", System.Text.Encoding.GetEncoding("{encoding}"))"""
 
     @staticmethod
@@ -44,7 +44,7 @@ Response.Write(p.StandardOutput.ReadToEnd());"""
     @staticmethod
     def upload_file(file_path: str, content: str) -> str:
         """Generate ASPX code to upload file (base64 content)."""
-        return f"""System.IO.File.WriteAllBytes(@"{file_path}", 
+        return f"""System.IO.File.WriteAllBytes(@"{file_path}",
     System.Convert.FromBase64String("{content}"))"""
 
     @staticmethod

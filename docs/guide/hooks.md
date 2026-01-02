@@ -39,7 +39,6 @@ Execute during command execution:
 hooks:
   hook_name:
     script: "script content"
-    script:
 ```
 
 ### Single-line Hook
@@ -60,7 +59,6 @@ hooks:
       import datetime
       print(f"Completed at {datetime.now()}")
       print(f"Duration: {ctx.duration} seconds")
-    script:
 ```
 
 ## Hook Propagation
@@ -124,7 +122,6 @@ hooks:
       print("=== Workflow Starting ===")
       print(f"Target: {ctx.inputs['target']}")
       print(f"Run ID: {ctx.run_id}")
-    script:
   
   on_success:
     script: python notify.py --status success --target ${{ inputs.target }}
@@ -185,13 +182,11 @@ steps:
         script: |
           print(f"Executing command: {command}")
           print(f"Working directory: {os.getcwd()}")
-        script:
       
       on_line:
         script: |
           # Process each line of output
           print(f"OUTPUT: {line.strip()}")
-        script:
       
       on_success:
         script: echo "Critical operation succeeded"
@@ -201,7 +196,6 @@ steps:
         script: |
           print(f"CRITICAL ERROR: {error}")
           # Emergency notification
-        script:
 ```
 
 ## Available Context in Hooks
@@ -355,7 +349,6 @@ jobs:
             
             # Update external tracker
             # update_progress(ctx.run_id, progress)
-        script:
     
     steps:
       - name: Full port scan

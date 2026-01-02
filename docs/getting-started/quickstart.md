@@ -168,7 +168,6 @@ jobs:
     name: WebShell Exploitation
     steps:
       - name: Execute command
-        script:
         script: |
           from ofx.api import webshell
           

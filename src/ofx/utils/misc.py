@@ -1,11 +1,10 @@
-from functools import lru_cache
 import json
 import os
 import tempfile
 from collections import deque
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 import git
@@ -15,14 +14,14 @@ from ofx.settings import TOOLS_BIN_DIR
 # Cache the tools bin path to avoid repeated Path operations
 _TOOLS_BIN_PATH = TOOLS_BIN_DIR.absolute().as_posix()
 
-def populate_env(alt_env=None) -> Dict[str, str]:
+def populate_env(alt_env=None) -> dict[str, str]:
     """Populate environment variables including tools bin directory.
-    
+
     Optimized to cache and reuse paths.
     """
     if alt_env is None:
         alt_env = {}
-    
+
     envs = os.environ.copy()
     current_path = envs.get("PATH", "")
     if _TOOLS_BIN_PATH not in current_path:
@@ -35,13 +34,13 @@ def populate_env(alt_env=None) -> Dict[str, str]:
 @lru_cache(maxsize=128)
 def is_remote_path(path: str) -> bool:
     """Check if the given path is a remote URL (http or https).
-    
+
     Cached for repeated checks.
     """
     return urlparse(path).scheme in ["http", "https"]
 
 
-def clone_remote_repo(path: str) -> Optional[Path]:
+def clone_remote_repo(path: str) -> Path | None:
     """Check if the given path is a Git repository"""
     try:
         tmp_dir = tempfile.mkdtemp(prefix=".ofx_")
@@ -52,7 +51,7 @@ def clone_remote_repo(path: str) -> Optional[Path]:
         return None
 
 
-def load_secrets(secrets_dir: Path = None) -> Dict[str, str]:
+def load_secrets(secrets_dir: Path = None) -> dict[str, str]:
     from ofx.utils.secrets import SecretManager
 
     secrets = SecretManager.list()
@@ -62,7 +61,7 @@ def load_secrets(secrets_dir: Path = None) -> Dict[str, str]:
             content = secret_file.read_text()
             try:
                 content = json.loads(content)
-            except:
+            except (json.JSONDecodeError, ValueError):
                 pass
             secrets[secret_file.name] = content
 
@@ -70,15 +69,15 @@ def load_secrets(secrets_dir: Path = None) -> Dict[str, str]:
 
 
 def find_parallel_schedule(
-    jobs: List[str], dependencies: List[Tuple[str, str]]
-) -> List[Set[str]]:
+    jobs: list[str], dependencies: list[tuple[str, str]]
+) -> list[set[str]]:
     """Groups jobs into stages that can be run in parallel.
-    
+
     Uses topological sorting with BFS for optimal parallelization.
     """
     # Pre-allocate with dict comprehension for better performance
-    graph: Dict[str, List[str]] = {job: [] for job in jobs}
-    in_degree: Dict[str, int] = {job: 0 for job in jobs}
+    graph: dict[str, list[str]] = {job: [] for job in jobs}
+    in_degree: dict[str, int] = dict.fromkeys(jobs, 0)
 
     for prereq, job in dependencies:
         if prereq not in graph or job not in graph:
@@ -93,7 +92,7 @@ def find_parallel_schedule(
 
     while queue:
         stage_size = len(queue)
-        current_stage: Set[str] = set()
+        current_stage: set[str] = set()
 
         for _ in range(stage_size):
             current_job = queue.popleft()
@@ -118,8 +117,8 @@ def find_parallel_schedule(
 class MetaSingleton(type):
     """Metaclass to create a singleton class"""
 
-    __instances: Dict[type, object] = {}
-    __spawning: Set[type] = set()
+    __instances: dict[type, object] = {}
+    __spawning: set[type] = set()
 
     def __call__(cls, *args, **kwargs) -> object:
         """Redirects each call to the current class to the corresponding single instance"""
@@ -129,7 +128,7 @@ class MetaSingleton(type):
                     f"Singleton {cls.__name__} is already being spawned. Recursive error detected."
                 )
             MetaSingleton.__spawning.add(cls)
-            MetaSingleton.__instances[cls] = super(MetaSingleton, cls).__call__(
+            MetaSingleton.__instances[cls] = super().__call__(
                 *args, **kwargs
             )
             MetaSingleton.__spawning.remove(cls)

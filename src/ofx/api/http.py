@@ -8,17 +8,16 @@ Optimized for red teaming operations with:
 """
 
 import time
-from typing import Any, Dict, Optional
 from functools import lru_cache
+from typing import Any
 
 import httpx
-from httpx import Response
 
-from ofx.exceptions import APIError, TimeoutError as OFXTimeoutError
-
+from ofx.exceptions import APIError
+from ofx.exceptions import TimeoutError as OFXTimeoutError
 
 # Singleton HTTP clients with connection pooling
-_http_client: Optional[httpx.Client] = None
+_http_client: httpx.Client | None = None
 
 
 def get_http_client(
@@ -51,12 +50,12 @@ def close_http_clients():
 
 class RateLimiter:
     """Simple rate limiter for API calls."""
-    
+
     def __init__(self, calls_per_second: float = 10.0):
         self.calls_per_second = calls_per_second
         self.min_interval = 1.0 / calls_per_second
         self.last_call = 0.0
-    
+
     def wait(self):
         """Wait if necessary to respect rate limit."""
         now = time.time()
@@ -98,31 +97,31 @@ def fetch(
     url: str,
     max_retries: int = 3,
     timeout: int = 30,
-    rate_limit: Optional[float] = None,
+    rate_limit: float | None = None,
     **kwargs
 ) -> str:
     """Send a GET request with retry logic and connection pooling.
-    
+
     Args:
         url: The URL to fetch
         max_retries: Number of retry attempts on failure
         timeout: Request timeout in seconds
         rate_limit: Rate limit in calls per second (optional)
         **kwargs: Additional arguments passed to httpx.get()
-    
+
     Returns:
         Response text
-        
+
     Raises:
         APIError: If request fails after retries
         OFXTimeoutError: If request times out
     """
     client = get_http_client(timeout=timeout)
-    
+
     if rate_limit:
         limiter = get_rate_limiter(rate_limit)
         limiter.wait()
-    
+
     @retry_with_backoff(max_retries=max_retries)
     def _fetch():
         try:
@@ -139,25 +138,25 @@ def fetch(
             ) from e
         except httpx.RequestError as e:
             raise APIError(f"Request failed: {str(e)}") from e
-    
+
     return _fetch()
 
 
 def post(
     url: str,
-    data: Dict[str, Any] | str,
+    data: dict[str, Any] | str,
     max_retries: int = 3,
     timeout: int = 30,
-    rate_limit: Optional[float] = None,
+    rate_limit: float | None = None,
     **kwargs
 ) -> str:
     """Send a POST request with retry logic and connection pooling."""
     client = get_http_client(timeout=timeout)
-    
+
     if rate_limit:
         limiter = get_rate_limiter(rate_limit)
         limiter.wait()
-    
+
     @retry_with_backoff(max_retries=max_retries)
     def _post():
         try:
@@ -179,7 +178,7 @@ def post(
             ) from e
         except httpx.RequestError as e:
             raise APIError(f"Request failed: {str(e)}") from e
-    
+
     return _post()
 
 
