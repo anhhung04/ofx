@@ -17,7 +17,7 @@ jobs:
           VAR: value
         timeout: 10
         outputs:
-          result: "{{ step.stdout }}"
+          result: "${{ step.stdout }}"
         continue_on_error: true
 ```
 
@@ -55,7 +55,7 @@ jobs:
           print(f"Result: {result}")
         script: python
         outputs:
-          calc: "{{ step.stdout }}"
+          calc: "${{ step.stdout }}"
 ```
 
 ---

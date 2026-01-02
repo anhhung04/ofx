@@ -38,7 +38,7 @@ jobs:
 				run: echo "Job started"
 				language: shell
 		steps:
-			- run: nmap {{ inputs.target }}
+			- run: nmap ${{ inputs.target }}
 				hooks:
 					on_success:
 						run: echo "Step succeeded"

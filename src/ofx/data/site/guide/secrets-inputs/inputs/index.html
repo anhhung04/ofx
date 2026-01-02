@@ -4155,7 +4155,7 @@
 <hr />
 <h2 id="using-inputs-in-yaml">Using Inputs in YAML<a class="headerlink" href="#using-inputs-in-yaml" title="Permanent link">&para;</a></h2>
 <p>Reference inputs in workflow files using the <code>inputs.</code> namespace:
-<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echo &quot;Target is {{ inputs.target }}&quot;</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">echo &quot;Target is ${{ inputs.target }}&quot;</span>
 </code></pre></div></p>
 <hr />
 <h2 id="default-values">Default Values<a class="headerlink" href="#default-values" title="Permanent link">&para;</a></h2>
