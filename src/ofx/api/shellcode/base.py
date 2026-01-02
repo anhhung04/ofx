@@ -1,0 +1,86 @@
+"""
+Base shellcode class with common operations.
+"""
+
+import logging
+
+from ofx.settings import settings
+
+logger = logging.getLogger(settings.app_branding)
+
+
+class ShellCode:
+    """Base class for shellcode operations"""
+
+    def __init__(
+        self,
+        os_target: str = "",
+        os_target_arch: str = "",
+        connect_back_ip: str = "localhost",
+        connect_back_port: int = 5555,
+        bad_chars: list[str] | None = None,
+        prefix: str = "",
+        suffix: str = "",
+    ):
+        """
+        Initialize shellcode base class.
+
+        Args:
+            os_target: Target OS (linux, windows)
+            os_target_arch: Target architecture (x86, x64)
+            connect_back_ip: IP address for reverse shell
+            connect_back_port: Port for reverse/bind shell
+            bad_chars: List of bad characters to avoid (e.g., ["\\x00"])
+            prefix: Bytes to prepend to shellcode
+            suffix: Bytes to append to shellcode
+        """
+        self.os_target = os_target
+        self.os_target_arch = os_target_arch
+        self.connect_back_ip = connect_back_ip
+        self.connect_back_port = connect_back_port
+        self.bad_chars = bad_chars or []
+        self.prefix = prefix
+        self.suffix = suffix
+        self.name = ""
+
+    def format_shellcode(self, code: str | bytes) -> str | bytes:
+        """
+        Replace placeholder values in shellcode templates.
+
+        Args:
+            code: Shellcode template with {{LOCALHOST}} and {{LOCALPORT}} placeholders
+
+        Returns:
+            Shellcode with placeholders replaced
+        """
+        if isinstance(code, str):
+            code = code.replace("{{LOCALHOST}}", self.connect_back_ip)
+            code = code.replace("{{LOCALPORT}}", str(self.connect_back_port))
+        return code
+
+    def get_shellcode(self, inline: bool = False) -> str:
+        """
+        Get shellcode as string (for subclasses to override).
+
+        Args:
+            inline: Whether to format as inline string
+
+        Returns:
+            Shellcode string
+        """
+        return ""
+
+    def make_inline(self, payload: str) -> str:
+        """
+        Convert multi-line shellcode string to single line.
+
+        Args:
+            payload: Multi-line shellcode string
+
+        Returns:
+            Single-line shellcode string
+        """
+        payload = payload.replace("\t", " ")
+        payload = payload.replace("\r", " ")
+        payload = payload.replace("\n", " ")
+        return payload

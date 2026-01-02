@@ -1,80 +1,89 @@
-import uuid
+"""Base runner class for workflow, job, and step execution"""
+
 import logging
+import os
+import shutil
+import uuid
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
 
-from typing import Any, Optional
+import aiofiles
+import aiofiles.os as aio_os
+from jinja2 import Template
 
+from ofx.models.job import Job
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
-from ofx.models.job import Job
-from ofx.settings import settings
-from ofx.runner.core.models import RunnerStatus, RunContext, RunResult
-from ofx.runner.core.template import TemplateEngine
-from ofx.runner.core.hooks import HookHandler, HookPoint, HookContext
+from ofx.runner.models import RunContext, RunnerStatus, RunResult
+from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR, settings
+
+if TYPE_CHECKING:
+    from ofx.runner.base import BaseRunner
 
 logger = logging.getLogger(settings.app_branding)
 
 
+async def _read_file(path: str) -> str | None:
+    if await aio_os.path.exists(path):
+        async with aiofiles.open(path) as f:
+            return await f.read()
+    return None
+
+async def _write_file(path: str, content: str):
+    async with aiofiles.open(path, 'w') as f:
+        await f.write(content)
+
+
 class BaseRunner:
-    """Abstract base class for all runners (Workflow, Job, Step).
-    
-    Implements the Template Method pattern with hooks for lifecycle events.
-    Provides common functionality for execution, context management, and result tracking.
-    
-    Attributes:
-        _id: Unique identifier for this runner instance
-        _status: Current execution status (IDLE, RUNNING, COMPLETED, FAILED, CANCELED)
-        _error: Error message if execution failed
-        _ctx: Execution context with inputs, outputs, secrets, environment
-        _parent: Parent runner in the hierarchy (if any)
-        _model: Workflow/Job/Step model being executed
-        _result: Execution result object
-        _template_engine: Template resolution engine
-        _hook_handler: Hook execution handler
-    """
-    def __init__(
-        self, name: Any, ctx: RunContext, parent: Optional["BaseRunner"] = None
-    ):
+    """Abstract base class for all runners (workflow, job, step, command)"""
+
+    # Memory optimization: define __slots__ to reduce memory footprint
+    __slots__ = ('_id', '_status', '_ctx', '_parent', '_error', '_model', '_result')
+
+    # Cache for compiled templates (limit size to prevent memory bloat)
+    _template_cache = {}
+    _template_cache_max_size = 1000
+    _support_funcs_cache = None
+
+    def __init__(self, name: Any, ctx: RunContext, parent: Optional["BaseRunner"] = None):
         name = str(name)
         self._id = f"{name}-{str(uuid.uuid4())}"
         self._status = RunnerStatus.IDLE
-        self._error = None
         self._ctx = ctx
         self._parent = parent
+        self._error = None
         self._model = None
         self._result = RunResult(status=self.status, run_id=self._id, name=name)
-        self._template_engine = TemplateEngine(self)
-        self._hook_handler = HookHandler(self)
 
-    async def run(self):
-        """Run the workflow/job/step and return the result.
-        
-        This is the main entry point that orchestrates the execution lifecycle:
-        1. Execute pre_run hooks and setup
-        2. Run the actual execution (_do_run)
-        3. Execute post_run hooks and cleanup
-        4. Handle errors and status updates
-        
-        Returns:
-            RunResult: Execution result with status, outputs, and metadata
-            
-        Raises:
-            Exception: Any unhandled exceptions during execution
-        """
+    async def run(self) -> RunResult:
+        """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
         try:
-            self._ctx.vars.update({"self": self._model})
+            self._status = RunnerStatus.IDLE
+            self._ctx.vars.update({"self": self.model})
             await self._pre_run()
+        except Exception as e:
+            self._error = f"Pre-run error ({type(e).__name__}): {e}"
+            self._status = RunnerStatus.FAILED
+            logger.error(self._produce_log(self._error))
+            return self.get_result()
+
+        try:
             self._status = RunnerStatus.RUNNING
             await self._do_run()
-            self._status = RunnerStatus.COMPLETED
         except Exception as e:
-            self._error = str(e)
-        if self._error and self._status != RunnerStatus.CANCELED:
+            self._error = f"Run error ({type(e).__name__}): {e}"
             self._status = RunnerStatus.FAILED
+            logger.error(self._produce_log(self._error))
+            return self.get_result()
+
         try:
             await self._post_run()
+            self._status = RunnerStatus.COMPLETED
         except Exception as e:
-            logger.error(self._produce_log(f"Error in post-run: {e}"))
+            self._error = f"Post-run error ({type(e).__name__}): {e}"
             self._status = RunnerStatus.FAILED
+            logger.error(self._produce_log(self._error))
+
         return self.get_result()
 
     async def _do_run(self):
@@ -86,58 +95,101 @@ class BaseRunner:
     async def _post_run(self):
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
-    def _register_hooks_from_model(self):
-        """Register hooks from model - common pattern across all runners."""
-        if not hasattr(self._model, 'hooks') or not self._model.hooks:
+    async def _resolve_template(self, value: Any) -> Any:
+        """Resolve Jinja2 templates in values recursively with optimized caching."""
+        if value is None or not isinstance(value, (str, int, float, bool, dict, list)):
+            return value
+        if isinstance(value, dict):
+            return {k: await self._resolve_template(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [await self._resolve_template(v) for v in value]
+        string_value = str(value)
+        if "${{" not in string_value and "{%" not in string_value:
+            return value
+
+        try:
+            # Use cached SUPPORT_FUNCS if available (one-time initialization)
+            if BaseRunner._support_funcs_cache is None:
+                sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
+                # Pre-compute static paths once
+                tools_dir_str = str(TOOLS_DIR.absolute())
+                tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
+
+                BaseRunner._support_funcs_cache = {
+                    "sudo": sudo,
+                    "tools_dir": tools_dir_str,
+                    "tools_bin_dir": tools_bin_dir_str,
+                    "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
+                    "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
+                    "go_install": lambda pkg: f"GO111MODULE=on GOBIN={tools_bin_dir_str} go install {pkg}@latest",
+                    "cargo_install": lambda name: f"cargo install --root {tools_dir_str} {name}",
+                    "npm_install": lambda name: f"npm install -g --prefix {tools_dir_str} {name}",
+                    "static_install": lambda url, name=None: (
+                        f"curl -fSsL {url} -o {tools_bin_dir_str}/{name if name else Path(url).name} && chmod +x {tools_bin_dir_str}/{name if name else Path(url).name}"
+                    ),
+                    "file_read": _read_file,
+                    "file_write": _write_file,
+                    "file_exists": aio_os.path.exists,
+                    "env": os.getenv,
+                    "str": str,
+                    "int": int,
+                    "float": float,
+                    "bool": lambda v: str(v).lower() in ("true", "yes", "1", "t", "y"),
+                }
+
+            # Add run_id dynamically (unique per runner instance)
+            SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()
+            SUPPORT_FUNCS["run_id"] = self._id
+
+            # Use template cache for repeated templates
+            if string_value not in BaseRunner._template_cache:
+                # Clear cache if it gets too large (simple LRU-like behavior)
+                if len(BaseRunner._template_cache) >= BaseRunner._template_cache_max_size:
+                    BaseRunner._template_cache.clear()
+
+                BaseRunner._template_cache[string_value] = Template(
+                    string_value,
+                    variable_start_string="${{",
+                    variable_end_string="}}",
+                    enable_async=True
+                )
+
+            template = BaseRunner._template_cache[string_value]
+            template_vars = self.ctx_vars.model_dump(exclude={"vars"})
+            template_vars.update(SUPPORT_FUNCS)
+            if self.ctx_vars.vars:
+                template_vars.update(self._ctx.vars)
+
+            result = await template.render_async(template_vars)
+            if isinstance(value, bool):
+                return result.lower() in ("true", "yes", "1", "t", "y")
+            elif isinstance(value, int):
+                try:
+                    return int(result)
+                except ValueError:
+                    logger.warning(self._produce_log(f"Could not convert template result '{result}' back to integer"))
+                    return result
+            elif isinstance(value, float):
+                try:
+                    return float(result)
+                except ValueError:
+                    logger.warning(self._produce_log(f"Could not convert template result '{result}' back to float"))
+                    return result
+
+            logger.debug(self._produce_log(f"Resolved template: {value} -> {result}"))
+            return result
+        except Exception as e:
+            logger.error(self._produce_log(f"Error resolving template for value '{value}': {e}"))
+            return value
+
+    async def _resolve_template_fields(self, fields: list[str]) -> None:
+        """Resolve templates in specific model fields"""
+        if not self.model:
             return
-        
-        for hook_name, hook_code in self._model.hooks.items():
-            try:
-                hook_point = HookPoint(hook_name)
-                self._hook_handler.register_hook(hook_point, hook_code)
-            except ValueError:
-                logger.warning(f"Unknown hook point: {hook_name}")
-    
-    async def _execute_pre_run_hooks(self) -> HookContext:
-        """Execute pre_run hooks and return modified context."""
-        hook_ctx = HookContext(
-            model=self._model,
-            inputs=self._ctx.inputs,
-            context=self._ctx,
-            runner=self,
-        )
-        hook_ctx = await self._hook_handler.execute_hooks(HookPoint.PRE_RUN, hook_ctx)
-        self._ctx.inputs.update(hook_ctx.inputs)
-        return hook_ctx
-    
-    async def _execute_post_run_hooks(self) -> HookContext:
-        """Execute post_run hooks with error/success handling."""
-        hook_ctx = HookContext(
-            model=self._model,
-            inputs=self._ctx.inputs,
-            outputs=self._result.outputs,
-            run_result=self._result,
-            context=self._ctx,
-            error=Exception(self._error) if self._error else None,
-            runner=self,
-        )
-        
-        # Execute error or success hooks
-        if self._error:
-            hook_ctx = await self._hook_handler.execute_hooks(HookPoint.ON_ERROR, hook_ctx)
-        else:
-            hook_ctx = await self._hook_handler.execute_hooks(HookPoint.ON_SUCCESS, hook_ctx)
-        
-        # Execute post_run hook
-        hook_ctx = await self._hook_handler.execute_hooks(HookPoint.POST_RUN, hook_ctx)
-        self._result.outputs.update(hook_ctx.outputs)
-        return hook_ctx
-
-    def _resolve_template(self, value: Any) -> Any:
-        return self._template_engine.resolve(value)
-
-    def _resolve_template_fields(self, fields: list[str]):
-        self._template_engine.resolve_model_fields(self._model, fields)
+        for field in fields:
+            if hasattr(self.model, field):
+                resolved_value = await self._resolve_template(getattr(self.model, field))
+                setattr(self._model, field, resolved_value)
 
     def _produce_log(self, message: Any) -> str:
         raise NotImplementedError("Subclasses should implement _produce_log method.")
@@ -152,11 +204,7 @@ class BaseRunner:
 
     @property
     def is_finished(self) -> bool:
-        return self._status in {
-            RunnerStatus.COMPLETED,
-            RunnerStatus.FAILED,
-            RunnerStatus.CANCELED,
-        }
+        return self._status in {RunnerStatus.COMPLETED, RunnerStatus.FAILED}
 
     @property
     def is_success(self) -> bool:
@@ -167,99 +215,22 @@ class BaseRunner:
         return self._id
 
     def get_result(self) -> RunResult:
-        """
-        Get the result of the workflow run.
-        """
         self._result.status = self.status
         self._result.error = self._error
         return self._result
-    
-    def _process_inputs(self, provided: dict, schema: dict) -> dict:
-        """Process and validate inputs against schema.
-        
-        Args:
-            provided: User-provided input values
-            schema: Input schema with required fields and defaults
-            
-        Returns:
-            Dictionary of validated and processed inputs
-            
-        Raises:
-            ValueError: If required inputs are missing
-        """
-        processed = {}
-        for key, config in schema.items():
-            value = provided.get(key)
-            
-            # Handle required inputs
-            if config.required and value is None:
-                if hasattr(config, 'default') and config.default is not None:
-                    value = config.default
-                else:
-                    raise ValueError(f"Required input '{key}' is missing")
-            
-            # Use default if not provided
-            if value is None and hasattr(config, 'default'):
-                value = config.default
-            
-            if value is not None:
-                processed[key] = value
-        
-        return processed
-    
-    def _safe_eval(self, expression: str | bool, context_name: str = "condition") -> bool:
-        """Safely evaluate run_if conditions with sandboxing.
-        
-        Args:
-            expression: Boolean expression or boolean value
-            context_name: Name of the context for error messages
-            
-        Returns:
-            Boolean result of the evaluation
-            
-        Note:
-            Only allows basic boolean expressions (True, False, and, or, not)
-            to prevent code injection attacks.
-        """
-        if isinstance(expression, bool):
-            return expression
-        
-        try:
-            # Convert to string and evaluate
-            expr_str = str(expression)
-            # Simple safety check - only allow basic boolean expressions
-            allowed_chars = set('TrueFalse0123456789 ()andornot')
-            if not all(c in allowed_chars for c in expr_str.replace('True', '').replace('False', '')):
-                logger.warning(f"Potentially unsafe {context_name}: {expr_str}")
-            
-            result = eval(expr_str, {"__builtins__": {}})
-            return bool(result)
-        except Exception as e:
-            logger.error(f"Error evaluating {context_name} '{expression}': {e}")
-            return False
-    
-    @property
-    def ctx_vars(self) -> RunContext:
-        """Get the run context for convenient access."""
-        return self._ctx
-    
-    @property
-    def ctx(self) -> RunContext:
-        """Alias for ctx_vars for convenience."""
-        return self._ctx
-    
-    @property
-    def ctx(self) -> RunContext:
-        """Alias for ctx_vars."""
-        return self._ctx
 
     @property
     def ctx_vars(self) -> RunContext:
-        """
-        Get the context variables for the workflow run.
-        """
         return self._ctx
 
     @property
     def parent(self) -> "BaseRunner | None":
         return self._parent
+
+    def get_job_status(self, job_id: str) -> RunnerStatus | None:
+        """Get job status from registry (WorkflowRunner override)"""
+        return None
+
+    def get_job_from_registry(self, job_id: str) -> dict[str, Any] | None:
+        """Get job from registry (WorkflowRunner override)"""
+        return None

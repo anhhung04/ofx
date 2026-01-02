@@ -1,14 +1,13 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-import git
-
-from ofx.settings import settings
+from ofx.settings import get_console, settings
 from ofx.utils.misc import MetaSingleton
 
 logger = logging.getLogger(settings.app_branding)
+console = get_console()
 
 ENGAGEMENT_FILE_STRUCTURE = [
     ("evidence", ["creds", "data", "screenshots"]),
@@ -19,7 +18,7 @@ ENGAGEMENT_FILE_STRUCTURE = [
     "exploits",
     "post-exploits",
 ]
-DIRECTORY_STRUCTURE: List[str | Tuple[str, List]] = [
+DIRECTORY_STRUCTURE: list[str | tuple[str, list]] = [
     ("ept", ENGAGEMENT_FILE_STRUCTURE),
     ("ipt", ENGAGEMENT_FILE_STRUCTURE + ["lateral-movement"]),
 ]
@@ -30,10 +29,10 @@ class InitHandler(metaclass=MetaSingleton):
         self,
         base: str,
         is_multiphase: bool,
-        remote_type: Optional[str] = None,
-        remote_config: Optional[Dict[str, Any]] = None,
+        remote_type: str | None = None,
+        remote_config: dict[str, Any] | None = None,
         encrypt: bool = False,
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
     ):
         self._base_path = Path(base)
         self._is_multiphase = is_multiphase
@@ -44,21 +43,20 @@ class InitHandler(metaclass=MetaSingleton):
 
     def run(self):
         if self._is_multiphase:
-            logger.info(
-                f"Initializing multi-phase project at: {self._base_path.absolute()}"
+            console.print(
+                f"✅ Initializing multi-phase project at: {self._base_path.absolute()}"
             )
             self._make_dir(self._base_path, DIRECTORY_STRUCTURE)
         else:
-            logger.info(
-                f"Initializing single-phase project at: {self._base_path.absolute()}"
+            console.print(
+                f"✅ Initializing single-phase project at: {self._base_path.absolute()}"
             )
             self._make_dir(self._base_path, ENGAGEMENT_FILE_STRUCTURE)
 
-        # Setup remote storage if specified
         if self._remote_type:
             self._setup_remote_storage()
 
-        logger.info("Project initialization complete.")
+        console.print("✅ Project initialization complete.")
 
     def _setup_remote_storage(self) -> None:
         """Setup remote storage based on type."""
@@ -73,14 +71,14 @@ class InitHandler(metaclass=MetaSingleton):
 
     def _setup_git(self) -> None:
         """Setup git remote for existing repository."""
+        import git
         git_url = self._remote_config.get("url")
         branch = self._remote_config.get("branch", "main")
 
         if not git_url:
-            logger.warning("Git URL not provided, skipping git remote setup.")
+            console.print("⚠️ Git URL not provided, skipping git remote setup.")
             return
 
-        # Save encryption config if enabled
         if self._encrypt:
             config_file = self._base_path / ".ofx-remote.json"
             config = {
@@ -97,13 +95,11 @@ class InitHandler(metaclass=MetaSingleton):
                 ]
                 config["encryption_key_hash"] = key_hash
 
-                # Save key to separate secure file
                 key_file = self._base_path / ".ofx-encryption-key"
                 key_file.write_text(self._encryption_key)
-                key_file.chmod(0o600)  # Read/write for owner only
+                key_file.chmod(0o600)
                 logger.info(f"Encryption key saved to {key_file} (keep this secure!)")
 
-                # Update .gitignore
                 gitignore = self._base_path / ".gitignore"
                 if gitignore.exists():
                     content = gitignore.read_text()
@@ -114,10 +110,8 @@ class InitHandler(metaclass=MetaSingleton):
             logger.info("Git storage configuration with encryption saved")
 
         try:
-            # Git repo should already exist from project_manager
             repo = git.Repo(self._base_path)
 
-            # Add or update remote
             if not repo.remotes:
                 origin = repo.create_remote("origin", git_url)
             else:
@@ -126,21 +120,19 @@ class InitHandler(metaclass=MetaSingleton):
 
             logger.info(f"Git remote configured: {origin}")
 
-            # Create initial commit if needed
             if not repo.head.is_valid():
                 repo.index.add(repo.untracked_files or [".gitignore"])
                 repo.index.commit("Initial project structure")
 
-            # Try to push to remote
             try:
                 origin.push(refspec=f"{branch}:{branch}", set_upstream=True)
-                logger.info("Pushed initial commit to remote repository.")
+                console.print("✅ Pushed initial commit to remote repository.")
             except Exception as e:
-                logger.warning(f"Could not push to remote: {e}")
-                logger.info("You may need to push manually later.")
+                console.print(f"⚠️ Could not push to remote: {e}")
+                console.print("You may need to push manually later.")
 
         except Exception as e:
-            logger.error(f"Failed to setup Git remote: {e}")
+            console.print(f"❌ Failed to setup Git remote: {e}")
 
     def _setup_ssh(self) -> None:
         """Setup SSH storage configuration."""
@@ -151,20 +143,17 @@ class InitHandler(metaclass=MetaSingleton):
             "encrypt": self._encrypt,
         }
 
-        # Store encryption key hash for verification
         if self._encrypt and self._encryption_key:
             import hashlib
 
             key_hash = hashlib.sha256(self._encryption_key.encode()).hexdigest()[:16]
             config["encryption_key_hash"] = key_hash
 
-            # Save key to separate secure file
             key_file = self._base_path / ".ofx-encryption-key"
             key_file.write_text(self._encryption_key)
             key_file.chmod(0o600)
             logger.info(f"Encryption key saved to {key_file} (keep this secure!)")
 
-            # Update .gitignore
             gitignore = self._base_path / ".gitignore"
             if gitignore.exists():
                 content = gitignore.read_text()
@@ -174,10 +163,9 @@ class InitHandler(metaclass=MetaSingleton):
         config_file.write_text(json.dumps(config, indent=2))
         logger.info(f"SSH storage configuration saved to {config_file}")
 
-        # Initialize SSH handler to generate key
         from .storage import SSHHandler
 
-        handler = SSHHandler(self._remote_config)
+        SSHHandler(self._remote_config)
         logger.info("SSH key setup complete")
 
     def _setup_s3(self) -> None:
@@ -188,20 +176,17 @@ class InitHandler(metaclass=MetaSingleton):
             "config": self._remote_config,
             "encrypt": self._encrypt,
         }
-        # Store encryption key hash for verification (not the actual key)
         if self._encrypt and self._encryption_key:
             import hashlib
 
             key_hash = hashlib.sha256(self._encryption_key.encode()).hexdigest()[:16]
             config["encryption_key_hash"] = key_hash
 
-            # Save key to separate secure file
             key_file = self._base_path / ".ofx-encryption-key"
             key_file.write_text(self._encryption_key)
-            key_file.chmod(0o600)  # Read/write for owner only
+            key_file.chmod(0o600)
             logger.info(f"Encryption key saved to {key_file} (keep this secure!)")
 
-            # Update .gitignore
             gitignore = self._base_path / ".gitignore"
             if gitignore.exists():
                 content = gitignore.read_text()
@@ -220,20 +205,17 @@ class InitHandler(metaclass=MetaSingleton):
             "config": self._remote_config,
             "encrypt": self._encrypt,
         }
-        # Store encryption key hash for verification (not the actual key)
         if self._encrypt and self._encryption_key:
             import hashlib
 
             key_hash = hashlib.sha256(self._encryption_key.encode()).hexdigest()[:16]
             config["encryption_key_hash"] = key_hash
 
-            # Save key to separate secure file
             key_file = self._base_path / ".ofx-encryption-key"
             key_file.write_text(self._encryption_key)
-            key_file.chmod(0o600)  # Read/write for owner only
+            key_file.chmod(0o600)
             logger.info(f"Encryption key saved to {key_file} (keep this secure!)")
 
-            # Update .gitignore
             gitignore = self._base_path / ".gitignore"
             if gitignore.exists():
                 content = gitignore.read_text()
@@ -244,7 +226,7 @@ class InitHandler(metaclass=MetaSingleton):
         logger.info(f"WebDAV storage configuration saved to {config_file}")
         logger.info("WebDAV will sync git repository using bundle files")
 
-    def _make_dir(self, base: Path, items: List[str | Tuple[str, List]]) -> None:
+    def _make_dir(self, base: Path, items: list[str | tuple[str, list]]) -> None:
         base.mkdir(parents=True, exist_ok=True)
         for item in items:
             if not isinstance(item, str):
@@ -254,7 +236,6 @@ class InitHandler(metaclass=MetaSingleton):
                 dir.mkdir(parents=True, exist_ok=True)
                 (dir / ".gitkeep").touch()
 
-        # Create .gitignore if not exists
         gitignore = base / ".gitignore"
         if not gitignore.exists():
             gitignore.write_text(

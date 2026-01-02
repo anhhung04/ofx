@@ -2,22 +2,14 @@ import logging
 
 
 def reload_logging_config(settings):
-    """
-    Reloads the logging configuration based on the current settings.
-    This is useful if settings are changed at runtime.
-    """
+    """Reloads the logging configuration based on the current settings"""
     from rich.logging import RichHandler
 
     branding = settings.app_branding
     pre_logger = logging.getLogger(branding)
     for handler in logging.getLogger(branding).handlers:
-        if (
-            handler.name == f"{branding}.console"
-            or handler.name == f"{branding}.notification"
-        ):
+        if handler.name == f"{branding}.console":
             pre_logger.removeHandler(handler)
-
-    log_handler = None
 
     log_handler = RichHandler(
         rich_tracebacks=settings.debug,

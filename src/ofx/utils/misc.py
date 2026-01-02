@@ -1,38 +1,47 @@
-import git
-import tempfile
 import json
-
+import os
+import tempfile
 from collections import deque
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
-from typing import Optional, Dict, Set, Tuple, List
+import git
 
+from ofx.settings import TOOLS_BIN_DIR
 
-def is_remote_path(path: str) -> bool:
+# Cache the tools bin path to avoid repeated Path operations
+_TOOLS_BIN_PATH = TOOLS_BIN_DIR.absolute().as_posix()
+
+def populate_env(alt_env=None) -> dict[str, str]:
+    """Populate environment variables including tools bin directory.
+
+    Optimized to cache and reuse paths.
     """
-    Check if the given path is a remote URL (http or https).
+    if alt_env is None:
+        alt_env = {}
 
-    Args:
-        path (str): The path to check.
+    envs = os.environ.copy()
+    current_path = envs.get("PATH", "")
+    if _TOOLS_BIN_PATH not in current_path:
+        envs["PATH"] = f"{_TOOLS_BIN_PATH}{os.pathsep}{current_path}"
+    # Set UV_TOOL_BIN_DIR for uv tool installations
+    envs["UV_TOOL_BIN_DIR"] = _TOOLS_BIN_PATH
+    envs.update(alt_env)
+    return envs
 
-    Returns:
-        bool: True if the path is a remote URL, False otherwise.
+@lru_cache(maxsize=128)
+def is_remote_path(path: str) -> bool:
+    """Check if the given path is a remote URL (http or https).
+
+    Cached for repeated checks.
     """
     return urlparse(path).scheme in ["http", "https"]
 
 
-def clone_remote_repo(path: str) -> Optional[Path]:
-    """
-    Check if the given path is a Git repository.
-
-    Args:
-        path (str): The path to check.
-
-    Returns:
-        Optional[Path]: The path to the cloned repository if it is a Git repository, None otherwise.
-    """
+def clone_remote_repo(path: str) -> Path | None:
+    """Check if the given path is a Git repository"""
     try:
         tmp_dir = tempfile.mkdtemp(prefix=".ofx_")
         repo_name = Path(path).name
@@ -42,66 +51,54 @@ def clone_remote_repo(path: str) -> Optional[Path]:
         return None
 
 
-def load_secrets(secrets_dir: Path) -> Dict[str, str]:
-    """
-    Load secrets from a YAML file in the specified directory.
+def load_secrets(secrets_dir: Path = None) -> dict[str, str]:
+    from ofx.utils.secrets import SecretManager
 
-    Args:
-        secrets_dir (Path): The directory where the secrets file is located.
+    secrets = SecretManager.list()
 
-    Returns:
-        Dict[str, str]: A dictionary containing the loaded secrets.
-    """
-    secrets = {}
-    for secret_file in secrets_dir.glob("*"):
-        content = secret_file.read_text()
-        try:
-            content = json.loads(content)
-        except:
-            pass
-        secrets[secret_file.name] = content
+    if not secrets and secrets_dir and secrets_dir.exists():
+        for secret_file in secrets_dir.glob("*"):
+            content = secret_file.read_text()
+            try:
+                content = json.loads(content)
+            except (json.JSONDecodeError, ValueError):
+                pass
+            secrets[secret_file.name] = content
+
     return secrets
 
 
-# kahn's algorithm
 def find_parallel_schedule(
-    jobs: List[str], dependencies: List[Tuple[str, str]]
-) -> List[Set[str]]:
-    """
-    Groups jobs into stages that can be run in parallel.
+    jobs: list[str], dependencies: list[tuple[str, str]]
+) -> list[set[str]]:
+    """Groups jobs into stages that can be run in parallel.
 
-    Returns:
-        A list of sets, where each set contains jobs that can be run concurrently.
+    Uses topological sorting with BFS for optimal parallelization.
     """
-    # Step 1 & 2: Build graph and in-degrees (same as before)
-    graph: Dict[str, List[str]] = {job: [] for job in jobs}
-    in_degree: Dict[str, int] = {job: 0 for job in jobs}
+    # Pre-allocate with dict comprehension for better performance
+    graph: dict[str, list[str]] = {job: [] for job in jobs}
+    in_degree: dict[str, int] = dict.fromkeys(jobs, 0)
 
     for prereq, job in dependencies:
-        # Ensure dependencies are valid jobs
         if prereq not in graph or job not in graph:
             continue
         graph[prereq].append(job)
         in_degree[job] += 1
 
-    # Step 3: Initialize the queue
     queue = deque([job for job in jobs if in_degree[job] == 0])
 
     parallel_schedule = []
     job_count = 0
 
-    # Step 4: Process jobs in stages
     while queue:
-        # All jobs currently in the queue can be run in parallel
         stage_size = len(queue)
-        current_stage: Set[str] = set()
+        current_stage: set[str] = set()
 
         for _ in range(stage_size):
             current_job = queue.popleft()
             current_stage.add(current_job)
             job_count += 1
 
-            # Update neighbors
             for next_job in graph[current_job]:
                 in_degree[next_job] -= 1
                 if in_degree[next_job] == 0:
@@ -109,7 +106,6 @@ def find_parallel_schedule(
 
         parallel_schedule.append(current_stage)
 
-    # Step 5: Check for cycles
     if job_count != len(jobs):
         raise ValueError(
             "A circular dependency was detected. Cannot create a valid schedule."
@@ -118,12 +114,11 @@ def find_parallel_schedule(
     return parallel_schedule
 
 
-# Generic singleton class
 class MetaSingleton(type):
     """Metaclass to create a singleton class"""
 
-    __instances: Dict[type, object] = {}
-    __spawning: Set[type] = set()
+    __instances: dict[type, object] = {}
+    __spawning: set[type] = set()
 
     def __call__(cls, *args, **kwargs) -> object:
         """Redirects each call to the current class to the corresponding single instance"""
@@ -132,14 +127,11 @@ class MetaSingleton(type):
                 raise RuntimeError(
                     f"Singleton {cls.__name__} is already being spawned. Recursive error detected."
                 )
-            # Spawning new singleton
             MetaSingleton.__spawning.add(cls)
-            # If the instance does not already exist, it is created
-            MetaSingleton.__instances[cls] = super(MetaSingleton, cls).__call__(
+            MetaSingleton.__instances[cls] = super().__call__(
                 *args, **kwargs
             )
             MetaSingleton.__spawning.remove(cls)
-        # Return the desired object
         return MetaSingleton.__instances[cls]
 
 

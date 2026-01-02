@@ -1,11 +1,14 @@
-import typer
+from typing import Annotated, Optional
 
-from typing import List, Annotated, Optional
+import typer
 from async_typer import AsyncTyper
 
 app = AsyncTyper()
 
 NAME = "flow"
+
+
+ALIAS = ["x", "task"]
 
 HELP = "Manage and run workflows in the OFX system"
 
@@ -15,7 +18,7 @@ async def run(
         str, typer.Argument(..., help="Name of the workflow to run")
     ],
     input: Annotated[
-        Optional[List[str]],
+        list[str] | None,
         typer.Option(
             "-i",
             "--input",
@@ -23,13 +26,20 @@ async def run(
         ),
     ] = None,
     output: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "-o",
             "--output",
             help="Output path for the workflow results. If not specified, defaults to the current directory.",
         ),
     ] = None,
+    profile: Annotated[
+        bool,
+        typer.Option(
+            "--profile",
+            help="Enable performance profiling and output timing information.",
+        ),
+    ] = False,
 ):
     from ofx.commands.flow.run import FlowRunHandler
 
@@ -37,6 +47,7 @@ async def run(
         workflow_name=workflow_name,
         input=input,
         output=output,
+        profile=profile,
     ).run()
 
 
@@ -46,9 +57,7 @@ def validate(
         str, typer.Argument(..., help="Name of the workflow to validate")
     ],
 ):
-    """
-    Validate a workflow configuration.
-    """
+    """Validate a workflow configuration"""
     from ofx.commands.flow.validate import ValidateHandler
 
     ValidateHandler().run(workflow_name=workflow_name)
@@ -56,9 +65,38 @@ def validate(
 
 @app.command()
 def update():
-    """
-    Update the workflow configuration.
-    """
+    """Update the workflow configuration"""
     from ofx.commands.flow.update import UpdateHandler
 
     UpdateHandler().run()
+
+
+@app.command()
+def visualize(
+    workflow_name: Annotated[
+        str, typer.Argument(..., help="Name of the workflow to visualize")
+    ],
+    output: Annotated[
+        str | None,
+        typer.Option(
+            "-o",
+            "--output",
+            help="Output path for the visualization file. If not specified, displays in terminal.",
+        ),
+    ] = None,
+    format: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="Output format for visualization (dot, png, svg, pdf). Default is dot.",
+        ),
+    ] = "dot",
+):
+    """Visualize workflow as a directed acyclic graph (DAG)"""
+    from ofx.commands.flow.visualize import VisualizeHandler
+
+    VisualizeHandler(
+        workflow_name=workflow_name,
+        output=output,
+        format=format,
+    ).run()

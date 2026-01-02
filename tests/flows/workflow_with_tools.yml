@@ -1,0 +1,49 @@
+name: Example Workflow with Tool Installation
+description: Demonstrates tool installation using template functions
+
+defaults:
+  run:
+    shell: /bin/bash
+
+tools:
+  # Go tools with ToolConfig - using template functions
+  nuclei:
+    install: ${{ go_install('github.com/projectdiscovery/nuclei/v3/cmd/nuclei') }}
+    check: "which nuclei"
+    post_install: "echo 'Nuclei installed, updating templates...' && nuclei -update-templates -silent || true"
+
+  httpx:
+    install: ${{ go_install('github.com/projectdiscovery/httpx/cmd/httpx') }}
+    check: "which httpx"
+
+  subfinder:
+    install: ${{ go_install('github.com/projectdiscovery/subfinder/v2/cmd/subfinder') }}
+    check: "which subfinder"
+
+  # Simple string format still supported (backward compatible)
+  nmap: "echo 'nmap check: nmap is available' || true"
+
+jobs:
+  scan:
+    name: Security Scan
+    steps:
+      - name: Run Nuclei Scan
+        run: |
+          echo "Running nuclei scan..."
+          nuclei -version
+          echo "Nuclei is ready!"
+
+      - name: Run HTTPx
+        run: |
+          echo "Running httpx..."
+          httpx -version
+
+      - name: Run Subfinder
+        run: |
+          echo "Running subfinder..."
+          subfinder -version
+
+      - name: Check Nmap
+        run: |
+          echo "Checking nmap..."
+          nmap --version

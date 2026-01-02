@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 mcr.microsoft.com/devcontainers/python:3.12
+FROM --platform=linux/amd64 mcr.microsoft.com/devcontainers/python:3.14
 
 ENV UV_LINK_MODE=copy
 
@@ -26,4 +26,4 @@ RUN mkdir -p $CODON_DIR \
     && rm codon-linux-x86_64.tar.gz \
     && chmod +x $CODON_DIR/bin/codon
 
-ENV PYTHONPATH=/workspace/src:${PYTHONPATH}
+ENV PYTHONPATH=/workspace/ofx/src:${PYTHONPATH}

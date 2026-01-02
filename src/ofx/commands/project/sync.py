@@ -3,7 +3,6 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -19,9 +18,9 @@ class SyncProjectHandler:
         self,
         path: str,
         remote_type: str = "git",
-        remote_config: Optional[str] = None,
+        remote_config: str | None = None,
         encrypt: bool = False,
-        encryption_key: Optional[str] = None,
+        encryption_key: str | None = None,
     ):
         self._project_path = Path(path)
         self._remote_type = remote_type
@@ -29,7 +28,6 @@ class SyncProjectHandler:
         self._encrypt = encrypt
         self._encryption_key = encryption_key or os.getenv("OFX_ENCRYPTION_KEY")
 
-        # Load project configuration if exists
         self._load_project_config()
 
         if self._encrypt and not self._encryption_key:
@@ -44,17 +42,14 @@ class SyncProjectHandler:
             try:
                 config = json.loads(config_file.read_text())
 
-                # Use project config if not explicitly overridden
                 if not self._remote_config:
                     self._remote_type = config.get("type", self._remote_type)
                     self._remote_config = json.dumps(config.get("config", {}))
 
-                # Load encryption settings from project
                 if config.get("encrypt") and not self._encrypt:
                     self._encrypt = True
                     logger.info("Encryption enabled from project configuration")
 
-                # Try to load encryption key from secure file
                 if self._encrypt and not self._encryption_key:
                     key_file = self._project_path / ".ofx-encryption-key"
                     if key_file.exists():
@@ -77,10 +72,8 @@ class SyncProjectHandler:
         logger.info(f"Syncing project at: {self._project_path.absolute()}")
         logger.info(f"Remote storage type: {self._remote_type}")
 
-        # Auto-commit before sync
         self._auto_commit()
 
-        # Sync based on remote type
         if self._remote_type == "git":
             self._sync_git()
         elif self._remote_type == "ssh":
@@ -95,13 +88,10 @@ class SyncProjectHandler:
 
             repo = git.Repo(self._project_path)
 
-            # Check if there are changes to commit
             if repo.is_dirty() or repo.untracked_files:
-                # Add all changes
                 repo.index.add(repo.untracked_files)
                 repo.git.add(A=True)
 
-                # Create commit with timestamp
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 hostname = os.getenv("HOSTNAME", "unknown")
                 user = os.getenv("USER", "unknown")
@@ -136,12 +126,10 @@ class SyncProjectHandler:
         handler = SSHHandler(config)
 
         try:
-            # Encrypt files if encryption is enabled
             if self._encrypt and self._encryption_key:
                 encryptor = EncryptionHandler(self._encryption_key)
                 self._encrypt_local_files(encryptor)
 
-            # Sync to remote
             handler.sync(self._project_path)
             logger.info("Successfully synced with SSH remote.")
         except Exception as e:
@@ -165,7 +153,6 @@ class SyncProjectHandler:
                 file_path = os.path.join(root, file)
                 encrypted_file_path = f"{file_path}.enc"
 
-                # Only encrypt if .enc doesn't exist or source is newer
                 if not os.path.exists(encrypted_file_path) or os.path.getmtime(
                     file_path
                 ) > os.path.getmtime(encrypted_file_path):
@@ -184,14 +171,12 @@ class SyncProjectHandler:
         if self._remote_type == "s3":
             handler = S3Handler(**config)
             try:
-                # Try to fetch first (if remote exists)
                 try:
                     handler.fetch(self._project_path)
                     logger.info("Fetched changes from S3")
                 except Exception:
                     logger.info("No existing remote found, will create initial sync")
 
-                # Sync local to remote
                 handler.sync(self._project_path)
                 logger.info("Synced project to S3 remote storage.")
             except Exception as e:
@@ -201,14 +186,12 @@ class SyncProjectHandler:
         elif self._remote_type == "webdav":
             handler = WebDAVHandler(config)
             try:
-                # Try to fetch first (if remote exists)
                 try:
                     handler.fetch(self._project_path)
                     logger.info("Fetched changes from WebDAV")
                 except Exception:
                     logger.info("No existing remote found, will create initial sync")
 
-                # Sync local to remote
                 handler.sync(self._project_path)
                 logger.info("Synced project to WebDAV remote storage.")
             except Exception as e:
@@ -221,7 +204,6 @@ class SyncProjectHandler:
         """Upload all project files using the given handler."""
         for root, _, files in os.walk(self._project_path):
             for f in files:
-                # Skip git files and encryption metadata
                 if ".git" in root or f == ".ofx-remote.json":
                     continue
                 local_path = os.path.join(root, f)
@@ -229,7 +211,6 @@ class SyncProjectHandler:
 
                 try:
                     if encryptor:
-                        # Encrypt and upload
                         encrypted_data = encryptor.encrypt_file(local_path)
                         temp_file = f"{local_path}.enc"
                         with open(temp_file, "wb") as tf:

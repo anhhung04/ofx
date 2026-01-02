@@ -1,0 +1,76 @@
+name: Interactive Step Demo
+description: Demonstrates interactive mode in single-job stages
+
+jobs:
+  # This job is alone in its stage - interactive mode works!
+  interactive_shell:
+    steps:
+      - name: Interactive Command
+        run: bash
+        interactive: true
+        timeout: 5
+
+      - name: Normal Command
+        run: echo "Back to normal execution"
+
+  # Comprehensive bash interactive tests
+  bash_interactive_tests:
+    needs: interactive_shell
+    steps:
+      - name: Multiple Read Prompts
+        run: |
+          echo "=== Multiple Input Test ==="
+          read -p "What's your age? " age
+          read -p "What's your city? " city
+          echo "You are $age years old and live in $city"
+        interactive: true
+        timeout: 10
+
+      - name: Conditional Input
+        run: |
+          echo "=== Conditional Logic Test ==="
+          read -p "Do you want to continue? (yes/no): " answer
+          if [ "$answer" = "yes" ]; then
+            echo "Great! Continuing..."
+          else
+            echo "Okay, stopping here."
+          fi
+        interactive: true
+        timeout: 10
+
+      - name: Read with Default Value
+        run: |
+          echo "=== Default Value Test ==="
+          read -p "Enter environment [dev]: " env
+          env=${env:-dev}
+          echo "Using environment: $env"
+        interactive: true
+        timeout: 10
+
+      - name: Silent Input (Password)
+        run: |
+          echo "=== Silent Input Test ==="
+          read -s -p "Enter password: " password
+          echo ""
+          echo "Password length: ${#password}"
+        interactive: true
+        timeout: 10
+
+      - name: Non-Interactive Verification
+        run: echo "All bash interactive tests completed!"
+
+  # This job depends on bash tests - also alone in its stage
+  interactive_python:
+    needs: bash_interactive_tests
+    steps:
+      - name: Interactive Python Script
+        script: |
+          name = input("What's your favorite color? ")
+          print(f"Nice! {name} is a great color!")
+        interactive: true
+        timeout: 5
+
+      - name: Show Result
+        run: echo "Interactive session completed"
+# Note: If you have multiple jobs in the same stage,
+# interactive mode will be automatically disabled to avoid conflicts

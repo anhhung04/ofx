@@ -1,0 +1,177 @@
+site_name: OFX - Offensive Flow Executor
+site_description: A powerful workflow execution framework optimized for red teaming operations
+site_author: anhhung04
+site_url: https://ofx.readthedocs.io
+
+repo_name: ofx
+repo_url: https://github.com/anhhung04/ofx
+edit_uri: edit/main/docs/
+
+theme:
+    name: material
+    palette:
+        # Light mode
+        - media: "(prefers-color-scheme: light)"
+          scheme: default
+          primary: red
+          accent: red
+          toggle:
+              icon: material/brightness-7
+              name: Switch to dark mode
+        # Dark mode
+        - media: "(prefers-color-scheme: dark)"
+          scheme: slate
+          primary: red
+          accent: red
+          toggle:
+              icon: material/brightness-4
+              name: Switch to light mode
+    features:
+        - navigation.instant
+        - navigation.tracking
+        - navigation.tabs
+        - navigation.tabs.sticky
+        - navigation.sections
+        - navigation.expand
+        - navigation.top
+        - search.suggest
+        - search.highlight
+        - content.code.copy
+        - content.code.annotate
+    icon:
+        repo: fontawesome/brands/github
+
+extra:
+    social:
+        - icon: fontawesome/brands/github
+          link: https://github.com/anhhung04/ofx
+        - icon: fontawesome/brands/python
+          link: https://pypi.org/project/ofx/
+
+markdown_extensions:
+    - admonition
+    - pymdownx.details
+    - pymdownx.superfences
+    - pymdownx.highlight:
+          anchor_linenums: true
+    - pymdownx.inlinehilite
+    - pymdownx.snippets
+    - pymdownx.tabbed:
+          alternate_style: true
+    - pymdownx.tasklist:
+          custom_checkbox: true
+    - pymdownx.emoji:
+          emoji_index: !!python/name:material.extensions.emoji.twemoji
+          emoji_generator: !!python/name:material.extensions.emoji.to_svg
+    - tables
+    - toc:
+          permalink: true
+    - attr_list
+    - md_in_html
+
+plugins:
+    - search
+
+nav:
+    - Home: index.md
+    - Getting Started:
+          - getting-started/quickstart.md
+          - Quick Start: getting-started/quickstart/index.md
+          - Quickstart Examples: getting-started/quickstart/examples.md
+          - getting-started/concepts.md
+          - Basic Concepts: getting-started/concepts/index.md
+          - Architecture: getting-started/concepts/architecture.md
+    - User Guide:
+          - guide/workflows.md
+          - Workflows:
+                - Overview: guide/workflows/index.md
+                - Dependencies: guide/workflows/dependencies.md
+                - Stages: guide/workflows/stages.md
+                - Examples: guide/workflows/examples.md
+          - guide/jobs-steps.md
+          - Jobs & Steps:
+                - Overview: guide/jobs-steps/index.md
+                - Jobs: guide/jobs-steps/jobs.md
+                - Steps: guide/jobs-steps/steps.md
+                - Outputs: guide/jobs-steps/outputs.md
+          - guide/hooks.md
+          - Hooks System:
+                - Overview: guide/hooks/index.md
+                - Lifecycle: guide/hooks/lifecycle.md
+                - Examples: guide/hooks/examples.md
+          - guide/templates.md
+          - Templates:
+                - Overview: guide/templates/index.md
+                - Jinja Templates: guide/templates/jinja.md
+                - Examples: guide/templates/examples.md
+          - guide/secrets-inputs.md
+          - Secrets & Inputs:
+                - Overview: guide/secrets-inputs/index.md
+                - Secrets: guide/secrets-inputs/secrets.md
+                - Inputs: guide/secrets-inputs/inputs.md
+          - guide/interactive-mode.md
+          - Interactive Mode:
+                - Overview: guide/interactive-mode/index.md
+                - Usage: guide/interactive-mode/usage.md
+                - Detection & Execution: guide/interactive-mode/detection.md
+                - Limitations: guide/interactive-mode/limitations.md
+                - Examples: guide/interactive-mode/examples.md
+                - Best Practices: guide/interactive-mode/best-practices.md
+                - Error Handling & Troubleshooting: guide/interactive-mode/error-handling.md
+          - guide/extending-data-modules.md
+          - Extending Data Modules:
+                - Overview: guide/extending-data-modules/index.md
+                - Custom Connectors: guide/extending-data-modules/custom-connectors.md
+                - Data Directory: guide/extending-data-modules/data-directory.md
+    - Red Teaming APIs:
+          - Overview: api/overview.md
+          - api/reconnaissance.md
+          - Reconnaissance:
+                - Overview: api/reconnaissance/index.md
+                - FOFA: api/reconnaissance/fofa.md
+                - Shodan: api/reconnaissance/shodan.md
+                - ZoomEye: api/reconnaissance/zoomeye.md
+                - Out-of-Band (OOB): api/reconnaissance/oob.md
+          - api/exploitation.md
+          - Exploitation:
+                - Overview: api/exploitation/index.md
+                - Shellcode: api/exploitation/shellcode.md
+                - Webshell: api/exploitation/webshell.md
+                - HTTP Client: api/exploitation/http.md
+                - Exploit Utilities: api/exploitation/exploit.md
+          - api/post-exploitation.md
+          - Post-Exploitation:
+                - Overview: api/post-exploitation/index.md
+                - File Operations: api/post-exploitation/file.md
+                - Network: api/post-exploitation/network.md
+                - HTTP Server: api/post-exploitation/httpserver.md
+                - String Utilities: api/post-exploitation/strings.md
+                - Utilities: api/post-exploitation/utils.md
+                - Workflow Integration: api/post-exploitation/workflow.md
+    - CLI Reference:
+          - cli/commands.md
+          - Commands:
+                - Overview: cli/commands/index.md
+                - Flow Commands:
+                      - Run: cli/commands/run.md
+                      - Validate: cli/commands/validate.md
+                      - Visualize: cli/commands/visualize.md
+                      - Tools: cli/commands/tools.md
+                      - Update: cli/commands/update.md
+                - Project Commands:
+                      - Init: cli/commands/init.md
+                      - Sync: cli/commands/sync.md
+                      - Overview: cli/commands/project.md
+                - Secret Management: cli/commands/secret.md
+                - Asset Management: cli/commands/asset.md
+                - Utilities:
+                      - Docs Server: cli/commands/docs-serve.md
+                      - Doctor: cli/commands/doctor.md
+                      - Dump: cli/commands/dump.md
+          - Visualization & UX: cli/visualization.md
+    - Advanced:
+          - advanced/performance.md
+          - Performance:
+                - Overview: advanced/performance/index.md
+                - Tuning: advanced/performance/tuning.md
+                - Troubleshooting: advanced/performance/troubleshooting.md

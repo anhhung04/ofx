@@ -1,13 +1,8 @@
 from typing import Annotated, Optional
 
 import typer
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
 
 from .project_manager import ProjectManager
-
-console = Console()
 
 app = typer.Typer()
 
@@ -25,16 +20,23 @@ def init(
         typer.Option("--multiphase", "-m", help="Initialize a multi-phase project"),
     ] = False,
 ):
-    """
-    Init new OFX project
-    """
-    base = ProjectManager.create_project(name)
-    console.print(f"[bold green]✓[/] Creating project: [cyan]{name}[/]")
+    """Init new OFX project"""
+    from rich.panel import Panel
+
+    from ofx.settings import get_console
+    console = get_console()
+
+    with console.status(f"[bold green]Creating project '{name}'...[/]", spinner="dots"):
+        base = ProjectManager.create_project(name)
+        # Simulate a short delay if needed, or just let it finish immediately
+        # Adding a small sleep just for the spinner to be visible if the operation is instant is optional but nice for UX
+        # import time; time.sleep(0.5)
+
+    console.print(f"[bold green]✓[/] Project created: [cyan]{name}[/]")
     console.print(f"[dim]Location: {base}[/]")
 
     from ofx.commands.project.init import InitHandler
 
-    # Interactive remote storage setup
     console.print("\n[bold]Remote Storage Setup[/]")
     setup_remote = typer.confirm(
         "Would you like to set up remote storage?", default=True
@@ -56,7 +58,6 @@ def init(
             git_url = typer.prompt("Enter Git repository URL")
             remote_config = {"url": git_url, "branch": "main"}
 
-            # Ask for encryption for git storage
             console.print("\n[bold]Encryption Setup[/]")
             encrypt = typer.confirm(
                 "Enable encryption for files in git repository?", default=False
@@ -142,7 +143,6 @@ def init(
                 "webdav_password": password,
             }
 
-            # Ask for encryption for non-git storage
             console.print("\n[bold]Encryption Setup[/]")
             encrypt = typer.confirm(
                 "Enable encryption for synced files?", default=False
@@ -166,9 +166,10 @@ def init(
         elif remote_type == "none":
             remote_type = None
 
-    InitHandler(
-        base, is_multiphase, remote_type, remote_config, encrypt, encryption_key
-    ).run()  # type: ignore
+    with console.status("[bold green]Initializing project...[/]", spinner="dots"):
+        InitHandler(
+            base, is_multiphase, remote_type, remote_config, encrypt, encryption_key
+        ).run()
 
     console.print(
         Panel(
@@ -193,7 +194,7 @@ def sync(
         ),
     ] = "git",
     remote_config: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--remote-config", "-c", help="Remote config as JSON"),
     ] = None,
     encrypt: Annotated[
@@ -201,41 +202,52 @@ def sync(
         typer.Option("--encrypt", "-e", help="Encrypt files before syncing"),
     ] = False,
     encryption_key: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--encryption-key",
             help="Encryption key (or set OFX_ENCRYPTION_KEY env var)",
         ),
     ] = None,
 ):
-    """
-    Sync local project with remote storage (git by default)
-    """
+    """Sync local project with remote storage (git by default)"""
+    from ofx.settings import get_console
+    console = get_console()
     path = ProjectManager.resolve_path(project)
-    console.print(f"[bold blue]⟳[/] Syncing project: [cyan]{project}[/]")
+
+    console.print(f"[bold blue]⟳[/] Preparing sync for project: [cyan]{project}[/]")
     console.print(f"[dim]Remote type: {remote_type}[/]")
     if encrypt:
         console.print("[dim]Encryption: enabled[/]")
 
     from ofx.commands.project.sync import SyncProjectHandler
 
-    SyncProjectHandler(
-        path,
-        remote_type=remote_type,
-        remote_config=remote_config,
-        encrypt=encrypt,
-        encryption_key=encryption_key,
-    ).run()
+    with console.status("[bold green]Syncing...[/]", spinner="dots"):
+        SyncProjectHandler(
+            path,
+            remote_type=remote_type,
+            remote_config=remote_config,
+            encrypt=encrypt,
+            encryption_key=encryption_key,
+        ).run()
 
-    console.print("[bold green]✓[/] Sync completed successfully")
+    from rich.panel import Panel
+    console.print(
+        Panel(
+            f"[bold green]Sync completed successfully![/]\nProject: {project}",
+            border_style="green",
+            title="✅ Sync Status"
+        )
+    )
 
 
 @app.command(name="list")
 @app.command(name="ls", hidden=True)
 def list():
-    """
-    List all projects in default project path
-    """
+    """List all projects in default project path"""
+    from rich.table import Table
+
+    from ofx.settings import get_console
+    console = get_console()
     projects = ProjectManager.list_projects()
 
     if not projects:
@@ -247,6 +259,8 @@ def list():
         title=f"OFX Projects ({len(projects)})",
         show_header=True,
         header_style="bold cyan",
+        expand=True,
+        border_style="cyan"
     )
     table.add_column("#", style="dim", width=4)
     table.add_column("Project Name", style="cyan")
@@ -262,10 +276,9 @@ def list():
 @app.command(name="remove")
 @app.command(name="rm", hidden=True)
 def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
-    """
-    Remove a project by name
-    """
-    # Confirm deletion
+    """Remove a project by name"""
+    from ofx.settings import get_console
+    console = get_console()
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():
@@ -288,19 +301,14 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
 
 @app.command(hidden=True)
 def encrypt_filter():
-    """
-    Git clean filter: Encrypt stdin to stdout (used by git attributes)
-    """
+    """Git clean filter: Encrypt stdin to stdout (used by git attributes)"""
     import sys
     from pathlib import Path
 
-    # Read encryption key from current git repo
     try:
-        # Try to find .ofx-encryption-key in current or parent directories
         current = Path.cwd()
         key_file = None
 
-        # Check current directory and all parents
         check_dirs = [current]
         check_dirs.extend(current.parents)
 
@@ -311,43 +319,33 @@ def encrypt_filter():
                 break
 
         if not key_file:
-            # No encryption key found, pass through unchanged
             sys.stdout.buffer.write(sys.stdin.buffer.read())
             return
 
         encryption_key = key_file.read_text().strip()
 
-        # Read stdin
         data = sys.stdin.buffer.read()
 
-        # Encrypt
         from .storage import EncryptionHandler
 
         encryptor = EncryptionHandler(encryption_key)
         encrypted = encryptor.encrypt_data(data)
 
-        # Write to stdout
         sys.stdout.buffer.write(encrypted)
     except Exception:
-        # On any error, pass through unchanged to avoid breaking git
         sys.stdout.buffer.write(sys.stdin.buffer.read())
 
 
 @app.command(hidden=True)
 def decrypt_filter():
-    """
-    Git smudge filter: Decrypt stdin to stdout (used by git attributes)
-    """
+    """Git smudge filter: Decrypt stdin to stdout (used by git attributes)"""
     import sys
     from pathlib import Path
 
-    # Read encryption key from current git repo
     try:
-        # Try to find .ofx-encryption-key in current or parent directories
         current = Path.cwd()
         key_file = None
 
-        # Check current directory and all parents
         check_dirs = [current]
         check_dirs.extend(current.parents)
 
@@ -358,28 +356,22 @@ def decrypt_filter():
                 break
 
         if not key_file:
-            # No encryption key found, pass through unchanged
             sys.stdout.buffer.write(sys.stdin.buffer.read())
             return
 
         encryption_key = key_file.read_text().strip()
 
-        # Read stdin
         data = sys.stdin.buffer.read()
 
-        # Check if data is encrypted (has proper structure)
-        if len(data) < 13:  # Min: 12-byte nonce + 1 byte data
+        if len(data) < 13:
             sys.stdout.buffer.write(data)
             return
 
-        # Decrypt
         from .storage import EncryptionHandler
 
         encryptor = EncryptionHandler(encryption_key)
         decrypted = encryptor.decrypt_file(data)
 
-        # Write to stdout
         sys.stdout.buffer.write(decrypted)
     except Exception:
-        # On any error, pass through unchanged to avoid breaking git
         sys.stdout.buffer.write(sys.stdin.buffer.read())

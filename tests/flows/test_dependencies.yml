@@ -1,0 +1,37 @@
+name: Dependency Test Workflow
+description: Test workflow with job dependencies to demonstrate vertical graph layout
+
+jobs:
+  setup:
+    name: Setup Environment
+    steps:
+      - name: Initialize
+        run: echo "Setting up environment"
+
+  build:
+    name: Build Application
+    needs: setup
+    steps:
+      - name: Compile
+        run: echo "Building application"
+
+  test:
+    name: Run Tests
+    needs: build
+    steps:
+      - name: Test
+        run: echo "Running tests"
+
+  deploy:
+    name: Deploy Application
+    needs: [build, test]
+    steps:
+      - name: Deploy
+        run: echo "Deploying application"
+
+  cleanup:
+    name: Cleanup Resources
+    needs: deploy
+    steps:
+      - name: Clean
+        run: echo "Cleaning up"

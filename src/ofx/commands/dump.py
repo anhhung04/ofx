@@ -1,18 +1,14 @@
-import typer
 import json
 import logging
-from typing import Dict, Any, List
-from rich.console import Console
-from rich.table import Table
-
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, Any
+
+import typer
+
+from ofx.models.job import Job
+from ofx.models.step import Step
+from ofx.models.workflow import Workflow
 from ofx.settings import BASE_DATA_DIR, settings
-
-from ofx.models.workflow import *
-from ofx.models.job import *
-from ofx.models.step import *
-
 
 NAME = "dump"
 HELP = "Dump the workflow configuration and outputs."
@@ -22,20 +18,45 @@ app = typer.Typer()
 logger = logging.getLogger(settings.app_branding)
 
 
-def get_property_type(prop_info: Dict[str, Any]) -> str:
+def get_property_type(prop_info: dict[str, Any], definitions: dict[str, Any] = None) -> str:
     """Extract property type from schema information."""
+    if definitions is None:
+        definitions = {}
     if "type" in prop_info:
-        return prop_info["type"]
+        t = prop_info["type"]
+        if t == "any":
+            return "Any"
+        if t == "object":
+            if "additionalProperties" in prop_info:
+                add_props = prop_info["additionalProperties"]
+                if isinstance(add_props, dict):
+                    if "$ref" in add_props:
+                        ref_name = add_props["$ref"].split("/")[-1]
+                        value_type = get_property_type(add_props, definitions)
+                        return f"dict[str, {value_type}]"
+                    else:
+                        return "dict[str, Any]"
+                elif add_props is True:
+                    return "dict[str, Any]"
+                else:
+                    return "dict[str, Any]"
+            return "dict[str, Any]"
+        if t == "array":
+            if "items" in prop_info:
+                item_type = get_property_type(prop_info["items"], definitions)
+                return f"array[{item_type}]"
+            return "array"
+        return t
     elif "anyOf" in prop_info:
-        types = [t.get("type", "any") for t in prop_info["anyOf"]]
+        types = [get_property_type(t, definitions) for t in prop_info["anyOf"]]
         return " | ".join(types)
     elif "$ref" in prop_info:
         ref_name = prop_info["$ref"].split("/")[-1]
         return ref_name
-    return "any"
+    return "Any"
 
 
-def get_property_default(prop_info: Dict[str, Any]) -> str:
+def get_property_default(prop_info: dict[str, Any]) -> str:
     """Get the default value of a property as a string."""
     if "default" in prop_info:
         default_value = prop_info["default"]
@@ -49,40 +70,37 @@ def get_property_default(prop_info: Dict[str, Any]) -> str:
 
 
 def extract_schema_properties(
-    schema: Dict[str, Any],
+    schema: dict[str, Any],
     parent_name: str = "",
-    properties_list: List[Dict[str, str]] = [],
-    definitions: Dict[str, Any] = {},
-) -> List[Dict[str, str]]:
-    """
-    Extract all properties from a schema into a flat list,
-    using dot notation for nested properties.
-    """
+    properties_list: list[dict[str, str]] = None,
+    definitions: dict[str, Any] = None,
+) -> list[dict[str, str]]:
+    """Extract all properties from a schema into a flat list,"""
+    if definitions is None:
+        definitions = {}
+    if properties_list is None:
+        properties_list = []
     if properties_list is None:
         properties_list = []
 
-    if definitions is None and "$defs" in schema:
+    if not definitions and "$defs" in schema:
         definitions = schema.get("$defs", {})
 
-    # Process properties
     properties = schema.get("properties", {})
     required = schema.get("required", [])
 
     for prop_name, prop_info in properties.items():
         full_name = f"{parent_name}.{prop_name}" if parent_name else prop_name
 
-        # Basic property info
-        prop_type = get_property_type(prop_info)
+        prop_type = get_property_type(prop_info, definitions)
         prop_required = "Yes" if prop_name in required else "No"
         prop_default = get_property_default(prop_info)
         prop_desc = prop_info.get("description", "")
 
-        # Handle enum values
         if "enum" in prop_info:
             enum_values = ", ".join([f"'{v}'" for v in prop_info["enum"]])
             prop_desc += f" (Values: {enum_values})"
 
-        # Add to list
         properties_list.append(
             {
                 "name": full_name,
@@ -93,7 +111,6 @@ def extract_schema_properties(
             }
         )
 
-        # Handle reference to another schema
         if "$ref" in prop_info and definitions:
             ref_name = prop_info["$ref"].split("/")[-1]
             ref_schema = definitions.get(ref_name)
@@ -102,7 +119,6 @@ def extract_schema_properties(
                     ref_schema, full_name, properties_list, definitions
                 )
 
-        # Handle array items
         elif prop_info.get("type") == "array" and "items" in prop_info:
             items_info = prop_info["items"]
             if "$ref" in items_info and definitions:
@@ -113,85 +129,147 @@ def extract_schema_properties(
                         ref_schema, f"{full_name}[]", properties_list, definitions
                     )
 
-        # Handle nested object
         elif prop_info.get("type") == "object" and "properties" in prop_info:
             extract_schema_properties(
                 prop_info, full_name, properties_list, definitions
             )
 
-        # Handle dictionary
         elif prop_info.get("type") == "object" and "additionalProperties" in prop_info:
             add_props = prop_info["additionalProperties"]
             if isinstance(add_props, dict) and "$ref" in add_props and definitions:
                 ref_name = add_props["$ref"].split("/")[-1]
                 ref_schema = definitions.get(ref_name)
                 if ref_schema:
-                    dict_key = f"{full_name}[key]"
                     extract_schema_properties(
-                        ref_schema, dict_key, properties_list, definitions
+                        ref_schema, full_name, properties_list, definitions
                     )
 
     return properties_list
 
 
-def display_schema_table(schema: Dict[str, Any], title: str, console: Console) -> None:
-    """
-    Display the schema properties in a tabular format with dot notation for nested objects.
-    """
-    properties_list = extract_schema_properties(schema)
+def display_schema_tree(schema: dict[str, Any], title: str, console) -> None:
+    """Display the schema properties in a hierarchical tree format."""
+    from rich.tree import Tree
 
-    # Create the table
-    table = Table(title=title, expand=True)
-    table.add_column("Property", style="cyan", no_wrap=True)
-    table.add_column("Type", style="green")
-    table.add_column("Required", style="red", justify="center")
-    table.add_column("Default", style="yellow")
-    table.add_column("Description", style="blue", max_width=60, overflow="fold")
+    tree = Tree(f"[bold]{title}[/]")
+    definitions = schema.get("$defs", {})
 
-    # Add rows to the table
-    for prop in properties_list:
-        table.add_row(
-            prop["name"],
-            prop["type"],
-            prop["required"],
-            prop["default"],
-            prop["description"],
-        )
+    def add_prop(node, prop_name, prop_info, required_list, parent_name=""):
+        full_name = f"{parent_name}.{prop_name}" if parent_name else prop_name
+        prop_type = get_property_type(prop_info, definitions)
+        prop_required = "Yes" if prop_name in required_list else "No"
+        prop_default = get_property_default(prop_info)
+        prop_desc = prop_info.get("description", "")
+        if "enum" in prop_info:
+            enum_values = ", ".join([f"'{v}'" for v in prop_info["enum"]])
+            prop_desc += f" (Values: {enum_values})"
+        label = f"[cyan]{prop_name}[/]: [green]{prop_type}[/] (Req: {prop_required}, Def: {prop_default})"
+        if prop_desc:
+            label += f" - {prop_desc}"
+        child_node = node.add(label)
 
-    # Display the table
-    console.print(table)
+        # Recurse for nested structures
+        if "$ref" in prop_info and definitions:
+            ref_name = prop_info["$ref"].split("/")[-1]
+            ref_schema = definitions.get(ref_name)
+            if ref_schema:
+                add_schema(child_node, ref_schema, full_name)
+        elif prop_info.get("type") == "array" and "items" in prop_info:
+            items_info = prop_info["items"]
+            if "$ref" in items_info and definitions:
+                ref_name = items_info["$ref"].split("/")[-1]
+                ref_schema = definitions.get(ref_name)
+                if ref_schema:
+                    add_schema(child_node, ref_schema, f"{full_name}[]")
+            elif items_info.get("type") == "object":
+                add_schema(child_node, items_info, f"{full_name}[]")
+        elif prop_info.get("type") == "object":
+            if "properties" in prop_info:
+                add_schema(child_node, prop_info, full_name)
+            elif "additionalProperties" in prop_info:
+                add_props = prop_info["additionalProperties"]
+                if isinstance(add_props, dict) and "$ref" in add_props and definitions:
+                    ref_name = add_props["$ref"].split("/")[-1]
+                    ref_schema = definitions.get(ref_name)
+                    if ref_schema:
+                        add_schema(child_node, ref_schema, full_name)
+
+    def add_schema(node, schema, parent_name=""):
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        for prop_name, prop_info in properties.items():
+            add_prop(node, prop_name, prop_info, required, parent_name)
+
+    add_schema(tree, schema)
+    console.print(tree)
 
 
 @app.command("flow")
 def dump_workflow():
     """
-    Dump the workflow model schema in JSON or rich formatted table.
+    Display the OFX workflow model schema as a rich, human-readable tree.
 
-    Args:
-        format: Output format - 'json' for raw JSON schema or 'table' for formatted table
+    This command prints a detailed tree of all workflow properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX workflow definitions.
     """
+    from ofx.settings import get_console
     schema = Workflow.model_json_schema()
-    console = Console()
+    console = get_console()
 
     console.print("\n[bold]Workflow Model Schema[/]\n", style="cyan")
-    display_schema_table(schema, "Workflow Properties", console)
+    display_schema_tree(schema, "Workflow Properties", console)
+
+
+
+@app.command("job")
+def dump_job():
+    """
+    Display the OFX job model schema as a rich, human-readable tree.
+
+    This command prints a detailed tree of all job properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX job definitions.
+    """
+    from ofx.settings import get_console
+    schema = Job.model_json_schema()
+    console = get_console()
+
+    console.print("\n[bold]Job Model Schema[/]\n", style="cyan")
+    display_schema_tree(schema, "Job Properties", console)
+
+
+
+@app.command("step")
+def dump_step():
+    """
+    Display the OFX step model schema as a rich, human-readable tree.
+
+    This command prints a detailed tree of all step properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX step definitions.
+    """
+    from ofx.settings import get_console
+    schema = Step.model_json_schema()
+    console = get_console()
+
+    console.print("\n[bold]Step Model Schema[/]\n", style="cyan")
+    display_schema_tree(schema, "Step Properties", console)
+
 
 
 @app.command("schema")
-def dump_schema(
+def export_schema(
     output: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
-            "-o", "--output", help="Output format - 'json' for raw JSON schema"
+            "-o", "--output", help="Output file path for the JSON schema (default: workflow_schema.json in data dir)"
         ),
     ] = None,
 ):
     """
-    Dump the workflow model schema in JSON or rich formatted table.
+    Export the OFX workflow model schema as a JSON file.
 
-    Args:
-        format: Output format - 'json' for raw JSON schema or 'table' for formatted table
+    By default, writes the full JSON schema for workflows to 'workflow_schema.json' in the data directory. You can specify a custom output path with -o/--output. This schema is suitable for validation, tooling, or integration with editors and CI systems.
     """
+    from ofx.settings import get_console
+
+    console = get_console()
+
     if not output:
         output = (BASE_DATA_DIR / "workflow_schema.json").as_posix()
     output_path = Path(output)
@@ -199,4 +277,4 @@ def dump_schema(
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(schema, indent=2))
-    logger.info(f"Workflow schema written to {output_path}")
+    console.print(f"✅ Workflow schema written to {output_path}")

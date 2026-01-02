@@ -1,6 +1,5 @@
 import shutil
 from pathlib import Path
-from typing import List
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
 
@@ -34,7 +33,7 @@ class ProjectManager:
         return str(candidate)
 
     @classmethod
-    def list_projects(cls) -> List[str]:
+    def list_projects(cls) -> list[str]:
         """List all projects in the default project path."""
         default_path = cls._get_default_path()
         if not default_path.exists():
@@ -54,14 +53,12 @@ class ProjectManager:
         project_path = cls._get_default_path() / safe_name
         project_path.mkdir(parents=True, exist_ok=True)
 
-        # Auto-initialize git repository
         try:
             git.Repo.init(str(project_path), initial_branch="main")
-            # Create initial .gitignore
             gitignore_path = project_path / ".gitignore"
             gitignore_path.write_text(".ofx-encryption-key\n*.enc\n")
         except Exception:
-            pass  # Silently continue if git init fails
+            pass
 
         return str(project_path)
 

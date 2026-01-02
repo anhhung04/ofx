@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
 from pathlib import Path
+
+from pydantic import BaseModel, Field
 
 from ofx.settings import DEFAULT_WORKFLOWS_DIR
 
