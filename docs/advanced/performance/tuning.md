@@ -21,16 +21,23 @@ Optimize your OFX workflows for speed, efficiency, and resource usage. This page
 
 ## Example: Parallel Jobs
 ```yaml
+name: Parallel Network Scans
 jobs:
-	scan1:
-		steps:
-			- run: nmap 10.0.0.1
-	scan2:
-		steps:
-			- run: nmap 10.0.0.2
-	scan3:
-		steps:
-			- run: nmap 10.0.0.3
+  scan1:
+    name: Scan Host 1
+    steps:
+      - name: Scan 10.0.0.1
+        run: nmap 10.0.0.1
+  scan2:
+    name: Scan Host 2
+    steps:
+      - name: Scan 10.0.0.2
+        run: nmap 10.0.0.2
+  scan3:
+    name: Scan Host 3
+    steps:
+      - name: Scan 10.0.0.3
+        run: nmap 10.0.0.3
 ```
 All three jobs run in parallel, speeding up the workflow.
 

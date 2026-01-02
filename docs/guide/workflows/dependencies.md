@@ -6,18 +6,25 @@ Dependencies control the execution order of jobs in an OFX workflow. Use the `ne
 
 ## Syntax
 ```yaml
+name: Build Pipeline
 jobs:
-	build:
-		steps:
-			- run: make
-	test:
-		needs: build
-		steps:
-			- run: pytest
-	deploy:
-		needs: [test]
-		steps:
-			- run: ./deploy.sh
+  build:
+    name: Build Application
+    steps:
+      - name: Compile code
+        run: make
+  test:
+    name: Run Tests
+    needs: build
+    steps:
+      - name: Execute tests
+        run: pytest
+  deploy:
+    name: Deploy Application
+    needs: [test]
+    steps:
+      - name: Deploy to production
+        run: ./deploy.sh
 ```
 
 ---
@@ -31,18 +38,25 @@ jobs:
 
 ## Example: Multiple Dependencies
 ```yaml
+name: Complex Attack Chain
 jobs:
-	setup:
-		steps:
-			- run: ./setup.sh
-	scan:
-		needs: setup
-		steps:
-			- run: nmap {{ inputs.target }}
-	exploit:
-		needs: [setup, scan]
-		steps:
-			- run: python exploit.py
+  setup:
+    name: Environment Setup
+    steps:
+      - name: Initialize environment
+        run: ./setup.sh
+  scan:
+    name: Port Scan
+    needs: setup
+    steps:
+      - name: Scan target
+        run: nmap {{ inputs.target }}
+  exploit:
+    name: Exploitation
+    needs: [setup, scan]
+    steps:
+      - name: Run exploit
+        run: python exploit.py
 ```
 
 ---

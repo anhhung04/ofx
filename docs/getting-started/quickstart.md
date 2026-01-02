@@ -273,7 +273,8 @@ jobs:
     name: Scan Target
     hooks:
       on_start:
-        - run: echo "Starting job: scan"
+        - name: Job start notification
+          run: echo "Starting job: scan"
     steps:
       - name: Run scan
         run: nmap -sV ${{ inputs.target }}

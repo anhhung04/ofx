@@ -43,17 +43,24 @@ jobs:
 ## Sequential Dependencies
 Ensure interactive jobs run sequentially:
 ```yaml
+name: Interactive Workflow
 jobs:
   prepare:
+    name: Preparation
     steps:
-      - run: ./prepare.sh
+      - name: Run preparation script
+        run: ./prepare.sh
   interact:
+    name: Interactive Session
     needs: prepare  # Sequential execution
     steps:
-      - run: bash
+      - name: Launch interactive shell
+        run: bash
         interactive: true
   cleanup:
+    name: Cleanup
     needs: interact  # Runs after interaction
     steps:
-      - run: ./cleanup.sh
+      - name: Run cleanup script
+        run: ./cleanup.sh
 ```

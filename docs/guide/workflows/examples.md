@@ -8,9 +8,11 @@ This page provides practical OFX workflow examples for common red teaming, autom
 ```yaml
 name: Web Recon
 jobs:
-	scan:
-		steps:
-			- run: nmap {{ inputs.target }}
+  scan:
+    name: Scan Target
+    steps:
+      - name: Run nmap scan
+        run: nmap {{ inputs.target }}
 ```
 
 ---
@@ -19,68 +21,90 @@ jobs:
 ```yaml
 name: Exploit Chain
 jobs:
-	recon:
-		steps:
-			- run: nmap {{ inputs.target }}
-	exploit:
-		needs: recon
-		steps:
-			- run: python exploit.py --target {{ inputs.target }}
-	loot:
-		needs: exploit
-		steps:
-			- run: ./loot.sh
+  recon:
+    name: Reconnaissance
+    steps:
+      - name: Scan target
+        run: nmap {{ inputs.target }}
+  exploit:
+    name: Exploitation
+    needs: recon
+    steps:
+      - name: Run exploit
+        run: python exploit.py --target {{ inputs.target }}
+  loot:
+    name: Data Collection
+    needs: exploit
+    steps:
+      - name: Collect loot
+        run: ./loot.sh
 ```
 
 ---
 
 ## Example 3: Parallel Jobs
 ```yaml
+name: Parallel Scans
 jobs:
-	scan1:
-		steps:
-			- run: nmap 10.0.0.1
-	scan2:
-		steps:
-			- run: nmap 10.0.0.2
+  scan1:
+    name: Scan Host 1
+    steps:
+      - name: Scan 10.0.0.1
+        run: nmap 10.0.0.1
+  scan2:
+    name: Scan Host 2
+    steps:
+      - name: Scan 10.0.0.2
+        run: nmap 10.0.0.2
 ```
 
 ---
 
 ## Example 4: Using Outputs
 ```yaml
+name: Scan with Outputs
 jobs:
-	scan:
-		steps:
-			- run: nmap {{ inputs.target }}
-				outputs:
-					open_ports: "{{ step.stdout_lines }}"
-	report:
-		needs: scan
-		steps:
-			- run: echo "Ports: {{ jobs.scan.outputs.open_ports }}"
+  scan:
+    name: Port Scan
+    steps:
+      - name: Scan target
+        run: nmap {{ inputs.target }}
+        outputs:
+          open_ports: "{{ step.stdout_lines }}"
+  report:
+    name: Generate Report
+    needs: scan
+    steps:
+      - name: Display results
+        run: echo "Ports: {{ jobs.scan.outputs.open_ports }}"
 ```
 
 ---
 
 ## Example 5: With Secrets
 ```yaml
+name: API Request
 jobs:
-	api:
-		steps:
-			- run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
+  api:
+    name: Call API
+    steps:
+      - name: Make authenticated request
+        run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
 ```
 
 ---
 
 ## Example 6: Interactive Debugging
 ```yaml
+name: Debug Session
 jobs:
-	debug:
-		steps:
-			- run: bash
-				interactive: true
-				timeout: 10
+  debug:
+    name: Interactive Debug
+    steps:
+      - name: Launch bash shell
+        run: bash
+        interactive: true
+        timeout: 10
 ```
 
 ---
