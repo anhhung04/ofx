@@ -189,33 +189,40 @@ steps:
 ```yaml
 hooks:
   on_start:
-    - run: echo "Starting..."
+    - name: Starting message
+      run: echo "Starting..."
   
   on_success:
-    - run: echo "Success!"
+    - name: Success message
+      run: echo "Success!"
   
   on_failure:
-    - run: echo "Failed!"
+    - name: Failure message
+      run: echo "Failed!"
 ```
 
 2. **Lifecycle Hooks**
 ```yaml
 hooks:
   before_jobs:
-    - run: echo "Before jobs"
+    - name: Setup
+      run: echo "Before jobs"
   
   after_jobs:
-    - run: echo "After jobs"
+    - name: Teardown
+      run: echo "After jobs"
 ```
 
 3. **Command Hooks**
 ```yaml
 hooks:
   before_command:
-    - run: echo "Before each command"
+    - name: Pre-command
+      run: echo "Before each command"
   
   after_command:
-    - run: echo "After each command"
+    - name: Post-command
+      run: echo "After each command"
 ```
 
 ### Hook Scopes
@@ -242,13 +249,16 @@ Example:
 ```yaml
 hooks:
   on_start:
-    - run: echo "Workflow start"  # Runs once
+    - name: Workflow start
+      run: echo "Workflow start"  # Runs once
 
 jobs:
   job1:
+    name: First Job
     hooks:
       on_start:
-        - run: echo "Job1 start"  # Runs at job start
+        - name: Job start
+          run: echo "Job1 start"  # Runs at job start
     steps:
       - name: Step 1
         run: echo "Doing work"
@@ -355,33 +365,45 @@ Jobs can depend on other jobs using `needs`:
 ### Simple Dependency
 
 ```yaml
+name: Sequential Jobs
 jobs:
   job1:
+    name: First Job
     steps:
-      - run: echo "First"
+      - name: Execute first task
+        run: echo "First"
   
   job2:
+    name: Second Job
     needs: [job1]  # Waits for job1
     steps:
-      - run: echo "Second"
+      - name: Execute second task
+        run: echo "Second"
 ```
 
 ### Multiple Dependencies
 
 ```yaml
+name: Parallel with Convergence
 jobs:
   recon:
+    name: Reconnaissance
     steps:
-      - run: echo "Recon"
+      - name: Run recon
+        run: echo "Recon"
   
   scan:
+    name: Port Scan
     steps:
-      - run: echo "Scan"
+      - name: Run scan
+        run: echo "Scan"
   
   analyze:
+    name: Analysis
     needs: [recon, scan]  # Waits for both
     steps:
-      - run: echo "Analyze"
+      - name: Analyze results
+        run: echo "Analyze"
 ```
 
 ### Execution Flow
@@ -401,13 +423,16 @@ Define environment variables at different levels:
 ### Workflow Level
 
 ```yaml
+name: Environment Variables Demo
 envs:
   GLOBAL_VAR: "value"
 
 jobs:
   job1:
+    name: Use Global Env
     steps:
-      - run: echo $GLOBAL_VAR  # Available
+      - name: Print global variable
+        run: echo $GLOBAL_VAR  # Available
 ```
 
 ### Job Level

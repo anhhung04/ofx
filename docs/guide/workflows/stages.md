@@ -13,22 +13,31 @@ Workflow stages define the execution order and parallelism of jobs in an OFX wor
 
 ## Example: Sequential and Parallel Stages
 ```yaml
+name: Multi-Stage Attack
 jobs:
-	recon:
-		steps:
-			- run: nmap {{ inputs.target }}
-	exploit:
-		needs: recon
-		steps:
-			- run: python exploit.py
-	loot:
-		needs: exploit
-		steps:
-			- run: ./loot.sh
-	notify:
-		needs: recon
-		steps:
-			- run: ./notify.sh
+  recon:
+    name: Reconnaissance
+    steps:
+      - name: Scan target
+        run: nmap {{ inputs.target }}
+  exploit:
+    name: Exploitation
+    needs: recon
+    steps:
+      - name: Run exploit
+        run: python exploit.py
+  loot:
+    name: Data Exfiltration
+    needs: exploit
+    steps:
+      - name: Collect data
+        run: ./loot.sh
+  notify:
+    name: Notification
+    needs: recon
+    steps:
+      - name: Send alert
+        run: ./notify.sh
 ```
 
 **Stages:**

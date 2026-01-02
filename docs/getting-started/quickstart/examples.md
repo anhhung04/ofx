@@ -8,9 +8,11 @@ Here are simple OFX workflow examples to get you started quickly.
 ```yaml
 name: Hello World
 jobs:
-	hello:
-		steps:
-			- run: echo "Hello, OFX!"
+  hello:
+    name: Say Hello
+    steps:
+      - name: Print greeting
+        run: echo "Hello, OFX!"
 ```
 
 ---
@@ -19,21 +21,28 @@ jobs:
 ```yaml
 name: Scan Target
 inputs:
-	target: "localhost"
+  target:
+    description: Target to scan
+    default: "localhost"
 jobs:
-	scan:
-		steps:
-			- run: nmap {{ inputs.target }}
+  scan:
+    name: Network Scan
+    steps:
+      - name: Run nmap
+        run: nmap {{ inputs.target }}
 ```
 
 ---
 
 ## Example 3: Use a Secret
 ```yaml
+name: API Request
 jobs:
-	api:
-		steps:
-			- run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
+  api:
+    name: Call API
+    steps:
+      - name: Make authenticated request
+        run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
 ```
 
 ---
