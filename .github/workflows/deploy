@@ -1,0 +1,45 @@
+name: Deploy MkDocs with uv
+
+on:
+  push:
+    branches:
+      - main  # or your default branch
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true # Speeds up subsequent runs
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "pyproject.toml" # Or specify "3.12"
+
+      - name: Install dependencies and build
+        run: |
+          # Uses your specific build command
+          uv run --extra docs mkdocs build -f mkdocs.yml -d site
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./site  # Must match the output directory (-d) in your build command
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
