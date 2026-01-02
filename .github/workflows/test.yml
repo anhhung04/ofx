@@ -31,4 +31,4 @@ jobs:
       - name: Build package (test)
         run: |
           pip install build cython setuptools wheel
-          python -m build
+          python -m build --wheel

@@ -6,17 +6,19 @@ Steps are the smallest unit of execution in an OFX workflow. Each step runs a co
 
 ## Step Syntax
 ```yaml
+name: Example Workflow
 jobs:
-	example:
-		steps:
-			- name: Run Script
-				run: ./myscript.sh
-				env:
-					VAR: value
-				timeout: 10
-				outputs:
-					result: "{{ step.stdout }}"
-				continue_on_error: true
+  example:
+    name: Example Job
+    steps:
+      - name: Run Script
+        run: ./myscript.sh
+        env:
+          VAR: value
+        timeout: 10
+        outputs:
+          result: "{{ step.stdout }}"
+        continue_on_error: true
 ```
 
 ---
@@ -42,14 +44,18 @@ jobs:
 
 ## Example: Python Step
 ```yaml
-steps:
-	- name: Calculate
-		run: |
-			result = 2 + 2
-			print(f"Result: {result}")
-		script:
-		outputs:
-			calc: "{{ step.stdout }}"
+name: Python Calculation
+jobs:
+  calculate:
+    name: Run Calculation
+    steps:
+      - name: Calculate result
+        run: |
+          result = 2 + 2
+          print(f"Result: {result}")
+        script: python
+        outputs:
+          calc: "{{ step.stdout }}"
 ```
 
 ---
