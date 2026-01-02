@@ -91,7 +91,7 @@ class CommandRunner(BaseRunner):
                     raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
 
                 # Apply output size limits to prevent memory exhaustion
-                max_size = self.ctx_vars.get("max_output_size", 10 * 1024 * 1024)  # 10MB default
+                max_size = settings.max_output_size
 
                 try:
                     stderr = stderr_bytes.decode("utf-8").strip()

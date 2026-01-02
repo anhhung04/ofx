@@ -80,9 +80,9 @@ class ToolInstallerRunner(BaseRunner):
 
         tool_config = ToolConfig.model_validate(tool_config)
 
-        install_cmd = self._resolve_template(tool_config.install)
-        check_cmd = self._resolve_template(tool_config.check) if tool_config.check else None
-        post_install_cmd = self._resolve_template(tool_config.post_install) if tool_config.post_install else None
+        install_cmd = await self._resolve_template(tool_config.install)
+        check_cmd = await self._resolve_template(tool_config.check) if tool_config.check else None
+        post_install_cmd = await self._resolve_template(tool_config.post_install) if tool_config.post_install else None
 
         tool_exists = await self._check_tool_exists(tool_bin, check_cmd)
 

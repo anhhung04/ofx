@@ -91,7 +91,7 @@ class WorkflowRunner(BaseRunner):
     async def _execute_workflow(self):
         """Execute workflow jobs in stages"""
         # Create semaphore to limit concurrent jobs based on settings
-        semaphore = asyncio.Semaphore(self._ctx.get("workers", 4))
+        semaphore = asyncio.Semaphore(settings.workers)
 
         completed_steps_before_stage = 0
         for idx, stage in enumerate(self._schedule):
@@ -101,7 +101,7 @@ class WorkflowRunner(BaseRunner):
             job_runners = {}
             for job_id in stage:
                 job = self.model.jobs[job_id]
-                self._job_registry[job_id] = self._resolve_template(
+                self._job_registry[job_id] = await self._resolve_template(
                     job.model_dump(exclude={"outputs", "steps"})
                 )
                 self._ctx.vars.update({"jobs": self._job_registry})
@@ -266,31 +266,31 @@ class WorkflowRunner(BaseRunner):
         logger.debug(self._produce_log(f"Workflow Call: {self.model.workflow_call}"))
         if self.model.workflow_dispatch and not self._is_reused:
             self._ctx.inputs.update(
-                self._process_inputs(
+                await self._process_inputs(
                     self._ctx.inputs, self.model.workflow_dispatch.inputs
                 )
             )
         if self.model.workflow_call and self._is_reused:
             self._ctx.inputs.update(
-                self._process_inputs(self._ctx.inputs, self.model.workflow_call.inputs)
+                await self._process_inputs(self._ctx.inputs, self.model.workflow_call.inputs)
             )
             self._ctx.secrets.update(
-                self._process_inputs(
+                await self._process_inputs(
                     self._ctx.secrets, self.model.workflow_call.secrets
                 )
             )
         self._model.defaults.workflows_base_dir = Path(
-            self._resolve_template(self.model.defaults.workflows_base_dir)
+            await self._resolve_template(self.model.defaults.workflows_base_dir)
         )
         WorkflowRunner.add_workflow_dir(
             self._model.defaults.workflows_base_dir.absolute()
         )
 
-        self._resolve_template_fields(
+        await self._resolve_template_fields(
             ["name", "tools", "env", "description", "tags", "schedule"]
         )
         for job_id, job in self.model.jobs.items():
-            self._model.jobs[job_id].name = self._resolve_template(job.name)
+            self._model.jobs[job_id].name = await self._resolve_template(job.name)
 
         logger.debug(self._produce_log(f"Resolved workflow: {self.model.model_dump()}"))
 
@@ -310,7 +310,7 @@ class WorkflowRunner(BaseRunner):
                     )
                 )
             self._result.outputs = {
-                k: self._resolve_template(v)
+                k: await self._resolve_template(v)
                 for k, v in self.model.workflow_call.outputs.items()
             }
         logger.debug(
@@ -355,7 +355,7 @@ class WorkflowRunner(BaseRunner):
         # Update our context with the updated PATH from installer
         self._ctx.envs.update(installer.ctx_vars.envs)
 
-    def _process_inputs(
+    async def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
     ) -> dict[str, Any]:
         """Process and validate inputs against the workflow's input constraints"""
@@ -380,7 +380,7 @@ class WorkflowRunner(BaseRunner):
             else:
                 req_inputs[key] = contrain.default
         for key, value in req_inputs.items():
-            req_inputs[key] = self._resolve_template(value)
+            req_inputs[key] = await self._resolve_template(value)
 
         return req_inputs
 
