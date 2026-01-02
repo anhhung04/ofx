@@ -19,7 +19,7 @@ ofx secret set
 ## Using Secrets in Workflows
 Reference secrets in YAML using the `secrets.` namespace:
 ```yaml
-run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
+run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com
 ```
 
 ---

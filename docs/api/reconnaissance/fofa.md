@@ -61,7 +61,7 @@ jobs:
 							for url in results:
 								print(url)
 						outputs:
-							targets: "{{ step.stdout_lines }}"
+							targets: "${{ step.stdout_lines }}"
 ```
 
 ---

@@ -33,7 +33,7 @@ jobs:
 ## Example 3: Step Output Processing
 ```yaml
 steps:
-	- run: nmap {{ inputs.target }}
+	- run: nmap ${{ inputs.target }}
 		hooks:
 			on_line:
 				run: print("Line:", line)

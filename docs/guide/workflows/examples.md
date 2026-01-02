@@ -12,7 +12,7 @@ jobs:
     name: Scan Target
     steps:
       - name: Run nmap scan
-        run: nmap {{ inputs.target }}
+        run: nmap ${{ inputs.target }}
 ```
 
 ---
@@ -25,13 +25,13 @@ jobs:
     name: Reconnaissance
     steps:
       - name: Scan target
-        run: nmap {{ inputs.target }}
+        run: nmap ${{ inputs.target }}
   exploit:
     name: Exploitation
     needs: recon
     steps:
       - name: Run exploit
-        run: python exploit.py --target {{ inputs.target }}
+        run: python exploit.py --target ${{ inputs.target }}
   loot:
     name: Data Collection
     needs: exploit
@@ -68,15 +68,15 @@ jobs:
     name: Port Scan
     steps:
       - name: Scan target
-        run: nmap {{ inputs.target }}
+        run: nmap ${{ inputs.target }}
         outputs:
-          open_ports: "{{ step.stdout_lines }}"
+          open_ports: "${{ step.stdout_lines }}"
   report:
     name: Generate Report
     needs: scan
     steps:
       - name: Display results
-        run: echo "Ports: {{ jobs.scan.outputs.open_ports }}"
+        run: echo "Ports: ${{ jobs.scan.outputs.open_ports }}"
 ```
 
 ---
@@ -89,7 +89,7 @@ jobs:
     name: Call API
     steps:
       - name: Make authenticated request
-        run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
+        run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com
 ```
 
 ---
@@ -132,12 +132,12 @@ jobs:
         script: |
           from ofx.api.search import Fofa
           fofa = Fofa(user="${{ secrets.FOFA_USER }}", token="${{ secrets.FOFA_TOKEN }}")
-          results = fofa.search(f'domain="{{ inputs.domain }}"')
+          results = fofa.search(f'domain="${{ inputs.domain }}"')
           # Extract host from results
           hosts = [res.split('//')[1].split(':')[0] for res in results]
           print('\n'.join(hosts))
         outputs:
-          subdomains: "{{ step.stdout_lines }}"
+          subdomains: "${{ step.stdout_lines }}"
 
   check-web-ports:
     name: Check for Open Web Ports
@@ -148,7 +148,7 @@ jobs:
           from ofx.api.exploit import check_port
           
           open_hosts = []
-          subdomains = {{ jobs.discover-subdomains.outputs.subdomains }}
+          subdomains = ${{ jobs.discover-subdomains.outputs.subdomains }}
           for host in subdomains:
               if check_port(host, 80):
                   open_hosts.append(f"http://{host}")
@@ -157,7 +157,7 @@ jobs:
           
           print('\n'.join(open_hosts))
         outputs:
-          live_hosts: "{{ step.stdout_lines }}"
+          live_hosts: "${{ step.stdout_lines }}"
 
   generate-report:
     name: Generate Report
@@ -169,9 +169,9 @@ jobs:
           from ofx.api.file import write_file
           import re
 
-          live_hosts = {{ jobs.check-web-ports.outputs.live_hosts }}
+          live_hosts = ${{ jobs.check-web-ports.outputs.live_hosts }}
           report = "# Web Reconnaissance Report\n\n"
-          report += f"## Target: {{ inputs.domain }}\n\n"
+          report += f"## Target: ${{ inputs.domain }}\n\n"
           
           for host in live_hosts:
               try:

@@ -62,7 +62,7 @@ jobs:
 							print(url)
 				script:
 				outputs:
-					targets: "{{ step.stdout_lines }}"
+					targets: "${{ step.stdout_lines }}"
 ```
 
 ---

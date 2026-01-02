@@ -153,12 +153,12 @@ jobs:
   db_session:
     steps:
       - name: Connect to MySQL
-        run: mysql -h {{ inputs.db_host }} -u {{ inputs.db_user }} -p{{ secrets.db_pass }}
+        run: mysql -h ${{ inputs.db_host }} -u ${{ inputs.db_user }} -p${{ secrets.db_pass }}
         interactive: true
         timeout: 15
       
       - name: Export Results
-        run: mysqldump {{ inputs.db_name }} > dump.sql
+        run: mysqldump ${{ inputs.db_name }} > dump.sql
 ```
 
 ### Network Tool Interaction
@@ -170,12 +170,12 @@ jobs:
   netcat:
     steps:
       - name: Interactive Netcat
-        run: nc {{ inputs.target_ip }} {{ inputs.target_port }}
+        run: nc ${{ inputs.target_ip }} ${{ inputs.target_port }}
         interactive: true
         timeout: 10
       
       - name: Log Connection
-        run: echo "Connection to {{ inputs.target_ip }}:{{ inputs.target_port }} completed"
+        run: echo "Connection to ${{ inputs.target_ip }}:${{ inputs.target_port }} completed"
 ```
 
 ### Python Script Development

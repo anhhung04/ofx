@@ -39,7 +39,7 @@ steps:
 					print(host)
 		script:
 		outputs:
-			hosts: "{{ step.stdout_lines }}"
+			hosts: "${{ step.stdout_lines }}"
 ```
 
 ---

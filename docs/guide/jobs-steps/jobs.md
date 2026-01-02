@@ -8,7 +8,7 @@ Jobs are the main building blocks of an OFX workflow. Each job contains one or m
 jobs:
 	recon:
 		steps:
-			- run: nmap {{ inputs.target }}
+			- run: nmap ${{ inputs.target }}
 	exploit:
 		needs: recon
 		steps:
@@ -25,7 +25,7 @@ Jobs are the main building blocks of an OFX workflow. Each job contains one or m
 jobs:
 	recon:
 		steps:
-			- run: nmap {{ inputs.target }}
+			- run: nmap ${{ inputs.target }}
 	exploit:
 		needs: recon
 		steps:

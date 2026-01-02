@@ -19,7 +19,7 @@ jobs:
     name: Reconnaissance
     steps:
       - name: Scan target
-        run: nmap {{ inputs.target }}
+        run: nmap ${{ inputs.target }}
   exploit:
     name: Exploitation
     needs: recon

@@ -50,7 +50,7 @@ jobs:
     needs: setup
     steps:
       - name: Scan target
-        run: nmap {{ inputs.target }}
+        run: nmap ${{ inputs.target }}
   exploit:
     name: Exploitation
     needs: [setup, scan]
