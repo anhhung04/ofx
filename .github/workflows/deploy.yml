@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies and build
         run: |
           # Uses your specific build command
-          uv run --extra docs mkdocs build -f mkdocs.yml -d site
+          uv run mkdocs build -f mkdocs.yml -d site
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
