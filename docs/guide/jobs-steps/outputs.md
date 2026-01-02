@@ -9,9 +9,9 @@ Define outputs in a step to export values:
 ```yaml
 steps:
 	- name: Scan
-		run: nmap {{ inputs.target }}
+		run: nmap ${{ inputs.target }}
 		outputs:
-			open_ports: "{{ step.stdout_lines }}"
+			open_ports: "${{ step.stdout_lines }}"
 ```
 
 **Access in later steps:**
@@ -29,14 +29,14 @@ jobs:
 		steps:
 			- run: ...
 				outputs:
-					result: "{{ step.stdout }}"
+					result: "${{ step.stdout }}"
 		outputs:
 			scan_result: "{{ steps.0.outputs.result }}"
 ```
 
 **Access in other jobs:**
 ```yaml
-run: echo "Scan: {{ jobs.scan.outputs.scan_result }}"
+run: echo "Scan: ${{ jobs.scan.outputs.scan_result }}"
 ```
 
 ---

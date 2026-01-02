@@ -6,7 +6,7 @@ This page provides practical examples of using Jinja2 templates in OFX workflows
 
 ## Basic Variable Substitution
 ```yaml
-run: echo "Target is {{ inputs.target }}"
+run: echo "Target is ${{ inputs.target }}"
 ```
 
 ---
@@ -15,9 +15,9 @@ run: echo "Target is {{ inputs.target }}"
 ```yaml
 steps:
 	- name: Scan
-		run: nmap {{ inputs.target }}
+		run: nmap ${{ inputs.target }}
 		outputs:
-			open_ports: "{{ step.stdout_lines }}"
+			open_ports: "${{ step.stdout_lines }}"
 	- name: Print Ports
 		run: echo "Ports: {{ steps.0.outputs.open_ports }}"
 ```
@@ -48,7 +48,7 @@ run: |
 
 ## Filters and Formatting
 ```yaml
-run: echo "Upper: {{ inputs.name | upper }}"
+run: echo "Upper: ${{ inputs.name | upper }}"
 ```
 
 ---

@@ -29,7 +29,7 @@ jobs:
     name: Network Scan
     steps:
       - name: Run nmap
-        run: nmap {{ inputs.target }}
+        run: nmap ${{ inputs.target }}
 ```
 
 ---
@@ -42,7 +42,7 @@ jobs:
     name: Call API
     steps:
       - name: Make authenticated request
-        run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
+        run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com
 ```
 
 ---

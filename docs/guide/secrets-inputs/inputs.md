@@ -14,7 +14,7 @@ ofx flow run workflow.yml --input target=example.com --input env=prod
 ## Using Inputs in YAML
 Reference inputs in workflow files using the `inputs.` namespace:
 ```yaml
-run: echo "Target is {{ inputs.target }}"
+run: echo "Target is ${{ inputs.target }}"
 ```
 
 ---
