@@ -47,13 +47,11 @@ class WorkflowRunner(BaseRunner):
         self._progress: Progress | None = None
         self._progress_id: Any | None = None
 
-    async def _do_run(self):
+    async def _do_run(self) -> None:
         """Execute the workflow by running its jobs in stages according to their dependencies"""
-        # Detect if workflow has interactive steps to skip progress bars entirely
         has_interactive = self._has_interactive_steps()
 
         if not self._is_reused and not has_interactive:
-            # Create progress bar only for non-interactive workflows
             self._progress = Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -88,16 +86,14 @@ class WorkflowRunner(BaseRunner):
             if self._progress:
                 self._progress.stop()
 
-    async def _execute_workflow(self):
+    async def _execute_workflow(self) -> None:
         """Execute workflow jobs in stages"""
-        # Create semaphore to limit concurrent jobs based on settings
         semaphore = asyncio.Semaphore(settings.workers)
 
         completed_steps_before_stage = 0
         for idx, stage in enumerate(self._schedule):
             logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
 
-            # Create job runners for the stage
             job_runners = {}
             for job_id in stage:
                 job = self.model.jobs[job_id]
@@ -114,7 +110,6 @@ class WorkflowRunner(BaseRunner):
                 job_runners[job_id] = runner
                 self._job_registry[job_id]["runner"] = runner
 
-            # Run jobs concurrently with semaphore limiting
             async def run_job_with_limit(job_id: str, runner: JobRunner):
                 async with semaphore:
                     return await self._run_and_monitor_job(job_id, runner)
@@ -124,7 +119,6 @@ class WorkflowRunner(BaseRunner):
                 for job_id, runner in job_runners.items()
             }
 
-            # Monitor overall stage progress if progress bar is active
             if self._progress and self._progress_id is not None:
                 while not all(task.done() for task in stage_tasks.values()):
                     current_steps_in_stage = sum(
@@ -142,7 +136,6 @@ class WorkflowRunner(BaseRunner):
                     )
                     await asyncio.sleep(0.1)
 
-            # Wait for stage to complete and gather results
             results = await asyncio.gather(*stage_tasks.values(), return_exceptions=True)
 
             stage_failed = False
@@ -171,19 +164,16 @@ class WorkflowRunner(BaseRunner):
                         self._produce_log(f"Job '{job_id}' completed successfully")
                     )
 
-                # Always update registry with the job's result
                 self._job_registry[job_id].update(job_result.model_dump())
                 self._job_registry[job_id]["steps"] = job_result.outputs.get(
                     "steps", {}
                 )
 
-            # Update context with all job results from the stage
             self._ctx.vars.update({"jobs": self._job_registry})
 
             completed_steps_before_stage += stage_steps
 
             if stage_failed:
-                # After processing all jobs in the stage, raise a single error if any failed
                 error_summary = ", ".join(failed_jobs_info)
                 raise RuntimeError(
                     f"One or more jobs failed in stage {idx + 1}: {error_summary}"
@@ -250,12 +240,11 @@ class WorkflowRunner(BaseRunner):
                 )
                 await asyncio.sleep(0.1)
 
-            # Ensure final update of progress bar
             job_progress.update(task_id, completed=job_runner.processed_steps, description=f"{indicator}[bold]{job_id}[/bold] ✓", refresh=True)
 
             return await run_task
 
-    async def _pre_run(self):
+    async def _pre_run(self) -> None:
         if not self.ctx_vars.output_path.exists():
             self.ctx_vars.output_path.mkdir(parents=True, exist_ok=True)
         if self.model.defaults:
@@ -298,7 +287,7 @@ class WorkflowRunner(BaseRunner):
         logger.debug(self._produce_log(f"Processed context: {self.ctx_vars}"))
         await self._install_tools()
 
-    async def _post_run(self):
+    async def _post_run(self) -> None:
         if self._status != RunnerStatus.COMPLETED and self._error:
             logger.error(self._produce_log(f"error: {self._error}"))
         self._result.outputs.update(self._job_registry)
@@ -337,22 +326,20 @@ class WorkflowRunner(BaseRunner):
             os.rmdir(self.ctx_vars.output_path)
         logger.debug(self._produce_log(f"result: {self.get_result()}"))
 
-    async def _install_tools(self):
+    async def _install_tools(self) -> None:
         """Install workflow tools using ToolInstallerRunner"""
         tools = self.model.tools
         if not tools:
             return
 
-        # Use ToolInstallerRunner to handle tool installation
         installer = ToolInstallerRunner(
             tools=tools,
             ctx=RunContext(envs=self.ctx_vars.envs.copy()),
             parent=self,
-            show_console=False,  # Don't show console output in workflow context
+            show_console=False,
         )
         await installer.run()
 
-        # Update our context with the updated PATH from installer
         self._ctx.envs.update(installer.ctx_vars.envs)
 
     async def _process_inputs(

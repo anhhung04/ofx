@@ -20,7 +20,7 @@ logger = logging.getLogger(settings.app_branding)
 class CommandRunner(BaseRunner):
     """Optimized command runner with caching."""
 
-    _shell_cache: dict[str, str] = {}  # Cache resolved shells
+    _shell_cache: dict[str, str] = {}
 
     def __init__(
         self,
@@ -39,7 +39,7 @@ class CommandRunner(BaseRunner):
         self._timeout_minutes = timeout_minutes
         self._interactive = interactive
 
-    async def _do_run(self):
+    async def _do_run(self) -> None:
         """Execute a shell command and capture output"""
         stderr = ""
         stdout = ""
@@ -50,7 +50,6 @@ class CommandRunner(BaseRunner):
 
         try:
             if self._interactive:
-                # Interactive mode: direct TTY passthrough
                 logger.info(self._produce_log("Running in interactive mode (stdin/stdout connected to terminal)"))
                 proc = await asyncio.create_subprocess_shell(
                     self._cmd,
@@ -72,7 +71,6 @@ class CommandRunner(BaseRunner):
                 stdout = "[Interactive mode - output shown in real-time]"
                 stderr = ""
             else:
-                # Normal mode: capture output
                 proc = await asyncio.create_subprocess_shell(
                     self._cmd,
                     executable=self._shell,
@@ -90,14 +88,12 @@ class CommandRunner(BaseRunner):
                     await proc.wait()
                     raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
 
-                # Apply output size limits to prevent memory exhaustion
                 max_size = settings.max_output_size
 
                 try:
                     stderr = stderr_bytes.decode("utf-8").strip()
                     stdout = stdout_bytes.decode("utf-8").strip()
 
-                    # Truncate outputs if they exceed the limit
                     if len(stdout_bytes) > max_size:
                         stdout = stdout_bytes[:max_size].decode("utf-8", errors="ignore") + "\n... [OUTPUT TRUNCATED]"
                         self._result.outputs["output_truncated"] = True
@@ -107,7 +103,6 @@ class CommandRunner(BaseRunner):
                         self._result.outputs["stderr_truncated"] = True
 
                 except UnicodeDecodeError:
-                    # Handle binary output
                     if len(stdout_bytes) > max_size:
                         stdout = base64.b64encode(stdout_bytes[:max_size]).decode("utf-8") + "... [BINARY OUTPUT TRUNCATED]"
                         self._result.outputs["binary_output"] = True
@@ -122,7 +117,6 @@ class CommandRunner(BaseRunner):
                     else:
                         stderr = base64.b64encode(stderr_bytes).decode("utf-8")
 
-            # In interactive mode, treat exit 0, 130 (SIGINT), and 127 (exit/quit/command not found) as clean exits
             if self._interactive:
                 if exit_code not in (0, 130, 127):
                     stderr = stderr or f"Command failed with exit code {exit_code}"
@@ -139,17 +133,16 @@ class CommandRunner(BaseRunner):
         except Exception as e:
             raise RuntimeError(f"Command error: {str(e)}") from e
         finally:
-            # Always update outputs, even on error
             self._result.outputs.update({
                 "stdout": stdout,
                 "stderr": stderr,
                 "exit_code": exit_code,
             })
 
-    async def _pre_run(self):
+    async def _pre_run(self) -> None:
         self._shell = self._resolve_shell()
 
-    async def _post_run(self):
+    async def _post_run(self) -> None:
         if self._error:
             logger.error(self._produce_log(f"Command failed: {self._error}"))
         logger.debug(
@@ -224,7 +217,7 @@ class ScriptRunner(CommandRunner):
             interactive=interactive,
         )
 
-    async def _post_run(self):
+    async def _post_run(self) -> None:
         if self._error:
             logger.error(self._produce_log(f"Script failed: {self._error}"))
         if self._run_in_file and self._tmp_file and Path(self._tmp_file).exists():

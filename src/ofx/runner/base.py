@@ -37,10 +37,6 @@ async def _write_file(path: str, content: str):
 class BaseRunner:
     """Abstract base class for all runners (workflow, job, step, command)"""
 
-    # Memory optimization: define __slots__ to reduce memory footprint
-    __slots__ = ('_id', '_status', '_ctx', '_parent', '_error', '_model', '_result')
-
-    # Cache for compiled templates (limit size to prevent memory bloat)
     _template_cache = {}
     _template_cache_max_size = 1000
     _support_funcs_cache = None
@@ -86,13 +82,13 @@ class BaseRunner:
 
         return self.get_result()
 
-    async def _do_run(self):
+    async def _do_run(self) -> None:
         raise NotImplementedError("Subclasses should implement _do_run method.")
 
-    async def _pre_run(self):
+    async def _pre_run(self) -> None:
         raise NotImplementedError("Subclasses should implement _pre_run method.")
 
-    async def _post_run(self):
+    async def _post_run(self) -> None:
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
     async def _resolve_template(self, value: Any) -> Any:
@@ -108,10 +104,8 @@ class BaseRunner:
             return value
 
         try:
-            # Use cached SUPPORT_FUNCS if available (one-time initialization)
             if BaseRunner._support_funcs_cache is None:
                 sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
-                # Pre-compute static paths once
                 tools_dir_str = str(TOOLS_DIR.absolute())
                 tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
 
@@ -137,15 +131,13 @@ class BaseRunner:
                     "bool": lambda v: str(v).lower() in ("true", "yes", "1", "t", "y"),
                 }
 
-            # Add run_id dynamically (unique per runner instance)
             SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()
             SUPPORT_FUNCS["run_id"] = self._id
 
-            # Use template cache for repeated templates
             if string_value not in BaseRunner._template_cache:
-                # Clear cache if it gets too large (simple LRU-like behavior)
                 if len(BaseRunner._template_cache) >= BaseRunner._template_cache_max_size:
-                    BaseRunner._template_cache.clear()
+                    first_key = next(iter(BaseRunner._template_cache))
+                    del BaseRunner._template_cache[first_key]
 
                 BaseRunner._template_cache[string_value] = Template(
                     string_value,

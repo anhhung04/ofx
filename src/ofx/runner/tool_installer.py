@@ -28,7 +28,6 @@ class ToolInstallerRunner(BaseRunner):
         parent: BaseRunner | None = None,
         show_console: bool = True,
     ):
-        # Create a minimal model for BaseRunner (tools don't need a full model)
         super().__init__(None, ctx, parent)
         self._tools = tools
         self._installed_count = 0
@@ -40,11 +39,11 @@ class ToolInstallerRunner(BaseRunner):
         """Produce a log message (override from BaseRunner)"""
         return f"[ToolInstaller] {message}"
 
-    async def _pre_run(self):
+    async def _pre_run(self) -> None:
         """Pre-run hook (no-op for tool installer)"""
         pass
 
-    async def _post_run(self):
+    async def _post_run(self) -> None:
         """Post-run hook (no-op for tool installer)"""
         pass
 
@@ -60,12 +59,11 @@ class ToolInstallerRunner(BaseRunner):
     def failed_count(self) -> int:
         return self._failed_count
 
-    async def _do_run(self):
+    async def _do_run(self) -> None:
         """Install all tools"""
         if not self._tools:
             return
 
-        # Ensure TOOLS_BIN_DIR is in PATH
         current_path = self.ctx_vars.envs.get("PATH", os.environ.get("PATH", ""))
         if str(TOOLS_BIN_DIR) not in current_path:
             self.ctx_vars.envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
@@ -107,7 +105,6 @@ class ToolInstallerRunner(BaseRunner):
                     console.print(f"[red]✗ Failed to install {tool_bin}: {result.error}[/red]")
                 logger.error(self._produce_log(error_msg))
                 self._failed_count += 1
-                # Don't raise for individual tool failures in batch installation
                 return
 
             if self._show_console:
@@ -115,7 +112,6 @@ class ToolInstallerRunner(BaseRunner):
             logger.info(self._produce_log(f"Tool '{tool_bin}' installed successfully"))
             self._installed_count += 1
 
-            # Run post-install command if specified
             if post_install_cmd:
                 await self._run_post_install(tool_bin, post_install_cmd)
 
@@ -124,18 +120,15 @@ class ToolInstallerRunner(BaseRunner):
                 console.print(f"[red]✗ Error installing {tool_bin}: {e}[/red]")
             logger.error(self._produce_log(f"Error installing tool '{tool_bin}': {e}"))
             self._failed_count += 1
-            # Don't raise for individual tool failures in batch installation
 
     async def _check_tool_exists(self, tool_bin: str, check_cmd: str | None = None) -> bool:
         """Check if a tool is already installed"""
         if check_cmd:
-            # Use custom check command
             logger.debug(self._produce_log(f"Checking tool '{tool_bin}' with: {check_cmd}"))
             check_runner = CommandRunner(check_cmd, RunContext(envs=self.ctx_vars.envs))
             check_result = await check_runner.run()
             return check_result.status.value == "completed" and check_result.outputs.get("exit_code") == 0
         else:
-            # Default check: look in TOOLS_BIN_DIR or system PATH
             tool_path = TOOLS_BIN_DIR / tool_bin
             return tool_path.exists() or shutil.which(tool_bin) is not None
 
@@ -147,7 +140,6 @@ class ToolInstallerRunner(BaseRunner):
         post_result = await post_runner.run()
 
         if post_result.status.value == "completed":
-            # Log post-install output if available
             if post_result.outputs.get("stdout"):
                 logger.info(
                     self._produce_log(f"Post-install output for '{tool_bin}': {post_result.outputs['stdout']}")
