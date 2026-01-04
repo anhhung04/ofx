@@ -14,32 +14,42 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install uv
+        uses: https://github.com/astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-
-      - name: Install build dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install build twine cython setuptools wheel
+          python-version: "3.13"
 
       - name: Build package
         run: |
-          python -m build
+          uv build --wheel --out-dir dist
+        env:
+          UV_COMPILE_BYTECODE: "1"
+
+      - name: Install twine for publishing
+        run: |
+          uv tool install twine
+
+      - name: Regenerate docs
+        run: |
+          uv run --extra docs mkdocs build -d src/ofx/data/site
 
       - name: Publish to Gitea Package Registry
         env:
-          TWINE_USERNAME: ${{ secrets.GITEA_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.GITEA_TOKEN }}
+          TWINE_USERNAME: ${{ secrets.PKG_USER }}
+          TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
         run: |
-          python -m twine upload \
-            --repository-url ${{ secrets.GITEA_PYPI_URL }} \
+          uvx twine upload \
+            --repository-url ${{ secrets.PKG_URL }} \
             --verbose \
             dist/*
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: python-package
           path: dist/
