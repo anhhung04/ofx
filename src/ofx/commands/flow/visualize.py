@@ -7,7 +7,8 @@ from rich.table import Table
 from rich.text import Text
 from rich.tree import Tree
 
-from ofx.runner.workflow import WorkflowRunner
+from ofx.settings import DEFAULT_WORKFLOWS_DIR
+from ofx.utils.misc import find_workflow
 
 
 class VisualizeHandler:
@@ -25,8 +26,8 @@ class VisualizeHandler:
     def run(self) -> None:
         """Generate and display/save workflow visualization"""
         try:
-            # Load the workflow
-            workflow = WorkflowRunner.find_flow(self.workflow_name)
+            workflow_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
+            workflow = find_workflow(self.workflow_name, tuple(workflow_dirs))
 
             if not workflow:
                 self.console.print(
@@ -743,8 +744,8 @@ class VisualizeHandler:
                 # This is a subworkflow step
                 step_node = parent_node.add(f"{step_prefix}: [bold green]{step_name}[/bold green] (Subworkflow)")
                 try:
-                    # Load the subworkflow
-                    subworkflow = WorkflowRunner.find_flow(step.uses)
+                    workflow_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
+                    subworkflow = find_workflow(step.uses, tuple(workflow_dirs))
                     subworkflow_node = step_node.add(f"🔥 [bold cyan]{subworkflow.name}[/bold cyan] - {subworkflow.description}")
 
                     # Recursively add subworkflow jobs and steps

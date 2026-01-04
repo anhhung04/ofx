@@ -4,8 +4,8 @@ import tempfile
 from pathlib import Path
 
 from ofx.runner import RunContext, WorkflowRunner
-from ofx.settings import SECRETS_DIR, get_console, settings
-from ofx.utils.misc import load_secrets
+from ofx.settings import DEFAULT_WORKFLOWS_DIR, SECRETS_DIR, get_console, settings
+from ofx.utils.misc import find_workflow, load_secrets
 
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
@@ -44,12 +44,17 @@ class FlowRunHandler:
             console.print(
                 f"✅ Starting to run workflow: '{self.workflow_name}' with input: {input_display}\nto output: '{self.output.as_posix()}'"
             )
+            
+            workflow_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
+            workflow = find_workflow(self.workflow_name, tuple(workflow_dirs))
+            
             runner = WorkflowRunner(
-                WorkflowRunner.find_flow(self.workflow_name),
+                workflow,
                 ctx=RunContext(
                     inputs=self.input,
                     output_path=self.output,
                     secrets=load_secrets(SECRETS_DIR),
+                    workflow_dirs=workflow_dirs,
                 ),
             )
             res = await runner.run()

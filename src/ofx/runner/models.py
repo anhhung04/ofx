@@ -31,6 +31,7 @@ class RunContext(BaseModel):
     output_path: Path = Field(default=Path.cwd() / "out")
     vars: dict[str, Any] = Field(default_factory=dict)
     allow_interactive: bool = Field(default=False, description="Whether interactive mode is allowed (single job in stage)")
+    workflow_dirs: list[Path] = Field(default_factory=list, description="Directories to search for workflow files")
 
 
 class RunResult(BaseModel):

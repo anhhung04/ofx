@@ -142,3 +142,93 @@ class EnumEncoder(json.JSONEncoder):
         if isinstance(obj, Enum):
             return obj.value
         return super().default(obj)
+
+
+def add_workflow_dir(workflow_dirs: list[Path], path: Path | str) -> list[Path]:
+    """Add a workflow directory to the search path if not already present.
+    
+    Args:
+        workflow_dirs: Current list of workflow directories
+        path: Path to add
+        
+    Returns:
+        Updated list of workflow directories
+    """
+    abs_path = Path(path).absolute()
+    if abs_path not in workflow_dirs:
+        workflow_dirs.append(abs_path)
+    return workflow_dirs
+
+
+@lru_cache(maxsize=32)
+def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> "Workflow":
+    """Find and load a workflow from local directories, file path, URL, or git repository.
+    
+    Args:
+        workflow_name: Name or path of the workflow to find
+        search_dirs_tuple: Tuple of directories to search (tuple for hashability)
+        
+    Returns:
+        Loaded Workflow object
+        
+    Raises:
+        RuntimeError: If workflow cannot be found or loaded
+    """
+    import logging
+    import httpx
+    import yaml
+    from ofx.models.workflow import Workflow
+    from ofx.settings import settings
+    
+    logger = logging.getLogger(settings.app_branding)
+    search_dirs = list(search_dirs_tuple)
+    
+    logger.debug(f"Searching for workflow: {workflow_name} in {search_dirs}")
+
+    if Path(workflow_name).exists():
+        try:
+            flow = Workflow.model_validate(
+                yaml.safe_load(Path(workflow_name).read_text().strip())
+            )
+            return flow
+        except Exception as e:
+            logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
+            raise RuntimeError(
+                f"Failed to load workflow from file {workflow_name}: {e}"
+            ) from e
+
+    for directory in search_dirs:
+        path = directory / f"{workflow_name.rstrip('.yml')}.yml"
+        if path.exists():
+            try:
+                return Workflow.model_validate(
+                    yaml.safe_load(path.read_text().strip())
+                )
+            except Exception as e:
+                logger.error(f"Failed to load workflow from {path}: {e}")
+                raise RuntimeError(f"Failed to load workflow from {path}: {e}") from e
+
+    if is_remote_path(workflow_name):
+        try:
+            response = httpx.get(workflow_name)
+            response.raise_for_status()
+            return Workflow.model_validate(yaml.safe_load(response.text.strip()))
+        except Exception as e:
+            logger.error(f"Failed to fetch workflow from {workflow_name}: {e}")
+            raise RuntimeError(
+                f"Failed to fetch workflow from {workflow_name}: {e}"
+            ) from e
+
+    git_path = clone_remote_repo(workflow_name)
+    if not git_path:
+        raise RuntimeError(f"Workflow {workflow_name} not found.") from None
+
+    try:
+        return Workflow.model_validate(
+            yaml.safe_load((git_path / "main.yml").read_text().strip())
+        )
+    except Exception as e:
+        logger.error(f"Failed to load workflow from git repo {workflow_name}: {e}")
+        raise RuntimeError(
+            f"Failed to load workflow from git repo {workflow_name}: {e}"
+        ) from e

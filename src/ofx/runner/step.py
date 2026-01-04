@@ -169,15 +169,32 @@ class StepRunner(BaseRunner):
 
         if self._run_type is RunType.WORKFLOW:
             from ofx.runner.workflow import WorkflowRunner
+            from ofx.utils.misc import add_workflow_dir, find_workflow
 
             output_path = Path.cwd()
+            workflow_dirs = self.ctx_vars.workflow_dirs.copy() if self.ctx_vars.workflow_dirs else []
+            
             parent = getattr(self, "parent", None)
             if parent and getattr(parent, "parent", None):
                 output_path = getattr(
                     parent.parent.ctx_vars, "output_path", Path.cwd()
                 )
+                if hasattr(parent.parent.ctx_vars, 'workflow_dirs'):
+                    workflow_dirs = parent.parent.ctx_vars.workflow_dirs.copy()
+            
+            workflow = find_workflow(
+                self._model.uses or "",
+                tuple(workflow_dirs)
+            )
+            
+            if Path(self._model.uses or "").exists():
+                workflow_dirs = add_workflow_dir(
+                    workflow_dirs,
+                    Path(self._model.uses).parent.absolute()
+                )
+            
             return WorkflowRunner(
-                WorkflowRunner.find_flow(self._model.uses or ""),
+                workflow,
                 RunContext(
                     inputs=self.model.run_with,
                     envs=self.ctx_vars.envs,
@@ -187,6 +204,7 @@ class StepRunner(BaseRunner):
                         if self.model.secrets == "inherit"
                         else self.model.secrets
                     ),
+                    workflow_dirs=workflow_dirs,
                 ),
                 parent=self,
             )

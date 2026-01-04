@@ -3,12 +3,9 @@
 import asyncio
 import logging
 import os
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import httpx
-import yaml
 from rich.progress import (
     BarColumn,
     Progress,
@@ -24,14 +21,12 @@ from ofx.runner.job import JobRunner
 from ofx.runner.models import RunContext, RunnerStatus
 from ofx.runner.tool_installer import ToolInstallerRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings
-from ofx.utils.misc import clone_remote_repo, find_parallel_schedule, is_remote_path
+from ofx.utils.misc import add_workflow_dir, find_parallel_schedule, find_workflow
 
 logger = logging.getLogger(settings.app_branding)
 
 
 class WorkflowRunner(BaseRunner):
-    flows_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
-
     def __init__(
         self,
         workflow: Workflow,
@@ -46,6 +41,12 @@ class WorkflowRunner(BaseRunner):
         self._job_errors: dict[str, Exception] = {}
         self._progress: Progress | None = None
         self._progress_id: Any | None = None
+        
+        if not self.ctx_vars.workflow_dirs:
+            self.ctx_vars.workflow_dirs = [
+                DEFAULT_WORKFLOWS_DIR.absolute(),
+                Path.cwd().absolute()
+            ]
 
     async def _do_run(self) -> None:
         """Execute the workflow by running its jobs in stages according to their dependencies"""
@@ -271,7 +272,8 @@ class WorkflowRunner(BaseRunner):
         self._model.defaults.workflows_base_dir = Path(
             await self._resolve_template(self.model.defaults.workflows_base_dir)
         )
-        WorkflowRunner.add_workflow_dir(
+        self.ctx_vars.workflow_dirs = add_workflow_dir(
+            self.ctx_vars.workflow_dirs,
             self._model.defaults.workflows_base_dir.absolute()
         )
 
@@ -399,71 +401,6 @@ class WorkflowRunner(BaseRunner):
     def get_output_path(self) -> Path:
         """Get output path"""
         return self.ctx_vars.output_path
-
-    @staticmethod
-    def add_workflow_dir(path: Path | str):
-        if path not in WorkflowRunner.flows_dirs:
-            WorkflowRunner.flows_dirs.append(Path(path).absolute())
-
-    @staticmethod
-    @lru_cache(maxsize=32)
-    def find_flow(workflow_name: str) -> Workflow:
-        """Find and load a workflow from local directories, file path, URL, or git repository"""
-        logger.debug(
-            f"Searching for workflow: {workflow_name} in {WorkflowRunner.flows_dirs}"
-        )
-
-        if Path(workflow_name).exists():
-            try:
-                flow = Workflow.model_validate(
-                    yaml.safe_load(Path(workflow_name).read_text().strip())
-                )
-                WorkflowRunner.add_workflow_dir(Path(workflow_name).parent.absolute())
-                return flow
-            except Exception as e:
-                logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
-                raise RuntimeError(
-                    f"Failed to load workflow from file {workflow_name}: {e}"
-                ) from e
-
-        for directory in WorkflowRunner.flows_dirs:
-            path = directory / f"{workflow_name.rstrip('.yml')}.yml"
-            if path.exists():
-                try:
-                    if path.parent.exists():
-                        WorkflowRunner.add_workflow_dir(path.parent.absolute())
-                    return Workflow.model_validate(
-                        yaml.safe_load(path.read_text().strip())
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to load workflow from {path}: {e}")
-                    raise RuntimeError(f"Failed to load workflow from {path}: {e}") from e
-
-        if is_remote_path(workflow_name):
-            try:
-                response = httpx.get(workflow_name)
-                response.raise_for_status()
-                return Workflow.model_validate(yaml.safe_load(response.text.strip()))
-            except Exception as e:
-                logger.error(f"Failed to fetch workflow from {workflow_name}: {e}")
-                raise RuntimeError(
-                    f"Failed to fetch workflow from {workflow_name}: {e}"
-                ) from e
-
-        git_path = clone_remote_repo(workflow_name)
-        if not git_path:
-            raise RuntimeError(f"Workflow {workflow_name} not found.") from None
-
-        WorkflowRunner.add_workflow_dir(git_path.absolute())
-        try:
-            return Workflow.model_validate(
-                yaml.safe_load((git_path / "main.yml").read_text().strip())
-            )
-        except Exception as e:
-            logger.error(f"Failed to load workflow from git repo {workflow_name}: {e}")
-            raise RuntimeError(
-                f"Failed to load workflow from git repo {workflow_name}: {e}"
-            ) from e
 
     def get_job_status(self, job_id: str) -> RunnerStatus:
         return self._job_registry.get(job_id, {}).get("status")
