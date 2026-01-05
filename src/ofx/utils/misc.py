@@ -9,9 +9,9 @@ from urllib.parse import urlparse
 
 import git
 
-from ofx.settings import TOOLS_BIN_DIR
+from ofx.settings import TOOLS_BIN_DIR, ALLOWED_WORKFLOW_FILE_EXTENSIONS
+from ofx.models.workflow import Workflow
 
-# Cache the tools bin path to avoid repeated Path operations
 _TOOLS_BIN_PATH = TOOLS_BIN_DIR.absolute().as_posix()
 
 def populate_env(alt_env=None) -> dict[str, str]:
@@ -51,10 +51,10 @@ def clone_remote_repo(path: str) -> Path | None:
         return None
 
 
-def load_secrets(secrets_dir: Path = None) -> dict[str, str]:
-    from ofx.utils.secrets import SecretManager
+def load_secrets(secrets_dir: Path | None = None) -> dict[str, str]:
+    from ofx.utils import secrets as secrets_store
 
-    secrets = SecretManager.list()
+    secrets = secrets_store.list_secrets()
 
     if not secrets and secrets_dir and secrets_dir.exists():
         for secret_file in secrets_dir.glob("*"):
@@ -113,28 +113,6 @@ def find_parallel_schedule(
 
     return parallel_schedule
 
-
-class MetaSingleton(type):
-    """Metaclass to create a singleton class"""
-
-    __instances: dict[type, object] = {}
-    __spawning: set[type] = set()
-
-    def __call__(cls, *args, **kwargs) -> object:
-        """Redirects each call to the current class to the corresponding single instance"""
-        if cls not in MetaSingleton.__instances:
-            if cls in MetaSingleton.__spawning:
-                raise RuntimeError(
-                    f"Singleton {cls.__name__} is already being spawned. Recursive error detected."
-                )
-            MetaSingleton.__spawning.add(cls)
-            MetaSingleton.__instances[cls] = super().__call__(
-                *args, **kwargs
-            )
-            MetaSingleton.__spawning.remove(cls)
-        return MetaSingleton.__instances[cls]
-
-
 class EnumEncoder(json.JSONEncoder):
     """Custom JSON encoder for Enums"""
 
@@ -159,9 +137,17 @@ def add_workflow_dir(workflow_dirs: list[Path], path: Path | str) -> list[Path]:
         workflow_dirs.append(abs_path)
     return workflow_dirs
 
-
+def find_valid_flow(dir: Path, name: str) -> Path | None:
+    """Check if a workflow file exists in the given directory."""
+    for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+        flow_path = dir / f"{name}{ext}"
+        if flow_path.exists():
+            return flow_path
+    else:
+        return None
+    
 @lru_cache(maxsize=32)
-def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> "Workflow":
+def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tuple[Path, Workflow]: #type: ignore
     """Find and load a workflow from local directories, file path, URL, or git repository.
     
     Args:
@@ -181,27 +167,29 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> "W
     from ofx.settings import settings
     
     logger = logging.getLogger(settings.app_branding)
-    search_dirs = list(search_dirs_tuple)
     
-    logger.debug(f"Searching for workflow: {workflow_name} in {search_dirs}")
+    logger.debug(f"Searching for workflow: {workflow_name} in {search_dirs_tuple}")
+    
+    workflow_name = workflow_name.strip().rsplit(".", 1)[0]
+    flow_path = find_valid_flow(Path.cwd(), workflow_name)
 
-    if Path(workflow_name).exists():
+    if flow_path:
         try:
             flow = Workflow.model_validate(
-                yaml.safe_load(Path(workflow_name).read_text().strip())
+                yaml.safe_load(flow_path.read_text().strip())
             )
-            return flow
+            return flow_path, flow
         except Exception as e:
             logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
             raise RuntimeError(
                 f"Failed to load workflow from file {workflow_name}: {e}"
             ) from e
 
-    for directory in search_dirs:
-        path = directory / f"{workflow_name.rstrip('.yml')}.yml"
-        if path.exists():
+    for directory in search_dirs_tuple:
+        path = find_valid_flow(directory, workflow_name)
+        if path:
             try:
-                return Workflow.model_validate(
+                return path, Workflow.model_validate(
                     yaml.safe_load(path.read_text().strip())
                 )
             except Exception as e:
@@ -212,7 +200,7 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> "W
         try:
             response = httpx.get(workflow_name)
             response.raise_for_status()
-            return Workflow.model_validate(yaml.safe_load(response.text.strip()))
+            return Path.cwd(), Workflow.model_validate(yaml.safe_load(response.text.strip()))
         except Exception as e:
             logger.error(f"Failed to fetch workflow from {workflow_name}: {e}")
             raise RuntimeError(
@@ -224,8 +212,11 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> "W
         raise RuntimeError(f"Workflow {workflow_name} not found.") from None
 
     try:
-        return Workflow.model_validate(
-            yaml.safe_load((git_path / "main.yml").read_text().strip())
+        main_path = find_valid_flow(git_path, "main")
+        if not main_path:
+            raise RuntimeError(f"No main workflow file found in cloned repo {workflow_name}.")
+        return main_path, Workflow.model_validate(
+            yaml.safe_load(main_path.read_text().strip())
         )
     except Exception as e:
         logger.error(f"Failed to load workflow from git repo {workflow_name}: {e}")

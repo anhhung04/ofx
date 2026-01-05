@@ -17,16 +17,26 @@ class JobRunner(BaseRunner):
     def __init__(self, job: Job, ctx: RunContext, parent: BaseRunner | None = None):
         super().__init__(job, ctx, parent)
         self._model = job
-        self._step_registry: dict[str, Any] = {}
+        self._step_registry: list[dict[str, Any]] = [{} for _ in job.steps]
         self._processed_steps = 0
 
     async def _do_run(self) -> None:
         for step in self.model.steps:
-            step_ctx = self.ctx_vars.model_copy(update={
-                "inputs": self.ctx_vars.inputs | await self._resolve_template(step.run_with),
-                "envs": self.ctx_vars.envs | await self._resolve_template(step.env),
-                "secrets": self.ctx_vars.secrets | await self._resolve_template(step.secrets if step.secrets != "inherit" else {}),
-            })
+            resolved_inputs = await self._resolve_template(step.run_with)
+            resolved_envs = await self._resolve_template(step.env)
+            resolved_secrets = (
+                await self._resolve_template(step.secrets)
+                if step.secrets != "inherit"
+                else {}
+            )
+
+            step_ctx = self.ctx_vars.model_copy(
+                update={
+                    "inputs": self.ctx_vars.inputs | resolved_inputs,
+                    "envs": self.ctx_vars.envs | resolved_envs,
+                    "secrets": self.ctx_vars.secrets | resolved_secrets,
+                }
+            )
 
             step_runner = StepRunner(
                 step,
@@ -36,17 +46,14 @@ class JobRunner(BaseRunner):
             start_time = time.time()
             result = await step_runner.run()
             result.metadata.update({"duration": int(time.time() - start_time)})
-            step_name = step.name
             step_id = step.step_index
             dump_model = result.model_dump()
             self._step_registry[step_id] = dump_model
-            if step.id and step.id != step_id:
-                self._step_registry[step.id] = dump_model
             self._processed_steps += 1
             if not step_runner.is_success and not step.continue_on_error:
                 self._status = RunnerStatus.FAILED
                 self._error = result.error
-                raise RuntimeError(self._produce_log(f"(step '{step_name}') -> job execution stopped due to step failure: {self._error}"))
+                break
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(["name", "needs", "run_if", "env"])
@@ -77,8 +84,6 @@ class JobRunner(BaseRunner):
         })
 
     async def _post_run(self) -> None:
-        if self._error:
-            logger.error(self._produce_log(f"job failed: {self._error}"))
         self._ctx.vars.update({"steps": self._step_registry})
         self._result.outputs.update({"steps": self._step_registry})
         if self.model.outputs:

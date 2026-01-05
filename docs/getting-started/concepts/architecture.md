@@ -32,5 +32,5 @@ OFX is designed as a modular, extensible workflow engine for red teaming, automa
 ---
 
 ## See Also
-- [Quickstart Guide](../quickstart/index.md)
-- [Workflow Syntax](../../guide/workflows/index.md)
+- [Quickstart Guide](../quickstart.md)
+- [Workflow Syntax](../../guide/workflows.md)

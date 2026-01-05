@@ -53,4 +53,4 @@ hooks:
 ---
 
 ## See Also
-- [Hooks Guide](index.md)
+- [Hooks Guide](../hooks.md)

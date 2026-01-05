@@ -116,4 +116,4 @@ The doctor will detect your Linux distribution and provide appropriate installat
 
 ## See Also
 
-- [Getting Started](../../getting-started/quickstart/index.md)
+- [Getting Started](../../getting-started/quickstart.md)

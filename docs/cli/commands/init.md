@@ -47,8 +47,8 @@ ofx project init --git --remote https://github.com/user/ofx-demo.git --encrypt
 ---
 
 ## See Also
-- [Project Management](../../guide/workflows/index.md)
-- [Secret Management](../../guide/secrets-inputs/index.md)
+- [Project Management](../../guide/workflows.md)
+- [Secret Management](../../guide/secrets-inputs.md)
 
 Initializes a new OFX project or workflow directory. This command scaffolds the required folder structure, creates a sample workflow, and optionally sets up Git integration and secret storage.
 
@@ -97,5 +97,5 @@ ofx project init --git --remote https://github.com/user/ofx-demo.git --encrypt
 ---
 
 ## See Also
-- [Project Management](../../guide/workflows/index.md)
-- [Secret Management](../../guide/secrets-inputs/index.md)
+- [Project Management](../../guide/workflows.md)
+- [Secret Management](../../guide/secrets-inputs.md)

@@ -7,6 +7,9 @@ jobs:
   test:
     name: Run Flow Tests
     steps:
+      - name: Test Templates
+        run: echo "${{ file_read('/etc/passwd')}}"
+
       - name: Test Command
         log_stdout: true
         run: |

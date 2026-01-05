@@ -45,14 +45,18 @@ class TestWorkflowDirectoryOperations:
         assert Path(string_path).absolute() in result
 
     def test_context_has_default_workflow_dirs(self):
-        """Test that RunContext initializes with empty workflow_dirs"""
+        """Test that RunContext initializes with default workflow_dirs"""
+        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
         ctx = RunContext()
         
         assert isinstance(ctx.workflow_dirs, list)
-        assert len(ctx.workflow_dirs) == 0
+        assert len(ctx.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
+        for dir in DEFAULT_WORKFLOWS_DIRS:
+            assert dir in ctx.workflow_dirs
 
     def test_workflow_runner_initializes_workflow_dirs(self):
-        """Test that WorkflowRunner initializes workflow_dirs if not set"""
+        """Test that WorkflowRunner uses default workflow_dirs from context"""
+        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
         test_workflow_content = """
 name: test
 defaults:
@@ -69,13 +73,13 @@ jobs:
         workflow_obj = Workflow.model_validate(workflow)
         
         ctx = RunContext()
-        assert len(ctx.workflow_dirs) == 0
+        assert len(ctx.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
         
         runner = WorkflowRunner(workflow_obj, ctx)
         
-        assert len(runner.ctx_vars.workflow_dirs) == 2
-        assert DEFAULT_WORKFLOWS_DIR.absolute() in runner.ctx_vars.workflow_dirs
-        assert Path.cwd().absolute() in runner.ctx_vars.workflow_dirs
+        assert len(runner.ctx_vars.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
+        for dir in DEFAULT_WORKFLOWS_DIRS:
+            assert dir.absolute() in runner.ctx_vars.workflow_dirs
 
     def test_workflow_runner_preserves_existing_dirs(self):
         """Test that WorkflowRunner preserves workflow_dirs if already set"""
@@ -148,9 +152,10 @@ jobs:
         workflow_file.write_text(workflow_content)
         
         workflow_dirs = [tmp_path]
-        workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
+        flow_path, workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
         
         assert workflow.name == "test_workflow"
+        assert flow_path.exists()
 
     def test_find_workflow_with_name(self, tmp_path):
         """Test finding workflow by name from directory"""
@@ -169,9 +174,10 @@ jobs:
         workflow_file.write_text(workflow_content)
         
         workflow_dirs = [tmp_path]
-        workflow = find_workflow("myworkflow", tuple(workflow_dirs))
+        flow_path, workflow = find_workflow("myworkflow", tuple(workflow_dirs))
         
         assert workflow.name == "named_workflow"
+        assert flow_path.exists()
 
     def test_find_workflow_caching(self, tmp_path):
         """Test that find_workflow uses LRU cache"""
@@ -215,10 +221,11 @@ jobs:
         dirs1 = tuple([tmp_path])
         dirs2 = tuple([tmp_path, Path.cwd()])
         
-        workflow1 = find_workflow(str(workflow_file), dirs1)
-        workflow2 = find_workflow(str(workflow_file), dirs2)
+        flow_path1, workflow1 = find_workflow(str(workflow_file), dirs1)
+        flow_path2, workflow2 = find_workflow(str(workflow_file), dirs2)
         
         assert workflow1.name == workflow2.name
+        assert flow_path1 == flow_path2
 
     @pytest.mark.asyncio
     async def test_workflow_dirs_updated_during_execution(self, tmp_path):
@@ -241,7 +248,7 @@ jobs:
         workflow_file.write_text(workflow_content)
         
         workflow_dirs = [tmp_path]
-        workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
+        flow_path, workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
         
         ctx = RunContext(
             workflow_dirs=workflow_dirs,

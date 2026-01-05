@@ -1,408 +1,51 @@
 # Secrets & Inputs
 
-Learn how to manage sensitive configuration and runtime parameters in OFX workflows.
+How to declare, pass, and use runtime parameters and sensitive values.
 
 ## Inputs
 
-Inputs are parameters passed to workflows at runtime. They make workflows reusable and configurable.
-
-### Defining Inputs
-
-```yaml
-name: Configurable Scan
-
-inputs:
-  target:
-    description: Target hostname or IP address
-    required: true
-  
-  ports:
-    description: Comma-separated list of ports to scan
-    required: false
-    default: "80,443,8080"
-  
-  scan_type:
-    description: Type of scan (quick|standard|comprehensive)
-    required: false
-    default: "standard"
-```
-
-### Input Properties
-
-#### description
-Human-readable description of the input:
-
 ```yaml
 inputs:
-  target:
-    description: "Target server (hostname or IP). Example: example.com or 192.168.1.1"
+  target: { required: true }
+  ports: { default: "80,443" }
 ```
 
-#### required
-Whether the input must be provided:
-
-```yaml
-inputs:
-  target:
-    required: true   # Must be provided
-  
-  ports:
-    required: false  # Optional
-```
-
-#### default
-Default value if not provided:
-
-```yaml
-inputs:
-  ports:
-    required: false
-    default: "80,443,8080,8443"
-  
-  timeout:
-    required: false
-    default: "300"
-```
-
-### Providing Inputs
-
-#### Command Line
-
-```bash
-# Single input
-ofx flow run workflow.yml --input target=example.com
-
-# Multiple inputs
-ofx flow run workflow.yml \
-  --input target=192.168.1.1 \
-  --input ports="22,80,443" \
-  --input scan_type=comprehensive
-```
-
-#### Python API
-
-```python
-from ofx.runner import WorkflowRunner, RunContext
-from ofx.models.workflow import Workflow
-
-# Load workflow
-workflow = Workflow.from_file("workflow.yml")
-
-# Create context with inputs
-ctx = RunContext(
-    inputs={
-        "target": "192.168.1.1",
-        "ports": "22,80,443",
-        "scan_type": "comprehensive"
-    }
-)
-
-# Run workflow
-runner = WorkflowRunner(workflow, ctx)
-await runner.run()
-```
-
-### Using Inputs
-
-Access inputs using `${{ inputs.name }}`:
-
-```yaml
-steps:
-  - name: Scan target
-    run: nmap -p ${{ inputs.ports }} ${{ inputs.target }}
-  
-  - name: Generate report
-    script: |
-      print(f"Scanning {ctx.inputs['target']}")
-      print(f"Ports: {ctx.inputs['ports']}")
-      print(f"Type: {ctx.inputs['scan_type']}")
-    script:
-```
-
-### Input Validation
-
-Validate inputs before execution:
-
-```yaml
-jobs:
-  validate:
-    steps:
-      - name: Validate target
-        script: |
-          import re
-          import sys
-          
-          target = '${{ inputs.target }}'
-          
-          # Check format
-          if not re.match(r'^[a-zA-Z0-9.-]+$', target):
-            print(f"Invalid target format: {target}")
-            sys.exit(1)
-          
-          print(f"✓ Valid target: {target}")
-        script:
-      
-      - name: Validate ports
-        script: |
-          import sys
-          
-          ports = '${{ inputs.ports }}'
-          
-          # Check port range
-          for port in ports.split(','):
-            try:
-              p = int(port.strip())
-              if p < 1 or p > 65535:
-                raise ValueError
-            except:
-              print(f"Invalid port: {port}")
-              sys.exit(1)
-          
-          print(f"✓ Valid ports: {ports}")
-        language: python
-```
+- Provide at run: `ofx flow run myflow --input target=example.com --input ports=22,443`.
+- Python: `RunContext(inputs={"target": "example.com"})`.
+- Use: `${{ inputs.target }}` inside steps.
 
 ## Secrets
 
-Secrets are sensitive values that should not be hardcoded or logged. OFX provides secure secret management.
-
-### Defining Secrets
-
-```yaml
-name: API Integration
-
-secrets:
-  API_KEY:
-    description: API key for external service
-    required: true
-  
-  API_SECRET:
-    description: API secret for authentication
-    required: false
-  
-  DATABASE_URL:
-    description: Database connection string
-    required: true
-```
-
-### Secret Properties
-
-Same as inputs, but stored securely:
-
 ```yaml
 secrets:
-  SHODAN_API_KEY:
-    description: "Shodan API key from https://account.shodan.io/"
-    required: true
+  API_KEY: { required: true }
 ```
 
-### Managing Secrets
+- Provide once: `ofx secret set API_KEY=...` (stored, masked), or per run `--secret API_KEY=...`, or env var.
+- Use: `${{ secrets.API_KEY }}`.
 
-#### Command Line
-
-```bash
-# Provide at runtime
-ofx flow run workflow.yml --secret API_KEY=your_key_here
-
-# Multiple secrets
-ofx flow run workflow.yml \
-  --secret API_KEY=key123 \
-  --secret API_SECRET=secret456
-```
-
-#### Secret Store
-
-Store secrets persistently:
-
-```bash
-# Set secret
-ofx secret set API_KEY=your_key_here
-
-# List secrets
-ofx secret list
-
-# Delete secret
-ofx secret delete API_KEY
-```
-
-Then use in workflows without providing at runtime:
-
-```bash
-# Secrets automatically loaded from store
-ofx flow run workflow.yml --input target=example.com
-```
-
-#### Environment Variables
-
-Load secrets from environment:
-
-```bash
-export API_KEY=your_key_here
-export API_SECRET=your_secret_here
-
-# OFX automatically loads from environment
-ofx flow run workflow.yml
-```
-
-#### Python API
-
-```python
-ctx = RunContext(
-    inputs={"target": "example.com"},
-    secrets={
-        "API_KEY": "your_key_here",
-        "API_SECRET": "your_secret_here"
-    }
-)
-```
-
-### Using Secrets
-
-Access secrets using `${{ secrets.name }}`:
+## Quick validation pattern
 
 ```yaml
-steps:
-  - name: Call API
-    run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com
-  
-  - name: Authenticate
-    script: |
-      import requests
-      
-      api_key = '${{ secrets.API_KEY }}'
-      response = requests.post(
-        'https://api.example.com/auth',
-        headers={'X-API-Key': api_key}
-      )
-      
-      print(response.json())
-    script:
+- name: Validate target
+  script: |
+    import re, sys
+    t='${{ inputs.target }}'
+    sys.exit(0 if re.match(r'^[A-Za-z0-9.-]+$', t) else 1)
+  language: python
 ```
 
-### Secret Security
+## Best practices
 
-Secrets are:
-- ✅ Not logged in output
-- ✅ Not visible in process listings
-- ✅ Encrypted at rest (in secret store)
-- ✅ Masked in error messages
-
-```yaml
-steps:
-  - name: Use secret safely
-    script: |
-      # Secret value is masked in logs
-      api_key = '${{ secrets.API_KEY }}'
-      
-      # This will NOT print the actual key
-      print(f"Using API key: {api_key}")  # Masked output
-      
-      # Use secret normally
-      authenticate(api_key)
-    language: python
-```
-
-## Best Practices
-
-### 1. Never Hardcode Secrets
-
-```yaml
-# Bad - Secret in workflow file
-steps:
-  - run: curl -H "Authorization: Bearer abc123def456" https://api.example.com
-
-# Good - Secret as parameter
-secrets:
-  API_KEY:
-    required: true
-
-steps:
-  - run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com
-```
-
-### 2. Use Meaningful Names
-
-```yaml
-inputs:
-  # Good - Clear purpose
-  target_hostname:
-    description: "Primary target server hostname"
-  
-  scan_timeout_seconds:
-    description: "Maximum scan duration in seconds"
-  
-  # Bad - Unclear
-  t:
-    description: "target"
-  
-  x:
-    description: "timeout"
-```
-
-### 3. Provide Defaults When Appropriate
-
-```yaml
-inputs:
-  # Required, no default
-  target:
-    required: true
-    description: "Must be provided by user"
-  
-  # Optional with sensible default
-  timeout:
-    required: false
-    default: "300"
-    description: "5 minute default timeout"
-```
-
-### 4. Document Expected Formats
-
-```yaml
-inputs:
-  target:
-    description: |
-      Target specification:
-      - Hostname: example.com
-      - IPv4: 192.168.1.1
-      - IPv6: 2001:db8::1
-      - CIDR: 192.168.1.0/24
-    required: true
-  
-  ports:
-    description: |
-      Port specification:
-      - Single: 80
-      - Range: 1-1000
-      - List: 80,443,8080
-      - Mixed: 22,80-443,8080
-    default: "80,443"
-```
-
-### 5. Validate Early
-
-```yaml
-jobs:
-  validate_inputs:
-    steps:
-      - name: Validate all inputs
-        script: |
-          import sys
-          
-          # Validate target
-          if not validate_target('${{ inputs.target }}'):
-            sys.exit(1)
-          
-          # Validate ports
-          if not validate_ports('${{ inputs.ports }}'):
-            sys.exit(1)
-          
-          print("✓ All inputs valid")
-        script:
-  
+- Never hardcode secrets; declare in `secrets`.
+- Give clear names and defaults where sensible.
+- Validate early; fail fast.
+- Secrets are masked in logs; avoid printing them directly.
   main_work:
     needs: [validate_inputs]
     steps:
-      - run: nmap ${{ inputs.target }}
+      - name: Scan target
+        run: nmap ${{ inputs.target }}
 ```
 
 ### 6. Use Secret Store for Persistent Secrets

@@ -83,4 +83,4 @@ tools:
 ## See Also
 
 - [flow run](run.md)
-- [Extending OFX](../../guide/extending-data-modules/index.md)
+- [Extending OFX](../../guide/extending-data-modules.md)

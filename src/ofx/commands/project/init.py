@@ -24,7 +24,7 @@ DIRECTORY_STRUCTURE: list[str | tuple[str, list]] = [
 ]
 
 
-class InitHandler(metaclass=MetaSingleton):
+class InitHandler:
     def __init__(
         self,
         base: str,

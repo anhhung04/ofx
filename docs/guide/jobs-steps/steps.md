@@ -38,7 +38,7 @@ jobs:
 ## Advanced Usage
 - Use `script:` to run inline Python code
 - Use `outputs:` to pass data between steps and jobs
-- Use `run_if:` for conditional logic (see [Hooks & Conditions](../hooks/index.md))
+- Use `run_if:` for conditional logic (see [Hooks & Conditions](../hooks.md))
 
 ---
 

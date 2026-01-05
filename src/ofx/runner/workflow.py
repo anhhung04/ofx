@@ -20,7 +20,7 @@ from ofx.runner.base import BaseRunner
 from ofx.runner.job import JobRunner
 from ofx.runner.models import RunContext, RunnerStatus
 from ofx.runner.tool_installer import ToolInstallerRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIR, settings
+from ofx.settings import DEFAULT_WORKFLOWS_DIRS, settings
 from ofx.utils.misc import add_workflow_dir, find_parallel_schedule, find_workflow
 
 logger = logging.getLogger(settings.app_branding)
@@ -43,10 +43,7 @@ class WorkflowRunner(BaseRunner):
         self._progress_id: Any | None = None
         
         if not self.ctx_vars.workflow_dirs:
-            self.ctx_vars.workflow_dirs = [
-                DEFAULT_WORKFLOWS_DIR.absolute(),
-                Path.cwd().absolute()
-            ]
+            self.ctx_vars.workflow_dirs = DEFAULT_WORKFLOWS_DIRS
 
     async def _do_run(self) -> None:
         """Execute the workflow by running its jobs in stages according to their dependencies"""
@@ -98,18 +95,18 @@ class WorkflowRunner(BaseRunner):
             job_runners = {}
             for job_id in stage:
                 job = self.model.jobs[job_id]
-                self._job_registry[job_id] = await self._resolve_template(
+                job_data = await self._resolve_template(
                     job.model_dump(exclude={"outputs", "steps"})
                 )
+                self._job_registry[job_id] = job_data
                 self._ctx.vars.update({"jobs": self._job_registry})
-                is_single_job_stage = len(stage) == 1
                 job_ctx = self.ctx_vars.model_copy(
-                    update={"allow_interactive": is_single_job_stage}
+                    update={"allow_interactive": len(stage) == 1}
                 )
 
                 runner = JobRunner(job, job_ctx, parent=self)
                 job_runners[job_id] = runner
-                self._job_registry[job_id]["runner"] = runner
+                job_data["runner"] = runner
 
             async def run_job_with_limit(job_id: str, runner: JobRunner):
                 async with semaphore:
@@ -121,21 +118,23 @@ class WorkflowRunner(BaseRunner):
             }
 
             if self._progress and self._progress_id is not None:
-                while not all(task.done() for task in stage_tasks.values()):
+                pending = set(stage_tasks.values())
+                while pending:
+                    done, pending = await asyncio.wait(pending, timeout=0.1)
+                    if not pending and not done:
+                        break
                     current_steps_in_stage = sum(
                         runner.processed_steps for runner in job_runners.values()
                     )
                     self._completed_steps = (
                         completed_steps_before_stage + current_steps_in_stage
                     )
-
                     self._progress.update(
                         self._progress_id,
                         description=f"⚙ [bold]{self.model.name}[/bold] → {', '.join(stage)}",
                         completed=min(self._completed_steps, self._total_steps),
                         refresh=True,
                     )
-                    await asyncio.sleep(0.1)
 
             results = await asyncio.gather(*stage_tasks.values(), return_exceptions=True)
 
@@ -143,8 +142,9 @@ class WorkflowRunner(BaseRunner):
             failed_jobs_info = []
 
             stage_steps = 0
-            for job_id, result in zip(stage_tasks.keys(), results, strict=False):
-                runner = job_runners[job_id]
+            for job_id, runner, result in zip(
+                stage_tasks.keys(), job_runners.values(), results, strict=False
+            ):
                 stage_steps += runner.total_steps
 
                 job_result = runner.get_result()

@@ -1,8 +1,7 @@
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    UV_COMPILE_BYTECODE=1 \
-    PYTHON_GIL=0
+    UV_COMPILE_BYTECODE=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -16,7 +15,7 @@ WORKDIR /build
 COPY pyproject.toml setup.py README.md ./
 COPY src/ ./src/
 
-RUN --mount=type=cache,target=/root/.cache/uv uv build --python=3.13+freethreaded --wheel --out-dir /build/dist
+RUN --mount=type=cache,target=/root/.cache/uv uv build --wheel --out-dir /build/dist
 
 FROM scratch AS export
 COPY --from=builder /build/dist/*.whl /

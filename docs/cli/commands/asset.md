@@ -159,5 +159,5 @@ tar -xzf recon-tools.tar.gz -C ~/.local/share/ofx/workflows/
 
 ## See Also
 
-- [Workflows](../../guide/workflows/index.md)
-- [Templates](../../guide/templates/index.md)
+- [Workflows](../../guide/workflows.md)
+- [Templates](../../guide/templates.md)

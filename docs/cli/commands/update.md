@@ -69,4 +69,4 @@ The `update` command resolves these references and fetches latest versions.
 ## See Also
 
 - [flow run](run.md)
-- [Templates Guide](../../guide/templates/index.md)
+- [Templates Guide](../../guide/templates.md)

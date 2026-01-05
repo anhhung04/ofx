@@ -16,10 +16,13 @@ TEMP_DIR = Path(tempfile.gettempdir()) / ".ofx"
 SECRETS_STORE = Path(os.getenv("OFX_SECRETS_STORE", BASE_DATA_DIR / "secrets.enc"))
 SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
+DEFAULT_WORKFLOWS_DIRS = [Path.cwd(), DEFAULT_WORKFLOWS_DIR]
 DEFAULT_PROJECTS_PATH = Path.home() / "ofx-projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
 DATA_DIR = Path(__file__).parent / "data"
+
+ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
 BANNER = """
 \033[1;31m      .--.

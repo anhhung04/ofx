@@ -14,6 +14,7 @@ jobs:
       - name: Print greeting
         run: echo "Hello, OFX!"
 ```
+Run: `ofx flow run Hello World` (save as `hello-world.yml`). Expected: a single step that prints `Hello, OFX!`.
 
 ---
 
@@ -31,6 +32,7 @@ jobs:
       - name: Run nmap
         run: nmap ${{ inputs.target }}
 ```
+Run: `ofx flow run Scan Target --input target=scanme.nmap.org`. Expected: `nmap` scan output with exit code 0. Ensure `nmap` is installed or add `run: ${{ uv_install('nmap') }}` before the scan step.
 
 ---
 
@@ -44,8 +46,9 @@ jobs:
       - name: Make authenticated request
         run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com
 ```
+Prepare secret: `ofx secret set API_KEY`. Run: `ofx flow run API Request`. Expected: HTTP response body or failure message if the token is invalid.
 
 ---
 
 ## See Also
-- [Quickstart Guide](index.md)
+- [Quickstart Guide](../quickstart.md)

@@ -159,19 +159,19 @@ class BaseRunner:
                 try:
                     return int(result)
                 except ValueError:
-                    logger.warning(self._produce_log(f"Could not convert template result '{result}' back to integer"))
+                    logger.warning(self._produce_log(f"Could not convert template result '{result[:100]}' back to integer"))
                     return result
             elif isinstance(value, float):
                 try:
                     return float(result)
                 except ValueError:
-                    logger.warning(self._produce_log(f"Could not convert template result '{result}' back to float"))
+                    logger.warning(self._produce_log(f"Could not convert template result '{result[:100]}' back to float"))
                     return result
 
             logger.debug(self._produce_log(f"Resolved template: {value} -> {result}"))
             return result
         except Exception as e:
-            logger.error(self._produce_log(f"Error resolving template for value '{value}': {e}"))
+            logger.error(self._produce_log(f"Error resolving template for value '{str(value)[:100]}': {e}"))
             return value
 
     async def _resolve_template_fields(self, fields: list[str]) -> None:

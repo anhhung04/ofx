@@ -38,6 +38,7 @@ class CommandRunner(BaseRunner):
         self._cwd = working_dir or Path.cwd()
         self._timeout_minutes = timeout_minutes
         self._interactive = interactive
+        self._outputs_file: Path | None = None
 
     async def _do_run(self) -> None:
         """Execute a shell command and capture output"""
@@ -47,6 +48,10 @@ class CommandRunner(BaseRunner):
 
         if not self._shell or not Path(self._shell).exists():
             raise RuntimeError(f"Shell not found: {self._shell}") from None
+
+        if not self._interactive:
+            self._outputs_file = Path(tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1])
+            self.ctx_vars.envs["OFX_OUTPUTS"] = str(self._outputs_file)
 
         try:
             if self._interactive:
@@ -138,6 +143,27 @@ class CommandRunner(BaseRunner):
                 "stderr": stderr,
                 "exit_code": exit_code,
             })
+            
+            if self._outputs_file and self._outputs_file.exists():
+                try:
+                    outputs_content = self._outputs_file.read_text().strip()
+                    if outputs_content:
+                        for line in outputs_content.splitlines():
+                            line = line.strip()
+                            if line and '=' in line:
+                                key, value = line.split('=', 1)
+                                key = key.strip()
+                                value = value.strip()
+                                if key:
+                                    self._result.outputs[key] = value
+                                    logger.debug(self._produce_log(f"Captured output: {key}={value}"))
+                except Exception as e:
+                    logger.warning(self._produce_log(f"Failed to parse OFX_OUTPUTS: {e}"))
+                finally:
+                    try:
+                        self._outputs_file.unlink()
+                    except Exception:
+                        pass
 
     async def _pre_run(self) -> None:
         self._shell = self._resolve_shell()

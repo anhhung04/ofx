@@ -55,9 +55,9 @@ ofx flow run workflows/exploit.yml --input target=10.0.0.1 --secret API_KEY=xxx 
 
 ---
 ## See Also
-- [Workflow Syntax](../../guide/workflows/index.md)
-- [Inputs & Secrets](../../guide/secrets-inputs/index.md)
+- [Workflow Syntax](../../guide/workflows.md)
+- [Inputs & Secrets](../../guide/secrets-inputs.md)
 
 ## See Also
-- [Workflow Syntax](../../guide/workflows/index.md)
-- [Inputs & Secrets](../../guide/secrets-inputs/index.md)
+- [Workflow Syntax](../../guide/workflows.md)
+- [Inputs & Secrets](../../guide/secrets-inputs.md)

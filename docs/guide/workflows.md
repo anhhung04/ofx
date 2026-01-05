@@ -1,259 +1,79 @@
 # Workflows
 
-Workflows are the top-level execution containers in OFX. They define the complete execution flow including jobs, dependencies, inputs, secrets, and lifecycle hooks.
+Top-level container: define inputs, secrets, jobs, hooks.
 
-## Basic Structure
+## Skeleton
 
 ```yaml
-name: My Workflow
-description: Optional workflow description
-
+name: my-workflow
 inputs:
-  target:
-    description: Target hostname or IP
-    required: true
-    default: localhost
-
+  target: { required: true }
 secrets:
-  API_KEY:
-    description: API key for external services
-    required: false
-
-jobs:
-  reconnaissance:
-    steps:
-      - name: Scan ports
-        run: nmap -sV ${{ inputs.target }}
-  
-  analysis:
-    needs: [reconnaissance]
-    steps:
-      - name: Analyze results
-        run: python analyze.py
-```
-
-## Workflow Properties
-
-### name (required)
-Human-readable workflow name.
-
-```yaml
-name: Red Team Assessment
-```
-
-### description (optional)
-Detailed description of what the workflow does.
-
-```yaml
-description: Automated reconnaissance and vulnerability assessment workflow
-```
-
-### inputs (optional)
-Define input parameters that can be provided at runtime.
-
-```yaml
-inputs:
-  target:
-    description: Target hostname or IP address
-    required: true
-    default: example.com
-  
-  ports:
-    description: Ports to scan
-    required: false
-    default: "80,443,8080"
-```
-
-Access inputs in commands using `${{ inputs.name }}`:
-
-```yaml
-run: nmap -p ${{ inputs.ports }} ${{ inputs.target }}
-```
-
-### secrets (optional)
-Define sensitive configuration values.
-
-```yaml
-secrets:
-  API_KEY:
-    description: API key for Shodan
-    required: true
-  
-  API_SECRET:
-    description: API secret
-    required: false
-```
-
-Access secrets using `${{ secrets.name }}`:
-
-```yaml
-run: python scan.py --api-key ${{ secrets.API_KEY }}
-```
-
-### envs (optional)
-Define environment variables for the entire workflow.
-
-```yaml
-envs:
-  LOG_LEVEL: DEBUG
-  OUTPUT_DIR: /tmp/results
-```
-
-### jobs (required)
-Map of job definitions. See [Jobs & Steps](jobs-steps.md) for details.
-
-## Running Workflows
-
-### From Command Line
-
-```bash
-# Basic execution
-ofx flow run workflow.yml
-
-# With inputs
-ofx flow run workflow.yml --input target=192.168.1.1 --input ports=80,443
-
-# With secrets
-ofx flow run workflow.yml --secret API_KEY=your_key_here
-
-# With environment variables
-ofx flow run workflow.yml --env LOG_LEVEL=DEBUG
-```
-
-### From Python
-
-```python
-import asyncio
-from pathlib import Path
-from ofx.runner import WorkflowRunner, RunContext
-from ofx.models.workflow import Workflow
-import yaml
-
-async def run_workflow():
-    # Load workflow
-    with open("workflow.yml") as f:
-        workflow_data = yaml.safe_load(f)
-    
-    workflow = Workflow(**workflow_data)
-    
-    # Create context
-    ctx = RunContext(
-        inputs={"target": "192.168.1.1"},
-        secrets={"API_KEY": "your_key"},
-        output_path=Path("./output"),
-    )
-    
-    # Run workflow
-    runner = WorkflowRunner(workflow, ctx)
-    result = await runner.run()
-    
-    print(f"Status: {result.status}")
-    print(f"Output: {result.output}")
-
-asyncio.run(run_workflow())
-```
-
-## Workflow Validation
-
-Validate workflow syntax before running:
-
-```bash
-ofx flow validate workflow.yml
-```
-
-This checks:
-- YAML syntax
-- Required fields
-- Job dependencies
-- Input/secret references
-
-## Workflow Dependencies
-
-Jobs can depend on other jobs using the `needs` field:
-
-```yaml
+  API_KEY: { required: false }
 jobs:
   scan:
     steps:
-      - name: Port scan
-        run: nmap -sV ${{ inputs.target }}
-  
+      - run: nmap -sV ${{ inputs.target }}
   analyze:
-    needs: [scan]  # Waits for scan to complete
+    needs: [scan]
     steps:
-      - name: Analyze results
-        run: python analyze.py
-  
-  report:
-    needs: [analyze]  # Waits for analyze to complete
-    steps:
-      - name: Generate report
-        run: python report.py
+      - run: python analyze.py
 ```
 
-### Parallel Execution
+## Key fields
 
-Jobs without dependencies run in parallel:
+- `name`, optional `description`.
+- `inputs`/`secrets`: declare and reference with `${{ inputs.* }}` / `${{ secrets.* }}`.
+- `envs`: workflow-wide env vars.
+- `jobs`: required map; see [jobs & steps](jobs-steps.md).
 
+## Run
+
+```bash
+ofx flow validate my-workflow
+ofx flow run my-workflow --input target=example.com --secret API_KEY=xxx
+```
+
+## Dependencies
+
+- `needs` controls order; missing `needs` = parallel.
 ```yaml
 jobs:
-  scan_http:
-    steps:
-      - run: nikto -h ${{ inputs.target }}
-  
-  scan_ssl:
-    steps:
-      - run: sslscan ${{ inputs.target }}
-  
-  # Both scan_http and scan_ssl run simultaneously
+  a: { steps: [{ run: echo a }] }
+  b:
+    needs: [a]
+    steps: [{ run: echo b }]
+  c:
+    needs: [a]
+    steps: [{ run: echo c }]
 ```
 
-### Multiple Dependencies
-
-Jobs can depend on multiple other jobs:
+## Hooks (workflow-level)
 
 ```yaml
-jobs:
-  port_scan:
-    steps:
-      - run: nmap ${{ inputs.target }}
-  
-  dns_enum:
-    steps:
-      - run: dnsrecon -d ${{ inputs.target }}
-  
-  exploit:
-    needs: [port_scan, dns_enum]  # Waits for both to complete
-    steps:
-      - run: python exploit.py
-```
-
-## Workflow Hooks
-
-Add hooks to execute custom code at various lifecycle points:
-
-```yaml
-name: Workflow with Hooks
-
 hooks:
   on_start:
-    script: |
-      print(f"Starting workflow at {datetime.now()}")
-      print(f"Target: {ctx.inputs['target']}")
-    script:
-  
+    - run: echo "start"
   on_success:
-    script: echo "Workflow completed successfully!"
-    language: shell
-  
-  on_error:
-    script: |
-      import sys
-      print(f"Error occurred: {error}", file=sys.stderr)
-    script:
+    - run: echo "ok"
+```
 
-jobs:
-  # ... job definitions
+## Python entry (minimal)
+
+```python
+import yaml, asyncio
+from pathlib import Path
+from ofx.runner import WorkflowRunner, RunContext
+from ofx.models.workflow import Workflow
+
+async def main():
+    data = yaml.safe_load(Path("workflow.yml").read_text())
+    wf = Workflow(**data)
+    res = await WorkflowRunner(wf, RunContext()).run()
+    print(res.status)
+
+asyncio.run(main())
+```
 ```
 
 See [Hooks System](hooks.md) for complete documentation.
@@ -313,7 +133,8 @@ jobs:
   scan:
     continue_on_error: true
     steps:
-      - run: nmap ${{ inputs.target }}
+      - name: Port scan
+        run: nmap ${{ inputs.target }}
 ```
 
 ### Retry Logic

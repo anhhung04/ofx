@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 class Step(BaseModel):
-    name: str = Field(..., description="Name of the step")
+    name: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Name of the step")
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for the step",

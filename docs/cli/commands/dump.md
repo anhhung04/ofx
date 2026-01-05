@@ -108,4 +108,4 @@ ofx dump workflow attack.yaml --format yaml
 
 ## See Also
 
-- [Workflows](../../guide/workflows/index.md)
+- [Workflows](../../guide/workflows.md)

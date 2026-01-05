@@ -10,11 +10,8 @@ class JobEntry:
     job_id: str
     name: str
     status: RunnerStatus = RunnerStatus.IDLE
-
     metadata: dict[str, Any] = field(default_factory=dict)
-
     runner: Any | None = None
-
     result: bool | None = None
     error: Exception | None = None
     outputs: dict[str, Any] = field(default_factory=dict)

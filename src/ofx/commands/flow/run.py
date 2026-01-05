@@ -3,13 +3,19 @@ import logging
 import tempfile
 from pathlib import Path
 
+from datetime import datetime
+
 from ofx.runner import RunContext, WorkflowRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIR, SECRETS_DIR, get_console, settings
-from ofx.utils.misc import find_workflow, load_secrets
+from ofx.settings import DEFAULT_WORKFLOWS_DIRS, SECRETS_DIR, TEMP_DIR, get_console, settings
+from ofx.utils.misc import find_workflow, load_secrets, add_workflow_dir
 
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
 
+def get_tmp_dir(output = None) -> Path:
+    """Get the temporary directory for workflow runs"""
+    if output and Path(output).is_dir(): return Path(output)
+    return Path(tempfile.mkdtemp(prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_", dir=TEMP_DIR))
 
 class FlowRunHandler:
     def __init__(
@@ -21,9 +27,7 @@ class FlowRunHandler:
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input
-        self.output = (
-            Path(output) if output else Path(tempfile.mkdtemp(prefix="ofx")) / "results"
-        )
+        self.output = get_tmp_dir(output)
         self.profile = profile
 
     async def run(self):
@@ -45,8 +49,7 @@ class FlowRunHandler:
                 f"✅ Starting to run workflow: '{self.workflow_name}' with input: {input_display}\nto output: '{self.output.as_posix()}'"
             )
             
-            workflow_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
-            workflow = find_workflow(self.workflow_name, tuple(workflow_dirs))
+            flow_path, workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
             
             runner = WorkflowRunner(
                 workflow,
@@ -54,7 +57,7 @@ class FlowRunHandler:
                     inputs=self.input,
                     output_path=self.output,
                     secrets=load_secrets(SECRETS_DIR),
-                    workflow_dirs=workflow_dirs,
+                    workflow_dirs=add_workflow_dir(DEFAULT_WORKFLOWS_DIRS, flow_path.parent),
                 ),
             )
             res = await runner.run()

@@ -243,5 +243,5 @@ for interaction in interactions:
 
 ## See Also
 
-- [Exploitation API](../exploitation/index.md)
+- [Exploitation API](../exploitation.md)
 - [HTTP API](../exploitation/http.md)

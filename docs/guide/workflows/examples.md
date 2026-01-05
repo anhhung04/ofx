@@ -61,22 +61,30 @@ jobs:
 ---
 
 ## Example 4: Using Outputs
+
+Use OFX_OUTPUTS to pass data between jobs:
+
 ```yaml
 name: Scan with Outputs
 jobs:
   scan:
     name: Port Scan
+    outputs:
+      open_ports: "${{ steps.0.outputs.open_ports }}"
     steps:
-      - name: Scan target
-        run: nmap ${{ inputs.target }}
-        outputs:
-          open_ports: "${{ step.stdout_lines }}"
+      - name: Scan and capture ports
+        run: |
+          # Run scan and extract open ports
+          nmap ${{ inputs.target }} | grep "^[0-9]" | cut -d'/' -f1 > ports.txt
+          # Save to outputs
+          echo "open_ports=$(cat ports.txt | tr '\n' ',')" >> $OFX_OUTPUTS
+  
   report:
     name: Generate Report
-    needs: scan
+    needs: [scan]
     steps:
       - name: Display results
-        run: echo "Ports: ${{ jobs.scan.outputs.open_ports }}"
+        run: echo "Open ports: ${{ jobs.scan.outputs.open_ports }}"
 ```
 
 ---
@@ -110,14 +118,17 @@ jobs:
 ---
 
 ## Example 7: Comprehensive Web Reconnaissance
+
 This example demonstrates a multi-job workflow that takes a domain, finds subdomains, checks for open web ports, and generates a report.
 
 ```yaml
 name: Comprehensive Web Recon
+
 inputs:
   domain:
-    description: The target domain to scan.
+    description: The target domain to scan
     required: true
+
 secrets:
   FOFA_USER:
     required: false
@@ -125,66 +136,87 @@ secrets:
     required: false
 
 jobs:
-  discover-subdomains:
+  discover_subdomains:
     name: Discover Subdomains
+    outputs:
+      subdomains: "${{ steps.0.outputs.subdomains }}"
     steps:
-      - name: Search with Fofa
-        script: |
+      - name: Search with FOFA
+        run: |
+          python << 'EOF'
           from ofx.api.search import Fofa
-          fofa = Fofa(user="${{ secrets.FOFA_USER }}", token="${{ secrets.FOFA_TOKEN }}")
+          import os
+          
+          fofa = Fofa(
+              user=os.getenv('FOFA_USER', '${{ secrets.FOFA_USER }}'),
+              token=os.getenv('FOFA_TOKEN', '${{ secrets.FOFA_TOKEN }}')
+          )
           results = fofa.search(f'domain="${{ inputs.domain }}"')
-          # Extract host from results
+          
+          # Extract hosts from results
           hosts = [res.split('//')[1].split(':')[0] for res in results]
-          print('\n'.join(hosts))
-        outputs:
-          subdomains: "${{ step.stdout_lines }}"
+          
+          # Save to outputs
+          with open(os.getenv('OFX_OUTPUTS'), 'a') as f:
+              f.write(f"subdomains={','.join(hosts)}\n")
+          EOF
 
-  check-web-ports:
+  check_web_ports:
     name: Check for Open Web Ports
-    needs: discover-subdomains
+    needs: [discover_subdomains]
+    outputs:
+      live_hosts: "${{ steps.0.outputs.live_hosts }}"
     steps:
       - name: Check ports 80 and 443
-        script: |
+        run: |
+          python << 'EOF'
           from ofx.api.exploit import check_port
+          import os
           
+          subdomains = "${{ jobs.discover_subdomains.outputs.subdomains }}".split(',')
           open_hosts = []
-          subdomains = ${{ jobs.discover-subdomains.outputs.subdomains }}
-          for host in subdomains:
-              if check_port(host, 80):
-                  open_hosts.append(f"http://{host}")
-              if check_port(host, 443):
-                  open_hosts.append(f"https://{host}")
           
-          print('\n'.join(open_hosts))
-        outputs:
-          live_hosts: "${{ step.stdout_lines }}"
+          for host in subdomains:
+              if host:
+                  if check_port(host, 80):
+                      open_hosts.append(f"http://{host}")
+                  if check_port(host, 443):
+                      open_hosts.append(f"https://{host}")
+          
+          # Save to outputs
+          with open(os.getenv('OFX_OUTPUTS'), 'a') as f:
+              f.write(f"live_hosts={','.join(open_hosts)}\n")
+          EOF
 
-  generate-report:
+  generate_report:
     name: Generate Report
-    needs: check-web-ports
+    needs: [check_web_ports]
     steps:
       - name: Fetch titles and generate report
-        script: |
+        run: |
+          python << 'EOF'
           from ofx.api.http import fetch
           from ofx.api.file import write_file
           import re
-
-          live_hosts = ${{ jobs.check-web-ports.outputs.live_hosts }}
+          
+          live_hosts = "${{ jobs.check_web_ports.outputs.live_hosts }}".split(',')
           report = "# Web Reconnaissance Report\n\n"
           report += f"## Target: ${{ inputs.domain }}\n\n"
           
           for host in live_hosts:
-              try:
-                  content = fetch(host, timeout=5)
-                  title_match = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE)
-                  title = title_match.group(1).strip() if title_match else "No Title Found"
-                  report += f"- **{host}**: {title}\n"
-              except Exception as e:
-                  report += f"- **{host}**: Failed to fetch ({e})\n"
+              if host:
+                  try:
+                      content = fetch(host, timeout=5)
+                      title_match = re.search(r'<title>(.*?)</title>', content, re.IGNORECASE)
+                      title = title_match.group(1).strip() if title_match else "No Title Found"
+                      report += f"- **{host}**: {title}\n"
+                  except Exception as e:
+                      report += f"- **{host}**: Failed to fetch ({str(e)})\n"
           
-          write_file(report, "${{ ctx.output_path }}/recon_report.md")
-          print(f"Report saved to ${{ ctx.output_path }}/recon_report.md")
-
+          output_file = "${{ ctx.output_path }}/recon_report.md"
+          write_file(report, output_file)
+          print(f"Report saved to {output_file}")
+          EOF
 ```
 
 ---

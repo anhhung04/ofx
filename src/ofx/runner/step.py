@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import aiofiles
 
@@ -13,9 +13,6 @@ from ofx.runner.base import BaseRunner
 from ofx.runner.command import CommandRunner, ScriptRunner
 from ofx.runner.models import RunContext, RunnerStatus, RunType
 from ofx.settings import settings
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -80,6 +77,8 @@ class StepRunner(BaseRunner):
 
     async def _post_run(self) -> None:
         """Log stdout, save output if configured, and run 'after_step' hook."""
+        if self._error:
+            logger.error(self._produce_log(f"step failed: {self._error}"))
         stdout = self._result.outputs.get("stdout", "")
         if stdout and isinstance(stdout, str):
             logger.info(self._produce_log(f"stdout:\n{stdout}"))
@@ -109,15 +108,11 @@ class StepRunner(BaseRunner):
         for attempt in range(max_attempts):
             try:
                 runner = self._create_runner()
-
                 res = await asyncio.wait_for(runner.run(), timeout=timeout_seconds)
                 last_res = res
 
                 if res.status == RunnerStatus.COMPLETED:
-                    self._status = res.status
-                    self._error = res.error
-                    for k, v in res.model_dump().items():
-                        setattr(self._result, k, v)
+                    self._apply_run_result(res)
                     logger.debug(self._produce_log(f"result: {self.get_result()}"))
                     return
 
@@ -130,7 +125,7 @@ class StepRunner(BaseRunner):
                 await self._run_hook("on_timeout")
                 break
             except Exception as e:
-                logger.warning(
+                logger.error(
                     self._produce_log(
                         f"Step failed on attempt {attempt + 1}/{max_attempts}. Error: {e}"
                     )
@@ -141,17 +136,12 @@ class StepRunner(BaseRunner):
                     await asyncio.sleep(delay)
                 else:
                     if last_res:
-                        self._status = last_res.status
-                        self._error = last_res.error
+                        self._apply_run_result(last_res)
+                        if not self._error:
+                            self._error = str(e)
                     else:
                         self._status = RunnerStatus.FAILED
                         self._error = str(e)
-
-                    for k, v in (last_res.model_dump() if last_res else {}).items():
-                        setattr(self._result, k, v)
-
-        if self._status != RunnerStatus.COMPLETED:
-             logger.error(self._produce_log(f"Step failed after {max_attempts} attempt(s). Final error: {self._error}"))
 
         logger.debug(self._produce_log(f"Final result after retries: {self.get_result()}"))
 
@@ -182,7 +172,7 @@ class StepRunner(BaseRunner):
                 if hasattr(parent.parent.ctx_vars, 'workflow_dirs'):
                     workflow_dirs = parent.parent.ctx_vars.workflow_dirs.copy()
             
-            workflow = find_workflow(
+            flow_path, workflow = find_workflow(
                 self._model.uses or "",
                 tuple(workflow_dirs)
             )
@@ -190,7 +180,7 @@ class StepRunner(BaseRunner):
             if Path(self._model.uses or "").exists():
                 workflow_dirs = add_workflow_dir(
                     workflow_dirs,
-                    Path(self._model.uses).parent.absolute()
+                    flow_path.parent
                 )
             
             return WorkflowRunner(
@@ -241,6 +231,12 @@ class StepRunner(BaseRunner):
             return self.parent._produce_log(msg)
         return msg
 
+    def _apply_run_result(self, res) -> None:
+        self._status = res.status
+        self._error = res.error
+        for k, v in res.model_dump().items():
+            setattr(self._result, k, v)
+
     def _parse_run_type(self) -> RunType:
         step = self._model
         if step.uses:
@@ -269,3 +265,7 @@ class StepRunner(BaseRunner):
     @property
     def model(self) -> Step:
         return self._model
+
+    @property
+    def parent(self) -> "JobRunner": # type: ignore
+        return self._parent

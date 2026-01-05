@@ -2,14 +2,71 @@ import getpass
 import json
 import logging
 from pathlib import Path
+from typing import Any, Dict
 
 import typer
 
 from ofx.settings import SECRETS_DIR, settings
-from ofx.utils.secrets import SecretManager
+from ofx.utils import secrets as secrets_store
 
 app = typer.Typer()
 logger = logging.getLogger(settings.app_branding)
+
+
+def _resolve_secret_input(name: str, value: str | None, file: Path | None) -> str:
+    """Resolve a secret value from CLI options or interactive prompt.
+
+    - Prevents using --value and --file together.
+    - Validates file existence when provided.
+    - Prompts interactively if neither option is supplied.
+    """
+    if value is not None and file is not None:
+        typer.secho("❌ Use either --value or --file, not both", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    if file is not None:
+        if not file.exists():
+            typer.secho(f"❌ File not found: {file}", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        return file.read_text().strip()
+
+    if value is not None:
+        return value
+
+    return getpass.getpass(f"Enter value for secret '{name}': ")
+
+
+def _resolve_passphrase(passphrase: str | None, ask: bool) -> str | None:
+    """Return the passphrase from flag or prompt; prompt wins when requested."""
+    if ask:
+        return getpass.getpass("Enter passphrase: ")
+    return passphrase
+
+
+def _maybe_backup_store(
+    backup_path: Path | None, passphrase: str | None, overwrite: bool
+) -> None:
+    """Create a backup if requested, failing fast on overwrite collisions."""
+    if backup_path is None:
+        return
+
+    if backup_path.exists() and not overwrite:
+        typer.secho(
+            f"❌ Backup file already exists: {backup_path}. Use --backup-overwrite to replace",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1)
+
+    count = secrets_store.backup_secrets(backup_path, passphrase=passphrase)
+
+    if count == 0:
+        typer.secho("No secrets to backup; skipping backup creation", fg=typer.colors.YELLOW)
+        return
+
+    typer.secho(
+        f"💾 Backup created at {backup_path} ({count} secrets)",
+        fg=typer.colors.CYAN,
+    )
 
 
 @app.command("set")
@@ -21,6 +78,9 @@ def set_secret(
     file: Path | None = typer.Option(
         None, "--file", "-f", help="Read secret value from file"
     ),
+    force: bool = typer.Option(
+        False, "--force", "-f", help="Overwrite existing secret without prompt"
+    ),
 ):
     """Store a secret value in encrypted storage.
 
@@ -28,22 +88,19 @@ def set_secret(
     or entered interactively if neither option is provided. JSON values are
     automatically detected and stored as structured data.
     """
-    if file:
-        if not file.exists():
-            typer.secho(f"❌ File not found: {file}", fg=typer.colors.RED)
-            raise typer.Exit(code=1)
-        secret_value = file.read_text().strip()
-    elif value:
-        secret_value = value
-    else:
-        secret_value = getpass.getpass(f"Enter value for secret '{name}': ")
+    secret_value = _resolve_secret_input(name, value, file)
+    if secrets_store.secret_exists(name) and not force:
+        if not typer.confirm(f"Secret '{name}' exists. Overwrite?"):
+            typer.secho("Cancelled", fg=typer.colors.YELLOW)
+            raise typer.Exit()
 
     try:
         secret_value = json.loads(secret_value)
     except json.JSONDecodeError:
+        # Keep raw string when JSON decoding is not applicable
         pass
 
-    SecretManager.set(name, secret_value)
+    secrets_store.set_secret(name, secret_value)
     typer.secho(f"✅ Secret '{name}' saved to encrypted store", fg=typer.colors.GREEN)
 
 
@@ -58,7 +115,7 @@ def get_secret(
     Use --show to display the actual secret value. JSON secrets are displayed
     in formatted output.
     """
-    value = SecretManager.get(name)
+    value = secrets_store.get_secret(name)
 
     if value is None:
         typer.secho(f"❌ Secret '{name}' not found", fg=typer.colors.RED)
@@ -96,14 +153,14 @@ def list_secrets(
 
     from ofx.settings import get_console
     console = get_console()
-    secrets = SecretManager.list()
+    secrets = secrets_store.list_secrets()
 
     if not secrets:
         typer.secho("No secrets found", fg=typer.colors.YELLOW)
         return
 
     # Apply filters
-    filtered_secrets = {}
+    filtered_secrets: Dict[str, Any] = {}
     for name, value in secrets.items():
         # Search filter
         if search and search.lower() not in name.lower():
@@ -166,13 +223,13 @@ def search_secrets(
 
     from ofx.settings import get_console
     console = get_console()
-    secrets = SecretManager.list()
+    secrets = secrets_store.list_secrets()
 
     if not secrets:
         typer.secho("No secrets found", fg=typer.colors.YELLOW)
         return
 
-    matches = {}
+    matches: Dict[str, Any] = {}
 
     for name, value in secrets.items():
         if fnmatch.fnmatch(name.lower(), pattern.lower()):
@@ -233,11 +290,12 @@ def _format_file_size(size_bytes: int) -> str:
     if size_bytes == 0:
         return "0 B"
 
+    size = float(size_bytes)
     for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024.0
-    return f"{size_bytes:.1f} TB"
+        if size < 1024.0:
+            return f"{size:.1f} {unit}"
+        size /= 1024.0
+    return f"{size:.1f} TB"
 
 
 def _format_secret_value(value) -> str:
@@ -257,15 +315,25 @@ def _format_secret_value(value) -> str:
 def delete_secret(
     name: str = typer.Argument(..., help="Secret name"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+    backup_to: Path | None = typer.Option(
+        None,
+        "--backup-to",
+        help="Create an encrypted backup before deletion (path to .enc file)",
+    ),
+    backup_overwrite: bool = typer.Option(
+        False, "--backup-overwrite", help="Overwrite backup file if it exists"
+    ),
 ):
     """Delete a secret from encrypted storage.
 
     Permanently removes a secret by name. Requires confirmation unless
     --force is used. This action cannot be undone.
     """
-    if not SecretManager.exists(name):
+    if not secrets_store.secret_exists(name):
         typer.secho(f"❌ Secret '{name}' not found", fg=typer.colors.RED)
         raise typer.Exit(code=1)
+
+    _maybe_backup_store(backup_to, None, backup_overwrite)
 
     if not force:
         confirm = typer.confirm(f"Delete secret '{name}'?")
@@ -273,7 +341,7 @@ def delete_secret(
             typer.secho("Cancelled", fg=typer.colors.YELLOW)
             raise typer.Exit()
 
-    SecretManager.delete(name)
+    secrets_store.delete_secret(name)
     typer.secho(f"✅ Secret '{name}' deleted", fg=typer.colors.GREEN)
 
 
@@ -282,6 +350,14 @@ def export_secrets(
     output: Path = typer.Option(
         Path("secrets.json"), "--output", "-o", help="Output file path"
     ),
+    backup_to: Path | None = typer.Option(
+        None,
+        "--backup-to",
+        help="Create an encrypted backup before export (path to .enc file)",
+    ),
+    backup_overwrite: bool = typer.Option(
+        False, "--backup-overwrite", help="Overwrite backup file if it exists"
+    ),
 ):
     """Export secrets to a file for backup or migration.
 
@@ -289,7 +365,8 @@ def export_secrets(
     file secure as it contains sensitive data. Use the backup command for
     encrypted backups instead.
     """
-    count = SecretManager.export(output)
+    _maybe_backup_store(backup_to, None, backup_overwrite)
+    count = secrets_store.export_secrets(output)
 
     if not count:
         typer.secho("No secrets to export", fg=typer.colors.YELLOW)
@@ -309,6 +386,14 @@ def import_secrets(
     overwrite: bool = typer.Option(
         False, "--overwrite", help="Overwrite existing secrets"
     ),
+    backup_to: Path | None = typer.Option(
+        None,
+        "--backup-to",
+        help="Create an encrypted backup before import (path to .enc file)",
+    ),
+    backup_overwrite: bool = typer.Option(
+        False, "--backup-overwrite", help="Overwrite backup file if it exists"
+    ),
 ):
     """Import secrets from a JSON file.
 
@@ -316,7 +401,8 @@ def import_secrets(
     storage. By default, skips existing secrets unless --overwrite is used.
     """
     try:
-        imported = SecretManager.import_from_file(file, overwrite)
+        _maybe_backup_store(backup_to, None, backup_overwrite)
+        imported = secrets_store.import_secrets_from_file(file, overwrite)
     except FileNotFoundError as e:
         typer.secho(f"❌ {e}", fg=typer.colors.RED)
         raise typer.Exit(code=1) from e
@@ -330,17 +416,27 @@ def import_secrets(
 @app.command("clear")
 def clear_secrets(
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+    backup_to: Path | None = typer.Option(
+        None,
+        "--backup-to",
+        help="Create an encrypted backup before clearing (path to .enc file)",
+    ),
+    backup_overwrite: bool = typer.Option(
+        False, "--backup-overwrite", help="Overwrite backup file if it exists"
+    ),
 ):
     """Clear all secrets from encrypted storage.
 
     Permanently removes ALL secrets from the store. Requires confirmation
     unless --force is used. This action cannot be undone.
     """
-    secrets = SecretManager.list()
+    secrets = secrets_store.list_secrets()
 
     if not secrets:
         typer.secho("No secrets to clear", fg=typer.colors.YELLOW)
         return
+
+    _maybe_backup_store(backup_to, None, backup_overwrite)
 
     if not force:
         confirm = typer.confirm(f"Delete ALL {len(secrets)} secrets?")
@@ -348,7 +444,7 @@ def clear_secrets(
             typer.secho("Cancelled", fg=typer.colors.YELLOW)
             raise typer.Exit()
 
-    SecretManager.clear()
+    secrets_store.clear_secrets()
     typer.secho("✅ All secrets cleared", fg=typer.colors.GREEN)
 
 
@@ -359,7 +455,7 @@ def show_store_location():
     Shows the location of the encrypted secrets file and basic information
     about the store. Useful for backup operations or troubleshooting.
     """
-    info = SecretManager.get_store_info()
+    info = secrets_store.get_store_info()
 
     typer.secho(f"Secret store: {info['path']}", fg=typer.colors.CYAN)
     typer.secho(
@@ -381,6 +477,24 @@ def backup_secrets(
     force: bool = typer.Option(
         False, "--force", "-f", help="Overwrite existing backup file"
     ),
+    backup_to: Path | None = typer.Option(
+        None,
+        "--backup-to",
+        help="Create an encrypted backup of current store before writing new backup",
+    ),
+    backup_overwrite: bool = typer.Option(
+        False, "--backup-overwrite", help="Overwrite pre-backup file if it exists"
+    ),
+    passphrase: str | None = typer.Option(
+        None,
+        "--passphrase",
+        "-p",
+        envvar="OFX_SECRETS_PASSPHRASE",
+        help="Passphrase to unlock the secret store (env: OFX_SECRETS_PASSPHRASE)",
+    ),
+    ask_passphrase: bool = typer.Option(
+        False, "--ask-passphrase", help="Prompt for passphrase interactively"
+    ),
 ):
     """Create an encrypted backup of all secrets with timestamp.
 
@@ -388,7 +502,9 @@ def backup_secrets(
     If no output file is specified, generates a filename with current timestamp.
     The backup can be restored using the restore command.
     """
-    secrets = SecretManager.list()
+    resolved_passphrase = _resolve_passphrase(passphrase, ask_passphrase)
+    _maybe_backup_store(backup_to, resolved_passphrase, backup_overwrite)
+    secrets = secrets_store.list_secrets(passphrase=resolved_passphrase)
 
     if not secrets:
         typer.secho("No secrets to backup", fg=typer.colors.YELLOW)
@@ -408,7 +524,7 @@ def backup_secrets(
 
     try:
         # Create encrypted backup
-        count = SecretManager.backup(output_file)
+        count = secrets_store.backup_secrets(output_file, passphrase=resolved_passphrase)
         typer.secho(f"✅ Created encrypted backup: {output_file}", fg=typer.colors.GREEN)
         typer.secho(f"[INFO] Backed up {count} secrets", fg=typer.colors.CYAN)
 
@@ -430,6 +546,24 @@ def restore_secrets(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be restored without actually doing it"
     ),
+    backup_to: Path | None = typer.Option(
+        None,
+        "--backup-to",
+        help="Create an encrypted backup of current store before restoring",
+    ),
+    backup_overwrite: bool = typer.Option(
+        False, "--backup-overwrite", help="Overwrite pre-backup file if it exists"
+    ),
+    passphrase: str | None = typer.Option(
+        None,
+        "--passphrase",
+        "-p",
+        envvar="OFX_SECRETS_PASSPHRASE",
+        help="Passphrase to unlock the secret store (env: OFX_SECRETS_PASSPHRASE)",
+    ),
+    ask_passphrase: bool = typer.Option(
+        False, "--ask-passphrase", help="Prompt for passphrase interactively"
+    ),
 ):
     """Restore secrets from an encrypted backup file.
 
@@ -441,13 +575,16 @@ def restore_secrets(
 
     from ofx.settings import get_console
     console = get_console()
+    resolved_passphrase = _resolve_passphrase(passphrase, ask_passphrase)
     if not backup_file.exists():
         typer.secho(f"❌ Backup file not found: {backup_file}", fg=typer.colors.RED)
         raise typer.Exit(1)
 
+    _maybe_backup_store(backup_to, resolved_passphrase, backup_overwrite)
+
     try:
         # Get backup info without restoring
-        info = SecretManager.get_backup_info(backup_file)
+        info = secrets_store.get_backup_info(backup_file, passphrase=resolved_passphrase)
 
         typer.secho(f"[INFO] Backup file: {backup_file}", fg=typer.colors.CYAN)
         typer.secho(f"[DATE] Created: {info['created']}", fg=typer.colors.CYAN)
@@ -461,7 +598,7 @@ def restore_secrets(
             table.add_column("Type", style="magenta")
             table.add_column("Status", style="yellow")
 
-            current_secrets = SecretManager.list()
+            current_secrets = secrets_store.list_secrets(passphrase=resolved_passphrase)
             for name, value in info['secrets'].items():
                 status = "New" if name not in current_secrets else ("Overwrite" if overwrite else "Skip")
                 secret_type = _get_secret_type(value)
@@ -471,7 +608,7 @@ def restore_secrets(
             return
 
         # Check for conflicts
-        current_secrets = SecretManager.list()
+        current_secrets = secrets_store.list_secrets(passphrase=resolved_passphrase)
         conflicts = []
         for name in info['secrets'].keys():
             if name in current_secrets and not overwrite:
@@ -489,7 +626,9 @@ def restore_secrets(
                 raise typer.Exit()
 
         # Perform restore
-        restored_count = SecretManager.restore(backup_file, overwrite)
+        restored_count = secrets_store.restore_secrets(
+            backup_file, overwrite, passphrase=resolved_passphrase
+        )
         typer.secho(f"✅ Restored {restored_count} secrets from backup", fg=typer.colors.GREEN)
 
         if conflicts:
@@ -528,7 +667,7 @@ def show_backup_history(
     backup_files = []
     for file_path in directory.glob("*.enc"):
         try:
-            info = SecretManager.get_backup_info(file_path)
+            info = secrets_store.get_backup_info(file_path)
             backup_files.append({
                 'path': file_path,
                 'created': info['created'],
@@ -587,7 +726,7 @@ def migrate_from_files(
             typer.secho("Cancelled", fg=typer.colors.YELLOW)
             raise typer.Exit()
 
-    migrated = SecretManager.migrate_from_directory(SECRETS_DIR)
+    migrated = secrets_store.migrate_from_directory(SECRETS_DIR)
 
     typer.secho(
         f"✅ Migrated {migrated} secrets to encrypted store", fg=typer.colors.GREEN

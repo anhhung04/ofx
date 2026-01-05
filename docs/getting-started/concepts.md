@@ -1,409 +1,82 @@
 # Basic Concepts
 
-Understanding OFX core concepts helps you build powerful workflows efficiently.
+Essentials for writing OFX workflows.
 
 ## Workflow
 
-A **workflow** is the top-level container that defines a complete automation process.
-
-### Structure
-
-```yaml
-name: workflow-name
-description: Workflow description
-
-inputs:
-  # Input parameters
-  
-secrets:
-  # Required secrets
-
-jobs:
-  # Job definitions
-  
-hooks:
-  # Lifecycle hooks
-```
-
-### Key Properties
-
-- **name** - Unique identifier (required)
-- **description** - Human-readable description
-- **inputs** - User-provided parameters
-- **secrets** - Sensitive configuration
-- **jobs** - Execution units
-- **hooks** - Lifecycle callbacks
-
-## Job
-
-A **job** is an independent unit of work within a workflow.
-
-### Characteristics
-
-- Jobs run **sequentially** by default
-- Can have **dependencies** (run after other jobs)
-- Contain **steps** that execute in order
-- Can define their own **hooks** and **environment**
-
-### Example
-
-```yaml
-jobs:
-  recon:
-    name: Reconnaissance
-    steps:
-      - name: Scan ports
-        run: nmap -p- ${{ inputs.target }}
-  
-  exploit:
-    name: Exploitation
-    needs: [recon]  # Runs after recon
-    steps:
-      - name: Launch exploit
-        run: python exploit.py
-```
-
-## Step
-
-A **step** is the smallest unit of execution within a job.
-
-### Types of Steps
-
-1. **Shell Command** (default)
-```yaml
-- name: Run command
-  run: echo "Hello"
-```
-
-2. **Python Script**
-```yaml
-- name: Python code
-  script:
-  script: |
-    print("Hello from Python")
-```
-
-3. **Bash Script**
-```yaml
-- name: Bash script
-  language: bash
-  script: |
-    #!/bin/bash
-    echo "Hello from Bash"
-```
-
-### Step Properties
-
-- **name** - Step description
-- **run** - Shell command (for shell steps)
-- **script** - Code content (for script steps)
-- **language** - Script language (python, bash, etc.)
-- **timeout** - Maximum execution time
-- **retry** - Retry configuration
-- **continue_on_error** - Don't fail job on error
-
-## Inputs
-
-**Inputs** are parameters passed to workflows at runtime.
-
-### Definition
-
-```yaml
-inputs:
-  target:
-    description: Target host or IP
-    required: true
-    default: "127.0.0.1"
-  
-  ports:
-    description: Ports to scan
-    required: false
-    default: "80,443"
-```
-
-### Usage
-
-**In workflow:**
-```yaml
-steps:
-  - run: nmap -p ${{ inputs.ports }} ${{ inputs.target }}
-```
-
-**From CLI:**
-```bash
-ofx flow run scan --input target=example.com --input ports=22,80,443
-```
-
-### Input Properties
-
-- **description** - Help text
-- **required** - Must be provided
-- **default** - Fallback value
-- **type** - Data type (string, number, boolean)
-
-## Secrets
-
-**Secrets** are encrypted sensitive data (API keys, passwords, tokens).
-
-### Definition
-
-```yaml
-secrets:
-  api_key:
-    description: API authentication key
-    required: true
-  
-  password:
-    description: Admin password
-    required: false
-```
-
-### Usage
-
-**Store secret:**
-```bash
-ofx secret set API_KEY
-# Enter value when prompted
-```
-
-**In workflow:**
-```yaml
-steps:
-  - run: curl -H "Authorization: Bearer ${{ secrets.api_key }}"
-```
-
-### Secret Properties
-
-- Stored in **encrypted file** (~/.config/ofx/secrets.enc)
-- **Never** logged or displayed
-- Automatically loaded from secret store
-- Can be provided via environment variables
-
-## Hooks
-
-**Hooks** are callbacks that execute at specific lifecycle events.
-
-### Hook Types
-
-1. **Status Hooks**
-```yaml
-hooks:
-  on_start:
-    - name: Starting message
-      run: echo "Starting..."
-  
-  on_success:
-    - name: Success message
-      run: echo "Success!"
-  
-  on_failure:
-    - name: Failure message
-      run: echo "Failed!"
-```
-
-2. **Lifecycle Hooks**
-```yaml
-hooks:
-  before_jobs:
-    - name: Setup
-      run: echo "Before jobs"
-  
-  after_jobs:
-    - name: Teardown
-      run: echo "After jobs"
-```
-
-3. **Command Hooks**
-```yaml
-hooks:
-  before_command:
-    - name: Pre-command
-      run: echo "Before each command"
-  
-  after_command:
-    - name: Post-command
-      run: echo "After each command"
-```
-
-### Hook Scopes
-
-Hooks can be defined at:
-
-1. **Workflow level** - Affect entire workflow
-2. **Job level** - Affect specific job
-3. **Step level** - Affect specific step
-
-### Hook Propagation
-
-Hooks **propagate** from parent to child:
-
-```
-Workflow hooks
-    ↓
-Job hooks (inherit + add)
-    ↓
-Step hooks (inherit + add)
-```
+- Top-level YAML: `name`, optional `description`, `inputs`, `secrets`, `jobs`, optional `hooks`.
+- Keep IDs simple; use `needs` for ordering.
 
 Example:
 ```yaml
-hooks:
-  on_start:
-    - name: Workflow start
-      run: echo "Workflow start"  # Runs once
-
+name: workflow-name
 jobs:
-  job1:
-    name: First Job
-    hooks:
-      on_start:
-        - name: Job start
-          run: echo "Job1 start"  # Runs at job start
+  recon:
     steps:
-      - name: Step 1
-        run: echo "Doing work"
+      - run: nmap -sV ${{ inputs.target }}
+  exploit:
+    needs: [recon]
+    steps:
+      - run: python exploit.py
 ```
 
-See [Hooks Guide](../guide/hooks.md) for more details.
+## Job
+
+- Runs steps sequentially; `needs` controls dependencies; can set env and hooks.
+- Fail-fast unless steps set `continue_on_error`.
+
+## Step
+
+- Exactly one of `run`, `script`, `uses`.
+- Key fields: `name`, `timeout`, `retry`/`retry_delay`, `continue_on_error`, `working_directory`, `env`.
+```yaml
+- name: Bash command
+  run: echo "Hello"
+- name: Python
+  script: |
+    print("hi")
+- name: Subflow
+  uses: ./other.yml
+```
+
+## Inputs
+
+- Defined under `inputs`; use via `${{ inputs.key }}`.
+- Provide via CLI: `--input key=value` (JSON parsed when possible).
+```yaml
+inputs:
+  target:
+    required: true
+    default: "127.0.0.1"
+```
+
+## Secrets
+
+- Defined under `secrets`; use via `${{ secrets.KEY }}`.
+- Provide with `--secret KEY=val` or store via `ofx secret set KEY`.
+
+## Hooks
+
+- Optional `hooks` at workflow/job/step; propagate downward.
+- Common: `on_start`, `on_success`, `on_failure`, `before_step`, `after_step`.
 
 ## Templates
 
-**Templates** enable dynamic configuration using Jinja2 syntax.
-
-### Template Syntax
-
-```yaml
-${{ expression }}
-```
-
-### Available Variables
-
-1. **inputs** - User inputs
-```yaml
-${{ inputs.target }}
-```
-
-2. **secrets** - Secret values
-```yaml
-${{ secrets.api_key }}
-```
-
-3. **ctx** - Context variables
-```yaml
-${{ ctx.workflow.name }}
-${{ ctx.job.name }}
-${{ ctx.step.name }}
-```
-
-### Built-in Functions
-
-**Tool Installation:**
-```yaml
-- run: ${{ uv_install('requests') }}
-- run: ${{ pip_install('numpy') }}
-- run: ${{ go_install('github.com/projectdiscovery/subfinder') }}
-- run: ${{ npm_install('wappalyzer') }}
-```
-
-**Path Operations:**
-```yaml
-- run: ${{ output_path('results.txt') }}
-- run: ${{ workflow_path() }}
-```
-
-### Template Examples
-
-**Conditional execution:**
-```yaml
-steps:
-  - name: Debug mode
-    run: |
-      {% if inputs.debug %}
-      echo "Debug enabled"
-      {% endif %}
-```
-
-**Loops:**
-```yaml
-steps:
-  - name: Scan multiple targets
-    run: |
-      {% for target in inputs.targets.split(',') %}
-      nmap {{ target }}
-      {% endfor %}
-```
-
-See [Templates Guide](../guide/templates.md) for more details.
-
-## Template Resolution
-
-Templates are resolved **before execution** in this order:
-
-1. **Workflow level** - Inputs, secrets loaded
-2. **Job level** - Job context available
-3. **Step level** - Full context available
-
-**Example:**
-
-```yaml
-inputs:
-  target: "example.com"
-
-jobs:
-  scan:
-    envs:
-      TARGET: ${{ inputs.target }}  # Resolved to "example.com"
-    steps:
-      - name: Scan
-        run: nmap $TARGET  # Uses resolved env var
-```
+- Jinja2 `${{ ... }}` on strings/nums/bools/maps/lists.
+- Variables: `inputs`, `secrets`, `envs`, `ctx` (run_id, output_path, workflow/job/step metadata).
+- Helpers: `uv_install`, `go_install`, `npm_install`, `cargo_install`, `tools_dir`, `tools_bin_dir`, `file_read`, `file_write`.
 
 ## Dependencies
 
-Jobs can depend on other jobs using `needs`:
-
-### Simple Dependency
-
+- Use `needs` to gate jobs; jobs without `needs` run in parallel.
 ```yaml
-name: Sequential Jobs
 jobs:
-  job1:
-    name: First Job
-    steps:
-      - name: Execute first task
-        run: echo "First"
-  
-  job2:
-    name: Second Job
-    needs: [job1]  # Waits for job1
-    steps:
-      - name: Execute second task
-        run: echo "Second"
+  a:
+    steps: [{ run: echo a }]
+  b:
+    needs: [a]
+    steps: [{ run: echo b }]
 ```
-
-### Multiple Dependencies
-
-```yaml
-name: Parallel with Convergence
-jobs:
-  recon:
-    name: Reconnaissance
-    steps:
-      - name: Run recon
-        run: echo "Recon"
-  
-  scan:
-    name: Port Scan
-    steps:
-      - name: Run scan
-        run: echo "Scan"
-  
-  analyze:
-    name: Analysis
-    needs: [recon, scan]  # Waits for both
-    steps:
-      - name: Analyze results
-        run: echo "Analyze"
 ```
 
 ### Execution Flow

@@ -54,7 +54,7 @@ Use `ofx flow run <workflow.yml> --debug` to see stage breakdowns and job execut
 
 ## Best Practices
 - Use `needs:` to control dependencies and avoid race conditions
-- Only one interactive job per stage (see [Interactive Mode](../interactive-mode/index.md))
+- Only one interactive job per stage (see [Interactive Mode](../interactive-mode.md))
 - Group independent jobs for faster execution
 
 ---

@@ -35,7 +35,7 @@ dist:
 
 docs:
 	@echo "Building documentation..."
-	uv run --extra docs mkdocs build -f mkdocs.yml -d src/ofx/data/site
+	uv run --extra docs mkdocs build --clean --strict -f mkdocs.yml -d src/ofx/data/site
 	@echo "Documentation built successfully in: src/ofx/data/site/"
 	@echo "To serve locally, run: uv run ofx docs serve"
 
