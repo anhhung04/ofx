@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-COPY pyproject.toml setup.py README.md ./
+COPY pyproject.toml setup.py README.md MANIFEST.in ./
 COPY src/ ./src/
 
 RUN --mount=type=cache,target=/root/.cache/uv uv build --wheel --out-dir /build/dist
 
 FROM scratch AS export
-COPY --from=builder /build/dist/*.whl /
+COPY --from=builder /build/dist/* /

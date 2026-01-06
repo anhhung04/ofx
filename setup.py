@@ -2,6 +2,7 @@
 import os
 import sys
 import sysconfig
+from pathlib import Path
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "src", "ofx")))
 
@@ -9,18 +10,24 @@ from _version import __version__
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py as _build_py
+from setuptools.command.build import build as _build
 
 
-def get_exclude_files(root_dir):
-    exclude_files = []
-    for root, dirs, files in os.walk(root_dir):
-        for filename in files:
-            file_path = os.path.join(root, filename)
-            exclude_files.append(file_path)
-    return exclude_files
+def collect_data_files(root: Path) -> list[str]:
+    """Enumerate data files while skipping cache artifacts."""
+    files: list[str] = []
+    for path in root.rglob("*"):
+        if path.is_dir():
+            continue
+        rel = path.relative_to("src/ofx")
+        if "__pycache__" in rel.parts or rel.suffix == ".pyc":
+            continue
+        files.append(rel.as_posix())
+    return files
 
 
-EXCLUDE_FILES = get_exclude_files("src/ofx/data")
+EXCLUDE_FILES = [str(p) for p in Path("src/ofx/data").rglob("*") if p.is_file()]
+DATA_FILES = collect_data_files(Path("src/ofx/data"))
 
 
 def get_ext_paths(root_dir, exclude_files):
@@ -62,10 +69,17 @@ class build_py(_build_py):
         return filtered_modules
 
 
+class build(_build):
+    # Force build_py to run so package_data is included even when only extensions exist
+    def has_pure_modules(self):
+        return True
+
+
 setup(
     name="ofx",
     version=__version__,
-    packages=find_packages(),
+    packages=find_packages(where="src"),
+    include_package_data=True,
     ext_modules=cythonize(
         get_ext_paths("src/ofx", EXCLUDE_FILES),
         compiler_directives={
@@ -76,11 +90,10 @@ setup(
     # Register our custom commands
     cmdclass={
         "build_py": build_py,
+        "build": build,
     },
     package_dir={"": "src"},
-    package_data={
-        "ofx": ["data/*", "data/**/*"],
-    },
+    package_data={"ofx": DATA_FILES},
     extra_compile_args=["-O3"],
 )
 

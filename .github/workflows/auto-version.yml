@@ -1,0 +1,162 @@
+name: Auto Version Tagging
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+    branches: [main, master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  bump-and-tag:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Gitea actions runner honors the token input for private repos
+          token: ${{ secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Ensure base branch and tags are present
+        run: |
+          git fetch origin "${{ github.event.pull_request.base.ref }}:${{ github.event.pull_request.base.ref }}" --tags --force
+
+      - name: Determine next version and update file
+        id: version
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          VERSION_FILE: src/ofx/_version.py
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          base_ref = os.environ.get("BASE_REF", "")
+          version_file = Path(os.environ.get("VERSION_FILE", "src/ofx/_version.py"))
+          output_file = Path(os.environ.get("GITHUB_OUTPUT", "/dev/stdout"))
+
+          if not base_ref:
+              raise SystemExit("BASE_REF is required to compute commit range")
+
+          # Collect commit messages between base branch and current HEAD
+          try:
+              log_output = subprocess.check_output(
+                  [
+                      "git",
+                      "log",
+                      "--no-merges",
+                      "--format=%B%n----ENDCOMMIT----",
+                      f"{base_ref}..HEAD",
+                  ],
+                  text=True,
+              )
+          except subprocess.CalledProcessError as exc:
+              raise SystemExit(f"Failed to read commits for range {base_ref}..HEAD: {exc}")
+
+          entries = [entry.strip() for entry in log_output.split("----ENDCOMMIT----") if entry.strip()]
+
+          bump_priority = {"patch": 0, "minor": 1, "major": 2}
+          bump_level = "patch"
+
+          for entry in entries:
+              lower_entry = entry.lower()
+              lines = [line for line in entry.splitlines() if line.strip()]
+              subject = lines[0] if lines else ""
+              subject_lower = subject.lower()
+
+              has_breaking = "breaking change" in lower_entry or bool(re.search(r"!\s*:", subject))
+              if has_breaking:
+                  bump_level = "major"
+                  break
+
+              is_feat = subject_lower.startswith("feat")
+              if is_feat and bump_priority[bump_level] < bump_priority["minor"]:
+                  bump_level = "minor"
+                  continue
+
+          version_text = version_file.read_text().splitlines()
+          current_version = None
+          for line in version_text:
+              match = re.search(r"__version__\s*=\s*\"(?P<ver>[0-9]+\.[0-9]+\.[0-9]+)\"", line)
+              if match:
+                  current_version = match.group("ver")
+                  break
+
+          if current_version is None:
+              raise SystemExit(f"Could not find __version__ in {version_file}")
+
+          major, minor, patch = [int(part) for part in current_version.split(".")]
+
+          if bump_level == "major":
+              major, minor, patch = major + 1, 0, 0
+          elif bump_level == "minor":
+              minor, patch = minor + 1, 0
+          else:
+              patch += 1
+
+          next_version = f"{major}.{minor}.{patch}"
+
+          changed = current_version != next_version
+
+          if changed:
+              new_content = "\n".join(
+                  [
+                      '"""Version information."""',
+                      "",
+                      f'__version__ = "{next_version}"',
+                      "",
+                  ]
+              )
+              version_file.write_text(new_content)
+
+          with output_file.open("a") as fh:
+              fh.write(f"current_version={current_version}\n")
+              fh.write(f"next_version={next_version}\n")
+              fh.write(f"bump_level={bump_level}\n")
+              fh.write(f"changed={'true' if changed else 'false'}\n")
+          PY
+
+      - name: Configure git user
+        if: steps.version.outputs.changed == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit version bump
+        if: steps.version.outputs.changed == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          git add src/ofx/_version.py
+          git commit -m "chore: bump version to v${{ steps.version.outputs.next_version }}"
+
+      - name: Create tag
+        if: steps.version.outputs.changed == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          git tag v${{ steps.version.outputs.next_version }}
+
+      - name: Push changes and tag (Gitea)
+        if: steps.version.outputs.changed == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GITEA_TOKEN: ${{ secrets.GITEA_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          : "${GITEA_TOKEN:?GITEA_TOKEN (or fallback GITHUB_TOKEN) is required to push tags}"
+          origin_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}.git"
+          git remote set-url origin "https://${GITEA_TOKEN}@${origin_url#https://}"
+          : "${HEAD_REF:?head ref missing}"
+          git push origin HEAD:refs/heads/${HEAD_REF}
+          git push origin v${{ steps.version.outputs.next_version }}
+
+      - name: Report calculated version
+        run: |
+          echo "Current: ${{ steps.version.outputs.current_version }}" \
+            && echo "Next: v${{ steps.version.outputs.next_version }}" \
+            && echo "Bump level: ${{ steps.version.outputs.bump_level }}"
