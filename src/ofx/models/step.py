@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 class Step(BaseModel):
-    name: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Name of the step")
+    name: str = Field(default="", description="Name of the step")
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for the step",
@@ -49,6 +49,9 @@ class Step(BaseModel):
     script: str | None = Field(
         None, description="Script to run in the step (if applicable)"
     )
+    script_file: str | None = Field(
+        None, description="Path to a Python script file to execute"
+    )
     run_with: dict[str, Any] = Field(
         default_factory=dict,
         description="Define inputs for the step if it uses a reusable workflow",
@@ -74,12 +77,12 @@ class Step(BaseModel):
         """Ensure that exactly one of 'run', 'script', or 'uses' is defined."""
         defined_fields = sum(
             1
-            for field in ["run", "script", "uses"]
+            for field in ["run", "script", "uses", "script_file"]
             if getattr(values, field) is not None
         )
         if defined_fields != 1:
             raise ValueError(
-                f"Step '{values.name}' must have exactly one of 'run', 'script', or 'uses' defined."
+                f"Step '{values.name}' must have exactly one of 'run', 'script', 'script_file', or 'uses' defined."
             )
         return values
 
@@ -99,13 +102,11 @@ class Step(BaseModel):
         if step_path.is_absolute():
             return step_path
 
-        # Get job working directory
         if job_defaults and job_defaults.run.working_directory:
             job_path = Path(job_defaults.run.working_directory)
             if job_path.is_absolute():
                 return job_path / step_path
 
-        # Get workflow working directory
         if workflow_defaults and workflow_defaults.run.working_directory:
             workflow_path = Path(workflow_defaults.run.working_directory)
             job_rel_path = Path(job_defaults.run.working_directory) if job_defaults else Path(".")

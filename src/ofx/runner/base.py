@@ -7,6 +7,8 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
+import asyncio
+
 import aiofiles
 import aiofiles.os as aio_os
 from jinja2 import Template
@@ -113,7 +115,8 @@ class BaseRunner:
                     "sudo": sudo,
                     "tools_dir": tools_dir_str,
                     "tools_bin_dir": tools_bin_dir_str,
-                    "fapt": f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends',
+                    "workflow_dir": self.ctx_vars.workflow_dir.absolute().as_posix(),
+                    "fapt": lambda app: f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends {app}',
                     "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
                     "go_install": lambda pkg: f"GO111MODULE=on GOBIN={tools_bin_dir_str} go install {pkg}@latest",
                     "cargo_install": lambda name: f"cargo install --root {tools_dir_str} {name}",
@@ -168,20 +171,32 @@ class BaseRunner:
                     logger.warning(self._produce_log(f"Could not convert template result '{result[:100]}' back to float"))
                     return result
 
-            logger.debug(self._produce_log(f"Resolved template: {value} -> {result}"))
+            logger.debug(self._produce_log(f"Resolved template:\n{value}\n==>\n{result}\n"))
             return result
         except Exception as e:
-            logger.error(self._produce_log(f"Error resolving template for value '{str(value)[:100]}': {e}"))
+            logger.error(self._produce_log(f"Error resolving template for value '{str(value)[:100]}':\n{e}"))
             return value
 
     async def _resolve_template_fields(self, fields: list[str]) -> None:
-        """Resolve templates in specific model fields"""
-        if not self.model:
-            return
+        """Resolve templates in specific model fields in parallel"""
+        if not self.model or not fields:
+            return None
+
+        tasks = []
+        target_fields = []
         for field in fields:
             if hasattr(self.model, field):
-                resolved_value = await self._resolve_template(getattr(self.model, field))
-                setattr(self._model, field, resolved_value)
+                tasks.append(asyncio.create_task(self._resolve_template(getattr(self.model, field))))
+                target_fields.append(field)
+
+        if not tasks:
+            return None
+
+        results = await asyncio.gather(*tasks)
+        for field, resolved_value in zip(target_fields, results):
+            setattr(self._model, field, resolved_value)
+
+        return None
 
     def _produce_log(self, message: Any) -> str:
         raise NotImplementedError("Subclasses should implement _produce_log method.")

@@ -76,6 +76,7 @@ jobs:
 ## See Also
 - [Steps](steps.md)
 - [Workflow Stages](../workflows/stages.md)
+- [Script files](script-file.md)
 
 ## Job Fields
 - `steps`: List of steps to execute

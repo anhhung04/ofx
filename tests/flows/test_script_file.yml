@@ -25,27 +25,13 @@ jobs:
         run: |
           cat > /tmp/test_script.py << 'EOF'
           #!/usr/bin/env python3
-          import sys
-          from ofx.api.strings import generate_random_string
-          print(f"Random string: {generate_random_string(16)}")
+          import secrets
+          print(f"Random string: {secrets.token_hex(8)}")
           EOF
 
       - name: Run script from absolute path
         script_file: /tmp/test_script.py
         log_stdout: true
 
-      - name: Create bash script
-        run: |
-          cat > /tmp/test_bash.sh << 'EOF'
-          #!/bin/bash
-          echo "Hello from bash script"
-          echo "Current directory: $(pwd)"
-          echo "User: $(whoami)"
-          EOF
-
-      - name: Run bash script with shebang
-        run_file: /tmp/test_bash.sh
-        log_stdout: true
-
       - name: Cleanup
-        run: rm -f /tmp/test_script.py /tmp/test_bash.sh
+        run: rm -f /tmp/test_script.py

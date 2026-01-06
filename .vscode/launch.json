@@ -18,6 +18,9 @@
                 "./tests/flows/test",
             ],
             "cwd": "${workspaceFolder}",
+            "env": {
+                "OFX_SKIP_CYTHONIZE": "1"
+            }
         }
     ]
 }

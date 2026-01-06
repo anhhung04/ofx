@@ -37,6 +37,7 @@ jobs:
 
 ## Advanced Usage
 - Use `script:` to run inline Python code
+- Use `script_file:` to execute an existing Python file (resolved relative to the workflow directory)
 - Use `outputs:` to pass data between steps and jobs
 - Use `run_if:` for conditional logic (see [Hooks & Conditions](../hooks.md))
 
@@ -63,3 +64,4 @@ jobs:
 ## See Also
 - [Jobs](jobs.md)
 - [Outputs](outputs.md)
+- [Script files](script-file.md)

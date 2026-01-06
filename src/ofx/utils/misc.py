@@ -178,6 +178,7 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tu
             flow = Workflow.model_validate(
                 yaml.safe_load(flow_path.read_text().strip())
             )
+            flow.workflow_path = flow_path
             return flow_path, flow
         except Exception as e:
             logger.error(f"Failed to load workflow from file {workflow_name}: {e}")
@@ -189,9 +190,11 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tu
         path = find_valid_flow(directory, workflow_name)
         if path:
             try:
-                return path, Workflow.model_validate(
+                workflow =  Workflow.model_validate(
                     yaml.safe_load(path.read_text().strip())
                 )
+                workflow.workflow_path = path
+                return path, workflow
             except Exception as e:
                 logger.error(f"Failed to load workflow from {path}: {e}")
                 raise RuntimeError(f"Failed to load workflow from {path}: {e}") from e
@@ -200,7 +203,8 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tu
         try:
             response = httpx.get(workflow_name)
             response.raise_for_status()
-            return Path.cwd(), Workflow.model_validate(yaml.safe_load(response.text.strip()))
+            workflow = Workflow.model_validate(yaml.safe_load(response.text.strip()))
+            return workflow.workflow_path, workflow
         except Exception as e:
             logger.error(f"Failed to fetch workflow from {workflow_name}: {e}")
             raise RuntimeError(
@@ -215,9 +219,11 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tu
         main_path = find_valid_flow(git_path, "main")
         if not main_path:
             raise RuntimeError(f"No main workflow file found in cloned repo {workflow_name}.")
-        return main_path, Workflow.model_validate(
+        workflow =  Workflow.model_validate(
             yaml.safe_load(main_path.read_text().strip())
         )
+        workflow.workflow_path = main_path
+        return main_path, workflow
     except Exception as e:
         logger.error(f"Failed to load workflow from git repo {workflow_name}: {e}")
         raise RuntimeError(

@@ -58,6 +58,7 @@ class FlowRunHandler:
                     output_path=self.output,
                     secrets=load_secrets(SECRETS_DIR),
                     workflow_dirs=add_workflow_dir(DEFAULT_WORKFLOWS_DIRS, flow_path.parent),
+                    workflow_dir=flow_path.parent,
                 ),
             )
             res = await runner.run()

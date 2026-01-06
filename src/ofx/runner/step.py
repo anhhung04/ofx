@@ -62,6 +62,7 @@ class StepRunner(BaseRunner):
                 "run_with",
                 "uses",
                 "script",
+                "script_file",
                 "shell",
                 "log_stdout",
                 "log_stdout",
@@ -83,14 +84,17 @@ class StepRunner(BaseRunner):
         if stdout and isinstance(stdout, str):
             logger.info(self._produce_log(f"stdout:\n{stdout}"))
             if self.model.log_stdout:
+                log_path = self.ctx_vars.output_path / "logs"
+                log_path.mkdir(parents=True, exist_ok=True)
                 tmp_file = (
-                    self.ctx_vars.output_path
+                    log_path
                     / f"stdout_{self.parent.model.jid}_{self.model.name.replace(' ', '-')}__{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 )
                 logger.info(
                     self._produce_log(f"Saving output of '{self.parent.model.jid}'[{self.model.step_index}] to {tmp_file}")
                 )
                 async with aiofiles.open(tmp_file, "w") as f:
+                    await f.write(f"cmd: {self.model.run or self.model.script or self.model.uses}\n===\n")
                     await f.write(stdout)
         logger.debug(self._produce_log(f"result: {self._result}"))
         await self._run_hook("after_step")
@@ -195,6 +199,7 @@ class StepRunner(BaseRunner):
                         else self.model.secrets
                     ),
                     workflow_dirs=workflow_dirs,
+                    workflow_dir=flow_path.parent,
                 ),
                 parent=self,
             )
@@ -220,12 +225,41 @@ class StepRunner(BaseRunner):
                 timeout_minutes=self.model.timeout,
                 interactive=is_interactive,
             )
+        elif self._run_type is RunType.SCRIPT_FILE:
+            import sys
+
+            assert self.model.script_file is not None, "script_file cannot be None for SCRIPT_FILE run type"
+
+            script_path = Path(self.model.script_file.strip()).expanduser()
+            if script_path.suffix != ".py":
+                script_path = script_path.with_suffix(".py")
+
+            if not script_path.is_absolute():
+                base_dir = getattr(self.ctx_vars, "workflow_dir", Path.cwd())
+                script_path = (base_dir / script_path).resolve()
+
+            if not script_path.exists():
+                raise FileNotFoundError(f"Script file '{script_path}' does not exist.")
+
+            cmd = f"{sys.executable} {script_path.as_posix()}"
+            working_dir = script_path.parent
+
+            return CommandRunner(
+                cmd,
+                self.ctx_vars.model_copy(),
+                shell=self.model.shell,
+                working_dir=working_dir,
+                parent=self,
+                timeout_minutes=self.model.timeout,
+                interactive=is_interactive,
+            )
+        
         else:
             raise ValueError(f"Invalid run type '{self._run_type}' for step '{self.model.name}'.")
 
     def _produce_log(self, message: Any) -> str:
         msg = str(message)
-        step_idx = self._model.step_index if hasattr(self._model, 'step_index') else '?'
+        step_idx = str(self._model.step_index) if hasattr(self._model, 'step_index') else '?'
         msg = f"'step{step_idx}' › {msg}"
         if self.parent:
             return self.parent._produce_log(msg)
@@ -243,11 +277,13 @@ class StepRunner(BaseRunner):
             return RunType.WORKFLOW
         elif step.script:
             return RunType.SCRIPT
+        elif step.script_file:
+            return RunType.SCRIPT_FILE
         elif step.run:
             return RunType.COMMAND
         raise ValueError(
             self._produce_log(
-                f"Step '{step.name}' must have one of 'run', 'script', or 'uses' defined."
+                f"Step '{step.name}' must have one of 'run', 'script', 'script_file', or 'uses' defined."
             )
         )
 

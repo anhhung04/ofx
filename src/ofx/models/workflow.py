@@ -1,6 +1,6 @@
 import re
 from typing import Any, Literal
-
+from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
 from ofx.models import DefaultConfig
@@ -66,6 +66,9 @@ class Workflow(BaseModel):
         None,
         description="Workflow call configuration for reusable workflows",
     )
+    workflow_path:  Path = Field(
+        Path.cwd(), description="Path to the workflow file (set automatically)"
+    )
     tools: None | dict[str, str | ToolConfig] = Field(
         None, description="Tools configuration - can be simple command string or ToolConfig object"
     )
@@ -86,7 +89,7 @@ class Workflow(BaseModel):
         - Job IDs have a valid pattern.
         - Job dependencies exist.
         - There are no circular dependencies.
-        - jid and step_index are populated.
+        - jid, step.name and step_index are populated.
         """
         job_keys = self.jobs.keys()
         for job_id, job in self.jobs.items():
@@ -107,6 +110,8 @@ class Workflow(BaseModel):
             self.jobs[job_id].jid = job_id
             for idx, step in enumerate(job.steps):
                 step.step_index = idx
+                if not step.name:
+                    step.name = f"{job_id}-step-{idx}"
 
         # Check for circular dependencies
         graph = {job_id: set(job.needs) for job_id, job in self.jobs.items()}
