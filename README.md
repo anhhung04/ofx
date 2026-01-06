@@ -1,37 +1,46 @@
 # Offensive Flow Executor (OFX)
 
-A workflow execution framework for red teaming operations.
+Workflow runner for red-team style automation: YAML workflows, parallel jobs, lifecycle hooks, templating, and built-in APIs for recon, exploitation, and post-exploitation.
 
-Automate complex attack chains with YAML workflows, lifecycle hooks, and built-in APIs for exploitation, reconnaissance, and post-exploitation.
+- **Docs:** https://anhhung04.github.io/ofx/
 
-## Key Features
-
-- YAML Workflows: Define multi-step operations with job dependencies and parallel execution
-- Lifecycle Hooks: Execute custom code at any workflow stage
-- Red Teaming APIs: Pre-built classes for common tasks
-- Template Engine: Dynamic configuration using Jinja2
-- Async Execution: Run jobs in parallel for faster operations
-
-## Installation
+## Install (uv)
 
 ```bash
-pip install -e .
+uv pip install --upgrade pip  # optional but recommended
+uv pip install ofx
+# or editable from source
+uv pip install -e .
 ```
 
 ## Quick Start
 
-Create a workflow YAML file and run it:
+Create a workflow and run it:
 
 ```bash
-ofx flow run your_workflow.yml --input target=example.com
+cat << EOF > hello.yml
+name: hello-ofx
+jobs:
+  hello:
+    steps:
+      - run: echo "Hello, OFX!"
+EOF
+
+ofx flow run hello.yml
 ```
 
-See [Documentation](docs/index.md) for detailed guides, API reference, and examples.
+## Core Capabilities
+
+- YAML workflows with job dependencies and parallel stages
+- Lifecycle hooks on steps, plus retries/timeouts and conditional `run_if`
+- Built-in APIs for recon/exploitation/post-exploitation tasks
+- Jinja templating for inputs, envs, secrets, and commands
+- Async-first engine with rich progress output
 
 ## Contributing
 
-Contributions welcome! Use semantic commit messages. See docs for development setup.
+PRs welcome. Use semantic commit messages. See the docs for development setup.
 
 ## License
 
-See LICENSE file for details.
+See `LICENSE` for details.
