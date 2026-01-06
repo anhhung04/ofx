@@ -31,55 +31,34 @@ jobs:
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           VERSION_FILE: src/ofx/_version.py
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           python - <<'PY'
           import os
           import re
-          import subprocess
           from pathlib import Path
 
-          base_ref = os.environ.get("BASE_REF", "")
           version_file = Path(os.environ.get("VERSION_FILE", "src/ofx/_version.py"))
           output_file = Path(os.environ.get("GITHUB_OUTPUT", "/dev/stdout"))
+          pr_title = os.environ.get("PR_TITLE", "").strip()
+          base_ref = os.environ.get("BASE_REF", "")
 
           if not base_ref:
-              raise SystemExit("BASE_REF is required to compute commit range")
+            raise SystemExit("BASE_REF is required to compute commit range")
 
-          # Collect commit messages between base branch and current HEAD
-          try:
-              log_output = subprocess.check_output(
-                  [
-                      "git",
-                      "log",
-                      "--no-merges",
-                      "--format=%B%n----ENDCOMMIT----",
-                      f"{base_ref}..HEAD",
-                  ],
-                  text=True,
-              )
-          except subprocess.CalledProcessError as exc:
-              raise SystemExit(f"Failed to read commits for range {base_ref}..HEAD: {exc}")
-
-          entries = [entry.strip() for entry in log_output.split("----ENDCOMMIT----") if entry.strip()]
+          if not pr_title:
+            raise SystemExit("PR_TITLE is required to determine bump level")
 
           bump_priority = {"patch": 0, "minor": 1, "major": 2}
           bump_level = "patch"
 
-          for entry in entries:
-              lower_entry = entry.lower()
-              lines = [line for line in entry.splitlines() if line.strip()]
-              subject = lines[0] if lines else ""
-              subject_lower = subject.lower()
+          subject_lower = pr_title.lower()
 
-              has_breaking = "breaking change" in lower_entry or bool(re.search(r"!\s*:", subject))
-              if has_breaking:
-                  bump_level = "major"
-                  break
-
-              is_feat = subject_lower.startswith("feat")
-              if is_feat and bump_priority[bump_level] < bump_priority["minor"]:
-                  bump_level = "minor"
-                  continue
+          has_breaking = "breaking change" in subject_lower or bool(re.search(r"!\s*:", pr_title))
+          if has_breaking:
+            bump_level = "major"
+          elif subject_lower.startswith("feat"):
+            bump_level = "minor"
 
           version_text = version_file.read_text().splitlines()
           current_version = None
@@ -138,7 +117,7 @@ jobs:
       - name: Create tag
         if: steps.version.outputs.changed == 'true' && github.event.pull_request.head.repo.full_name == github.repository
         run: |
-          git tag v${{ steps.version.outputs.next_version }}
+          git tag -f v${{ steps.version.outputs.next_version }}
 
       - name: Push changes and tag (Gitea)
         if: steps.version.outputs.changed == 'true' && github.event.pull_request.head.repo.full_name == github.repository
@@ -147,13 +126,14 @@ jobs:
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           : "${GITEA_TOKEN:?GITEA_TOKEN (or fallback GITHUB_TOKEN) is required to push tags}"
           origin_url="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY}.git"
           git remote set-url origin "https://${GITEA_TOKEN}@${origin_url#https://}"
           : "${HEAD_REF:?head ref missing}"
           git push origin HEAD:refs/heads/${HEAD_REF}
-          git push origin v${{ steps.version.outputs.next_version }}
+          git push --force --tags origin
 
       - name: Report calculated version
         run: |
