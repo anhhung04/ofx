@@ -56,8 +56,6 @@ class ExampleConnector(ShellcodeConnector):
         Returns:
             True if connector can be used
         """
-        # This example connector is always available
-        # In real connectors, check dependencies here
         return True
 
     def generate(
@@ -99,7 +97,6 @@ class ExampleConnector(ShellcodeConnector):
             ValueError: If parameters are invalid
             RuntimeError: If generation fails
         """
-        # Validate parameters
         self.validate_parameters(os_target, arch, shell_type, ip, port)
 
         logger.info(
@@ -107,29 +104,19 @@ class ExampleConnector(ShellcodeConnector):
             f"{ip}:{port}"
         )
 
-        # Example: Create a simple shellcode structure
-        # In real connectors, this would call actual shellcode generation
-
-        # NOP sled (0x90)
         nop_sled = b'\x90' * 10
 
-        # Embed IP address (as bytes)
         ip_bytes = bytes(map(int, ip.split('.')))
 
-        # Embed port (big-endian)
         port_bytes = struct.pack('>H', port)
 
-        # Marker bytes
-        marker = b'\xCC' * 4  # INT3 breakpoint (not real shellcode!)
+        marker = b'\xCC' * 4
 
-        # Combine
         shellcode = nop_sled + ip_bytes + port_bytes + marker
 
-        # Handle bad character avoidance
         if bad_chars:
             for bad_char in bad_chars:
                 if isinstance(bad_char, str):
-                    # Convert hex string like "\x00" to bytes
                     bad_byte = bytes.fromhex(bad_char.replace('\\x', ''))
                 else:
                     bad_byte = bad_char.encode() if isinstance(bad_char, str) else bad_char
@@ -140,10 +127,8 @@ class ExampleConnector(ShellcodeConnector):
                         "Real connectors should handle this properly."
                     )
 
-        # Apply encoding if requested
         if encoder:
             logger.info(f"Encoding requested: {encoder} (not implemented in example)")
-            # Real connectors would implement encoding here
 
         logger.info(f"Generated example shellcode: {len(shellcode)} bytes")
 
@@ -155,7 +140,6 @@ class ExampleConnector(ShellcodeConnector):
         Returns:
             List of (os_target, arch, shell_type) tuples
         """
-        # Example connector supports only a few combinations
         return [
             ('linux', 'x64', 'reverse'),
             ('linux', 'x86', 'reverse'),
@@ -164,7 +148,6 @@ class ExampleConnector(ShellcodeConnector):
         ]
 
 
-# You can define multiple connectors in one file
 class AnotherExampleConnector(ShellcodeConnector):
     """Another example showing how multiple connectors can coexist."""
 
@@ -176,21 +159,7 @@ class AnotherExampleConnector(ShellcodeConnector):
 
     def generate(self, *args, **kwargs) -> bytes:
         """Generate shellcode."""
-        # Simple placeholder
         return b'\x90' * 100
 
     def get_supported_platforms(self) -> list[tuple[str, str, str]]:
         return [('linux', 'x64', 'bind')]
-
-
-# IMPORTANT: This connector is for demonstration only!
-# It does NOT generate real working shellcode.
-#
-# To use this as a template:
-# 1. Rename the class and file
-# 2. Implement real shellcode generation in generate()
-# 3. Update _check_availability() to verify dependencies
-# 4. List supported platforms in get_supported_platforms()
-#
-# The connector will be automatically discovered and registered
-# when you use the shellcode API.

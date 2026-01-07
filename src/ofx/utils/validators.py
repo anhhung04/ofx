@@ -53,14 +53,12 @@ class WorkflowValidator:
 
         job_ids = set(self.workflow.jobs.keys())
 
-        # Check for duplicate job IDs
         if len(job_ids) != len(self.workflow.jobs):
             self.errors.append(ValidationError(
                 "error",
                 "Duplicate job IDs found"
             ))
 
-        # Check job names
         for job_id, job in self.workflow.jobs.items():
             if not job.name and not job_id:
                 self.warnings.append(ValidationError(
@@ -81,7 +79,6 @@ class WorkflowValidator:
         jobs = self.workflow.jobs
         job_ids = set(jobs.keys())
 
-        # Build dependency graph
         graph: dict[str, list[str]] = {jid: [] for jid in job_ids}
 
         for job_id, job in jobs.items():
@@ -89,7 +86,6 @@ class WorkflowValidator:
                 needs = [job.needs] if isinstance(job.needs, str) else job.needs
 
                 for dep in needs:
-                    # Check if dependency exists
                     if dep not in job_ids:
                         self.errors.append(ValidationError(
                             "error",
@@ -99,7 +95,6 @@ class WorkflowValidator:
                     else:
                         graph[dep].append(job_id)
 
-        # Detect circular dependencies using DFS
         visited = set()
         rec_stack = set()
 
@@ -132,7 +127,6 @@ class WorkflowValidator:
             for idx, step in enumerate(job.steps):
                 step_loc = f"jobs.{job_id}.steps[{idx}]"
 
-                # Check that step has at least one action
                 has_action = any([step.run, step.script, step.uses])
                 if not has_action:
                     self.errors.append(ValidationError(
@@ -141,7 +135,6 @@ class WorkflowValidator:
                         step_loc
                     ))
 
-                # Check for multiple actions
                 action_count = sum([bool(step.run), bool(step.script), bool(step.uses)])
                 if action_count > 1:
                     self.errors.append(ValidationError(
@@ -150,7 +143,6 @@ class WorkflowValidator:
                         step_loc
                     ))
 
-                # Validate 'uses' path
                 if step.uses:
                     if not isinstance(step.uses, str):
                         self.errors.append(ValidationError(
@@ -159,7 +151,6 @@ class WorkflowValidator:
                             step_loc
                         ))
 
-                # Check timeout
                 if step.timeout and step.timeout <= 0:
                     self.warnings.append(ValidationError(
                         "warning",
@@ -169,10 +160,8 @@ class WorkflowValidator:
 
     def _validate_template_syntax(self):
         """Validate template syntax (basic check)."""
-        # This is a simplified check - full validation would need Jinja2 parsing
         def check_templates(obj: Any, location: str = ""):
             if isinstance(obj, str):
-                # Check for unclosed templates
                 open_count = obj.count("${{")
                 close_count = obj.count("}}")
                 if open_count != close_count:
@@ -192,9 +181,6 @@ class WorkflowValidator:
 
     def _validate_secrets(self):
         """Validate secret references."""
-        # Check if secrets are referenced but not defined in workflow
-        # This is a basic check - full validation would need runtime context
-
         for job_id, job in self.workflow.jobs.items():
             for idx, step in enumerate(job.steps):
                 if step.secrets and step.secrets != "inherit":
@@ -209,7 +195,6 @@ class WorkflowValidator:
         """Validate workflow inputs."""
         if self.workflow.inputs:
             for input_name, input_spec in self.workflow.inputs.items():
-                # Check required inputs have no default
                 if input_spec.required and input_spec.default is not None:
                     self.warnings.append(ValidationError(
                         "warning",

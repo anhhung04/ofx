@@ -96,7 +96,6 @@ class Workflow(BaseModel):
             if not re.match(r"^[a-zA-Z0-9_-]+$", job_id):
                 raise ValueError(f"Job ID '{job_id}' does not have a valid pattern. Use letters, numbers, hyphens, and underscores.")
 
-            # Check if dependencies exist
             needs = job.needs
             if isinstance(needs, str):
                 needs = [needs]
@@ -106,14 +105,12 @@ class Workflow(BaseModel):
                         f"Job '{job_id}' has a dependency on '{dep}', which does not exist."
                     )
 
-            # Populate internal fields
             self.jobs[job_id].jid = job_id
             for idx, step in enumerate(job.steps):
                 step.step_index = idx
                 if not step.name:
                     step.name = f"{job_id}-step-{idx}"
 
-        # Check for circular dependencies
         graph = {job_id: set(job.needs) for job_id, job in self.jobs.items()}
         path = set()
         visited = set()

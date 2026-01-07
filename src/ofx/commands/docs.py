@@ -558,15 +558,15 @@ def create_function_tree(
 @app.command()
 def api(
     module: Annotated[
-        str | None,
+        str,
         typer.Option("--module", "-m", help="Optional API module name to document"),
-    ] = None,
+    ] = "",
     function: Annotated[
-        str | None,
+        str,
         typer.Option(
             "--function", "-f", help="The specific function to display details for"
         ),
-    ] = None,
+    ] = "",
     list_modules: Annotated[
         bool, typer.Option("--list", "-l", help="List all available API modules")
     ] = False,
@@ -710,8 +710,14 @@ def api(
 
 @app.command()
 def serve(
-    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host to bind to"),
-    port: int = typer.Option(8888, "--port", "-p", help="Port to bind to"),
+    host: Annotated[
+        str,
+        typer.Option("--host", "-h", help="Host to bind to"),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option("--port", "-p", help="Port to bind to"),
+    ] = 8888,
 ):
     """
     Serve the documentation using Python HTTP server.

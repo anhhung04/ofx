@@ -1,14 +1,22 @@
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+try:
+    from cython import cython_function_or_method  # type: ignore
+except Exception:  # pragma: no cover - cython optional
+    cython_function_or_method = type(lambda: None)
 
 if TYPE_CHECKING:
     from ofx.models import DefaultConfig
 
 
 class Step(BaseModel):
+    model_config: ClassVar = ConfigDict(
+        ignored_types=(type(lambda: None), cython_function_or_method)
+    )
     name: str = Field(default="", description="Name of the step")
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
@@ -73,18 +81,18 @@ class Step(BaseModel):
     )
 
     @model_validator(mode="after")
-    def check_run_type(cls, values):
+    def check_run_type(self):
         """Ensure that exactly one of 'run', 'script', or 'uses' is defined."""
         defined_fields = sum(
             1
             for field in ["run", "script", "uses", "script_file"]
-            if getattr(values, field) is not None
+            if getattr(self, field) is not None
         )
         if defined_fields != 1:
             raise ValueError(
-                f"Step '{values.name}' must have exactly one of 'run', 'script', 'script_file', or 'uses' defined."
+                f"Step '{self.name}' must have exactly one of 'run', 'script', 'script_file', or 'uses' defined."
             )
-        return values
+        return self
 
     def get_shell(self, job_defaults: Optional["DefaultConfig"] = None, workflow_defaults: Optional["DefaultConfig"] = None) -> str | None:
         """Get shell from step, job defaults, or workflow defaults."""

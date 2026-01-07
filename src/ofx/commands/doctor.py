@@ -1,41 +1,22 @@
-"""
-Doctor command to check system dependencies, tools, and overall system health.
-
-This module provides a suite of commands to diagnose the local environment, ensuring that
-all necessary dependencies are available and correctly configured for OFX to run smoothly.
-It checks for essential and recommended tools, Python packages, system resources,
-network connectivity, and OFX-specific configurations.
-"""
+"""Doctor command to check system dependencies, tools, and overall system health."""
 
 import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Annotated
 
 import typer
+from rich.panel import Panel
+
+from ofx.settings import get_console
 
 app = typer.Typer()
+console = get_console()
 
 NAME = "doctor"
 HELP = "Diagnose and check system dependencies for OFX."
 
-_console = None
-
-
-def get_console():
-    """
-    Returns a lazily-initialized Rich console object with red team theme.
-    This prevents the `rich` library from being imported at startup, speeding up
-    the CLI's initial response time.
-    """
-    global _console
-    if _console is None:
-        from ofx.settings import get_console as get_themed_console
-        _console = get_themed_console()
-    return _console
-
-
-# Configuration for essential command-line tools
 ESSENTIAL_TOOLS = {
     "git": {
         "check": "git --version",
@@ -52,7 +33,6 @@ ESSENTIAL_TOOLS = {
     },
 }
 
-# Configuration for recommended (but not essential) command-line tools
 RECOMMENDED_TOOLS = {
     "uv": {
         "check": "uv --version",
@@ -82,11 +62,8 @@ RECOMMENDED_TOOLS = {
 
 
 def get_linux_distro() -> str:
-    """
-    Detect the Linux distribution to determine the appropriate package manager.
-    """
+    """Detect the Linux distribution to determine the appropriate package manager."""
     try:
-        # Check /etc/os-release first (systemd standard)
         with open("/etc/os-release") as f:
             for line in f:
                 if line.startswith("ID="):
@@ -102,7 +79,6 @@ def get_linux_distro() -> str:
     except FileNotFoundError:
         pass
 
-    # Fallback to checking for package managers
     if shutil.which("apt"):
         return "debian"
     elif shutil.which("dnf"):
@@ -225,13 +201,15 @@ def check_ofx_directories() -> dict[str, tuple[bool, str]]:
 
 @app.command(name="check")
 def run_all_checks(
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed information.")
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show detailed information."),
+    ] = False,
 ):
     """
     Run a comprehensive check of all system dependencies and configurations for OFX.
     """
     console = get_console()
-    from rich.panel import Panel
     from rich.table import Table
 
     all_ok = True
@@ -283,20 +261,32 @@ def run_all_checks(
     console.print(system_table)
 
     if all_ok:
-        console.print(Panel("[bold green]✅ All checks passed[/bold green]", title="Report"))
+        console.print(Panel(
+            "[bold green]All system checks passed successfully![/bold green]\n"
+            "[dim]Your OFX installation is ready to use[/dim]",
+            title="[bold green][OK] System Health Report[/bold green]",
+            border_style="green"
+        ))
     else:
-        console.print(Panel("[bold red]❌ Some checks failed[/bold red]", title="Report"))
+        console.print(Panel(
+            "[bold red]Some system checks failed[/bold red]\n"
+            "[yellow]Please review the errors above and install missing dependencies[/yellow]",
+            title="[bold red][X] System Health Report[/bold red]",
+            border_style="red"
+        ))
         raise typer.Exit(code=1)
 
 @app.command()
 def install_help(
-    tool: str | None = typer.Argument(None, help="Show help for a specific tool.")
+    tool: Annotated[
+        str,
+        typer.Argument(help="Show help for a specific tool."),
+    ] = "",
 ):
     """
     Provide installation instructions for required tools.
     """
     console = get_console()
-    from rich.panel import Panel
 
     distro = get_linux_distro()
     all_tools = {**ESSENTIAL_TOOLS, **RECOMMENDED_TOOLS}

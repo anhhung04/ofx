@@ -69,14 +69,13 @@ class ConnectorRegistry:
 
         Returns:
             Connector instance or None if not found
-        """        # Ensure discovery has happened
+        """
         if not self._initial_discovery_done:
             self.discover_connectors()
-                # Check instance cache first
+
         if name in self._instances:
             return self._instances[name]
 
-        # Create new instance from class
         if name in self._connectors:
             connector_class = self._connectors[name]
             instance = connector_class()
@@ -97,7 +96,6 @@ class ConnectorRegistry:
 
         available = []
 
-        # Check all registered classes
         for name, connector_class in self._connectors.items():
             if name not in self._instances:
                 self._instances[name] = connector_class()
@@ -106,7 +104,6 @@ class ConnectorRegistry:
             if connector.is_available():
                 available.append(connector)
 
-        # Check registered instances
         for connector in self._instances.values():
             if connector.name not in self._connectors and connector.is_available():
                 available.append(connector)
@@ -150,7 +147,6 @@ class ConnectorRegistry:
 
         discovered_count = 0
 
-        # Default connector directory
         connector_dir = DATA_DIR / "webshell" / "connectors"
         if connector_dir not in self._user_connector_paths:
             self._user_connector_paths.insert(0, connector_dir)
@@ -161,7 +157,6 @@ class ConnectorRegistry:
                 logger.debug(f"Created connector directory: {connector_path}")
                 continue
 
-            # Find all Python files
             for py_file in connector_path.glob("*.py"):
                 if py_file.name.startswith("_") or py_file.name == "__init__.py":
                     continue
@@ -251,12 +246,10 @@ class ConnectorRegistry:
         if not self._initial_discovery_done:
             self.discover_connectors()
 
-        # Try template first
         template = self.get_connector('template')
         if template and template.is_available():
             return template
 
-        # Fall back to any available connector
         available = self.get_available_connectors()
         if available:
             return available[0]
@@ -264,7 +257,6 @@ class ConnectorRegistry:
         return None
 
 
-# Global registry instance
 _global_registry = ConnectorRegistry()
 
 

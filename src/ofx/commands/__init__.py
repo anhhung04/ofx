@@ -52,5 +52,9 @@ def main():
         typer.echo(BANNER)
         app()
     except Exception as e:
+        import traceback
+        import os
+        if os.getenv("OFX_DEBUG"):
+            traceback.print_exc()
         typer.secho(f"🚨 Error: {e}", fg=typer.colors.RED, bold=True)
         return typer.Exit(code=1)

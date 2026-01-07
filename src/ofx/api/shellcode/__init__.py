@@ -47,7 +47,6 @@ from .generator import ShellGenerator
 
 logger = logging.getLogger(settings.app_branding)
 
-# Lazy connector discovery - will run on first use
 _registry = get_registry()
 
 __all__ = [
@@ -216,18 +215,15 @@ class OSShellcodes:
         dll_inj_funcs = dll_inj_funcs or []
         shell_args = shell_args or {}
 
-        # Handle legacy use_msfvenom parameter
         if use_msfvenom and connector_name is None:
             connector_name = "msfvenom"
 
-        # Warn about deprecated Docker option
         if use_docker_compile:
             logger.warning(
                 "use_docker_compile is deprecated. Docker-based compilation has been "
                 "removed. Use connectors instead. Falling back to connector-based generation."
             )
 
-        # Determine which connector to use
         connector = None
         if connector_name:
             connector = _registry.get_connector(connector_name)

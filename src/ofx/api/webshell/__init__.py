@@ -47,8 +47,6 @@ from ofx.api.webshell.shell.aspx import AspxShell
 from ofx.api.webshell.shell.jsp import JspShell
 from ofx.api.webshell.shell.php import PhpShell
 
-# Lazy connector discovery - will run on first use
-
 __all__ = [
     "WebShell",
     "PhpShell",
@@ -108,7 +106,6 @@ def generate_webshell(
         >>> # Use specific connector
         >>> shell = generate_webshell('php', password='x', connector_name='template')
     """
-    # Use connector if specified
     if connector_name:
         connector = get_connector(connector_name)
         if connector is None:
@@ -126,7 +123,6 @@ def generate_webshell(
             inline=inline,
         )
 
-    # Default: use template connector (backward compatible)
     language = language.lower()
 
     shells = {

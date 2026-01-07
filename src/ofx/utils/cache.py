@@ -14,23 +14,18 @@ def async_lru_cache(maxsize: int = 128):
 
         @wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> T:
-            # Create a hashable key from args and kwargs
             key = (args, tuple(sorted(kwargs.items())))
 
             if key in cache:
-                # Move to end (most recently used)
                 cache_order.remove(key)
                 cache_order.append(key)
                 return cache[key]
 
-            # Execute function
             result = await func(*args, **kwargs)
 
-            # Store in cache
             cache[key] = result
             cache_order.append(key)
 
-            # Evict oldest if cache is full
             if len(cache) > maxsize:
                 oldest = cache_order.pop(0)
                 del cache[oldest]
@@ -43,7 +38,7 @@ def async_lru_cache(maxsize: int = 128):
 
         def cache_info() -> dict[str, Any]:
             return {
-                'hits': 0,  # Could be tracked if needed
+                'hits': 0,
                 'misses': 0,
                 'maxsize': maxsize,
                 'currsize': len(cache)

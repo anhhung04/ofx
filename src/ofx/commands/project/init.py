@@ -29,10 +29,10 @@ class InitHandler:
         self,
         base: str,
         is_multiphase: bool,
-        remote_type: str | None = None,
+        remote_type: str = "",
         remote_config: dict[str, Any] | None = None,
         encrypt: bool = False,
-        encryption_key: str | None = None,
+        encryption_key: str = "",
     ):
         self._base_path = Path(base)
         self._is_multiphase = is_multiphase

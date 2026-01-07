@@ -41,7 +41,6 @@ class SecretStore:
 
             self.store_path = SECRETS_STORE
 
-        # prefer per-instance passphrase, fallback to environment
         env_passphrase = os.getenv("OFX_SECRETS_PASSPHRASE")
         self._passphrase = passphrase or env_passphrase
 

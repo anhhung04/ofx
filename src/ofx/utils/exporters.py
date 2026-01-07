@@ -45,7 +45,6 @@ class CSVExporter(ResultExporter):
         """Export results to CSV file."""
         output_path = Path(output_path).with_suffix('.csv')
 
-        # Flatten nested structure for CSV
         rows = self._flatten_results(self.results)
 
         if not rows:
@@ -276,7 +275,6 @@ class MarkdownExporter(ResultExporter):
             "",
         ]
 
-        # Add jobs section
         jobs = self.results.get('outputs', {}).get('jobs', {})
         if jobs:
             md_lines.extend(["## Jobs", ""])
@@ -293,7 +291,6 @@ class MarkdownExporter(ResultExporter):
                         md_lines.append(f"- **{step.get('name', step_id)}**: {step.get('status', 'unknown')}")
                     md_lines.append("")
 
-        # Add outputs section
         outputs = self.results.get('outputs', {})
         if outputs:
             md_lines.extend(["## Outputs", "", "```json"])

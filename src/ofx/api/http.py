@@ -16,7 +16,6 @@ import httpx
 from ofx.exceptions import APIError
 from ofx.exceptions import TimeoutError as OFXTimeoutError
 
-# Singleton HTTP clients with connection pooling
 _http_client: httpx.Client | None = None
 
 
@@ -182,7 +181,6 @@ def post(
     return _post()
 
 
-# Keep backwards compatibility
 requests = httpx
 
 

@@ -1,13 +1,21 @@
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+try:
+    from cython import cython_function_or_method  # type: ignore
+except Exception:  # pragma: no cover - cython optional
+    cython_function_or_method = type(lambda: None)
 
 from ofx.models import DefaultConfig
 from ofx.models.step import Step
 
 
 class Job(BaseModel):
+    model_config: ClassVar = ConfigDict(
+        ignored_types=(type(lambda: None), cython_function_or_method)
+    )
     name: str | None = Field(None, description="Name of the job")
     needs: str | list[str] = Field(
         default_factory=list,

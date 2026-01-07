@@ -1,4 +1,4 @@
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from async_typer import AsyncTyper
@@ -15,24 +15,24 @@ HELP = "Manage and run workflows in the OFX system"
 @app.async_command()
 async def run(
     workflow_name: Annotated[
-        str, typer.Argument(..., help="Name of the workflow to run")
+        str, typer.Argument(help="Name of the workflow to run")
     ],
     input: Annotated[
-        list[str] | None,
+        list[str],
         typer.Option(
             "-i",
             "--input",
             help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
         ),
-    ] = None,
+    ] = [],
     output: Annotated[
-        str | None,
+        str,
         typer.Option(
             "-o",
             "--output",
             help="Output path for the workflow results. If not specified, defaults to the current directory.",
         ),
-    ] = None,
+    ] = "",
     profile: Annotated[
         bool,
         typer.Option(
@@ -54,8 +54,8 @@ async def run(
 @app.command()
 def validate(
     workflow_name: Annotated[
-        str, typer.Argument(..., help="Name of the workflow to validate")
-    ],
+        str, typer.Argument(help="Name of the workflow to validate")
+    ] = "",
 ):
     """Validate a workflow configuration"""
     from ofx.commands.flow.validate import ValidateHandler
@@ -77,13 +77,13 @@ def visualize(
         str, typer.Argument(..., help="Name of the workflow to visualize")
     ],
     output: Annotated[
-        str | None,
+        str,
         typer.Option(
             "-o",
             "--output",
             help="Output path for the visualization file. If not specified, displays in terminal.",
         ),
-    ] = None,
+    ] = "",
     format: Annotated[
         str,
         typer.Option(

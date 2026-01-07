@@ -6,6 +6,3 @@ This directory contains all shellcode connector implementations:
 
 All connectors are automatically discovered by the connector registry.
 """
-
-# This file intentionally left mostly empty
-# Connectors are loaded dynamically by the registry

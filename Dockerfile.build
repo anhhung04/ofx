@@ -19,3 +19,17 @@ RUN --mount=type=cache,target=/root/.cache/uv uv build --wheel --out-dir /build/
 
 FROM scratch AS export
 COPY --from=builder /build/dist/* /
+
+FROM python:3.12-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    UV_COMPILE_BYTECODE=1 \
+    OFX_HOME=/opt/ofx
+
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /build/dist/* /tmp/
+RUN pip install /tmp/ofx.whl && rm /tmp/ofx.whl
+
+WORKDIR /workspace
+ENTRYPOINT ["ofx"]

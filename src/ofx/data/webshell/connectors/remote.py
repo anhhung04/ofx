@@ -38,7 +38,6 @@ class RemoteHTTPConnector(WebshellConnector):
             endpoint: API endpoint path (default: '/api/v1/generate')
             timeout: Request timeout in seconds
         """
-        # Normalize base URL
         base_url = base_url.rstrip('/')
 
         super().__init__(
@@ -90,7 +89,6 @@ class RemoteHTTPConnector(WebshellConnector):
             payload['secret_header'] = secret_header
             payload['secret_value'] = secret_value
 
-        # Add custom parameters
         payload.update(kwargs.get('custom_params', {}))
 
         try:
@@ -120,7 +118,7 @@ class RemoteHTTPConnector(WebshellConnector):
                 f"{self.base_url}/health",
                 timeout=5
             )
-            return response.status_code in (200, 404)  # 404 means server is up
+            return response.status_code in (200, 404)
         except Exception:
             return False
 
@@ -172,7 +170,6 @@ class FileConnector(WebshellConnector):
         """
         self.validate_params(language, password, encoder)
 
-        # Try specific encoder template first
         extensions = {
             'php': 'php',
             'jsp': 'jsp',
@@ -182,7 +179,6 @@ class FileConnector(WebshellConnector):
         }
         ext = extensions.get(language.lower(), language.lower())
 
-        # Try: php_base64.php -> php.php
         template_file = self.template_dir / f"{language}_{encoder}.{ext}"
         if not template_file.exists():
             template_file = self.template_dir / f"{language}.{ext}"
@@ -196,7 +192,6 @@ class FileConnector(WebshellConnector):
         try:
             code = template_file.read_text()
 
-            # Replace template variables
             code = code.replace('{{PASSWORD}}', password)
             code = code.replace('{{ENCODER}}', encoder)
 
@@ -206,7 +201,7 @@ class FileConnector(WebshellConnector):
 
             if inline:
                 code = code.replace('\n', ' ').replace('\t', ' ')
-                code = ' '.join(code.split())  # Collapse multiple spaces
+                code = ' '.join(code.split())
 
             return code
 
@@ -225,7 +220,7 @@ class FileConnector(WebshellConnector):
         languages = set()
         for file in self.template_dir.glob('*'):
             if file.is_file():
-                name = file.stem.split('_')[0]  # php_base64 -> php
+                name = file.stem.split('_')[0]
                 languages.add(name)
 
         return sorted(languages)

@@ -2,8 +2,9 @@ import json
 import logging
 import tempfile
 from pathlib import Path
-
 from datetime import datetime
+
+from rich.panel import Panel
 
 from ofx.runner import RunContext, WorkflowRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, SECRETS_DIR, TEMP_DIR, get_console, settings
@@ -12,7 +13,7 @@ from ofx.utils.misc import find_workflow, load_secrets, add_workflow_dir
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
 
-def get_tmp_dir(output = None) -> Path:
+def get_tmp_dir(output: str = "") -> Path:
     """Get the temporary directory for workflow runs"""
     if output and Path(output).is_dir(): return Path(output)
     return Path(tempfile.mkdtemp(prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_", dir=TEMP_DIR))
@@ -22,11 +23,11 @@ class FlowRunHandler:
         self,
         workflow_name: str,
         input: list[str] | None = None,
-        output: str | None = None,
+        output: str = "",
         profile: bool = False,
     ):
         self.workflow_name = workflow_name
-        self.preprocess_input = input
+        self.preprocess_input = input or []
         self.output = get_tmp_dir(output)
         self.profile = profile
 
@@ -38,16 +39,27 @@ class FlowRunHandler:
         start_time = time.time()
 
         if self.profile:
-            console.print("🔍 Performance profiling enabled")
+            console.print(Panel(
+                "[bold yellow]Performance profiling enabled[/bold yellow]\n"
+                "[dim]Detailed timing data will be collected[/dim]",
+                title="[?] Profiling",
+                border_style="yellow"
+            ))
             profiler = cProfile.Profile()
             profiler.enable()
 
         try:
             self._process_inputs()
-            input_display = self._render_input_as_table() if self.input else "None"
-            console.print(
-                f"✅ Starting to run workflow: '{self.workflow_name}' with input: {input_display}\nto output: '{self.output.as_posix()}'"
-            )
+            input_display = self._render_input_as_table() if self.input else "[dim]No inputs provided[/dim]"
+            
+            console.print(Panel(
+                f"[bold cyan]Workflow:[/bold cyan] {self.workflow_name}\n"
+                f"[bold cyan]Output:[/bold cyan] {self.output.as_posix()}\n"
+                f"[bold cyan]Inputs:[/bold cyan]{input_display}",
+                title="[bold green][>] Workflow Execution[/bold green]",
+                border_style="green",
+                padding=(1, 2)
+            ))
             
             flow_path, workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
             
@@ -64,9 +76,20 @@ class FlowRunHandler:
             res = await runner.run()
 
             if res.status.value != "completed":
-                console.print(
-                    f"❌ Workflow run failed with status: {res.status}, error: {res.error}"
-                )
+                console.print(Panel(
+                    f"[bold]Status:[/bold] [red]{res.status.value}[/red]\n"
+                    f"[bold]Error:[/bold] [red]{res.error}[/red]",
+                    title="[bold red][X] Workflow Failed[/bold red]",
+                    border_style="red",
+                    padding=(1, 2)
+                ))
+            else:
+                console.print(Panel(
+                    f"[bold green]Workflow completed successfully![/bold green]\n"
+                    f"[dim]Output directory: {self.output.as_posix()}[/dim]",
+                    title="[bold green][OK] Success[/bold green]",
+                    border_style="green"
+                ))
 
             result = runner.get_result()
 
@@ -75,26 +98,25 @@ class FlowRunHandler:
                 profiler.disable()
                 end_time = time.time()
 
-                # Print timing summary
                 total_time = end_time - start_time
-                console.print("\n⏱️  Performance Summary:")
-                console.print(f"   Total execution time: {total_time:.2f}s")
-
-                # Generate profile stats
+                
                 stats = pstats.Stats(profiler)
                 stats.sort_stats('cumulative')
 
-                # Save profile to file
                 profile_file = self.output / "profile.prof"
                 profiler.dump_stats(str(profile_file))
-                console.print(f"   Profile saved to: {profile_file}")
+                
+                console.print(Panel(
+                    f"[bold]Total execution time:[/bold] [cyan]{total_time:.2f}s[/cyan]\n"
+                    f"[bold]Profile saved to:[/bold] [dim]{profile_file}[/dim]",
+                    title="[T] Performance Summary",
+                    border_style="cyan"
+                ))
 
-                # Print top 10 functions by cumulative time
-                console.print("   Top 10 functions by cumulative time:")
+                console.print("\n[bold cyan]Top 10 functions by cumulative time:[/bold cyan]")
                 stats.print_stats(10)
 
-                # Print top 10 functions by total time
-                console.print("   Top 10 functions by total time:")
+                console.print("\n[bold cyan]Top 10 functions by total time:[/bold cyan]")
                 stats.print_stats('time', 10)
 
         return result

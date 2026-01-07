@@ -128,10 +128,6 @@ class BaseRunner:
                     "file_write": _write_file,
                     "file_exists": aio_os.path.exists,
                     "env": os.getenv,
-                    "str": str,
-                    "int": int,
-                    "float": float,
-                    "bool": lambda v: str(v).lower() in ("true", "yes", "1", "t", "y"),
                 }
 
             SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()

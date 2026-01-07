@@ -4,24 +4,24 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from rich.panel import Panel
 
 from ofx.models.job import Job
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
-from ofx.settings import BASE_DATA_DIR, settings
+from ofx.settings import BASE_DATA_DIR, settings, get_console
 
 NAME = "dump"
 HELP = "Dump the workflow configuration and outputs."
 
 app = typer.Typer()
+console = get_console()
 
 logger = logging.getLogger(settings.app_branding)
 
 
-def get_property_type(prop_info: dict[str, Any], definitions: dict[str, Any] = None) -> str:
+def get_property_type(prop_info: dict[str, Any], definitions: dict[str, Any] = {}) -> str:
     """Extract property type from schema information."""
-    if definitions is None:
-        definitions = {}
     if "type" in prop_info:
         t = prop_info["type"]
         if t == "any":
@@ -72,17 +72,10 @@ def get_property_default(prop_info: dict[str, Any]) -> str:
 def extract_schema_properties(
     schema: dict[str, Any],
     parent_name: str = "",
-    properties_list: list[dict[str, str]] = None,
-    definitions: dict[str, Any] = None,
+    properties_list: list[dict[str, str]] = [],
+    definitions: dict[str, Any] = {},
 ) -> list[dict[str, str]]:
     """Extract all properties from a schema into a flat list,"""
-    if definitions is None:
-        definitions = {}
-    if properties_list is None:
-        properties_list = []
-    if properties_list is None:
-        properties_list = []
-
     if not definitions and "$defs" in schema:
         definitions = schema.get("$defs", {})
 
@@ -168,7 +161,6 @@ def display_schema_tree(schema: dict[str, Any], title: str, console) -> None:
             label += f" - {prop_desc}"
         child_node = node.add(label)
 
-        # Recurse for nested structures
         if "$ref" in prop_info and definitions:
             ref_name = prop_info["$ref"].split("/")[-1]
             ref_schema = definitions.get(ref_name)
@@ -211,9 +203,7 @@ def dump_workflow():
 
     This command prints a detailed tree of all workflow properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX workflow definitions.
     """
-    from ofx.settings import get_console
     schema = Workflow.model_json_schema()
-    console = get_console()
 
     console.print("\n[bold]Workflow Model Schema[/]\n", style="cyan")
     display_schema_tree(schema, "Workflow Properties", console)
@@ -227,9 +217,7 @@ def dump_job():
 
     This command prints a detailed tree of all job properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX job definitions.
     """
-    from ofx.settings import get_console
     schema = Job.model_json_schema()
-    console = get_console()
 
     console.print("\n[bold]Job Model Schema[/]\n", style="cyan")
     display_schema_tree(schema, "Job Properties", console)
@@ -243,9 +231,7 @@ def dump_step():
 
     This command prints a detailed tree of all step properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX step definitions.
     """
-    from ofx.settings import get_console
     schema = Step.model_json_schema()
-    console = get_console()
 
     console.print("\n[bold]Step Model Schema[/]\n", style="cyan")
     display_schema_tree(schema, "Step Properties", console)
@@ -255,20 +241,18 @@ def dump_step():
 @app.command("schema")
 def export_schema(
     output: Annotated[
-        str | None,
+        str,
         typer.Option(
             "-o", "--output", help="Output file path for the JSON schema (default: workflow_schema.json in data dir)"
         ),
-    ] = None,
+    ] = "",
 ):
     """
     Export the OFX workflow model schema as a JSON file.
 
     By default, writes the full JSON schema for workflows to 'workflow_schema.json' in the data directory. You can specify a custom output path with -o/--output. This schema is suitable for validation, tooling, or integration with editors and CI systems.
     """
-    from ofx.settings import get_console
 
-    console = get_console()
 
     if not output:
         output = (BASE_DATA_DIR / "workflow_schema.json").as_posix()
@@ -277,4 +261,11 @@ def export_schema(
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(schema, indent=2))
-    console.print(f"✅ Workflow schema written to {output_path}")
+    
+    console.print(Panel(
+        f"[bold green]Schema exported successfully[/bold green]\n"
+        f"[bold]File:[/bold] [cyan]{output_path}[/cyan]\n"
+        f"[dim]Use this schema for validation and IDE support[/dim]",
+        title="[OK] Schema Export",
+        border_style="green"
+    ))

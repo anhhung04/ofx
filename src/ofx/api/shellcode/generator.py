@@ -217,7 +217,6 @@ class ShellGenerator:
 
         self._validate_settings(connectback_ip, connectback_port)
 
-        # Try connector-based generation first
         shellcode = self._generate_with_connector(
             shellcode_type,
             connectback_ip,
@@ -227,7 +226,6 @@ class ShellGenerator:
             iterations,
         )
 
-        # Fall back to template-based generation
         if shellcode is None:
             shellcode = self._generate_shellcode(
                 shellcode_type, connectback_ip, connectback_port
@@ -278,7 +276,6 @@ class ShellGenerator:
         Returns:
             Shellcode bytes or None if connector generation fails
         """
-        # Use provided connector or get best available
         connector = self.connector
         if connector is None:
             registry = get_registry()

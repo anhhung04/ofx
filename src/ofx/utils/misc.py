@@ -26,7 +26,6 @@ def populate_env(alt_env=None) -> dict[str, str]:
     current_path = envs.get("PATH", "")
     if _TOOLS_BIN_PATH not in current_path:
         envs["PATH"] = f"{_TOOLS_BIN_PATH}{os.pathsep}{current_path}"
-    # Set UV_TOOL_BIN_DIR for uv tool installations
     envs["UV_TOOL_BIN_DIR"] = _TOOLS_BIN_PATH
     envs.update(alt_env)
     return envs
@@ -75,7 +74,6 @@ def find_parallel_schedule(
 
     Uses topological sorting with BFS for optimal parallelization.
     """
-    # Pre-allocate with dict comprehension for better performance
     graph: dict[str, list[str]] = {job: [] for job in jobs}
     in_degree: dict[str, int] = dict.fromkeys(jobs, 0)
 
@@ -140,7 +138,8 @@ def add_workflow_dir(workflow_dirs: list[Path], path: Path | str) -> list[Path]:
 def find_valid_flow(dir: Path, name: str) -> Path | None:
     """Check if a workflow file exists in the given directory."""
     for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-        flow_path = dir / f"{name}{ext}"
+        flow_path = dir / name
+        flow_path = flow_path.with_suffix(ext)
         if flow_path.exists():
             return flow_path
     else:
@@ -170,7 +169,7 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tu
     
     logger.debug(f"Searching for workflow: {workflow_name} in {search_dirs_tuple}")
     
-    workflow_name = workflow_name.strip().rsplit(".", 1)[0]
+    workflow_name = workflow_name.strip()
     flow_path = find_valid_flow(Path.cwd(), workflow_name)
 
     if flow_path:

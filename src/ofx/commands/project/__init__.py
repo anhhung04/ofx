@@ -1,11 +1,13 @@
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
+from rich.panel import Panel
 
+from ofx.settings import get_console
 from .project_manager import ProjectManager
 
 app = typer.Typer()
-
+console = get_console()
 
 NAME = "project"
 
@@ -21,16 +23,10 @@ def init(
     ] = False,
 ):
     """Init new OFX project"""
-    from rich.panel import Panel
 
-    from ofx.settings import get_console
-    console = get_console()
 
     with console.status(f"[bold green]Creating project '{name}'...[/]", spinner="dots"):
         base = ProjectManager.create_project(name)
-        # Simulate a short delay if needed, or just let it finish immediately
-        # Adding a small sleep just for the spinner to be visible if the operation is instant is optional but nice for UX
-        # import time; time.sleep(0.5)
 
     console.print(f"[bold green]✓[/] Project created: [cyan]{name}[/]")
     console.print(f"[dim]Location: {base}[/]")
@@ -106,7 +102,7 @@ def init(
                         f"\n[yellow]Generated encryption key:[/] {encryption_key}"
                     )
                     console.print(
-                        "[yellow]⚠️  Save this key securely! You'll need it to decrypt files.[/]"
+                        "[yellow][!] Save this key securely! You'll need it to decrypt files.[/]"
                     )
         elif remote_type == "s3":
             bucket = typer.prompt("Enter S3 bucket name")
@@ -131,7 +127,7 @@ def init(
                         f"\n[yellow]Generated encryption key:[/] {encryption_key}"
                     )
                     console.print(
-                        "[yellow]⚠️  Save this key securely! You'll need it to decrypt files.[/]"
+                        "[yellow][!] Save this key securely! You'll need it to decrypt files.[/]"
                     )
         elif remote_type == "webdav":
             webdav_url = typer.prompt("Enter WebDAV URL")
@@ -161,7 +157,7 @@ def init(
                         f"\n[yellow]Generated encryption key:[/] {encryption_key}"
                     )
                     console.print(
-                        "[yellow]⚠️  Save this key securely! You'll need it to decrypt files.[/]"
+                        "[yellow][!] Save this key securely! You'll need it to decrypt files.[/]"
                     )
         elif remote_type == "none":
             remote_type = None
@@ -175,6 +171,7 @@ def init(
         Panel(
             f"[bold green]Project '{name}' initialized successfully![/]",
             border_style="green",
+            title="[OK] Project Created"
         )
     )
 
@@ -194,24 +191,22 @@ def sync(
         ),
     ] = "git",
     remote_config: Annotated[
-        str | None,
+        str,
         typer.Option("--remote-config", "-c", help="Remote config as JSON"),
-    ] = None,
+    ] = "",
     encrypt: Annotated[
         bool,
         typer.Option("--encrypt", "-e", help="Encrypt files before syncing"),
     ] = False,
     encryption_key: Annotated[
-        str | None,
+        str,
         typer.Option(
             "--encryption-key",
             help="Encryption key (or set OFX_ENCRYPTION_KEY env var)",
         ),
-    ] = None,
+    ] = "",
 ):
     """Sync local project with remote storage (git by default)"""
-    from ofx.settings import get_console
-    console = get_console()
     path = ProjectManager.resolve_path(project)
 
     console.print(f"[bold blue]⟳[/] Preparing sync for project: [cyan]{project}[/]")
@@ -230,12 +225,11 @@ def sync(
             encryption_key=encryption_key,
         ).run()
 
-    from rich.panel import Panel
     console.print(
         Panel(
             f"[bold green]Sync completed successfully![/]\nProject: {project}",
             border_style="green",
-            title="✅ Sync Status"
+            title="[OK] Sync Status"
         )
     )
 
@@ -246,17 +240,21 @@ def list():
     """List all projects in default project path"""
     from rich.table import Table
 
-    from ofx.settings import get_console
-    console = get_console()
+    
     projects = ProjectManager.list_projects()
 
     if not projects:
-        console.print("[yellow]No projects found.[/]")
-        console.print(f"[dim]Default path: {ProjectManager._get_default_path()}[/]")
+        console.print(Panel(
+            "[yellow]No projects found[/yellow]\n"
+            f"[dim]Default path: {ProjectManager._get_default_path()}\n"
+            "Use 'ofx project init <name>' to create a project[/dim]",
+            title="[+] Projects",
+            border_style="yellow"
+        ))
         return
 
     table = Table(
-        title=f"OFX Projects ({len(projects)})",
+        title=f"[+] OFX Projects ({len(projects)})",
         show_header=True,
         header_style="bold cyan",
         expand=True,
@@ -277,26 +275,43 @@ def list():
 @app.command(name="rm", hidden=True)
 def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     """Remove a project by name"""
-    from ofx.settings import get_console
-    console = get_console()
+    
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():
-        console.print(f"[red]✗[/] Project not found: [yellow]{name}[/]")
+        console.print(Panel(
+            f"[bold red]Project '{name}' not found[/bold red]\n"
+            "[dim]Use 'ofx project list' to see available projects[/dim]",
+            title="[X] Not Found",
+            border_style="red"
+        ))
         return
 
-    console.print(f"[yellow]⚠[/]  About to delete project: [red]{name}[/]")
-    console.print(f"[dim]Path: {project_path}[/]")
+    console.print(Panel(
+        f"[bold red]Project:[/bold red] {name}\n"
+        f"[bold]Path:[/bold] [dim]{project_path}[/dim]\n\n"
+        "[yellow]This action cannot be undone![/yellow]",
+        title="[!] Delete Project",
+        border_style="red"
+    ))
 
-    if not typer.confirm("Are you sure?"):
-        console.print("[yellow]Deletion cancelled.[/]")
+    if not typer.confirm("Are you sure you want to delete this project?"):
+        console.print("[yellow]Deletion cancelled[/yellow]")
         return
 
     ok = ProjectManager.delete_project(name)
     if ok:
-        console.print(f"[bold green]✓[/] Deleted project: [cyan]{name}[/]")
+        console.print(Panel(
+            f"[bold green]Project '{name}' deleted successfully[/bold green]",
+            title="[OK] Deleted",
+            border_style="green"
+        ))
     else:
-        console.print(f"[red]✗[/] Failed to delete project: [yellow]{name}[/]")
+        console.print(Panel(
+            f"[bold red]Failed to delete project '{name}'[/bold red]",
+            title="[X] Error",
+            border_style="red"
+        ))
 
 
 @app.command(hidden=True)

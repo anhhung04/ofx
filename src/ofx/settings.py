@@ -37,46 +37,30 @@ BANNER = """
 > Handing over to the next generation of red teamers
 """
 
-# Rich theme for red team aesthetic
 RICH_THEME = Theme({
-    # Status indicators
     "success": "bold green",
     "error": "bold red",
     "warning": "bold yellow",
     "info": "bold cyan",
-
-    # Text styles
     "header": "bold red on black",
     "subheader": "bold magenta",
     "dim": "dim white",
     "bright": "bold white",
-
-    # Table styles
     "table.header": "bold red",
     "table.border": "red",
     "table.row": "white",
-
-    # Panel styles
     "panel.border": "red",
     "panel.header": "bold red",
-
-    # Tree styles
     "tree": "red",
     "tree.line": "red",
-
-    # Progress styles
     "progress.description": "cyan",
     "progress.percentage": "green",
     "progress.bar": "red",
-
-    # Specific colors for red team theme
     "danger": "bold red on black",
     "alert": "bold yellow on black",
     "good": "bold green",
     "neutral": "white",
     "muted": "dim bright_black",
-
-    # Command output styles
     "command": "bold cyan",
     "output": "green",
     "stderr": "red",

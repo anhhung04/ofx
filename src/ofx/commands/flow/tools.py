@@ -11,7 +11,7 @@ logger = logging.getLogger(settings.app_branding)
 class ToolsInstallHandler:
     def __init__(
         self,
-        workflow_name: str | None = None,
+        workflow_name: str = "",
         all_workflows: bool = False,
     ):
         from ofx.settings import get_console

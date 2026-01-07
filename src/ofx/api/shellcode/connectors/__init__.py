@@ -46,7 +46,6 @@ class ConnectorRegistry:
         self._instances: dict[str, ShellcodeConnector] = {}
         self._user_connector_paths: list[Path] = []
 
-        # Auto-discover connectors on initialization
         self._initial_discovery_done = False
 
     def register_connector_class(self, connector_class: type) -> None:
@@ -59,7 +58,6 @@ class ConnectorRegistry:
             >>> from ofx.data.shellcode.connectors.my_connector import MyConnector
             >>> registry.register_connector_class(MyConnector)
         """
-        # Create temporary instance to get name
         temp_instance = connector_class()
         name = temp_instance.name
 
@@ -99,15 +97,12 @@ class ConnectorRegistry:
             >>> if connector:
             ...     shellcode = connector.generate(...)
         """
-        # Ensure discovery has happened
         if not self._initial_discovery_done:
             self.discover_connectors()
 
-        # Check instance cache first
         if name in self._instances:
             return self._instances[name]
 
-        # Create new instance from class
         if name in self._connectors:
             connector_class = self._connectors[name]
             instance = connector_class()
@@ -128,13 +123,11 @@ class ConnectorRegistry:
             >>> for connector in connectors:
             ...     print(f"{connector.name}: {connector.description}")
         """
-        # Ensure discovery has happened
         if not self._initial_discovery_done:
             self.discover_connectors()
 
         available = []
 
-        # Check all registered classes
         for name, connector_class in self._connectors.items():
             if name not in self._instances:
                 self._instances[name] = connector_class()
@@ -143,7 +136,6 @@ class ConnectorRegistry:
             if connector.is_available():
                 available.append(connector)
 
-        # Check registered instances
         for connector in self._instances.values():
             if connector.name not in self._connectors and connector.is_available():
                 available.append(connector)
@@ -202,7 +194,6 @@ class ConnectorRegistry:
 
         discovered_count = 0
 
-        # Default connector directory (contains both built-in and user connectors)
         connector_dir = DATA_DIR / "shellcode" / "connectors"
         if connector_dir not in self._user_connector_paths:
             self._user_connector_paths.insert(0, connector_dir)
@@ -213,7 +204,6 @@ class ConnectorRegistry:
                 logger.debug(f"Created connector directory: {connector_path}")
                 continue
 
-            # Find all Python files (including base.py, msfvenom.py, remote.py, user files)
             for py_file in connector_path.glob("*.py"):
                 if py_file.name.startswith("_") or py_file.name == "__init__.py":
                     continue
@@ -324,7 +314,6 @@ class ConnectorRegistry:
         return None
 
 
-# Global registry instance
 _global_registry = ConnectorRegistry()
 
 

@@ -144,10 +144,9 @@ class RemoteSSHConnector(ShellcodeConnector):
 
         self.validate_parameters(os_target, arch, shell_type, ip, port)
 
-        # Build remote msfvenom command
         from .msfvenom import MsfvenomConnector
 
-        # Use msfvenom connector's payload mapping
+
         msfvenom_connector = MsfvenomConnector()
         payload = msfvenom_connector._get_payload_name(os_target, arch, shell_type)
 
@@ -168,7 +167,6 @@ class RemoteSSHConnector(ShellcodeConnector):
 
         remote_cmd.extend(["-f", "raw"])
 
-        # Build SSH command
         ssh_cmd = ["ssh"]
         if self.identity_file:
             ssh_cmd.extend(["-i", self.identity_file])
@@ -268,7 +266,7 @@ class RemoteHTTPConnector(ShellcodeConnector):
 
             response = httpx.get(url, headers=headers, timeout=5)
 
-            if response.status_code in [200, 404]:  # 404 is OK if /health doesn't exist
+            if response.status_code in [200, 404]:
                 logger.debug(f"HTTP API at {self.base_url} is reachable")
                 return True
             else:
@@ -368,7 +366,6 @@ class RemoteHTTPConnector(ShellcodeConnector):
 
             response.raise_for_status()
 
-            # Expect raw bytes response
             shellcode = response.content
 
             if not shellcode:
