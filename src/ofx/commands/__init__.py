@@ -1,9 +1,16 @@
 import typer
 
-from ofx.commands import asset, docs, doctor, dump, flow, project, secret
 from ofx.settings import BANNER
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
+
+from ofx.commands import asset 
+from ofx.commands import docs
+from ofx.commands import doctor
+from ofx.commands import dump
+from ofx.commands import flow
+from ofx.commands import project
+from ofx.commands import secret
 
 COMMAND_ALIASES = {
     flow: ["x"],
@@ -35,20 +42,21 @@ def add_aliases():
             app.add_typer(command_module.app, name=alias, help=command_module.HELP, hidden=True)
 
 
-add_app(flow)
-add_app(dump)
-add_app(asset)
-add_app(project)
-add_app(docs)
-add_app(doctor)
-add_app(secret)
-
-add_aliases()
+def _register_commands():
+    add_app(flow)
+    add_app(dump)
+    add_app(asset)
+    add_app(project)
+    add_app(docs)
+    add_app(doctor)
+    add_app(secret)
+    add_aliases()
 
 
 def main():
     """Main entry point for the OFX CLI application"""
     try:
+        _register_commands()
         typer.echo(BANNER)
         app()
     except Exception as e:

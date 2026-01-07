@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-import requests
+import httpx
 
 from ofx.data.webshell.connectors.base import WebshellConnector
 
@@ -92,33 +92,31 @@ class RemoteHTTPConnector(WebshellConnector):
         payload.update(kwargs.get('custom_params', {}))
 
         try:
-            response = requests.post(
-                url,
-                json=payload,
-                headers=headers,
-                timeout=self.timeout
-            )
-            response.raise_for_status()
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                )
+                response.raise_for_status()
 
-            result = response.json()
-            if 'code' in result:
-                return result['code']
-            elif 'webshell' in result:
-                return result['webshell']
-            else:
-                raise RuntimeError(f"Unexpected API response format: {result}") from None
+                result = response.json()
+                if 'code' in result:
+                    return result['code']
+                elif 'webshell' in result:
+                    return result['webshell']
+                else:
+                    raise RuntimeError(f"Unexpected API response format: {result}") from None
 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             raise RuntimeError(f"HTTP API request failed: {e}") from e
 
     def _check_availability(self) -> bool:
         """Check if API is reachable."""
         try:
-            response = requests.get(
-                f"{self.base_url}/health",
-                timeout=5
-            )
-            return response.status_code in (200, 404)
+            with httpx.Client(timeout=5) as client:
+                response = client.get(f"{self.base_url}/health")
+                return response.status_code in (200, 404)
         except Exception:
             return False
 

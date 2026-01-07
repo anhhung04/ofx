@@ -25,24 +25,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install twine for publishing
+        run: |
+          uv tool install twine
+          
       - name: Build package
         run: |
           uv build --wheel --out-dir dist
         env:
           UV_COMPILE_BYTECODE: "1"
-
-      - name: Install twine for publishing
-        run: |
-          uv tool install twine
-
-      - name: Regenerate docs
-        run: |
-          uv run --extra docs mkdocs build -d src/ofx/data/site
+          OFX_COMPILE: "1"
 
       - name: Publish to Gitea Package Registry
         env:
           TWINE_USERNAME: ${{ secrets.PKG_USER }}
           TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
+          OFX_COMPILE: "1"
         run: |
           uvx twine upload \
             --repository-url ${{ secrets.PKG_URL }} \

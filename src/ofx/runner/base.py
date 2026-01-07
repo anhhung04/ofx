@@ -105,74 +105,65 @@ class BaseRunner:
         if "${{" not in string_value and "{%" not in string_value:
             return value
 
-        try:
-            if BaseRunner._support_funcs_cache is None:
-                sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
-                tools_dir_str = str(TOOLS_DIR.absolute())
-                tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
-
-                BaseRunner._support_funcs_cache = {
-                    "sudo": sudo,
-                    "tools_dir": tools_dir_str,
-                    "tools_bin_dir": tools_bin_dir_str,
-                    "workflow_dir": self.ctx_vars.workflow_dir.absolute().as_posix(),
-                    "fapt": lambda app: f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends {app}',
-                    "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
-                    "go_install": lambda pkg: f"GO111MODULE=on GOBIN={tools_bin_dir_str} go install {pkg}@latest",
-                    "cargo_install": lambda name: f"cargo install --root {tools_dir_str} {name}",
-                    "npm_install": lambda name: f"npm install -g --prefix {tools_dir_str} {name}",
-                    "static_install": lambda url, name=None: (
-                        f"curl -fSsL {url} -o {tools_bin_dir_str}/{name if name else Path(url).name} && chmod +x {tools_bin_dir_str}/{name if name else Path(url).name}"
-                    ),
-                    "file_read": _read_file,
-                    "file_write": _write_file,
-                    "file_exists": aio_os.path.exists,
-                    "env": os.getenv,
-                }
-
-            SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()
-            SUPPORT_FUNCS["run_id"] = self._id
-
-            if string_value not in BaseRunner._template_cache:
-                if len(BaseRunner._template_cache) >= BaseRunner._template_cache_max_size:
-                    first_key = next(iter(BaseRunner._template_cache))
-                    del BaseRunner._template_cache[first_key]
-
-                BaseRunner._template_cache[string_value] = Template(
-                    string_value,
-                    variable_start_string="${{",
-                    variable_end_string="}}",
-                    enable_async=True
-                )
-
-            template = BaseRunner._template_cache[string_value]
-            template_vars = self.ctx_vars.model_dump(exclude={"vars"})
-            template_vars.update(SUPPORT_FUNCS)
-            if self.ctx_vars.vars:
-                template_vars.update(self._ctx.vars)
-
-            result = await template.render_async(template_vars)
-            if isinstance(value, bool):
-                return result.lower() in ("true", "yes", "1", "t", "y")
-            elif isinstance(value, int):
-                try:
-                    return int(result)
-                except ValueError:
-                    logger.warning(self._produce_log(f"Could not convert template result '{result[:100]}' back to integer"))
-                    return result
-            elif isinstance(value, float):
-                try:
-                    return float(result)
-                except ValueError:
-                    logger.warning(self._produce_log(f"Could not convert template result '{result[:100]}' back to float"))
-                    return result
-
-            logger.debug(self._produce_log(f"Resolved template:\n{value}\n==>\n{result}\n"))
-            return result
-        except Exception as e:
-            logger.error(self._produce_log(f"Error resolving template for value '{str(value)[:100]}':\n{e}"))
-            return value
-
+        if BaseRunner._support_funcs_cache is None:
+            sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
+            tools_dir_str = str(TOOLS_DIR.absolute())
+            tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
+            BaseRunner._support_funcs_cache = {
+                "sudo": sudo,
+                "tools_dir": tools_dir_str,
+                "tools_bin_dir": tools_bin_dir_str,
+                "workflow_dir": self.ctx_vars.workflow_dir.absolute().as_posix(),
+                "fapt": lambda app: f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends {app}',
+                "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
+                "go_install": lambda pkg: f"GO111MODULE=on GOBIN={tools_bin_dir_str} go install {pkg}@latest",
+                "cargo_install": lambda name: f"cargo install --root {tools_dir_str} {name}",
+                "npm_install": lambda name: f"npm install -g --prefix {tools_dir_str} {name}",
+                "static_install": lambda url, name=None: (
+                    f"curl -fSsL {url} -o {tools_bin_dir_str}/{name if name else Path(url).name} && chmod +x {tools_bin_dir_str}/{name if name else Path(url).name}"
+                ),
+                "file_read": _read_file,
+                "file_write": _write_file,
+                "file_exists": aio_os.path.exists,
+                "env": os.getenv,
+                "python": __import__('sys').executable,
+                "pip_install": lambda pkg: f'"{__import__("sys").executable}" -m pip install --upgrade {pkg}',
+            }
+        SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()
+        SUPPORT_FUNCS["run_id"] = self._id
+        if string_value not in BaseRunner._template_cache:
+            if len(BaseRunner._template_cache) >= BaseRunner._template_cache_max_size:
+                first_key = next(iter(BaseRunner._template_cache))
+                del BaseRunner._template_cache[first_key]
+            BaseRunner._template_cache[string_value] = Template(
+                string_value,
+                variable_start_string="${{",
+                variable_end_string="}}",
+                enable_async=True
+            )
+        template = BaseRunner._template_cache[string_value]
+        template_vars = self.ctx_vars.model_dump(exclude={"vars"})
+        template_vars.update(SUPPORT_FUNCS)
+        if self.ctx_vars.vars:
+            template_vars.update(self._ctx.vars)
+        result = await template.render_async(template_vars)
+        if isinstance(value, bool):
+            return result.lower() in ("true", "yes", "1", "t", "y")
+        elif isinstance(value, int):
+            try:
+                return int(result)
+            except ValueError:
+                logger.warning(self._produce_log(f"Could not convert template result '{result[:100]}' back to integer"))
+                return result
+        elif isinstance(value, float):
+            try:
+                return float(result)
+            except ValueError:
+                logger.warning(self._produce_log(f"Could not convert template result '{result[:100]}' back to float"))
+                return result
+        logger.debug(self._produce_log(f"Resolved template:\n{value}\n==>\n{result}\n"))
+        return result
+    
     async def _resolve_template_fields(self, fields: list[str]) -> None:
         """Resolve templates in specific model fields in parallel"""
         if not self.model or not fields:

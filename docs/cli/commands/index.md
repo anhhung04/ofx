@@ -26,9 +26,51 @@ Complete reference for all OFX command-line interface commands.
 
 ## Utility Commands
 
-- **[docs](docs-serve.md)** - Serve API documentation
+- **[docs](docs-serve.md)** - Display API documentation and data directories
 - **[doctor](doctor.md)** - Diagnose system dependencies
 - **[dump](dump.md)** - Dump and analyze data structures
+
+## Quick Start
+
+### Viewing Data Directories
+
+```bash
+# Show where to place custom workflows and data
+ofx docs
+```
+
+### Finding API Documentation
+
+```bash
+# List all available API modules
+ofx docs --list
+
+# View specific module documentation
+ofx docs --module webshell
+```
+
+### Working with Workflows
+
+```bash
+# Run a workflow
+ofx flow run workflow-name
+
+# Validate workflow syntax
+ofx flow validate workflow-name
+
+# Visualize workflow dependencies
+ofx flow visualize workflow-name
+```
+
+### Managing Secrets
+
+```bash
+# Add a secret
+ofx secret add api_key
+
+# List all secrets
+ofx secret list
+```
 
 ## Command Index
 
@@ -43,6 +85,8 @@ Complete reference for all OFX command-line interface commands.
 | `ofx project sync` | Sync project to storage |
 | `ofx secret manage` | Manage secrets |
 | `ofx asset` | Manage asset collections |
-| `ofx docs` | Serve API documentation server |
+| `ofx docs` | Display API documentation and data directories |
+| `ofx docs --list` | List all available API modules |
+| `ofx docs --module <name>` | View specific module documentation |
 | `ofx doctor` | Check system dependencies |
 | `ofx dump` | Dump data structures |

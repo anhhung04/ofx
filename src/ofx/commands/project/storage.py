@@ -324,6 +324,7 @@ class S3Handler:
         prefix: str = "",
     ):
         import boto3
+            
         self.bucket = bucket
         self.prefix = prefix.strip("/")
         self.s3 = boto3.client(

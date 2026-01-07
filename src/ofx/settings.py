@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.theme import Theme
+from rich.console import Console
 
 from ofx.utils.log import reload_logging_config
 
@@ -72,22 +73,25 @@ os.makedirs(SECRETS_DIR, exist_ok=True)
 TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
 
+_console = None
 
 def get_console():
     """Get a Rich console with the red team theme applied."""
-    from rich.console import Console
-    return Console(theme=RICH_THEME)
+    global _console
+    if _console is None:
+        _console = Console(theme=RICH_THEME)
+    return _console
 
 
 class Settings(BaseSettings):
-    """Application settings for OFX"""
+    """Application settings or OFX"""
 
     app_name: str = "Offensive Flow Executor"
     app_branding: str = "ofx"
 
     debug: bool = Field(default=False, description="Enable debug mode")
     workers: int = Field(
-        default=4,
+        default_factory=lambda: os.cpu_count() or 4,
         description="Number of concurrent workers for running flows",
     )
     timeout: int = Field(

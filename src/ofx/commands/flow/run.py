@@ -5,6 +5,8 @@ from pathlib import Path
 from datetime import datetime
 
 from rich.panel import Panel
+from rich.table import Table
+from rich.console import Group
 
 from ofx.runner import RunContext, WorkflowRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, SECRETS_DIR, TEMP_DIR, get_console, settings
@@ -50,12 +52,18 @@ class FlowRunHandler:
 
         try:
             self._process_inputs()
-            input_display = self._render_input_as_table() if self.input else "[dim]No inputs provided[/dim]"
+            
+            panel_content = [
+                f"[bold cyan]Workflow:[/bold cyan] {self.workflow_name}",
+                f"[bold cyan]Output:[/bold cyan] {self.output.as_posix()}",
+            ]
+            
+            if self.input:
+                panel_content.append("")  # Empty line for spacing
+                panel_content.append(self._create_input_table())
             
             console.print(Panel(
-                f"[bold cyan]Workflow:[/bold cyan] {self.workflow_name}\n"
-                f"[bold cyan]Output:[/bold cyan] {self.output.as_posix()}\n"
-                f"[bold cyan]Inputs:[/bold cyan]{input_display}",
+                Group(*panel_content),
                 title="[bold green][>] Workflow Execution[/bold green]",
                 border_style="green",
                 padding=(1, 2)
@@ -85,8 +93,7 @@ class FlowRunHandler:
                 ))
             else:
                 console.print(Panel(
-                    f"[bold green]Workflow completed successfully![/bold green]\n"
-                    f"[dim]Output directory: {self.output.as_posix()}[/dim]",
+                    f"[bold green]Workflow completed successfully![/bold green]",
                     title="[bold green][OK] Success[/bold green]",
                     border_style="green"
                 ))
@@ -142,24 +149,45 @@ class FlowRunHandler:
         logger.debug(f"Processed inputs: {processed_inputs}")
         self.input = processed_inputs
 
-    def _render_input_as_table(self) -> str:
-        """Renders the input data as a nicely formatted table if it contains any input."""
-        from tabulate import tabulate
-        if not self.input:
-            return "None"
-
-        table_data = []
+    def _create_input_table(self) -> Table:
+        """Create a Rich table for workflow inputs."""
+        table = Table(
+            title="[bold cyan]Inputs[/bold cyan]",
+            show_header=True,
+            header_style="bold cyan",
+            border_style="dim cyan",
+            padding=(0, 1),
+        )
+        
+        table.add_column("Parameter", style="bold yellow", no_wrap=True)
+        table.add_column("Value", style="white")
+        table.add_column("Type", style="dim", justify="right")
+        
         for key, value in self.input.items():
-            if isinstance(value, (dict, list)):
+            if isinstance(value, dict):
                 try:
-                    formatted_value = json.dumps(value)
+                    formatted_value = json.dumps(value, indent=2)
+                    value_type = "object"
                 except (TypeError, ValueError):
                     formatted_value = str(value)
+                    value_type = "object"
+            elif isinstance(value, list):
+                try:
+                    formatted_value = json.dumps(value, indent=2)
+                    value_type = "array"
+                except (TypeError, ValueError):
+                    formatted_value = str(value)
+                    value_type = "array"
+            elif isinstance(value, bool):
+                formatted_value = str(value)
+                value_type = "boolean"
+            elif isinstance(value, (int, float)):
+                formatted_value = str(value)
+                value_type = "number"
             else:
                 formatted_value = str(value)
-
-            table_data.append([key, formatted_value])
-
-        return "\n" + tabulate(
-            table_data, headers=["Parameter", "Value"], tablefmt="grid"
-        )
+                value_type = "string"
+            
+            table.add_row(key, formatted_value, value_type)
+        
+        return table

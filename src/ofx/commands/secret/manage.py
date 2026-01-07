@@ -1,10 +1,10 @@
+import typer
 import getpass
 import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, Annotated
 
-import typer
 from rich.panel import Panel
 
 from ofx.settings import SECRETS_DIR, settings, get_console
@@ -12,6 +12,7 @@ from ofx.utils import secrets as secrets_store
 
 app = typer.Typer()
 logger = logging.getLogger(settings.app_branding)
+console = get_console()
 
 
 def _resolve_secret_input(name: str, value: str | None, file: Path | None) -> str:

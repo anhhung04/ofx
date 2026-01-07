@@ -1,4 +1,4 @@
-.PHONY: help install dev test clean dist docs docs-clean
+.PHONY: help install dev test clean dist docs
 
 help:
 	@echo "OFX Makefile Commands:"
@@ -8,7 +8,6 @@ help:
 	@echo "  make clean         - Remove build artifacts"
 	@echo "  make dist          - Export compiled package from Docker"
 	@echo "  make docs          - Build documentation"
-	@echo "  make docs-clean    - Remove built documentation"
 
 install:
 	uv sync --no-dev
@@ -17,7 +16,7 @@ dev:
 	uv sync
 
 test:
-	uv run pytest
+	uv run --extra test pytest
 
 clean:
 	rm -rf build/ dist/ *.egg-info .pytest_cache .coverage htmlcov/ src/ofx/data/site/
@@ -35,11 +34,6 @@ dist:
 
 docs:
 	@echo "Building documentation..."
-	uv run --extra docs mkdocs build --clean --strict -f mkdocs.yml -d src/ofx/data/site
+	uv run --extra docs mkdocs build --clean --strict -f mkdocs.yml -d site
 	@echo "Documentation built successfully in: src/ofx/data/site/"
 	@echo "To serve locally, run: uv run ofx docs serve"
-
-docs-clean:
-	@echo "Cleaning documentation build..."
-	rm -rf src/ofx/data/site/
-	@echo "Documentation build removed"

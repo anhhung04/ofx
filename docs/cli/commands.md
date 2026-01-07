@@ -155,8 +155,8 @@ ofx project init <name> [options]
 
 **Interactive Setup:**
 The command will interactively prompt for:
-- Remote storage type (git, ssh, s3, webdav, none)
-- Repository/server details
+- Remote storage type (git, s3, none)
+- Repository/bucket details
 - Encryption options
 
 **Examples:**
@@ -171,6 +171,10 @@ ofx project init enterprise_assessment --multiphase
 # Project with Git remote
 ofx project init client_pentest
 # Then follow prompts for Git URL and encryption
+
+# Project with S3 storage
+ofx project init redteam_ops
+# Then follow prompts for S3 bucket and region
 ```
 
 ### project sync

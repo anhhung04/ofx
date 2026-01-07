@@ -1,0 +1,10 @@
+name: Test Binary Output
+
+jobs:
+  test_binary:
+    steps:
+      - name: Generate large output
+        run: head -c 12000000 /dev/urandom | base64 | head -c 100
+
+      - name: Normal text output
+        run: echo "This is normal text"

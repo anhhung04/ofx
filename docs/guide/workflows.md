@@ -34,6 +34,62 @@ ofx flow validate my-workflow
 ofx flow run my-workflow --input target=example.com --secret API_KEY=xxx
 ```
 
+## Workflow Sources
+
+OFX can load workflows from multiple sources:
+
+### Local Files
+
+```bash
+# Current directory
+ofx flow run my-workflow.yml
+
+# Absolute path
+ofx flow run /path/to/workflow.yml
+
+# From workflow directories
+ofx flow run my-workflow  # Searches ~/.local/share/ofx/workflows
+```
+
+### Git Repositories
+
+```bash
+# Clone and run main workflow
+ofx flow run https://github.com/user/repo
+
+# Specific workflow in repo
+ofx flow run https://github.com/user/repo/workflows/scan.yml
+```
+
+### HTTP/HTTPS URLs
+
+```bash
+# Direct URL to workflow file
+ofx flow run https://example.com/workflows/security-scan.yml
+```
+
+### S3 Buckets
+
+```bash
+# S3 URI with full path
+ofx flow run s3://my-workflows-bucket/prod/main.yml
+
+# Automatic extension detection
+ofx flow run s3://my-workflows-bucket/workflows/scan
+
+# With AWS credentials from environment or ~/.aws/credentials
+export AWS_ACCESS_KEY_ID=your_key
+export AWS_SECRET_ACCESS_KEY=your_secret
+ofx flow run s3://my-bucket/workflow.yml
+```
+
+**S3 Requirements:**
+- boto3 installed (included by default in OFX)
+- AWS credentials configured via environment variables, ~/.aws/credentials, or IAM role
+- Read permissions on the S3 bucket and object
+
+**Supported extensions:** `.yml`, `.yaml`
+
 ## Dependencies
 
 - `needs` controls order; missing `needs` = parallel.

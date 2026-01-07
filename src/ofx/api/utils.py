@@ -3,8 +3,6 @@ import logging
 import socket
 import urllib.parse
 
-from faker import Faker
-
 from ofx.settings import settings
 
 __all__ = [
@@ -88,7 +86,12 @@ def generate_random_user_agent() -> str:
         >>> ua
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36...'
     """
-    return Faker().user_agent()
+    try:
+        from faker import Faker
+        return Faker().user_agent()
+    except ImportError:
+        logger.warning("faker not installed, using default user agent")
+        return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
 def minimum_version_required(version: str, current_version: str) -> bool:

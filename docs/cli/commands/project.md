@@ -74,62 +74,71 @@ Synchronize project to remote storage backends.
 
 ### Options
 
-- `--storage <type>` - Storage backend: `git`, `s3`, `ssh`, `webdav`
+- `--remote-type <type>` - Storage backend: `git` (default), `s3`
+- `--remote-config <json>` - Remote configuration as JSON
 - `--encrypt` - Encrypt before upload
-- `--remote <url>` - Remote URL/path
+- `--encryption-key <key>` - Custom encryption key
 
 ### Examples
 
 ```bash
-# Sync to Git
-ofx project sync --storage git --remote git@github.com:user/project.git
+# Sync to Git (default)
+ofx project sync my-project
 
 # Sync to S3 with encryption
-ofx project sync --storage s3 --remote s3://bucket/project --encrypt
+ofx project sync my-project \
+  --remote-type s3 \
+  --remote-config '{"bucket":"my-backups","region_name":"us-east-1"}' \
+  --encrypt
 
-# Sync via SSH
-ofx project sync --storage ssh --remote user@host:/path/to/backup
+# Sync to S3 with custom prefix
+ofx project sync pentest-2024 \
+  --remote-type s3 \
+  --remote-config '{"bucket":"projects","prefix":"clients/acme"}'
 ```
 
 ### Storage Backends
 
 #### Git
-Version-controlled project sync:
+Version-controlled project sync (default):
 
 ```bash
-ofx project sync --storage git --remote https://github.com/user/repo.git
+ofx project sync my-project
 ```
+
+Features:
+- Full version history
+- Branch support  
+- Conflict resolution
+- Automated commits
 
 #### S3
-AWS S3 or compatible storage:
+AWS S3 or compatible object storage:
 
 ```bash
-ofx project sync --storage s3 --remote s3://my-bucket/projects/name
+ofx project sync my-project \
+  --remote-type s3 \
+  --remote-config '{"bucket":"my-ofx-backups","region_name":"us-east-1"}'
 ```
 
-#### SSH
-Remote server via SSH:
-
-```bash
-ofx project sync --storage ssh --remote user@server:/backups/project
-```
-
-#### WebDAV
-WebDAV-compatible storage:
-
-```bash
-ofx project sync --storage webdav --remote https://webdav.server.com/projects
-```
+Features:
+- Scalable cloud storage
+- Built-in redundancy
+- Access control
+- Git bundle-based sync
 
 ### Encryption
 
 Enable encryption for sensitive data:
 
 ```bash
-ofx project sync --encrypt --storage s3 --remote s3://bucket/project
+ofx project sync my-project --encrypt --encryption-key "$MY_KEY"
 ```
 
-Encryption uses project-specific keys stored securely.
+Encryption options:
+- **Git**: Configured via Git filters during init
+- **S3**: Encrypted before S3 upload
+- Keys must be stored securely (no recovery if lost)
 
 ## Project list
 

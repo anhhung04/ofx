@@ -1,79 +1,65 @@
 # coding: utf-8
 import os
 import sys
-import sysconfig
 from pathlib import Path
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "src", "ofx")))
-
-from _version import __version__
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py as _build_py
-from setuptools.command.build import build as _build
 
+# Ensure src/ofx is in path for versioning
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "src", "ofx")))
+from _version import __version__
 
 def collect_data_files(root: Path) -> list[str]:
-    """Enumerate data files while skipping cache artifacts."""
+    """Enumerate data files while skipping cache and build artifacts."""
     files: list[str] = []
+    # Define suffixes we definitely don't want in our package data
+    exclude_suffixes = {".c"}
+    
     for path in root.rglob("*"):
-        if path.is_dir():
+        if path.is_dir() or path.suffix in exclude_suffixes:
             continue
+            
         rel = path.relative_to("src/ofx")
-        if "__pycache__" in rel.parts or rel.suffix == ".pyc":
+        if "__pycache__" in rel.parts:
             continue
+            
         files.append(rel.as_posix())
     return files
 
-
-EXCLUDE_FILES = [str(p) for p in Path("src/ofx/data").rglob("*") if p.is_file()]
-DATA_FILES = collect_data_files(Path("src/ofx/data"))
-
+EXCLUDE_DATA_PATH = Path("src/ofx/data")
+EXCLUDE_FILES = [str(p) for p in EXCLUDE_DATA_PATH.rglob("*") if p.is_file()]
+DATA_FILES = collect_data_files(EXCLUDE_DATA_PATH)
 
 def get_ext_paths(root_dir, exclude_files):
-    """get filepaths for compilation"""
+    """Get filepaths for Cython compilation."""
     paths = []
-    if os.environ.get("OFX_SKIP_CYTHONIZE") == "1":
+    if os.environ.get("OFX_COMPILE") != "1":
         return paths
 
     for root, dirs, files in os.walk(root_dir):
         for filename in files:
-            if os.path.splitext(filename)[1] != ".py" or "__pycache__" in root:
+            if not filename.endswith(".py") or "__pycache__" in root:
                 continue
 
             file_path = os.path.join(root, filename)
-            if file_path in exclude_files:
+            if file_path in exclude_files or filename == "__init__.py":
                 continue
 
             paths.append(file_path)
     return paths
 
-
-# Custom build_py to exclude .py files that have a compiled version
-# noinspection PyPep8Naming
 class build_py(_build_py):
+    """Custom build_py to exclude .py files that are being replaced by compiled extensions."""
     def find_package_modules(self, package, package_dir):
-        ext_suffix = sysconfig.get_config_var("EXT_SUFFIX")
         modules = super().find_package_modules(package, package_dir)
         filtered_modules = []
         for pkg, mod, filepath in modules:
-            if os.path.exists(filepath.replace(".py", ext_suffix)):
+            c_file = filepath.replace(".py", ".c")
+            if os.path.exists(c_file):
                 continue
-            filtered_modules.append(
-                (
-                    pkg,
-                    mod,
-                    filepath,
-                )
-            )
+            filtered_modules.append((pkg, mod, filepath))
         return filtered_modules
-
-
-class build(_build):
-    # Force build_py to run so package_data is included even when only extensions exist
-    def has_pure_modules(self):
-        return True
-
 
 setup(
     name="ofx",
@@ -83,22 +69,19 @@ setup(
     ext_modules=cythonize(
         get_ext_paths("src/ofx", EXCLUDE_FILES),
         compiler_directives={
-            "language_level": 3,
+            "language_level": "3",
+            "always_allow_keywords": True,
         },
         nthreads=os.cpu_count() or 1,
     ),
-    # Register our custom commands
     cmdclass={
         "build_py": build_py,
-        "build": build,
     },
     package_dir={"": "src"},
     package_data={"ofx": DATA_FILES},
-    extra_compile_args=["-O3"],
+    # Ensure we don't accidentally include .c files via MANIFEST or auto-discovery
+    exclude_package_data={
+        "": ["*.c",  "*.pyd"],
+    },
+    zip_safe=False,
 )
-
-for root, dirs, files in os.walk("src/ofx"):
-    for filename in files:
-        file = os.path.join(root, filename)
-        if file.endswith(".c") or file.endswith(".so"):
-            os.remove(file)

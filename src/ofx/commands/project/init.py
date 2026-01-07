@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from ofx.settings import get_console, settings
-from ofx.utils.misc import MetaSingleton
 
 logger = logging.getLogger(settings.app_branding)
 console = get_console()

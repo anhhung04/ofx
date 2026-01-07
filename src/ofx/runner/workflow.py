@@ -6,15 +6,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeElapsedColumn,
-)
-
 from ofx.models.workflow import Workflow
 from ofx.runner.base import BaseRunner
 from ofx.runner.job import JobRunner
@@ -39,50 +30,14 @@ class WorkflowRunner(BaseRunner):
         self._job_registry: dict[str, Any] = {}
         self._job_results: dict[str, bool] = {}
         self._job_errors: dict[str, Exception] = {}
-        self._progress: Progress | None = None
-        self._progress_id: Any | None = None
         
         if not self.ctx_vars.workflow_dirs:
             self.ctx_vars.workflow_dirs = DEFAULT_WORKFLOWS_DIRS
 
     async def _do_run(self) -> None:
         """Execute the workflow by running its jobs in stages according to their dependencies"""
-        has_interactive = self._has_interactive_steps()
-
-        if not self._is_reused and not has_interactive:
-            self._progress = Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                BarColumn(),
-                TaskProgressColumn(),
-                TimeElapsedColumn(),
-                transient=False,
-            )
-
-        try:
-            if self._progress:
-                self._progress.start()
-                workflow_prefix = "⚙"
-                total_steps = self._planning_jobs()
-                self._progress_id = self._progress.add_task(
-                    description=f"{workflow_prefix} [bold]{self.model.name}[/bold]",
-                    total=total_steps,
-                )
-            else:
-                self._planning_jobs()
-
-            await self._execute_workflow()
-
-            if self._progress and self._progress_id is not None:
-                self._progress.update(
-                    self._progress_id,
-                    description=f"✓ [bold]{self.model.name}[/bold]",
-                    completed=self._total_steps,
-                    refresh=True,
-                )
-        finally:
-            if self._progress:
-                self._progress.stop()
+        self._planning_jobs()
+        await self._execute_workflow()
 
     async def _execute_workflow(self) -> None:
         """Execute workflow jobs in stages"""
@@ -116,25 +71,6 @@ class WorkflowRunner(BaseRunner):
                 job_id: asyncio.create_task(run_job_with_limit(job_id, runner))
                 for job_id, runner in job_runners.items()
             }
-
-            if self._progress and self._progress_id is not None:
-                pending = set(stage_tasks.values())
-                while pending:
-                    done, pending = await asyncio.wait(pending, timeout=0.1)
-                    if not pending and not done:
-                        break
-                    current_steps_in_stage = sum(
-                        runner.processed_steps for runner in job_runners.values()
-                    )
-                    self._completed_steps = (
-                        completed_steps_before_stage + current_steps_in_stage
-                    )
-                    self._progress.update(
-                        self._progress_id,
-                        description=f"⚙ [bold]{self.model.name}[/bold] → {', '.join(stage)}",
-                        completed=min(self._completed_steps, self._total_steps),
-                        refresh=True,
-                    )
 
             results = await asyncio.gather(*stage_tasks.values(), return_exceptions=True)
 
@@ -205,45 +141,13 @@ class WorkflowRunner(BaseRunner):
         return self._total_steps
 
     async def _run_and_monitor_job(self, job_id: str, job_runner: JobRunner):
-        """Run a job asynchronously and monitor its progress with a progress bar"""
-        total_steps = job_runner.total_steps
+        """Run a job asynchronously"""
         has_interactive_step = any(getattr(step, 'interactive', False) for step in job_runner.model.steps)
 
         if has_interactive_step and job_runner.ctx_vars.allow_interactive:
-            logger.info(self._produce_log(f"Running job '{job_id}' with interactive steps (progress hidden)"))
-            return await job_runner.run()
-
-        indicator = "  ↳ " if self._is_reused else "→ "
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeElapsedColumn(),
-            transient=True,
-        ) as job_progress:
-            task_id = job_progress.add_task(f"{indicator}[bold]{job_id}[/bold]", total=total_steps)
-
-            run_task = asyncio.create_task(job_runner.run())
-
-            while not run_task.done():
-                processed = job_runner.processed_steps
-                step_name = ""
-                if processed < len(job_runner.model.steps):
-                    current_step = job_runner.model.steps[processed]
-                    step_name = f" → {current_step.name or current_step.uses or f'step {processed + 1}'}"
-
-                job_progress.update(
-                    task_id,
-                    completed=processed,
-                    description=f"{indicator}[bold]{job_id}[/bold]{step_name}",
-                    refresh=True,
-                )
-                await asyncio.sleep(0.1)
-
-            job_progress.update(task_id, completed=job_runner.processed_steps, description=f"{indicator}[bold]{job_id}[/bold] ✓", refresh=True)
-
-            return await run_task
+            logger.info(self._produce_log(f"Running job '{job_id}' with interactive steps"))
+        
+        return await job_runner.run()
 
     async def _pre_run(self) -> None:
         if not self.ctx_vars.output_path.exists():
