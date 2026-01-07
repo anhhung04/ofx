@@ -12,7 +12,7 @@ from ofx.runner.job import JobRunner
 from ofx.runner.models import RunContext, RunnerStatus
 from ofx.runner.tool_installer import ToolInstallerRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, settings
-from ofx.utils.misc import add_workflow_dir, find_parallel_schedule, find_workflow
+from ofx.utils.misc import add_workflow_dir, find_parallel_schedule
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -30,7 +30,7 @@ class WorkflowRunner(BaseRunner):
         self._job_registry: dict[str, Any] = {}
         self._job_results: dict[str, bool] = {}
         self._job_errors: dict[str, Exception] = {}
-        
+
         if not self.ctx_vars.workflow_dirs:
             self.ctx_vars.workflow_dirs = DEFAULT_WORKFLOWS_DIRS
 
@@ -146,7 +146,7 @@ class WorkflowRunner(BaseRunner):
 
         if has_interactive_step and job_runner.ctx_vars.allow_interactive:
             logger.info(self._produce_log(f"Running job '{job_id}' with interactive steps"))
-        
+
         return await job_runner.run()
 
     async def _pre_run(self) -> None:

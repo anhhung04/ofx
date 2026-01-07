@@ -1,6 +1,7 @@
 import re
-from typing import Any, Literal
 from pathlib import Path
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field, model_validator
 
 from ofx.models import DefaultConfig

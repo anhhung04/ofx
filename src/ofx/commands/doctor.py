@@ -316,7 +316,7 @@ def install_help(
             fallback_cmd = conf.get("install_cmd_fallback")
 
             if distro == "debian" and install_cmd:
-                display_cmd = install_cmd.split(" && ")[-1]  # Show just the install part
+                display_cmd = install_cmd.split(" && ")[-1]
             elif distro in ["redhat", "arch", "suse"] and fallback_cmd:
                 display_cmd = fallback_cmd
             else:

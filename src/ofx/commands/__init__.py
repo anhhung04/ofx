@@ -4,13 +4,7 @@ from ofx.settings import BANNER
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 
-from ofx.commands import asset 
-from ofx.commands import docs
-from ofx.commands import doctor
-from ofx.commands import dump
-from ofx.commands import flow
-from ofx.commands import project
-from ofx.commands import secret
+from ofx.commands import asset, docs, doctor, dump, flow, project, secret
 
 COMMAND_ALIASES = {
     flow: ["x"],
@@ -60,8 +54,8 @@ def main():
         typer.echo(BANNER)
         app()
     except Exception as e:
-        import traceback
         import os
+        import traceback
         if os.getenv("OFX_DEBUG"):
             traceback.print_exc()
         typer.secho(f"🚨 Error: {e}", fg=typer.colors.RED, bold=True)

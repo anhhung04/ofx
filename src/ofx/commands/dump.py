@@ -9,7 +9,7 @@ from rich.panel import Panel
 from ofx.models.job import Job
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
-from ofx.settings import BASE_DATA_DIR, settings, get_console
+from ofx.settings import BASE_DATA_DIR, get_console, settings
 
 NAME = "dump"
 HELP = "Dump the workflow configuration and outputs."
@@ -261,7 +261,7 @@ def export_schema(
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(schema, indent=2))
-    
+
     console.print(Panel(
         f"[bold green]Schema exported successfully[/bold green]\n"
         f"[bold]File:[/bold] [cyan]{output_path}[/cyan]\n"

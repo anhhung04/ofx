@@ -1,13 +1,13 @@
-import typer
 import getpass
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Annotated
+from typing import Annotated, Any
 
+import typer
 from rich.panel import Panel
 
-from ofx.settings import SECRETS_DIR, settings, get_console
+from ofx.settings import SECRETS_DIR, get_console, settings
 from ofx.utils import secrets as secrets_store
 
 app = typer.Typer()
@@ -119,7 +119,7 @@ def set_secret(
         pass
 
     secrets_store.set_secret(name, secret_value)
-    
+
     console.print(Panel(
         f"[bold green]Secret '{name}' saved successfully[/bold green]\n"
         "[dim]Stored in encrypted vault[/dim]",
@@ -215,7 +215,7 @@ def list_secrets(
         typer.secho("No secrets found", fg=typer.colors.YELLOW)
         return
 
-    filtered_secrets: Dict[str, Any] = {}
+    filtered_secrets: dict[str, Any] = {}
     for name, value in secrets.items():
         if search and search.lower() not in name.lower():
             continue
@@ -287,7 +287,7 @@ def search_secrets(
 
     from rich.table import Table
 
-    
+
     secrets = secrets_store.list_secrets()
 
     if not secrets:
@@ -299,7 +299,7 @@ def search_secrets(
         ))
         return
 
-    matches: Dict[str, Any] = {}
+    matches: dict[str, Any] = {}
 
     for name, value in secrets.items():
         if fnmatch.fnmatch(name.lower(), pattern.lower()):
@@ -418,7 +418,7 @@ def delete_secret(
     if not secrets_store.secret_exists(name):
         typer.secho(f"❌ Secret '{name}' not found", fg=typer.colors.RED)
         raise typer.Exit(code=1)
-    
+
     _maybe_backup_store(backup_to, None, backup_overwrite)
 
     if not force:
@@ -427,9 +427,9 @@ def delete_secret(
             typer.secho("Cancelled", fg=typer.colors.YELLOW)
             raise typer.Exit()
 
-    
+
     secrets_store.delete_secret(name)
-    
+
     console.print(Panel(
         f"[bold green]Secret '{name}' deleted successfully[/bold green]\n"
         "[dim]Removed from encrypted store[/dim]",
@@ -471,7 +471,7 @@ def export_secrets(
     """
     path_output = Path(output)
     _maybe_backup_store(backup_to, None, backup_overwrite)
-    
+
     count = secrets_store.export_secrets(path_output)
 
     if not count:
@@ -520,8 +520,8 @@ def import_secrets(
     Reads secrets from an unencrypted JSON file and stores them in encrypted
     storage. By default, skips existing secrets unless --overwrite is used.
     """
-    
-    
+
+
     try:
         _maybe_backup_store(backup_to, None, backup_overwrite)
         imported = secrets_store.import_secrets_from_file(file, overwrite)
@@ -576,7 +576,7 @@ def clear_secrets(
     Permanently removes ALL secrets from the store. Requires confirmation
     unless --force is used. This action cannot be undone.
     """
-    
+
     secrets = secrets_store.list_secrets()
 
     if not secrets:
@@ -707,7 +707,7 @@ def backup_secrets(
 
     try:
         count = secrets_store.backup_secrets(output_path, passphrase=resolved_passphrase)
-        
+
         file_size = output_path.stat().st_size
         console.print(Panel(
             f"[bold green]Backup created successfully[/bold green]\n"
@@ -842,7 +842,7 @@ def restore_secrets(
             conflict_list = "\n".join([f"• {name}" for name in conflicts[:5]])
             if len(conflicts) > 5:
                 conflict_list += f"\n• ... and {len(conflicts) - 5} more"
-            
+
             console.print(Panel(
                 f"[yellow]{len(conflicts)} secrets already exist and will be skipped:[/yellow]\n\n"
                 f"{conflict_list}\n\n"
@@ -858,12 +858,12 @@ def restore_secrets(
         restored_count = secrets_store.restore_secrets(
             backup_file, overwrite, passphrase=resolved_passphrase
         )
-        
+
         success_msg = f"[bold green]Restored {restored_count} secrets successfully[/bold green]"
         if conflicts:
             skipped_count = len(conflicts)
             success_msg += f"\n[yellow]Skipped {skipped_count} existing secrets[/yellow]"
-        
+
         console.print(Panel(
             success_msg,
             title="[OK] Restore Complete",

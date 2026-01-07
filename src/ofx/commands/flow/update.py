@@ -20,16 +20,16 @@ class UpdateHandler:
             title="[~] Update Workflows",
             border_style="cyan"
         ))
-        
+
         want_update = typer.confirm("Do you want to update workflows?")
         if not want_update:
             console.print("[yellow]Update cancelled[/yellow]")
             return
-            
-        with console.status("[bold green]Updating workflows...", spinner="dots"):
-            repo = git.Repo(wf_path)
-            repo.remotes.origin.pull()
-        
+
+        console.print("[bold green]Updating workflows...[/bold green]")
+        repo = git.Repo(wf_path)
+        repo.remotes.origin.pull()
+
         console.print(Panel(
             f"[bold green]Workflows updated successfully![/bold green]\n"
             f"[dim]Location: {wf_path}[/dim]",

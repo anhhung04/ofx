@@ -9,8 +9,8 @@ from urllib.parse import urlparse
 
 import git
 
-from ofx.settings import TOOLS_BIN_DIR, ALLOWED_WORKFLOW_FILE_EXTENSIONS
 from ofx.models.workflow import Workflow
+from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, TOOLS_BIN_DIR
 
 _TOOLS_BIN_PATH = TOOLS_BIN_DIR.absolute().as_posix()
 
@@ -47,7 +47,6 @@ def is_s3_path(path: str) -> bool:
     Cached for repeated checks.
     """
     parsed = urlparse(path)
-    # Only lowercase 's3' is valid (case-sensitive)
     return parsed.scheme == "s3" and path.startswith("s3://")
 
 
@@ -76,17 +75,17 @@ def download_s3_workflow(s3_uri: str) -> tuple[Path, str]:
     """
     import boto3
     from botocore.exceptions import ClientError
-    
+
     parsed = urlparse(s3_uri)
     if parsed.scheme != "s3":
         raise ValueError(f"Invalid S3 URI: {s3_uri}")
-    
+
     bucket = parsed.netloc
     key = parsed.path.lstrip("/")
-    
+
     if not key:
         raise ValueError(f"S3 URI must include a key path: {s3_uri}")
-    
+
     key_path = Path(key)
     if key_path.suffix not in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
         original_key = key
@@ -101,23 +100,23 @@ def download_s3_workflow(s3_uri: str) -> tuple[Path, str]:
                 break
             except ClientError:
                 continue
-        
+
         if not found:
             raise RuntimeError(
                 f"No workflow found at s3://{bucket}/{original_key} with extensions {ALLOWED_WORKFLOW_FILE_EXTENSIONS}"
             )
-    
+
     try:
         s3 = boto3.client("s3")
         response = s3.get_object(Bucket=bucket, Key=key)
         content = response["Body"].read().decode("utf-8")
-        
+
         tmp_dir = Path(tempfile.mkdtemp(prefix=".ofx_s3_"))
         workflow_file = tmp_dir / Path(key).name
         workflow_file.write_text(content)
-        
+
         return workflow_file, content
-        
+
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         if error_code == "NoSuchBucket":
@@ -126,7 +125,7 @@ def download_s3_workflow(s3_uri: str) -> tuple[Path, str]:
             raise RuntimeError(f"Workflow not found: s3://{bucket}/{key}") from e
         elif error_code in ["AccessDenied", "InvalidAccessKeyId"]:
             raise RuntimeError(
-                f"Access denied to S3. Check AWS credentials and bucket permissions."
+                "Access denied to S3. Check AWS credentials and bucket permissions."
             ) from e
         else:
             raise RuntimeError(f"Failed to download from S3: {e}") from e
@@ -228,7 +227,7 @@ def find_valid_flow(dir: Path, name: str) -> Path | None:
             return flow_path
     else:
         return None
-    
+
 @lru_cache(maxsize=32)
 def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tuple[Path, Workflow]: #type: ignore
     """Find and load a workflow from local directories, file path, URL, or git repository.
@@ -244,15 +243,17 @@ def find_workflow(workflow_name: str, search_dirs_tuple: tuple[Path, ...]) -> tu
         RuntimeError: If workflow cannot be found or loaded
     """
     import logging
+
     import httpx
     import yaml
+
     from ofx.models.workflow import Workflow
     from ofx.settings import settings
-    
+
     logger = logging.getLogger(settings.app_branding)
-    
+
     logger.debug(f"Searching for workflow: {workflow_name} in {search_dirs_tuple}")
-    
+
     workflow_name = workflow_name.strip()
     flow_path = find_valid_flow(Path.cwd(), workflow_name)
 

@@ -8,7 +8,6 @@ from typing import Annotated
 import git
 import typer
 from git.exc import GitCommandError
-from rich.panel import Panel
 from rich.table import Table
 
 from ofx.settings import DEFAULT_WORKFLOWS_DIR, get_console
@@ -55,16 +54,16 @@ class AssetManager:
             )
 
         from rich.panel import Panel
-        
-        with console.status(f"[bold cyan]Cloning asset collection from {url}...", spinner="dots"):
-            try:
-                git.Repo.clone_from(url, target_path, depth=1)
-            except GitCommandError as e:
-                raise RuntimeError(f"Failed to clone repository: {e}") from e
+
+        console.print(f"[bold cyan]Cloning asset collection from {url}...[/bold cyan]")
+        try:
+            git.Repo.clone_from(url, target_path, depth=1)
+        except GitCommandError as e:
+            raise RuntimeError(f"Failed to clone repository: {e}") from e
 
         self.assets[name] = {"url": url, "path": str(target_path)}
         self._save_assets()
-        
+
         console.print(Panel(
             f"[bold]Name:[/bold] [green]{name}[/green]\n"
             f"[bold]Source:[/bold] [cyan]{url}[/cyan]\n"
@@ -81,7 +80,7 @@ class AssetManager:
         """Auto-commit any local changes in the asset repository."""
         if repo.is_dirty() or repo.untracked_files:
             repo.index.add(repo.untracked_files)
-            repo.git.add(A=True)  # Add all changes, including deletions
+            repo.git.add(A=True)
 
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             hostname = os.getenv("HOSTNAME", "unknown")
@@ -142,14 +141,14 @@ class AssetManager:
             console.print("⚠️ No asset collections installed to sync.")
             return
 
-        if not pull and not push:  # Default behavior is pull if nothing specified
+        if not pull and not push:
             pull = True
 
         from rich.panel import Panel
-        
+
         for asset_name, details in assets_to_sync.items():
             path = details["path"]
-            
+
             action = "Pulling" if pull else "Pushing" if push else "Syncing"
             console.print(Panel(
                 f"[bold]Asset:[/bold] [cyan]{asset_name}[/cyan]\n"
@@ -167,23 +166,23 @@ class AssetManager:
 
     def remove(self, name: str):
         from rich.panel import Panel
-        
+
         if name in self.assets:
             path = self.assets[name]["path"]
-            with console.status(f"[bold red]Removing asset collection '{name}'...", spinner="dots"):
-                try:
-                    shutil.rmtree(path)
-                    del self.assets[name]
-                    self._save_assets()
-                except Exception as e:
-                    console.print(Panel(
-                        f"[bold red]Failed to remove directory[/bold red]\n"
-                        f"[red]{e}[/red]",
-                        title="[X] Error",
-                        border_style="red"
-                    ))
-                    return
-            
+            console.print(f"[bold red]Removing asset collection '{name}'...[/bold red]")
+            try:
+                shutil.rmtree(path)
+                del self.assets[name]
+                self._save_assets()
+            except Exception as e:
+                console.print(Panel(
+                    f"[bold red]Failed to remove directory[/bold red]\n"
+                    f"[red]{e}[/red]",
+                    title="[X] Error",
+                    border_style="red"
+                ))
+                return
+
             console.print(Panel(
                 f"[bold green]Asset collection '{name}' removed successfully[/bold green]\n"
                 f"[dim]Path: {path}[/dim]",
@@ -205,7 +204,7 @@ asset_manager = AssetManager()
 def init():
     """Initialize the default asset collection if none are installed."""
     from rich.panel import Panel
-    
+
     if asset_manager.list():
         console.print(Panel(
             "[yellow]Asset collections already exist[/yellow]\n"
@@ -222,7 +221,7 @@ def init():
         title="[#] Initialize Asset Collections",
         border_style="cyan"
     ))
-    
+
     add_default = typer.confirm("Add the default collection?" , default=True)
 
     if add_default:
@@ -261,7 +260,7 @@ def add(
 def list_assets():
     """List all installed workflow asset collections."""
     from rich.panel import Panel
-    
+
     assets = asset_manager.list()
     if not assets:
         console.print(Panel(

@@ -8,7 +8,7 @@ import typer
 
 from ofx.settings import settings
 
-from .storage import EncryptionHandler, GitHandler, S3Handler, SSHHandler, WebDAVHandler
+from .storage import EncryptionHandler, GitHandler, S3Handler
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -76,10 +76,11 @@ class SyncProjectHandler:
 
         if self._remote_type == "git":
             self._sync_git()
-        elif self._remote_type == "ssh":
-            self._sync_ssh()
-        else:
+        elif self._remote_type == "s3":
             self._sync_remote_storage()
+        else:
+            logger.warning(f"Unknown remote type: {self._remote_type}")
+            raise ValueError(f"Unsupported remote type: {self._remote_type}")
 
     def _auto_commit(self) -> None:
         """Auto-commit changes before sync with timestamp."""
@@ -118,22 +119,6 @@ class SyncProjectHandler:
             logger.info("Successfully synced with git remote.")
         except Exception as e:
             logger.error(f"Git sync failed: {e}")
-            raise
-
-    def _sync_ssh(self) -> None:
-        """Sync with SSH remote storage."""
-        config = json.loads(self._remote_config) if self._remote_config else {}
-        handler = SSHHandler(config)
-
-        try:
-            if self._encrypt and self._encryption_key:
-                encryptor = EncryptionHandler(self._encryption_key)
-                self._encrypt_local_files(encryptor)
-
-            handler.sync(self._project_path)
-            logger.info("Successfully synced with SSH remote.")
-        except Exception as e:
-            logger.error(f"SSH sync failed: {e}")
             raise
 
     def _encrypt_local_files(self, encryptor: EncryptionHandler) -> None:

@@ -52,23 +52,41 @@ class InitHandler:
             )
             self._make_dir(self._base_path, ENGAGEMENT_FILE_STRUCTURE)
 
-        if self._remote_type:
+        self._setup_local_git()
+
+        if self._remote_type and self._remote_config.get("url"):
             self._setup_remote_storage()
 
         console.print("✅ Project initialization complete.")
 
+    def _setup_local_git(self) -> None:
+        """Initialize local git repository."""
+        import git
+
+        try:
+            try:
+                repo = git.Repo(self._base_path)
+                logger.info(f"Using existing git repository at {self._base_path}")
+            except:
+                repo = git.Repo.init(self._base_path)
+                logger.info(f"Initialized git repository at {self._base_path}")
+
+            if not repo.head.is_valid():
+                repo.index.add(repo.untracked_files or [".gitignore"])
+                repo.index.commit("Initial project structure")
+                logger.info("Created initial commit")
+                console.print("✅ Local git repository initialized.")
+        except Exception as e:
+            console.print(f"⚠️ Failed to initialize git repository: {e}")
+
     def _setup_remote_storage(self) -> None:
         """Setup remote storage based on type."""
         if self._remote_type == "git":
-            self._setup_git()
-        elif self._remote_type == "ssh":
-            self._setup_ssh()
+            self._setup_git_remote()
         elif self._remote_type == "s3":
             self._setup_s3()
-        elif self._remote_type == "webdav":
-            self._setup_webdav()
 
-    def _setup_git(self) -> None:
+    def _setup_git_remote(self) -> None:
         """Setup git remote for existing repository."""
         import git
         git_url = self._remote_config.get("url")
@@ -119,53 +137,15 @@ class InitHandler:
 
             logger.info(f"Git remote configured: {origin}")
 
-            if not repo.head.is_valid():
-                repo.index.add(repo.untracked_files or [".gitignore"])
-                repo.index.commit("Initial project structure")
-
             try:
                 origin.push(refspec=f"{branch}:{branch}", set_upstream=True)
-                console.print("✅ Pushed initial commit to remote repository.")
+                console.print("✅ Pushed to remote repository.")
             except Exception as e:
                 console.print(f"⚠️ Could not push to remote: {e}")
                 console.print("You may need to push manually later.")
 
         except Exception as e:
             console.print(f"❌ Failed to setup Git remote: {e}")
-
-    def _setup_ssh(self) -> None:
-        """Setup SSH storage configuration."""
-        config_file = self._base_path / ".ofx-remote.json"
-        config = {
-            "type": "ssh",
-            "config": self._remote_config,
-            "encrypt": self._encrypt,
-        }
-
-        if self._encrypt and self._encryption_key:
-            import hashlib
-
-            key_hash = hashlib.sha256(self._encryption_key.encode()).hexdigest()[:16]
-            config["encryption_key_hash"] = key_hash
-
-            key_file = self._base_path / ".ofx-encryption-key"
-            key_file.write_text(self._encryption_key)
-            key_file.chmod(0o600)
-            logger.info(f"Encryption key saved to {key_file} (keep this secure!)")
-
-            gitignore = self._base_path / ".gitignore"
-            if gitignore.exists():
-                content = gitignore.read_text()
-                if ".ofx-encryption-key" not in content:
-                    gitignore.write_text(content + "\n.ofx-encryption-key\n")
-
-        config_file.write_text(json.dumps(config, indent=2))
-        logger.info(f"SSH storage configuration saved to {config_file}")
-
-        from .storage import SSHHandler
-
-        SSHHandler(self._remote_config)
-        logger.info("SSH key setup complete")
 
     def _setup_s3(self) -> None:
         """Setup S3 storage configuration."""
@@ -195,35 +175,6 @@ class InitHandler:
         config_file.write_text(json.dumps(config, indent=2))
         logger.info(f"S3 storage configuration saved to {config_file}")
         logger.info("S3 will sync git repository using bundle files")
-
-    def _setup_webdav(self) -> None:
-        """Setup WebDAV storage configuration."""
-        config_file = self._base_path / ".ofx-remote.json"
-        config = {
-            "type": "webdav",
-            "config": self._remote_config,
-            "encrypt": self._encrypt,
-        }
-        if self._encrypt and self._encryption_key:
-            import hashlib
-
-            key_hash = hashlib.sha256(self._encryption_key.encode()).hexdigest()[:16]
-            config["encryption_key_hash"] = key_hash
-
-            key_file = self._base_path / ".ofx-encryption-key"
-            key_file.write_text(self._encryption_key)
-            key_file.chmod(0o600)
-            logger.info(f"Encryption key saved to {key_file} (keep this secure!)")
-
-            gitignore = self._base_path / ".gitignore"
-            if gitignore.exists():
-                content = gitignore.read_text()
-                if ".ofx-encryption-key" not in content:
-                    gitignore.write_text(content + "\n.ofx-encryption-key\n")
-
-        config_file.write_text(json.dumps(config, indent=2))
-        logger.info(f"WebDAV storage configuration saved to {config_file}")
-        logger.info("WebDAV will sync git repository using bundle files")
 
     def _make_dir(self, base: Path, items: list[str | tuple[str, list]]) -> None:
         base.mkdir(parents=True, exist_ok=True)

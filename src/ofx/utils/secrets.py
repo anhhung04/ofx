@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 class SecretStore:
     _instance: Optional["SecretStore"] = None
     _store_path: Path | None = None
-    _passphrase: Optional[str] = None
+    _passphrase: str | None = None
 
     def __new__(cls, store_path: Path | None = None, passphrase: str | None = None):
         needs_new_instance = (

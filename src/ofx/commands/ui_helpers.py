@@ -1,7 +1,9 @@
 """UI helper functions for consistent command output across OFX."""
 
 from typing import Any
+
 from rich.panel import Panel
+
 from ofx.settings import get_console
 
 console = get_console()
@@ -19,12 +21,12 @@ def success_panel(title: str, message: str, details: dict[str, Any] | None = Non
         Configured Panel object
     """
     content = f"[bold green]{message}[/bold green]"
-    
+
     if details:
         content += "\n"
         for key, value in details.items():
             content += f"\n[bold]{key}:[/bold] {value}"
-    
+
     return Panel(
         content,
         title=f"[bold green][OK] {title}[/bold green]",
@@ -44,10 +46,10 @@ def error_panel(title: str, message: str, details: str | None = None) -> Panel:
         Configured Panel object
     """
     content = f"[bold red]{message}[/bold red]"
-    
+
     if details:
         content += f"\n[red]{details}[/red]"
-    
+
     return Panel(
         content,
         title=f"[bold red][X] {title}[/bold red]",
@@ -67,10 +69,10 @@ def warning_panel(title: str, message: str, hint: str | None = None) -> Panel:
         Configured Panel object
     """
     content = f"[bold yellow]{message}[/bold yellow]"
-    
+
     if hint:
         content += f"\n[dim]{hint}[/dim]"
-    
+
     return Panel(
         content,
         title=f"[bold yellow][!] {title}[/bold yellow]",
@@ -90,12 +92,12 @@ def info_panel(title: str, message: str, details: dict[str, Any] | None = None) 
         Configured Panel object
     """
     content = message
-    
+
     if details:
         content += "\n"
         for key, value in details.items():
             content += f"\n[bold]{key}:[/bold] {value}"
-    
+
     return Panel(
         content,
         title=f"[?] {title}",

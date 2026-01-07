@@ -1,4 +1,4 @@
 """Flow command package."""
-from .app import app, ALIAS, HELP, NAME
+from .app import ALIAS, HELP, NAME, app
 
 __all__ = ["app", "NAME", "ALIAS", "HELP"]

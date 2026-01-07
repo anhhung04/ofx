@@ -2,9 +2,9 @@ import logging
 import shutil
 from pathlib import Path
 
-from ofx.runner import RunContext, WorkflowRunner
+from ofx.runner import RunContext
 from ofx.runner.tool_installer import ToolInstallerRunner
-from ofx.settings import TOOLS_BIN_DIR, settings
+from ofx.settings import DEFAULT_WORKFLOWS_DIRS, TOOLS_BIN_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -49,31 +49,31 @@ class ToolsInstallHandler:
             self.console.print("[yellow]No tools configured in the specified workflow(s)[/yellow]")
             return
 
+        self._display_tools_table(all_tools)
+
         installer = ToolInstallerRunner(
             tools=all_tools,
             ctx=RunContext(),
             parent=None,
         )
 
-        self._display_tools_table(all_tools, installer)
-
         await self._install_tools(installer)
 
     def _find_all_workflows(self) -> list[Path]:
         """Find all workflow YAML files in the configured directories"""
         workflow_files = []
-        for directory in WorkflowRunner.flows_dirs:
+        for directory in DEFAULT_WORKFLOWS_DIRS:
             if directory.exists():
                 workflow_files.extend(directory.glob("*.yml"))
                 workflow_files.extend(directory.glob("*.yaml"))
         return workflow_files
 
     def _find_workflow_file(self, workflow_name: str) -> Path | None:
-        """Find a specific workflow file by name using WorkflowRunner's search logic"""
+        """Find a specific workflow file by name using DEFAULT_WORKFLOWS_DIRS search logic"""
         if Path(workflow_name).exists():
             return Path(workflow_name)
 
-        for directory in WorkflowRunner.flows_dirs:
+        for directory in DEFAULT_WORKFLOWS_DIRS:
             for ext in [".yml", ".yaml"]:
                 path = directory / f"{workflow_name.rstrip('.yml').rstrip('.yaml')}{ext}"
                 if path.exists():
@@ -117,8 +117,8 @@ class ToolsInstallHandler:
 
         return all_tools
 
-    def _display_tools_table(self, tools: dict[str, str], installer: ToolInstallerRunner):
-        """Display tools in a formatted table with resolved templates"""
+    def _display_tools_table(self, tools: dict[str, str]):
+        """Display tools in a formatted table"""
         from rich.table import Table
         table = Table(title="Tools to Install", show_header=True, header_style="bold cyan")
         table.add_column("Tool", style="green")
@@ -126,15 +126,17 @@ class ToolsInstallHandler:
         table.add_column("Status", style="blue")
 
         for tool_bin, install_cmd in tools.items():
-            resolved_cmd = installer._resolve_template(install_cmd)
             tool_path = TOOLS_BIN_DIR / tool_bin
             tool_exists = tool_path.exists() or shutil.which(tool_bin) is not None
 
             status = "✓ Installed" if tool_exists else "✗ Not Installed"
             status_style = "green" if tool_exists else "red"
+
+            display_cmd = install_cmd if len(install_cmd) <= 60 else install_cmd[:57] + "..."
+
             table.add_row(
                 tool_bin,
-                resolved_cmd,
+                display_cmd,
                 f"[{status_style}]{status}[/{status_style}]",
             )
 

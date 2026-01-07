@@ -82,13 +82,13 @@ class StepRunner(BaseRunner):
             logger.error(self._produce_log(f"step failed: {self._error}"))
             for handler in logger.handlers:
                 handler.flush()
-        
+
         result = self.get_result()
         stdout = result.outputs.get("stdout", "")
         is_binary = result.outputs.get("binary_output", False)
         is_truncated = result.outputs.get("output_truncated", False)
         stderr_truncated = result.outputs.get("stderr_truncated", False)
-        
+
         if stdout and isinstance(stdout, str):
             msg_parts = ["stdout:"]
             if is_binary:
@@ -97,12 +97,12 @@ class StepRunner(BaseRunner):
                 msg_parts.append("[OUTPUT TRUNCATED]")
             if stderr_truncated:
                 msg_parts.append("[STDERR TRUNCATED]")
-            
+
             log_msg = " ".join(msg_parts) + f"\n{stdout}"
             logger.info(self._produce_log(log_msg))
             for handler in logger.handlers:
                 handler.flush()
-                
+
             if self.model.log_stdout:
                 log_path = self.ctx_vars.output_path / "logs"
                 log_path.mkdir(parents=True, exist_ok=True)
@@ -194,7 +194,7 @@ class StepRunner(BaseRunner):
 
             output_path = Path.cwd()
             workflow_dirs = self.ctx_vars.workflow_dirs.copy() if self.ctx_vars.workflow_dirs else []
-            
+
             parent = getattr(self, "parent", None)
             if parent and getattr(parent, "parent", None):
                 output_path = getattr(
@@ -202,18 +202,18 @@ class StepRunner(BaseRunner):
                 )
                 if hasattr(parent.parent.ctx_vars, 'workflow_dirs'):
                     workflow_dirs = parent.parent.ctx_vars.workflow_dirs.copy()
-            
+
             flow_path, workflow = find_workflow(
                 self._model.uses or "",
                 tuple(workflow_dirs)
             )
-            
+
             if Path(self._model.uses or "").exists():
                 workflow_dirs = add_workflow_dir(
                     workflow_dirs,
                     flow_path.parent
                 )
-            
+
             return WorkflowRunner(
                 workflow,
                 RunContext(
@@ -280,7 +280,7 @@ class StepRunner(BaseRunner):
                 timeout_minutes=self.model.timeout,
                 interactive=is_interactive,
             )
-        
+
         else:
             raise ValueError(f"Invalid run type '{self._run_type}' for step '{self.model.name}'.")
 

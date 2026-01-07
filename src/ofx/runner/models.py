@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from ofx.utils.misc import populate_env
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+from ofx.utils.misc import populate_env
 
 
 class RunnerStatus(Enum):

@@ -1,5 +1,6 @@
-import typer
 from typing import Annotated
+
+import typer
 from async_typer import AsyncTyper
 
 app = AsyncTyper()
@@ -97,4 +98,29 @@ def visualize(
         workflow_name=workflow_name,
         output=output,
         format=format,
+    ).run()
+
+
+@app.async_command()
+async def tools(
+    workflow_name: Annotated[
+        str,
+        typer.Argument(
+            help="Name of the workflow to install tools for. Use --all to process all workflows."
+        ),
+    ] = "",
+    all_workflows: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            help="Install tools from all workflows in the configured directories.",
+        ),
+    ] = False,
+):
+    """Install workflow tool dependencies"""
+    from ofx.commands.flow.tools import ToolsInstallHandler
+
+    await ToolsInstallHandler(
+        workflow_name=workflow_name,
+        all_workflows=all_workflows,
     ).run()

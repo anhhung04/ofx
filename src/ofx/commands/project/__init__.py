@@ -1,4 +1,4 @@
 """Project command package."""
-from ofx.commands.project.app import app, NAME, HELP
+from ofx.commands.project.app import HELP, NAME, app
 
 __all__ = ["app", "NAME", "HELP"]

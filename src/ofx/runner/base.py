@@ -1,13 +1,12 @@
 """Base runner class for workflow, job, and step execution"""
 
+import asyncio
 import logging
 import os
 import shutil
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
-
-import asyncio
 
 import aiofiles
 import aiofiles.os as aio_os
@@ -163,7 +162,7 @@ class BaseRunner:
                 return result
         logger.debug(self._produce_log(f"Resolved template:\n{value}\n==>\n{result}\n"))
         return result
-    
+
     async def _resolve_template_fields(self, fields: list[str]) -> None:
         """Resolve templates in specific model fields in parallel"""
         if not self.model or not fields:

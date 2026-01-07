@@ -4,8 +4,8 @@ from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from rich.theme import Theme
 from rich.console import Console
+from rich.theme import Theme
 
 from ofx.utils.log import reload_logging_config
 

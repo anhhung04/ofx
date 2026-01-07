@@ -1,9 +1,10 @@
-import typer
 from typing import Annotated
 
+import typer
 from rich.panel import Panel
 
 from ofx.settings import get_console
+
 from .project_manager import ProjectManager
 
 app = typer.Typer()
@@ -24,33 +25,32 @@ def init(
 ):
     """Init new OFX project"""
 
-
-    with console.status(f"[bold green]Creating project '{name}'...[/]", spinner="dots"):
-        base = ProjectManager.create_project(name)
+    console.print(f"[bold green]Creating project '{name}'...[/bold green]")
+    base = ProjectManager.create_project(name)
 
     console.print(f"[bold green]✓[/] Project created: [cyan]{name}[/]")
     console.print(f"[dim]Location: {base}[/]")
 
     from ofx.commands.project.init import InitHandler
 
-    console.print("\n[bold]Remote Storage Setup[/]")
-    setup_remote = typer.confirm(
-        "Would you like to set up remote storage?", default=True
-    )
-
-    remote_type = None
-    remote_config = None
+    console.print("\n[bold]Initializing local git repository...[/]")
+    remote_type = "git"
+    remote_config = {"url": "", "branch": "main"}
     encrypt = False
     encryption_key = ""
 
-    if setup_remote:
-        console.print("\n[cyan]Available storage types:[/] git, s3, none")
-        remote_type = typer.prompt("Select remote storage type", default="git")
+    console.print("\n[bold]Remote Storage Setup (Optional)[/]")
+    setup_remote = typer.confirm(
+        "Would you like to set up remote storage?", default=False
+    )
 
-        if remote_type not in ["git", "s3", "none"]:
-            console.print(f"[red]Invalid storage type: {remote_type}[/]")
-            remote_type = None
-        elif remote_type == "git":
+    if setup_remote:
+        console.print("\n[cyan]Available storage types:[/] git, s3")
+        storage_type = typer.prompt("Select remote storage type", default="git")
+
+        if storage_type not in ["git", "s3"]:
+            console.print(f"[red]Invalid storage type: {storage_type}[/]")
+        elif storage_type == "git":
             git_url = typer.prompt("Enter Git repository URL")
             remote_config = {"url": git_url, "branch": "main"}
 
@@ -74,10 +74,11 @@ def init(
                     console.print(
                         "[yellow]⚠️  Save this key securely! You'll need it to decrypt files.[/]"
                     )
-        elif remote_type == "s3":
+        elif storage_type == "s3":
             bucket = typer.prompt("Enter S3 bucket name")
             region = typer.prompt("Enter AWS region", default="us-east-1")
             remote_config = {"bucket": bucket, "region_name": region}
+            remote_type = "s3"
 
             console.print("\n[bold]Encryption Setup[/]")
             encrypt = typer.confirm(
@@ -99,13 +100,11 @@ def init(
                     console.print(
                         "[yellow][!] Save this key securely! You'll need it to decrypt files.[/]"
                     )
-        elif remote_type == "none":
-            remote_type = None
 
-    with console.status("[bold green]Initializing project...[/]", spinner="dots"):
-        InitHandler(
-            base, is_multiphase, remote_type, remote_config, encrypt, encryption_key
-        ).run()
+    console.print("[bold green]Initializing project...[/bold green]")
+    InitHandler(
+        base, is_multiphase, remote_type, remote_config, encrypt, encryption_key
+    ).run()
 
     console.print(
         Panel(
@@ -180,7 +179,7 @@ def list():
     """List all projects in default project path"""
     from rich.table import Table
 
-    
+
     projects = ProjectManager.list_projects()
 
     if not projects:
@@ -215,7 +214,7 @@ def list():
 @app.command(name="rm", hidden=True)
 def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     """Remove a project by name"""
-    
+
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():

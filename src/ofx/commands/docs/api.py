@@ -577,10 +577,10 @@ def show_api(
     from rich.panel import Panel
     from rich.table import Table
 
-    from ofx.settings import get_console, BASE_DATA_DIR, DATA_DIR
+    from ofx.settings import BASE_DATA_DIR, DATA_DIR, get_console
 
     console = get_console()
-    
+
     if not module and not list_modules:
         console.print()
         console.print(Panel(

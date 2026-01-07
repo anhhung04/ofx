@@ -115,7 +115,7 @@ class VisualizeHandler:
         """Extract displayable information from job steps"""
         step_list = []
         max_cmd_length = 40
-        
+
         for step in steps:
             if step.name:
                 step_list.append(step.name)
@@ -128,7 +128,7 @@ class VisualizeHandler:
                 step_list.append(f"uses: {step.uses}")
             else:
                 step_list.append("[step]")
-        
+
         return step_list
 
     def _draw_simple_graph(self, job_deps: dict, job_details: dict) -> None:
@@ -143,18 +143,18 @@ class VisualizeHandler:
 
         stages = self._find_parallel_schedule(job_keys, deps_relationships)
         terminal_max_width = 100
-        
+
         for stage_idx, stage_jobs in enumerate(stages):
             box_width = self._calculate_box_width(len(stage_jobs), terminal_max_width)
             box_spacing = 3
-            
+
             job_boxes, job_deps_lines = self._prepare_stage_boxes(stage_jobs, job_details, job_deps, box_width)
             max_box_height = max(len(box) for box in job_boxes)
-            
+
             self._pad_boxes_to_height(job_boxes, max_box_height, box_width)
             self._print_stage_boxes(job_boxes, stage_jobs)
             self._print_stage_dependencies(job_deps_lines, stage_jobs, box_width, box_spacing)
-            
+
             if stage_idx < len(stages) - 1:
                 self._print_stage_connector()
 
@@ -162,7 +162,7 @@ class VisualizeHandler:
         """Calculate optimal box width based on number of parallel jobs"""
         if num_jobs == 1:
             return 50
-        
+
         box_spacing = 3
         base_indentation = 4
         available_width = terminal_max_width - base_indentation
@@ -173,11 +173,11 @@ class VisualizeHandler:
         """Create job boxes and dependency lines for a stage"""
         job_boxes = []
         job_deps_lines = []
-        
+
         for job_id in stage_jobs:
             box_lines = self._create_simple_job_box(job_id, job_details[job_id], box_width)
             job_boxes.append(box_lines)
-            
+
             dep_line = ""
             if job_deps.get(job_id):
                 deps_str = ", ".join(job_deps[job_id])
@@ -185,7 +185,7 @@ class VisualizeHandler:
                 if len(dep_line) > box_width:
                     dep_line = dep_line[:box_width - 3] + "..."
             job_deps_lines.append(dep_line)
-        
+
         return job_boxes, job_deps_lines
 
     def _pad_boxes_to_height(self, job_boxes: list, target_height: int, box_width: int) -> None:
@@ -200,7 +200,7 @@ class VisualizeHandler:
         max_height = max(len(box) for box in job_boxes)
         base_indent = "  "
         box_spacing = "   "
-        
+
         for row_idx in range(max_height):
             row_parts = [box[row_idx] for box in job_boxes]
             if len(stage_jobs) == 1:
@@ -219,7 +219,7 @@ class VisualizeHandler:
                 base_indent = 2
                 border_width = 2
                 sub_indent = 2
-                
+
                 for idx, dep_text in enumerate(job_deps_lines):
                     if dep_text:
                         current_pos = len(dep_line.replace("[dim]", "").replace("[/dim]", ""))
@@ -241,17 +241,17 @@ class VisualizeHandler:
         lines = []
         border_padding = 2
         max_steps_to_show = 5
-        
+
         lines.append(f"+{'-' * width}+")
-        
+
         job_line = f"{job_id}: {job_detail['name']}"
         if len(job_line) > width - border_padding:
             job_line = job_line[:width - 5] + "..."
         padding = width - len(job_line) - border_padding
         lines.append(f"| [bold cyan]{job_line}[/bold cyan]{' ' * padding} |")
-        
+
         lines.append(f"|{'-' * width}|")
-        
+
         step_list = job_detail.get('step_list', [])
         if step_list:
             for idx, step_info in enumerate(step_list[:max_steps_to_show], 1):
@@ -260,7 +260,7 @@ class VisualizeHandler:
                     step_text = step_text[:width - 5] + "..."
                 padding = width - len(step_text) - border_padding
                 lines.append(f"| [dim]{step_text}[/dim]{' ' * padding} |")
-            
+
             if len(step_list) > max_steps_to_show:
                 more_text = f"  ... and {len(step_list) - max_steps_to_show} more"
                 padding = width - len(more_text) - border_padding
@@ -269,9 +269,9 @@ class VisualizeHandler:
             steps_line = f"  {job_detail['steps']} step{'s' if job_detail['steps'] != 1 else ''}"
             padding = width - len(steps_line) - border_padding
             lines.append(f"| [dim]{steps_line}[/dim]{' ' * padding} |")
-        
+
         lines.append(f"+{'-' * width}+")
-        
+
         return lines
 
     def _plan_workflow_stages(self, job_deps: dict, job_details: dict) -> list:
@@ -288,7 +288,7 @@ class VisualizeHandler:
     def _find_parallel_schedule(self, job_keys: list, deps_relationships: list) -> list:
         """Use topological sort to group jobs into parallel execution stages"""
         from collections import deque
-        
+
         graph = {job: [] for job in job_keys}
         indegree = dict.fromkeys(job_keys, 0)
 
@@ -303,7 +303,7 @@ class VisualizeHandler:
         while queue:
             current_stage = []
             stage_size = len(queue)
-            
+
             for _ in range(stage_size):
                 job = queue.popleft()
                 current_stage.append(job)
@@ -350,29 +350,14 @@ class VisualizeHandler:
             return Text("[yellow]No execution stages found[/yellow]")
 
         diagram_lines = []
-        
-        H_LINE = "─"
-        V_LINE = "│"
-        TOP_LEFT = "┌"
-        TOP_RIGHT = "┐"
-        BOTTOM_LEFT = "└"
-        BOTTOM_RIGHT = "┘"
-        T_DOWN = "┬"
-        T_UP = "┴"
-        T_RIGHT = "├"
-        T_LEFT = "┤"
-        CROSS = "┼"
-        ARROW_DOWN = "↓"
-        ARROW_RIGHT = "→"
-        
         max_width = 100
-        
+
         for stage_idx, stage_jobs in enumerate(execution_stages):
             if stage_idx > 0:
                 diagram_lines.append("")
-            
+
             job_box_width = min(35, (max_width - (len(stage_jobs) - 1) * 3) // len(stage_jobs))
-            
+
             if len(stage_jobs) == 1:
                 job_id = stage_jobs[0]
                 box = self._create_job_box(job_id, job_details[job_id], job_box_width)
@@ -381,30 +366,30 @@ class VisualizeHandler:
             else:
                 boxes = [self._create_job_box(jid, job_details[jid], job_box_width) for jid in stage_jobs]
                 max_height = max(len(box) for box in boxes)
-                
+
                 for box in boxes:
                     while len(box) < max_height:
                         box.append(" " * job_box_width)
-                
+
                 for row_idx in range(max_height):
                     row_parts = []
                     for box in boxes:
                         row_parts.append(box[row_idx])
                     diagram_lines.append("    " + "   ".join(row_parts))
-            
+
             if stage_idx < len(execution_stages) - 1:
                 diagram_lines.append("")
-                
+
                 next_stage = execution_stages[stage_idx + 1]
                 edges = self._draw_stage_connectors(
                     stage_jobs, next_stage, job_deps, job_box_width, len(stage_jobs), len(next_stage)
                 )
                 diagram_lines.extend(edges)
                 diagram_lines.append("")
-        
+
         return Text.from_markup("\n".join(diagram_lines))
-    
-    def _draw_stage_connectors(self, from_jobs: list, to_jobs: list, job_deps: dict, 
+
+    def _draw_stage_connectors(self, from_jobs: list, to_jobs: list, job_deps: dict,
                                 box_width: int, from_count: int, to_count: int) -> list[str]:
         """Draw visual connector lines between stages with modern style"""
         H_LINE = "─"
@@ -413,14 +398,14 @@ class VisualizeHandler:
         T_UP = "┴"
         CURVE_DOWN_RIGHT = "╮"
         CURVE_DOWN_LEFT = "╭"
-        ARROW_DOWN = "▼"  # Filled triangle
+        ARROW_DOWN = "▼"
         DOT = "•"
-        
+
         connector_lines = []
-        
+
         spacing = 3
         base_indent = "    "
-        
+
         deps_map = {}
         has_explicit_deps = False
         for from_job in from_jobs:
@@ -429,7 +414,7 @@ class VisualizeHandler:
                 if from_job in job_deps.get(to_job, []):
                     deps_map[from_job].append(to_job)
                     has_explicit_deps = True
-        
+
         if not has_explicit_deps:
             if from_count == 1 and to_count == 1:
                 center = base_indent + " " * (box_width // 2)
@@ -439,7 +424,7 @@ class VisualizeHandler:
                 center = base_indent + " " * (box_width // 2)
                 connector_lines.append(center + f"[dim yellow]{V_LINE}[/dim yellow]")
                 connector_lines.append(center + f"[yellow]{DOT}[/yellow]")
-                
+
                 line_start = box_width // 2
                 line_end = to_count * box_width + (to_count - 1) * spacing - (box_width // 2)
                 line = base_indent + " " * line_start
@@ -451,7 +436,7 @@ class VisualizeHandler:
                     else:
                         line += f"[dim yellow]{H_LINE}[/dim yellow]"
                 connector_lines.append(line)
-                
+
                 arrow_line = base_indent
                 for i in range(to_count):
                     pos = i * (box_width + spacing) + box_width // 2
@@ -463,7 +448,7 @@ class VisualizeHandler:
                     pos = i * (box_width + spacing) + box_width // 2
                     arrow_line += " " * (pos - len(arrow_line) + len(base_indent)) + f"[dim yellow]{V_LINE}[/dim yellow]"
                 connector_lines.append(arrow_line)
-                
+
                 line_start = box_width // 2
                 line_end = from_count * box_width + (from_count - 1) * spacing - (box_width // 2)
                 line = base_indent + " " * line_start
@@ -475,7 +460,7 @@ class VisualizeHandler:
                     else:
                         line += f"[dim yellow]{H_LINE}[/dim yellow]"
                 connector_lines.append(line)
-                
+
                 center = base_indent + " " * (box_width // 2)
                 connector_lines.append(center + f"[yellow]{ARROW_DOWN}[/yellow]")
             else:
@@ -484,7 +469,7 @@ class VisualizeHandler:
                     pos = i * (box_width + spacing) + box_width // 2
                     arrow_line += " " * (pos - len(arrow_line) + len(base_indent)) + f"[dim yellow]{V_LINE}[/dim yellow]"
                 connector_lines.append(arrow_line)
-                
+
                 arrow_line2 = base_indent
                 for i in range(from_count):
                     pos = i * (box_width + spacing) + box_width // 2
@@ -496,10 +481,10 @@ class VisualizeHandler:
                 if deps_map[from_job]:
                     from_center = from_idx * (box_width + spacing) + box_width // 2
                     line1 += " " * (from_center - len(line1) + len(base_indent)) + f"[dim cyan]{V_LINE}[/dim cyan]"
-            
+
             if line1.strip():
                 connector_lines.append(line1)
-            
+
             connections = []
             for from_idx, from_job in enumerate(from_jobs):
                 if deps_map[from_job]:
@@ -508,17 +493,17 @@ class VisualizeHandler:
                         to_idx = to_jobs.index(to_job)
                         to_center = to_idx * (box_width + spacing) + box_width // 2
                         connections.append((from_center, to_center))
-            
+
             if connections:
                 all_positions = set()
                 for from_pos, to_pos in connections:
                     all_positions.add(from_pos)
                     all_positions.add(to_pos)
-                
+
                 if len(all_positions) > 1:
                     min_pos = min(all_positions)
                     max_pos = max(all_positions)
-                    
+
                     hline = base_indent + " " * min_pos
                     for i in range(max_pos - min_pos + 1):
                         pos = min_pos + i
@@ -532,19 +517,19 @@ class VisualizeHandler:
                         else:
                             hline += f"[dim cyan]{H_LINE}[/dim cyan]"
                     connector_lines.append(hline)
-            
+
             arrow_line = base_indent
             for to_idx, to_job in enumerate(to_jobs):
                 to_center = to_idx * (box_width + spacing) + box_width // 2
                 has_dep = any(to_job in deps_map.get(from_job, []) for from_job in from_jobs)
                 if has_dep:
                     arrow_line += " " * (to_center - len(arrow_line) + len(base_indent)) + f"[cyan]{ARROW_DOWN}[/cyan]"
-            
+
             if arrow_line.strip():
                 connector_lines.append(arrow_line)
-        
+
         return connector_lines
-    
+
     def _create_job_box(self, job_id: str, job_detail: dict, width: int) -> list[str]:
         """Create an ASCII box for a job with modern rounded style"""
         H_LINE = "─"
@@ -553,59 +538,59 @@ class VisualizeHandler:
         TOP_RIGHT = "╮"
         BOTTOM_LEFT = "╰"
         BOTTOM_RIGHT = "╯"
-        
+
         if job_detail['has_outputs'] and job_detail['has_hooks']:
             color = "green"
-            symbol = "◆"  # Diamond
+            symbol = "◆"
         elif job_detail['has_outputs']:
             color = "blue"
-            symbol = "▸"  # Right triangle
+            symbol = "▸"
         elif job_detail['has_hooks']:
             color = "yellow"
-            symbol = "●"  # Circle
+            symbol = "●"
         else:
             color = "white"
-            symbol = "▫"  # Square
-        
+            symbol = "▫"
+
         lines = []
         inner_width = width - 2
-        
+
         lines.append(f"[{color}]{TOP_LEFT}{H_LINE * inner_width}{TOP_RIGHT}[/{color}]")
-        
+
         job_id_text = f"{symbol} {job_id}"
         if len(job_id_text) > inner_width:
             job_id_text = job_id_text[:inner_width-3] + "..."
         padding = inner_width - len(job_id_text)
         lines.append(f"[{color}]{V_LINE}[/{color}][bold {color}]{job_id_text}{' ' * padding}[/bold {color}][{color}]{V_LINE}[/{color}]")
-        
+
         job_name = job_detail['name']
         if len(job_name) > inner_width:
             job_name = job_name[:inner_width-3] + "..."
         padding = inner_width - len(job_name)
         lines.append(f"[{color}]{V_LINE}[/{color}][dim]{job_name}{' ' * padding}[/dim][{color}]{V_LINE}[/{color}]")
-        
+
         lines.append(f"[{color}]{V_LINE}[dim]{H_LINE * inner_width}[/dim]{V_LINE}[/{color}]")
-        
+
         steps_icon = "✦"
         steps_text = f"{steps_icon} {job_detail['steps']} step{'s' if job_detail['steps'] != 1 else ''}"
         padding = inner_width - len(steps_text)
         lines.append(f"[{color}]{V_LINE}[/{color}][dim]{steps_text}{' ' * padding}[/dim][{color}]{V_LINE}[/{color}]")
-        
+
         if job_detail['has_outputs'] or job_detail['has_hooks']:
             features = []
             if job_detail['has_outputs']:
                 features.append("→ Out")
             if job_detail['has_hooks']:
                 features.append("↪ Hook")
-            
+
             features_text = " ".join(features)
             if len(features_text) > inner_width:
                 features_text = features_text[:inner_width-3] + "..."
             padding = inner_width - len(features_text)
             lines.append(f"[{color}]{V_LINE}[/{color}][dim italic]{features_text}{' ' * padding}[/dim italic][{color}]{V_LINE}[/{color}]")
-        
+
         lines.append(f"[{color}]{BOTTOM_LEFT}{H_LINE * inner_width}{BOTTOM_RIGHT}[/{color}]")
-        
+
         return lines
 
     def _draw_ascii_graph(self, level_jobs: dict, job_deps: dict, job_details: dict) -> list:
@@ -709,7 +694,7 @@ class VisualizeHandler:
         avg_steps = total_steps / len(job_details) if job_details else 0
         jobs_with_outputs = sum(1 for d in job_details.values() if d['has_outputs'])
         jobs_with_hooks = sum(1 for d in job_details.values() if d['has_hooks'])
-        
+
         table = Table(
             title=f"[bold red][#] Job Specifications[/bold red] [dim]({len(job_details)} jobs, {total_steps} steps total, avg {avg_steps:.1f} steps/job)[/dim]",
             show_header=True,
@@ -731,10 +716,10 @@ class VisualizeHandler:
                 complexity += 2
             if details['has_hooks']:
                 complexity += 1
-            
+
             complexity_label = "Low" if complexity <= 3 else "Med" if complexity <= 6 else "High"
             complexity_color = "green" if complexity <= 3 else "yellow" if complexity <= 6 else "red"
-            
+
             table.add_row(
                 f"[bold]{job_id}[/bold]",
                 details['name'],
@@ -745,7 +730,7 @@ class VisualizeHandler:
             )
 
         self.console.print(table)
-        
+
         summary = Text()
         summary.append("\nSummary: ", style="bold white")
         summary.append(f"Jobs with outputs: {jobs_with_outputs}/{len(job_details)} | ", style="dim")
@@ -755,7 +740,7 @@ class VisualizeHandler:
     def _display_job_steps(self, workflow) -> None:
         """Display detailed steps for each job in the workflow with recursive subworkflow support"""
         self.console.print()
-        
+
         steps_panel = Panel(
             "[white]Detailed step-by-step breakdown with type indicators[/white]",
             title="[bold cyan][>>] Workflow Steps Hierarchy[/bold cyan]",
@@ -838,13 +823,13 @@ class VisualizeHandler:
     def _generate_mermaid(self, workflow: dict) -> str:
         """Generate Mermaid format string for the workflow"""
         lines = ["graph TD"]
-        
+
         if "jobs" in workflow:
             for job_name, job_config in workflow["jobs"].items():
                 description = job_config.get("name", job_name) if isinstance(job_config, dict) else str(job_config)
                 safe_description = description.replace('"', "'").replace("[", "(").replace("]", ")")
                 lines.append(f'    {job_name}["{job_name}: {safe_description}"]')
-                
+
                 if isinstance(job_config, dict) and "needs" in job_config:
                     needs = job_config["needs"]
                     if isinstance(needs, list):
@@ -852,7 +837,7 @@ class VisualizeHandler:
                             lines.append(f"    {dep} --> {job_name}")
                     elif isinstance(needs, str):
                         lines.append(f"    {needs} --> {job_name}")
-        
+
         return "\n".join(lines)
 
     def _generate_dot(self, workflow: dict) -> str:
@@ -882,17 +867,17 @@ class VisualizeHandler:
         lines.append("skinparam defaultTextAlignment center")
         lines.append("skinparam BoxPadding 10")
         lines.append("")
-        
+
         if "jobs" in workflow:
             for job_name, job_config in workflow["jobs"].items():
                 description = job_config.get("name", job_name) if isinstance(job_config, dict) else str(job_config)
                 safe_description = description.replace('"', "'")
-                
+
                 steps_count = len(job_config.get("steps", [])) if isinstance(job_config, dict) else 0
                 lines.append(f'rectangle "{job_name}\n{safe_description}\n({steps_count} steps)" as {job_name}')
-            
+
             lines.append("")
-            
+
             for job_name, job_config in workflow["jobs"].items():
                 if isinstance(job_config, dict) and "needs" in job_config:
                     needs = job_config["needs"]
@@ -901,25 +886,25 @@ class VisualizeHandler:
                             lines.append(f"{dep} --> {job_name}")
                     elif isinstance(needs, str):
                         lines.append(f"{needs} --> {job_name}")
-        
+
         lines.append("@enduml")
         return "\n".join(lines)
 
     def _generate_d2(self, workflow: dict) -> str:
         """Generate D2 format string for the workflow"""
         lines = []
-        
+
         if "jobs" in workflow:
             for job_name, job_config in workflow["jobs"].items():
                 description = job_config.get("name", job_name) if isinstance(job_config, dict) else str(job_config)
                 steps_count = len(job_config.get("steps", [])) if isinstance(job_config, dict) else 0
-                
+
                 lines.append(f"{job_name}: {{")
-                lines.append(f"  shape: rectangle")
+                lines.append("  shape: rectangle")
                 lines.append(f'  label: "{job_name}\\n{description}\\n({steps_count} steps)"')
                 lines.append("}")
                 lines.append("")
-            
+
             for job_name, job_config in workflow["jobs"].items():
                 if isinstance(job_config, dict) and "needs" in job_config:
                     needs = job_config["needs"]
@@ -928,20 +913,20 @@ class VisualizeHandler:
                             lines.append(f"{dep} -> {job_name}")
                     elif isinstance(needs, str):
                         lines.append(f"{needs} -> {job_name}")
-        
+
         return "\n".join(lines)
 
     def _generate_json(self, workflow: dict) -> str:
         """Generate JSON format with workflow graph structure"""
         import json
-        
+
         graph = {
             "name": workflow.get("name", "Unnamed Workflow"),
             "description": workflow.get("description", ""),
             "nodes": [],
             "edges": []
         }
-        
+
         if "jobs" in workflow:
             for job_name, job_config in workflow["jobs"].items():
                 node = {
@@ -950,7 +935,7 @@ class VisualizeHandler:
                     "steps": len(job_config.get("steps", [])) if isinstance(job_config, dict) else 0
                 }
                 graph["nodes"].append(node)
-                
+
                 if isinstance(job_config, dict) and "needs" in job_config:
                     needs = job_config["needs"]
                     if isinstance(needs, list):
@@ -958,20 +943,20 @@ class VisualizeHandler:
                             graph["edges"].append({"from": dep, "to": job_name})
                     elif isinstance(needs, str):
                         graph["edges"].append({"from": needs, "to": job_name})
-        
+
         return json.dumps(graph, indent=2)
 
     def _generate_yaml(self, workflow: dict) -> str:
         """Generate YAML format with workflow graph structure"""
         import yaml
-        
+
         graph = {
             "name": workflow.get("name", "Unnamed Workflow"),
             "description": workflow.get("description", ""),
             "nodes": [],
             "edges": []
         }
-        
+
         if "jobs" in workflow:
             for job_name, job_config in workflow["jobs"].items():
                 node = {
@@ -980,7 +965,7 @@ class VisualizeHandler:
                     "steps": len(job_config.get("steps", [])) if isinstance(job_config, dict) else 0
                 }
                 graph["nodes"].append(node)
-                
+
                 if isinstance(job_config, dict) and "needs" in job_config:
                     needs = job_config["needs"]
                     if isinstance(needs, list):
@@ -988,7 +973,7 @@ class VisualizeHandler:
                             graph["edges"].append({"from": dep, "to": job_name})
                     elif isinstance(needs, str):
                         graph["edges"].append({"from": needs, "to": job_name})
-        
+
         return yaml.dump(graph, default_flow_style=False, sort_keys=False)
 
     def _calculate_dependency_levels(self, root_jobs: list, job_deps: dict) -> dict:

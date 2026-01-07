@@ -15,7 +15,7 @@ wheels/
 
 out/
 
-src/ofx/data/site/
+site/
 
 .pytest_cache/
 # Byte-compiled / optimized / DLL files

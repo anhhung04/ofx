@@ -143,7 +143,7 @@ class CommandRunner(BaseRunner):
                 "stderr": stderr,
                 "exit_code": exit_code,
             })
-            
+
             if self._outputs_file and self._outputs_file.exists():
                 try:
                     outputs_content = self._outputs_file.read_text().strip()

@@ -13,7 +13,7 @@ class ValidationError:
     """Represents a validation error."""
 
     def __init__(self, severity: str, message: str, location: str = None):
-        self.severity = severity  # 'error' or 'warning'
+        self.severity = severity
         self.message = message
         self.location = location
 

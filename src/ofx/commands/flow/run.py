@@ -1,16 +1,22 @@
 import json
 import logging
 import tempfile
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
+from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
-from rich.console import Group
 
 from ofx.runner import RunContext, WorkflowRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIRS, SECRETS_DIR, TEMP_DIR, get_console, settings
-from ofx.utils.misc import find_workflow, load_secrets, add_workflow_dir
+from ofx.settings import (
+    DEFAULT_WORKFLOWS_DIRS,
+    SECRETS_DIR,
+    TEMP_DIR,
+    get_console,
+    settings,
+)
+from ofx.utils.misc import add_workflow_dir, find_workflow, load_secrets
 
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
@@ -52,25 +58,25 @@ class FlowRunHandler:
 
         try:
             self._process_inputs()
-            
+
             panel_content = [
                 f"[bold cyan]Workflow:[/bold cyan] {self.workflow_name}",
                 f"[bold cyan]Output:[/bold cyan] {self.output.as_posix()}",
             ]
-            
+
             if self.input:
-                panel_content.append("")  # Empty line for spacing
+                panel_content.append("")
                 panel_content.append(self._create_input_table())
-            
+
             console.print(Panel(
                 Group(*panel_content),
                 title="[bold green][>] Workflow Execution[/bold green]",
                 border_style="green",
                 padding=(1, 2)
             ))
-            
+
             flow_path, workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
-            
+
             runner = WorkflowRunner(
                 workflow,
                 ctx=RunContext(
@@ -93,7 +99,7 @@ class FlowRunHandler:
                 ))
             else:
                 console.print(Panel(
-                    f"[bold green]Workflow completed successfully![/bold green]",
+                    "[bold green]Workflow completed successfully![/bold green]",
                     title="[bold green][OK] Success[/bold green]",
                     border_style="green"
                 ))
@@ -106,13 +112,13 @@ class FlowRunHandler:
                 end_time = time.time()
 
                 total_time = end_time - start_time
-                
+
                 stats = pstats.Stats(profiler)
                 stats.sort_stats('cumulative')
 
                 profile_file = self.output / "profile.prof"
                 profiler.dump_stats(str(profile_file))
-                
+
                 console.print(Panel(
                     f"[bold]Total execution time:[/bold] [cyan]{total_time:.2f}s[/cyan]\n"
                     f"[bold]Profile saved to:[/bold] [dim]{profile_file}[/dim]",
@@ -158,11 +164,11 @@ class FlowRunHandler:
             border_style="dim cyan",
             padding=(0, 1),
         )
-        
+
         table.add_column("Parameter", style="bold yellow", no_wrap=True)
         table.add_column("Value", style="white")
         table.add_column("Type", style="dim", justify="right")
-        
+
         for key, value in self.input.items():
             if isinstance(value, dict):
                 try:
@@ -187,7 +193,7 @@ class FlowRunHandler:
             else:
                 formatted_value = str(value)
                 value_type = "string"
-            
+
             table.add_row(key, formatted_value, value_type)
-        
+
         return table

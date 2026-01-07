@@ -5,6 +5,7 @@ def reload_logging_config(settings):
     """Reloads the logging configuration based on the current settings"""
     from rich.console import Console
     from rich.logging import RichHandler
+
     from ofx.settings import RICH_THEME
 
     branding = settings.app_branding
@@ -31,5 +32,5 @@ def reload_logging_config(settings):
     else:
         log_handler.setLevel(logging.INFO)
         pre_logger.setLevel(logging.INFO)
-    
+
     pre_logger.addHandler(log_handler)
