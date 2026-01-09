@@ -90,6 +90,7 @@ nav:
                             - Overview: guide/jobs-steps.md
                             - Jobs: guide/jobs-steps/jobs.md
                             - Steps: guide/jobs-steps/steps.md
+                            - Matrix Strategy: guide/jobs-steps/matrix-strategy.md
                             - Outputs: guide/jobs-steps/outputs.md
                             - Script files: guide/jobs-steps/script-file.md
                   - Hooks System:

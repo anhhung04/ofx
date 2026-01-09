@@ -25,10 +25,15 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Python development headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3.12-dev build-essential
+
       - name: Install twine for publishing
         run: |
           uv tool install twine
-          
+
       - name: Build package
         run: |
           uv build --wheel --out-dir dist
