@@ -1,0 +1,49 @@
+name: Matrix Test Quick
+description: Quick test for matrix features
+
+jobs:
+  basic:
+    name: "Test ${{ matrix.os }}"
+    strategy:
+      matrix:
+        os: [linux, windows]
+    steps:
+      - name: Display OS
+        run: 'echo "OS: ${{ matrix.os }}"'
+
+  excluded:
+    name: "Browser ${{ matrix.browser }}"
+    needs: basic
+    strategy:
+      matrix:
+        browser: [chrome, firefox, safari]
+        os: [ubuntu, macos]
+      exclude:
+        - browser: safari
+          os: ubuntu
+    steps:
+      - name: Test browser
+        run: 'echo "Testing ${{ matrix.browser }} on ${{ matrix.os }}"'
+
+  included:
+    name: "Build ${{ matrix.arch }}"
+    needs: excluded
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+      include:
+        - arch: riscv
+          experimental: true
+    steps:
+      - name: Build
+        run: |
+          echo "Building for ${{ matrix.arch }}"
+          if [ "${{ matrix.experimental }}" = "true" ]; then
+            echo "Experimental build"
+          fi
+
+  summary:
+    needs: [basic, excluded, included]
+    steps:
+      - name: Summary
+        run: 'echo "All tests passed"'

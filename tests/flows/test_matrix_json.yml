@@ -1,0 +1,19 @@
+name: Matrix JSON Test
+description: Test matrix values with JSON parsing
+
+jobs:
+  test_json:
+    name: "Test ${{ matrix.config.name }}"
+    strategy:
+      matrix:
+        config:
+          - '{"name": "dev", "port": 3000}'
+          - '{"name": "prod", "port": 8080}'
+        flag: ["true", "false"]
+    steps:
+      - name: Show parsed values
+        run: |
+          echo "Config name: ${{ matrix.config.name }}"
+          echo "Config port: ${{ matrix.config.port }}"
+          echo "Flag (boolean): ${{ matrix.flag }}"
+          echo "Flag type check: ${{ matrix.flag == true }}"

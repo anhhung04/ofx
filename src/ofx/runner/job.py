@@ -35,7 +35,8 @@ class JobRunner(BaseRunner):
                     "inputs": self.ctx_vars.inputs | resolved_inputs,
                     "envs": self.ctx_vars.envs | resolved_envs,
                     "secrets": self.ctx_vars.secrets | resolved_secrets,
-                }
+                },
+                deep=True,
             )
 
             step_runner = StepRunner(

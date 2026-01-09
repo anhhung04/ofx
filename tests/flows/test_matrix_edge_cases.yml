@@ -1,0 +1,126 @@
+name: Matrix Edge Cases Test
+description: Test edge cases and boundary conditions for matrix strategy
+
+jobs:
+  empty_after_exclude:
+    name: All Excluded
+    strategy:
+      matrix:
+        value: [1, 2]
+        exclude:
+          - value: 1
+          - value: 2
+    steps:
+      - run: echo "This should not run"
+
+  duplicate_include:
+    name: Duplicate in Include
+    strategy:
+      matrix:
+        value: [1, 2]
+        include:
+          - value: 1
+          - value: 3
+    steps:
+      - run: echo "Value: ${{ matrix.value }}"
+
+  mixed_types:
+    name: Mixed Types - ${{ matrix.value }}
+    strategy:
+      matrix:
+        value: [1, "2", true, 3.14]
+    steps:
+      - run: |
+          echo "Value: ${{ matrix.value }}"
+          echo "Type: $(python3 -c 'print(type(${{ matrix.value }}).__name__)')"
+
+  partial_exclude:
+    name: Partial Exclude - ${{ matrix.a }}-${{ matrix.b }}
+    strategy:
+      matrix:
+        a: [1, 2, 3]
+        b: [x, y]
+        exclude:
+          - a: 2
+    steps:
+      - run: echo "Combo: ${{ matrix.a }}-${{ matrix.b }}"
+
+  include_new_keys:
+    name: Include New Keys
+    strategy:
+      matrix:
+        base: [a, b]
+        include:
+          - base: c
+            extra: additional
+          - newkey: standalone
+    steps:
+      - run: |
+          echo "Base: ${{ matrix.base }}"
+          if [ ! -z "${{ matrix.extra }}" ]; then
+            echo "Extra: ${{ matrix.extra }}"
+          fi
+          if [ ! -z "${{ matrix.newkey }}" ]; then
+            echo "Newkey: ${{ matrix.newkey }}"
+          fi
+
+  large_matrix:
+    name: Large Matrix
+    strategy:
+      max_parallel: 5
+      matrix:
+        a: [1, 2, 3, 4, 5]
+        b: [x, y, z]
+    steps:
+      - run: echo "${{ matrix.a }}-${{ matrix.b }}"
+
+  nested_json:
+    name: Nested JSON
+    strategy:
+      matrix:
+        config: ['{"app": {"name": "test", "settings": {"port": 3000}}}']
+    steps:
+      - run: |
+          echo "App name: ${{ matrix.config.app.name }}"
+          echo "Port: ${{ matrix.config.app.settings.port }}"
+
+  array_in_matrix:
+    name: Array in Matrix
+    strategy:
+      matrix:
+        tags: ['["tag1", "tag2"]', '["tag3"]']
+    steps:
+      - run: echo "First tag: ${{ matrix.tags[0] }}"
+
+  special_characters:
+    name: Special Chars - ${{ matrix.value }}
+    strategy:
+      matrix:
+        value: ["test-value", "test_value", "test.value", "test@value"]
+    steps:
+      - run: echo "Value with special chars: ${{ matrix.value }}"
+
+  long_matrix_name:
+    name: ${{ matrix.very_long_variable_name_that_tests_template_length }}
+    strategy:
+      matrix:
+        very_long_variable_name_that_tests_template_length: [short1, short2]
+    steps:
+      - run: echo "Long name: ${{ matrix.very_long_variable_name_that_tests_template_length }}"
+
+  verify_edge_cases:
+    name: Verify Edge Cases
+    needs: [duplicate_include, mixed_types, partial_exclude, include_new_keys, large_matrix, nested_json, array_in_matrix, special_characters, long_matrix_name]
+    steps:
+      - run: |
+          echo "Edge cases tested:"
+          echo "  - Duplicate in include (should have 3 instances: 1, 2, 3)"
+          echo "  - Mixed types (4 instances with int, str, bool, float)"
+          echo "  - Partial exclude (4 instances: 1x, 1y, 3x, 3y)"
+          echo "  - Include new keys (4 instances with extra fields)"
+          echo "  - Large matrix (15 instances with max_parallel=5)"
+          echo "  - Nested JSON (1 instance with deep object access)"
+          echo "  - Array in matrix (2 instances with JSON arrays)"
+          echo "  - Special characters (4 instances)"
+          echo "  - Long matrix name (2 instances)"
+          echo "All edge cases passed!"

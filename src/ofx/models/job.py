@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing import Any, ClassVar, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -10,6 +10,30 @@ except Exception:  # pragma: no cover - cython optional
 
 from ofx.models import DefaultConfig
 from ofx.models.step import Step
+
+
+class MatrixStrategy(BaseModel):
+    """Matrix strategy for running job variations"""
+    matrix: dict[str, list[Any]] = Field(
+        ...,
+        description="Matrix variables with lists of values to create job combinations",
+    )
+    max_parallel: int | None = Field(
+        None,
+        description="Maximum number of matrix jobs to run in parallel (default: unlimited)",
+    )
+    fail_fast: bool = Field(
+        True,
+        description="Whether to cancel remaining matrix jobs when one fails",
+    )
+    include: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Additional matrix combinations to include",
+    )
+    exclude: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Matrix combinations to exclude from execution",
+    )
 
 
 class Job(BaseModel):
@@ -23,6 +47,10 @@ class Job(BaseModel):
     )
     run_if: str | bool = Field(
         True, description="Condition to run the job (e.g., 'success()', 'failure()')"
+    )
+    strategy: MatrixStrategy | None = Field(
+        None,
+        description="Matrix strategy for running multiple variations of the job",
     )
     env: dict[str, str] = Field(
         default_factory=dict,

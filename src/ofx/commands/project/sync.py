@@ -167,21 +167,6 @@ class SyncProjectHandler:
             except Exception as e:
                 logger.error(f"S3 sync failed: {e}")
                 raise
-
-        elif self._remote_type == "webdav":
-            handler = WebDAVHandler(config)
-            try:
-                try:
-                    handler.fetch(self._project_path)
-                    logger.info("Fetched changes from WebDAV")
-                except Exception:
-                    logger.info("No existing remote found, will create initial sync")
-
-                handler.sync(self._project_path)
-                logger.info("Synced project to WebDAV remote storage.")
-            except Exception as e:
-                logger.error(f"WebDAV sync failed: {e}")
-                raise
         else:
             logger.warning(f"Unknown remote storage type: {self._remote_type}")
 

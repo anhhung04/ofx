@@ -1,7 +1,8 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    UV_COMPILE_BYTECODE=1
+    UV_COMPILE_BYTECODE=1 \
+    OFX_COMPILE=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
