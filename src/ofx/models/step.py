@@ -26,7 +26,7 @@ class Step(BaseModel):
         True, description="Condition to run the step (e.g., 'success()', 'failure()')"
     )
     env: dict[str, str] = Field(
-        default_factory=dict,
+        default={},
         description="Environment variables for the step",
     )
     continue_on_error: bool = Field(

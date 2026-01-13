@@ -53,7 +53,7 @@ class Job(BaseModel):
         description="Matrix strategy for running multiple variations of the job",
     )
     env: dict[str, str] = Field(
-        default_factory=dict,
+        default={},
         description="A map of variables that are available to all steps in the job",
     )
     outputs: dict[str, str] = Field(

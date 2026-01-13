@@ -124,9 +124,9 @@ class BaseRunner:
                 "file_read": _read_file,
                 "file_write": _write_file,
                 "file_exists": aio_os.path.exists,
-                "env": os.getenv,
                 "python": __import__('sys').executable,
                 "pip_install": lambda pkg: f'"{__import__("sys").executable}" -m pip install --upgrade {pkg}',
+                "env": self.ctx_vars.envs,
             }
         SUPPORT_FUNCS = BaseRunner._support_funcs_cache.copy()
         SUPPORT_FUNCS["run_id"] = self._id

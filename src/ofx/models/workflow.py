@@ -57,7 +57,7 @@ class Workflow(BaseModel):
         "No provided description", description="Description of the workflow"
     )
     env: dict[str, str] = Field(
-        default_factory=dict, description="Environment variables for the workflow"
+        default={}, description="Environment variables for the workflow"
     )
     workflow_dispatch: None | WorkflowDispatch = Field(
         None,

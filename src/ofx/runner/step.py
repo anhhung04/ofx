@@ -234,7 +234,7 @@ class StepRunner(BaseRunner):
             assert self.model.script is not None, "Script cannot be None for SCRIPT run type"
             return ScriptRunner(
                 self.model.script,
-                self.ctx_vars.model_copy(),
+                self.ctx_vars.model_copy(deep=True),
                 shell=self.model.shell,
                 working_dir=self._resolve_working_dir(),
                 parent=self,
@@ -245,7 +245,7 @@ class StepRunner(BaseRunner):
             assert self.model.run is not None, "Run cannot be None for COMMAND run type"
             return CommandRunner(
                 self.model.run,
-                self.ctx_vars.model_copy(),
+                self.ctx_vars.model_copy(deep=True),
                 shell=self.model.shell,
                 working_dir=self._resolve_working_dir(),
                 parent=self,
@@ -273,7 +273,7 @@ class StepRunner(BaseRunner):
 
             return CommandRunner(
                 cmd,
-                self.ctx_vars.model_copy(),
+                self.ctx_vars.model_copy(deep=True),
                 shell=self.model.shell,
                 working_dir=working_dir,
                 parent=self,

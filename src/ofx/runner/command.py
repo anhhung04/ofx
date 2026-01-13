@@ -51,7 +51,7 @@ class CommandRunner(BaseRunner):
 
         if not self._interactive:
             self._outputs_file = Path(tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1])
-            self.ctx_vars.envs["OFX_OUTPUTS"] = str(self._outputs_file)
+            self._ctx.envs["OFX_OUTPUTS"] = str(self._outputs_file)
 
         try:
             if self._interactive:

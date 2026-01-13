@@ -35,7 +35,7 @@ class RunContext(BaseModel):
     allow_interactive: bool = Field(default=False, description="Whether interactive mode is allowed (single job in stage)")
     workflow_dirs: list[Path] = Field(default=DEFAULT_WORKFLOWS_DIRS, description="Directories to search for workflow files")
     workflow_dir: Path = Field(default=Path.cwd(), description="Directory of the current workflow being executed")
-
+    
 class RunResult(BaseModel):
     """Result of a runner execution"""
     status: RunnerStatus
