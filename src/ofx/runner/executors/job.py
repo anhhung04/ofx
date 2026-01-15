@@ -5,9 +5,8 @@ import time
 from typing import Any
 
 from ofx.models.job import Job
-from ofx.runner.base import BaseRunner
-from ofx.runner.models import RunContext, RunnerStatus
-from ofx.runner.step import StepRunner
+from ofx.runner.core import BaseRunner, RunContext, RunnerStatus
+from ofx.runner.executors.step import StepRunner
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
