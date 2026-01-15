@@ -7,6 +7,7 @@ import yaml
 
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
+from ofx.runner.matrix import MatrixExpander
 
 
 @pytest.fixture
@@ -413,13 +414,17 @@ jobs:
 
         await runner._planning_jobs()
 
-        matrix_ids = runner._get_expanded_job_ids("matrix_job")
+        matrix_ids = MatrixExpander.get_expanded_job_ids(
+            runner._expanded_jobs, "matrix_job"
+        )
         assert len(matrix_ids) == 3
         assert "matrix_job_0" in matrix_ids
         assert "matrix_job_1" in matrix_ids
         assert "matrix_job_2" in matrix_ids
 
-        normal_ids = runner._get_expanded_job_ids("normal_job")
+        normal_ids = MatrixExpander.get_expanded_job_ids(
+            runner._expanded_jobs, "normal_job"
+        )
         assert normal_ids == ["normal_job"]
 
     @pytest.mark.asyncio

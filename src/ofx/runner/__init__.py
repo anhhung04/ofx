@@ -3,9 +3,9 @@
 from ofx.runner.core import BaseRunner, RunContext, RunnerStatus, RunResult, RunType
 from ofx.runner.executors import (
     CommandRunner,
+    JobRunner,
     ScriptRunner,
     StepRunner,
-    JobRunner,
     WorkflowRunner,
 )
 
