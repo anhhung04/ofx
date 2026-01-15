@@ -10,8 +10,7 @@ from pathlib import Path
 from typing import Any
 from zlib import compress
 
-from ofx.runner.base import BaseRunner
-from ofx.runner.models import RunContext
+from ofx.runner.core import BaseRunner, RunContext
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -50,12 +49,18 @@ class CommandRunner(BaseRunner):
             raise RuntimeError(f"Shell not found: {self._shell}") from None
 
         if not self._interactive:
-            self._outputs_file = Path(tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1])
+            self._outputs_file = Path(
+                tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1]
+            )
             self._ctx.envs["OFX_OUTPUTS"] = str(self._outputs_file)
 
         try:
             if self._interactive:
-                logger.info(self._produce_log("Running in interactive mode (stdin/stdout connected to terminal)"))
+                logger.info(
+                    self._produce_log(
+                        "Running in interactive mode (stdin/stdout connected to terminal)"
+                    )
+                )
                 proc = await asyncio.create_subprocess_shell(
                     self._cmd,
                     executable=self._shell,
@@ -67,11 +72,15 @@ class CommandRunner(BaseRunner):
                 )
 
                 try:
-                    exit_code = await asyncio.wait_for(proc.wait(), self._timeout_minutes * 60)
+                    exit_code = await asyncio.wait_for(
+                        proc.wait(), self._timeout_minutes * 60
+                    )
                 except TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+                    raise RuntimeError(
+                        f"Command timed out after {self._timeout_minutes} minutes"
+                    ) from None
 
                 stdout = "[Interactive mode - output shown in real-time]"
                 stderr = ""
@@ -86,12 +95,16 @@ class CommandRunner(BaseRunner):
                 )
 
                 try:
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), self._timeout_minutes * 60)
+                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                        proc.communicate(), self._timeout_minutes * 60
+                    )
                     exit_code = proc.returncode
                 except TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+                    raise RuntimeError(
+                        f"Command timed out after {self._timeout_minutes} minutes"
+                    ) from None
 
                 max_size = settings.max_output_size
 
@@ -100,16 +113,25 @@ class CommandRunner(BaseRunner):
                     stdout = stdout_bytes.decode("utf-8").strip()
 
                     if len(stdout_bytes) > max_size:
-                        stdout = stdout_bytes[:max_size].decode("utf-8", errors="ignore") + "\n... [OUTPUT TRUNCATED]"
+                        stdout = (
+                            stdout_bytes[:max_size].decode("utf-8", errors="ignore")
+                            + "\n... [OUTPUT TRUNCATED]"
+                        )
                         self._result.outputs["output_truncated"] = True
 
                     if len(stderr_bytes) > max_size:
-                        stderr = stderr_bytes[:max_size].decode("utf-8", errors="ignore") + "\n... [STDERR TRUNCATED]"
+                        stderr = (
+                            stderr_bytes[:max_size].decode("utf-8", errors="ignore")
+                            + "\n... [STDERR TRUNCATED]"
+                        )
                         self._result.outputs["stderr_truncated"] = True
 
                 except UnicodeDecodeError:
                     if len(stdout_bytes) > max_size:
-                        stdout = base64.b64encode(stdout_bytes[:max_size]).decode("utf-8") + "... [BINARY OUTPUT TRUNCATED]"
+                        stdout = (
+                            base64.b64encode(stdout_bytes[:max_size]).decode("utf-8")
+                            + "... [BINARY OUTPUT TRUNCATED]"
+                        )
                         self._result.outputs["binary_output"] = True
                         self._result.outputs["output_truncated"] = True
                     else:
@@ -117,7 +139,10 @@ class CommandRunner(BaseRunner):
                         self._result.outputs["binary_output"] = True
 
                     if len(stderr_bytes) > max_size:
-                        stderr = base64.b64encode(stderr_bytes[:max_size]).decode("utf-8") + "... [BINARY STDERR TRUNCATED]"
+                        stderr = (
+                            base64.b64encode(stderr_bytes[:max_size]).decode("utf-8")
+                            + "... [BINARY STDERR TRUNCATED]"
+                        )
                         self._result.outputs["stderr_truncated"] = True
                     else:
                         stderr = base64.b64encode(stderr_bytes).decode("utf-8")
@@ -132,17 +157,21 @@ class CommandRunner(BaseRunner):
                     raise RuntimeError(f"Command failed: {stderr}") from None
 
         except TimeoutError:
-            raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+            raise RuntimeError(
+                f"Command timed out after {self._timeout_minutes} minutes"
+            ) from None
         except RuntimeError:
             raise
         except Exception as e:
             raise RuntimeError(f"Command error: {str(e)}") from e
         finally:
-            self._result.outputs.update({
-                "stdout": stdout,
-                "stderr": stderr,
-                "exit_code": exit_code,
-            })
+            self._result.outputs.update(
+                {
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "exit_code": exit_code,
+                }
+            )
 
             if self._outputs_file and self._outputs_file.exists():
                 try:
@@ -150,15 +179,21 @@ class CommandRunner(BaseRunner):
                     if outputs_content:
                         for line in outputs_content.splitlines():
                             line = line.strip()
-                            if line and '=' in line:
-                                key, value = line.split('=', 1)
+                            if line and "=" in line:
+                                key, value = line.split("=", 1)
                                 key = key.strip()
                                 value = value.strip()
                                 if key:
                                     self._result.outputs[key] = value
-                                    logger.debug(self._produce_log(f"Captured output: {key}={value}"))
+                                    logger.debug(
+                                        self._produce_log(
+                                            f"Captured output: {key}={value}"
+                                        )
+                                    )
                 except Exception as e:
-                    logger.warning(self._produce_log(f"Failed to parse OFX_OUTPUTS: {e}"))
+                    logger.warning(
+                        self._produce_log(f"Failed to parse OFX_OUTPUTS: {e}")
+                    )
                 finally:
                     try:
                         self._outputs_file.unlink()
@@ -188,14 +223,14 @@ class CommandRunner(BaseRunner):
         if self._shell:
             return self._shell
 
-        parent = getattr(self, 'parent', None)
-        if parent and getattr(parent, 'parent', None):
+        parent = getattr(self, "parent", None)
+        if parent and getattr(parent, "parent", None):
             grandparent = parent.parent
-            grandparent_model = getattr(grandparent, 'model', None)
+            grandparent_model = getattr(grandparent, "model", None)
             if grandparent_model:
-                defaults = getattr(grandparent_model, 'defaults', None)
-                if defaults and hasattr(defaults, 'run'):
-                    parent_shell = getattr(defaults.run, 'shell', None)
+                defaults = getattr(grandparent_model, "defaults", None)
+                if defaults and hasattr(defaults, "run"):
+                    parent_shell = getattr(defaults.run, "shell", None)
                     if parent_shell:
                         return parent_shell
 

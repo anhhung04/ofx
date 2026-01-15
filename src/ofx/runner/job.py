@@ -5,8 +5,7 @@ import time
 from typing import Any
 
 from ofx.models.job import Job
-from ofx.runner.base import BaseRunner
-from ofx.runner.models import RunContext, RunnerStatus
+from ofx.runner.core import BaseRunner, RunContext, RunnerStatus
 from ofx.runner.step import StepRunner
 from ofx.settings import settings
 
@@ -67,23 +66,43 @@ class JobRunner(BaseRunner):
             unmet_deps = []
             for job_id in self.model.needs:
                 try:
-                    if self.parent and hasattr(self.parent, "get_job_status") and self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED:
+                    if (
+                        self.parent
+                        and hasattr(self.parent, "get_job_status")
+                        and self.parent.get_job_status(job_id) != RunnerStatus.COMPLETED
+                    ):
                         unmet_deps.append(job_id)
                 except Exception as e:
-                    logger.error(self._produce_log(f"Error checking dependency status for {job_id}: {e}"))
+                    logger.error(
+                        self._produce_log(
+                            f"Error checking dependency status for {job_id}: {e}"
+                        )
+                    )
                     unmet_deps.append(job_id)
             if len(unmet_deps) > 0:
-                raise RuntimeError(f"Job cannot run because dependencies are not met: {unmet_deps}")
+                raise RuntimeError(
+                    f"Job cannot run because dependencies are not met: {unmet_deps}"
+                )
         if not self._model.run_if:
             raise RuntimeError(self._produce_log("Job condition is not met"))
         needs_data = {}
-        if self.model.needs and self.parent and hasattr(self.parent, "get_job_from_registry"):
-            needs_data = {jid: self.parent.get_job_from_registry(jid) for jid in self.model.needs}
-        self._ctx.vars.update({
-            "steps": self._step_registry,
-            "needs": needs_data,
-            "jobs": self.parent.ctx_vars.vars.get("jobs", {}) if self.parent else {},
-        })
+        if (
+            self.model.needs
+            and self.parent
+            and hasattr(self.parent, "get_job_from_registry")
+        ):
+            needs_data = {
+                jid: self.parent.get_job_from_registry(jid) for jid in self.model.needs
+            }
+        self._ctx.vars.update(
+            {
+                "steps": self._step_registry,
+                "needs": needs_data,
+                "jobs": self.parent.ctx_vars.vars.get("jobs", {})
+                if self.parent
+                else {},
+            }
+        )
 
     async def _post_run(self) -> None:
         self._ctx.vars.update({"steps": self._step_registry})
@@ -91,7 +110,11 @@ class JobRunner(BaseRunner):
         if self.model.outputs:
             for key, value in self.model.outputs.items():
                 self._result.outputs[key] = await self._resolve_template(value)
-        logger.debug(self._produce_log(f"job '{self.model.name or self.model.jid}' result: {self._result}"))
+        logger.debug(
+            self._produce_log(
+                f"job '{self.model.name or self.model.jid}' result: {self._result}"
+            )
+        )
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)

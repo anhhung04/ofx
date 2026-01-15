@@ -4,7 +4,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ofx.runner.models import RunContext, RunnerStatus
+from ofx.runner.core.models import RunContext, RunnerStatus
 from ofx.settings import settings
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ class HookManager:
         ctx: RunContext,
     ) -> None:
         """Execute a lifecycle hook if defined
-        
+
         Args:
             hook_name: Name of the hook (e.g., 'before_step', 'after_step')
             hooks: Dictionary of hook name to script mappings
@@ -67,6 +67,6 @@ class HookManager:
 
     def _produce_log(self, message: str) -> str:
         """Produce a log message through parent runner"""
-        if self._parent and hasattr(self._parent, '_produce_log'):
+        if self._parent and hasattr(self._parent, "_produce_log"):
             return self._parent._produce_log(f"[HookManager] {message}")
         return f"[HookManager] {message}"

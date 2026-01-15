@@ -8,9 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from ofx.models.workflow import Workflow
-from ofx.runner.base import BaseRunner
-from ofx.runner.job import JobRunner
-from ofx.runner.models import RunContext, RunnerStatus
+from ofx.runner.core import BaseRunner, RunContext, RunnerStatus
+from ofx.runner.executors.job import JobRunner
 from ofx.runner.tool_installer import ToolInstallerRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, settings
 from ofx.utils.misc import add_workflow_dir, find_parallel_schedule
@@ -53,28 +52,29 @@ class WorkflowRunner(BaseRunner):
             job_runners = {}
             for job_id in stage:
                 job_data = self._expanded_jobs[job_id]
-                job = job_data['job']
-                matrix_values = job_data['matrix']
-                original_job_id = job_data['original_job_id']
-                
+                job = job_data["job"]
+                matrix_values = job_data["matrix"]
+                original_job_id = job_data["original_job_id"]
+
                 resolved_job_dict = await self._resolve_template_with_matrix(
-                    job.model_dump(exclude={"outputs", "steps"}),
-                    matrix_values
+                    job.model_dump(exclude={"outputs", "steps"}), matrix_values
                 )
                 self._job_registry[job_id] = resolved_job_dict
                 self._ctx.vars.update({"jobs": self._job_registry})
-                
+
                 job_ctx = self.ctx_vars.model_copy(
                     update={"allow_interactive": len(stage) == 1},
                     deep=True,
                 )
-                job_ctx.vars['matrix'] = matrix_values
+                job_ctx.vars["matrix"] = matrix_values
 
                 runner = JobRunner(job, job_ctx, parent=self)
                 job_runners[job_id] = (runner, original_job_id)
                 resolved_job_dict["runner"] = runner
 
-            async def run_job_with_limit(job_id: str, runner: JobRunner, orig_job_id: str):
+            async def run_job_with_limit(
+                job_id: str, runner: JobRunner, orig_job_id: str
+            ):
                 if orig_job_id in self._matrix_semaphores:
                     async with self._matrix_semaphores[orig_job_id]:
                         async with semaphore:
@@ -88,7 +88,9 @@ class WorkflowRunner(BaseRunner):
                 for job_id, (runner, orig_id) in job_runners.items()
             }
 
-            results = await asyncio.gather(*stage_tasks.values(), return_exceptions=True)
+            results = await asyncio.gather(
+                *stage_tasks.values(), return_exceptions=True
+            )
 
             stage_failed = False
             failed_jobs_info = []
@@ -136,18 +138,20 @@ class WorkflowRunner(BaseRunner):
         for job_id, job in self.model.jobs.items():
             if job.strategy and job.strategy.matrix:
                 matrix_combinations = self._generate_matrix_combinations(job.strategy)
-                
+
                 if job.strategy.max_parallel:
-                    self._matrix_semaphores[job_id] = asyncio.Semaphore(job.strategy.max_parallel)
-                
+                    self._matrix_semaphores[job_id] = asyncio.Semaphore(
+                        job.strategy.max_parallel
+                    )
+
                 for idx, matrix_values in enumerate(matrix_combinations):
                     expanded_job_id = f"{job_id}_{idx}"
                     self._expanded_jobs[expanded_job_id] = {
-                        'job': job.model_copy(deep=True),
-                        'matrix': matrix_values,
-                        'original_job_id': job_id,
-                        'matrix_index': idx,
-                        'fail_fast': job.strategy.fail_fast,
+                        "job": job.model_copy(deep=True),
+                        "matrix": matrix_values,
+                        "original_job_id": job_id,
+                        "matrix_index": idx,
+                        "fail_fast": job.strategy.fail_fast,
                     }
                     logger.debug(
                         self._produce_log(
@@ -156,36 +160,39 @@ class WorkflowRunner(BaseRunner):
                     )
             else:
                 self._expanded_jobs[job_id] = {
-                    'job': job,
-                    'matrix': {},
-                    'original_job_id': job_id,
-                    'matrix_index': None,
-                    'fail_fast': False,
+                    "job": job,
+                    "matrix": {},
+                    "original_job_id": job_id,
+                    "matrix_index": None,
+                    "fail_fast": False,
                 }
 
     def _generate_matrix_combinations(self, strategy) -> list[dict[str, Any]]:
         matrix_keys = list(strategy.matrix.keys())
         matrix_values = [strategy.matrix[key] for key in matrix_keys]
-        
+
         base_combinations = [
             dict(zip(matrix_keys, combination))
             for combination in itertools.product(*matrix_values)
         ]
-        
+
         if strategy.exclude:
             base_combinations = [
-                combo for combo in base_combinations
+                combo
+                for combo in base_combinations
                 if not self._matches_filter(combo, strategy.exclude)
             ]
-        
+
         if strategy.include:
             for include_combo in strategy.include:
                 if include_combo not in base_combinations:
                     base_combinations.append(include_combo)
-        
+
         return base_combinations
 
-    def _matches_filter(self, combo: dict[str, Any], filters: list[dict[str, Any]]) -> bool:
+    def _matches_filter(
+        self, combo: dict[str, Any], filters: list[dict[str, Any]]
+    ) -> bool:
         for filter_dict in filters:
             if all(combo.get(key) == value for key, value in filter_dict.items()):
                 return True
@@ -196,6 +203,7 @@ class WorkflowRunner(BaseRunner):
             return value
         try:
             import json
+
             return json.loads(value)
         except (json.JSONDecodeError, ValueError):
             return value
@@ -203,7 +211,7 @@ class WorkflowRunner(BaseRunner):
     def _get_expanded_job_ids(self, original_job_id: str) -> list[str]:
         expanded_ids = []
         for expanded_job_id, job_data in self._expanded_jobs.items():
-            if job_data['original_job_id'] == original_job_id:
+            if job_data["original_job_id"] == original_job_id:
                 expanded_ids.append(expanded_job_id)
         return expanded_ids if expanded_ids else [original_job_id]
 
@@ -213,20 +221,24 @@ class WorkflowRunner(BaseRunner):
         )
 
         for job_id, job_data in self._expanded_jobs.items():
-            job = job_data['job']
-            matrix_values = job_data['matrix']
-            
+            job = job_data["job"]
+            matrix_values = job_data["matrix"]
+
             if matrix_values:
                 processed_matrix = {}
                 for key, value in matrix_values.items():
-                    resolved_value = await self._resolve_template_with_matrix(value, matrix_values)
+                    resolved_value = await self._resolve_template_with_matrix(
+                        value, matrix_values
+                    )
                     processed_matrix[key] = self._process_matrix_value(resolved_value)
-                job_data['matrix'] = processed_matrix
+                job_data["matrix"] = processed_matrix
                 matrix_values = processed_matrix
-            
+
             if job.name:
                 if matrix_values:
-                    job.name = await self._resolve_template_with_matrix(job.name, matrix_values)
+                    job.name = await self._resolve_template_with_matrix(
+                        job.name, matrix_values
+                    )
                 else:
                     job.name = await self._resolve_template(job.name)
 
@@ -234,18 +246,20 @@ class WorkflowRunner(BaseRunner):
         await self._install_tools()
         logger.debug(self._produce_log(f"Resolved workflow: {self.model.model_dump()}"))
 
-    async def _resolve_template_with_matrix(self, value: Any, matrix_values: dict[str, Any]) -> Any:
-        original_matrix = self._ctx.vars.get('matrix')
-        self._ctx.vars['matrix'] = matrix_values
-        
+    async def _resolve_template_with_matrix(
+        self, value: Any, matrix_values: dict[str, Any]
+    ) -> Any:
+        original_matrix = self._ctx.vars.get("matrix")
+        self._ctx.vars["matrix"] = matrix_values
+
         try:
             result = await self._resolve_template(value)
             return result
         finally:
             if original_matrix is not None:
-                self._ctx.vars['matrix'] = original_matrix
-            elif 'matrix' in self._ctx.vars:
-                del self._ctx.vars['matrix']
+                self._ctx.vars["matrix"] = original_matrix
+            elif "matrix" in self._ctx.vars:
+                del self._ctx.vars["matrix"]
 
     async def _planning_jobs(self) -> int:
         jobs = self.model.jobs
@@ -261,9 +275,9 @@ class WorkflowRunner(BaseRunner):
                             f"Job '{job.name}' depends on '{dep}', which is not defined in the workflow."
                         )
                     deps_relationships.append((dep, job_id))
-        
+
         self._expand_matrix_jobs()
-        
+
         expanded_job_keys = list(self._expanded_jobs.keys())
         expanded_deps = []
         for dep, job_id in deps_relationships:
@@ -272,23 +286,28 @@ class WorkflowRunner(BaseRunner):
             for dep_expanded in dep_jobs:
                 for dependent_expanded in dependent_jobs:
                     expanded_deps.append((dep_expanded, dependent_expanded))
-        
+
         self._schedule = find_parallel_schedule(expanded_job_keys, expanded_deps)
 
         await self._resolve_workflow_templates()
 
         self._total_steps = sum(
-            sum(len(self._expanded_jobs[job_id]['job'].steps) for job_id in stage) for stage in self._schedule
+            sum(len(self._expanded_jobs[job_id]["job"].steps) for job_id in stage)
+            for stage in self._schedule
         )
         logger.debug(self._produce_log(f"Execution stages: {self._schedule}"))
         self._completed_steps = 0
         return self._total_steps
 
     async def _run_and_monitor_job(self, job_id: str, job_runner: JobRunner):
-        has_interactive_step = any(getattr(step, 'interactive', False) for step in job_runner.model.steps)
+        has_interactive_step = any(
+            getattr(step, "interactive", False) for step in job_runner.model.steps
+        )
 
         if has_interactive_step and job_runner.ctx_vars.allow_interactive:
-            logger.info(self._produce_log(f"Running job '{job_id}' with interactive steps"))
+            logger.info(
+                self._produce_log(f"Running job '{job_id}' with interactive steps")
+            )
 
         return await job_runner.run()
 
@@ -309,7 +328,9 @@ class WorkflowRunner(BaseRunner):
             )
         if self.model.workflow_call and self._is_reused:
             self._ctx.inputs.update(
-                await self._process_inputs(self._ctx.inputs, self.model.workflow_call.inputs)
+                await self._process_inputs(
+                    self._ctx.inputs, self.model.workflow_call.inputs
+                )
             )
             self._ctx.secrets.update(
                 await self._process_inputs(
@@ -321,7 +342,7 @@ class WorkflowRunner(BaseRunner):
         )
         self.ctx_vars.workflow_dirs = add_workflow_dir(
             self.ctx_vars.workflow_dirs,
-            self._model.defaults.workflows_base_dir.absolute()
+            self._model.defaults.workflows_base_dir.absolute(),
         )
         logger.debug(self._produce_log(f"Processed context: {self.ctx_vars}"))
 
@@ -352,7 +373,7 @@ class WorkflowRunner(BaseRunner):
                 RunnerStatus.COMPLETED
                 if all(
                     job["status"] == RunnerStatus.COMPLETED
-                        for job in self._job_registry.values()
+                    for job in self._job_registry.values()
                 )
                 else RunnerStatus.FAILED
             )
@@ -437,22 +458,24 @@ class WorkflowRunner(BaseRunner):
     def get_job_status(self, job_id: str) -> RunnerStatus:
         if job_id in self._job_registry:
             return self._job_registry.get(job_id, {}).get("status")
-        
+
         expanded_ids = self._get_expanded_job_ids(job_id)
         if not expanded_ids or expanded_ids == [job_id]:
             return self._job_registry.get(job_id, {}).get("status")
-        
+
         statuses = []
         for expanded_id in expanded_ids:
             status = self._job_registry.get(expanded_id, {}).get("status")
             if status:
                 statuses.append(status)
-        
+
         if any(s == RunnerStatus.FAILED for s in statuses):
             return RunnerStatus.FAILED
         if any(s == RunnerStatus.CANCELED for s in statuses):
             return RunnerStatus.CANCELED
-        if all(s == RunnerStatus.COMPLETED for s in statuses) and len(statuses) == len(expanded_ids):
+        if all(s == RunnerStatus.COMPLETED for s in statuses) and len(statuses) == len(
+            expanded_ids
+        ):
             return RunnerStatus.COMPLETED
         return RunnerStatus.RUNNING if statuses else RunnerStatus.IDLE
 
@@ -463,7 +486,7 @@ class WorkflowRunner(BaseRunner):
 
     def _has_interactive_steps(self) -> bool:
         for job in self.model.jobs.values():
-            if any(getattr(step, 'interactive', False) for step in job.steps):
+            if any(getattr(step, "interactive", False) for step in job.steps):
                 return True
         return False
 
@@ -472,7 +495,7 @@ class WorkflowRunner(BaseRunner):
             return False
         job_id = list(stage)[0]
         job = self.model.jobs[job_id]
-        return any(getattr(step, 'interactive', False) for step in job.steps)
+        return any(getattr(step, "interactive", False) for step in job.steps)
 
     @property
     def model(self) -> Workflow:
