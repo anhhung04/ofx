@@ -16,7 +16,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class StepRunner(BaseRunner):
+class StepRunner(BaseRunner[Step]):
     def __init__(
         self,
         step: Step,
@@ -24,7 +24,6 @@ class StepRunner(BaseRunner):
         parent: BaseRunner | None = None,
     ):
         super().__init__(step, context, parent)
-        self._model = step
         self._hook_manager = HookManager(self)
 
     async def _run_hook(self, hook_name: str) -> None:
@@ -56,8 +55,8 @@ class StepRunner(BaseRunner):
                 "secrets",
             ]
         )
-        self._result.metadata.update({"step": self._model})
-        if not self._model.run_if:
+        self._result.metadata.update({"step": self.model})
+        if not self.model.run_if:
             self._status = RunnerStatus.CANCELED
             await self._run_hook("on_skip")
             raise Exception("Step skipped due to run_if condition")
@@ -97,10 +96,14 @@ class StepRunner(BaseRunner):
                     / f"stdout_{self.parent.model.jid}_{self.model.name.replace(' ', '-')}__{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
                 )
                 logger.info(
-                    self._produce_log(f"Saving output of '{self.parent.model.jid}'[{self.model.step_index}] to {tmp_file}")
+                    self._produce_log(
+                        f"Saving output of '{self.parent.model.jid}'[{self.model.step_index}] to {tmp_file}"
+                    )
                 )
                 async with aiofiles.open(tmp_file, "w") as f:
-                    await f.write(f"cmd: {self.model.run or self.model.script or self.model.uses}\n")
+                    await f.write(
+                        f"cmd: {self.model.run or self.model.script or self.model.uses}\n"
+                    )
                     if is_binary:
                         await f.write("[BINARY OUTPUT - base64 encoded]\n")
                     if is_truncated:
@@ -133,7 +136,9 @@ class StepRunner(BaseRunner):
                     logger.debug(self._produce_log(f"result: {self.get_result()}"))
                     return
 
-                raise Exception(f"Step execution failed with status: {res.status}, error: {res.error}")
+                raise Exception(
+                    f"Step execution failed with status: {res.status}, error: {res.error}"
+                )
 
             except TimeoutError:
                 self._status = RunnerStatus.FAILED
@@ -160,7 +165,9 @@ class StepRunner(BaseRunner):
                         self._status = RunnerStatus.FAILED
                         self._error = str(e)
 
-        logger.debug(self._produce_log(f"Final result after retries: {self.get_result()}"))
+        logger.debug(
+            self._produce_log(f"Final result after retries: {self.get_result()}")
+        )
 
     def _create_runner(self) -> BaseRunner:
         """Creates the appropriate runner instance based on the step's run type."""
@@ -179,26 +186,24 @@ class StepRunner(BaseRunner):
             from ofx.utils.misc import add_workflow_dir, find_workflow
 
             output_path = Path.cwd()
-            workflow_dirs = self.ctx_vars.workflow_dirs.copy() if self.ctx_vars.workflow_dirs else []
+            workflow_dirs = (
+                self.ctx_vars.workflow_dirs.copy()
+                if self.ctx_vars.workflow_dirs
+                else []
+            )
 
             parent = getattr(self, "parent", None)
             if parent and getattr(parent, "parent", None):
-                output_path = getattr(
-                    parent.parent.ctx_vars, "output_path", Path.cwd()
-                )
-                if hasattr(parent.parent.ctx_vars, 'workflow_dirs'):
+                output_path = getattr(parent.parent.ctx_vars, "output_path", Path.cwd())
+                if hasattr(parent.parent.ctx_vars, "workflow_dirs"):
                     workflow_dirs = parent.parent.ctx_vars.workflow_dirs.copy()
 
             flow_path, workflow = find_workflow(
-                self._model.uses or "",
-                tuple(workflow_dirs)
+                self.model.uses or "", tuple(workflow_dirs)
             )
 
-            if Path(self._model.uses or "").exists():
-                workflow_dirs = add_workflow_dir(
-                    workflow_dirs,
-                    flow_path.parent
-                )
+            if Path(self.model.uses or "").exists():
+                workflow_dirs = add_workflow_dir(workflow_dirs, flow_path.parent)
 
             return WorkflowRunner(
                 workflow,
@@ -218,8 +223,10 @@ class StepRunner(BaseRunner):
             )
         elif self._run_type is RunType.SCRIPT:
             from ofx.runner.executors.command import ScriptRunner
-            
-            assert self.model.script is not None, "Script cannot be None for SCRIPT run type"
+
+            assert self.model.script is not None, (
+                "Script cannot be None for SCRIPT run type"
+            )
             return ScriptRunner(
                 self.model.script,
                 self.ctx_vars.model_copy(deep=True),
@@ -231,7 +238,7 @@ class StepRunner(BaseRunner):
             )
         elif self._run_type is RunType.COMMAND:
             from ofx.runner.executors.command import CommandRunner
-            
+
             assert self.model.run is not None, "Run cannot be None for COMMAND run type"
             return CommandRunner(
                 self.model.run,
@@ -244,9 +251,12 @@ class StepRunner(BaseRunner):
             )
         elif self._run_type is RunType.SCRIPT_FILE:
             import sys
+
             from ofx.runner.executors.command import CommandRunner
 
-            assert self.model.script_file is not None, "script_file cannot be None for SCRIPT_FILE run type"
+            assert self.model.script_file is not None, (
+                "script_file cannot be None for SCRIPT_FILE run type"
+            )
 
             script_path = Path(self.model.script_file.strip()).expanduser()
             if script_path.suffix != ".py":
@@ -273,11 +283,15 @@ class StepRunner(BaseRunner):
             )
 
         else:
-            raise ValueError(f"Invalid run type '{self._run_type}' for step '{self.model.name}'.")
+            raise ValueError(
+                f"Invalid run type '{self._run_type}' for step '{self.model.name}'."
+            )
 
     def _produce_log(self, message: Any) -> str:
         msg = str(message)
-        step_idx = str(self._model.step_index) if hasattr(self._model, 'step_index') else '?'
+        step_idx = (
+            str(self.model.step_index) if hasattr(self.model, "step_index") else "?"
+        )
         msg = f"'step{step_idx}' › {msg}"
         if self.parent:
             return self.parent._produce_log(msg)
@@ -290,7 +304,7 @@ class StepRunner(BaseRunner):
             setattr(self._result, k, v)
 
     def _parse_run_type(self) -> RunType:
-        step = self._model
+        step = self.model
         if step.uses:
             return RunType.WORKFLOW
         elif step.script:
@@ -306,7 +320,7 @@ class StepRunner(BaseRunner):
         )
 
     def _resolve_working_dir(self) -> Path:
-        step = self._model
+        step = self.model
         step_path = Path(step.working_directory)
         if step_path.is_absolute():
             return step_path
@@ -314,12 +328,3 @@ class StepRunner(BaseRunner):
         base_path = self.ctx_vars.vars.get("working_directory", Path.cwd())
 
         return (base_path / step_path).resolve()
-
-
-    @property
-    def model(self) -> Step:
-        return self._model
-
-    @property
-    def parent(self) -> "JobRunner": # type: ignore
-        return self._parent

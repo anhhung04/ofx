@@ -17,7 +17,7 @@ from ofx.utils.misc import add_workflow_dir, find_parallel_schedule
 logger = logging.getLogger(settings.app_branding)
 
 
-class WorkflowRunner(BaseRunner):
+class WorkflowRunner(BaseRunner[Workflow]):
     def __init__(
         self,
         workflow: Workflow,
@@ -25,8 +25,7 @@ class WorkflowRunner(BaseRunner):
         parent: BaseRunner | None = None,
     ):
         super().__init__(workflow, ctx, parent)
-        self._model = workflow
-        self._is_reused = self._parent is not None
+        self._is_reused = self.parent is not None
         self._job_registry: dict[str, Any] = {}
         self._job_results: dict[str, bool] = {}
         self._job_errors: dict[str, Exception] = {}
@@ -35,6 +34,9 @@ class WorkflowRunner(BaseRunner):
 
         if not self.ctx_vars.workflow_dirs:
             self.ctx_vars.workflow_dirs = DEFAULT_WORKFLOWS_DIRS
+
+        if not self.model:
+            raise ValueError("Workflow model cannot be None")
 
     async def _do_run(self) -> None:
         """Execute the workflow by running its jobs in stages according to their dependencies"""
@@ -60,7 +62,7 @@ class WorkflowRunner(BaseRunner):
                     job.model_dump(exclude={"outputs", "steps"}), matrix_values
                 )
                 self._job_registry[job_id] = resolved_job_dict
-                self._ctx.vars.update({"jobs": self._job_registry})
+                self.ctx_vars.vars.update({"jobs": self._job_registry})
 
                 job_ctx = self.ctx_vars.model_copy(
                     update={"allow_interactive": len(stage) == 1},
@@ -124,7 +126,7 @@ class WorkflowRunner(BaseRunner):
                     "steps", {}
                 )
 
-            self._ctx.vars.update({"jobs": self._job_registry})
+            self.ctx_vars.vars.update({"jobs": self._job_registry})
 
             completed_steps_before_stage += stage_steps
 
@@ -174,24 +176,24 @@ class WorkflowRunner(BaseRunner):
                 else:
                     job.name = await self._resolve_template(job.name)
 
-        self._ctx.envs.update(self.model.env)
+        self.ctx_vars.envs.update(self.model.env)
         await self._install_tools()
         logger.debug(self._produce_log(f"Resolved workflow: {self.model.model_dump()}"))
 
     async def _resolve_template_with_matrix(
         self, value: Any, matrix_values: dict[str, Any]
     ) -> Any:
-        original_matrix = self._ctx.vars.get("matrix")
-        self._ctx.vars["matrix"] = matrix_values
+        original_matrix = self.ctx_vars.vars.get("matrix")
+        self.ctx_vars.vars["matrix"] = matrix_values
 
         try:
             result = await self._resolve_template(value)
             return result
         finally:
             if original_matrix is not None:
-                self._ctx.vars["matrix"] = original_matrix
-            elif "matrix" in self._ctx.vars:
-                del self._ctx.vars["matrix"]
+                self.ctx_vars.vars["matrix"] = original_matrix
+            elif "matrix" in self.ctx_vars.vars:
+                del self.ctx_vars.vars["matrix"]
 
     async def _planning_jobs(self) -> int:
         jobs = self.model.jobs
@@ -266,28 +268,28 @@ class WorkflowRunner(BaseRunner):
         )
         logger.debug(self._produce_log(f"Workflow Call: {self.model.workflow_call}"))
         if self.model.workflow_dispatch and not self._is_reused:
-            self._ctx.inputs.update(
+            self.ctx_vars.inputs.update(
                 await self._process_inputs(
-                    self._ctx.inputs, self.model.workflow_dispatch.inputs
+                    self.ctx_vars.inputs, self.model.workflow_dispatch.inputs
                 )
             )
         if self.model.workflow_call and self._is_reused:
-            self._ctx.inputs.update(
+            self.ctx_vars.inputs.update(
                 await self._process_inputs(
-                    self._ctx.inputs, self.model.workflow_call.inputs
+                    self.ctx_vars.inputs, self.model.workflow_call.inputs
                 )
             )
-            self._ctx.secrets.update(
+            self.ctx_vars.secrets.update(
                 await self._process_inputs(
-                    self._ctx.secrets, self.model.workflow_call.secrets
+                    self.ctx_vars.secrets, self.model.workflow_call.secrets
                 )
             )
-        self._model.defaults.workflows_base_dir = Path(
+        self.model.defaults.workflows_base_dir = Path(
             await self._resolve_template(self.model.defaults.workflows_base_dir)
         )
         self.ctx_vars.workflow_dirs = add_workflow_dir(
             self.ctx_vars.workflow_dirs,
-            self._model.defaults.workflows_base_dir.absolute(),
+            self.model.defaults.workflows_base_dir.absolute(),
         )
         logger.debug(self._produce_log(f"Processed context: {self.ctx_vars}"))
 
@@ -343,7 +345,7 @@ class WorkflowRunner(BaseRunner):
         )
         await installer.run()
 
-        self._ctx.envs.update(installer.ctx_vars.envs)
+        self.ctx_vars.envs.update(installer.ctx_vars.envs)
 
     async def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
@@ -441,7 +443,3 @@ class WorkflowRunner(BaseRunner):
         job_id = list(stage)[0]
         job = self.model.jobs[job_id]
         return any(getattr(step, "interactive", False) for step in job.steps)
-
-    @property
-    def model(self) -> Workflow:
-        return self._model

@@ -10,13 +10,14 @@ from pathlib import Path
 from typing import Any
 from zlib import compress
 
+from ofx.models.command import Command, Script
 from ofx.runner.core import BaseRunner, RunContext
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
 
-class CommandRunner(BaseRunner):
+class CommandRunner(BaseRunner[Command]):
     """Optimized command runner with caching."""
 
     _shell_cache: dict[str, str] = {}
@@ -31,12 +32,14 @@ class CommandRunner(BaseRunner):
         parent: "BaseRunner | None" = None,
         interactive: bool = False,
     ):
-        super().__init__("command", ctx, parent)
-        self._cmd = cmd
-        self._shell = shell
-        self._cwd = working_dir or Path.cwd()
-        self._timeout_minutes = timeout_minutes
-        self._interactive = interactive
+        command_model = Command(
+            cmd=cmd,
+            shell=shell,
+            working_directory=working_dir or Path.cwd(),
+            timeout_minutes=timeout_minutes,
+            interactive=interactive,
+        )
+        super().__init__(command_model, ctx, parent)
         self._outputs_file: Path | None = None
 
     async def _do_run(self) -> None:
@@ -44,21 +47,28 @@ class CommandRunner(BaseRunner):
         stderr = ""
         stdout = ""
         exit_code = None
+        proc = None
 
-        if not self._shell or not Path(self._shell).exists():
-            raise RuntimeError(f"Shell not found: {self._shell}") from None
+        if not self.model.shell or not Path(self.model.shell).exists():
+            raise RuntimeError(f"Shell not found: {self.model.shell}") from None
 
-        if not self._interactive:
-            self._outputs_file = Path(tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1])
-            self._ctx.envs["OFX_OUTPUTS"] = str(self._outputs_file)
+        if not self.model.interactive:
+            self._outputs_file = Path(
+                tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1]
+            )
+            self.ctx_vars.envs["OFX_OUTPUTS"] = str(self._outputs_file)
 
         try:
-            if self._interactive:
-                logger.info(self._produce_log("Running in interactive mode (stdin/stdout connected to terminal)"))
+            if self.model.interactive:
+                logger.info(
+                    self._produce_log(
+                        "Running in interactive mode (stdin/stdout connected to terminal)"
+                    )
+                )
                 proc = await asyncio.create_subprocess_shell(
-                    self._cmd,
-                    executable=self._shell,
-                    cwd=self._cwd,
+                    self.model.cmd,
+                    executable=self.model.shell,
+                    cwd=self.model.working_directory,
                     env=self.ctx_vars.envs,
                     stdin=sys.stdin,
                     stdout=sys.stdout,
@@ -66,31 +76,39 @@ class CommandRunner(BaseRunner):
                 )
 
                 try:
-                    exit_code = await asyncio.wait_for(proc.wait(), self._timeout_minutes * 60)
+                    exit_code = await asyncio.wait_for(
+                        proc.wait(), self.model.timeout_minutes * 60
+                    )
                 except TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+                    raise RuntimeError(
+                        f"Command timed out after {self.model.timeout_minutes} minutes"
+                    ) from None
 
                 stdout = "[Interactive mode - output shown in real-time]"
                 stderr = ""
             else:
                 proc = await asyncio.create_subprocess_shell(
-                    self._cmd,
-                    executable=self._shell,
-                    cwd=self._cwd,
+                    self.model.cmd,
+                    executable=self.model.shell,
+                    cwd=self.model.working_directory,
                     env=self.ctx_vars.envs,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
 
                 try:
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(proc.communicate(), self._timeout_minutes * 60)
+                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                        proc.communicate(), self.model.timeout_minutes * 60
+                    )
                     exit_code = proc.returncode
                 except TimeoutError:
                     proc.kill()
                     await proc.wait()
-                    raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+                    raise RuntimeError(
+                        f"Command timed out after {self.model.timeout_minutes} minutes"
+                    ) from None
 
                 max_size = settings.max_output_size
 
@@ -99,16 +117,25 @@ class CommandRunner(BaseRunner):
                     stdout = stdout_bytes.decode("utf-8").strip()
 
                     if len(stdout_bytes) > max_size:
-                        stdout = stdout_bytes[:max_size].decode("utf-8", errors="ignore") + "\n... [OUTPUT TRUNCATED]"
+                        stdout = (
+                            stdout_bytes[:max_size].decode("utf-8", errors="ignore")
+                            + "\n... [OUTPUT TRUNCATED]"
+                        )
                         self._result.outputs["output_truncated"] = True
 
                     if len(stderr_bytes) > max_size:
-                        stderr = stderr_bytes[:max_size].decode("utf-8", errors="ignore") + "\n... [STDERR TRUNCATED]"
+                        stderr = (
+                            stderr_bytes[:max_size].decode("utf-8", errors="ignore")
+                            + "\n... [STDERR TRUNCATED]"
+                        )
                         self._result.outputs["stderr_truncated"] = True
 
                 except UnicodeDecodeError:
                     if len(stdout_bytes) > max_size:
-                        stdout = base64.b64encode(stdout_bytes[:max_size]).decode("utf-8") + "... [BINARY OUTPUT TRUNCATED]"
+                        stdout = (
+                            base64.b64encode(stdout_bytes[:max_size]).decode("utf-8")
+                            + "... [BINARY OUTPUT TRUNCATED]"
+                        )
                         self._result.outputs["binary_output"] = True
                         self._result.outputs["output_truncated"] = True
                     else:
@@ -116,12 +143,15 @@ class CommandRunner(BaseRunner):
                         self._result.outputs["binary_output"] = True
 
                     if len(stderr_bytes) > max_size:
-                        stderr = base64.b64encode(stderr_bytes[:max_size]).decode("utf-8") + "... [BINARY STDERR TRUNCATED]"
+                        stderr = (
+                            base64.b64encode(stderr_bytes[:max_size]).decode("utf-8")
+                            + "... [BINARY STDERR TRUNCATED]"
+                        )
                         self._result.outputs["stderr_truncated"] = True
                     else:
                         stderr = base64.b64encode(stderr_bytes).decode("utf-8")
 
-            if self._interactive:
+            if self.model.interactive:
                 if exit_code not in (0, 130, 127):
                     stderr = stderr or f"Command failed with exit code {exit_code}"
                     raise RuntimeError(f"Command failed: {stderr}") from None
@@ -131,17 +161,30 @@ class CommandRunner(BaseRunner):
                     raise RuntimeError(f"Command failed: {stderr}") from None
 
         except TimeoutError:
-            raise RuntimeError(f"Command timed out after {self._timeout_minutes} minutes") from None
+            raise RuntimeError(
+                f"Command timed out after {self.model.timeout_minutes} minutes"
+            ) from None
         except RuntimeError:
             raise
         except Exception as e:
             raise RuntimeError(f"Command error: {str(e)}") from e
         finally:
-            self._result.outputs.update({
-                "stdout": stdout,
-                "stderr": stderr,
-                "exit_code": exit_code,
-            })
+            # Properly close subprocess to avoid event loop warnings
+            if proc is not None:
+                try:
+                    if proc.returncode is None:
+                        proc.kill()
+                        await asyncio.wait_for(proc.wait(), timeout=1.0)
+                except Exception:
+                    pass  # Ignore cleanup errors
+
+            self._result.outputs.update(
+                {
+                    "stdout": stdout,
+                    "stderr": stderr,
+                    "exit_code": exit_code,
+                }
+            )
 
             if self._outputs_file and self._outputs_file.exists():
                 try:
@@ -149,15 +192,21 @@ class CommandRunner(BaseRunner):
                     if outputs_content:
                         for line in outputs_content.splitlines():
                             line = line.strip()
-                            if line and '=' in line:
-                                key, value = line.split('=', 1)
+                            if line and "=" in line:
+                                key, value = line.split("=", 1)
                                 key = key.strip()
                                 value = value.strip()
                                 if key:
                                     self._result.outputs[key] = value
-                                    logger.debug(self._produce_log(f"Captured output: {key}={value}"))
+                                    logger.debug(
+                                        self._produce_log(
+                                            f"Captured output: {key}={value}"
+                                        )
+                                    )
                 except Exception as e:
-                    logger.warning(self._produce_log(f"Failed to parse OFX_OUTPUTS: {e}"))
+                    logger.warning(
+                        self._produce_log(f"Failed to parse OFX_OUTPUTS: {e}")
+                    )
                 finally:
                     try:
                         self._outputs_file.unlink()
@@ -165,7 +214,7 @@ class CommandRunner(BaseRunner):
                         pass
 
     async def _pre_run(self) -> None:
-        self._shell = self._resolve_shell()
+        self.model.shell = self._resolve_shell()
 
     async def _post_run(self) -> None:
         if self._error:
@@ -184,24 +233,24 @@ class CommandRunner(BaseRunner):
 
     def _resolve_shell(self) -> str:
         """Resolve shell path from hierarchy or use default /bin/bash"""
-        if self._shell:
-            return self._shell
+        if self.model.shell:
+            return self.model.shell
 
-        parent = getattr(self, 'parent', None)
-        if parent and getattr(parent, 'parent', None):
+        parent = getattr(self, "parent", None)
+        if parent and getattr(parent, "parent", None):
             grandparent = parent.parent
-            grandparent_model = getattr(grandparent, 'model', None)
+            grandparent_model = getattr(grandparent, "model", None)
             if grandparent_model:
-                defaults = getattr(grandparent_model, 'defaults', None)
-                if defaults and hasattr(defaults, 'run'):
-                    parent_shell = getattr(defaults.run, 'shell', None)
+                defaults = getattr(grandparent_model, "defaults", None)
+                if defaults and hasattr(defaults, "run"):
+                    parent_shell = getattr(defaults.run, "shell", None)
                     if parent_shell:
                         return parent_shell
 
         return "/bin/bash"
 
 
-class ScriptRunner(CommandRunner):
+class ScriptRunner(BaseRunner[Script]):
     def __init__(
         self,
         script: str,
@@ -212,9 +261,21 @@ class ScriptRunner(CommandRunner):
         parent: "BaseRunner | None" = None,
         interactive: bool = False,
     ):
+        script_model = Script(
+            script=script,
+            shell=shell,
+            working_directory=working_dir or Path.cwd(),
+            timeout_minutes=timeout_minutes,
+            interactive=interactive,
+        )
+        super().__init__(script_model, ctx, parent)
         self._tmp_file = None
         self._run_in_file = False
-        enc_script = base64.b64encode(compress(script.encode(), 9)).decode()
+        self._command_runner: CommandRunner | None = None
+
+    async def _do_run(self) -> None:
+        """Execute a Python script"""
+        enc_script = base64.b64encode(compress(self.model.script.encode(), 9)).decode()
         python_executable = sys.executable or "python3"
         if len(enc_script) > 2000:
             self._run_in_file = True
@@ -232,18 +293,33 @@ class ScriptRunner(CommandRunner):
                 "-c",
                 f"import base64,zlib;exec(zlib.decompress(base64.b64decode('{enc_script}')).decode('utf-8'))",
             ]
-        super().__init__(
+
+        self._command_runner = CommandRunner(
             cmd=shlex.join(args),
-            shell=shell,
-            working_dir=working_dir,
-            timeout_minutes=timeout_minutes,
-            parent=parent,
-            ctx=ctx,
-            interactive=interactive,
+            shell=self.model.shell,
+            working_dir=self.model.working_directory,
+            timeout_minutes=self.model.timeout_minutes,
+            parent=self.parent,
+            ctx=self.ctx_vars,
+            interactive=self.model.interactive,
         )
+        result = await self._command_runner.run()
+        self._result = result
+        if result.status.value != "completed":
+            raise RuntimeError(result.error or "Script execution failed")
+
+    async def _pre_run(self) -> None:
+        """Pre-run hook"""
+        pass
 
     async def _post_run(self) -> None:
         if self._error:
             logger.error(self._produce_log(f"Script failed: {self._error}"))
         if self._run_in_file and self._tmp_file and Path(self._tmp_file).exists():
             Path(self._tmp_file).unlink()
+
+    def _produce_log(self, message: Any) -> str:
+        msg = str(message)
+        if self.parent:
+            return self.parent._produce_log(msg)
+        return msg

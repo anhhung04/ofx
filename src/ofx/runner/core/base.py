@@ -4,42 +4,44 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Optional
 
+from pydantic import BaseModel
+
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.templates import TemplateResolver
 from ofx.settings import settings
 
 if TYPE_CHECKING:
-    from ofx.models.job import Job
-    from ofx.models.step import Step
-    from ofx.models.workflow import Workflow
+    pass
 
 logger = logging.getLogger(settings.app_branding)
 
 
-class BaseRunner:
-    """Abstract base class for all runners (workflow, job, step, command)"""
+class BaseRunner[TModel: BaseModel]:
+    """Abstract base class for all runners (workflow, job, step, command)
+
+    Type Parameters:
+        TModel: The model type this runner executes (Workflow, Job, Step, etc.)
+    """
 
     def __init__(
-        self,
-        name: Any,
-        ctx: RunContext,
-        parent: Optional["BaseRunner"] = None
+        self, model: TModel, ctx: RunContext, parent: Optional["BaseRunner"] = None
     ):
-        name = str(name)
-        self._id = f"{name}-{str(uuid.uuid4())}"
+        name = str(model) if model is not None else "unknown"
+        self.model = model
+        self.parent = parent
+        self.ctx_vars = ctx
+        self.run_id = f"{name}-{str(uuid.uuid4())}"
+
         self._status = RunnerStatus.IDLE
-        self._ctx = ctx
-        self._parent = parent
-        self._error = None
-        self._model = None
-        self._result = RunResult(status=self.status, run_id=self._id, name=name)
+        self._error: str | None = None
+        self._result = RunResult(status=self.status, run_id=self.run_id, name=name)
         self._template_resolver = TemplateResolver()
 
     async def run(self) -> RunResult:
         """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
         try:
             self._status = RunnerStatus.IDLE
-            self._ctx.vars.update({"self": self.model})
+            self.ctx_vars.vars.update({"self": self.model})
             await self._pre_run()
         except Exception as e:
             self._error = f"Pre-run error ({type(e).__name__}): {e}"
@@ -80,28 +82,28 @@ class BaseRunner:
 
     async def _resolve_template(self, value: Any) -> Any:
         """Resolve Jinja2 templates in values using TemplateResolver
-        
+
         Args:
             value: Value to resolve (can be str, dict, list, primitives)
-            
+
         Returns:
             Resolved value with templates expanded
         """
         # Prepare context variables
         context_vars = self.ctx_vars.model_dump(exclude={"vars"})
         if self.ctx_vars.vars:
-            context_vars.update(self._ctx.vars)
+            context_vars.update(self.ctx_vars.vars)
 
         return await self._template_resolver.resolve(
             value,
             context_vars,
             self.ctx_vars.workflow_dir,
-            self._id,
+            self.run_id,
         )
 
     async def _resolve_template_fields(self, fields: list[str]) -> None:
         """Resolve templates in specific model fields in parallel
-        
+
         Args:
             fields: List of field names to resolve
         """
@@ -125,19 +127,14 @@ class BaseRunner:
             return None
 
         results = await asyncio.gather(*tasks)
-        for field, resolved_value in zip(target_fields, results):
-            setattr(self._model, field, resolved_value)
+        for field, resolved_value in zip(target_fields, results, strict=True):
+            setattr(self.model, field, resolved_value)
 
         return None
 
     def _produce_log(self, message: Any) -> str:
         """Produce a log message - must be implemented by subclasses"""
         raise NotImplementedError("Subclasses should implement _produce_log method.")
-
-    @property
-    def model(self) -> "Workflow | Job | Step | None":
-        """Get the model being executed"""
-        return self._model
 
     @property
     def status(self) -> RunnerStatus:
@@ -154,26 +151,11 @@ class BaseRunner:
         """Check if execution succeeded"""
         return self._status == RunnerStatus.COMPLETED and self._error is None
 
-    @property
-    def run_id(self) -> str:
-        """Get the unique run ID"""
-        return self._id
-
     def get_result(self) -> RunResult:
         """Get the execution result"""
         self._result.status = self.status
         self._result.error = self._error
         return self._result
-
-    @property
-    def ctx_vars(self) -> RunContext:
-        """Get the execution context"""
-        return self._ctx
-
-    @property
-    def parent(self) -> "BaseRunner | None":
-        """Get the parent runner"""
-        return self._parent
 
     def get_job_status(self, job_id: str) -> RunnerStatus | None:
         """Get job status from registry (WorkflowRunner override)"""
