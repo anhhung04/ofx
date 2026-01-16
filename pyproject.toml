@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-dynamic = ["version"]
+version = "0.3.0"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -1,35 +1,43 @@
-# coding: utf-8
 import os
-import sys
+import tomllib
 from pathlib import Path
+
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.command.build_py import build_py as _build_py
 
-# Ensure src/ofx is in path for versioning
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "src", "ofx")))
-from _version import __version__
+
+def get_version_from_toml():
+    # Adopt path to your pyproject.toml
+    pyproject_toml_file = Path(__file__).parent / "pyproject.toml"
+    if pyproject_toml_file.exists():
+        with open(pyproject_toml_file, "rb") as f:
+            data = tomllib.load(f)
+        return data["project"]["version"]
+    raise RuntimeError("pyproject.toml not found or version not specified")
+
 
 def collect_data_files(root: Path) -> list[str]:
     """Enumerate data files while skipping cache and build artifacts."""
     files: list[str] = []
-    # Define suffixes we definitely don't want in our package data
     exclude_suffixes = {".c"}
-    
+
     for path in root.rglob("*"):
         if path.is_dir() or path.suffix in exclude_suffixes:
             continue
-            
+
         rel = path.relative_to("src/ofx")
         if "__pycache__" in rel.parts:
             continue
-            
+
         files.append(rel.as_posix())
     return files
+
 
 EXCLUDE_DATA_PATH = Path("src/ofx/data")
 EXCLUDE_FILES = [str(p) for p in EXCLUDE_DATA_PATH.rglob("*") if p.is_file()]
 DATA_FILES = collect_data_files(EXCLUDE_DATA_PATH)
+
 
 def get_ext_paths(root_dir, exclude_files):
     """Get filepaths for Cython compilation."""
@@ -37,7 +45,7 @@ def get_ext_paths(root_dir, exclude_files):
     if os.environ.get("OFX_COMPILE") != "1":
         return paths
 
-    for root, dirs, files in os.walk(root_dir):
+    for root, _, files in os.walk(root_dir):
         for filename in files:
             if not filename.endswith(".py") or "__pycache__" in root:
                 continue
@@ -49,8 +57,10 @@ def get_ext_paths(root_dir, exclude_files):
             paths.append(file_path)
     return paths
 
+
 class build_py(_build_py):
     """Custom build_py to exclude .py files that are being replaced by compiled extensions."""
+
     def find_package_modules(self, package, package_dir):
         modules = super().find_package_modules(package, package_dir)
         filtered_modules = []
@@ -61,9 +71,10 @@ class build_py(_build_py):
             filtered_modules.append((pkg, mod, filepath))
         return filtered_modules
 
+
 setup(
     name="ofx",
-    version=__version__,
+    version=get_version_from_toml(),
     packages=find_packages(where="src"),
     include_package_data=True,
     ext_modules=cythonize(
@@ -79,9 +90,8 @@ setup(
     },
     package_dir={"": "src"},
     package_data={"ofx": DATA_FILES},
-    # Ensure we don't accidentally include .c files via MANIFEST or auto-discovery
     exclude_package_data={
-        "": ["*.c",  "*.pyd"],
+        "": ["*.c", "*.pyd"],
     },
-    zip_safe=False,
+    zip_safe=True,
 )
