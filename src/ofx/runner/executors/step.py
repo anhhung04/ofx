@@ -8,8 +8,8 @@ from typing import Any
 
 import aiofiles
 
-from ofx.models.step import Step
-from ofx.runner.core import BaseRunner, RunContext, RunnerStatus, RunType
+from ofx.models.step import RunType, Step
+from ofx.runner.core import BaseRunner, RunContext, RunnerStatus
 from ofx.runner.lifecycle import HookManager
 from ofx.settings import settings
 
@@ -39,7 +39,7 @@ class StepRunner(BaseRunner[Step]):
     async def _pre_run(self) -> None:
         """Prepare the step for execution, resolve templates, and run 'before_step' hook."""
         await self._run_hook("before_step")
-        self._run_type = self._parse_run_type()
+        self._run_type = self.model.get_run_type()
         await self._resolve_template_fields(
             [
                 "run",
@@ -258,9 +258,9 @@ class StepRunner(BaseRunner[Step]):
                 "script_file cannot be None for SCRIPT_FILE run type"
             )
 
-            script_path = Path(self.model.script_file.strip()).expanduser()
-            if script_path.suffix != ".py":
-                script_path = script_path.with_suffix(".py")
+            script_path = (
+                Path(self.model.script_file.strip()).expanduser().with_suffix(".py")
+            )
 
             if not script_path.is_absolute():
                 base_dir = getattr(self.ctx_vars, "workflow_dir", Path.cwd())
@@ -302,22 +302,6 @@ class StepRunner(BaseRunner[Step]):
         self._error = res.error
         for k, v in res.model_dump().items():
             setattr(self._result, k, v)
-
-    def _parse_run_type(self) -> RunType:
-        step = self.model
-        if step.uses:
-            return RunType.WORKFLOW
-        elif step.script:
-            return RunType.SCRIPT
-        elif step.script_file:
-            return RunType.SCRIPT_FILE
-        elif step.run:
-            return RunType.COMMAND
-        raise ValueError(
-            self._produce_log(
-                f"Step '{step.name}' must have one of 'run', 'script', 'script_file', or 'uses' defined."
-            )
-        )
 
     def _resolve_working_dir(self) -> Path:
         step = self.model

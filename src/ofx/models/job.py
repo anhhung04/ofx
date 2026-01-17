@@ -10,20 +10,22 @@ except Exception:  # pragma: no cover - cython optional
 
 from ofx.models import DefaultConfig
 from ofx.models.step import Step
+from ofx.settings import DEFAULT_SHELL
 
 
 class MatrixStrategy(BaseModel):
     """Matrix strategy for running job variations"""
+
     matrix: dict[str, list[Any]] = Field(
         ...,
         description="Matrix variables with lists of values to create job combinations",
     )
     max_parallel: int | None = Field(
-        None,
+        default=None,
         description="Maximum number of matrix jobs to run in parallel (default: unlimited)",
     )
     fail_fast: bool = Field(
-        True,
+        default=True,
         description="Whether to cancel remaining matrix jobs when one fails",
     )
     include: list[dict[str, Any]] = Field(
@@ -40,20 +42,21 @@ class Job(BaseModel):
     model_config: ClassVar = ConfigDict(
         ignored_types=(type(lambda: None), cython_function_or_method)
     )
-    name: str | None = Field(None, description="Name of the job")
+    name: str = Field(default="", description="Name of the job")
     needs: str | list[str] = Field(
         default_factory=list,
         description="Job dependencies (other jobs that must complete before this one)",
     )
     run_if: str | bool = Field(
-        True, description="Condition to run the job (e.g., 'success()', 'failure()')"
+        default=True,
+        description="Condition to run the job (e.g., 'success()', 'failure()')",
     )
     strategy: MatrixStrategy | None = Field(
-        None,
+        default=None,
         description="Matrix strategy for running multiple variations of the job",
     )
     env: dict[str, str] = Field(
-        default={},
+        default_factory=dict,
         description="A map of variables that are available to all steps in the job",
     )
     outputs: dict[str, str] = Field(
@@ -83,17 +86,19 @@ class Job(BaseModel):
         return self
 
     def __str__(self):
-        return f"Job(name='{self.name}', id={self.jid})"
+        return f"Job(name='{self.name}',id={self.jid})"
 
-    def get_shell(self, workflow_defaults: Optional["DefaultConfig"] = None) -> str | None:
+    def get_shell(self, workflow_defaults: Optional["DefaultConfig"] = None) -> str:
         """Get shell from job defaults or inherit from workflow."""
         if self.defaults and self.defaults.run.shell:
             return self.defaults.run.shell
         if workflow_defaults and workflow_defaults.run.shell:
             return workflow_defaults.run.shell
-        return None
+        return DEFAULT_SHELL
 
-    def get_working_directory(self, workflow_defaults: Optional["DefaultConfig"] = None) -> Path:
+    def get_working_directory(
+        self, workflow_defaults: Optional["DefaultConfig"] = None
+    ) -> Path:
         """Get working directory from job defaults or inherit from workflow."""
         if self.defaults and self.defaults.run.working_directory:
             return Path(self.defaults.run.working_directory)

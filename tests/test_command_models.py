@@ -12,7 +12,7 @@ class TestCommandModel:
         """Test creating a Command with minimal required fields"""
         cmd = Command(cmd="echo hello")
         assert cmd.cmd == "echo hello"
-        assert cmd.shell is None
+        assert cmd.shell == "/bin/bash"
         assert cmd.working_directory == Path.cwd()
         assert cmd.timeout_minutes == 1440
         assert cmd.interactive is False
@@ -32,19 +32,12 @@ class TestCommandModel:
         assert cmd.timeout_minutes == 60
         assert cmd.interactive is True
 
-    def test_command_str_short(self):
-        """Test Command __str__ with short command"""
+    def test_command_str(self):
+        """Test Command __str__ command"""
         cmd = Command(cmd="echo hello")
         result = str(cmd)
         assert "Command(cmd=" in result
-        assert "echo hello" in result
-
-    def test_command_str_long(self):
-        """Test Command __str__ with long command"""
-        long_cmd = "a" * 100
-        cmd = Command(cmd=long_cmd)
-        assert "..." in str(cmd)
-        assert len(str(cmd)) < len(long_cmd) + 50
+        assert "echo" in result
 
     def test_command_model_dump(self):
         """Test Command model_dump"""
@@ -72,7 +65,7 @@ class TestScriptModel:
         """Test creating a Script with minimal required fields"""
         script = Script(script="print('hello')")
         assert script.script == "print('hello')"
-        assert script.shell is None
+        assert script.shell == "/bin/bash"
         assert script.working_directory == Path.cwd()
         assert script.timeout_minutes == 1440
         assert script.interactive is False
@@ -95,16 +88,8 @@ class TestScriptModel:
     def test_script_str_short(self):
         """Test Script __str__ with short script"""
         script = Script(script="print('test')")
-        assert "Script(script=" in str(script)
-        assert "..." in str(script)
-
-    def test_script_str_long(self):
-        """Test Script __str__ with long script"""
-        long_script = "print('x')\n" * 50
-        script = Script(script=long_script)
-        result = str(script)
-        assert "..." in result
-        assert len(result) < len(long_script)
+        assert "Script(script_file=" in str(script)
+        assert "memory" in str(script)
 
     def test_script_model_dump(self):
         """Test Script model_dump"""

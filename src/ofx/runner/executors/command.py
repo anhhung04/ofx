@@ -3,16 +3,14 @@
 import asyncio
 import base64
 import logging
-import shlex
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
-from zlib import compress
 
 from ofx.models.command import Command, Script
 from ofx.runner.core import BaseRunner, RunContext
-from ofx.settings import settings
+from ofx.settings import DEFAULT_SHELL, settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -26,7 +24,7 @@ class CommandRunner(BaseRunner[Command]):
         self,
         cmd: str,
         ctx: RunContext,
-        shell: str | None = None,
+        shell: str = DEFAULT_SHELL,
         working_dir: Path | None = None,
         timeout_minutes: int = 1440,
         parent: "BaseRunner | None" = None,
@@ -247,7 +245,7 @@ class CommandRunner(BaseRunner[Command]):
                     if parent_shell:
                         return parent_shell
 
-        return "/bin/bash"
+        return DEFAULT_SHELL
 
 
 class ScriptRunner(BaseRunner[Script]):
@@ -255,7 +253,7 @@ class ScriptRunner(BaseRunner[Script]):
         self,
         script: str,
         ctx: RunContext,
-        shell: str | None = None,
+        shell: str = DEFAULT_SHELL,
         working_dir: Path | None = None,
         timeout_minutes: int = 1440,
         parent: "BaseRunner | None" = None,
@@ -267,35 +265,11 @@ class ScriptRunner(BaseRunner[Script]):
             working_directory=working_dir or Path.cwd(),
             timeout_minutes=timeout_minutes,
             interactive=interactive,
+            interpreter=sys.executable or "python3",
         )
         super().__init__(script_model, ctx, parent)
-        self._tmp_file = None
-        self._run_in_file = False
-        self._command_runner: CommandRunner | None = None
-
-    async def _do_run(self) -> None:
-        """Execute a Python script"""
-        enc_script = base64.b64encode(compress(self.model.script.encode(), 9)).decode()
-        python_executable = sys.executable or "python3"
-        if len(enc_script) > 2000:
-            self._run_in_file = True
-            self._tmp_file = tempfile.mktemp(suffix=".py")
-            with open(self._tmp_file, "w") as f:
-                f.write("import base64,zlib\n")
-                f.write(
-                    f"exec(zlib.decompress(base64.b64decode('{enc_script}')).decode('utf-8'))\n"
-                )
-            args = [python_executable, self._tmp_file]
-        else:
-            args = [
-                python_executable,
-                "-Wignore",
-                "-c",
-                f"import base64,zlib;exec(zlib.decompress(base64.b64decode('{enc_script}')).decode('utf-8'))",
-            ]
-
-        self._command_runner = CommandRunner(
-            cmd=shlex.join(args),
+        self._command_runner: CommandRunner = CommandRunner(
+            cmd=self.model.cmd,
             shell=self.model.shell,
             working_dir=self.model.working_directory,
             timeout_minutes=self.model.timeout_minutes,
@@ -303,6 +277,9 @@ class ScriptRunner(BaseRunner[Script]):
             ctx=self.ctx_vars,
             interactive=self.model.interactive,
         )
+
+    async def _do_run(self) -> None:
+        """Execute a Python script"""
         result = await self._command_runner.run()
         self._result = result
         if result.status.value != "completed":
@@ -315,8 +292,8 @@ class ScriptRunner(BaseRunner[Script]):
     async def _post_run(self) -> None:
         if self._error:
             logger.error(self._produce_log(f"Script failed: {self._error}"))
-        if self._run_in_file and self._tmp_file and Path(self._tmp_file).exists():
-            Path(self._tmp_file).unlink()
+        if self.model.script_file and self.model.script_file.exists():
+            self.model.script_file.unlink(missing_ok=True)
 
     def _produce_log(self, message: Any) -> str:
         msg = str(message)

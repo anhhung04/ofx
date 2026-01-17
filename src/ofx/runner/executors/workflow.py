@@ -263,25 +263,21 @@ class WorkflowRunner(BaseRunner[Workflow]):
             self.ctx_vars.output_path.mkdir(parents=True, exist_ok=True)
         if self.model.defaults:
             os.chdir(self.model.defaults.run.working_directory)
-        logger.debug(
-            self._produce_log(f"Workflow Dispatch: {self.model.workflow_dispatch}")
-        )
-        logger.debug(self._produce_log(f"Workflow Call: {self.model.workflow_call}"))
-        if self.model.workflow_dispatch and not self._is_reused:
+        logger.debug(self._produce_log(f"Workflow Dispatch: {self.model.dispatch}"))
+        logger.debug(self._produce_log(f"Workflow Call: {self.model.call}"))
+        if self.model.dispatch and not self._is_reused:
             self.ctx_vars.inputs.update(
                 await self._process_inputs(
-                    self.ctx_vars.inputs, self.model.workflow_dispatch.inputs
+                    self.ctx_vars.inputs, self.model.dispatch.inputs
                 )
             )
-        if self.model.workflow_call and self._is_reused:
+        if self.model.call and self._is_reused:
             self.ctx_vars.inputs.update(
-                await self._process_inputs(
-                    self.ctx_vars.inputs, self.model.workflow_call.inputs
-                )
+                await self._process_inputs(self.ctx_vars.inputs, self.model.call.inputs)
             )
             self.ctx_vars.secrets.update(
                 await self._process_inputs(
-                    self.ctx_vars.secrets, self.model.workflow_call.secrets
+                    self.ctx_vars.secrets, self.model.call.secrets
                 )
             )
         self.model.defaults.workflows_base_dir = Path(
@@ -297,7 +293,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
         if self._status != RunnerStatus.COMPLETED and self._error:
             logger.error(self._produce_log(f"error: {self._error}"))
         self._result.outputs.update(self._job_registry)
-        if self._is_reused and self.model.workflow_call:
+        if self._is_reused and self.model.call:
             if not self.is_success:
                 raise RuntimeError(
                     self._produce_log(
@@ -306,7 +302,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 )
             self._result.outputs = {
                 k: await self._resolve_template(v)
-                for k, v in self.model.workflow_call.outputs.items()
+                for k, v in self.model.call.outputs.items()
             }
         logger.debug(
             self._produce_log(

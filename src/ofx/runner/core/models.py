@@ -17,14 +17,6 @@ class RunnerStatus(Enum):
     FAILED = "failed"
     CANCELED = "canceled"
 
-
-class RunType(Enum):
-    """Type of step execution"""
-    SCRIPT = "script"
-    COMMAND = "command"
-    WORKFLOW = "workflow"
-    SCRIPT_FILE = "script_file"
-
 class RunContext(BaseModel):
     """Execution context for runners"""
     inputs: dict[str, Any] = Field(default_factory=dict)

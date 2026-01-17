@@ -2,16 +2,13 @@
 
 import logging
 import uuid
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.templates import TemplateResolver
 from ofx.settings import settings
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -30,7 +27,7 @@ class BaseRunner[TModel: BaseModel]:
         self.model = model
         self.parent = parent
         self.ctx_vars = ctx
-        self.run_id = f"{name}-{str(uuid.uuid4())}"
+        self.run_id = f"{name}[{str(uuid.uuid4())}]"
 
         self._status = RunnerStatus.IDLE
         self._error: str | None = None

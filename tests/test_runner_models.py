@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from ofx.runner.core.models import RunContext, RunnerStatus, RunResult, RunType
+from ofx.models.step import RunType
+from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 
 
 class TestRunnerStatus:

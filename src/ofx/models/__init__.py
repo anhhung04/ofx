@@ -2,16 +2,17 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from ofx.settings import DEFAULT_WORKFLOWS_DIR
+from ofx.settings import DEFAULT_SHELL, DEFAULT_WORKFLOWS_DIR
 
 
 class RunConfig(BaseModel):
-    shell: str | None = Field(
-        default=None,
+    shell: str = Field(
+        default=DEFAULT_SHELL,
         description="Shell to use for running commands in the workflow",
     )
     working_directory: str | Path = Field(
-        default=Path.cwd(), description="Working directory for the workflow execution"
+        default_factory=Path.cwd,
+        description="Working directory for the workflow execution",
     )
 
 

@@ -1,6 +1,6 @@
 """Runner module for workflow, job, and step execution"""
 
-from ofx.runner.core import BaseRunner, RunContext, RunnerStatus, RunResult, RunType
+from ofx.runner.core import BaseRunner, RunContext, RunnerStatus, RunResult
 from ofx.runner.executors import (
     CommandRunner,
     JobRunner,
@@ -11,7 +11,6 @@ from ofx.runner.executors import (
 
 __all__ = [
     "RunnerStatus",
-    "RunType",
     "RunContext",
     "RunResult",
     "BaseRunner",

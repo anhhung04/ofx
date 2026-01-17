@@ -58,7 +58,6 @@ class JobRunner(BaseRunner[Job]):
         await self._resolve_template_fields(["name", "needs", "run_if", "env"])
         for idx, step in enumerate(self.model.steps):
             self.model.steps[idx].name = await self._resolve_template(step.name)
-            self.model.steps[idx].id = await self._resolve_template(step.id)
         self.ctx_vars.envs.update(self.model.env)
         logger.debug(self._produce_log(f"Resolved job: {self.model.model_dump()}"))
         if self.model.needs:

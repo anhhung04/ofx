@@ -25,6 +25,8 @@ DATA_DIR = Path(__file__).parent / "data"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
+DEFAULT_SHELL = "/bin/bash"
+
 BANNER = """
 \033[1;31m      .--.
      |o_o |
@@ -38,34 +40,36 @@ BANNER = """
 > Handing over to the next generation of red teamers
 """
 
-RICH_THEME = Theme({
-    "success": "bold green",
-    "error": "bold red",
-    "warning": "bold yellow",
-    "info": "bold cyan",
-    "header": "bold red on black",
-    "subheader": "bold magenta",
-    "dim": "dim white",
-    "bright": "bold white",
-    "table.header": "bold red",
-    "table.border": "red",
-    "table.row": "white",
-    "panel.border": "red",
-    "panel.header": "bold red",
-    "tree": "red",
-    "tree.line": "red",
-    "progress.description": "cyan",
-    "progress.percentage": "green",
-    "progress.bar": "red",
-    "danger": "bold red on black",
-    "alert": "bold yellow on black",
-    "good": "bold green",
-    "neutral": "white",
-    "muted": "dim bright_black",
-    "command": "bold cyan",
-    "output": "green",
-    "stderr": "red",
-})
+RICH_THEME = Theme(
+    {
+        "success": "bold green",
+        "error": "bold red",
+        "warning": "bold yellow",
+        "info": "bold cyan",
+        "header": "bold red on black",
+        "subheader": "bold magenta",
+        "dim": "dim white",
+        "bright": "bold white",
+        "table.header": "bold red",
+        "table.border": "red",
+        "table.row": "white",
+        "panel.border": "red",
+        "panel.header": "bold red",
+        "tree": "red",
+        "tree.line": "red",
+        "progress.description": "cyan",
+        "progress.percentage": "green",
+        "progress.bar": "red",
+        "danger": "bold red on black",
+        "alert": "bold yellow on black",
+        "good": "bold green",
+        "neutral": "white",
+        "muted": "dim bright_black",
+        "command": "bold cyan",
+        "output": "green",
+        "stderr": "red",
+    }
+)
 
 os.makedirs(BASE_DATA_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
@@ -74,6 +78,7 @@ TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
 
 _console = None
+
 
 def get_console():
     """Get a Rich console with the red team theme applied."""
