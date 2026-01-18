@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -13,8 +13,10 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
+TModel = TypeVar("TModel", bound=BaseModel)
 
-class BaseRunner[TModel: BaseModel]:
+
+class BaseRunner[TModel]:
     """Abstract base class for all runners (workflow, job, step, command)
 
     Type Parameters:
@@ -28,7 +30,7 @@ class BaseRunner[TModel: BaseModel]:
         self.model = model
         self.parent = parent
         self.ctx_vars = ctx
-        self.run_id = f"{name}[{str(uuid.uuid4())}]"
+        self.run_id = str(uuid.uuid4())
 
         self._status = RunnerStatus.IDLE
         self._error: str | None = None
@@ -41,28 +43,14 @@ class BaseRunner[TModel: BaseModel]:
             self._status = RunnerStatus.IDLE
             self.ctx_vars.vars.update({"self": self.model})
             await self._pre_run()
-        except Exception as e:
-            self._error = f"Pre-run error ({type(e).__name__}): {e}"
-            self._status = RunnerStatus.FAILED
-            logger.error(self._produce_log(self._error))
-            return self.get_result()
-
-        try:
             self._status = RunnerStatus.RUNNING
             await self._do_run()
-        except Exception as e:
-            self._error = f"Run error ({type(e).__name__}): {e}"
-            self._status = RunnerStatus.FAILED
-            logger.error(self._produce_log(self._error))
-            return self.get_result()
-
-        try:
+            self._status = RunnerStatus.FINISHED
             await self._post_run()
             self._status = RunnerStatus.COMPLETED
         except Exception as e:
-            self._error = f"Post-run error ({type(e).__name__}): {e}"
+            self._error = f"Error ({type(e).__name__}): {e}"
             self._status = RunnerStatus.FAILED
-            logger.error(self._produce_log(self._error))
 
         return self.get_result()
 
@@ -91,11 +79,9 @@ class BaseRunner[TModel: BaseModel]:
         context_vars = self.ctx_vars.model_dump(exclude={"vars"})
         if self.ctx_vars.vars:
             context_vars.update(self.ctx_vars.vars)
-
         return await self._template_resolver.resolve(
             value,
             context_vars,
-            self.ctx_vars.workflow_dir,
             self.run_id,
         )
 

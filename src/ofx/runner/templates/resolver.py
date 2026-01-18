@@ -19,7 +19,6 @@ class TemplateResolver:
         self,
         value: Any,
         context_vars: dict[str, Any],
-        workflow_dir: Path,
         run_id: str,
     ) -> Any:
         """Resolve Jinja2 templates in values recursively with optimized caching
@@ -27,7 +26,6 @@ class TemplateResolver:
         Args:
             value: Value to resolve (can be str, dict, list, primitives)
             context_vars: Context variables for template rendering
-            workflow_dir: Current workflow directory
             run_id: Current runner ID
             
         Returns:
@@ -37,10 +35,10 @@ class TemplateResolver:
             return value
             
         if isinstance(value, dict):
-            return {k: await self.resolve(v, context_vars, workflow_dir, run_id) for k, v in value.items()}
+            return {k: await self.resolve(v, context_vars, run_id) for k, v in value.items()}
             
         if isinstance(value, list):
-            return [await self.resolve(v, context_vars, workflow_dir, run_id) for v in value]
+            return [await self.resolve(v, context_vars, run_id) for v in value]
             
         string_value = str(value)
         if "${{" not in string_value and "{%" not in string_value:
@@ -48,7 +46,6 @@ class TemplateResolver:
 
         # Get support functions
         support_funcs = TemplateHelpers.get_support_functions(
-            workflow_dir, 
             context_vars.get("envs", {})
         )
         support_funcs["run_id"] = run_id

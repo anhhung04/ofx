@@ -127,10 +127,6 @@ class Settings(BaseSettings):
     app_branding: str = "ofx"
 
     debug: bool = Field(default=False, description="Enable debug mode")
-    workers: int = Field(
-        default_factory=lambda: os.cpu_count() or 4,
-        description="Number of concurrent workers for running flows",
-    )
     timeout: int = Field(
         default=24 * 60 * 60,
         description="Timeout for running flows in seconds",

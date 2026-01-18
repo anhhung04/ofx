@@ -22,11 +22,7 @@ class MatrixStrategy(BaseModel):
     )
     max_parallel: int | None = Field(
         default=None,
-        description="Maximum number of matrix jobs to run in parallel (default: unlimited)",
-    )
-    fail_fast: bool = Field(
-        default=True,
-        description="Whether to cancel remaining matrix jobs when one fails",
+        description="Maximum number of matrix jobs to run in parallel per stage (default: unlimited)",
     )
     include: list[dict[str, Any]] = Field(
         default_factory=list,

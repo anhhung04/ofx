@@ -1,5 +1,4 @@
 import re
-import uuid
 from pathlib import Path
 from typing import Any, Literal
 
@@ -89,9 +88,6 @@ class Workflow(BaseModel):
     jobs: dict[str, Job] = Field(..., description="List of jobs in the workflow")
     workflow_path: Path = Field(
         Path.cwd(), description="Path to the workflow file (set automatically)"
-    )
-    flow_id: str = Field(
-        default_factory=lambda: str(uuid.uuid4()), description="Unique workflow ID"
     )
 
     def __str__(self):

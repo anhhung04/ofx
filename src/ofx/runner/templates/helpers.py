@@ -31,7 +31,7 @@ class TemplateHelpers:
     _support_funcs_cache: dict[str, Any] | None = None
 
     @classmethod
-    def get_support_functions(cls, workflow_dir: Path, envs: dict[str, str]) -> dict[str, Any]:
+    def get_support_functions(cls, envs: dict[str, str]) -> dict[str, Any]:
         """Get template support functions with caching
         
         Args:
@@ -66,7 +66,6 @@ class TemplateHelpers:
             }
         
         support_funcs = cls._support_funcs_cache.copy()
-        support_funcs["workflow_dir"] = workflow_dir.absolute().as_posix()
         support_funcs["env"] = envs
         
         return support_funcs

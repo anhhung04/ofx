@@ -15,33 +15,34 @@ class MatrixExpander:
 
     @staticmethod
     def expand_jobs(jobs: dict[str, Any]) -> dict[str, dict[str, Any]]:
-        """Expand jobs with matrix strategies into individual job instances
-
-        Args:
-            jobs: Dictionary of job ID to job configuration
-
-        Returns:
-            Dictionary of expanded job ID to job data including matrix values
-        """
+        """Expand jobs with matrix strategies into individual job instances, auto-injecting needs for max_parallel."""
         expanded_jobs = {}
 
         for job_id, job in jobs.items():
             if job.strategy and job.strategy.matrix:
-                matrix_combinations = MatrixExpander._generate_combinations(
-                    job.strategy
-                )
-
+                matrix_combinations = MatrixExpander._generate_combinations(job.strategy)
+                max_parallel = job.strategy.max_parallel if job.strategy else None
+                expanded_ids = []
                 for idx, matrix_values in enumerate(matrix_combinations):
                     expanded_job_id = f"{job_id}_{idx}"
+                    expanded_ids.append(expanded_job_id)
                     expanded_jobs[expanded_job_id] = {
                         "job": job.model_copy(deep=True),
                         "matrix": matrix_values,
                         "original_job_id": job_id,
                         "matrix_index": idx,
-                        "fail_fast": job.strategy.fail_fast,
+                        "max_parallel": max_parallel,
                     }
+                # Inject needs dependencies for max_parallel
+                if max_parallel and max_parallel > 0:
+                    for idx, expanded_job_id in enumerate(expanded_ids):
+                        if idx >= max_parallel:
+                            # Each job beyond the first n depends on previous n jobs
+                            needs = expanded_ids[max(0, idx-max_parallel):idx]
+                            expanded_jobs[expanded_job_id]["job"].needs = needs
+                for idx, matrix_values in enumerate(matrix_combinations):
                     logger.debug(
-                        f"Expanded matrix job '{job_id}' -> '{expanded_job_id}' with matrix: {matrix_values}"
+                        f"Expanded matrix job '{job_id}' -> '{job_id}_{idx}' with matrix: {matrix_values}"
                     )
             else:
                 expanded_jobs[job_id] = {
@@ -49,7 +50,7 @@ class MatrixExpander:
                     "matrix": {},
                     "original_job_id": job_id,
                     "matrix_index": None,
-                    "fail_fast": False,
+                    "max_parallel": None,
                 }
 
         return expanded_jobs

@@ -41,7 +41,6 @@ class WorkflowRunner(BaseRunner[Workflow]):
         self._job_results: dict[str, bool] = {}
         self._job_errors: dict[str, Exception] = {}
         self._expanded_jobs: dict[str, Any] = {}
-        self._matrix_semaphores: dict[str, asyncio.Semaphore] = {}
 
         if not self.ctx_vars.workflow_dirs:
             self.ctx_vars.workflow_dirs = DEFAULT_WORKFLOWS_DIRS
@@ -50,116 +49,63 @@ class WorkflowRunner(BaseRunner[Workflow]):
             raise ValueError("Workflow model cannot be None")
 
     async def _do_run(self) -> None:
-        """Execute the workflow by running its jobs in stages according to their dependencies"""
-        await self._planning_jobs()
-        await self._execute_workflow()
+        await self._plan_jobs()
+        await self._run_workflow()
 
-    async def _execute_workflow(self) -> None:
-        """Execute workflow jobs in stages"""
-        semaphore = asyncio.Semaphore(settings.workers)
-
-        completed_steps_before_stage = 0
-        for idx, stage in enumerate(self._schedule):
-            logger.debug(self._produce_log(f"Running stage {idx + 1}: {stage}"))
-
-            job_runners = {}
+    async def _run_workflow(self) -> None:
+        step_count = 0
+        for stage_index, stage in enumerate(self._schedule):
+            logger.debug(self._produce_log(f"Stage {stage_index + 1}: {stage}"))
+            runners = {}
             for job_id in stage:
-                job_data = self._expanded_jobs[job_id]
-                job = job_data["job"]
-                matrix_values = job_data["matrix"]
-                original_job_id = job_data["original_job_id"]
-
-                resolved_job_dict = await self._resolve_template_with_matrix(
-                    job.model_dump(exclude={"outputs", "steps"}), matrix_values
-                )
-                await self._job_registry.set(job_id, resolved_job_dict)
-                self.ctx_vars.vars.update({"jobs": await self._job_registry.get_all()})
-
-                job_ctx = self.ctx_vars.model_copy(
-                    update={"allow_interactive": len(stage) == 1},
-                    deep=True,
-                )
-                job_ctx.vars["matrix"] = matrix_values
-
+                job_info = self._expanded_jobs[job_id]
+                job = job_info["job"]
+                matrix = job_info["matrix"]
+                resolved_job = await self._resolve_template_with_matrix(job.model_dump(exclude={"outputs", "steps"}), matrix)
+                await self._job_registry.set(job_id, resolved_job)
+                self.ctx_vars.vars["jobs"] = await self._job_registry.get_all()
+                job_ctx = self.ctx_vars.model_copy(update={"allow_interactive": len(stage) == 1}, deep=True)
+                job_ctx.vars["matrix"] = matrix
                 runner = JobRunner(job, job_ctx, parent=self)
-                job_runners[job_id] = (runner, original_job_id)
-                resolved_job_dict["runner"] = runner
-
-            async def run_job_with_limit(
-                job_id: str, runner: JobRunner, orig_job_id: str
-            ):
-                if orig_job_id in self._matrix_semaphores:
-                    async with self._matrix_semaphores[orig_job_id]:
-                        async with semaphore:
-                            return await self._run_and_monitor_job(job_id, runner)
-                else:
-                    async with semaphore:
-                        return await self._run_and_monitor_job(job_id, runner)
-
-            stage_tasks = {
-                job_id: asyncio.create_task(run_job_with_limit(job_id, runner, orig_id))
-                for job_id, (runner, orig_id) in job_runners.items()
-            }
-
-            results = await asyncio.gather(
-                *stage_tasks.values(), return_exceptions=True
-            )
-
-            stage_failed = False
-            failed_jobs_info = []
-
-            stage_steps = 0
-            for job_id, (runner, _), result in zip(
-                stage_tasks.keys(), job_runners.values(), results, strict=False
-            ):
-                stage_steps += runner.total_steps
-
+                runners[job_id] = runner
+                resolved_job["runner"] = runner
+            tasks = {job_id: asyncio.create_task(self._run_and_monitor_job(job_id, runner)) for job_id, runner in runners.items()}
+            results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+            failed = False
+            errors = []
+            for job_id, runner, result in zip(tasks.keys(), runners.values(), results, strict=False):
+                step_count += runner.total_steps
                 job_result = runner.get_result()
-
                 if isinstance(result, Exception):
                     self._job_errors[job_id] = result
                     self._job_results[job_id] = False
-                    stage_failed = True
-                    failed_jobs_info.append(f"'{job_id}': {result}")
+                    failed = True
+                    errors.append(f"{job_id}: {result}")
                 elif not runner.is_success:
                     error = job_result.error or "Unknown error"
                     self._job_errors[job_id] = RuntimeError(error)
                     self._job_results[job_id] = False
-                    stage_failed = True
-                    failed_jobs_info.append(f"'{job_id}': {error}")
+                    failed = True
+                    errors.append(f"{job_id}: {error}")
                 else:
-                    logger.debug(
-                        self._produce_log(f"Job '{job_id}' completed successfully")
-                    )
-
+                    logger.debug(self._produce_log(f"Job {job_id} completed"))
                 job_result_dict = job_result.model_dump()
                 job_result_dict["steps"] = job_result.outputs.get("steps", {})
                 await self._job_registry.update(job_id, job_result_dict)
+            self.ctx_vars.vars["jobs"] = await self._job_registry.get_all()
+            if failed:
+                error_summary = ", ".join(errors)
+                raise RuntimeError(f"Job failure in stage {stage_index + 1}: {error_summary}")
+        self._completed_steps += step_count
 
-            self.ctx_vars.vars.update({"jobs": await self._job_registry.get_all()})
-
-            completed_steps_before_stage += stage_steps
-
-            if stage_failed:
-                error_summary = ", ".join(failed_jobs_info)
-                raise RuntimeError(
-                    f"One or more jobs failed in stage {idx + 1}: {error_summary}"
-                )
 
     def _expand_matrix_jobs(self) -> None:
         """Expand jobs with matrix strategies using MatrixExpander"""
         self._expanded_jobs = MatrixExpander.expand_jobs(self.model.jobs)
 
-        # Set up semaphores for max_parallel constraints
-        for job_id, job in self.model.jobs.items():
-            if job.strategy and job.strategy.max_parallel:
-                self._matrix_semaphores[job_id] = asyncio.Semaphore(
-                    job.strategy.max_parallel
-                )
-
     async def _resolve_workflow_templates(self) -> None:
         await self._resolve_template_fields(
-            ["name", "tools", "env", "description", "tags", "schedule"]
+            ["name", "tools", "env", "description", "tags"]
         )
 
         for job_id, job_data in self._expanded_jobs.items():
@@ -205,43 +151,33 @@ class WorkflowRunner(BaseRunner[Workflow]):
             elif "matrix" in self.ctx_vars.vars:
                 del self.ctx_vars.vars["matrix"]
 
-    async def _planning_jobs(self) -> int:
+    async def _plan_jobs(self) -> int:
         jobs = self.model.jobs
-        job_keys = list(jobs.keys())
-        deps_relationships = []
+        job_ids = list(jobs.keys())
+        dependencies = []
         for job_id, job in jobs.items():
             if job.needs:
-                if isinstance(job.needs, str):
-                    job.needs = [job.needs]
-                for dep in job.needs:
-                    if dep and dep not in job_keys:
-                        raise ValueError(
-                            f"Job '{job.name}' depends on '{dep}', which is not defined in the workflow."
-                        )
-                    deps_relationships.append((dep, job_id))
-
+                needs = [job.needs] if isinstance(job.needs, str) else job.needs
+                for dep in needs:
+                    if dep and dep not in job_ids:
+                        raise ValueError(f"Job {job.name} depends on {dep}, which is not defined.")
+                    dependencies.append((dep, job_id))
         self._expand_matrix_jobs()
-
-        expanded_job_keys = list(self._expanded_jobs.keys())
+        expanded_ids = list(self._expanded_jobs.keys())
         expanded_deps = []
-        for dep, job_id in deps_relationships:
+        for dep, job_id in dependencies:
             dep_jobs = MatrixExpander.get_expanded_job_ids(self._expanded_jobs, dep)
-            dependent_jobs = MatrixExpander.get_expanded_job_ids(
-                self._expanded_jobs, job_id
-            )
-            for dep_expanded in dep_jobs:
-                for dependent_expanded in dependent_jobs:
-                    expanded_deps.append((dep_expanded, dependent_expanded))
-
-        self._schedule = find_parallel_schedule(expanded_job_keys, expanded_deps)
-
+            dependent_jobs = MatrixExpander.get_expanded_job_ids(self._expanded_jobs, job_id)
+            for dep_exp in dep_jobs:
+                for dep_job in dependent_jobs:
+                    expanded_deps.append((dep_exp, dep_job))
+        self._schedule = find_parallel_schedule(expanded_ids, expanded_deps)
         await self._resolve_workflow_templates()
-
         self._total_steps = sum(
-            sum(len(self._expanded_jobs[job_id]["job"].steps) for job_id in stage)
+            sum(len(self._expanded_jobs[jid]["job"].steps) for jid in stage)
             for stage in self._schedule
         )
-        logger.debug(self._produce_log(f"Execution stages: {self._schedule}"))
+        logger.debug(self._produce_log(f"Stages: {self._schedule}"))
         self._completed_steps = 0
         return self._total_steps
 
@@ -269,8 +205,9 @@ class WorkflowRunner(BaseRunner[Workflow]):
         return await job_runner.run()
 
     async def _pre_run(self) -> None:
-        if not self.ctx_vars.output_path.exists():
-            self.ctx_vars.output_path.mkdir(parents=True, exist_ok=True)
+        output_path = self.ctx_vars.output_path
+        if output_path and output_path.exists():
+            output_path.mkdir(parents=True, exist_ok=True)
         os.chdir(self.model.defaults.run.working_directory)
         logger.debug(self._produce_log(f"Workflow Dispatch: {self.model.dispatch}"))
         logger.debug(self._produce_log(f"Workflow Call: {self.model.call}"))

@@ -15,6 +15,7 @@ class RunnerStatus(Enum):
 
     IDLE = "idle"
     RUNNING = "running"
+    FINISHED = "finished"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELED = "canceled"
@@ -26,7 +27,7 @@ class RunContext(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     secrets: dict[str, Any] = Field(default_factory=dict)
     envs: dict[str, Any] = Field(default_factory=populate_env)
-    output_path: Path = Field(default=Path.cwd() / "out")
+    output_path: Path | None = Field(default=None, description="Path to store runner outputs")
     vars: dict[str, Any] = Field(default_factory=dict)
     allow_interactive: bool = Field(
         default=False,
@@ -37,7 +38,7 @@ class RunContext(BaseModel):
         description="Directories to search for workflow files",
     )
     workflow_dir: Path = Field(
-        default=Path.cwd(),
+        default_factory=Path.cwd,
         description="Directory of the current workflow being executed",
     )
 
@@ -45,9 +46,9 @@ class RunContext(BaseModel):
 class RunResult(BaseModel):
     """Result of a runner execution"""
 
+    name: str = Field(...)
+    run_id: str = Field(...)
     status: RunnerStatus
     error: str | None = None
     outputs: dict[str, Any] = Field(default_factory=dict)
-    name: str = Field(...)
-    run_id: str = Field(...)
     metadata: dict[str, Any] = Field(default_factory=dict)
