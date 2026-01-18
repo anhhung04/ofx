@@ -2,7 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
 from rich.theme import Theme
@@ -88,6 +88,38 @@ def get_console():
     return _console
 
 
+class RedisRegistrySettings(BaseModel):
+    """Redis registry configuration"""
+
+    host: str = Field(default="localhost", description="Redis server host")
+    port: int = Field(default=6379, description="Redis server port")
+    db: int = Field(default=0, description="Redis database number")
+    password: str | None = Field(default=None, description="Redis password")
+    prefix: str = Field(
+        default="ofx:job:", description="Key prefix for registry entries"
+    )
+
+
+class MemcachedRegistrySettings(BaseModel):
+    """Memcached registry configuration"""
+
+    host: str = Field(default="localhost", description="Memcached server host")
+    port: int = Field(default=11211, description="Memcached server port")
+    prefix: str = Field(
+        default="ofx:job:", description="Key prefix for registry entries"
+    )
+
+
+class EtcdRegistrySettings(BaseModel):
+    """etcd registry configuration"""
+
+    host: str = Field(default="localhost", description="etcd server host")
+    port: int = Field(default=2379, description="etcd gRPC port")
+    prefix: str = Field(
+        default="/ofx/job/", description="Key prefix for registry entries"
+    )
+
+
 class Settings(BaseSettings):
     """Application settings or OFX"""
 
@@ -106,6 +138,28 @@ class Settings(BaseSettings):
     max_output_size: int = Field(
         default=10 * 1024 * 1024,  # 10MB
         description="Maximum output size in bytes before truncation",
+    )
+
+    # Job Registry Settings
+    registry_backend: str = Field(
+        default="memory",
+        description="Job registry backend type: 'memory', 'file', 'redis', 'memcached', or 'etcd'",
+    )
+    registry_file_path: str | None = Field(
+        default=None,
+        description="File path for file-based registry (defaults to ~/.local/share/ofx/job_registry.json)",
+    )
+    registry_redis: RedisRegistrySettings | None = Field(
+        default=None,
+        description="Redis registry configuration",
+    )
+    registry_memcached: MemcachedRegistrySettings | None = Field(
+        default=None,
+        description="Memcached registry configuration",
+    )
+    registry_etcd: EtcdRegistrySettings | None = Field(
+        default=None,
+        description="etcd registry configuration",
     )
 
     model_config = SettingsConfigDict(

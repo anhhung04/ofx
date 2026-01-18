@@ -1,5 +1,6 @@
 """Base runner class for workflow, job, and step execution"""
 
+import asyncio
 import logging
 import uuid
 from typing import Any, Optional
@@ -98,16 +99,14 @@ class BaseRunner[TModel: BaseModel]:
             self.run_id,
         )
 
-    async def _resolve_template_fields(self, fields: list[str]) -> None:
+    async def _resolve_template_fields(self, fields: list[str]) -> bool:
         """Resolve templates in specific model fields in parallel
 
         Args:
             fields: List of field names to resolve
         """
         if not self.model or not fields:
-            return None
-
-        import asyncio
+            return False
 
         tasks = []
         target_fields = []
@@ -119,15 +118,12 @@ class BaseRunner[TModel: BaseModel]:
                     )
                 )
                 target_fields.append(field)
-
-        if not tasks:
-            return None
-
-        results = await asyncio.gather(*tasks)
-        for field, resolved_value in zip(target_fields, results, strict=True):
-            setattr(self.model, field, resolved_value)
-
-        return None
+        if tasks:
+            results = await asyncio.gather(*tasks)
+            for field, resolved_value in zip(target_fields, results, strict=True):
+                setattr(self.model, field, resolved_value)
+            return True
+        return False
 
     def _produce_log(self, message: Any) -> str:
         """Produce a log message - must be implemented by subclasses"""

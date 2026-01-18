@@ -7,6 +7,7 @@ from pathlib import Path
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
 from ofx.runner import RunContext, WorkflowRunner
 from ofx.settings import (
@@ -21,10 +22,17 @@ from ofx.utils.misc import add_workflow_dir, find_workflow, load_secrets
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
 
+
 def get_tmp_dir(output: str = "") -> Path:
     """Get the temporary directory for workflow runs"""
-    if output and Path(output).is_dir(): return Path(output)
-    return Path(tempfile.mkdtemp(prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_", dir=TEMP_DIR))
+    if output and Path(output).is_dir():
+        return Path(output)
+    return Path(
+        tempfile.mkdtemp(
+            prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_", dir=TEMP_DIR
+        )
+    )
+
 
 class FlowRunHandler:
     def __init__(
@@ -47,12 +55,14 @@ class FlowRunHandler:
         start_time = time.time()
 
         if self.profile:
-            console.print(Panel(
-                "[bold yellow]Performance profiling enabled[/bold yellow]\n"
-                "[dim]Detailed timing data will be collected[/dim]",
-                title="[?] Profiling",
-                border_style="yellow"
-            ))
+            console.print(
+                Panel(
+                    "[bold yellow]Performance profiling enabled[/bold yellow]\n"
+                    "[dim]Detailed timing data will be collected[/dim]",
+                    title="[?] Profiling",
+                    border_style="yellow",
+                )
+            )
             profiler = cProfile.Profile()
             profiler.enable()
 
@@ -60,22 +70,30 @@ class FlowRunHandler:
             self._process_inputs()
 
             panel_content = [
-                f"[bold cyan]Workflow:[/bold cyan] {self.workflow_name}",
-                f"[bold cyan]Output:[/bold cyan] {self.output.as_posix()}",
+                Text.from_markup(
+                    f"[bold cyan]Workflow:[/bold cyan] {self.workflow_name}"
+                ),
+                Text.from_markup(
+                    f"[bold cyan]Output:[/bold cyan] {self.output.as_posix()}"
+                ),
             ]
 
             if self.input:
-                panel_content.append("")
+                panel_content.append(Text(""))
                 panel_content.append(self._create_input_table())
 
-            console.print(Panel(
-                Group(*panel_content),
-                title="[bold green][>] Workflow Execution[/bold green]",
-                border_style="green",
-                padding=(1, 2)
-            ))
+            console.print(
+                Panel(
+                    Group(*panel_content),
+                    title="[bold green][>] Workflow Execution[/bold green]",
+                    border_style="green",
+                    padding=(1, 2),
+                )
+            )
 
-            flow_path, workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+            flow_path, workflow = find_workflow(
+                self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS)
+            )
 
             runner = WorkflowRunner(
                 workflow,
@@ -83,26 +101,32 @@ class FlowRunHandler:
                     inputs=self.input,
                     output_path=self.output,
                     secrets=load_secrets(SECRETS_DIR),
-                    workflow_dirs=add_workflow_dir(DEFAULT_WORKFLOWS_DIRS, flow_path.parent),
+                    workflow_dirs=add_workflow_dir(
+                        DEFAULT_WORKFLOWS_DIRS, flow_path.parent
+                    ),
                     workflow_dir=flow_path.parent,
                 ),
             )
             res = await runner.run()
 
             if res.status.value != "completed":
-                console.print(Panel(
-                    f"[bold]Status:[/bold] [red]{res.status.value}[/red]\n"
-                    f"[bold]Error:[/bold] [red]{res.error}[/red]",
-                    title="[bold red][X] Workflow Failed[/bold red]",
-                    border_style="red",
-                    padding=(1, 2)
-                ))
+                console.print(
+                    Panel(
+                        f"[bold]Status:[/bold] [red]{res.status.value}[/red]\n"
+                        f"[bold]Error:[/bold] [red]{res.error}[/red]",
+                        title="[bold red][X] Workflow Failed[/bold red]",
+                        border_style="red",
+                        padding=(1, 2),
+                    )
+                )
             else:
-                console.print(Panel(
-                    "[bold green]Workflow completed successfully![/bold green]",
-                    title="[bold green][OK] Success[/bold green]",
-                    border_style="green"
-                ))
+                console.print(
+                    Panel(
+                        "[bold green]Workflow completed successfully![/bold green]",
+                        title="[bold green][OK] Success[/bold green]",
+                        border_style="green",
+                    )
+                )
 
             result = runner.get_result()
 
@@ -114,23 +138,29 @@ class FlowRunHandler:
                 total_time = end_time - start_time
 
                 stats = pstats.Stats(profiler)
-                stats.sort_stats('cumulative')
+                stats.sort_stats("cumulative")
 
                 profile_file = self.output / "profile.prof"
                 profiler.dump_stats(str(profile_file))
 
-                console.print(Panel(
-                    f"[bold]Total execution time:[/bold] [cyan]{total_time:.2f}s[/cyan]\n"
-                    f"[bold]Profile saved to:[/bold] [dim]{profile_file}[/dim]",
-                    title="[T] Performance Summary",
-                    border_style="cyan"
-                ))
+                console.print(
+                    Panel(
+                        f"[bold]Total execution time:[/bold] [cyan]{total_time:.2f}s[/cyan]\n"
+                        f"[bold]Profile saved to:[/bold] [dim]{profile_file}[/dim]",
+                        title="[T] Performance Summary",
+                        border_style="cyan",
+                    )
+                )
 
-                console.print("\n[bold cyan]Top 10 functions by cumulative time:[/bold cyan]")
+                console.print(
+                    "\n[bold cyan]Top 10 functions by cumulative time:[/bold cyan]"
+                )
                 stats.print_stats(10)
 
-                console.print("\n[bold cyan]Top 10 functions by total time:[/bold cyan]")
-                stats.print_stats('time', 10)
+                console.print(
+                    "\n[bold cyan]Top 10 functions by total time:[/bold cyan]"
+                )
+                stats.print_stats("time", 10)
 
         return result
 
@@ -140,7 +170,9 @@ class FlowRunHandler:
             try:
                 key, value = inp.split("=", 1)
             except Exception:
-                raise ValueError(f"Invalid input format: {inp}. Expected key=value.") from None
+                raise ValueError(
+                    f"Invalid input format: {inp}. Expected key=value."
+                ) from None
             try:
                 value = json.loads(value)
             except json.JSONDecodeError:

@@ -261,17 +261,17 @@ jobs:
 
         await runner._planning_jobs()
 
-        runner._job_registry["test_0"] = {"status": RunnerStatus.COMPLETED}
-        runner._job_registry["test_1"] = {"status": RunnerStatus.RUNNING}
+        await runner._job_registry.set("test_0", {"status": RunnerStatus.COMPLETED})
+        await runner._job_registry.set("test_1", {"status": RunnerStatus.RUNNING})
 
         status = runner.get_job_status("test")
         assert status == RunnerStatus.RUNNING
 
-        runner._job_registry["test_1"] = {"status": RunnerStatus.COMPLETED}
+        await runner._job_registry.set("test_1", {"status": RunnerStatus.COMPLETED})
         status = runner.get_job_status("test")
         assert status == RunnerStatus.COMPLETED
 
-        runner._job_registry["test_0"] = {"status": RunnerStatus.FAILED}
+        await runner._job_registry.set("test_0", {"status": RunnerStatus.FAILED})
         status = runner.get_job_status("test")
         assert status == RunnerStatus.FAILED
 

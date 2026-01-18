@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from ofx.models.workflow import Workflow
-from ofx.runner.core import BaseRunner, RunContext, RunnerStatus
+from ofx.runner.core import (
+    BaseRunner,
+    JobRegistryAdapter,
+    RegistryFactory,
+    RunContext,
+    RunnerStatus,
+    cleanup_registry,
+)
 from ofx.runner.executors.job import JobRunner
 from ofx.runner.executors.tool_installer import ToolInstallerRunner
 from ofx.runner.matrix import MatrixExpander
@@ -23,10 +30,14 @@ class WorkflowRunner(BaseRunner[Workflow]):
         workflow: Workflow,
         ctx: RunContext,
         parent: BaseRunner | None = None,
+        registry: JobRegistryAdapter | None = None,
     ):
         super().__init__(workflow, ctx, parent)
         self._is_reused = self.parent is not None
-        self._job_registry: dict[str, Any] = {}
+        # Use injected registry or create default (memory-based)
+        self._job_registry: JobRegistryAdapter = (
+            registry if registry is not None else RegistryFactory.create_memory()
+        )
         self._job_results: dict[str, bool] = {}
         self._job_errors: dict[str, Exception] = {}
         self._expanded_jobs: dict[str, Any] = {}
@@ -61,8 +72,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 resolved_job_dict = await self._resolve_template_with_matrix(
                     job.model_dump(exclude={"outputs", "steps"}), matrix_values
                 )
-                self._job_registry[job_id] = resolved_job_dict
-                self.ctx_vars.vars.update({"jobs": self._job_registry})
+                await self._job_registry.set(job_id, resolved_job_dict)
+                self.ctx_vars.vars.update({"jobs": await self._job_registry.get_all()})
 
                 job_ctx = self.ctx_vars.model_copy(
                     update={"allow_interactive": len(stage) == 1},
@@ -121,12 +132,11 @@ class WorkflowRunner(BaseRunner[Workflow]):
                         self._produce_log(f"Job '{job_id}' completed successfully")
                     )
 
-                self._job_registry[job_id].update(job_result.model_dump())
-                self._job_registry[job_id]["steps"] = job_result.outputs.get(
-                    "steps", {}
-                )
+                job_result_dict = job_result.model_dump()
+                job_result_dict["steps"] = job_result.outputs.get("steps", {})
+                await self._job_registry.update(job_id, job_result_dict)
 
-            self.ctx_vars.vars.update({"jobs": self._job_registry})
+            self.ctx_vars.vars.update({"jobs": await self._job_registry.get_all()})
 
             completed_steps_before_stage += stage_steps
 
@@ -261,8 +271,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
     async def _pre_run(self) -> None:
         if not self.ctx_vars.output_path.exists():
             self.ctx_vars.output_path.mkdir(parents=True, exist_ok=True)
-        if self.model.defaults:
-            os.chdir(self.model.defaults.run.working_directory)
+        os.chdir(self.model.defaults.run.working_directory)
         logger.debug(self._produce_log(f"Workflow Dispatch: {self.model.dispatch}"))
         logger.debug(self._produce_log(f"Workflow Call: {self.model.call}"))
         if self.model.dispatch and not self._is_reused:
@@ -292,7 +301,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
     async def _post_run(self) -> None:
         if self._status != RunnerStatus.COMPLETED and self._error:
             logger.error(self._produce_log(f"error: {self._error}"))
-        self._result.outputs.update(self._job_registry)
+        all_jobs = await self._job_registry.get_all()
+        self._result.outputs.update(all_jobs)
         if self._is_reused and self.model.call:
             if not self.is_success:
                 raise RuntimeError(
@@ -306,7 +316,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
             }
         logger.debug(
             self._produce_log(
-                f"job execution status: {[(job['name'], job['status']) for job in self._job_registry.values()]}"
+                f"job execution status: {[(job['name'], job['status']) for job in all_jobs.values()]}"
             )
         )
         self._status = (
@@ -315,8 +325,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
             else (
                 RunnerStatus.COMPLETED
                 if all(
-                    job["status"] == RunnerStatus.COMPLETED
-                    for job in self._job_registry.values()
+                    job["status"] == RunnerStatus.COMPLETED for job in all_jobs.values()
                 )
                 else RunnerStatus.FAILED
             )
@@ -327,6 +336,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
         ):
             os.rmdir(self.ctx_vars.output_path)
         logger.debug(self._produce_log(f"result: {self.get_result()}"))
+        # Clean up registry resources
+        await cleanup_registry(self._job_registry)
 
     async def _install_tools(self) -> None:
         tools = self.model.tools
@@ -399,18 +410,45 @@ class WorkflowRunner(BaseRunner[Workflow]):
         return self.ctx_vars.output_path
 
     def get_job_status(self, job_id: str) -> RunnerStatus:
-        if job_id in self._job_registry:
-            return self._job_registry.get(job_id, {}).get("status")
+        """Get job status from registry (sync wrapper for async call)
+
+        Note: This is a synchronous method that uses asyncio.run internally.
+        It's kept for backward compatibility but should ideally be async.
+        """
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in async context - create task
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run, self._async_get_job_status(job_id)
+                    )
+                    return future.result()
+            else:
+                return asyncio.run(self._async_get_job_status(job_id))
+        except Exception:
+            return asyncio.run(self._async_get_job_status(job_id))
+
+    async def _async_get_job_status(self, job_id: str) -> RunnerStatus:
+        """Async implementation of get_job_status"""
+        job_data = await self._job_registry.get(job_id)
+        if job_data:
+            return job_data.get("status")
 
         expanded_ids = MatrixExpander.get_expanded_job_ids(self._expanded_jobs, job_id)
         if not expanded_ids or expanded_ids == [job_id]:
-            return self._job_registry.get(job_id, {}).get("status")
+            job_data = await self._job_registry.get(job_id)
+            return job_data.get("status") if job_data else None
 
         statuses = []
         for expanded_id in expanded_ids:
-            status = self._job_registry.get(expanded_id, {}).get("status")
-            if status:
-                statuses.append(status)
+            job_data = await self._job_registry.get(expanded_id)
+            if job_data and job_data.get("status"):
+                statuses.append(job_data["status"])
 
         if any(s == RunnerStatus.FAILED for s in statuses):
             return RunnerStatus.FAILED
@@ -425,7 +463,28 @@ class WorkflowRunner(BaseRunner[Workflow]):
     def get_job_from_registry(
         self, job_id: str
     ) -> dict[str, JobRunner | dict[str, Any]] | None:
-        return self._job_registry.get(job_id)
+        """Get job from registry (sync wrapper for async call)
+
+        Note: This is a synchronous method that uses asyncio.run internally.
+        It's kept for backward compatibility but should ideally be async.
+        """
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Already in async context - create task
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run, self._job_registry.get(job_id)
+                    )
+                    return future.result()
+            else:
+                return asyncio.run(self._job_registry.get(job_id))
+        except Exception:
+            return asyncio.run(self._job_registry.get(job_id))
 
     def _has_interactive_steps(self) -> bool:
         for job in self.model.jobs.values():

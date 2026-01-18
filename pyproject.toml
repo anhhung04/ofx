@@ -38,6 +38,15 @@ docs = [
   "mkdocs-material>=9.5.0",
   "pymdown-extensions>=10.7.0",
 ]
+redis = [
+  "redis>=5.0.0",
+]
+memcached = [
+  "aiomcache>=0.8.2",
+]
+etcd = [
+  "etcd3>=0.12.0",
+]
 
 [project.scripts]
 ofx = "ofx:main"
