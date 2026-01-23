@@ -1,4 +1,5 @@
 # Copilot Instructions for OFX
+**Note:** The documentation in this repository is intended for end users only. There is no developer or internal guide included or distributed. All documentation updates should focus on end-user guidance, not internal or developer-facing details.
 
 ## Runner Architecture (Modular Structure)
 
@@ -15,8 +16,8 @@ The runner module uses a **modular architecture** organized into specialized sub
   - `ToolInstallerRunner`: Manages tool installation via `workflow.tools` block
 - **Lifecycle** ([src/ofx/runner/lifecycle/](../src/ofx/runner/lifecycle/)): Hook management
   - `HookManager`: Handles step lifecycle hooks (before_step, after_step, on_retry, on_skip, on_timeout)
-- **Matrix** ([src/ofx/runner/matrix/](../src/ofx/runner/matrix/)): Matrix strategy expansion
-  - `MatrixExpander`: Generates job variations from matrix configurations with include/exclude rules
+- **Matrix** ([src/ofx/utils/matrix.py](../src/ofx/utils/matrix.py)): Matrix strategy expansion
+  - `expand_jobs`, `process_matrix_value`, etc.: Generate job variations from matrix configurations with include/exclude rules
 - **Templates** ([src/ofx/runner/templates/](../src/ofx/runner/templates/)): Jinja2 template resolution
   - `TemplateResolver`: Async template resolution with caching
   - `TemplateHelpers`: Helper functions for templates (sudo, uv_install, file_read, etc.)
@@ -27,14 +28,14 @@ The runner module uses a **modular architecture** organized into specialized sub
 
 - Workflows: YAML parsed via `Workflow` model ([src/ofx/models/workflow.py](../src/ofx/models/workflow.py)); job IDs must match `[A-Za-z0-9_-]+`, `needs` validated, and steps get `step_index` assigned during validation.
 - Steps: must define exactly one of `run`, `script`, `script_file`, or `uses` ([src/ofx/models/step.py](../src/ofx/models/step.py)); `interactive` only honored when a stage has a single job, otherwise it is ignored.
-- Matrix strategy: jobs with `strategy.matrix` expand into multiple instances with cartesian product of matrix values; supports `max_parallel`, `fail_fast`, `include`, `exclude`; matrix values accessible via `${{ matrix.key }}` context ([src/ofx/models/job.py](../src/ofx/models/job.py), [src/ofx/runner/matrix/expander.py](../src/ofx/runner/matrix/expander.py)).
+- Matrix strategy: jobs with `strategy.matrix` expand into multiple instances with cartesian product of matrix values; supports `max_parallel`, `fail_fast`, `include`, `exclude`; matrix values accessible via `${{ matrix.key }}` context ([src/ofx/models/job.py](../src/ofx/models/job.py), [src/ofx/utils/matrix.py](../src/ofx/utils/matrix.py)).
 - Reusable workflows: steps with `uses` create a nested `WorkflowRunner`, inheriting envs and optionally secrets (`secrets: inherit`) while respecting workflow search paths ([src/ofx/runner/executors/step.py](../src/ofx/runner/executors/step.py)).
 
 ## Execution & Context
 
-- Workflow discovery: `find_workflow` searches current dir, `~/.local/share/ofx/workflows`, then remote URL or git repo clones; file extensions `.yml/.yaml` only ([src/ofx/utils/misc.py](../src/ofx/utils/misc.py)).
+- Workflow discovery: `find_workflow` searches current dir, `~/.local/share/ofx/workflows`, then remote URL or git repo clones; file extensions `.yml/.yaml` only ([src/ofx/utils/workflow_utils.py](../src/ofx/utils/workflow_utils.py)).
 - Execution plan: dependencies topologically sorted into parallel stages via `find_parallel_schedule`; jobs in the same stage run concurrently with a shared semaphore sized by `settings.workers`; matrix jobs expanded before scheduling ([src/ofx/runner/executors/workflow.py](../src/ofx/runner/executors/workflow.py)).
-- Run contexts: `RunContext` merges env vars with PATH prepended by `~/Tools/bin` and sets `UV_TOOL_BIN_DIR`; matrix context available as `ctx.vars['matrix']` during job execution ([src/ofx/runner/core/models.py](../src/ofx/runner/core/models.py) and [src/ofx/utils/misc.py](../src/ofx/utils/misc.py)).
+- Run contexts: `RunContext` merges env vars with PATH prepended by `~/Tools/bin` and sets `UV_TOOL_BIN_DIR`; matrix context available as `ctx.vars['matrix']` during job execution ([src/ofx/runner/core/models.py](../src/ofx/runner/core/models.py) and [src/ofx/utils/env.py](../src/ofx/utils/env.py)).
 - Templates: all string/number/bool fields pass through async Jinja using `${{ ... }}` delimiters; helper funcs include `sudo`, `tools_dir/tools_bin_dir`, `uv_install/go_install/cargo_install/npm_install/static_install`, `file_read/file_write`, `file_exists`, and `env`; matrix values accessible via `matrix` context ([src/ofx/runner/templates/](../src/ofx/runner/templates/)).
 - Defaults & working dirs: workflow/job/step shells and working directories cascade from `DefaultConfig` ([src/ofx/models/__init__.py](../src/ofx/models/__init__.py)); workflow default `workflows_base_dir` is appended to search paths.
 
@@ -52,7 +53,7 @@ The runner module uses a **modular architecture** organized into specialized sub
 - CLI commands: use `typing.Annotated` for all `typer.Option`/`typer.Argument` declarations; provide defaults inside `typer.Option` (strings default to `""`, bools to `False`) to avoid `NoneType.isidentifier` issues with Click/Typer.
 - Running workflows: `ofx flow run <name> --input key=val --output <dir>`; inputs are JSON-decoded when possible and shown via table; default output is a temp dir under `/tmp/.ofx` ([src/ofx/commands/flow/run.py](../src/ofx/commands/flow/run.py)).
 - Validation & visualization: `ofx flow validate <name>` checks schema; `ofx flow visualize <name> --format dot|png|svg|pdf|mermaid|plantuml|d2|json|yaml` renders the DAG ([src/ofx/commands/flow/validate.py](../src/ofx/commands/flow/validate.py), [src/ofx/commands/flow/visualize.py](../src/ofx/commands/flow/visualize.py)).
-- Secrets: CLI loads secrets from `~/.local/share/ofx/secrets` and falls back to `secrets.enc`; `secrets: inherit` passes parent secrets into reusable workflows ([src/ofx/utils/misc.py](../src/ofx/utils/misc.py)).
+- Secrets: CLI loads secrets from `~/.local/share/ofx/secrets` and falls back to `secrets.enc`; `secrets: inherit` passes parent secrets into reusable workflows ([src/ofx/utils/secrets.py](../src/ofx/utils/secrets.py)).
 - Progress UX: workflow/job runners use `rich` progress bars; interactive steps suppress nested progress to keep TTY usable.
 
 ## Development
