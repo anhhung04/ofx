@@ -10,7 +10,15 @@
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "charliermarsh.ruff",
-                "ms-azuretools.vscode-docker"
+                "ms-azuretools.vscode-docker",
+                "redhat.vscode-yaml",
+                "ms-vscode.vscode-json",
+                "yzhang.markdown-all-in-one",
+                "donjayamanne.githistory",
+                "hbenl.vscode-test-explorer",
+                "ms-toolsai.jupyter",
+                "wholroyd.jinja",
+                "ms-python.debugpy"
             ],
             "settings": {
                 "python.languageServer": "Pylance",
@@ -30,8 +38,10 @@
         "ghcr.io/devcontainers/features/github-cli:1": {},
         "ghcr.io/devcontainers/features/docker-in-docker:2": {
             "moby": false
-        }
+        },
+        "ghcr.io/devcontainers/features/aws-cli:1": {}
     },
     "forwardPorts": [],
-    "remoteUser": "vscode"
+    "remoteUser": "vscode",
+    "postCreateCommand": "uv venv && uv sync"
 }
