@@ -6,6 +6,7 @@ from ofx.runner.executors import (
     JobRunner,
     ScriptRunner,
     StepRunner,
+    ToolInstallerRunner,
     WorkflowRunner,
 )
 
@@ -17,6 +18,7 @@ __all__ = [
     "CommandRunner",
     "ScriptRunner",
     "StepRunner",
+    "ToolInstallerRunner",
     "JobRunner",
     "WorkflowRunner",
 ]
