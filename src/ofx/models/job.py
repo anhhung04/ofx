@@ -24,6 +24,10 @@ class MatrixStrategy(BaseModel):
         default=None,
         description="Maximum number of matrix jobs to run in parallel per stage (default: unlimited)",
     )
+    fail_fast: bool = Field(
+        default=True,
+        description="Whether to fail the entire matrix if one job fails (default: true)",
+    )
     include: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Additional matrix combinations to include",
@@ -70,6 +74,26 @@ class Job(BaseModel):
     jid: str = Field(
         default="",
         description="Job identifier in the workflow",
+    )
+    matrix_values: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Matrix values for this job instance (populated during expansion)",
+    )
+    original_job_id: str = Field(
+        default="",
+        description="Original job ID before matrix expansion",
+    )
+    matrix_index: int | None = Field(
+        default=None,
+        description="Index of this job in the matrix expansion",
+    )
+    max_parallel: int | None = Field(
+        default=None,
+        description="Maximum number of matrix jobs to run in parallel",
+    )
+    fail_fast: bool = Field(
+        default=True,
+        description="Whether to fail the entire matrix if one job fails",
     )
 
     @model_validator(mode="after")

@@ -17,9 +17,10 @@ from ofx.runner.core import (
 )
 from ofx.runner.executors.job import JobRunner
 from ofx.runner.executors.tool_installer import ToolInstallerRunner
-from ofx.runner.matrix import MatrixExpander
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, settings
-from ofx.utils.misc import add_workflow_dir, find_parallel_schedule
+from ofx.utils.matrix import expand_jobs, get_expanded_job_ids, process_matrix_value
+from ofx.utils.scheduling import find_parallel_schedule
+from ofx.utils.workflow_utils import add_workflow_dir
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -58,22 +59,30 @@ class WorkflowRunner(BaseRunner[Workflow]):
             logger.debug(self._produce_log(f"Stage {stage_index + 1}: {stage}"))
             runners = {}
             for job_id in stage:
-                job_info = self._expanded_jobs[job_id]
-                job = job_info["job"]
-                matrix = job_info["matrix"]
-                resolved_job = await self._resolve_template_with_matrix(job.model_dump(exclude={"outputs", "steps"}), matrix)
+                job = self._expanded_jobs[job_id]
+                matrix = job.matrix_values
+                resolved_job = await self._resolve_template_with_matrix(
+                    job.model_dump(exclude={"outputs", "steps"}), matrix
+                )
                 await self._job_registry.set(job_id, resolved_job)
                 self.ctx_vars.vars["jobs"] = await self._job_registry.get_all()
-                job_ctx = self.ctx_vars.model_copy(update={"allow_interactive": len(stage) == 1}, deep=True)
+                job_ctx = self.ctx_vars.model_copy(
+                    update={"allow_interactive": len(stage) == 1}, deep=True
+                )
                 job_ctx.vars["matrix"] = matrix
                 runner = JobRunner(job, job_ctx, parent=self)
                 runners[job_id] = runner
                 resolved_job["runner"] = runner
-            tasks = {job_id: asyncio.create_task(self._run_and_monitor_job(job_id, runner)) for job_id, runner in runners.items()}
+            tasks = {
+                job_id: asyncio.create_task(self._run_and_monitor_job(job_id, runner))
+                for job_id, runner in runners.items()
+            }
             results = await asyncio.gather(*tasks.values(), return_exceptions=True)
             failed = False
             errors = []
-            for job_id, runner, result in zip(tasks.keys(), runners.values(), results, strict=False):
+            for job_id, runner, result in zip(
+                tasks.keys(), runners.values(), results, strict=False
+            ):
                 step_count += runner.total_steps
                 job_result = runner.get_result()
                 if isinstance(result, Exception):
@@ -95,22 +104,22 @@ class WorkflowRunner(BaseRunner[Workflow]):
             self.ctx_vars.vars["jobs"] = await self._job_registry.get_all()
             if failed:
                 error_summary = ", ".join(errors)
-                raise RuntimeError(f"Job failure in stage {stage_index + 1}: {error_summary}")
+                raise RuntimeError(
+                    f"Job failure in stage {stage_index + 1}: {error_summary}"
+                )
         self._completed_steps += step_count
-
 
     def _expand_matrix_jobs(self) -> None:
         """Expand jobs with matrix strategies using MatrixExpander"""
-        self._expanded_jobs = MatrixExpander.expand_jobs(self.model.jobs)
+        self._expanded_jobs = expand_jobs(self.model.jobs)
 
     async def _resolve_workflow_templates(self) -> None:
         await self._resolve_template_fields(
             ["name", "tools", "env", "description", "tags"]
         )
 
-        for job_id, job_data in self._expanded_jobs.items():
-            job = job_data["job"]
-            matrix_values = job_data["matrix"]
+        for job_id, job in self._expanded_jobs.items():
+            matrix_values = job.matrix_values
 
             if matrix_values:
                 processed_matrix = {}
@@ -118,10 +127,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
                     resolved_value = await self._resolve_template_with_matrix(
                         value, matrix_values
                     )
-                    processed_matrix[key] = MatrixExpander.process_matrix_value(
-                        resolved_value
-                    )
-                job_data["matrix"] = processed_matrix
+                    processed_matrix[key] = process_matrix_value(resolved_value)
+                job.matrix_values = processed_matrix
                 matrix_values = processed_matrix
 
             if job.name:
@@ -160,21 +167,23 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 needs = [job.needs] if isinstance(job.needs, str) else job.needs
                 for dep in needs:
                     if dep and dep not in job_ids:
-                        raise ValueError(f"Job {job.name} depends on {dep}, which is not defined.")
+                        raise ValueError(
+                            f"Job {job.name} depends on {dep}, which is not defined."
+                        )
                     dependencies.append((dep, job_id))
         self._expand_matrix_jobs()
         expanded_ids = list(self._expanded_jobs.keys())
         expanded_deps = []
         for dep, job_id in dependencies:
-            dep_jobs = MatrixExpander.get_expanded_job_ids(self._expanded_jobs, dep)
-            dependent_jobs = MatrixExpander.get_expanded_job_ids(self._expanded_jobs, job_id)
+            dep_jobs = get_expanded_job_ids(self._expanded_jobs, dep)
+            dependent_jobs = get_expanded_job_ids(self._expanded_jobs, job_id)
             for dep_exp in dep_jobs:
                 for dep_job in dependent_jobs:
                     expanded_deps.append((dep_exp, dep_job))
         self._schedule = find_parallel_schedule(expanded_ids, expanded_deps)
         await self._resolve_workflow_templates()
         self._total_steps = sum(
-            sum(len(self._expanded_jobs[jid]["job"].steps) for jid in stage)
+            sum(len(self._expanded_jobs[jid].steps) for jid in stage)
             for stage in self._schedule
         )
         logger.debug(self._produce_log(f"Stages: {self._schedule}"))
@@ -190,7 +199,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
         Returns:
             List of expanded job IDs
         """
-        return MatrixExpander.get_expanded_job_ids(self._expanded_jobs, original_job_id)
+        return get_expanded_job_ids(self._expanded_jobs, original_job_id)
 
     async def _run_and_monitor_job(self, job_id: str, job_runner: JobRunner):
         has_interactive_step = any(
@@ -376,7 +385,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
         if job_data:
             return job_data.get("status")
 
-        expanded_ids = MatrixExpander.get_expanded_job_ids(self._expanded_jobs, job_id)
+        expanded_ids = get_expanded_job_ids(self._expanded_jobs, job_id)
         if not expanded_ids or expanded_ids == [job_id]:
             job_data = await self._job_registry.get(job_id)
             return job_data.get("status") if job_data else None

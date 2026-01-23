@@ -1,7 +1,7 @@
 import pytest
 
 from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
-from ofx.utils.misc import find_workflow
+from ofx.utils.workflow_utils import find_workflow
 
 
 class TestFlowRun:

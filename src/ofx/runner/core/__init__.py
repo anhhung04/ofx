@@ -17,17 +17,9 @@ __all__ = [
     "RunContext",
     "RunnerStatus",
     "RunResult",
+    "FileJobRegistry",
     "JobRegistryAdapter",
     "MemoryJobRegistry",
-    "FileJobRegistry",
     "RegistryFactory",
     "cleanup_registry",
 ]
-
-# Conditionally export RedisJobRegistry if available
-try:
-    from ofx.runner.core.registries import RedisJobRegistry
-
-    __all__.append("RedisJobRegistry")
-except ImportError:
-    pass

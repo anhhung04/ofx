@@ -51,7 +51,7 @@ class TestRunContext:
         assert ctx.secrets == {}
         assert isinstance(ctx.envs, dict)
         assert "PATH" in ctx.envs
-        assert ctx.output_path == Path.cwd() / "out"
+        assert ctx.output_path is None
         assert ctx.vars == {}
         assert ctx.allow_interactive is False
         assert isinstance(ctx.workflow_dirs, list)

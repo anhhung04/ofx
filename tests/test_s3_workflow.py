@@ -19,7 +19,7 @@ def mock_boto3_client():
 
 def test_is_s3_path():
     """Test S3 path detection."""
-    from ofx.utils.misc import is_s3_path
+    from ofx.utils.path import is_s3_path
 
     assert is_s3_path("s3://bucket/path/to/workflow.yml") is True
     assert is_s3_path("s3://my-bucket/workflows/test.yaml") is True
@@ -31,7 +31,7 @@ def test_is_s3_path():
 
 def test_download_s3_workflow_success(mock_boto3_client):
     """Test successful S3 workflow download."""
-    from ofx.utils.misc import download_s3_workflow
+    from ofx.utils.s3 import download_s3_workflow
 
     workflow_content = """
 name: Test Workflow
@@ -61,7 +61,7 @@ jobs:
 
 def test_download_s3_workflow_with_extension_detection(mock_boto3_client):
     """Test S3 workflow download with automatic extension detection."""
-    from ofx.utils.misc import download_s3_workflow
+    from ofx.utils.s3 import download_s3_workflow
 
     workflow_content = "name: Test\njobs: {}"
 
@@ -83,7 +83,8 @@ def test_download_s3_workflow_with_extension_detection(mock_boto3_client):
 def test_download_s3_workflow_bucket_not_found(mock_boto3_client):
     """Test S3 workflow download with non-existent bucket."""
     from botocore.exceptions import ClientError
-    from ofx.utils.misc import download_s3_workflow
+
+    from ofx.utils.s3 import download_s3_workflow
 
     # Mock NoSuchBucket error
     error_response = {"Error": {"Code": "NoSuchBucket"}}
@@ -96,7 +97,8 @@ def test_download_s3_workflow_bucket_not_found(mock_boto3_client):
 def test_download_s3_workflow_key_not_found(mock_boto3_client):
     """Test S3 workflow download with non-existent key."""
     from botocore.exceptions import ClientError
-    from ofx.utils.misc import download_s3_workflow
+
+    from ofx.utils.s3 import download_s3_workflow
 
     # Mock NoSuchKey error
     error_response = {"Error": {"Code": "NoSuchKey"}}
@@ -109,7 +111,8 @@ def test_download_s3_workflow_key_not_found(mock_boto3_client):
 def test_download_s3_workflow_access_denied(mock_boto3_client):
     """Test S3 workflow download with access denied."""
     from botocore.exceptions import ClientError
-    from ofx.utils.misc import download_s3_workflow
+
+    from ofx.utils.s3 import download_s3_workflow
 
     # Mock AccessDenied error
     error_response = {"Error": {"Code": "AccessDenied"}}
@@ -121,7 +124,7 @@ def test_download_s3_workflow_access_denied(mock_boto3_client):
 
 def test_download_s3_workflow_invalid_uri():
     """Test S3 workflow download with invalid URI."""
-    from ofx.utils.misc import download_s3_workflow
+    from ofx.utils.s3 import download_s3_workflow
 
     with pytest.raises(ValueError, match="Invalid S3 URI"):
         download_s3_workflow("http://example.com/workflow.yml")
@@ -130,10 +133,13 @@ def test_download_s3_workflow_invalid_uri():
         download_s3_workflow("s3://bucket-only")
 
 
-@patch("ofx.utils.misc.download_s3_workflow")
+@patch("ofx.utils.workflow_utils.download_s3_workflow")
 def test_find_workflow_from_s3(mock_download, tmp_path):
     """Test finding workflow from S3 URI."""
-    from ofx.utils.misc import find_workflow
+    from ofx.utils.workflow_utils import find_workflow
+
+    # Clear the cache to ensure fresh call
+    find_workflow.cache_clear()
 
     workflow_content = """
 name: S3 Test Workflow
@@ -163,7 +169,7 @@ jobs:
 
 def test_s3_workflow_integration():
     """Integration test for S3 workflow paths in workflow context."""
-    from ofx.utils.misc import is_s3_path
+    from ofx.utils.path import is_s3_path
 
     # Test various S3 URI formats
     test_cases = [

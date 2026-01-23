@@ -183,7 +183,7 @@ class StepRunner(BaseRunner[Step]):
 
         if self._run_type is RunType.WORKFLOW:
             from ofx.runner.executors.workflow import WorkflowRunner
-            from ofx.utils.misc import add_workflow_dir, find_workflow
+            from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
             output_path = Path.cwd()
             workflow_dirs = (

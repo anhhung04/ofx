@@ -8,7 +8,7 @@ import yaml
 
 from ofx.runner import RunContext, WorkflowRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIR
-from ofx.utils.misc import add_workflow_dir, find_workflow
+from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
 
 class TestWorkflowDirectoryOperations:

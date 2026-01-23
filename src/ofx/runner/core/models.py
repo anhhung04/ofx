@@ -7,7 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS
-from ofx.utils.misc import populate_env
+from ofx.utils.env import populate_env
 
 
 class RunnerStatus(Enum):
@@ -27,7 +27,9 @@ class RunContext(BaseModel):
     inputs: dict[str, Any] = Field(default_factory=dict)
     secrets: dict[str, Any] = Field(default_factory=dict)
     envs: dict[str, Any] = Field(default_factory=populate_env)
-    output_path: Path | None = Field(default=None, description="Path to store runner outputs")
+    output_path: Path | None = Field(
+        default=None, description="Path to store runner outputs"
+    )
     vars: dict[str, Any] = Field(default_factory=dict)
     allow_interactive: bool = Field(
         default=False,

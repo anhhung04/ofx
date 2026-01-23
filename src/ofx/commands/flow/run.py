@@ -17,7 +17,8 @@ from ofx.settings import (
     get_console,
     settings,
 )
-from ofx.utils.misc import add_workflow_dir, find_workflow, load_secrets
+from ofx.utils.secrets import load_secrets
+from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
