@@ -33,7 +33,7 @@ jobs:
         uv run --extra test pytest --cov=src/ofx --cov-report=xml --cov-report=term-missing
     
     - name: Upload coverage reports to Codecov
-      uses: codecov/codecov-action@v4
+      uses: https://github.com/codecov/codecov-action@v4
       with:
         file: ./coverage.xml
         fail_ci_if_error: false
@@ -43,7 +43,7 @@ jobs:
     
     - name: Coverage comment
       if: github.event_name == 'pull_request'
-      uses: py-cov-action/python-coverage-comment-action@v3
+      uses: https://github.com/py-cov-action/python-coverage-comment-action@v3
       with:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         MINIMUM_GREEN: 70
