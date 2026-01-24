@@ -43,5 +43,5 @@
     },
     "forwardPorts": [],
     "remoteUser": "vscode",
-    "postCreateCommand": "uv venv && uv sync"
+    "postCreateCommand": "uv venv --clear && uv sync --extra test --extra docs"
 }
