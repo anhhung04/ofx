@@ -4,7 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from ofx.models import DefaultConfig
+from ofx.models.config import DefaultConfig
 from ofx.models.job import Job
 
 
@@ -67,15 +67,15 @@ class Workflow(BaseModel):
         default_factory=list, description="Tags associated with the workflow"
     )
     dispatch: None | WorkflowDispatch = Field(
-        None,
+        default=None,
         description="Workflow dispatch configuration for manual triggers",
     )
     call: None | WorkflowCall = Field(
-        None,
+        default=None,
         description="Workflow call configuration for reusable workflows",
     )
     env: dict[str, str] = Field(
-        default={}, description="Environment variables for the workflow"
+        default_factory=dict, description="Environment variables for the workflow"
     )
     tools: dict[str, str | ToolConfig] = Field(
         default_factory=dict,
@@ -87,7 +87,8 @@ class Workflow(BaseModel):
     )
     jobs: dict[str, Job] = Field(..., description="List of jobs in the workflow")
     workflow_path: Path = Field(
-        Path.cwd(), description="Path to the workflow file (set automatically)"
+        default_factory=Path.cwd,
+        description="Path to the workflow file (set automatically)",
     )
 
     def __str__(self):

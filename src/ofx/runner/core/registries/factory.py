@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from ofx.runner.core.registries.base import JobRegistryAdapter
+from ofx.runner.core.registries.base import RegistryAdapter
 from ofx.runner.core.registries.file import FileJobRegistry
 from ofx.runner.core.registries.memory import MemoryJobRegistry
 from ofx.settings import settings
@@ -39,13 +39,13 @@ class RegistryFactory:
         return {key: getattr(config, key, default) for key, default in defaults.items()}
 
     @classmethod
-    def create_memory(cls) -> JobRegistryAdapter:
+    def create_memory(cls) -> RegistryAdapter:
         """Create in-memory registry"""
         logger.debug("Creating MemoryJobRegistry")
         return MemoryJobRegistry()
 
     @classmethod
-    def create_file(cls, filepath: str | None = None) -> JobRegistryAdapter:
+    def create_file(cls, filepath: str | None = None) -> RegistryAdapter:
         """Create file-based registry
 
         Args:
@@ -60,7 +60,7 @@ class RegistryFactory:
     @classmethod
     def create_redis(
         cls, config: BaseModel | dict | None = None, **kwargs
-    ) -> JobRegistryAdapter:
+    ) -> RegistryAdapter:
         """Create Redis-based registry
 
         Args:
@@ -96,7 +96,7 @@ class RegistryFactory:
     @classmethod
     def create_memcached(
         cls, config: BaseModel | dict | None = None, **kwargs
-    ) -> JobRegistryAdapter:
+    ) -> RegistryAdapter:
         """Create Memcached-based registry
 
         Args:
@@ -126,7 +126,7 @@ class RegistryFactory:
     @classmethod
     def create_etcd(
         cls, config: BaseModel | dict | None = None, **kwargs
-    ) -> JobRegistryAdapter:
+    ) -> RegistryAdapter:
         """Create etcd-based registry
 
         Args:
@@ -156,7 +156,7 @@ class RegistryFactory:
     @classmethod
     def create(
         cls, backend: RegistryBackend = "memory", **kwargs: Any
-    ) -> JobRegistryAdapter:
+    ) -> RegistryAdapter:
         """Create a registry adapter based on backend type
 
         Args:
@@ -186,7 +186,7 @@ class RegistryFactory:
             )
 
     @classmethod
-    def create_from_settings(cls) -> JobRegistryAdapter:
+    def create_from_settings(cls) -> RegistryAdapter:
         """Create a registry based on application settings
 
         Returns:
@@ -211,7 +211,7 @@ class RegistryFactory:
             return cls.create_memory()
 
 
-async def cleanup_registry(registry: JobRegistryAdapter) -> None:
+async def cleanup_registry(registry: RegistryAdapter) -> None:
     """Clean up registry resources
 
     Args:

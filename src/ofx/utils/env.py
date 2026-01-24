@@ -1,7 +1,6 @@
 """Environment utilities for OFX framework."""
 
 import os
-from pathlib import Path
 
 from ofx.settings import TOOLS_BIN_DIR
 

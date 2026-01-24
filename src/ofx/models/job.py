@@ -1,14 +1,9 @@
 from pathlib import Path
-from typing import Any, ClassVar, Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-try:
-    from cython import cython_function_or_method  # type: ignore
-except Exception:  # pragma: no cover - cython optional
-    cython_function_or_method = type(lambda: None)
-
-from ofx.models import DefaultConfig
+from ofx.models.config import DefaultConfig
 from ofx.models.step import Step
 from ofx.settings import DEFAULT_SHELL
 
@@ -20,8 +15,8 @@ class MatrixStrategy(BaseModel):
         ...,
         description="Matrix variables with lists of values to create job combinations",
     )
-    max_parallel: int | None = Field(
-        default=None,
+    max_parallel: int = Field(
+        default=10000000,
         description="Maximum number of matrix jobs to run in parallel per stage (default: unlimited)",
     )
     fail_fast: bool = Field(
@@ -39,9 +34,6 @@ class MatrixStrategy(BaseModel):
 
 
 class Job(BaseModel):
-    model_config: ClassVar = ConfigDict(
-        ignored_types=(type(lambda: None), cython_function_or_method)
-    )
     name: str = Field(default="", description="Name of the job")
     needs: str | list[str] = Field(
         default_factory=list,
@@ -65,10 +57,6 @@ class Job(BaseModel):
     defaults: DefaultConfig = Field(
         default_factory=DefaultConfig,
         description="Default configuration for the job",
-    )
-    hooks: dict[str, str] = Field(
-        default_factory=dict,
-        description="Lifecycle hooks with Python code (e.g., pre_run, post_run, on_iter_step)",
     )
     steps: list[Step] = Field(..., min_length=1, description="List of steps in the job")
     jid: str = Field(
@@ -107,21 +95,3 @@ class Job(BaseModel):
 
     def __str__(self):
         return f"Job(name='{self.name}',id={self.jid})"
-
-    def get_shell(self, workflow_defaults: Optional["DefaultConfig"] = None) -> str:
-        """Get shell from job defaults or inherit from workflow."""
-        if self.defaults and self.defaults.run.shell:
-            return self.defaults.run.shell
-        if workflow_defaults and workflow_defaults.run.shell:
-            return workflow_defaults.run.shell
-        return DEFAULT_SHELL
-
-    def get_working_directory(
-        self, workflow_defaults: Optional["DefaultConfig"] = None
-    ) -> Path:
-        """Get working directory from job defaults or inherit from workflow."""
-        if self.defaults and self.defaults.run.working_directory:
-            return Path(self.defaults.run.working_directory)
-        if workflow_defaults and workflow_defaults.run.working_directory:
-            return Path(workflow_defaults.run.working_directory)
-        return Path.cwd()

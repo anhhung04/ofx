@@ -80,9 +80,9 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
         if not self.model.tools:
             return
 
-        current_path = self.ctx_vars.envs.get("PATH", os.environ.get("PATH", ""))
+        current_path = self.ctx.envs.get("PATH", os.environ.get("PATH", ""))
         if str(TOOLS_BIN_DIR) not in current_path:
-            self.ctx_vars.envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
+            self.ctx.envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
 
         for tool_bin, tool_config in self.model.tools.items():
             await self._install_tool(tool_bin, tool_config)
@@ -128,7 +128,7 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
                 )
             )
 
-            runner = CommandRunner(install_cmd, RunContext(envs=self.ctx_vars.envs))
+            runner = CommandRunner(install_cmd, RunContext(envs=self.ctx.envs))
             result = await runner.run()
 
             if result.status.value != "completed":
@@ -163,7 +163,7 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
             logger.debug(
                 self._produce_log(f"Checking tool '{tool_bin}' with: {check_cmd}")
             )
-            check_runner = CommandRunner(check_cmd, RunContext(envs=self.ctx_vars.envs))
+            check_runner = CommandRunner(check_cmd, RunContext(envs=self.ctx.envs))
             check_result = await check_runner.run()
             return (
                 check_result.status.value == "completed"
@@ -177,9 +177,7 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
         """Run post-install command for a tool"""
         logger.info(self._produce_log(f"Running post-install for '{tool_bin}'"))
 
-        post_runner = CommandRunner(
-            post_install_cmd, RunContext(envs=self.ctx_vars.envs)
-        )
+        post_runner = CommandRunner(post_install_cmd, RunContext(envs=self.ctx.envs))
         post_result = await post_runner.run()
 
         if post_result.status.value == "completed":

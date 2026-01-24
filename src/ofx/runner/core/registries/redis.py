@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from ofx.runner.core.registries.base import JobRegistryAdapter
+from ofx.runner.core.registries.base import RegistryAdapter
 
 try:
     import redis.asyncio as aioredis
@@ -20,7 +20,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class RedisJobRegistry(JobRegistryAdapter):
+class RedisJobRegistry(RegistryAdapter):
     """Redis-based implementation of registry
 
     Stores data in Redis for distributed access and persistence.

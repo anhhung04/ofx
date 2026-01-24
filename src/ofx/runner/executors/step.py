@@ -8,9 +8,9 @@ from typing import Any
 
 import aiofiles
 
+from ofx.models.job import Job
 from ofx.models.step import RunType, Step
 from ofx.runner.core import BaseRunner, RunContext, RunnerStatus
-from ofx.runner.lifecycle import HookManager
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -21,27 +21,16 @@ class StepRunner(BaseRunner[Step]):
         self,
         step: Step,
         context: RunContext,
-        parent: BaseRunner | None = None,
+        parent: BaseRunner[Job],
     ):
-        super().__init__(step, context, parent)
-        self._hook_manager = HookManager(self)
-
-    async def _run_hook(self, hook_name: str) -> None:
-        """Executes a lifecycle hook if it's defined in the step."""
-        await self._hook_manager.run_hook(
-            hook_name,
-            self.model.hooks,
-            self.model.shell,
-            self._resolve_working_dir(),
-            self.ctx_vars,
-        )
+        super().__init__(step, context, parent, parent.registry)
 
     async def _pre_run(self) -> None:
-        """Prepare the step for execution, resolve templates, and run 'before_step' hook."""
-        await self._run_hook("before_step")
+        """Prepare the step for execution, resolve templates"""
         self._run_type = self.model.get_run_type()
         await self._resolve_template_fields(
             [
+                "name",
                 "run",
                 "run_if",
                 "run_with",
@@ -50,25 +39,72 @@ class StepRunner(BaseRunner[Step]):
                 "script_file",
                 "shell",
                 "log_stdout",
-                "log_stdout",
                 "working_directory",
-                "secrets",
+                "env",
             ]
         )
-        self._result.metadata.update({"step": self.model})
-        if not self.model.run_if:
-            self._status = RunnerStatus.CANCELED
-            await self._run_hook("on_skip")
+        self.ctx.inputs.update(self.model.run_with)
+        self.ctx.envs.update(self.model.env)
+        if not eval(str(self.model.run_if)):
+            self._state_machine.transition(RunnerStatus.CANCELED)
             raise Exception("Step skipped due to run_if condition")
 
-    async def _post_run(self) -> None:
-        """Log stdout, save output if configured, and run 'after_step' hook."""
-        if self._error:
-            logger.error(self._produce_log(f"step failed: {self._error}"))
-            for handler in logger.handlers:
-                handler.flush()
+    async def _do_run(self) -> None:
+        """
+        Execute the step's action with retry logic, timeout handling.
+        """
+        max_attempts = self.model.retry + 1
+        delay = self.model.retry_delay
+        timeout_seconds = self.model.timeout * 60
 
-        result = self.get_result()
+        last_res = None
+
+        for attempt in range(max_attempts):
+            try:
+                runner = self._create_runner()
+                res = await asyncio.wait_for(runner.run(), timeout=timeout_seconds)
+                last_res = res
+
+                if runner.is_success:
+                    self._apply_run_result(res)
+                    logger.debug(
+                        self._produce_log(f"result: {await self.get_result()}")
+                    )
+                else:
+                    raise Exception(
+                        f"Step execution failed with status: {res.status}, error: {res.error}"
+                    )
+            except TimeoutError:
+                raise Exception(f"Step timed out after {self.model.timeout} minutes.")
+            except Exception as e:
+                logger.error(
+                    self._produce_log(
+                        f"Step failed on attempt {attempt + 1}/{max_attempts}. Error: {e}"
+                    )
+                )
+                if attempt < max_attempts - 1:
+                    logger.info(self._produce_log(f"Retrying in {delay}s..."))
+                    await asyncio.sleep(delay)
+                else:
+                    if last_res:
+                        self._apply_run_result(last_res)
+                        if not self._error:
+                            raise Exception(e)
+                    else:
+                        raise Exception(f"Step failed after {max_attempts} attempts. Error: {e}")
+
+        logger.debug(
+            self._produce_log(f"Final result after retries: {await self.get_result()}")
+        )
+
+    async def _post_run(self) -> None:
+        """Log stdout, save output if configured"""
+        # if self._error:
+        #     logger.error(self._produce_log(f"step failed: {self._error}"))
+        #     for handler in logger.handlers:
+        #         handler.flush()
+
+        result = await self.get_result()
         stdout = result.outputs.get("stdout", "")
         is_binary = result.outputs.get("binary_output", False)
         is_truncated = result.outputs.get("output_truncated", False)
@@ -88,8 +124,8 @@ class StepRunner(BaseRunner[Step]):
             for handler in logger.handlers:
                 handler.flush()
 
-            if self.model.log_stdout:
-                log_path = self.ctx_vars.output_path / "logs"
+            if self.model.log_stdout and self.ctx.output_path:
+                log_path = self.ctx.output_path / "logs"
                 log_path.mkdir(parents=True, exist_ok=True)
                 tmp_file = (
                     log_path
@@ -112,66 +148,10 @@ class StepRunner(BaseRunner[Step]):
                         await f.write("[STDERR TRUNCATED]\n")
                     await f.write("===\n")
                     await f.write(stdout)
-        logger.debug(self._produce_log(f"result: {self._result}"))
-        await self._run_hook("after_step")
-
-    async def _do_run(self) -> None:
-        """
-        Execute the step's action with retry logic, timeout handling, and lifecycle hooks.
-        """
-        max_attempts = getattr(self.model, "retry", 0) + 1
-        delay = getattr(self.model, "retry_delay", 5)
-        timeout_seconds = self.model.timeout * 60
-
-        last_res = None
-
-        for attempt in range(max_attempts):
-            try:
-                runner = self._create_runner()
-                res = await asyncio.wait_for(runner.run(), timeout=timeout_seconds)
-                last_res = res
-
-                if res.status == RunnerStatus.COMPLETED:
-                    self._apply_run_result(res)
-                    logger.debug(self._produce_log(f"result: {self.get_result()}"))
-                    return
-
-                raise Exception(
-                    f"Step execution failed with status: {res.status}, error: {res.error}"
-                )
-
-            except TimeoutError:
-                self._status = RunnerStatus.FAILED
-                self._error = f"Step timed out after {self.model.timeout} minutes."
-                logger.error(self._produce_log(self._error))
-                await self._run_hook("on_timeout")
-                break
-            except Exception as e:
-                logger.error(
-                    self._produce_log(
-                        f"Step failed on attempt {attempt + 1}/{max_attempts}. Error: {e}"
-                    )
-                )
-                if attempt < max_attempts - 1:
-                    await self._run_hook("on_retry")
-                    logger.info(self._produce_log(f"Retrying in {delay}s..."))
-                    await asyncio.sleep(delay)
-                else:
-                    if last_res:
-                        self._apply_run_result(last_res)
-                        if not self._error:
-                            self._error = str(e)
-                    else:
-                        self._status = RunnerStatus.FAILED
-                        self._error = str(e)
-
-        logger.debug(
-            self._produce_log(f"Final result after retries: {self.get_result()}")
-        )
 
     def _create_runner(self) -> BaseRunner:
         """Creates the appropriate runner instance based on the step's run type."""
-        is_interactive = self.model.interactive and self.ctx_vars.allow_interactive
+        is_interactive = self.model.interactive and self.ctx.allow_interactive
 
         if is_interactive and self._run_type == RunType.WORKFLOW:
             logger.warning(
@@ -185,40 +165,19 @@ class StepRunner(BaseRunner[Step]):
             from ofx.runner.executors.workflow import WorkflowRunner
             from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
-            output_path = Path.cwd()
             workflow_dirs = (
-                self.ctx_vars.workflow_dirs.copy()
-                if self.ctx_vars.workflow_dirs
-                else []
+                self.ctx.workflow_dirs.copy() if self.ctx.workflow_dirs else []
             )
 
-            parent = getattr(self, "parent", None)
-            if parent and getattr(parent, "parent", None):
-                output_path = getattr(parent.parent.ctx_vars, "output_path", Path.cwd())
-                if hasattr(parent.parent.ctx_vars, "workflow_dirs"):
-                    workflow_dirs = parent.parent.ctx_vars.workflow_dirs.copy()
-
-            flow_path, workflow = find_workflow(
-                self.model.uses or "", tuple(workflow_dirs)
+            workflow = find_workflow(
+                self.model.uses or "", tuple(workflow_dirs), self.parent.model.defaults.flow_registry_url
             )
-
-            if Path(self.model.uses or "").exists():
-                workflow_dirs = add_workflow_dir(workflow_dirs, flow_path.parent)
 
             return WorkflowRunner(
                 workflow,
-                RunContext(
-                    inputs=self.model.run_with,
-                    envs=self.ctx_vars.envs,
-                    output_path=output_path,
-                    secrets=(
-                        self.ctx_vars.secrets
-                        if self.model.secrets == "inherit"
-                        else self.model.secrets
-                    ),
-                    workflow_dirs=workflow_dirs,
-                    workflow_dir=flow_path.parent,
-                ),
+                self.ctx.model_copy(deep=True, update={
+                    "workflow_dirs": add_workflow_dir(workflow_dirs, workflow.workflow_path.parent),
+                }),
                 parent=self,
             )
         elif self._run_type is RunType.SCRIPT:
@@ -229,7 +188,7 @@ class StepRunner(BaseRunner[Step]):
             )
             return ScriptRunner(
                 self.model.script,
-                self.ctx_vars.model_copy(deep=True),
+                self.ctx.model_copy(deep=True),
                 shell=self.model.shell,
                 working_dir=self._resolve_working_dir(),
                 parent=self,
@@ -242,7 +201,7 @@ class StepRunner(BaseRunner[Step]):
             assert self.model.run is not None, "Run cannot be None for COMMAND run type"
             return CommandRunner(
                 self.model.run,
-                self.ctx_vars.model_copy(deep=True),
+                self.ctx.model_copy(deep=True),
                 shell=self.model.shell,
                 working_dir=self._resolve_working_dir(),
                 parent=self,
@@ -263,7 +222,7 @@ class StepRunner(BaseRunner[Step]):
             )
 
             if not script_path.is_absolute():
-                base_dir = getattr(self.ctx_vars, "workflow_dir", Path.cwd())
+                base_dir = getattr(self.ctx, "workflow_dir", Path.cwd())
                 script_path = (base_dir / script_path).resolve()
 
             if not script_path.exists():
@@ -274,7 +233,7 @@ class StepRunner(BaseRunner[Step]):
 
             return CommandRunner(
                 cmd,
-                self.ctx_vars.model_copy(deep=True),
+                self.ctx.model_copy(deep=True),
                 shell=self.model.shell,
                 working_dir=working_dir,
                 parent=self,
@@ -298,10 +257,8 @@ class StepRunner(BaseRunner[Step]):
         return msg
 
     def _apply_run_result(self, res) -> None:
-        self._status = res.status
         self._error = res.error
-        for k, v in res.model_dump().items():
-            setattr(self._result, k, v)
+        # TODO: handle outputs, artifacts, etc. with registry
 
     def _resolve_working_dir(self) -> Path:
         step = self.model
@@ -309,6 +266,6 @@ class StepRunner(BaseRunner[Step]):
         if step_path.is_absolute():
             return step_path
 
-        base_path = self.ctx_vars.vars.get("working_directory", Path.cwd())
+        base_path = self.ctx.vars.get("working_directory", Path.cwd())
 
         return (base_path / step_path).resolve()

@@ -1,7 +1,5 @@
 FROM --platform=linux/amd64 mcr.microsoft.com/devcontainers/python:3.14
 
-ENV UV_LINK_MODE=copy
-
 RUN apt-get update && apt-get install -y \
     build-essential \
     wget \

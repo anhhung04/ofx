@@ -14,8 +14,6 @@ The runner module uses a **modular architecture** organized into specialized sub
   - `StepRunner`: Runs steps with retry logic and hooks
   - `CommandRunner`, `ScriptRunner`: Execute shell commands and scripts
   - `ToolInstallerRunner`: Manages tool installation via `workflow.tools` block
-- **Lifecycle** ([src/ofx/runner/lifecycle/](../src/ofx/runner/lifecycle/)): Hook management
-  - `HookManager`: Handles step lifecycle hooks (before_step, after_step, on_retry, on_skip, on_timeout)
 - **Matrix** ([src/ofx/utils/matrix.py](../src/ofx/utils/matrix.py)): Matrix strategy expansion
   - `expand_jobs`, `process_matrix_value`, etc.: Generate job variations from matrix configurations with include/exclude rules
 - **Templates** ([src/ofx/runner/templates/](../src/ofx/runner/templates/)): Jinja2 template resolution

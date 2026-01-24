@@ -169,7 +169,7 @@ EOF
 
         await runner._pre_run()
         assert runner._outputs_file is None
-        assert "OFX_OUTPUTS" not in runner.ctx_vars.envs
+        assert "OFX_OUTPUTS" not in runner.ctx.envs
 
     @pytest.mark.asyncio
     async def test_numeric_values_as_strings(self):

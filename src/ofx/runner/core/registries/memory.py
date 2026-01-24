@@ -3,13 +3,13 @@
 import logging
 from typing import Any
 
-from ofx.runner.core.registries.base import JobRegistryAdapter
+from ofx.runner.core.registries.base import RegistryAdapter
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
 
-class MemoryJobRegistry(JobRegistryAdapter):
+class MemoryJobRegistry(RegistryAdapter):
     """In-memory implementation of job registry
 
     This is the default adapter, storing job data in a Python dictionary.

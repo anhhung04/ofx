@@ -3,22 +3,20 @@
 import asyncio
 import logging
 import os
-from pathlib import Path
 from typing import Any
 
+from ofx.models.job import Job
 from ofx.models.workflow import Workflow
+from ofx.models.config import DefaultConfig
 from ofx.runner.core import (
     BaseRunner,
-    JobRegistryAdapter,
-    RegistryFactory,
+    RegistryAdapter,
     RunContext,
     RunnerStatus,
-    cleanup_registry,
 )
-from ofx.runner.executors.job import JobRunner
+from ofx.runner.executors.job import JobRunner, MatrixJobRunner
 from ofx.runner.executors.tool_installer import ToolInstallerRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIRS, settings
-from ofx.utils.matrix import expand_jobs, get_expanded_job_ids, process_matrix_value
+from ofx.settings import settings
 from ofx.utils.scheduling import find_parallel_schedule
 from ofx.utils.workflow_utils import add_workflow_dir
 
@@ -31,259 +29,135 @@ class WorkflowRunner(BaseRunner[Workflow]):
         workflow: Workflow,
         ctx: RunContext,
         parent: BaseRunner | None = None,
-        registry: JobRegistryAdapter | None = None,
+        registry: RegistryAdapter | None = None,
     ):
-        super().__init__(workflow, ctx, parent)
+        super().__init__(workflow, ctx, parent, registry)
         self._is_reused = self.parent is not None
-        # Use injected registry or create default (memory-based)
-        self._job_registry: JobRegistryAdapter = (
-            registry if registry is not None else RegistryFactory.create_memory()
+        if not self._is_reused:
+            self.name = f"[RUN-{self.run_id}]:{self.name}"
+        self._runners: dict[str, JobRunner | MatrixJobRunner] = {}
+
+    async def _pre_run(self) -> None:
+        await self._resolve_template_fields(
+            ["name", "description", "tags", "env", "defaults"]
         )
-        self._job_results: dict[str, bool] = {}
-        self._job_errors: dict[str, Exception] = {}
-        self._expanded_jobs: dict[str, Any] = {}
+        logger.debug(
+            self._produce_log(
+                f"Resolved workflow: {self.model.model_dump(exclude={'jobs'})}"
+            )
+        )
 
-        if not self.ctx_vars.workflow_dirs:
-            self.ctx_vars.workflow_dirs = DEFAULT_WORKFLOWS_DIRS
+        output_path = self.ctx.output_path
+        if output_path and output_path.exists():
+            output_path.mkdir(parents=True, exist_ok=True)
+        os.chdir(self.model.defaults.run.working_directory)
 
-        if not self.model:
-            raise ValueError("Workflow model cannot be None")
+        logger.debug(self._produce_log(f"Workflow Dispatch: {self.model.dispatch}"))
+        if self.model.dispatch and not self._is_reused:
+            self.ctx.inputs.update(
+                await self._process_inputs(self.ctx.inputs, self.model.dispatch.inputs)
+            )
+
+        logger.debug(self._produce_log(f"Workflow Call: {self.model.call}"))
+        if self.model.call and self._is_reused:
+            self.ctx.inputs.update(
+                await self._process_inputs(self.ctx.inputs, self.model.call.inputs)
+            )
+            self.ctx.secrets.update(
+                await self._process_inputs(self.ctx.secrets, self.model.call.secrets)
+            )
+
+        self.ctx.workflow_dirs = add_workflow_dir(
+            self.ctx.workflow_dirs,
+            self.model.defaults.workflows_base_dir.absolute(),
+        )
+        logger.debug(self._produce_log(f"Processed context: {self.ctx}"))
+
+        self.ctx.envs.update(self.model.env)
+        
+        for jid, job in self.model.jobs.items():
+            job_default_config = job.defaults.model_dump(exclude_defaults=True)
+            workflow_default_config = self.model.defaults.model_dump()
+            for key, value in job_default_config.items():
+                workflow_default_config[key] = value
+            job.defaults = DefaultConfig.model_validate(workflow_default_config)
+            self.model.jobs[jid] = job
+
+        await self._install_tools()
 
     async def _do_run(self) -> None:
         await self._plan_jobs()
         await self._run_workflow()
 
+    async def _post_run(self) -> None:
+        # if not self.is_success:
+        #     logger.error(self._produce_log(f"error: {self._error}"))
+        if self._is_reused:
+            job_runners = self._runners.values()
+            # if not self.is_success:
+            #     raise RuntimeError(
+            #         f"Reusable workflow '{self.model.name}' failed. Cannot retrieve outputs."
+            #     )
+            if  any(runner.is_failed for runner in job_runners):
+                raise RuntimeError(
+                    f"Reusable workflow '{self.model.name}' has failed jobs. Cannot retrieve outputs."
+                )
+        if (
+            self.ctx.output_path
+            and self.ctx.output_path.exists()
+            and len(os.listdir(self.ctx.output_path)) == 0
+        ):
+            os.rmdir(self.ctx.output_path)
+        logger.debug(self._produce_log(f"result: {await self.get_result()}"))
+
     async def _run_workflow(self) -> None:
-        step_count = 0
         for stage_index, stage in enumerate(self._schedule):
             logger.debug(self._produce_log(f"Stage {stage_index + 1}: {stage}"))
-            runners = {}
             for job_id in stage:
-                job = self._expanded_jobs[job_id]
-                matrix = job.matrix_values
-                resolved_job = await self._resolve_template_with_matrix(
-                    job.model_dump(exclude={"outputs", "steps"}), matrix
-                )
-                await self._job_registry.set(job_id, resolved_job)
-                self.ctx_vars.vars["jobs"] = await self._job_registry.get_all()
-                job_ctx = self.ctx_vars.model_copy(
+                job = self.model.jobs[job_id]
+                job_ctx = self.ctx.model_copy(
                     update={"allow_interactive": len(stage) == 1}, deep=True
                 )
-                job_ctx.vars["matrix"] = matrix
-                runner = JobRunner(job, job_ctx, parent=self)
-                runners[job_id] = runner
-                resolved_job["runner"] = runner
+                if job.strategy and job.strategy.matrix:
+                    runner = MatrixJobRunner(job, job_ctx, parent=self)
+                else:
+                    runner = JobRunner(job, job_ctx, parent=self)
+                self._runners[job_id] = runner
             tasks = {
-                job_id: asyncio.create_task(self._run_and_monitor_job(job_id, runner))
-                for job_id, runner in runners.items()
+                job_id: asyncio.create_task(runner.run())
+                for job_id, runner in self._runners.items()
             }
             results = await asyncio.gather(*tasks.values(), return_exceptions=True)
             failed = False
             errors = []
             for job_id, runner, result in zip(
-                tasks.keys(), runners.values(), results, strict=False
+                tasks.keys(), self._runners.values(), results, strict=False
             ):
-                step_count += runner.total_steps
-                job_result = runner.get_result()
+                job_result = await runner.get_result()
                 if isinstance(result, Exception):
-                    self._job_errors[job_id] = result
-                    self._job_results[job_id] = False
                     failed = True
                     errors.append(f"{job_id}: {result}")
                 elif not runner.is_success:
                     error = job_result.error or "Unknown error"
-                    self._job_errors[job_id] = RuntimeError(error)
-                    self._job_results[job_id] = False
                     failed = True
-                    errors.append(f"{job_id}: {error}")
-                else:
-                    logger.debug(self._produce_log(f"Job {job_id} completed"))
-                job_result_dict = job_result.model_dump()
-                job_result_dict["steps"] = job_result.outputs.get("steps", {})
-                await self._job_registry.update(job_id, job_result_dict)
-            self.ctx_vars.vars["jobs"] = await self._job_registry.get_all()
+                    errors.append(f"job '{job_id}': {error}")
             if failed:
-                error_summary = ", ".join(errors)
+                error_summary = "====\n".join(errors)
                 raise RuntimeError(
-                    f"Job failure in stage {stage_index + 1}: {error_summary}"
+                    f"Job failure in stage {stage_index + 1}:\n{error_summary}"
                 )
-        self._completed_steps += step_count
 
-    def _expand_matrix_jobs(self) -> None:
-        """Expand jobs with matrix strategies using MatrixExpander"""
-        self._expanded_jobs = expand_jobs(self.model.jobs)
-
-    async def _resolve_workflow_templates(self) -> None:
-        await self._resolve_template_fields(
-            ["name", "tools", "env", "description", "tags"]
-        )
-
-        for job_id, job in self._expanded_jobs.items():
-            matrix_values = job.matrix_values
-
-            if matrix_values:
-                processed_matrix = {}
-                for key, value in matrix_values.items():
-                    resolved_value = await self._resolve_template_with_matrix(
-                        value, matrix_values
-                    )
-                    processed_matrix[key] = process_matrix_value(resolved_value)
-                job.matrix_values = processed_matrix
-                matrix_values = processed_matrix
-
-            if job.name:
-                if matrix_values:
-                    job.name = await self._resolve_template_with_matrix(
-                        job.name, matrix_values
-                    )
-                else:
-                    job.name = await self._resolve_template(job.name)
-
-        self.ctx_vars.envs.update(self.model.env)
-        await self._install_tools()
-        logger.debug(self._produce_log(f"Resolved workflow: {self.model.model_dump()}"))
-
-    async def _resolve_template_with_matrix(
-        self, value: Any, matrix_values: dict[str, Any]
-    ) -> Any:
-        original_matrix = self.ctx_vars.vars.get("matrix")
-        self.ctx_vars.vars["matrix"] = matrix_values
-
-        try:
-            result = await self._resolve_template(value)
-            return result
-        finally:
-            if original_matrix is not None:
-                self.ctx_vars.vars["matrix"] = original_matrix
-            elif "matrix" in self.ctx_vars.vars:
-                del self.ctx_vars.vars["matrix"]
-
-    async def _plan_jobs(self) -> int:
+    async def _plan_jobs(self) -> None:
         jobs = self.model.jobs
-        job_ids = list(jobs.keys())
         dependencies = []
         for job_id, job in jobs.items():
-            if job.needs:
-                needs = [job.needs] if isinstance(job.needs, str) else job.needs
-                for dep in needs:
-                    if dep and dep not in job_ids:
-                        raise ValueError(
-                            f"Job {job.name} depends on {dep}, which is not defined."
-                        )
-                    dependencies.append((dep, job_id))
-        self._expand_matrix_jobs()
-        expanded_ids = list(self._expanded_jobs.keys())
-        expanded_deps = []
-        for dep, job_id in dependencies:
-            dep_jobs = get_expanded_job_ids(self._expanded_jobs, dep)
-            dependent_jobs = get_expanded_job_ids(self._expanded_jobs, job_id)
-            for dep_exp in dep_jobs:
-                for dep_job in dependent_jobs:
-                    expanded_deps.append((dep_exp, dep_job))
-        self._schedule = find_parallel_schedule(expanded_ids, expanded_deps)
-        await self._resolve_workflow_templates()
-        self._total_steps = sum(
-            sum(len(self._expanded_jobs[jid].steps) for jid in stage)
-            for stage in self._schedule
+            needs = [job.needs] if isinstance(job.needs, str) else job.needs
+            for dep in needs:
+                dependencies.append((dep, job_id))
+        self._schedule = find_parallel_schedule(
+            list(self.model.jobs.keys()), dependencies
         )
         logger.debug(self._produce_log(f"Stages: {self._schedule}"))
-        self._completed_steps = 0
-        return self._total_steps
-
-    def _get_expanded_job_ids(self, original_job_id: str) -> list[str]:
-        """Get all expanded job IDs for an original job (delegates to MatrixExpander)
-
-        Args:
-            original_job_id: Original job ID before expansion
-
-        Returns:
-            List of expanded job IDs
-        """
-        return get_expanded_job_ids(self._expanded_jobs, original_job_id)
-
-    async def _run_and_monitor_job(self, job_id: str, job_runner: JobRunner):
-        has_interactive_step = any(
-            getattr(step, "interactive", False) for step in job_runner.model.steps
-        )
-
-        if has_interactive_step and job_runner.ctx_vars.allow_interactive:
-            logger.info(
-                self._produce_log(f"Running job '{job_id}' with interactive steps")
-            )
-
-        return await job_runner.run()
-
-    async def _pre_run(self) -> None:
-        output_path = self.ctx_vars.output_path
-        if output_path and output_path.exists():
-            output_path.mkdir(parents=True, exist_ok=True)
-        os.chdir(self.model.defaults.run.working_directory)
-        logger.debug(self._produce_log(f"Workflow Dispatch: {self.model.dispatch}"))
-        logger.debug(self._produce_log(f"Workflow Call: {self.model.call}"))
-        if self.model.dispatch and not self._is_reused:
-            self.ctx_vars.inputs.update(
-                await self._process_inputs(
-                    self.ctx_vars.inputs, self.model.dispatch.inputs
-                )
-            )
-        if self.model.call and self._is_reused:
-            self.ctx_vars.inputs.update(
-                await self._process_inputs(self.ctx_vars.inputs, self.model.call.inputs)
-            )
-            self.ctx_vars.secrets.update(
-                await self._process_inputs(
-                    self.ctx_vars.secrets, self.model.call.secrets
-                )
-            )
-        self.model.defaults.workflows_base_dir = Path(
-            await self._resolve_template(self.model.defaults.workflows_base_dir)
-        )
-        self.ctx_vars.workflow_dirs = add_workflow_dir(
-            self.ctx_vars.workflow_dirs,
-            self.model.defaults.workflows_base_dir.absolute(),
-        )
-        logger.debug(self._produce_log(f"Processed context: {self.ctx_vars}"))
-
-    async def _post_run(self) -> None:
-        if self._status != RunnerStatus.COMPLETED and self._error:
-            logger.error(self._produce_log(f"error: {self._error}"))
-        all_jobs = await self._job_registry.get_all()
-        self._result.outputs.update(all_jobs)
-        if self._is_reused and self.model.call:
-            if not self.is_success:
-                raise RuntimeError(
-                    self._produce_log(
-                        f"Reusable workflow '{self.model.name}' failed. Cannot retrieve outputs."
-                    )
-                )
-            self._result.outputs = {
-                k: await self._resolve_template(v)
-                for k, v in self.model.call.outputs.items()
-            }
-        logger.debug(
-            self._produce_log(
-                f"job execution status: {[(job['name'], job['status']) for job in all_jobs.values()]}"
-            )
-        )
-        self._status = (
-            self._status
-            if not self._is_reused
-            else (
-                RunnerStatus.COMPLETED
-                if all(
-                    job["status"] == RunnerStatus.COMPLETED for job in all_jobs.values()
-                )
-                else RunnerStatus.FAILED
-            )
-        )
-        if (
-            self.ctx_vars.output_path.exists()
-            and len(os.listdir(self.ctx_vars.output_path.absolute())) == 0
-        ):
-            os.rmdir(self.ctx_vars.output_path)
-        logger.debug(self._produce_log(f"result: {self.get_result()}"))
-        # Clean up registry resources
-        await cleanup_registry(self._job_registry)
 
     async def _install_tools(self) -> None:
         tools = self.model.tools
@@ -292,13 +166,11 @@ class WorkflowRunner(BaseRunner[Workflow]):
 
         installer = ToolInstallerRunner(
             tools=tools,
-            ctx=RunContext(envs=self.ctx_vars.envs.copy()),
+            ctx=RunContext(envs=self.ctx.envs.copy()),
             parent=self,
             show_console=False,
         )
         await installer.run()
-
-        self.ctx_vars.envs.update(installer.ctx_vars.envs)
 
     async def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
@@ -352,86 +224,6 @@ class WorkflowRunner(BaseRunner[Workflow]):
             return self.parent._produce_log(f"{prefix} › {message_str}")
         return f"{prefix} › {message_str}"
 
-    def get_output_path(self) -> Path:
-        return self.ctx_vars.output_path
-
-    def get_job_status(self, job_id: str) -> RunnerStatus:
-        """Get job status from registry (sync wrapper for async call)
-
-        Note: This is a synchronous method that uses asyncio.run internally.
-        It's kept for backward compatibility but should ideally be async.
-        """
-        import asyncio
-
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Already in async context - create task
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run, self._async_get_job_status(job_id)
-                    )
-                    return future.result()
-            else:
-                return asyncio.run(self._async_get_job_status(job_id))
-        except Exception:
-            return asyncio.run(self._async_get_job_status(job_id))
-
-    async def _async_get_job_status(self, job_id: str) -> RunnerStatus:
-        """Async implementation of get_job_status"""
-        job_data = await self._job_registry.get(job_id)
-        if job_data:
-            return job_data.get("status")
-
-        expanded_ids = get_expanded_job_ids(self._expanded_jobs, job_id)
-        if not expanded_ids or expanded_ids == [job_id]:
-            job_data = await self._job_registry.get(job_id)
-            return job_data.get("status") if job_data else None
-
-        statuses = []
-        for expanded_id in expanded_ids:
-            job_data = await self._job_registry.get(expanded_id)
-            if job_data and job_data.get("status"):
-                statuses.append(job_data["status"])
-
-        if any(s == RunnerStatus.FAILED for s in statuses):
-            return RunnerStatus.FAILED
-        if any(s == RunnerStatus.CANCELED for s in statuses):
-            return RunnerStatus.CANCELED
-        if all(s == RunnerStatus.COMPLETED for s in statuses) and len(statuses) == len(
-            expanded_ids
-        ):
-            return RunnerStatus.COMPLETED
-        return RunnerStatus.RUNNING if statuses else RunnerStatus.IDLE
-
-    def get_job_from_registry(
-        self, job_id: str
-    ) -> dict[str, JobRunner | dict[str, Any]] | None:
-        """Get job from registry (sync wrapper for async call)
-
-        Note: This is a synchronous method that uses asyncio.run internally.
-        It's kept for backward compatibility but should ideally be async.
-        """
-        import asyncio
-
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Already in async context - create task
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(
-                        asyncio.run, self._job_registry.get(job_id)
-                    )
-                    return future.result()
-            else:
-                return asyncio.run(self._job_registry.get(job_id))
-        except Exception:
-            return asyncio.run(self._job_registry.get(job_id))
-
     def _has_interactive_steps(self) -> bool:
         for job in self.model.jobs.values():
             if any(getattr(step, "interactive", False) for step in job.steps):
@@ -444,3 +236,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
         job_id = list(stage)[0]
         job = self.model.jobs[job_id]
         return any(getattr(step, "interactive", False) for step in job.steps)
+
+    @property
+    def runners(self) -> dict[str, JobRunner | MatrixJobRunner]:
+        """Get the job runners within the workflow"""
+        return self._runners

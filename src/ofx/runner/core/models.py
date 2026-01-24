@@ -39,10 +39,6 @@ class RunContext(BaseModel):
         default=DEFAULT_WORKFLOWS_DIRS,
         description="Directories to search for workflow files",
     )
-    workflow_dir: Path = Field(
-        default_factory=Path.cwd,
-        description="Directory of the current workflow being executed",
-    )
 
 
 class RunResult(BaseModel):
@@ -53,4 +49,3 @@ class RunResult(BaseModel):
     status: RunnerStatus
     error: str | None = None
     outputs: dict[str, Any] = Field(default_factory=dict)
-    metadata: dict[str, Any] = Field(default_factory=dict)

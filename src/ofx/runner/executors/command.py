@@ -54,7 +54,7 @@ class CommandRunner(BaseRunner[Command]):
             self._outputs_file = Path(
                 tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1]
             )
-            self.ctx_vars.envs["OFX_OUTPUTS"] = str(self._outputs_file)
+            self.ctx.envs["OFX_OUTPUTS"] = str(self._outputs_file)
 
         try:
             if self.model.interactive:
@@ -67,7 +67,7 @@ class CommandRunner(BaseRunner[Command]):
                     self.model.cmd,
                     executable=self.model.shell,
                     cwd=self.model.working_directory,
-                    env=self.ctx_vars.envs,
+                    env=self.ctx.envs,
                     stdin=sys.stdin,
                     stdout=sys.stdout,
                     stderr=sys.stderr,
@@ -91,7 +91,7 @@ class CommandRunner(BaseRunner[Command]):
                     self.model.cmd,
                     executable=self.model.shell,
                     cwd=self.model.working_directory,
-                    env=self.ctx_vars.envs,
+                    env=self.ctx.envs,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -176,13 +176,13 @@ class CommandRunner(BaseRunner[Command]):
                 except Exception:
                     pass  # Ignore cleanup errors
 
-            self._result.outputs.update(
-                {
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "exit_code": exit_code,
-                }
-            )
+            # self._result.outputs.update(
+            #     {
+            #         "stdout": stdout,
+            #         "stderr": stderr,
+            #         "exit_code": exit_code,
+            #     }
+            # )
 
             if self._outputs_file and self._outputs_file.exists():
                 try:
@@ -194,13 +194,13 @@ class CommandRunner(BaseRunner[Command]):
                                 key, value = line.split("=", 1)
                                 key = key.strip()
                                 value = value.strip()
-                                if key:
-                                    self._result.outputs[key] = value
-                                    logger.debug(
-                                        self._produce_log(
-                                            f"Captured output: {key}={value}"
-                                        )
-                                    )
+                                # if key:
+                                #     self._result.outputs[key] = value
+                                #     logger.debug(
+                                #         self._produce_log(
+                                #             f"Captured output: {key}={value}"
+                                #         )
+                                #     )
                 except Exception as e:
                     logger.warning(
                         self._produce_log(f"Failed to parse OFX_OUTPUTS: {e}")
@@ -219,7 +219,7 @@ class CommandRunner(BaseRunner[Command]):
             logger.error(self._produce_log(f"Command failed: {self._error}"))
         logger.debug(
             self._produce_log(
-                f"cmd result: \n---\n{self.get_result()}\n---\n with context: \n---\n{self.ctx_vars}\n---"
+                f"cmd result: \n---\n{await self.get_result()}\n---\n with context: \n---\n{self.ctx}\n---"
             )
         )
 
@@ -274,7 +274,7 @@ class ScriptRunner(BaseRunner[Script]):
             working_dir=self.model.working_directory,
             timeout_minutes=self.model.timeout_minutes,
             parent=self.parent,
-            ctx=self.ctx_vars,
+            ctx=self.ctx,
             interactive=self.model.interactive,
         )
 

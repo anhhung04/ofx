@@ -7,7 +7,6 @@ requires-python = ">=3.13"
 dependencies = [
   "aiofiles>=23.2.1",
   "async-typer>=0.1.9",
-  "boto3>=1.41.5",
   "cryptography>=43.0.0",
   "filelock>=3.18.0",
   "gitpython>=3.1.45",

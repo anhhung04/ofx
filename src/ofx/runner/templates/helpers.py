@@ -3,7 +3,7 @@
 import os
 import shutil
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import aiofiles
 import aiofiles.os as aio_os
@@ -21,7 +21,7 @@ async def _read_file(path: str) -> str | None:
 
 async def _write_file(path: str, content: str):
     """Write file content asynchronously"""
-    async with aiofiles.open(path, 'w') as f:
+    async with aiofiles.open(path, "w") as f:
         await f.write(content)
 
 
@@ -33,11 +33,11 @@ class TemplateHelpers:
     @classmethod
     def get_support_functions(cls, envs: dict[str, str]) -> dict[str, Any]:
         """Get template support functions with caching
-        
+
         Args:
             workflow_dir: Current workflow directory
             envs: Environment variables
-            
+
         Returns:
             Dictionary of support functions available in templates
         """
@@ -45,7 +45,7 @@ class TemplateHelpers:
             sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
             tools_dir_str = str(TOOLS_DIR.absolute())
             tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
-            
+
             cls._support_funcs_cache = {
                 "sudo": sudo,
                 "tools_dir": tools_dir_str,
@@ -61,13 +61,13 @@ class TemplateHelpers:
                 "file_read": _read_file,
                 "file_write": _write_file,
                 "file_exists": aio_os.path.exists,
-                "python": __import__('sys').executable,
+                "python": __import__("sys").executable,
                 "pip_install": lambda pkg: f'"{__import__("sys").executable}" -m pip install --upgrade {pkg}',
             }
-        
+
         support_funcs = cls._support_funcs_cache.copy()
         support_funcs["env"] = envs
-        
+
         return support_funcs
 
     @classmethod

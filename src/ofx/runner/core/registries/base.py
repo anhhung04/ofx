@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class JobRegistryAdapter(ABC):
+class RegistryAdapter(ABC):
     """Abstract base class for job registry implementations using adapter pattern
 
     This allows different storage backends (memory, Redis, file, etc.) to be used

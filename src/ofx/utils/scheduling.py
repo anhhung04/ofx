@@ -1,8 +1,6 @@
 """Scheduling utilities for OFX framework."""
 
 from collections import deque
-from typing import Any
-
 
 def find_parallel_schedule(
     jobs: list[str], dependencies: list[tuple[str, str]]

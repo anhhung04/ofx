@@ -79,9 +79,9 @@ jobs:
 
         runner = WorkflowRunner(workflow_obj, ctx)
 
-        assert len(runner.ctx_vars.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
+        assert len(runner.ctx.workflow_dirs) == len(DEFAULT_WORKFLOWS_DIRS)
         for dir in DEFAULT_WORKFLOWS_DIRS:
-            assert dir.absolute() in runner.ctx_vars.workflow_dirs
+            assert dir.absolute() in runner.ctx.workflow_dirs
 
     def test_workflow_runner_preserves_existing_dirs(self):
         """Test that WorkflowRunner preserves workflow_dirs if already set"""
@@ -106,7 +106,7 @@ jobs:
 
         runner = WorkflowRunner(workflow_obj, ctx)
 
-        assert custom_dir in runner.ctx_vars.workflow_dirs
+        assert custom_dir in runner.ctx.workflow_dirs
 
     @pytest.mark.asyncio
     async def test_context_isolation_between_runners(self):
@@ -133,11 +133,11 @@ jobs:
         runner1 = WorkflowRunner(workflow_obj, ctx1)
         runner2 = WorkflowRunner(workflow_obj, ctx2)
 
-        assert Path("/dir1").absolute() in runner1.ctx_vars.workflow_dirs
-        assert Path("/dir1").absolute() not in runner2.ctx_vars.workflow_dirs
+        assert Path("/dir1").absolute() in runner1.ctx.workflow_dirs
+        assert Path("/dir1").absolute() not in runner2.ctx.workflow_dirs
 
-        assert Path("/dir2").absolute() in runner2.ctx_vars.workflow_dirs
-        assert Path("/dir2").absolute() not in runner1.ctx_vars.workflow_dirs
+        assert Path("/dir2").absolute() in runner2.ctx.workflow_dirs
+        assert Path("/dir2").absolute() not in runner1.ctx.workflow_dirs
 
     def test_find_workflow_with_file_path(self, tmp_path):
         """Test finding workflow from absolute file path"""
@@ -259,7 +259,7 @@ jobs:
 
         await runner._pre_run()
 
-        assert subworkflow_dir.absolute() in runner.ctx_vars.workflow_dirs
+        assert subworkflow_dir.absolute() in runner.ctx.workflow_dirs
 
     def test_model_copy_preserves_workflow_dirs(self):
         """Test that model_copy preserves workflow_dirs"""

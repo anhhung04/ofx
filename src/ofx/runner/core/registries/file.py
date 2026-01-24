@@ -8,13 +8,13 @@ from typing import Any
 import aiofiles
 from filelock import FileLock
 
-from ofx.runner.core.registries.base import JobRegistryAdapter
+from ofx.runner.core.registries.base import RegistryAdapter
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
 
-class FileJobRegistry(JobRegistryAdapter):
+class FileJobRegistry(RegistryAdapter):
     """File-based implementation of job registry
 
     Stores job data in a JSON file for persistence across process restarts.

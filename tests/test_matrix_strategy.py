@@ -35,13 +35,13 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 3
-        assert "test_0" in runner._expanded_jobs
-        assert "test_1" in runner._expanded_jobs
-        assert "test_2" in runner._expanded_jobs
-        assert runner._expanded_jobs["test_0"].matrix_values["value"] == 1
-        assert runner._expanded_jobs["test_1"].matrix_values["value"] == 2
-        assert runner._expanded_jobs["test_2"].matrix_values["value"] == 3
+        assert len(runner._staged_jobs) == 3
+        assert "test_0" in runner._staged_jobs
+        assert "test_1" in runner._staged_jobs
+        assert "test_2" in runner._staged_jobs
+        assert runner._staged_jobs["test_0"].matrix_values["value"] == 1
+        assert runner._staged_jobs["test_1"].matrix_values["value"] == 2
+        assert runner._staged_jobs["test_2"].matrix_values["value"] == 3
 
     @pytest.mark.asyncio
     async def test_multi_dimensional_matrix(self):
@@ -61,9 +61,9 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 4
+        assert len(runner._staged_jobs) == 4
         combinations = [
-            runner._expanded_jobs[f"test_{i}"].matrix_values for i in range(4)
+            runner._staged_jobs[f"test_{i}"].matrix_values for i in range(4)
         ]
 
         assert {"os": "linux", "arch": "amd64"} in combinations
@@ -94,9 +94,9 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 7
+        assert len(runner._staged_jobs) == 7
         combinations = [
-            runner._expanded_jobs[f"test_{i}"].matrix_values for i in range(7)
+            runner._staged_jobs[f"test_{i}"].matrix_values for i in range(7)
         ]
 
         assert {"os": "linux", "browser": "safari"} not in combinations
@@ -123,10 +123,9 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 4
+        assert len(runner._staged_jobs) == 4
         platforms = [
-            runner._expanded_jobs[f"test_{i}"].matrix_values["platform"]
-            for i in range(4)
+            runner._staged_jobs[f"test_{i}"].matrix_values["platform"] for i in range(4)
         ]
 
         assert "x86" in platforms
@@ -153,9 +152,9 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 5
+        assert len(runner._staged_jobs) == 5
         for i in range(5):
-            assert runner._expanded_jobs[f"test_{i}"].max_parallel == 2
+            assert runner._staged_jobs[f"test_{i}"].max_parallel == 2
 
     @pytest.mark.asyncio
     async def test_matrix_fail_fast_flag(self):
@@ -177,7 +176,7 @@ jobs:
         await runner._plan_jobs()
 
         for i in range(3):
-            assert runner._expanded_jobs[f"test_{i}"].fail_fast is True
+            assert runner._staged_jobs[f"test_{i}"].fail_fast is True
 
     @pytest.mark.asyncio
     async def test_matrix_json_value_parsing(self):
@@ -198,15 +197,15 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 4
+        assert len(runner._staged_jobs) == 4
 
-        config_0 = runner._expanded_jobs["test_0"].matrix_values["config"]
+        config_0 = runner._staged_jobs["test_0"].matrix_values["config"]
         assert isinstance(config_0, dict)
         assert config_0["name"] in ["dev", "prod"]
         assert config_0["port"] in [3000, 8080]
 
         debug_vals = [
-            runner._expanded_jobs[f"test_{i}"].matrix_values["debug"] for i in range(4)
+            runner._staged_jobs[f"test_{i}"].matrix_values["debug"] for i in range(4)
         ]
         assert True in debug_vals
         assert False in debug_vals
@@ -237,7 +236,7 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 4
+        assert len(runner._staged_jobs) == 4
         assert len(runner._schedule) == 2
 
         stage_0_jobs = runner._schedule[0]
@@ -298,8 +297,8 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 1
-        assert runner._expanded_jobs["test_0"].matrix_values["only"] == "single"
+        assert len(runner._staged_jobs) == 1
+        assert runner._staged_jobs["test_0"].matrix_values["only"] == "single"
 
     @pytest.mark.asyncio
     async def test_three_dimensional_matrix(self):
@@ -321,7 +320,7 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 8
+        assert len(runner._staged_jobs) == 8
 
     @pytest.mark.asyncio
     async def test_matrix_without_strategy(self):
@@ -338,9 +337,9 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 1
-        assert "test" in runner._expanded_jobs
-        assert runner._expanded_jobs["test"].matrix_values == {}
+        assert len(runner._staged_jobs) == 1
+        assert "test" in runner._staged_jobs
+        assert runner._staged_jobs["test"].matrix_values == {}
 
     @pytest.mark.asyncio
     async def test_complex_exclude_include(self):
@@ -366,9 +365,9 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 6
+        assert len(runner._staged_jobs) == 6
         combinations = [
-            runner._expanded_jobs[f"test_{i}"].matrix_values for i in range(6)
+            runner._staged_jobs[f"test_{i}"].matrix_values for i in range(6)
         ]
 
         assert {"env": "prod", "version": "1.0"} not in combinations
@@ -396,8 +395,8 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert runner._expanded_jobs["test_0"].name == "Build for linux"
-        assert runner._expanded_jobs["test_1"].name == "Build for macos"
+        assert runner._staged_jobs["test_0"].name == "Build for linux"
+        assert runner._staged_jobs["test_1"].name == "Build for macos"
 
     @pytest.mark.asyncio
     async def test_get_expanded_job_ids(self):
@@ -421,13 +420,13 @@ jobs:
 
         await runner._plan_jobs()
 
-        matrix_ids = get_expanded_job_ids(runner._expanded_jobs, "matrix_job")
+        matrix_ids = get_expanded_job_ids(runner._staged_jobs, "matrix_job")
         assert len(matrix_ids) == 3
         assert "matrix_job_0" in matrix_ids
         assert "matrix_job_1" in matrix_ids
         assert "matrix_job_2" in matrix_ids
 
-        normal_ids = get_expanded_job_ids(runner._expanded_jobs, "normal_job")
+        normal_ids = get_expanded_job_ids(runner._staged_jobs, "normal_job")
         assert normal_ids == ["normal_job"]
 
     @pytest.mark.asyncio
@@ -447,9 +446,9 @@ jobs:
 
         await runner._plan_jobs()
 
-        assert len(runner._expanded_jobs) == 3
+        assert len(runner._staged_jobs) == 3
         values = [
-            runner._expanded_jobs[f"test_{i}"].matrix_values["value"] for i in range(3)
+            runner._staged_jobs[f"test_{i}"].matrix_values["value"] for i in range(3)
         ]
         assert "plain" in values
         assert "with-dash" in values

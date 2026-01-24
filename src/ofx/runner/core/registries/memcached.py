@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from ofx.runner.core.registries.base import JobRegistryAdapter
+from ofx.runner.core.registries.base import RegistryAdapter
 
 try:
     import aiomcache
@@ -19,7 +19,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class MemcachedJobRegistry(JobRegistryAdapter):
+class MemcachedJobRegistry(RegistryAdapter):
     """Memcached-based implementation of registry
 
     Stores data in Memcached for distributed caching and high-performance access.

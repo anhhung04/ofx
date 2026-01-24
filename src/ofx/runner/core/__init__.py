@@ -3,10 +3,8 @@
 from ofx.runner.core.base import BaseRunner
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registries import (
-    JobRegistryAdapter,
     MemoryJobRegistry,
-)
-from ofx.runner.core.registries.factory import (
+    RegistryAdapter,
     RegistryFactory,
     cleanup_registry,
 )
@@ -16,7 +14,7 @@ __all__ = [
     "RunContext",
     "RunnerStatus",
     "RunResult",
-    "JobRegistryAdapter",
+    "RegistryAdapter",
     "MemoryJobRegistry",
     "RegistryFactory",
     "cleanup_registry",

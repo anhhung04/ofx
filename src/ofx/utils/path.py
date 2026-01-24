@@ -4,6 +4,8 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
+from git import Git
+
 from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
 
@@ -17,14 +19,13 @@ def is_remote_path(path: str) -> bool:
 
 
 @lru_cache(maxsize=128)
-def is_s3_path(path: str) -> bool:
-    """Check if the given path is an S3 URI (s3://).
-
-    Case-sensitive check for lowercase 's3' scheme.
-    Cached for repeated checks.
-    """
-    parsed = urlparse(path)
-    return parsed.scheme == "s3" and path.startswith("s3://")
+def is_git_repo(url: str) -> bool:
+    """Check if the given URL is a remote Git repo"""
+    try:
+        Git().ls_remote(url)
+        return True
+    except:
+        return False
 
 
 def find_valid_flow(dir: Path, name: str) -> Path | None:

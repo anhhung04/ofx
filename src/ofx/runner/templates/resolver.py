@@ -1,15 +1,22 @@
 """Template resolver for Jinja2-based workflow templates"""
 
-from pathlib import Path
 from typing import Any
 
 from jinja2 import Template
+from pydantic import BaseModel
 
 from ofx.runner.templates.helpers import TemplateHelpers
 
 
 class TemplateResolver:
     """Handles template resolution with caching and optimization"""
+
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self):
         self._template_cache: dict[str, Template] = {}
@@ -19,59 +26,54 @@ class TemplateResolver:
         self,
         value: Any,
         context_vars: dict[str, Any],
-        run_id: str,
     ) -> Any:
         """Resolve Jinja2 templates in values recursively with optimized caching
-        
         Args:
             value: Value to resolve (can be str, dict, list, primitives)
             context_vars: Context variables for template rendering
-            run_id: Current runner ID
-            
         Returns:
             Resolved value with templates expanded
         """
-        if value is None or not isinstance(value, (str, int, float, bool, dict, list)):
+        if value is None:
             return value
-            
-        if isinstance(value, dict):
-            return {k: await self.resolve(v, context_vars, run_id) for k, v in value.items()}
-            
-        if isinstance(value, list):
-            return [await self.resolve(v, context_vars, run_id) for v in value]
-            
-        string_value = str(value)
-        if "${{" not in string_value and "{%" not in string_value:
+        elif isinstance(value, dict):
+            return {k: await self.resolve(v, context_vars) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [await self.resolve(v, context_vars) for v in value]
+        elif issubclass(type(value), BaseModel):
+            return value.model_copy(
+                update={
+                    k: await self.resolve(v, context_vars)
+                    for k, v in value
+                }
+            )
+        elif not isinstance(value, (str, int, float, bool, dict, list)):
             return value
 
-        # Get support functions
+        value_str = str(value)
+        if "{{" not in value_str and "{%" not in value_str:
+            return value
+
         support_funcs = TemplateHelpers.get_support_functions(
             context_vars.get("envs", {})
         )
-        support_funcs["run_id"] = run_id
 
-        # Cache template compilation
-        if string_value not in self._template_cache:
+        if value_str not in self._template_cache:
             if len(self._template_cache) >= self._template_cache_max_size:
                 first_key = next(iter(self._template_cache))
                 del self._template_cache[first_key]
-            self._template_cache[string_value] = Template(
-                string_value,
-                variable_start_string="${{",
-                variable_end_string="}}",
-                enable_async=True
+            self._template_cache[value_str] = Template(
+                value_str,
+                enable_async=True,
             )
 
-        template = self._template_cache[string_value]
-        
-        # Prepare template variables
+        template = self._template_cache[value_str]
+
         template_vars = context_vars.copy()
         template_vars.update(support_funcs)
 
-        # Render template
         result = await template.render_async(template_vars)
 
-        # Type conversion for non-string values
         if isinstance(value, bool):
             return result.lower() in ("true", "yes", "1", "t", "y")
         elif isinstance(value, int):

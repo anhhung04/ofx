@@ -1,13 +1,19 @@
 """Job registry adapters using the adapter pattern"""
 
-from ofx.runner.core.registries.base import JobRegistryAdapter
+from ofx.runner.core.registries.base import RegistryAdapter
+from ofx.runner.core.registries.factory import (
+    RegistryFactory,
+    cleanup_registry,
+)
 from ofx.runner.core.registries.file import FileJobRegistry
 from ofx.runner.core.registries.memory import MemoryJobRegistry
 
 __all__ = [
-    "JobRegistryAdapter",
+    "RegistryAdapter",
     "MemoryJobRegistry",
     "FileJobRegistry",
+    "RegistryFactory",
+    "cleanup_registry",
 ]
 
 try:

@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from ofx.runner.core.registries.base import JobRegistryAdapter
+from ofx.runner.core.registries.base import RegistryAdapter
 
 try:
     import etcd3
@@ -19,7 +19,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class EtcdJobRegistry(JobRegistryAdapter):
+class EtcdJobRegistry(RegistryAdapter):
     """etcd-based implementation of registry
 
     Stores data in etcd for distributed coordination and strong consistency.
