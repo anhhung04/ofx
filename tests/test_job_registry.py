@@ -6,12 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from ofx.runner.core import (
+from ofx.runner.core import RegistryFactory, cleanup_registry
+from ofx.runner.core.registries import (
     FileJobRegistry,
-    JobRegistryAdapter,
     MemoryJobRegistry,
-    RegistryFactory,
-    cleanup_registry,
 )
 
 
