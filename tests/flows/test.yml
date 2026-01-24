@@ -19,4 +19,4 @@ jobs:
     name: Run Flow Tests in Subworkflow
     steps:
       - name: Run Flow Tests in Docker
-        uses: subworkflow
+        uses: ./subworkflow
