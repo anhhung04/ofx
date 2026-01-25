@@ -105,6 +105,8 @@ nav:
                             - Overview: guide/secrets-inputs.md
                             - Secrets: guide/secrets-inputs/secrets.md
                             - Inputs: guide/secrets-inputs/inputs.md
+                  - Execution Context:
+                            - Precedence: guide/context-precedence.md
                   - Interactive Mode:
                             - Overview: guide/interactive-mode.md
                             - Usage: guide/interactive-mode/usage.md

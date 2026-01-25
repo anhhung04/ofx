@@ -27,26 +27,13 @@ ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
 DEFAULT_SHELL = "/bin/bash"
 
-BANNER = """
-\033[1;31m      .--.
-     |o_o |
-     |:_/ |
-    //   \\ \\
-   (|     | )
-  /'\\_   _/`\\
-  \\___)=(___/\033[0m
-
-\033[1mOffensive Flow Executor\033[0m
-> Handing over to the next generation of red teamers
-"""
-
 RICH_THEME = Theme(
     {
         "success": "bold green",
         "error": "bold red",
         "warning": "bold yellow",
         "info": "bold cyan",
-        "header": "bold red on black",
+        "header": "bold red",
         "subheader": "bold magenta",
         "dim": "dim white",
         "bright": "bold white",
@@ -96,7 +83,7 @@ class RedisRegistrySettings(BaseModel):
     db: int = Field(default=0, description="Redis database number")
     password: str | None = Field(default=None, description="Redis password")
     prefix: str = Field(
-        default="ofx:job:", description="Key prefix for registry entries"
+        default="ofx:run:", description="Key prefix for registry entries"
     )
 
 
@@ -106,7 +93,7 @@ class MemcachedRegistrySettings(BaseModel):
     host: str = Field(default="localhost", description="Memcached server host")
     port: int = Field(default=11211, description="Memcached server port")
     prefix: str = Field(
-        default="ofx:job:", description="Key prefix for registry entries"
+        default="ofx:run:", description="Key prefix for registry entries"
     )
 
 
@@ -116,7 +103,7 @@ class EtcdRegistrySettings(BaseModel):
     host: str = Field(default="localhost", description="etcd server host")
     port: int = Field(default=2379, description="etcd gRPC port")
     prefix: str = Field(
-        default="/ofx/job/", description="Key prefix for registry entries"
+        default="/ofx/run/", description="Key prefix for registry entries"
     )
 
 

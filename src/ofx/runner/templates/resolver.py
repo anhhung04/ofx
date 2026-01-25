@@ -42,10 +42,7 @@ class TemplateResolver:
             return [await self.resolve(v, context_vars) for v in value]
         elif issubclass(type(value), BaseModel):
             return value.model_copy(
-                update={
-                    k: await self.resolve(v, context_vars)
-                    for k, v in value
-                }
+                update={k: await self.resolve(v, context_vars) for k, v in value}
             )
         elif not isinstance(value, (str, int, float, bool, dict, list)):
             return value
@@ -57,6 +54,22 @@ class TemplateResolver:
         support_funcs = TemplateHelpers.get_support_functions(
             context_vars.get("envs", {})
         )
+
+        # Add registry-based data for accessing job and step data
+        if "registry" in context_vars:
+            registry = context_vars["registry"]
+            job_results = await registry.get("jobs:results") or {}
+
+            # Get steps for current job if available
+            steps_list = []
+            if "current_job_id" in context_vars:
+                job_id = context_vars["current_job_id"]
+                step_results = await registry.get(f"jobs:{job_id}:steps") or {}
+                sorted_steps = step_results.items()
+                steps_list = [data for idx, data in sorted_steps]
+
+            support_funcs["jobs"] = job_results
+            support_funcs["steps"] = steps_list
 
         if value_str not in self._template_cache:
             if len(self._template_cache) >= self._template_cache_max_size:

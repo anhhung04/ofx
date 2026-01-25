@@ -2,60 +2,37 @@
 
 import itertools
 import json
-import logging
 from typing import Any
 
 from ofx.models.job import Job, MatrixStrategy
-from ofx.settings import settings
 
 
 def expand_jobs(jobs: dict[str, Job]) -> dict[str, Job]:
-    """Expand jobs with matrix strategies into individual job instances, auto-injecting needs for max_parallel."""
-    logger = logging.getLogger(settings.app_branding)
-    expanded_jobs: dict[str, Job] = {}
+    """Process jobs, keeping matrix jobs as single units for MatrixJobRunner to handle."""
+    processed_jobs: dict[str, Job] = {}
 
     for job_id, job in jobs.items():
         if job.strategy and job.strategy.matrix:
-            matrix_combinations = _generate_matrix_combinations(job.strategy)
-            max_parallel = job.strategy.max_parallel if job.strategy else None
-            fail_fast = job.strategy.fail_fast if job.strategy else True
-            expanded_ids = []
-            for idx, matrix_values in enumerate(matrix_combinations):
-                expanded_job_id = f"{job_id}_{idx}"
-                expanded_ids.append(expanded_job_id)
-                expanded_job = job.model_copy(
-                    deep=True,
-                    update={
-                        "jid": expanded_job_id,
-                        "matrix_values": matrix_values,
-                        "original_job_id": job_id,
-                        "matrix_index": idx,
-                        "max_parallel": max_parallel,
-                        "fail_fast": fail_fast,
-                    },
-                )
-                expanded_jobs[expanded_job_id] = expanded_job
-                logger.debug(
-                    f"Expanded matrix job '{job_id}' -> '{job_id}_{idx}' with matrix: {matrix_values}"
-                )
-            # Inject needs dependencies for max_parallel
-            if max_parallel and max_parallel > 0:
-                for idx, expanded_job_id in enumerate(expanded_ids):
-                    if idx >= max_parallel:
-                        # Each job beyond the first n depends on previous n jobs
-                        needs = expanded_ids[max(0, idx - max_parallel) : idx]
-                        expanded_jobs[expanded_job_id].needs = needs
+            # Keep matrix jobs as single units, MatrixJobRunner will expand internally
+            processed_job = job.model_copy(deep=True)
+            processed_job.jid = job_id
+            processed_job.matrix_values = {}
+            processed_job.original_job_id = job_id
+            processed_job.matrix_index = None
+            processed_job.max_parallel = job.strategy.max_parallel
+            processed_job.fail_fast = job.strategy.fail_fast
+            processed_jobs[job_id] = processed_job
         else:
-            expanded_job = job.model_copy(deep=True)
-            expanded_job.jid = job_id
-            expanded_job.matrix_values = {}
-            expanded_job.original_job_id = job_id
-            expanded_job.matrix_index = None
-            expanded_job.max_parallel = None
-            expanded_job.fail_fast = True
-            expanded_jobs[job_id] = expanded_job
+            processed_job = job.model_copy(deep=True)
+            processed_job.jid = job_id
+            processed_job.matrix_values = {}
+            processed_job.original_job_id = job_id
+            processed_job.matrix_index = None
+            processed_job.max_parallel = None
+            processed_job.fail_fast = True
+            processed_jobs[job_id] = processed_job
 
-    return expanded_jobs
+    return processed_jobs
 
 
 def _generate_matrix_combinations(strategy: MatrixStrategy) -> list[dict[str, Any]]:
@@ -76,19 +53,37 @@ def _generate_matrix_combinations(strategy: MatrixStrategy) -> list[dict[str, An
         for combination in itertools.product(*matrix_values)
     ]
 
+    # Process matrix values (e.g., parse JSON strings)
+    processed_combinations = []
+    for combo in base_combinations:
+        processed_combo = {}
+        for key, value in combo.items():
+            processed_combo[key] = process_matrix_value(value)
+        processed_combinations.append(processed_combo)
+    base_combinations = processed_combinations
+
     # Apply exclude rules
     if strategy.exclude:
+        processed_exclude = []
+        for exclude_filter in strategy.exclude:
+            processed_filter = {}
+            for key, value in exclude_filter.items():
+                processed_filter[key] = process_matrix_value(value)
+            processed_exclude.append(processed_filter)
         base_combinations = [
             combo
             for combo in base_combinations
-            if not _matches_matrix_filter(combo, strategy.exclude)
+            if not _matches_matrix_filter(combo, processed_exclude)
         ]
 
     # Apply include rules
     if strategy.include:
         for include_combo in strategy.include:
-            if include_combo not in base_combinations:
-                base_combinations.append(include_combo)
+            processed_include = {}
+            for key, value in include_combo.items():
+                processed_include[key] = process_matrix_value(value)
+            if processed_include not in base_combinations:
+                base_combinations.append(processed_include)
 
     return base_combinations
 

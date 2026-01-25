@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from ofx.runner.core import RegistryFactory, cleanup_registry
-from ofx.runner.core.registries import (
+from ofx.runner.registry import (
     FileJobRegistry,
     MemoryJobRegistry,
 )

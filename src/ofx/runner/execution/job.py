@@ -5,11 +5,20 @@ import itertools
 import logging
 from typing import Any
 
+from ofx.models.config import DefaultConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.core import BaseRunner, RunContext, RunnerStatus, RunResult
-from ofx.runner.core.registries import RegistryAdapter
-from ofx.runner.executors.step import StepRunner
+from ofx.runner.context import RunnerContextBuilder
+from ofx.runner.core import (
+    BaseRunner,
+    RunContext,
+    RunnerRegistryKeys,
+    RunnerStatus,
+    RunResult,
+)
+from ofx.runner.execution.execution_results import JobExecutionResult, StepExecutionResult
+from ofx.runner.execution.error_helpers import job_step_failed
+from ofx.runner.execution.step import StepRunner
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -23,40 +32,52 @@ class JobRunner(BaseRunner[Job]):
         parent: BaseRunner[Workflow],
     ):
         super().__init__(job, ctx, parent, parent.registry)
-        self._processed_steps = 0
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(
             ["name", "needs", "run_if", "env", "defaults"]
         )
-        self.ctx.envs.update(self.model.env)
-        logger.debug(
-            self._produce_log(
-                f"Resolved job: {self.model.model_dump(exclude={'steps'})}"
-            )
-        )
+        self.ctx = RunnerContextBuilder(self.ctx).with_env(self.model.env)
+        self._log_debug(f"Resolved job: {self.model.model_dump(exclude={'steps'})}")
+
         if isinstance(self.model.needs, str):
             self.model.needs = [self.model.needs]
-        unmet_deps = []
-        runners: dict[str, JobRunner] = self.parent.runners  # type: ignore
+
+        runners: dict[str, BaseRunner] = self.parent.runners  # type: ignore
+        dep_runners = []
         for job_id in self.model.needs:
-            if self.parent and not runners[job_id].is_success:
-                unmet_deps.append(job_id)
-        if len(unmet_deps) > 0:
-            raise RuntimeError(
-                f"Job cannot run because dependencies are not met: {unmet_deps}"
-            )
-        if not eval(str(self.model.run_if)):
-            raise RuntimeError(self._produce_log("Job condition is not met"))
-        # TODO: add needs data resolve
+            runner = runners.get(job_id)
+            if not runner:
+                raise RuntimeError(
+                    f"Job dependency '{job_id}' is missing from workflow runners."
+                )
+            dep_runners.append(runner)
+
+        run_if_expr = self.model.run_if
+        if run_if_expr is True and dep_runners:
+            run_if_expr = "success()"
+
+        if not self._evaluate_run_if(run_if_expr, self._run_if_context(dep_runners)):
+            self._state_machine.transition(RunnerStatus.CANCELED)
+            raise Exception(self._produce_log("Job condition is not met"))
+
+        job_default_config = self.model.defaults.model_dump(exclude_defaults=True)
+        workflow_default_config = self.parent.model.defaults.model_dump()  # type: ignore
+        for key, value in job_default_config.items():
+            workflow_default_config[key] = value
+        self.model.defaults = DefaultConfig.model_validate(workflow_default_config)
+
+        await self.reg_set(
+            RunnerRegistryKeys.MODEL,
+            self.model.model_dump(exclude={"steps", "env"}),
+        )
 
     async def _do_run(self) -> None:
         for step in self.model.steps:
-            step_ctx = self.ctx.model_copy(
+            step_ctx = self._child_context(
                 update={
                     "secrets": self.ctx.secrets if step.secrets != "inherit" else {},
                 },
-                deep=True,
             )
 
             step_runner = StepRunner(
@@ -64,25 +85,63 @@ class JobRunner(BaseRunner[Job]):
                 step_ctx,
                 self,
             )
+            self._runners[str(step.step_index)] = step_runner
             result = await step_runner.run()
-            # step_id = step.step_index
-            # dump_model = result.model_dump()
-            # TODO: add registry handler for step
-            self._processed_steps += 1
-            if not step_runner.is_success and not step.continue_on_error:
+            if step_runner.is_failed and not step.continue_on_error:
                 raise RuntimeError(
-                    f"Step '{step.name or step.step_index}' failed: {result.error}"
+                    job_step_failed(step.name or step.step_index, result.error)
                 )
 
     async def _post_run(self) -> None:
-        # TODO: add handle step outputs
+        # Handle job outputs
         if self.model.outputs:
+            resolved_outputs = {}
             for key, value in self.model.outputs.items():
-                pass
-        logger.debug(
-            self._produce_log(
-                f"job '{self.model.name or self.model.jid}' result: {await self.get_result()}"
+                resolved_value = await self._resolve_template(value)
+                resolved_outputs[key] = resolved_value
+            await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
+
+        step_results: list[dict[str, Any]] = []
+        failed_steps: list[int] = []
+        for runner in self._runners.values():
+            if not isinstance(runner, StepRunner):
+                continue
+            step_result = await runner.get_result()
+            run_type = (
+                runner._run_type.value
+                if hasattr(runner, "_run_type")
+                else runner.model.get_run_type().value
             )
+            step_exec = StepExecutionResult(
+                step_index=runner.model.step_index,
+                name=runner.model.name,
+                run_type=run_type,
+                status=step_result.status.value,
+                error=step_result.error,
+                outputs=step_result.outputs,
+            )
+            step_results.append(step_exec.to_dict())
+            if step_result.status == RunnerStatus.FAILED:
+                failed_steps.append(runner.model.step_index)
+
+        status_value = (
+            RunnerStatus.COMPLETED.value
+            if self.status == RunnerStatus.FINISHED
+            else self.status.value
+        )
+        job_exec = JobExecutionResult(
+            jid=self.model.jid,
+            name=self.model.name,
+            status=status_value,
+            error=self._error,
+            total_steps=len(self.model.steps),
+            failed_steps=failed_steps,
+            steps=step_results,
+        )
+        await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
+
+        self._log_debug(
+            f"job '{self.model.name or self.model.jid}' result: {await self.get_result()}"
         )
 
     def _produce_log(self, message: Any) -> str:
@@ -93,12 +152,25 @@ class JobRunner(BaseRunner[Job]):
         return msg
 
     @property
-    def processed_steps(self) -> int:
-        return self._processed_steps
-
-    @property
     def total_steps(self) -> int:
         return len(self.model.steps)
+
+    def _run_if_context(self, dep_runners: list[BaseRunner]) -> dict[str, Any]:
+        if not dep_runners:
+            return {
+                "success": lambda: True,
+                "failure": lambda: False,
+                "canceled": lambda: False,
+                "always": lambda: True,
+            }
+        return {
+            "success": lambda: all(r.is_success for r in dep_runners),
+            "failure": lambda: any(r.is_failed for r in dep_runners),
+            "canceled": lambda: any(
+                r.status == RunnerStatus.CANCELED for r in dep_runners
+            ),
+            "always": lambda: True,
+        }
 
 
 class MatrixJobRunner(BaseRunner[Job]):
@@ -157,14 +229,14 @@ class MatrixJobRunner(BaseRunner[Job]):
 
     async def _run_single_job(self, matrix_idx: int, matrix_values: dict[str, Any]):
         """Run a single job instance with specific matrix values"""
-        job_ctx = self.ctx.model_copy(deep=True)
+        job_ctx = self._child_context()
         job_ctx.vars["matrix"] = matrix_values
-
+        new_jid = f"{self.model.jid}_{str(matrix_idx)}"
         runner = JobRunner(
             self.model.model_copy(
                 update={
                     "name": f"{self.model.name}{{{str(matrix_idx)}}}",
-                    "jid": f"{self.model.jid}_{str(matrix_idx)}",
+                    "jid": new_jid,
                     "matrix_values": matrix_values,
                     "matrix_index": matrix_idx,
                 },
@@ -172,6 +244,7 @@ class MatrixJobRunner(BaseRunner[Job]):
             job_ctx,
             parent=self.parent,  # type: ignore
         )
+        self._runners[new_jid] = runner
         return await runner.run()
 
     async def _pre_run(self) -> None:

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from ofx.models.command import Command
 from ofx.runner import CommandRunner, RunContext, RunnerStatus
 
 
@@ -16,7 +17,7 @@ class TestCommandOutputs:
         cmd = 'echo "test_key=test_value" >> $OFX_OUTPUTS'
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -33,7 +34,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
 """
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -47,7 +48,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
         cmd = 'echo "message=Hello World" >> $OFX_OUTPUTS'
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -59,7 +60,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
         cmd = 'echo "url=https://example.com/path?key=value&foo=bar" >> $OFX_OUTPUTS'
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -71,7 +72,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
         cmd = 'echo "cleanup_test=success" >> $OFX_OUTPUTS'
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         outputs_file_path = None
 
         await runner._pre_run()
@@ -91,7 +92,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
         cmd = 'echo "test" > /dev/null'
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -108,7 +109,7 @@ echo "another_key=another_value" >> $OFX_OUTPUTS
 """
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -125,7 +126,7 @@ echo "counter=3" >> $OFX_OUTPUTS
 """
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -137,7 +138,7 @@ echo "counter=3" >> $OFX_OUTPUTS
         cmd = 'echo "equation=a=b+c" >> $OFX_OUTPUTS'
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -152,7 +153,7 @@ EOF
 """
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -165,7 +166,7 @@ EOF
         cmd = 'echo "should_not_capture=value"'
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx, interactive=True)
+        runner = CommandRunner(Command(cmd=cmd, interactive=True), ctx)
 
         await runner._pre_run()
         assert runner._outputs_file is None
@@ -181,7 +182,7 @@ echo "ratio=3.14" >> $OFX_OUTPUTS
 """
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
@@ -198,9 +199,27 @@ echo "has_value=something" >> $OFX_OUTPUTS
 """
         ctx = RunContext()
 
-        runner = CommandRunner(cmd, ctx)
+        runner = CommandRunner(Command(cmd=cmd), ctx)
         result = await runner.run()
 
         assert result.status == RunnerStatus.COMPLETED
         assert result.outputs["empty_key"] == ""
         assert result.outputs["has_value"] == "something"
+
+    @pytest.mark.asyncio
+    async def test_output_truncated_flag(self):
+        """Test that large output sets output_truncated flag"""
+        from ofx.settings import settings
+
+        original_max = settings.max_output_size
+        settings.max_output_size = 1024
+        cmd = 'python3 -c "print(\'x\' * 5000)"'
+        ctx = RunContext()
+
+        runner = CommandRunner(Command(cmd=cmd), ctx)
+        try:
+            result = await runner.run()
+            assert result.status == RunnerStatus.COMPLETED
+            assert result.outputs.get("output_truncated") is True
+        finally:
+            settings.max_output_size = original_max

@@ -16,7 +16,7 @@
                                 │ uses
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                   JobRegistryAdapter (Abstract)                  │
+│                   RegistryAdapter (Abstract)                  │
 │                                                                   │
 │  Interface:                                                       │
 │  ├── async set(key, value)                                       │
@@ -56,12 +56,12 @@
 │                    Factory & Configuration                       │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│  create_job_registry(backend, **kwargs) -> JobRegistryAdapter    │
+│  create_job_registry(backend, **kwargs) -> RegistryAdapter    │
 │  ├── backend="memory" → MemoryJobRegistry()                      │
 │  ├── backend="file" → FileJobRegistry(filepath)                  │
 │  └── backend="redis" → RedisJobRegistry(host, port, ...)         │
 │                                                                   │
-│  create_registry_from_settings() -> JobRegistryAdapter           │
+│  create_registry_from_settings() -> RegistryAdapter           │
 │  └── Uses environment variables for configuration                │
 │                                                                   │
 │  cleanup_registry(registry)                                       │
@@ -93,7 +93,7 @@
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  1. WorkflowRunner starts execution                              │
-│     └─> Creates/receives JobRegistryAdapter                      │
+│     └─> Creates/receives RegistryAdapter                      │
 │                                                                   │
 │  2. Job planning phase                                            │
 │     └─> await registry.set(key, metadata)                        │
@@ -129,7 +129,7 @@
 
 ## Component Details
 
-### Abstract Base Class (`JobRegistryAdapter`)
+### Abstract Base Class (`RegistryAdapter`)
 - Defines the contract all adapters must follow
 - 8 async methods for CRUD operations
 - Located: `src/ofx/runner/core/adapters/base.py`
@@ -157,9 +157,9 @@
 To add a new adapter:
 
 ```python
-from ofx.runner.core.registries import JobRegistryAdapter
+from ofx.runner.registry import RegistryAdapter
 
-class MyCustomAdapter(JobRegistryAdapter):
+class MyCustomAdapter(RegistryAdapter):
     async def set(self, key: str, value: dict) -> None:
         # Your implementation
         pass

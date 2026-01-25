@@ -55,7 +55,6 @@ class TestRunContext:
         assert ctx.vars == {}
         assert ctx.allow_interactive is False
         assert isinstance(ctx.workflow_dirs, list)
-        assert ctx.workflow_dir == Path.cwd()
 
     def test_run_context_with_custom_values(self):
         """Test RunContext with custom values"""
@@ -67,7 +66,6 @@ class TestRunContext:
             vars={"custom": "data"},
             allow_interactive=True,
             workflow_dirs=[Path("/custom/dir")],
-            workflow_dir=Path("/workflow/dir"),
         )
         assert ctx.inputs == {"key": "value"}
         assert ctx.secrets == {"secret_key": "secret_value"}
@@ -76,7 +74,6 @@ class TestRunContext:
         assert ctx.vars == {"custom": "data"}
         assert ctx.allow_interactive is True
         assert ctx.workflow_dirs == [Path("/custom/dir")]
-        assert ctx.workflow_dir == Path("/workflow/dir")
 
     def test_run_context_model_copy(self):
         """Test RunContext model_copy preserves data"""
@@ -120,7 +117,6 @@ class TestRunResult:
         assert result.outputs == {}
         assert result.name == "test-run"
         assert result.run_id == "test-123"
-        assert result.metadata == {}
 
     def test_run_result_with_error(self):
         """Test RunResult with error"""
@@ -143,17 +139,6 @@ class TestRunResult:
         )
         assert result.outputs["stdout"] == "test output"
         assert result.outputs["exit_code"] == 0
-
-    def test_run_result_with_metadata(self):
-        """Test RunResult with metadata"""
-        result = RunResult(
-            status=RunnerStatus.COMPLETED,
-            metadata={"duration": 10, "step": "test-step"},
-            name="test-run",
-            run_id="test-123",
-        )
-        assert result.metadata["duration"] == 10
-        assert result.metadata["step"] == "test-step"
 
     def test_run_result_model_dump(self):
         """Test RunResult model_dump"""

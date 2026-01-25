@@ -9,9 +9,10 @@ from typing import Any
 from pydantic import BaseModel, Field
 from rich.console import Console
 
+from ofx.models.command import Command
 from ofx.models.workflow import ToolConfig
 from ofx.runner.core import BaseRunner, RunContext
-from ofx.runner.executors.command import CommandRunner
+from ofx.runner.commands.command import CommandRunner
 from ofx.settings import TOOLS_BIN_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -113,22 +114,17 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
         if tool_exists:
             if self.model.show_console:
                 console.print(f"[dim]Skipping {tool_bin} (already installed)[/dim]")
-            logger.debug(
-                self._produce_log(f"Tool '{tool_bin}' is already installed, skipping")
-            )
+            self._log_debug(f"Tool '{tool_bin}' is already installed, skipping")
             self._skipped_count += 1
             return
 
         try:
             if self.model.show_console:
                 console.print(f"[cyan]Installing {tool_bin}...[/cyan]")
-            logger.info(
-                self._produce_log(
-                    f"Installing tool '{tool_bin}' with command: {install_cmd}"
-                )
-            )
+            self._log_info(f"Installing tool '{tool_bin}' with command: {install_cmd}")
 
-            runner = CommandRunner(install_cmd, RunContext(envs=self.ctx.envs))
+            cmd_model = Command(cmd=install_cmd)
+            runner = CommandRunner(cmd_model, RunContext(envs=self.ctx.envs))
             result = await runner.run()
 
             if result.status.value != "completed":
@@ -137,13 +133,13 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
                     console.print(
                         f"[red]✗ Failed to install {tool_bin}: {result.error}[/red]"
                     )
-                logger.error(self._produce_log(error_msg))
+                self._log_error(error_msg)
                 self._failed_count += 1
                 return
 
             if self.model.show_console:
                 console.print(f"[green]✓ Successfully installed {tool_bin}[/green]")
-            logger.info(self._produce_log(f"Tool '{tool_bin}' installed successfully"))
+            self._log_info(f"Tool '{tool_bin}' installed successfully")
             self._installed_count += 1
 
             if post_install_cmd:
@@ -152,7 +148,7 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
         except Exception as e:
             if self.model.show_console:
                 console.print(f"[red]✗ Error installing {tool_bin}: {e}[/red]")
-            logger.error(self._produce_log(f"Error installing tool '{tool_bin}': {e}"))
+            self._log_error(f"Error installing tool '{tool_bin}': {e}")
             self._failed_count += 1
 
     async def _check_tool_exists(
@@ -160,10 +156,10 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
     ) -> bool:
         """Check if a tool is already installed"""
         if check_cmd:
-            logger.debug(
-                self._produce_log(f"Checking tool '{tool_bin}' with: {check_cmd}")
+            self._log_debug(f"Checking tool '{tool_bin}' with: {check_cmd}")
+            check_runner = CommandRunner(
+                Command(cmd=check_cmd), RunContext(envs=self.ctx.envs)
             )
-            check_runner = CommandRunner(check_cmd, RunContext(envs=self.ctx.envs))
             check_result = await check_runner.run()
             return (
                 check_result.status.value == "completed"
@@ -175,21 +171,18 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
 
     async def _run_post_install(self, tool_bin: str, post_install_cmd: str):
         """Run post-install command for a tool"""
-        logger.info(self._produce_log(f"Running post-install for '{tool_bin}'"))
+        self._log_info(f"Running post-install for '{tool_bin}'")
 
-        post_runner = CommandRunner(post_install_cmd, RunContext(envs=self.ctx.envs))
+        cmd_model = Command(cmd=post_install_cmd)
+        post_runner = CommandRunner(cmd_model, RunContext(envs=self.ctx.envs))
         post_result = await post_runner.run()
 
         if post_result.status.value == "completed":
             if post_result.outputs.get("stdout"):
-                logger.info(
-                    self._produce_log(
-                        f"Post-install output for '{tool_bin}': {post_result.outputs['stdout']}"
-                    )
+                self._log_info(
+                    f"Post-install output for '{tool_bin}': {post_result.outputs['stdout']}"
                 )
         else:
-            logger.warning(
-                self._produce_log(
-                    f"Post-install command for '{tool_bin}' failed: {post_result.error}"
-                )
+            self._log_warning(
+                f"Post-install command for '{tool_bin}' failed: {post_result.error}"
             )

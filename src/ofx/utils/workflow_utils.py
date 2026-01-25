@@ -36,7 +36,7 @@ def find_workflow(
     workflow_name: str,
     search_dirs_tuple: tuple[Path, ...],
     flow_registry_url: str = "https://github.com",
-) -> Workflow:
+) -> tuple[Path, Workflow]:
     """Find and load a workflow from local directories, file path, URL, or git repository.
 
     Args:
@@ -44,7 +44,7 @@ def find_workflow(
         search_dirs_tuple: Tuple of directories to search (tuple for hashability)
 
     Returns:
-        Loaded Workflow object
+        Tuple of (workflow_path, loaded Workflow object)
 
     Raises:
         RuntimeError: If workflow cannot be found or loaded
@@ -59,7 +59,7 @@ def find_workflow(
                 yaml.safe_load(flow_path.read_text().strip())
             )
             flow.workflow_path = flow_path
-            return flow
+            return flow_path, flow
 
         for directory in search_dirs_tuple:
             path = find_valid_flow(directory, workflow_name)
@@ -67,16 +67,25 @@ def find_workflow(
                 continue
             workflow = Workflow.model_validate(yaml.safe_load(path.read_text().strip()))
             workflow.workflow_path = path
-            return workflow
+            return path, workflow
         else:
             raise RuntimeError(f"Workflow {workflow_name} not found in local paths.")
+
+    # Search for workflow by name in search directories
+    for directory in search_dirs_tuple:
+        path = find_valid_flow(directory, workflow_name)
+        if not path:
+            continue
+        workflow = Workflow.model_validate(yaml.safe_load(path.read_text().strip()))
+        workflow.workflow_path = path
+        return path, workflow
 
     if is_remote_path(workflow_name) and not is_git_repo(workflow_name):
         response = httpx.get(workflow_name)
         response.raise_for_status()
         workflow = Workflow.model_validate(yaml.safe_load(response.text.strip()))
         workflow.workflow_path = Path.cwd()
-        return workflow
+        return Path.cwd(), workflow
 
     git_path = clone_remote_repo(workflow_name, flow_registry_url)
     if not git_path:
@@ -89,4 +98,4 @@ def find_workflow(
         )
     workflow = Workflow.model_validate(yaml.safe_load(main_path.read_text().strip()))
     workflow.workflow_path = main_path
-    return workflow
+    return main_path, workflow

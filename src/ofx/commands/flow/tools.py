@@ -2,11 +2,13 @@ import logging
 import shutil
 from pathlib import Path
 
+from ofx.commands.ui_helpers import print_info, print_warning
 from ofx.runner import RunContext
 from ofx.runner.tool_installer import ToolInstallerRunner
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, TOOLS_BIN_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
+
 
 class ToolsInstallHandler:
     def __init__(
@@ -22,8 +24,9 @@ class ToolsInstallHandler:
     async def run(self):
         """Install tools from workflow configurations"""
         if not self.workflow_name and not self.all_workflows:
-            self.console.print(
-                "[yellow]Please specify either a workflow name or use --all flag[/yellow]"
+            print_warning(
+                "Missing Input",
+                "Please specify either a workflow name or use --all.",
             )
             return
 
@@ -32,13 +35,14 @@ class ToolsInstallHandler:
         if self.all_workflows:
             workflows_to_process = self._find_all_workflows()
             if not workflows_to_process:
-                self.console.print("[yellow]No workflow files found[/yellow]")
+                print_warning("No Workflows", "No workflow files found.")
                 return
         elif self.workflow_name:
             workflow_path = self._find_workflow_file(self.workflow_name)
             if not workflow_path:
-                self.console.print(
-                    f"[red]Workflow '{self.workflow_name}' not found[/red]"
+                print_warning(
+                    "Workflow Not Found",
+                    f"Workflow '{self.workflow_name}' not found.",
                 )
                 return
             workflows_to_process = [workflow_path]
@@ -46,7 +50,10 @@ class ToolsInstallHandler:
         all_tools = self._collect_tools_from_workflows(workflows_to_process)
 
         if not all_tools:
-            self.console.print("[yellow]No tools configured in the specified workflow(s)[/yellow]")
+            print_warning(
+                "No Tools",
+                "No tools configured in the specified workflow(s).",
+            )
             return
 
         self._display_tools_table(all_tools)
@@ -144,15 +151,16 @@ class ToolsInstallHandler:
 
     async def _install_tools(self, installer: ToolInstallerRunner):
         """Install the collected tools using ToolInstallerRunner"""
-        self.console.print("\n[bold]Installing tools...[/bold]\n")
+        print_info("Installing Tools", "Starting tool installation...")
 
         try:
             await installer.run()
         except Exception as e:
             logger.error(f"Error during tool installation: {e}")
 
-        self.console.print("\n[bold]Installation Summary:[/bold]")
-        self.console.print(f"  Installed: [green]{installer.installed_count}[/green]")
-        self.console.print(f"  Skipped: [yellow]{installer.skipped_count}[/yellow]")
-        if installer.failed_count > 0:
-            self.console.print(f"  Failed: [red]{installer.failed_count}[/red]")
+        summary = {
+            "Installed": installer.installed_count,
+            "Skipped": installer.skipped_count,
+            "Failed": installer.failed_count,
+        }
+        print_info("Installation Summary", "Tool installation finished.", summary)

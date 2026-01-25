@@ -201,8 +201,8 @@ jobs:
 
         workflow_dirs = tuple([tmp_path])
 
-        workflow1 = find_workflow(str(workflow_file), workflow_dirs)
-        workflow2 = find_workflow(str(workflow_file), workflow_dirs)
+        workflow_path1, workflow1 = find_workflow(str(workflow_file), workflow_dirs)
+        workflow_path2, workflow2 = find_workflow(str(workflow_file), workflow_dirs)
 
         assert workflow1 is workflow2
 

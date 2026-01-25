@@ -882,7 +882,9 @@ class VisualizeHandler:
                         DEFAULT_WORKFLOWS_DIR.absolute(),
                         Path.cwd().absolute(),
                     ]
-                    subworkflow = find_workflow(step.uses, tuple(workflow_dirs))
+                    subworkflow_path, subworkflow = find_workflow(
+                        step.uses, tuple(workflow_dirs)
+                    )
                     subworkflow_node = step_node.add(
                         f"[>] [bold cyan]{subworkflow.name}[/bold cyan] - {subworkflow.description}"
                     )

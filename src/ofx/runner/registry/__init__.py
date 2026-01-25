@@ -1,12 +1,12 @@
 """Job registry adapters using the adapter pattern"""
 
-from ofx.runner.core.registries.base import RegistryAdapter
-from ofx.runner.core.registries.factory import (
+from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry.factory import (
     RegistryFactory,
     cleanup_registry,
 )
-from ofx.runner.core.registries.file import FileJobRegistry
-from ofx.runner.core.registries.memory import MemoryJobRegistry
+from ofx.runner.registry.file import FileJobRegistry
+from ofx.runner.registry.memory import MemoryJobRegistry
 
 __all__ = [
     "RegistryAdapter",
@@ -17,21 +17,21 @@ __all__ = [
 ]
 
 try:
-    from ofx.runner.core.registries.redis import RedisJobRegistry
+    from ofx.runner.registry.redis import RedisJobRegistry
 
     __all__.append("RedisJobRegistry")
 except ImportError:
     pass
 
 try:
-    from ofx.runner.core.registries.memcached import MemcachedJobRegistry
+    from ofx.runner.registry.memcached import MemcachedJobRegistry
 
     __all__.append("MemcachedJobRegistry")
 except ImportError:
     pass
 
 try:
-    from ofx.runner.core.registries.etcd import EtcdJobRegistry
+    from ofx.runner.registry.etcd import EtcdJobRegistry
 
     __all__.append("EtcdJobRegistry")
 except ImportError:

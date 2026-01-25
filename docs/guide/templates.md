@@ -113,7 +113,6 @@ ${{ secrets.secret_name }}
 # Context
 ${{ ctx.run_id }}           # Unique run identifier
 ${{ ctx.output_path }}      # Output directory path
-${{ ctx.workflow_dir }}     # Workflow directory
 
 # Environment
 ${{ env.VARIABLE_NAME }}    # Environment variables

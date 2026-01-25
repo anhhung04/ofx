@@ -93,5 +93,15 @@ class Job(BaseModel):
             self.needs = []
         return self
 
+    @model_validator(mode="after")
+    def set_matrix_fields(self):
+        """Set max_parallel and fail_fast from strategy if present."""
+        if self.strategy:
+            if self.strategy.max_parallel is not None:
+                self.max_parallel = self.strategy.max_parallel
+            if self.strategy.fail_fast is not None:
+                self.fail_fast = self.strategy.fail_fast
+        return self
+
     def __str__(self):
         return f"Job(name='{self.name}',id={self.jid})"

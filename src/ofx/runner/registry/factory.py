@@ -5,9 +5,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from ofx.runner.core.registries.base import RegistryAdapter
-from ofx.runner.core.registries.file import FileJobRegistry
-from ofx.runner.core.registries.memory import MemoryJobRegistry
+from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry.file import FileJobRegistry
+from ofx.runner.registry.memory import MemoryJobRegistry
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -41,7 +41,7 @@ class RegistryFactory:
     @classmethod
     def create_memory(cls) -> RegistryAdapter:
         """Create in-memory registry"""
-        logger.debug("Creating MemoryJobRegistry")
+        _log_debug("Creating MemoryJobRegistry")
         return MemoryJobRegistry()
 
     @classmethod
@@ -54,7 +54,7 @@ class RegistryFactory:
         kwargs = {}
         if filepath:
             kwargs["filepath"] = filepath
-        logger.debug(f"Creating FileJobRegistry with kwargs: {kwargs}")
+        _log_debug(f"Creating FileJobRegistry with kwargs: {kwargs}")
         return FileJobRegistry(**kwargs)
 
     @classmethod
@@ -68,7 +68,7 @@ class RegistryFactory:
             **kwargs: Override configuration values
         """
         try:
-            from ofx.runner.core.registries.redis import RedisJobRegistry
+            from ofx.runner.registry.redis import RedisJobRegistry
 
             defaults = {
                 "host": "localhost",
@@ -85,7 +85,7 @@ class RegistryFactory:
             if params.get("password") is None:
                 params.pop("password", None)
 
-            logger.debug(f"Creating RedisJobRegistry with kwargs: {params}")
+            _log_debug(f"Creating RedisJobRegistry with kwargs: {params}")
             return RedisJobRegistry(**params)
         except ImportError as e:
             raise ImportError(
@@ -104,7 +104,7 @@ class RegistryFactory:
             **kwargs: Override configuration values
         """
         try:
-            from ofx.runner.core.registries.memcached import MemcachedJobRegistry
+            from ofx.runner.registry.memcached import MemcachedJobRegistry
 
             defaults = {
                 "host": "localhost",
@@ -115,7 +115,7 @@ class RegistryFactory:
             params = cls._extract_config(config, defaults)
             params.update(kwargs)
 
-            logger.debug(f"Creating MemcachedJobRegistry with kwargs: {params}")
+            _log_debug(f"Creating MemcachedJobRegistry with kwargs: {params}")
             return MemcachedJobRegistry(**params)
         except ImportError as e:
             raise ImportError(
@@ -134,7 +134,7 @@ class RegistryFactory:
             **kwargs: Override configuration values
         """
         try:
-            from ofx.runner.core.registries.etcd import EtcdJobRegistry
+            from ofx.runner.registry.etcd import EtcdJobRegistry
 
             defaults = {
                 "host": "localhost",
@@ -145,7 +145,7 @@ class RegistryFactory:
             params = cls._extract_config(config, defaults)
             params.update(kwargs)
 
-            logger.debug(f"Creating EtcdJobRegistry with kwargs: {params}")
+            _log_debug(f"Creating EtcdJobRegistry with kwargs: {params}")
             return EtcdJobRegistry(**params)
         except ImportError as e:
             raise ImportError(
@@ -219,6 +219,10 @@ async def cleanup_registry(registry: RegistryAdapter) -> None:
     """
     try:
         await registry.close()
-        logger.debug(f"Cleaned up {type(registry).__name__}")
+        _log_debug(f"Cleaned up {type(registry).__name__}")
     except Exception as e:
         logger.error(f"Error cleaning up registry: {e}")
+
+
+def _log_debug(message: str) -> None:
+    logger.debug(message)

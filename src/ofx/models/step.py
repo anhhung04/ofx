@@ -40,12 +40,12 @@ class Step(BaseModel):
     retry_delay: int = Field(
         default=5, description="Delay in seconds between retry attempts (default: 5)"
     )
-    working_directory: Path = Field(
-        default_factory=Path.cwd, description="Working directory for the step execution"
-    )
     shell: str = Field(
         default=DEFAULT_SHELL,
         description="Shell to use for running commands in the step",
+    )
+    working_directory: Path = Field(
+        default_factory=Path.cwd, description="Working directory for the step execution"
     )
     log_stdout: bool | str = Field(
         default=False, description="Whether to capture standard output of the step"
@@ -92,17 +92,16 @@ class Step(BaseModel):
         return self
 
     def get_run_type(self) -> RunType:
-        step = self
-        if step.uses:
+        if self.uses:
             return RunType.WORKFLOW
-        elif step.script:
+        elif self.script:
             return RunType.SCRIPT
-        elif step.script_file:
+        elif self.script_file:
             return RunType.SCRIPT_FILE
-        elif step.run:
+        elif self.run:
             return RunType.COMMAND
         raise ValueError(
-            f"Step '{step.name}' must have one of 'run', 'script', 'script_file', or 'uses' defined."
+            f"Step '{self.name}' must have one of 'run', 'script', 'script_file', or 'uses' defined."
         )
 
     def __str__(self):

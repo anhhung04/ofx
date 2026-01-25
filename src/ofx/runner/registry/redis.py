@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from ofx.runner.core.registries.base import RegistryAdapter
+from ofx.runner.registry.base import RegistryAdapter
 
 try:
     import redis.asyncio as aioredis
@@ -61,7 +61,7 @@ class RedisJobRegistry(RegistryAdapter):
             decode_responses=True,
             **kwargs,
         )
-        logger.debug(f"Initialized RedisJobRegistry at {host}:{port}/{db}")
+        self._log_debug(f"Initialized RedisJobRegistry at {host}:{port}/{db}")
 
     def _make_key(self, key: str) -> str:
         """Create a Redis key for a data identifier
@@ -74,82 +74,47 @@ class RedisJobRegistry(RegistryAdapter):
         """
         return f"{self.prefix}{key}"
 
-    async def set(self, key: str, value: dict[str, Any]) -> None:
-        """Store data in Redis
-
-        Args:
-            key: Unique identifier for the data
-            value: Data to store (must be JSON-serializable)
-        """
+    async def _set(self, key: str, value: dict[str, Any]) -> None:
+        """Store data in Redis"""
         redis_key = self._make_key(key)
         json_value = json.dumps(value)
         await self._client.set(redis_key, json_value)
-        logger.debug(f"Set key '{key}' in RedisJobRegistry")
+        self._log_debug(f"Set key '{key}' in RedisJobRegistry")
 
-    async def get(self, key: str) -> dict[str, Any] | None:
-        """Retrieve data from Redis
-
-        Args:
-            key: Unique identifier for the data
-
-        Returns:
-            Data if found, None otherwise
-        """
+    async def _get(self, key: str) -> dict[str, Any] | None:
+        """Retrieve data from Redis"""
         redis_key = self._make_key(key)
         value = await self._client.get(redis_key)
         if value:
             return json.loads(value)
         return None
 
-    async def update(self, key: str, updates: dict[str, Any]) -> None:
-        """Update specific fields in data
-
-        Args:
-            key: Unique identifier for the data
-            updates: Fields to update in the data
-        """
-        existing = await self.get(key)
-        if existing:
+    async def _update(self, key: str, updates: dict[str, Any]) -> None:
+        """Update specific fields in data"""
+        existing = await self._get(key)
+        if existing is not None:
             existing.update(updates)
-            await self.set(key, existing)
-            logger.debug(f"Updated key '{key}' in RedisJobRegistry")
+            await self._set(key, existing)
         else:
-            logger.warning(f"Cannot update key '{key}' - not found in RedisJobRegistry")
+            await self._set(key, updates)
+        self._log_debug(f"Updated key '{key}' in RedisJobRegistry")
 
-    async def delete(self, key: str) -> bool:
-        """Remove data from Redis
-
-        Args:
-            key: Unique identifier for the data
-
-        Returns:
-            True if deleted, False if not found
-        """
+    async def _delete(self, key: str) -> bool:
+        """Remove data from Redis"""
         redis_key = self._make_key(key)
         deleted = await self._client.delete(redis_key)
         if deleted:
-            logger.debug(f"Deleted key '{key}' from RedisJobRegistry")
+            self._log_debug(f"Deleted key '{key}' from RedisJobRegistry")
             return True
         return False
 
-    async def exists(self, key: str) -> bool:
-        """Check if data exists in Redis
-
-        Args:
-            key: Unique identifier for the data
-
-        Returns:
-            True if data exists, False otherwise
-        """
+    async def _exists(self, key: str) -> bool:
+        """Check if data exists in Redis"""
         redis_key = self._make_key(key)
         return bool(await self._client.exists(redis_key))
 
-    async def get_all(self) -> dict[str, dict[str, Any]]:
-        """Get all entries from Redis
-
-        Returns:
-            Dictionary mapping keys to their data
-        """
+    async def _get_all(self) -> dict[str, dict[str, Any]]:
+        """Get all entries from Redis"""
         pattern = f"{self.prefix}*"
         keys = await self._client.keys(pattern)
 
@@ -162,15 +127,19 @@ class RedisJobRegistry(RegistryAdapter):
 
         return result
 
-    async def clear(self) -> None:
+    async def _clear(self) -> None:
         """Clear all entries from Redis"""
         pattern = f"{self.prefix}*"
         keys = await self._client.keys(pattern)
         if keys:
             await self._client.delete(*keys)
-        logger.debug("Cleared RedisJobRegistry")
+        self._log_debug("Cleared RedisJobRegistry")
 
-    async def close(self) -> None:
+    async def _close(self) -> None:
         """Close the Redis connection"""
         await self._client.close()
-        logger.debug("Closed RedisJobRegistry")
+        self._log_debug("Closed RedisJobRegistry")
+
+    @staticmethod
+    def _log_debug(message: str) -> None:
+        logger.debug(message)

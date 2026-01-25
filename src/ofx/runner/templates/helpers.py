@@ -5,24 +5,22 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import aiofiles
-import aiofiles.os as aio_os
-
 from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR
 
 
 async def _read_file(path: str) -> str | None:
     """Read file content asynchronously"""
-    if await aio_os.path.exists(path):
-        async with aiofiles.open(path) as f:
-            return await f.read()
+    path_obj = Path(path)
+    if path_obj.exists():
+        return path_obj.read_text()
     return None
 
 
 async def _write_file(path: str, content: str):
     """Write file content asynchronously"""
-    async with aiofiles.open(path, "w") as f:
-        await f.write(content)
+    path_obj = Path(path)
+    path_obj.parent.mkdir(parents=True, exist_ok=True)
+    path_obj.write_text(content)
 
 
 class TemplateHelpers:
@@ -60,7 +58,7 @@ class TemplateHelpers:
                 ),
                 "file_read": _read_file,
                 "file_write": _write_file,
-                "file_exists": aio_os.path.exists,
+                "file_exists": lambda path: Path(path).exists(),
                 "python": __import__("sys").executable,
                 "pip_install": lambda pkg: f'"{__import__("sys").executable}" -m pip install --upgrade {pkg}',
             }

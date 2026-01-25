@@ -1,8 +1,9 @@
 """Core runner components"""
 
 from ofx.runner.core.base import BaseRunner
+from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
-from ofx.runner.core.registries import (
+from ofx.runner.registry import (
     MemoryJobRegistry,
     RegistryAdapter,
     RegistryFactory,
@@ -18,4 +19,5 @@ __all__ = [
     "MemoryJobRegistry",
     "RegistryFactory",
     "cleanup_registry",
+    "RunnerRegistryKeys",
 ]

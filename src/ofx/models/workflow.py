@@ -124,7 +124,7 @@ class Workflow(BaseModel):
             self.jobs[job_id].jid = job_id
             for idx, step in enumerate(job.steps):
                 step.step_index = idx
-                if not step.name:
+                if not step.name or step.name == "<should_be_replaced>":
                     step.name = f"{job_id}-step-{idx}"
 
         graph = {job_id: set(job.needs) for job_id, job in self.jobs.items()}

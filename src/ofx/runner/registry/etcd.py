@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Any
 
-from ofx.runner.core.registries.base import RegistryAdapter
+from ofx.runner.registry.base import RegistryAdapter
 
 try:
     import etcd3
@@ -62,7 +62,7 @@ class EtcdJobRegistry(RegistryAdapter):
             timeout=timeout,
             **kwargs,
         )
-        logger.debug(f"Initialized EtcdJobRegistry at {host}:{port}")
+        self._log_debug(f"Initialized EtcdJobRegistry at {host}:{port}")
 
     def _make_key(self, key: str) -> str:
         """Create an etcd key for a data identifier
@@ -77,86 +77,51 @@ class EtcdJobRegistry(RegistryAdapter):
         prefix = self.prefix if self.prefix.endswith("/") else f"{self.prefix}/"
         return f"{prefix}{key}"
 
-    async def set(self, key: str, value: dict[str, Any]) -> None:
-        """Store data in etcd
-
-        Args:
-            key: Unique identifier for the data
-            value: Data to store (must be JSON-serializable)
-        """
+    async def _set(self, key: str, value: dict[str, Any]) -> None:
+        """Store data in etcd"""
         etcd_key = self._make_key(key)
         json_value = json.dumps(value)
         self._client.put(etcd_key, json_value)
-        logger.debug(f"Set key '{key}' in EtcdJobRegistry")
+        self._log_debug(f"Set key '{key}' in EtcdJobRegistry")
 
-    async def get(self, key: str) -> dict[str, Any] | None:
-        """Retrieve data from etcd
-
-        Args:
-            key: Unique identifier for the data
-
-        Returns:
-            Data if found, None otherwise
-        """
+    async def _get(self, key: str) -> dict[str, Any] | None:
+        """Retrieve data from etcd"""
         etcd_key = self._make_key(key)
         value, _ = self._client.get(etcd_key)
         if value:
             return json.loads(value.decode())
         return None
 
-    async def update(self, key: str, updates: dict[str, Any]) -> None:
-        """Update specific fields in data
-
-        Args:
-            key: Unique identifier for the data
-            updates: Fields to update in the data
-        """
-        existing = await self.get(key)
-        if existing:
+    async def _update(self, key: str, updates: dict[str, Any]) -> None:
+        """Update specific fields in data"""
+        existing = await self._get(key)
+        if existing is not None:
             existing.update(updates)
-            await self.set(key, existing)
-            logger.debug(f"Updated key '{key}' in EtcdJobRegistry")
+            await self._set(key, existing)
         else:
-            logger.warning(f"Cannot update key '{key}' - not found in EtcdJobRegistry")
+            await self._set(key, updates)
+        self._log_debug(f"Updated key '{key}' in EtcdJobRegistry")
 
-    async def delete(self, key: str) -> bool:
-        """Remove data from etcd
-
-        Args:
-            key: Unique identifier for the data
-
-        Returns:
-            True if deleted, False if not found
-        """
+    async def _delete(self, key: str) -> bool:
+        """Remove data from etcd"""
         etcd_key = self._make_key(key)
 
         # Check if key exists first
         value, _ = self._client.get(etcd_key)
         if value:
             self._client.delete(etcd_key)
-            logger.debug(f"Deleted key '{key}' from EtcdJobRegistry")
+            self._log_debug(f"Deleted key '{key}' from EtcdJobRegistry")
             return True
         return False
 
-    async def exists(self, key: str) -> bool:
-        """Check if data exists in etcd
-
-        Args:
-            key: Unique identifier for the data
-
-        Returns:
-            True if data exists, False otherwise
-        """
+    async def _exists(self, key: str) -> bool:
+        """Check if data exists in etcd"""
         etcd_key = self._make_key(key)
         value, _ = self._client.get(etcd_key)
         return value is not None
 
-    async def get_all(self) -> dict[str, dict[str, Any]]:
-        """Get all entries from etcd
-
-        Returns:
-            Dictionary mapping keys to their data
-        """
+    async def _get_all(self) -> dict[str, dict[str, Any]]:
+        """Get all entries from etcd"""
         # Get all keys with the prefix
         result = {}
         prefix = self.prefix if self.prefix.endswith("/") else f"{self.prefix}/"
@@ -170,15 +135,19 @@ class EtcdJobRegistry(RegistryAdapter):
 
         return result
 
-    async def clear(self) -> None:
+    async def _clear(self) -> None:
         """Clear all entries from etcd"""
         prefix = self.prefix if self.prefix.endswith("/") else f"{self.prefix}/"
         self._client.delete_prefix(prefix)
-        logger.debug("Cleared EtcdJobRegistry")
+        self._log_debug("Cleared EtcdJobRegistry")
 
-    async def close(self) -> None:
+    async def _close(self) -> None:
         """Close the etcd connection"""
         if self._client:
             self._client.close()
             self._client = None
-        logger.debug("Closed EtcdJobRegistry")
+        self._log_debug("Closed EtcdJobRegistry")
+
+    @staticmethod
+    def _log_debug(message: str) -> None:
+        logger.debug(message)

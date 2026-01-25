@@ -6,7 +6,7 @@ The OFX job registry uses the **Adapter Pattern** to support multiple storage ba
 
 The registry system consists of:
 
-1. **Abstract Base Class** (`JobRegistryAdapter`) - Defines the interface all adapters must implement
+1. **Abstract Base Class** (`RegistryAdapter`) - Defines the interface all adapters must implement
 2. **Concrete Adapters** - Implementations for different storage backends:
    - `MemoryJobRegistry` - In-memory storage (default)
    - `FileJobRegistry` - File-based persistent storage
@@ -196,14 +196,14 @@ pip install -e ".[redis,test,docs]"
 
 To create a custom registry adapter:
 
-1. Inherit from `JobRegistryAdapter`
+1. Inherit from `RegistryAdapter`
 2. Implement all abstract methods
 3. Register in your application
 
 ```python
-from ofx.runner.core.registries import JobRegistryAdapter
+from ofx.runner.registry import RegistryAdapter
 
-class DatabaseJobRegistry(JobRegistryAdapter):
+class DatabaseJobRegistry(RegistryAdapter):
     """Custom database-based registry"""
     
     def __init__(self, connection_string: str):
@@ -294,10 +294,10 @@ pip install ofx[redis]
 
 ## API Reference
 
-### JobRegistryAdapter (Abstract Base Class)
+### RegistryAdapter (Abstract Base Class)
 
 ```python
-class JobRegistryAdapter(ABC):
+class RegistryAdapter(ABC):
     async def set(key: str, value: dict) -> None
     async def get(key: str) -> dict | None
     async def update(key: str, updates: dict) -> None
@@ -314,11 +314,11 @@ class JobRegistryAdapter(ABC):
 def create_job_registry(
     backend: Literal["memory", "file", "redis"],
     **kwargs
-) -> JobRegistryAdapter
+) -> RegistryAdapter
 
-def create_registry_from_settings() -> JobRegistryAdapter
+def create_registry_from_settings() -> RegistryAdapter
 
-async def cleanup_registry(registry: JobRegistryAdapter) -> None
+async def cleanup_registry(registry: RegistryAdapter) -> None
 ```
 
 ## Environment Variables

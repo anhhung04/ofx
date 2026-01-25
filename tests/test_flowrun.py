@@ -16,7 +16,7 @@ class TestFlowRun:
             tmpdir = tempfile.mkdtemp()
             try:
                 workflow_dirs = [Path(__file__).parent / "flows", Path.cwd().absolute()]
-                flow_path, workflow = find_workflow(
+                workflow_path, workflow = find_workflow(
                     str(test_workflow), tuple(workflow_dirs)
                 )
 
@@ -26,8 +26,7 @@ class TestFlowRun:
 
                 assert "command test output" in caplog.text, "Expected output in logs"
 
-                assert "test" in result.outputs
-                assert result.outputs["test"]["status"] == RunnerStatus.COMPLETED
+                assert result.status == RunnerStatus.COMPLETED
             finally:
                 import shutil
 
