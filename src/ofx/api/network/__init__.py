@@ -1,3 +1,5 @@
+"""Network utilities for basic shell workflows."""
+
 import os
 import socket
 import subprocess

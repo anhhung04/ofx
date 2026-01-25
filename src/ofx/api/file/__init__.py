@@ -1,6 +1,9 @@
+"""File read/write helpers."""
+
 from pathlib import Path
 
 __all__ = ["read_file", "write_file"]
+
 
 def write_file(content: str, path: Path | str) -> None:
     """Write content to a file, creating parent directories if needed.

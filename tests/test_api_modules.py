@@ -5,7 +5,7 @@ class TestExploitModule:
     """Test exploit.py utilities."""
 
     def test_attrib_dict(self):
-        from ofx.api.exploitation.exploit import AttribDict
+        from ofx.api.exploitation.exploit.utils import AttribDict
 
         d = AttribDict({"name": "test", "value": 123})
         assert d.name == "test"
@@ -23,13 +23,13 @@ class TestExploitModule:
         assert keys == ["z", "a", "m"]
 
     def test_ordered_set(self):
-        from ofx.api.exploitation.exploit import OrderedSet
+        from ofx.api.exploitation.exploit.utils import OrderedSet
 
         s = OrderedSet([3, 1, 4, 1, 5, 9, 2, 6, 5])
         assert list(s) == [3, 1, 4, 5, 9, 2, 6]
 
     def test_urlparse(self):
-        from ofx.api.exploitation.exploit import urlparse
+        from ofx.api.exploitation.exploit.utils import urlparse
 
         result = urlparse("http://example.com:8080/path")
         assert result.scheme == "http"
@@ -38,21 +38,21 @@ class TestExploitModule:
         assert result.path == "/path"
 
     def test_check_port(self):
-        from ofx.api.exploitation.exploit import check_port
+        from ofx.api.exploitation.exploit.utils import check_port
 
         # Test invalid port (should be unreachable)
         result = check_port("192.0.2.1", 99999, timeout=0.1)
         assert result is False
 
     def test_get_host_ip(self):
-        from ofx.api.exploitation.exploit import get_host_ip
+        from ofx.api.exploitation.exploit.utils import get_host_ip
 
         ip = get_host_ip()
         assert isinstance(ip, str)
         assert len(ip.split(".")) == 4  # IPv4 format
 
     def test_random_str(self):
-        from ofx.api.exploitation.exploit import random_str
+        from ofx.api.exploitation.exploit.utils import random_str
 
         s1 = random_str(10)
         s2 = random_str(10)
@@ -61,14 +61,14 @@ class TestExploitModule:
         assert s1 != s2  # Should be random
 
     def test_get_middle_text(self):
-        from ofx.api.exploitation.exploit import get_middle_text
+        from ofx.api.exploitation.exploit.utils import get_middle_text
 
         text = "Hello [WORLD] from [EARTH]"
         result = get_middle_text(text, "[", "]")
         assert result == "WORLD"
 
     def test_mosaic(self):
-        from ofx.api.exploitation.exploit import mosaic
+        from ofx.api.exploitation.exploit.utils import mosaic
 
         text = "sensitive data 12345"
         result = mosaic(text, ratio=0.5)
@@ -76,7 +76,7 @@ class TestExploitModule:
         assert "*" in result
 
     def test_encoder_bash_payload(self):
-        from ofx.api.exploitation.exploit import encoder_bash_payload
+        from ofx.api.exploitation.exploit.utils import encoder_bash_payload
 
         payload = 'echo "hello"'
         encoded = encoder_bash_payload(payload)
@@ -84,7 +84,7 @@ class TestExploitModule:
         assert "base64" in encoded or "bash" in encoded
 
     def test_encoder_powershell_payload(self):
-        from ofx.api.exploitation.exploit import encoder_powershell_payload
+        from ofx.api.exploitation.exploit.utils import encoder_powershell_payload
 
         payload = 'Write-Host "hello"'
         encoded = encoder_powershell_payload(payload)
