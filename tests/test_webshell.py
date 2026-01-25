@@ -12,7 +12,7 @@ Tests:
 
 import pytest
 
-from ofx.api.webshell import (
+from ofx.api.exploitation.webshell import (
     AspShell,
     AspxShell,
     JspShell,

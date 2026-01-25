@@ -11,6 +11,6 @@ jobs:
         log_stdout: true
         script: |
           import time
-          from ofx.api import file
+          from ofx.api.file import read_file
           time.sleep(5)
-          print(file.read_file("/etc/passwd"))
+          print(read_file("/etc/passwd"))

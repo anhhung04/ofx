@@ -3,7 +3,7 @@ name = "ofx"
 version = "0.3.0"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
   "aiofiles>=23.2.1",
   "async-typer>=0.1.9",
@@ -62,7 +62,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [

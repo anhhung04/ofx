@@ -4,7 +4,7 @@ Build and run red-team workflows with async execution, reusable subflows, hooks,
 
 ## Before You Start
 
-- Install: `uv sync` (or `pip install .`), Python 3.12+, `git`
+- Install: `uv sync` (or `pip install .`), Python 3.14+, `git`
 - Check: `ofx --help` and `ofx doctor`
 - Docs locally: `ofx docs serve`
 

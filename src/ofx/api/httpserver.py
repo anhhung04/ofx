@@ -7,7 +7,7 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-from ofx.api.exploit import check_port, get_host_ip, get_host_ipv6
+from ofx.api.exploitation.exploit.utils import check_port, get_host_ip, get_host_ipv6
 from ofx.settings import settings
 
 __all__ = ["PHTTPServer"]

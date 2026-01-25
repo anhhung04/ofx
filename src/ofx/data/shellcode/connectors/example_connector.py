@@ -5,7 +5,7 @@ Place custom connector files in this directory and they will be auto-discovered.
 
 To create a custom connector:
 1. Create a new Python file in this directory (e.g., my_connector.py)
-2. Import ShellcodeConnector from ofx.api.shellcode.connectors
+2. Import ShellcodeConnector from ofx.api.exploitation.shellcode.connectors
 3. Create a class that inherits from ShellcodeConnector
 4. Implement the generate() method
 5. Optionally override _check_availability() and get_supported_platforms()

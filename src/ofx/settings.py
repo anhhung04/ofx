@@ -22,6 +22,9 @@ DEFAULT_PROJECTS_PATH = Path.home() / "ofx-projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
 DATA_DIR = Path(__file__).parent / "data"
+USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
+USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
+USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
@@ -61,6 +64,9 @@ RICH_THEME = Theme(
 os.makedirs(BASE_DATA_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(SECRETS_DIR, exist_ok=True)
+os.makedirs(USER_EXPLOITS_DIR, exist_ok=True)
+os.makedirs(USER_SHELLCODE_CONNECTORS_DIR, exist_ok=True)
+os.makedirs(USER_WEBSHELL_CONNECTORS_DIR, exist_ok=True)
 TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
 

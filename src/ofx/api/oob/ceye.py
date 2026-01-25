@@ -6,7 +6,7 @@ import time
 from configparser import ConfigParser
 from pathlib import Path
 
-from ofx.api.exploit import get_middle_text, random_str
+from ofx.api.exploitation.exploit.utils import get_middle_text, random_str
 from ofx.api.http import requests
 from ofx.settings import settings
 

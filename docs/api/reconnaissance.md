@@ -337,7 +337,7 @@ Payload hosting with SSL support.
 **Basic Usage:**
 
 ```python
-from ofx.api import PHTTPServer
+from ofx.api.httpserver import PHTTPServer
 
 # Simple HTTP server
 server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)

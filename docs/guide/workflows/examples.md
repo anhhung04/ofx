@@ -170,7 +170,7 @@ jobs:
       - name: Check ports 80 and 443
         run: |
           python << 'EOF'
-          from ofx.api.exploit import check_port
+          from ofx.api.exploitation.exploit import check_port
           import os
           
           subdomains = "${{ jobs.discover_subdomains.outputs.subdomains }}".split(',')

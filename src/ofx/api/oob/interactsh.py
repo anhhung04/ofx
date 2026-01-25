@@ -9,7 +9,7 @@ from Cryptodome.Cipher import AES, PKCS1_OAEP
 from Cryptodome.Hash import SHA256
 from Cryptodome.PublicKey import RSA
 
-from ofx.api.exploit import random_str
+from ofx.api.exploitation.exploit.utils import random_str
 from ofx.api.http import requests
 from ofx.settings import settings
 

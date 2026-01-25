@@ -5,10 +5,10 @@ to generate webshells for PHP, JSP, ASP, and ASPX.
 """
 
 
-from ofx.api.webshell.shell.asp import AspShell
-from ofx.api.webshell.shell.aspx import AspxShell
-from ofx.api.webshell.shell.jsp import JspShell
-from ofx.api.webshell.shell.php import PhpShell
+from ofx.api.exploitation.webshell.shell.asp import AspShell
+from ofx.api.exploitation.webshell.shell.aspx import AspxShell
+from ofx.api.exploitation.webshell.shell.jsp import JspShell
+from ofx.api.exploitation.webshell.shell.php import PhpShell
 from ofx.data.webshell.connectors.base import WebshellConnector
 
 

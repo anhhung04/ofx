@@ -813,7 +813,7 @@ ofx doctor check [options]
 
 **Description:**
 Checks for all essential and recommended tools including:
-- Git, curl, Python 3.10+
+- Git, curl, Python 3.14+
 - uv package manager
 - Go toolchain
 - Node.js runtime
@@ -912,7 +912,7 @@ ofx doctor --fix
 **Checks:**
 - Git installation and version
 - curl availability
-- Python 3.10+ runtime
+- Python 3.14+ runtime
 - uv package manager
 - Go toolchain
 - Node.js runtime
