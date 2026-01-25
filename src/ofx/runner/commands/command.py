@@ -130,6 +130,7 @@ class ScriptRunner(BaseRunner[Script]):
     async def _do_run(self) -> None:
         """Execute a Python script"""
         result = await self._command_runner.run()
+        await self.reg_set(RunnerRegistryKeys.OUTPUTS, result.outputs or {})
         self._result = result
         if result.status.value != "completed":
             raise RuntimeError(result.error or "Script execution failed")
