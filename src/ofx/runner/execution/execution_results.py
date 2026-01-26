@@ -14,6 +14,7 @@ class StepExecutionResult:
     status: str
     error: str | None
     outputs: dict[str, Any]
+    duration_ms: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -28,6 +29,7 @@ class JobExecutionResult:
     total_steps: int
     failed_steps: list[int]
     steps: list[dict[str, Any]]
+    duration_ms: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

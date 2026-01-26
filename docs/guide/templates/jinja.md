@@ -5,9 +5,11 @@ OFX uses the Jinja2 template engine for dynamic variable substitution, logic, an
 ---
 
 ## Basic Syntax
-- `${{ variable }}`: Output the value of a variable
+- `{{ variable }}`: Output the value of a variable
 - `{% if ... %} ... {% endif %}`: Conditional logic
 - `{% for ... %} ... {% endfor %}`: Loops
+
+`${{ variable }}` is also accepted, but it renders with a leading `$`.
 
 ---
 
@@ -21,7 +23,7 @@ OFX uses the Jinja2 template engine for dynamic variable substitution, logic, an
 
 ## Example: Using Inputs
 ```yaml
-run: echo "Scanning target ${{ inputs.target | upper }}!"
+run: echo "Scanning target {{ inputs.target | upper }}!"
 ```
 
 ---
@@ -31,7 +33,7 @@ run: echo "Scanning target ${{ inputs.target | upper }}!"
 run: |
 	#!/bin/bash
 	{% for port in jobs.scan.outputs.open_ports %}
-	echo "Port: ${{ port }}"
+	echo "Port: {{ port }}"
 	{% endfor %}
 ```
 

@@ -137,6 +137,7 @@ class JobRunner(BaseRunner[Job]):
             total_steps=len(self.model.steps),
             failed_steps=failed_steps,
             steps=step_results,
+            duration_ms=self.duration_ms(),
         )
         await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
 

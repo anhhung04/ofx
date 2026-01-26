@@ -57,6 +57,7 @@ class ExecutionSummaryReporter:
                     "total_steps": len(runner.model.steps),
                     "failed_steps": [],
                     "steps": [],
+                    "duration_ms": runner.duration_ms(),
                 }
             jobs_summary.append(job_exec)
             total_steps += job_exec.get("total_steps", 0)
@@ -100,6 +101,7 @@ class ExecutionSummaryReporter:
                         "name": step.get("name"),
                         "status": step.get("status"),
                         "error": step.get("error"),
+                        "duration_ms": step.get("duration_ms"),
                     }
                     for step in job_exec.get("steps", [])
                 ]
@@ -113,6 +115,7 @@ class ExecutionSummaryReporter:
                                 "name": step_runner.model.name,
                                 "status": step_result.status.value,
                                 "error": step_result.error,
+                                "duration_ms": step_runner.duration_ms(),
                             }
                         )
             total_steps += job_exec.get("total_steps", len(steps))
@@ -127,6 +130,7 @@ class ExecutionSummaryReporter:
                     "name": runner.model.name,
                     "status": runner.status.value,
                     "error": runner._error,
+                    "duration_ms": job_exec.get("duration_ms"),
                     "steps": steps,
                 }
             )

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -9,14 +10,14 @@ from typing import Any
 from ofx.models.job import Job
 from ofx.models.step import RunType, Step
 from ofx.runner.context import RunnerContextBuilder
-from ofx.runner.core import BaseRunner, RunContext, RunnerStatus, RunnerRegistryKeys
-from ofx.runner.execution.execution_results import StepExecutionResult
+from ofx.runner.core import BaseRunner, RunContext, RunnerRegistryKeys, RunnerStatus
+from ofx.runner.core.models import RunResult
 from ofx.runner.execution.error_helpers import (
     step_execution_error,
     step_retry_error,
     step_timeout_error,
 )
-from ofx.runner.core.models import RunResult
+from ofx.runner.execution.execution_results import StepExecutionResult
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -118,9 +119,8 @@ class StepRunner(BaseRunner[Step]):
         is_binary = result.outputs.get("binary_output", False)
         is_truncated = result.outputs.get("output_truncated", False)
         stderr_truncated = result.outputs.get("stderr_truncated", False)
-
         if stdout and isinstance(stdout, str):
-            msg_parts = ["stdout:"]
+            msg_parts = ["stdout:\n====="]
             if is_binary:
                 msg_parts.append("[BINARY OUTPUT - base64 encoded]")
             if is_truncated:
@@ -128,7 +128,7 @@ class StepRunner(BaseRunner[Step]):
             if stderr_truncated:
                 msg_parts.append("[STDERR TRUNCATED]")
 
-            log_msg = " ".join(msg_parts) + f"\n{stdout}"
+            log_msg = " ".join(msg_parts) + f"\n{stdout}\n====="
             self._log_info(log_msg)
 
             if self.model.log_stdout and self.ctx.output_path:
@@ -166,6 +166,7 @@ class StepRunner(BaseRunner[Step]):
             status=status_value,
             error=result.error,
             outputs=result.outputs,
+            duration_ms=self.duration_ms(),
         )
         await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
 
@@ -187,7 +188,7 @@ class StepRunner(BaseRunner[Step]):
                 self.ctx.workflow_dirs.copy() if self.ctx.workflow_dirs else []
             )
 
-            workflow_path, workflow = find_workflow(
+            workflow = find_workflow(
                 self.model.uses or "",
                 tuple(workflow_dirs),
                 self.parent.model.defaults.flow_registry_url,  # type: ignore
@@ -312,7 +313,6 @@ class StepRunner(BaseRunner[Step]):
             "canceled": lambda: prev_runner.status == RunnerStatus.CANCELED,
             "always": lambda: True,
         }
-
 
     async def _apply_run_result(self, res: RunResult) -> None:
         self._error = res.error

@@ -4,15 +4,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from ofx.commands.ui_helpers import (
-    execution_summary_panel,
-    print_error,
-    print_info,
-    print_success,
-    workflow_start_panel,
-)
+from ofx.commands.ui_helpers import inputs_table
 from ofx.runner import RunContext, WorkflowRunner
-from ofx.runner.execution import ExecutionSummaryReporter
 from ofx.settings import (
     DEFAULT_WORKFLOWS_DIRS,
     SECRETS_DIR,
@@ -59,26 +52,19 @@ class FlowRunHandler:
         start_time = time.time()
 
         if self.profile:
-            print_info(
-                "Profiling",
-                "[bold yellow]Performance profiling enabled[/bold yellow]",
-                {"Note": "Detailed timing data will be collected"},
-            )
+            logger.info("Profiling enabled (detailed timing data will be collected).")
             profiler = cProfile.Profile()
             profiler.enable()
 
         try:
             self._process_inputs()
 
-            console.print(
-                workflow_start_panel(
-                    self.workflow_name,
-                    self.output.as_posix(),
-                    inputs=self.input or None,
-                )
-            )
+            logger.info("Workflow: %s", self.workflow_name)
+            logger.info("Output: %s", self.output.as_posix())
+            if self.input:
+                console.print(inputs_table(self.input))
 
-            workflow_path, workflow = find_workflow(
+            workflow = find_workflow(
                 self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS)
             )
 
@@ -96,20 +82,13 @@ class FlowRunHandler:
             res = await runner.run()
 
             if res.status.value != "completed":
-                print_error(
-                    "Workflow Failed",
-                    f"Status: {res.status.value}",
-                    res.error,
+                logger.error(
+                    "Workflow failed: status=%s error=%s", res.status.value, res.error
                 )
             else:
-                print_success(
-                    "Success",
-                    "Workflow completed successfully!",
-                )
+                logger.info("Workflow completed successfully!")
 
             result = await runner.get_result()
-            summary = await ExecutionSummaryReporter(runner).build()
-            console.print(execution_summary_panel(summary))
 
         finally:
             if self.profile:
@@ -124,20 +103,16 @@ class FlowRunHandler:
                 profile_file = self.output / "profile.prof"
                 profiler.dump_stats(str(profile_file))
 
-                print_info(
-                    "Performance Summary",
-                    f"Total execution time: [cyan]{total_time:.2f}s[/cyan]",
-                    {"Profile saved to": profile_file},
+                logger.info(
+                    "Performance Summary: total_time=%.2fs profile=%s",
+                    total_time,
+                    profile_file,
                 )
 
-                console.print(
-                    "\n[bold cyan]Top 10 functions by cumulative time:[/bold cyan]"
-                )
+                logger.info("Top 10 functions by cumulative time:")
                 stats.print_stats(10)
 
-                console.print(
-                    "\n[bold cyan]Top 10 functions by total time:[/bold cyan]"
-                )
+                logger.info("Top 10 functions by total time:")
                 stats.print_stats("time", 10)
 
         return result

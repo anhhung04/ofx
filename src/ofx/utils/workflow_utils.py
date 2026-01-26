@@ -36,7 +36,7 @@ def find_workflow(
     workflow_name: str,
     search_dirs_tuple: tuple[Path, ...],
     flow_registry_url: str = "https://github.com",
-) -> tuple[Path, Workflow]:
+) -> Workflow:
     """Find and load a workflow from local directories, file path, URL, or git repository.
 
     Args:
@@ -44,7 +44,7 @@ def find_workflow(
         search_dirs_tuple: Tuple of directories to search (tuple for hashability)
 
     Returns:
-        Tuple of (workflow_path, loaded Workflow object)
+        Loaded Workflow object
 
     Raises:
         RuntimeError: If workflow cannot be found or loaded
@@ -59,7 +59,7 @@ def find_workflow(
                 yaml.safe_load(flow_path.read_text().strip())
             )
             flow.workflow_path = flow_path
-            return flow_path, flow
+            return flow
 
         for directory in search_dirs_tuple:
             path = find_valid_flow(directory, workflow_name)
@@ -67,7 +67,7 @@ def find_workflow(
                 continue
             workflow = Workflow.model_validate(yaml.safe_load(path.read_text().strip()))
             workflow.workflow_path = path
-            return path, workflow
+            return workflow
         else:
             raise RuntimeError(f"Workflow {workflow_name} not found in local paths.")
 
@@ -78,14 +78,14 @@ def find_workflow(
             continue
         workflow = Workflow.model_validate(yaml.safe_load(path.read_text().strip()))
         workflow.workflow_path = path
-        return path, workflow
+        return workflow
 
     if is_remote_path(workflow_name) and not is_git_repo(workflow_name):
         response = httpx.get(workflow_name)
         response.raise_for_status()
         workflow = Workflow.model_validate(yaml.safe_load(response.text.strip()))
         workflow.workflow_path = Path.cwd()
-        return Path.cwd(), workflow
+        return workflow
 
     git_path = clone_remote_repo(workflow_name, flow_registry_url)
     if not git_path:
@@ -98,4 +98,4 @@ def find_workflow(
         )
     workflow = Workflow.model_validate(yaml.safe_load(main_path.read_text().strip()))
     workflow.workflow_path = main_path
-    return main_path, workflow
+    return workflow

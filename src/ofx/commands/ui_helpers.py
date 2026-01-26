@@ -27,11 +27,6 @@ BANNER_ART = r"""
 
 BANNER_TITLE = "Offensive Flow Executor"
 BANNER_TAGLINE = "Handing over to the next generation of red teamers"
-BANNER_WIDTH = max(
-    max(len(line) for line in BANNER_ART.splitlines()),
-    len(BANNER_TITLE),
-    len(BANNER_TAGLINE),
-)
 
 
 def _format_details(details: dict[str, Any] | None) -> Text:
@@ -48,9 +43,9 @@ def banner_panel() -> Group:
     title = Text(BANNER_TITLE, style="bright")
     tagline = Text(BANNER_TAGLINE, style="dim")
     content = Group(
-        Align.center(art, width=BANNER_WIDTH),
-        Align.center(title, width=BANNER_WIDTH),
-        Align.center(tagline, width=BANNER_WIDTH),
+        Align.left(art),
+        Align.left(title),
+        Align.left(tagline),
     )
     return content
 
@@ -157,15 +152,16 @@ def key_value_table(
 
 def inputs_table(inputs: dict[str, Any]) -> Table:
     table = Table(
-        title="[bold cyan]Inputs[/bold cyan]",
+        title=Text("Inputs", style="table.header"),
+        title_justify="left",
         show_header=True,
-        header_style="bold cyan",
-        border_style="dim cyan",
+        header_style="table.header",
+        border_style="table.border",
         padding=(0, 1),
-        box=box.SIMPLE_HEAVY,
+        box=box.ROUNDED,
     )
-    table.add_column("Parameter", style="bold yellow", no_wrap=True)
-    table.add_column("Value", style="white")
+    table.add_column("Parameter", style="table.row", no_wrap=True)
+    table.add_column("Value", style="table.row")
     table.add_column("Type", style="dim", justify="right")
 
     for key, value in inputs.items():
@@ -229,19 +225,30 @@ def execution_summary_panel(summary: Any) -> Panel:
     )
     table.add_column("Job", style="bold")
     table.add_column("Status", style="white", no_wrap=True)
-    table.add_column("Failed Steps", justify="right")
+    table.add_column("Steps", justify="right")
+    table.add_column("Failed", justify="right")
+    table.add_column("Duration", justify="right")
+    table.add_column("Step Durations", style="dim", overflow="fold")
     table.add_column("Error", style="dim", overflow="fold")
 
     for job in data.get("jobs", []):
         name = job.get("name") or job.get("jid") or "unknown"
         status = job.get("status", "unknown")
+        steps = job.get("steps") or []
+        total_steps = job.get("total_steps") or len(steps)
+        completed_steps = _count_completed_steps(steps)
         failed_steps = _count_failed_steps(job)
         error = _truncate_text(job.get("error") or "")
         status_color = _status_color(status)
+        duration = _format_duration_ms(job.get("duration_ms"))
+        step_durations = _format_step_durations(steps)
         table.add_row(
             str(name),
             f"[{status_color}]{status}[/{status_color}]",
+            f"{completed_steps}/{total_steps}",
             str(failed_steps),
+            duration,
+            step_durations,
             error,
         )
 
@@ -263,6 +270,10 @@ def _count_failed_steps(job: dict[str, Any]) -> int:
     return sum(1 for step in steps if step.get("status") == "failed")
 
 
+def _count_completed_steps(steps: list[dict[str, Any]]) -> int:
+    return sum(1 for step in steps if step.get("status") == "completed")
+
+
 def _status_color(status: str) -> str:
     status_map = {
         "completed": "green",
@@ -278,3 +289,39 @@ def _truncate_text(value: str, limit: int = 120) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 3] + "..."
+
+
+def _format_duration_ms(duration_ms: int | None) -> str:
+    if duration_ms is None:
+        return "-"
+    if duration_ms < 1000:
+        return f"{duration_ms}ms"
+    seconds = duration_ms / 1000
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    seconds = seconds % 60
+    if minutes < 60:
+        return f"{minutes}m {seconds:.0f}s"
+    hours = minutes // 60
+    minutes = minutes % 60
+    return f"{hours}h {minutes}m"
+
+
+def _format_step_durations(
+    steps: list[dict[str, Any]], limit: int = 5, max_chars: int = 80
+) -> str:
+    if not steps:
+        return "-"
+    parts: list[str] = []
+    for step in steps[:limit]:
+        idx = step.get("step_index")
+        dur = _format_duration_ms(step.get("duration_ms"))
+        if idx is None:
+            parts.append(f"{dur}")
+        else:
+            parts.append(f"{idx}:{dur}")
+    if len(steps) > limit:
+        parts.append("…")
+    text = ", ".join(parts)
+    return _truncate_text(text, limit=max_chars)

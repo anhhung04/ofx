@@ -17,14 +17,14 @@ Expose specific values from a step by mapping them to templates:
 ```yaml
 steps:
   - name: Scan
-    run: nmap ${{ inputs.target }}
+    run: nmap {{ inputs.target }}
     outputs:
-      open_ports: "${{ step.stdout_lines }}"
+      open_ports: "{{ step.stdout_lines }}"
 ```
 
 Use them later in the same job:
 ```yaml
-run: echo "Ports: ${{ steps.0.outputs.open_ports }}"
+run: echo "Ports: {{ steps.0.outputs.open_ports }}"
 ```
 
 ---
@@ -37,14 +37,14 @@ jobs:
     steps:
       - run: ...
         outputs:
-          result: "${{ step.stdout }}"
+          result: "{{ step.stdout }}"
     outputs:
-      scan_result: "${{ steps.0.outputs.result }}"
+      scan_result: "{{ steps.0.outputs.result }}"
 ```
 
 Reference job outputs from dependents:
 ```yaml
-run: echo "Scan: ${{ jobs.scan.outputs.scan_result }}"
+run: echo "Scan: {{ jobs.scan.outputs.scan_result }}"
 ```
 
 ---
@@ -63,7 +63,7 @@ How it works for each command step:
 jobs:
   discover:
     outputs:
-      target_ip: "${{ steps.0.outputs.target_ip }}"
+      target_ip: "{{ steps.0.outputs.target_ip }}"
     steps:
       - name: Find target
         run: |
@@ -73,7 +73,7 @@ jobs:
   exploit:
     needs: [discover]
     steps:
-      - run: echo "Attacking ${{ jobs.discover.outputs.target_ip }}"
+      - run: echo "Attacking {{ jobs.discover.outputs.target_ip }}"
 ```
 
 ### Rules and limits

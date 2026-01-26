@@ -2,15 +2,17 @@
 
 import asyncio
 import logging
+import time
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Optional, TypeVar
 
 from pydantic import BaseModel
 
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
+from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import RegistryAdapter, cleanup_registry
 from ofx.runner.registry.factory import RegistryFactory
-from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.templates import TemplateResolver
 from ofx.settings import settings
 
@@ -89,9 +91,14 @@ class BaseRunner[TModel]:
         self._template_resolver = TemplateResolver()
         self._registry = registry or RegistryFactory.create_memory()
         self._runners: dict[str, BaseRunner] = {}  # child runners
+        self._started_at: float | None = None
+        self._finished_at: float | None = None
+        self._started_at_utc: str | None = None
+        self._finished_at_utc: str | None = None
 
     async def run(self) -> RunResult:
         """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
+        self._mark_start()
         try:
             await self.reg_set(
                 "metadata",
@@ -124,6 +131,7 @@ class BaseRunner[TModel]:
             ]:
                 self._state_machine.transition(RunnerStatus.FAILED)
         finally:
+            self._mark_finish()
             await self._on_finish()
             await cleanup_registry(self._registry)
         return await self.get_result()
@@ -149,13 +157,17 @@ class BaseRunner[TModel]:
         """
         context_vars = self.ctx.vars.copy()
         context_vars.update(self.ctx.model_dump(exclude={"vars"}))
-        context_vars.update({"self": self.model})
+        context_vars.update(
+            {"self": self.model, "registry": self._registry, "runner": self}
+        )
         return await self._template_resolver.resolve(
             value,
             context_vars,
         )
 
-    def _evaluate_run_if(self, expr: Any, context: dict[str, Any] | None = None) -> bool:
+    def _evaluate_run_if(
+        self, expr: Any, context: dict[str, Any] | None = None
+    ) -> bool:
         """Evaluate run_if using provided context helpers."""
         if expr is None:
             return True
@@ -212,6 +224,29 @@ class BaseRunner[TModel]:
 
     def _log_error(self, message: Any) -> None:
         logger.error(self._produce_log(message))
+
+    def _mark_start(self) -> None:
+        self._started_at = time.perf_counter()
+        self._started_at_utc = datetime.now(timezone.utc).isoformat()
+
+    def _mark_finish(self) -> None:
+        if self._finished_at is None:
+            self._finished_at = time.perf_counter()
+            self._finished_at_utc = datetime.now(timezone.utc).isoformat()
+
+    @property
+    def started_at(self) -> str | None:
+        return self._started_at_utc
+
+    @property
+    def finished_at(self) -> str | None:
+        return self._finished_at_utc
+
+    def duration_ms(self) -> int | None:
+        if self._started_at is None:
+            return None
+        end = self._finished_at or time.perf_counter()
+        return int((end - self._started_at) * 1000)
 
     async def _on_start(self) -> None:
         """Lifecycle hook called before pre_run."""

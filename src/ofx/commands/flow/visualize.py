@@ -25,7 +25,7 @@ class VisualizeHandler:
         """Generate and display/save workflow visualization"""
         try:
             workflow_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
-            _, workflow = find_workflow(self.workflow_name, tuple(workflow_dirs))
+            workflow = find_workflow(self.workflow_name, tuple(workflow_dirs))
 
             if not workflow:
                 self.console.print(
@@ -882,7 +882,7 @@ class VisualizeHandler:
                         DEFAULT_WORKFLOWS_DIR.absolute(),
                         Path.cwd().absolute(),
                     ]
-                    subworkflow_path, subworkflow = find_workflow(
+                    subworkflow = find_workflow(
                         step.uses, tuple(workflow_dirs)
                     )
                     subworkflow_node = step_node.add(
