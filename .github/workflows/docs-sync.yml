@@ -18,6 +18,11 @@ jobs:
       - name: Checkout code
         uses: https://github.com/actions/checkout@v4
 
+      - name: Install rsync
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
       - name: Sync docs to docs repo
         env:
           DOCS_REPO: ${{ vars.DOCS_REPO_SSH }}
