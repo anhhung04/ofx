@@ -4,59 +4,11 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - master
-    paths:
-      - "docs/**"
-      - "mkdocs.yml"
   workflow_dispatch: # Allow manual trigger
 
 jobs:
   test:
     uses: ./.github/workflows/tests.yml
-
-  docs-sync:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: https://github.com/actions/checkout@v4
-
-      - name: Sync docs to docs repo
-        env:
-          DOCS_REPO: ${{ vars.DOCS_REPO_SSH }}
-          DOCS_BRANCH: ${{ vars.DOCS_BRANCH }}
-          DOCS_SSH_HOST: ${{ vars.DOCS_SSH_HOST }}
-          DOCS_DEPLOY_KEY: ${{ secrets.DOCS_DEPLOY_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${DOCS_REPO}" ] || [ -z "${DOCS_BRANCH}" ] || [ -z "${DOCS_DEPLOY_KEY}" ]; then
-            echo "Docs sync skipped: DOCS_REPO_SSH, DOCS_BRANCH, or DOCS_DEPLOY_KEY not set."
-            exit 0
-          fi
-          mkdir -p ~/.ssh
-          echo "${DOCS_DEPLOY_KEY}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          if [ -z "${DOCS_SSH_HOST}" ]; then
-            DOCS_SSH_HOST="github.com"
-          fi
-          ssh-keyscan "${DOCS_SSH_HOST}" >> ~/.ssh/known_hosts
-          rm -rf /tmp/ofx-docs-repo
-          git clone --branch "${DOCS_BRANCH}" "${DOCS_REPO}" /tmp/ofx-docs-repo
-          rsync -a --delete docs/ /tmp/ofx-docs-repo/docs/
-          rsync -a mkdocs.yml /tmp/ofx-docs-repo/mkdocs.yml
-          cd /tmp/ofx-docs-repo
-          if git status --porcelain | grep -q .; then
-            git config user.email "actions@github.com"
-            git config user.name "ofx-publish-bot"
-            git add docs mkdocs.yml
-            git commit -m "docs: sync from ${GITHUB_SHA}"
-            git push origin "${DOCS_BRANCH}"
-          else
-            echo "Docs repo already up to date."
-          fi
 
   build-and-publish:
     runs-on: ubuntu-latest
