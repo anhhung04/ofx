@@ -17,7 +17,7 @@ async def test_script_file_relative_and_absolute(caplog):
         tmpdir = Path(tempfile.mkdtemp())
         try:
             workflow_dirs = [flow_dir, Path.cwd().absolute()]
-            flow_path, workflow = find_workflow(str(flow_path), tuple(workflow_dirs))
+            workflow = find_workflow(str(flow_path), tuple(workflow_dirs))
 
             ctx = RunContext(
                 output_path=tmpdir,

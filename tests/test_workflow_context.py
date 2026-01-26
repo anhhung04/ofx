@@ -156,10 +156,11 @@ jobs:
         workflow_file.write_text(workflow_content)
 
         workflow_dirs = [tmp_path]
-        flow_path, workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
+        workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
 
         assert workflow.name == "test_workflow"
-        assert flow_path.exists()
+        assert workflow.workflow_path.exists()
+        assert workflow.workflow_path == workflow_file
 
     def test_find_workflow_with_name(self, tmp_path):
         """Test finding workflow by name from directory"""
@@ -178,10 +179,11 @@ jobs:
         workflow_file.write_text(workflow_content)
 
         workflow_dirs = [tmp_path]
-        flow_path, workflow = find_workflow("myworkflow", tuple(workflow_dirs))
+        workflow = find_workflow("myworkflow", tuple(workflow_dirs))
 
         assert workflow.name == "named_workflow"
-        assert flow_path.exists()
+        assert workflow.workflow_path.exists()
+        assert workflow.workflow_path.name == "myworkflow.yml"
 
     def test_find_workflow_caching(self, tmp_path):
         """Test that find_workflow uses LRU cache"""
@@ -201,8 +203,8 @@ jobs:
 
         workflow_dirs = tuple([tmp_path])
 
-        workflow_path1, workflow1 = find_workflow(str(workflow_file), workflow_dirs)
-        workflow_path2, workflow2 = find_workflow(str(workflow_file), workflow_dirs)
+        workflow1 = find_workflow(str(workflow_file), workflow_dirs)
+        workflow2 = find_workflow(str(workflow_file), workflow_dirs)
 
         assert workflow1 is workflow2
 
@@ -225,11 +227,11 @@ jobs:
         dirs1 = tuple([tmp_path])
         dirs2 = tuple([tmp_path, Path.cwd()])
 
-        flow_path1, workflow1 = find_workflow(str(workflow_file), dirs1)
-        flow_path2, workflow2 = find_workflow(str(workflow_file), dirs2)
+        workflow1 = find_workflow(str(workflow_file), dirs1)
+        workflow2 = find_workflow(str(workflow_file), dirs2)
 
         assert workflow1.name == workflow2.name
-        assert flow_path1 == flow_path2
+        assert workflow1.workflow_path == workflow2.workflow_path
 
     @pytest.mark.asyncio
     async def test_workflow_dirs_updated_during_execution(self, tmp_path):
@@ -252,7 +254,7 @@ jobs:
         workflow_file.write_text(workflow_content)
 
         workflow_dirs = [tmp_path]
-        flow_path, workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
+        workflow = find_workflow(str(workflow_file), tuple(workflow_dirs))
 
         ctx = RunContext(workflow_dirs=workflow_dirs, output_path=tmp_path / "output")
         runner = WorkflowRunner(workflow, ctx)

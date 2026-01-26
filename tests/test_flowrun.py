@@ -16,9 +16,7 @@ class TestFlowRun:
             tmpdir = tempfile.mkdtemp()
             try:
                 workflow_dirs = [Path(__file__).parent / "flows", Path.cwd().absolute()]
-                workflow_path, workflow = find_workflow(
-                    str(test_workflow), tuple(workflow_dirs)
-                )
+                workflow = find_workflow(str(test_workflow), tuple(workflow_dirs))
 
                 ctx = RunContext(output_path=Path(tmpdir), workflow_dirs=workflow_dirs)
                 runner = WorkflowRunner(workflow=workflow, ctx=ctx)
