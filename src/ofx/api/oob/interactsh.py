@@ -1,3 +1,5 @@
+"""Interactsh OOB client."""
+
 import base64
 import json
 import logging
@@ -212,3 +214,8 @@ class Interactsh:
             if flag.lower() in item["full-id"].lower():
                 return (True, result) if get_result else True
         return (False, result) if get_result else False
+
+
+InteractshClient = Interactsh
+
+__all__ = ["Interactsh", "InteractshClient"]

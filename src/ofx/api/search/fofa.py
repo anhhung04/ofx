@@ -1,3 +1,5 @@
+"""FOFA search client."""
+
 import getpass
 import logging
 import time
@@ -192,3 +194,8 @@ class Fofa:
         except Exception as ex:
             logger.error(str(ex))
         return search_result
+
+
+FofaClient = Fofa
+
+__all__ = ["Fofa", "FofaClient", "is_ipv6_address_format"]

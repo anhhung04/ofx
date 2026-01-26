@@ -141,6 +141,7 @@ nav:
                             - HTTP Server: api/post-exploitation/httpserver.md
                             - String Utilities: api/post-exploitation/strings.md
                             - Utilities: api/post-exploitation/utils.md
+                            - Credentials: api/post-exploitation/creds.md
                             - Workflow Integration: api/post-exploitation/workflow.md
         - CLI Reference:
                   - Overview: cli/commands.md

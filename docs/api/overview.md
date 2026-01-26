@@ -8,7 +8,7 @@ OFX provides comprehensive red teaming APIs to reduce scripting overhead by 80-9
 
 - **[Reconnaissance APIs](reconnaissance.md)** - Search engines, OOB testing, network scanning, HTTP server
 - **[Exploitation APIs](exploitation.md)** - HTTP client, shellcode generation, webshells, binary exploitation  
-- **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation
+- **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation, credential helpers
 
 ## Categories
 
@@ -24,7 +24,7 @@ Search engines, port scanning, service grabbing, DNS resolution, and subdomain e
 | **Shodan** | Internet-wide scanning search | `shodan.search('apache')` |
 | **ZoomEye** | Cyberspace search engine | `zoomeye.search('apache')` |
 | **CEye** | OOB DNS/HTTP callback testing | `ceye.build_request('data')` |
-| **Interactsh** | OOB interaction testing | `interactsh.register()` |
+| **Interactsh** | OOB interaction testing | `interactsh.build_request()` |
 | **PHTTPServer** | Payload hosting with SSL | `server.start(daemon=True)` |
 <!--
 | **PortScanner** | Fast port discovery | `scanner.scan()` |
@@ -58,6 +58,9 @@ File operations, process management, cryptography, and credential handling.
 | API | Purpose | Example |
 |-----|---------|---------|
 | **file** | File operations | `file.read_file(path)` |
+| **post** | Post-exploitation helpers | `post.detect_os(uname)` |
+| **evasion** | Evasion helpers | `evasion.jitter_delay(10)` |
+| **creds** | Credential helpers | `creds.ExegolHistoryDB()` |
 <!--
 | **ProcessUtils** | Command execution | `ProcessUtils.run_command(cmd)` |
 | **CryptoUtils** | Hashing and encoding | `CryptoUtils.md5(data)` |
@@ -70,18 +73,16 @@ File operations, process management, cryptography, and credential handling.
 ### Reconnaissance Example
 
 ```python
-from ofx.api.search import Fofa
+from ofx.api.search import FofaClient
 
 # Asset discovery
-fofa = Fofa()
+fofa = FofaClient()
 targets = fofa.search('app="Apache" && country="US"', pages=2)
 
 # This example uses fofa, which is available.
 # PortScanner is commented out as it is not in the provided context.
-# for target in targets['results'][:10]:
-#     scanner = PortScanner(target=target['ip'], ports='80,443,8080')
-#     open_ports = scanner.scan()
-#     print(f"{target['ip']}: {open_ports}")
+# for target_url in list(targets)[:10]:
+#     print(target_url)
 ```
 
 ### Exploitation Example
@@ -209,8 +210,9 @@ jobs:
               url="${{ inputs.shell_url }}",
               password="${{ inputs.shell_password }}"
           )
-          result = shell.run_command("whoami")
-          print(result)
+          results = shell.batch_run_command(["whoami", "uname -a"])
+          for output in results:
+              print(output)
 ```
 
 ### Common API Patterns

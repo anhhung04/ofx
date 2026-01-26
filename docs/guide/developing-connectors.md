@@ -248,7 +248,7 @@ if result.success:
 
 Place exploit connectors in:
 
-- **Built-in**: `{package}/ofx/data/exploit/`
+- **Built-in**: `{package}/ofx/api/exploitation/exploit/connectors/`
 - **Custom**: `~/.local/share/ofx/exploits/`
 
 File naming: `cve_2023_1234.py` or `app_name_vulnerability.py`
@@ -263,7 +263,7 @@ and are auto-discovered on startup.
 ### Base Class
 
 ```python
-from ofx.api.exploitation.webshell import WebShell
+from ofx.api.exploitation.webshell.base import WebShell
 
 class CustomWebShell(WebShell):
     def __init__(self, password="pass", encoder="default"):
@@ -323,7 +323,7 @@ PhpShell.register_template(
 
 shell = PhpShell(password="p")
 shell.template = "mini"
-code = shell.generate()  # Uses mini template
+code = shell.get_webshell()  # Uses mini template
 ```
 
 ## Shellcode Connectors
@@ -336,7 +336,7 @@ and are auto-discovered on startup.
 ### Base Class
 
 ```python
-from ofx.api.exploitation.shellcode import ShellCode
+from ofx.api.exploitation.shellcode.base import ShellCode
 
 class CustomShellcode(ShellCode):
     def __init__(self, connect_back_ip="127.0.0.1", connect_back_port=4444):
@@ -371,7 +371,7 @@ Available in shellcode templates:
 Apply encoders to avoid bad characters:
 
 ```python
-from ofx.api.exploitation.shellcode.encoder import encode_xor, encode_alpha
+from ofx.api.exploitation.shellcode.encoder import encode_xor, encode_alphanum
 
 shellcode = b"\\x90\\x90\\x90\\x00\\x41\\x41"
 bad_chars = ["\\x00", "\\x0a", "\\x0d"]
@@ -380,7 +380,7 @@ bad_chars = ["\\x00", "\\x0a", "\\x0d"]
 encoded = encode_xor(shellcode, key=0x42)
 
 # Alphanumeric encoding
-alpha = encode_alpha(shellcode)
+alpha = encode_alphanum(shellcode)
 ```
 
 ## Best Practices

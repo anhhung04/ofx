@@ -7,9 +7,12 @@ Optimized for red teaming operations with:
 - Custom headers and timeouts
 """
 
+from __future__ import annotations
+
 import time
+from collections.abc import Callable
 from functools import lru_cache
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 
@@ -17,6 +20,7 @@ from ofx.exceptions import APIError
 from ofx.exceptions import TimeoutError as OFXTimeoutError
 
 _http_client: httpx.Client | None = None
+_T = TypeVar("_T")
 
 
 def get_http_client(
@@ -39,7 +43,7 @@ def get_http_client(
     return _http_client
 
 
-def close_http_clients():
+def close_http_clients() -> None:
     """Close all HTTP clients and free resources."""
     global _http_client
     if _http_client:
@@ -50,12 +54,12 @@ def close_http_clients():
 class RateLimiter:
     """Simple rate limiter for API calls."""
 
-    def __init__(self, calls_per_second: float = 10.0):
+    def __init__(self, calls_per_second: float = 10.0) -> None:
         self.calls_per_second = calls_per_second
         self.min_interval = 1.0 / calls_per_second
         self.last_call = 0.0
 
-    def wait(self):
+    def wait(self) -> None:
         """Wait if necessary to respect rate limit."""
         now = time.time()
         elapsed = now - self.last_call
@@ -73,21 +77,26 @@ def get_rate_limiter(calls_per_second: float = 10.0) -> RateLimiter:
 def retry_with_backoff(
     max_retries: int = 3,
     backoff_factor: float = 2.0,
-    exceptions: tuple = (httpx.RequestError, httpx.HTTPStatusError),
-):
+    exceptions: tuple[type[Exception], ...] = (
+        httpx.RequestError,
+        httpx.HTTPStatusError,
+    ),
+) -> Callable[[Callable[..., _T]], Callable[..., _T]]:
     """Decorator for retrying functions with exponential backoff."""
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            last_exception = None
+    def decorator(func: Callable[..., _T]) -> Callable[..., _T]:
+        def wrapper(*args: object, **kwargs: object) -> _T:
+            last_exception: Exception | None = None
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except exceptions as e:
+                except exceptions as e:  # type: ignore[misc]
                     last_exception = e
                     if attempt < max_retries:
                         wait_time = backoff_factor ** attempt
                         time.sleep(wait_time)
-            raise last_exception
+            if last_exception is not None:
+                raise last_exception
+            raise RuntimeError("Retry wrapper failed without exception")
         return wrapper
     return decorator
 
@@ -97,7 +106,7 @@ def fetch(
     max_retries: int = 3,
     timeout: int = 30,
     rate_limit: float | None = None,
-    **kwargs
+    **kwargs: Any,
 ) -> str:
     """Send a GET request with retry logic and connection pooling.
 
@@ -122,7 +131,7 @@ def fetch(
         limiter.wait()
 
     @retry_with_backoff(max_retries=max_retries)
-    def _fetch():
+    def _fetch() -> str:
         try:
             response = client.get(url, **kwargs)
             response.raise_for_status()
@@ -147,7 +156,7 @@ def post(
     max_retries: int = 3,
     timeout: int = 30,
     rate_limit: float | None = None,
-    **kwargs
+    **kwargs: Any,
 ) -> str:
     """Send a POST request with retry logic and connection pooling."""
     client = get_http_client(timeout=timeout)
@@ -157,7 +166,7 @@ def post(
         limiter.wait()
 
     @retry_with_backoff(max_retries=max_retries)
-    def _post():
+    def _post() -> str:
         try:
             response = client.post(
                 url,

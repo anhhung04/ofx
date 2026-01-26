@@ -4,7 +4,8 @@ Quick guide to locate OFX data files and add custom shellcode/webshell connector
 
 ## Where data lives
 
-- Built-in data ships inside the package (`ofx/data/...`).
+- Static assets ship inside the package (`ofx/data/...`).
+- Built-in connectors live under `ofx/api/exploitation/...`.
 - User extensions live under `~/.local/share/ofx/`.
 - Programmatic lookup:
   - Built-in: `from ofx.settings import DATA_DIR`
@@ -18,15 +19,15 @@ python -c "from ofx.settings import DATA_DIR, BASE_DATA_DIR; print(DATA_DIR); pr
 ## Shellcode connectors (new ones)
 
 1) Create a file in `~/.local/share/ofx/shellcode/connectors/`.
-2) Subclass `ShellcodeConnector`; implement `generate()` and optionally `check_available()`.
+2) Subclass `ShellcodeConnector`; implement `generate()` and optionally `_check_availability()`.
 ```python
-from ofx.data.shellcode.connectors.base import ShellcodeConnector
+from ofx.api.exploitation.shellcode.connectors.base import ShellcodeConnector
 import shutil, subprocess
 
 class CustomShellcodeConnector(ShellcodeConnector):
     def __init__(self):
         super().__init__(name="custom-tool", description="My generator")
-    def check_available(self):
+    def _check_availability(self):
         return shutil.which("custom-tool") is not None
     def generate(self, arch: str, format: str = "raw", **kw) -> bytes:
         return subprocess.check_output(["custom-tool", "-a", arch, "-f", format])
@@ -36,9 +37,9 @@ class CustomShellcodeConnector(ShellcodeConnector):
 ## Webshell connectors (new ones)
 
 1) Add a file under `~/.local/share/ofx/webshell/connectors/` and subclass `WebshellConnector`.
-2) Implement `generate(language, password, encoder, **kwargs)` and `check_available` if needed.
+2) Implement `generate(language, password, encoder, **kwargs)` and `_check_availability` if needed.
 ```python
-from ofx.data.webshell.connectors.base import WebshellConnector
+from ofx.api.exploitation.webshell.connectors.base import WebshellConnector
 
 class MinimalWebshellConnector(WebshellConnector):
     def __init__(self):
@@ -117,7 +118,7 @@ def generate(self, arch: str, **kwargs) -> bytes:
 Check for required tools/libraries:
 
 ```python
-def check_available(self) -> bool:
+def _check_availability(self) -> bool:
     """Check if required dependencies are available."""
     # Check for command-line tools
     if not shutil.which("required-tool"):
@@ -155,7 +156,9 @@ Create tests for your connectors:
 # tests/test_custom_connector.py
 
 import pytest
-from ofx.data.shellcode.connectors.custom_connector import CustomShellcodeConnector
+from ofx.api.exploitation.shellcode.connectors.custom_connector import (
+    CustomShellcodeConnector,
+)
 
 def test_connector_available():
     connector = CustomShellcodeConnector()

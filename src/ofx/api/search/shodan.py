@@ -1,3 +1,5 @@
+"""Shodan search client."""
+
 import getpass
 import logging
 import time
@@ -168,3 +170,8 @@ class Shodan:
         except Exception as ex:
             logger.error(str(ex))
         return search_result
+
+
+ShodanClient = Shodan
+
+__all__ = ["Shodan", "ShodanClient", "is_ipv6_address_format"]

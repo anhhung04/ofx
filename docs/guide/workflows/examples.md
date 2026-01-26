@@ -144,10 +144,10 @@ jobs:
       - name: Search with FOFA
         run: |
           python << 'EOF'
-          from ofx.api.search import Fofa
+          from ofx.api.search import FofaClient
           import os
           
-          fofa = Fofa(
+          fofa = FofaClient(
               user=os.getenv('FOFA_USER', '${{ secrets.FOFA_USER }}'),
               token=os.getenv('FOFA_TOKEN', '${{ secrets.FOFA_TOKEN }}')
           )

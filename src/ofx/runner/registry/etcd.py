@@ -10,7 +10,7 @@ try:
     import etcd3
 
     ETCD_AVAILABLE = True
-except ImportError:
+except Exception:
     ETCD_AVAILABLE = False
     etcd3 = None  # type: ignore
 

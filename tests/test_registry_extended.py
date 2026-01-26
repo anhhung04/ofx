@@ -1,8 +1,39 @@
-"""Tests for Memcached and etcd registry adapters"""
+"""Tests for optional registry backends."""
+
+from __future__ import annotations
+
+import importlib
 
 import pytest
 
 from ofx.runner.core import RegistryFactory
+
+
+def _can_import(module: str) -> bool:
+    try:
+        importlib.import_module(module)
+        return True
+    except Exception:
+        return False
+
+
+async def _assert_basic_operations(registry) -> None:
+    test_data = {"name": "test-job", "status": "running"}
+
+    await registry.set("job1", test_data)
+    result = await registry.get("job1")
+    assert result == test_data
+
+    await registry.update("job1", {"status": "completed"})
+    result = await registry.get("job1")
+    assert result["status"] == "completed"
+
+    assert await registry.exists("job1") is True
+    assert await registry.exists("nonexistent") is False
+
+    deleted = await registry.delete("job1")
+    assert deleted is True
+    assert await registry.get("job1") is None
 
 
 class TestMemcachedJobRegistry:
@@ -11,46 +42,21 @@ class TestMemcachedJobRegistry:
     @pytest.mark.asyncio
     async def test_memcached_import_error(self):
         """Test that MemcachedJobRegistry raises ImportError when aiomcache is not installed"""
-        try:
-            import aiomcache  # noqa: F401
-
+        if _can_import("aiomcache"):
             pytest.skip("aiomcache is installed, skipping import error test")
-        except ImportError:
-            with pytest.raises(ImportError, match="aiomcache"):
-                RegistryFactory.create_memcached()
+
+        with pytest.raises(ImportError, match="aiomcache"):
+            RegistryFactory.create_memcached()
 
     @pytest.mark.asyncio
     async def test_memcached_basic_operations(self):
         """Test basic Memcached operations if aiomcache is available"""
-        try:
-            import aiomcache  # noqa: F401
-        except ImportError:
+        if not _can_import("aiomcache"):
             pytest.skip("aiomcache not installed")
 
         try:
             registry = RegistryFactory.create_memcached()
-
-            # Test set and get
-            test_data = {"name": "test-job", "status": "running"}
-            await registry.set("job1", test_data)
-            result = await registry.get("job1")
-            assert result == test_data
-
-            # Test update
-            await registry.update("job1", {"status": "completed"})
-            result = await registry.get("job1")
-            assert result["status"] == "completed"
-
-            # Test exists
-            assert await registry.exists("job1") is True
-            assert await registry.exists("nonexistent") is False
-
-            # Test delete
-            deleted = await registry.delete("job1")
-            assert deleted is True
-            assert await registry.get("job1") is None
-
-            # Clean up
+            await _assert_basic_operations(registry)
             await registry.close()
         except Exception as e:
             # Connection errors are expected if Memcached server is not running
@@ -65,46 +71,21 @@ class TestEtcdJobRegistry:
     @pytest.mark.asyncio
     async def test_etcd_import_error(self):
         """Test that EtcdJobRegistry raises ImportError when etcd3 is not installed"""
-        try:
-            import etcd3  # noqa: F401
-
+        if _can_import("etcd3"):
             pytest.skip("etcd3 is installed, skipping import error test")
-        except ImportError:
-            with pytest.raises(ImportError, match="etcd3"):
-                RegistryFactory.create_etcd()
+
+        with pytest.raises(ImportError, match="etcd3"):
+            RegistryFactory.create_etcd()
 
     @pytest.mark.asyncio
     async def test_etcd_basic_operations(self):
         """Test basic etcd operations if etcd3 is available"""
-        try:
-            import etcd3  # noqa: F401
-        except ImportError:
-            pytest.skip("etcd3 not installed")
+        if not _can_import("etcd3"):
+            pytest.skip("etcd3 not installed or incompatible")
 
         try:
             registry = RegistryFactory.create_etcd()
-
-            # Test set and get
-            test_data = {"name": "test-job", "status": "running"}
-            await registry.set("job1", test_data)
-            result = await registry.get("job1")
-            assert result == test_data
-
-            # Test update
-            await registry.update("job1", {"status": "completed"})
-            result = await registry.get("job1")
-            assert result["status"] == "completed"
-
-            # Test exists
-            assert await registry.exists("job1") is True
-            assert await registry.exists("nonexistent") is False
-
-            # Test delete
-            deleted = await registry.delete("job1")
-            assert deleted is True
-            assert await registry.get("job1") is None
-
-            # Clean up
+            await _assert_basic_operations(registry)
             await registry.close()
         except Exception as e:
             # Connection errors are expected if etcd server is not running
@@ -118,23 +99,19 @@ class TestRegistryFactoryExtended:
 
     def test_factory_supports_memcached(self):
         """Test that factory recognizes memcached backend"""
-        try:
-            import aiomcache  # noqa: F401
-
+        if _can_import("aiomcache"):
             registry = RegistryFactory.create_memcached()
             assert registry.__class__.__name__ == "MemcachedJobRegistry"
-        except ImportError:
+        else:
             with pytest.raises(ImportError, match="aiomcache"):
                 RegistryFactory.create_memcached()
 
     def test_factory_supports_etcd(self):
         """Test that factory recognizes etcd backend"""
-        try:
-            import etcd3  # noqa: F401
-
+        if _can_import("etcd3"):
             registry = RegistryFactory.create_etcd()
             assert registry.__class__.__name__ == "EtcdJobRegistry"
-        except ImportError:
+        else:
             with pytest.raises(ImportError, match="etcd3"):
                 RegistryFactory.create_etcd()
 

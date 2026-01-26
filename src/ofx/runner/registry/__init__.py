@@ -34,5 +34,7 @@ try:
     from ofx.runner.registry.etcd import EtcdJobRegistry
 
     __all__.append("EtcdJobRegistry")
-except ImportError:
+except Exception:
+    # etcd3 can fail at import-time due to protobuf version incompatibilities.
+    # Keep registry importable; the backend can be enabled by fixing env deps.
     pass
