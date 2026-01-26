@@ -1,3 +1,5 @@
+"""ZoomEye search client."""
+
 import getpass
 import logging
 import time
@@ -213,3 +215,8 @@ class ZoomEye:
         except Exception as ex:
             logger.error(str(ex))
         return search_result
+
+
+ZoomEyeClient = ZoomEye
+
+__all__ = ["ZoomEye", "ZoomEyeClient", "is_ipv6_address_format"]

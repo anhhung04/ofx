@@ -2,7 +2,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from rich.console import Console
 from rich.theme import Theme
@@ -22,58 +22,56 @@ DEFAULT_PROJECTS_PATH = Path.home() / "ofx-projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
 DATA_DIR = Path(__file__).parent / "data"
+USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
+USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
+USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
-BANNER = """
-\033[1;31m      .--.
-     |o_o |
-     |:_/ |
-    //   \\ \\
-   (|     | )
-  /'\\_   _/`\\
-  \\___)=(___/\033[0m
+DEFAULT_SHELL = "/bin/bash"
 
-\033[1mOffensive Flow Executor\033[0m
-> Handing over to the next generation of red teamers
-"""
-
-RICH_THEME = Theme({
-    "success": "bold green",
-    "error": "bold red",
-    "warning": "bold yellow",
-    "info": "bold cyan",
-    "header": "bold red on black",
-    "subheader": "bold magenta",
-    "dim": "dim white",
-    "bright": "bold white",
-    "table.header": "bold red",
-    "table.border": "red",
-    "table.row": "white",
-    "panel.border": "red",
-    "panel.header": "bold red",
-    "tree": "red",
-    "tree.line": "red",
-    "progress.description": "cyan",
-    "progress.percentage": "green",
-    "progress.bar": "red",
-    "danger": "bold red on black",
-    "alert": "bold yellow on black",
-    "good": "bold green",
-    "neutral": "white",
-    "muted": "dim bright_black",
-    "command": "bold cyan",
-    "output": "green",
-    "stderr": "red",
-})
+RICH_THEME = Theme(
+    {
+        "success": "bold green",
+        "error": "bold red",
+        "warning": "bold yellow",
+        "info": "bold cyan",
+        "header": "bold red",
+        "subheader": "bold magenta",
+        "dim": "dim white",
+        "bright": "bold white",
+        "table.header": "bold red",
+        "table.border": "red",
+        "table.row": "white",
+        "panel.border": "red",
+        "panel.header": "bold red",
+        "tree": "red",
+        "tree.line": "red",
+        "progress.description": "cyan",
+        "progress.percentage": "green",
+        "progress.bar": "red",
+        "danger": "bold red on black",
+        "alert": "bold yellow on black",
+        "good": "bold green",
+        "neutral": "white",
+        "muted": "dim bright_black",
+        "command": "bold cyan",
+        "output": "green",
+        "stderr": "red",
+    }
+)
 
 os.makedirs(BASE_DATA_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 os.makedirs(SECRETS_DIR, exist_ok=True)
+os.makedirs(USER_EXPLOITS_DIR, exist_ok=True)
+os.makedirs(USER_SHELLCODE_CONNECTORS_DIR, exist_ok=True)
+os.makedirs(USER_WEBSHELL_CONNECTORS_DIR, exist_ok=True)
 TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
 
 _console = None
+
 
 def get_console():
     """Get a Rich console with the red team theme applied."""
@@ -83,6 +81,38 @@ def get_console():
     return _console
 
 
+class RedisRegistrySettings(BaseModel):
+    """Redis registry configuration"""
+
+    host: str = Field(default="localhost", description="Redis server host")
+    port: int = Field(default=6379, description="Redis server port")
+    db: int = Field(default=0, description="Redis database number")
+    password: str | None = Field(default=None, description="Redis password")
+    prefix: str = Field(
+        default="ofx:run:", description="Key prefix for registry entries"
+    )
+
+
+class MemcachedRegistrySettings(BaseModel):
+    """Memcached registry configuration"""
+
+    host: str = Field(default="localhost", description="Memcached server host")
+    port: int = Field(default=11211, description="Memcached server port")
+    prefix: str = Field(
+        default="ofx:run:", description="Key prefix for registry entries"
+    )
+
+
+class EtcdRegistrySettings(BaseModel):
+    """etcd registry configuration"""
+
+    host: str = Field(default="localhost", description="etcd server host")
+    port: int = Field(default=2379, description="etcd gRPC port")
+    prefix: str = Field(
+        default="/ofx/run/", description="Key prefix for registry entries"
+    )
+
+
 class Settings(BaseSettings):
     """Application settings or OFX"""
 
@@ -90,10 +120,6 @@ class Settings(BaseSettings):
     app_branding: str = "ofx"
 
     debug: bool = Field(default=False, description="Enable debug mode")
-    workers: int = Field(
-        default_factory=lambda: os.cpu_count() or 4,
-        description="Number of concurrent workers for running flows",
-    )
     timeout: int = Field(
         default=24 * 60 * 60,
         description="Timeout for running flows in seconds",
@@ -101,6 +127,28 @@ class Settings(BaseSettings):
     max_output_size: int = Field(
         default=10 * 1024 * 1024,  # 10MB
         description="Maximum output size in bytes before truncation",
+    )
+
+    # Job Registry Settings
+    registry_backend: str = Field(
+        default="memory",
+        description="Job registry backend type: 'memory', 'file', 'redis', 'memcached', or 'etcd'",
+    )
+    registry_file_path: str | None = Field(
+        default=None,
+        description="File path for file-based registry (defaults to ~/.local/share/ofx/job_registry.json)",
+    )
+    registry_redis: RedisRegistrySettings | None = Field(
+        default=None,
+        description="Redis registry configuration",
+    )
+    registry_memcached: MemcachedRegistrySettings | None = Field(
+        default=None,
+        description="Memcached registry configuration",
+    )
+    registry_etcd: EtcdRegistrySettings | None = Field(
+        default=None,
+        description="etcd registry configuration",
     )
 
     model_config = SettingsConfigDict(

@@ -1,11 +1,13 @@
 """Comprehensive tests for OFX API modules."""
 
+import inspect
+
 
 class TestExploitModule:
     """Test exploit.py utilities."""
 
     def test_attrib_dict(self):
-        from ofx.api.exploit import AttribDict
+        from ofx.api.exploitation.exploit.utils import AttribDict
 
         d = AttribDict({"name": "test", "value": 123})
         assert d.name == "test"
@@ -23,13 +25,13 @@ class TestExploitModule:
         assert keys == ["z", "a", "m"]
 
     def test_ordered_set(self):
-        from ofx.api.exploit import OrderedSet
+        from ofx.api.exploitation.exploit.utils import OrderedSet
 
         s = OrderedSet([3, 1, 4, 1, 5, 9, 2, 6, 5])
         assert list(s) == [3, 1, 4, 5, 9, 2, 6]
 
     def test_urlparse(self):
-        from ofx.api.exploit import urlparse
+        from ofx.api.exploitation.exploit.utils import urlparse
 
         result = urlparse("http://example.com:8080/path")
         assert result.scheme == "http"
@@ -38,21 +40,21 @@ class TestExploitModule:
         assert result.path == "/path"
 
     def test_check_port(self):
-        from ofx.api.exploit import check_port
+        from ofx.api.exploitation.exploit.utils import check_port
 
         # Test invalid port (should be unreachable)
         result = check_port("192.0.2.1", 99999, timeout=0.1)
         assert result is False
 
     def test_get_host_ip(self):
-        from ofx.api.exploit import get_host_ip
+        from ofx.api.exploitation.exploit.utils import get_host_ip
 
         ip = get_host_ip()
         assert isinstance(ip, str)
         assert len(ip.split(".")) == 4  # IPv4 format
 
     def test_random_str(self):
-        from ofx.api.exploit import random_str
+        from ofx.api.exploitation.exploit.utils import random_str
 
         s1 = random_str(10)
         s2 = random_str(10)
@@ -61,14 +63,14 @@ class TestExploitModule:
         assert s1 != s2  # Should be random
 
     def test_get_middle_text(self):
-        from ofx.api.exploit import get_middle_text
+        from ofx.api.exploitation.exploit.utils import get_middle_text
 
         text = "Hello [WORLD] from [EARTH]"
         result = get_middle_text(text, "[", "]")
         assert result == "WORLD"
 
     def test_mosaic(self):
-        from ofx.api.exploit import mosaic
+        from ofx.api.exploitation.exploit.utils import mosaic
 
         text = "sensitive data 12345"
         result = mosaic(text, ratio=0.5)
@@ -76,7 +78,7 @@ class TestExploitModule:
         assert "*" in result
 
     def test_encoder_bash_payload(self):
-        from ofx.api.exploit import encoder_bash_payload
+        from ofx.api.exploitation.exploit.utils import encoder_bash_payload
 
         payload = 'echo "hello"'
         encoded = encoder_bash_payload(payload)
@@ -84,7 +86,7 @@ class TestExploitModule:
         assert "base64" in encoded or "bash" in encoded
 
     def test_encoder_powershell_payload(self):
-        from ofx.api.exploit import encoder_powershell_payload
+        from ofx.api.exploitation.exploit.utils import encoder_powershell_payload
 
         payload = 'Write-Host "hello"'
         encoded = encoder_powershell_payload(payload)
@@ -201,11 +203,9 @@ class TestNetworkModule:
         assert callable(bind_telnet_shell)
 
     def test_reverse_shell_function_exists(self):
-        import asyncio
-
         from ofx.api.network import reverse_shell
 
-        assert callable(reverse_shell) and not asyncio.iscoroutinefunction(reverse_shell)
+        assert callable(reverse_shell) and not inspect.iscoroutinefunction(reverse_shell)
 
 
 class TestHttpServerModule:
@@ -272,22 +272,22 @@ class TestShellcodeModule:
     """Test shellcode submodule."""
 
     def test_osshellcode_import(self):
-        from ofx.api.shellcode import OSShellcodes
+        from ofx.api.exploitation.shellcode import OSShellcodes
 
         assert OSShellcodes is not None
 
     def test_shellcode_base_import(self):
-        from ofx.api.shellcode import ShellCode
+        from ofx.api.exploitation.shellcode import ShellCode
 
         assert ShellCode is not None
 
     def test_shellcode_to_exe_import(self):
-        from ofx.api.shellcode import ShellcodeToExe
+        from ofx.api.exploitation.shellcode import ShellcodeToExe
 
         assert ShellcodeToExe is not None
 
     def test_shell_generator_import(self):
-        from ofx.api.shellcode import ShellGenerator
+        from ofx.api.exploitation.shellcode import ShellGenerator
 
         assert ShellGenerator is not None
 
@@ -296,16 +296,11 @@ class TestWebshellModule:
     """Test webshell submodule."""
 
     def test_webshell_imports(self):
-        from ofx.api.webshell import (
-            AspShell,
-            AspxShell,
-            JspShell,
-            PhpShell,
-            WebShell,
-            WebShellClient,
-            WebShellCodeFactory,
-            generate_webshell,
-        )
+        from ofx.api.exploitation.webshell import WebShell, WebShellClient, WebShellCodeFactory, generate_webshell
+        from ofx.api.exploitation.webshell.shell.asp import AspShell
+        from ofx.api.exploitation.webshell.shell.aspx import AspxShell
+        from ofx.api.exploitation.webshell.shell.jsp import JspShell
+        from ofx.api.exploitation.webshell.shell.php import PhpShell
 
         assert WebShell is not None
         assert PhpShell is not None
@@ -317,7 +312,7 @@ class TestWebshellModule:
         assert callable(generate_webshell)
 
     def test_php_shell_generation(self):
-        from ofx.api.webshell import PhpShell
+        from ofx.api.exploitation.webshell.shell.php import PhpShell
 
         shell = PhpShell(password="test123")
         code = shell.get_webshell()
@@ -325,7 +320,7 @@ class TestWebshellModule:
         assert "test123" in code or "{{PASSWORD}}" not in code
 
     def test_webshell_factory_operations(self):
-        from ofx.api.webshell import WebShellCodeFactory
+        from ofx.api.exploitation.webshell import WebShellCodeFactory
 
         # Test run_command
         code = WebShellCodeFactory.run_command("python", "whoami")
@@ -340,7 +335,7 @@ class TestWebshellModule:
         assert "192.168.1.1" in code and "4444" in code
 
     def test_generate_webshell_convenience(self):
-        from ofx.api.webshell import generate_webshell
+        from ofx.api.exploitation.webshell import generate_webshell
 
         code = generate_webshell("php", password="secret")
         assert "<?php" in code

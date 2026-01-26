@@ -2,7 +2,7 @@
 
 import pytest
 
-from ofx.api.webshell import WebShellClient, WebShellCodeFactory
+from ofx.api.exploitation.webshell import WebShellClient, WebShellCodeFactory
 
 
 class TestWebShellCodeFactory:

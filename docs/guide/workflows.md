@@ -275,6 +275,25 @@ jobs:
 
 ## Examples
 
+### Post-Exploitation + Evasion (Short)
+
+```yaml
+jobs:
+  post_exploitation:
+    steps:
+      - name: Classify target + jitter
+        run: |
+          from ofx.api.post import detect_os, is_root_from_id
+          from ofx.api.evasion import jitter_delay
+
+          os_type = detect_os("${{ inputs.uname_output }}")
+          print(f"os={os_type}")
+          print(f"is_root={is_root_from_id('${{ inputs.id_output }}')}")
+          print(f"sleep={jitter_delay(5, jitter_pct=0.2):.2f}s")
+        outputs:
+          os: "${{ step.stdout_lines[0] }}"
+```
+
 ### Simple Scan Workflow
 
 ```yaml

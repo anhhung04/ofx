@@ -144,10 +144,10 @@ jobs:
       - name: Search with FOFA
         run: |
           python << 'EOF'
-          from ofx.api.search import Fofa
+          from ofx.api.search import FofaClient
           import os
           
-          fofa = Fofa(
+          fofa = FofaClient(
               user=os.getenv('FOFA_USER', '${{ secrets.FOFA_USER }}'),
               token=os.getenv('FOFA_TOKEN', '${{ secrets.FOFA_TOKEN }}')
           )
@@ -170,7 +170,7 @@ jobs:
       - name: Check ports 80 and 443
         run: |
           python << 'EOF'
-          from ofx.api.exploit import check_port
+          from ofx.api.exploitation.exploit.utils import check_port
           import os
           
           subdomains = "${{ jobs.discover_subdomains.outputs.subdomains }}".split(',')

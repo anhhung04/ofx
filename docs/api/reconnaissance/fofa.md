@@ -27,10 +27,10 @@ Token = your_fofa_api_key
 
 ## Usage in Python
 ```python
-from ofx.api.search.fofa import Fofa
+from ofx.api.search import FofaClient
 
 # Initialize (will prompt for credentials if not found)
-fofa = Fofa()
+fofa = FofaClient()
 
 # Search for assets with a FOFA dork
 results = fofa.search('title="login" && country="US"', pages=2)
@@ -55,8 +55,8 @@ jobs:
 				steps:
 					- name: Search FOFA
 						script: |
-							from ofx.api.search.fofa import Fofa
-							fofa = Fofa()
+							from ofx.api.search import FofaClient
+							fofa = FofaClient()
 							results = fofa.search('app="Apache" && country="CN"', pages=1)
 							for url in results:
 								print(url)

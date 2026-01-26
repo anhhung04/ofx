@@ -1,6 +1,6 @@
 # Data Directory Structure
 
-The data directory in OFX stores reusable assets, payloads, templates, and other resources used by workflows and custom connectors.
+The data directory in OFX stores reusable assets, payloads, templates, and other resources used by workflows and custom connectors. You can extend it with user data under `~/.local/share/ofx/`.
 
 ---
 
@@ -14,10 +14,19 @@ src/ofx/data/
 	...
 ```
 
+User extension layout:
+```
+~/.local/share/ofx/
+	exploits/
+	shellcode/connectors/
+	webshell/connectors/
+```
+
 ---
 
 ## How to Use
-- Reference files in the data directory from workflow steps
+- Reference built-in files via `DATA_DIR`
+- Store user extensions in `~/.local/share/ofx/` subdirectories
 - Use in custom connectors to load payloads or templates
 
 ---
@@ -27,7 +36,8 @@ src/ofx/data/
 steps:
 	- name: Use Payload
 		run: |
-			with open('src/ofx/data/shellcode/payload.bin', 'rb') as f:
+			from ofx.settings import DATA_DIR
+			with open(DATA_DIR / 'shellcode' / 'payload.bin', 'rb') as f:
 					data = f.read()
 			# Use data in exploit
 		script:

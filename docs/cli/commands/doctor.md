@@ -73,7 +73,7 @@ ofx doctor install-help
 | Tool | Purpose | Install Command |
 |------|---------|-----------------|
 | `git` | Version control | `sudo apt install git` |
-| `python3` | Runtime environment (≥3.10) | `sudo apt install python3` |
+| `python3` | Runtime environment (≥3.14) | `sudo apt install python3` |
 
 ### Recommended Tools
 

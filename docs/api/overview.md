@@ -2,11 +2,13 @@
 
 OFX provides comprehensive red teaming APIs to reduce scripting overhead by 80-90%.
 
+> **Public API:** Use imports under `ofx.api.*`.
+
 ## Quick Navigation
 
 - **[Reconnaissance APIs](reconnaissance.md)** - Search engines, OOB testing, network scanning, HTTP server
 - **[Exploitation APIs](exploitation.md)** - HTTP client, shellcode generation, webshells, binary exploitation  
-- **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation
+- **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation, credential helpers
 
 ## Categories
 
@@ -22,7 +24,7 @@ Search engines, port scanning, service grabbing, DNS resolution, and subdomain e
 | **Shodan** | Internet-wide scanning search | `shodan.search('apache')` |
 | **ZoomEye** | Cyberspace search engine | `zoomeye.search('apache')` |
 | **CEye** | OOB DNS/HTTP callback testing | `ceye.build_request('data')` |
-| **Interactsh** | OOB interaction testing | `interactsh.register()` |
+| **Interactsh** | OOB interaction testing | `interactsh.build_request()` |
 | **PHTTPServer** | Payload hosting with SSL | `server.start(daemon=True)` |
 <!--
 | **PortScanner** | Fast port discovery | `scanner.scan()` |
@@ -56,6 +58,9 @@ File operations, process management, cryptography, and credential handling.
 | API | Purpose | Example |
 |-----|---------|---------|
 | **file** | File operations | `file.read_file(path)` |
+| **post** | Post-exploitation helpers | `post.detect_os(uname)` |
+| **evasion** | Evasion helpers | `evasion.jitter_delay(10)` |
+| **creds** | Credential helpers | `creds.ExegolHistoryDB()` |
 <!--
 | **ProcessUtils** | Command execution | `ProcessUtils.run_command(cmd)` |
 | **CryptoUtils** | Hashing and encoding | `CryptoUtils.md5(data)` |
@@ -68,24 +73,22 @@ File operations, process management, cryptography, and credential handling.
 ### Reconnaissance Example
 
 ```python
-from ofx.api import search
+from ofx.api.search import FofaClient
 
 # Asset discovery
-fofa = search.Fofa()
+fofa = FofaClient()
 targets = fofa.search('app="Apache" && country="US"', pages=2)
 
 # This example uses fofa, which is available.
 # PortScanner is commented out as it is not in the provided context.
-# for target in targets['results'][:10]:
-#     scanner = PortScanner(target=target['ip'], ports='80,443,8080')
-#     open_ports = scanner.scan()
-#     print(f"{target['ip']}: {open_ports}")
+# for target_url in list(targets)[:10]:
+#     print(target_url)
 ```
 
 ### Exploitation Example
 
 ```python
-from ofx.api.exploit import ExploitRunner, ExploitMode
+from ofx.api.exploitation.exploit import ExploitRunner, ExploitMode
 
 # Initialize exploit runner
 runner = ExploitRunner()
@@ -130,10 +133,10 @@ if result.success:
 ### Post-Exploitation Example
 
 ```python
-from ofx.api import file
+from ofx.api.file import read_file
 
 # Read sensitive file
-data = file.read_file('/etc/passwd')
+data = read_file('/etc/passwd')
 
 # CryptoUtils is commented out as it is not in the provided context.
 # # Hash for verification
@@ -194,56 +197,57 @@ jobs:
     steps:
       - name: Use HTTP API
         script: |
-          from ofx.api import http
+          from ofx.api.http import fetch
           
-          response = http.fetch("https://api.target.com")
+          response = fetch("https://api.target.com")
           print(response)
       
       - name: Use WebShell API
         script: |
-          from ofx.api import webshell
+          from ofx.api.exploitation.webshell import WebShellClient
           
-          shell = webshell.WebShell(
+          shell = WebShellClient(
               url="${{ inputs.shell_url }}",
-              param="cmd"
+              password="${{ inputs.shell_password }}"
           )
-          result = shell.execute("whoami")
-          print(result)
+          results = shell.batch_run_command(["whoami", "uname -a"])
+          for output in results:
+              print(output)
 ```
 
 ### Common API Patterns
 
 **HTTP Requests:**
 ```python
-from ofx.api import http
+from ofx.api.http import fetch, post
 
 # GET request
-response = http.fetch("https://api.example.com/data")
+response = fetch("https://api.example.com/data")
 
 # POST request
-data = http.post("https://api.example.com/submit", 
-                 data={"key": "value"})
+data = post("https://api.example.com/submit", 
+            data={"key": "value"})
 ```
 
 **File Operations:**
 ```python
-from ofx.api import file
+from ofx.api.file import read_file, write_file
 
 # Read file
-content = file.read_file("results.txt")
+content = read_file("results.txt")
 
 # Write file
-file.write_file("output.txt", "data")
+write_file("output.txt", "data")
 ```
 
 **String Manipulation:**
 ```python
-from ofx.api import strings
+from ofx.api.strings import encode_string, decode_string
 
 # This is an example, function does not exist in provided context
 # # Encode/decode
-# encoded = strings.base64_encode("data")
-# decoded = strings.base64_decode(encoded)
+# encoded = encode_string("data")
+# decoded = decode_string(encoded)
 # 
 # # URL operations
 # encoded_url = strings.url_encode("param=value&test=1")

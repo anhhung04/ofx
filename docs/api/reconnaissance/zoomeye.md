@@ -27,10 +27,10 @@ Token = your_zoomeye_api_key
 
 ## Usage in Python
 ```python
-from ofx.api.search.zoomeye import ZoomEye
+from ofx.api.search import ZoomEyeClient
 
 # Initialize (will prompt for credentials if not found)
-zoomeye = ZoomEye()
+zoomeye = ZoomEyeClient()
 
 # Search for assets with a ZoomEye dork
 results = zoomeye.search('app:"nginx" && country:"US"', pages=2)
@@ -55,8 +55,8 @@ jobs:
 		steps:
 			- name: Search ZoomEye
 				run: |
-					from ofx.api.search.zoomeye import ZoomEye
-					zoomeye = ZoomEye()
+					from ofx.api.search import ZoomEyeClient
+					zoomeye = ZoomEyeClient()
 					results = zoomeye.search('app:"nginx" && country:"US"', pages=1)
 					for url in results:
 							print(url)

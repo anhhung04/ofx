@@ -1,30 +1,27 @@
 from pathlib import Path
-from typing import Any, ClassVar, Optional
+from typing import Any, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
-try:
-    from cython import cython_function_or_method  # type: ignore
-except Exception:  # pragma: no cover - cython optional
-    cython_function_or_method = type(lambda: None)
-
-from ofx.models import DefaultConfig
+from ofx.models.config import DefaultConfig
 from ofx.models.step import Step
+from ofx.settings import DEFAULT_SHELL
 
 
 class MatrixStrategy(BaseModel):
     """Matrix strategy for running job variations"""
+
     matrix: dict[str, list[Any]] = Field(
         ...,
         description="Matrix variables with lists of values to create job combinations",
     )
-    max_parallel: int | None = Field(
-        None,
-        description="Maximum number of matrix jobs to run in parallel (default: unlimited)",
+    max_parallel: int = Field(
+        default=10000000,
+        description="Maximum number of matrix jobs to run in parallel per stage (default: unlimited)",
     )
     fail_fast: bool = Field(
-        True,
-        description="Whether to cancel remaining matrix jobs when one fails",
+        default=True,
+        description="Whether to fail the entire matrix if one job fails (default: true)",
     )
     include: list[dict[str, Any]] = Field(
         default_factory=list,
@@ -37,23 +34,21 @@ class MatrixStrategy(BaseModel):
 
 
 class Job(BaseModel):
-    model_config: ClassVar = ConfigDict(
-        ignored_types=(type(lambda: None), cython_function_or_method)
-    )
-    name: str | None = Field(None, description="Name of the job")
+    name: str = Field(default="", description="Name of the job")
     needs: str | list[str] = Field(
         default_factory=list,
         description="Job dependencies (other jobs that must complete before this one)",
     )
     run_if: str | bool = Field(
-        True, description="Condition to run the job (e.g., 'success()', 'failure()')"
+        default=True,
+        description="Condition to run the job (e.g., 'success()', 'failure()')",
     )
     strategy: MatrixStrategy | None = Field(
-        None,
+        default=None,
         description="Matrix strategy for running multiple variations of the job",
     )
     env: dict[str, str] = Field(
-        default={},
+        default_factory=dict,
         description="A map of variables that are available to all steps in the job",
     )
     outputs: dict[str, str] = Field(
@@ -63,14 +58,30 @@ class Job(BaseModel):
         default_factory=DefaultConfig,
         description="Default configuration for the job",
     )
-    hooks: dict[str, str] = Field(
-        default_factory=dict,
-        description="Lifecycle hooks with Python code (e.g., pre_run, post_run, on_iter_step)",
-    )
     steps: list[Step] = Field(..., min_length=1, description="List of steps in the job")
     jid: str = Field(
         default="",
         description="Job identifier in the workflow",
+    )
+    matrix_values: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Matrix values for this job instance (populated during expansion)",
+    )
+    original_job_id: str = Field(
+        default="",
+        description="Original job ID before matrix expansion",
+    )
+    matrix_index: int | None = Field(
+        default=None,
+        description="Index of this job in the matrix expansion",
+    )
+    max_parallel: int | None = Field(
+        default=None,
+        description="Maximum number of matrix jobs to run in parallel",
+    )
+    fail_fast: bool = Field(
+        default=True,
+        description="Whether to fail the entire matrix if one job fails",
     )
 
     @model_validator(mode="after")
@@ -82,21 +93,15 @@ class Job(BaseModel):
             self.needs = []
         return self
 
+    @model_validator(mode="after")
+    def set_matrix_fields(self):
+        """Set max_parallel and fail_fast from strategy if present."""
+        if self.strategy:
+            if self.strategy.max_parallel is not None:
+                self.max_parallel = self.strategy.max_parallel
+            if self.strategy.fail_fast is not None:
+                self.fail_fast = self.strategy.fail_fast
+        return self
+
     def __str__(self):
-        return f"Job(name='{self.name}', id={self.jid})"
-
-    def get_shell(self, workflow_defaults: Optional["DefaultConfig"] = None) -> str | None:
-        """Get shell from job defaults or inherit from workflow."""
-        if self.defaults and self.defaults.run.shell:
-            return self.defaults.run.shell
-        if workflow_defaults and workflow_defaults.run.shell:
-            return workflow_defaults.run.shell
-        return None
-
-    def get_working_directory(self, workflow_defaults: Optional["DefaultConfig"] = None) -> Path:
-        """Get working directory from job defaults or inherit from workflow."""
-        if self.defaults and self.defaults.run.working_directory:
-            return Path(self.defaults.run.working_directory)
-        if workflow_defaults and workflow_defaults.run.working_directory:
-            return Path(workflow_defaults.run.working_directory)
-        return Path.cwd()
+        return f"Job(name='{self.name}',id={self.jid})"

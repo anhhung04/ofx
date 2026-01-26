@@ -195,7 +195,7 @@ steps:
 ```yaml
 # For complex logic, use external scripts
 - name: Complex analysis
-  run: python ${{ ctx.workflow_dir }}/scripts/analyze.py --input ${{ ctx.output_path }}
+  run: python ${{ ctx.workflow_dirs }}/scripts/analyze.py --input ${{ ctx.output_path }}
 ```
 
 ## Examples

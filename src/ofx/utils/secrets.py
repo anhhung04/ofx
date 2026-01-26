@@ -155,7 +155,9 @@ def set_secret(
     store.set(name, value)
 
 
-def get_secret(name: str, store_path: Path | None = None, passphrase: str | None = None) -> Any:
+def get_secret(
+    name: str, store_path: Path | None = None, passphrase: str | None = None
+) -> Any:
     store = SecretStore.get_instance(store_path, passphrase)
     return store.get(name)
 
@@ -167,7 +169,9 @@ def delete_secret(
     return store.delete(name)
 
 
-def list_secrets(store_path: Path | None = None, passphrase: str | None = None) -> dict[str, Any]:
+def list_secrets(
+    store_path: Path | None = None, passphrase: str | None = None
+) -> dict[str, Any]:
     store = SecretStore.get_instance(store_path, passphrase)
     return store.list()
 
@@ -179,7 +183,9 @@ def secret_exists(
     return store.exists(name)
 
 
-def clear_secrets(store_path: Path | None = None, passphrase: str | None = None) -> None:
+def clear_secrets(
+    store_path: Path | None = None, passphrase: str | None = None
+) -> None:
     store = SecretStore.get_instance(store_path, passphrase)
     store.clear()
 
@@ -245,7 +251,9 @@ def get_store_path(store_path: Path | None = None) -> Path:
     return SECRETS_STORE
 
 
-def get_store_info(store_path: Path | None = None, passphrase: str | None = None) -> dict[str, Any]:
+def get_store_info(
+    store_path: Path | None = None, passphrase: str | None = None
+) -> dict[str, Any]:
     path = get_store_path(store_path)
     info = {
         "path": str(path),
@@ -347,3 +355,19 @@ def get_backup_info(
         "version": metadata.get("version", "unknown"),
         "secrets": secrets,
     }
+
+
+def load_secrets(secrets_dir: Path | None = None) -> dict[str, str]:
+    """Load secrets from directory or encrypted store."""
+    secrets = list_secrets()
+
+    if not secrets and secrets_dir and secrets_dir.exists():
+        for secret_file in secrets_dir.glob("*"):
+            content = secret_file.read_text()
+            try:
+                content = json.loads(content)
+            except (json.JSONDecodeError, ValueError):
+                pass
+            secrets[secret_file.name] = content
+
+    return secrets

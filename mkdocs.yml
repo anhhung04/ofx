@@ -105,6 +105,8 @@ nav:
                             - Overview: guide/secrets-inputs.md
                             - Secrets: guide/secrets-inputs/secrets.md
                             - Inputs: guide/secrets-inputs/inputs.md
+                  - Execution Context:
+                            - Precedence: guide/context-precedence.md
                   - Interactive Mode:
                             - Overview: guide/interactive-mode.md
                             - Usage: guide/interactive-mode/usage.md
@@ -139,6 +141,7 @@ nav:
                             - HTTP Server: api/post-exploitation/httpserver.md
                             - String Utilities: api/post-exploitation/strings.md
                             - Utilities: api/post-exploitation/utils.md
+                            - Credentials: api/post-exploitation/creds.md
                             - Workflow Integration: api/post-exploitation/workflow.md
         - CLI Reference:
                   - Overview: cli/commands.md

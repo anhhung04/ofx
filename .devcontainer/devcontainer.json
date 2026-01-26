@@ -10,7 +10,15 @@
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "charliermarsh.ruff",
-                "ms-azuretools.vscode-docker"
+                "ms-azuretools.vscode-docker",
+                "redhat.vscode-yaml",
+                "ms-vscode.vscode-json",
+                "yzhang.markdown-all-in-one",
+                "donjayamanne.githistory",
+                "hbenl.vscode-test-explorer",
+                "ms-toolsai.jupyter",
+                "wholroyd.jinja",
+                "ms-python.debugpy"
             ],
             "settings": {
                 "python.languageServer": "Pylance",
@@ -33,5 +41,10 @@
         }
     },
     "forwardPorts": [],
-    "remoteUser": "vscode"
+    "remoteUser": "root",
+    "postCreateCommand": "uv venv --clear && uv sync --extra test --extra docs",
+    "mounts": [
+        "source=ofx-venv,target=${containerWorkspaceFolder}/.venv,type=volume"
+    ],
+    "updateRemoteUserUID": true
 }

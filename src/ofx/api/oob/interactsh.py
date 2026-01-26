@@ -1,3 +1,5 @@
+"""Interactsh OOB client."""
+
 import base64
 import json
 import logging
@@ -9,7 +11,7 @@ from Cryptodome.Cipher import AES, PKCS1_OAEP
 from Cryptodome.Hash import SHA256
 from Cryptodome.PublicKey import RSA
 
-from ofx.api.exploit import random_str
+from ofx.api.exploitation.exploit.utils import random_str
 from ofx.api.http import requests
 from ofx.settings import settings
 
@@ -212,3 +214,8 @@ class Interactsh:
             if flag.lower() in item["full-id"].lower():
                 return (True, result) if get_result else True
         return (False, result) if get_result else False
+
+
+InteractshClient = Interactsh
+
+__all__ = ["Interactsh", "InteractshClient"]

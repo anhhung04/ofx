@@ -1,0 +1,58 @@
+name: Tests and Coverage
+
+on:
+  push:
+    branches: [ main, develop, feat/* ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.12"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+
+    steps:
+    - uses: https://github.com/actions/checkout@v4
+    
+    - name: Install uv
+      uses: https://github.com/astral-sh/setup-uv@v7
+      with:
+        version: "latest"
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: https://github.com/actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: "pip"
+    
+    - name: Install dependencies
+      run: |
+        uv sync --extra test --locked
+    
+    - name: Run tests with coverage
+      run: |
+        uv run --extra test pytest --cov=src/ofx --cov-report=xml --cov-report=term-missing
+    
+    - name: Upload coverage reports to Codecov
+      uses: https://github.com/codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+        verbose: true
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    
+    - name: Coverage comment
+      if: github.event_name == 'pull_request'
+      uses: https://github.com/py-cov-action/python-coverage-comment-action@v3
+      with:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        MINIMUM_GREEN: 70
+        MINIMUM_ORANGE: 50

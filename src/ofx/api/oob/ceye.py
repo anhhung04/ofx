@@ -1,3 +1,5 @@
+"""CEye OOB client."""
+
 import getpass
 import json
 import logging
@@ -6,7 +8,7 @@ import time
 from configparser import ConfigParser
 from pathlib import Path
 
-from ofx.api.exploit import get_middle_text, random_str
+from ofx.api.exploitation.exploit.utils import get_middle_text, random_str
 from ofx.api.http import requests
 from ofx.settings import settings
 
@@ -80,7 +82,7 @@ class CEye:
                 if resp and resp.status_code == 200 and "identify" in resp.text:
                     self.identify = resp.json()["data"]["identify"]
                     return True
-                else:
+                if resp is not None:
                     logger.info(resp.text)
             except Exception as ex:
                 logger.error(str(ex))
@@ -243,3 +245,8 @@ class CEye:
             'abc123.ceye.io'
         """
         return f"{self.identify}.ceye.io"
+
+
+CEyeClient = CEye
+
+__all__ = ["CEye", "CEyeClient"]

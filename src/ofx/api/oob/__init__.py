@@ -1,4 +1,6 @@
-from .ceye import CEye
-from .interactsh import Interactsh
+"""Out-of-band (OOB) interaction clients."""
 
-__all__ = ["CEye", "Interactsh"]
+from .ceye import CEye, CEyeClient
+from .interactsh import Interactsh, InteractshClient
+
+__all__ = ["CEye", "CEyeClient", "Interactsh", "InteractshClient"]

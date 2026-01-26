@@ -27,10 +27,10 @@ Token = your_shodan_api_key
 
 ## Usage in Python
 ```python
-from ofx.api.search.shodan import Shodan
+from ofx.api.search import ShodanClient
 
 # Initialize (will prompt for credentials if not found)
-shodan = Shodan()
+shodan = ShodanClient()
 
 # Search for assets with a Shodan dork
 results = shodan.search('product:"nginx" country:"US"', pages=2)
@@ -55,8 +55,8 @@ jobs:
 		steps:
 			- name: Search Shodan
 				run: |
-					from ofx.api.search.shodan import Shodan
-					shodan = Shodan()
+					from ofx.api.search import ShodanClient
+					shodan = ShodanClient()
 					results = shodan.search('product:"nginx" country:"US"', pages=1)
 					for url in results:
 							print(url)

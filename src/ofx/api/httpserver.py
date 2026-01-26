@@ -1,3 +1,7 @@
+"""HTTP server utilities."""
+
+from __future__ import annotations
+
 import logging
 import random
 import socket
@@ -7,7 +11,7 @@ import time
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
-from ofx.api.exploit import check_port, get_host_ip, get_host_ipv6
+from ofx.api.exploitation.exploit.utils import check_port, get_host_ip, get_host_ipv6
 from ofx.settings import settings
 
 __all__ = ["PHTTPServer"]
@@ -21,9 +25,9 @@ class PHTTPSingleton(type):
     Ensures only one instance of PHTTPServer exists.
     """
 
-    _instance = None
+    _instance: "PHTTPServer | None" = None
 
-    def __call__(cls, *args, **kwargs):
+    def __call__(cls, *args: object, **kwargs: object) -> "PHTTPServer":
         if cls._instance is None:
             cls._instance = super().__call__(*args, **kwargs)
         return cls._instance
@@ -36,13 +40,13 @@ class BaseRequestHandler(SimpleHTTPRequestHandler):
     through the OFX logging system.
     """
 
-    def do_GET(self):
+    def do_GET(self) -> None:
         SimpleHTTPRequestHandler.do_GET(self)
 
-    def do_HEAD(self):
+    def do_HEAD(self) -> None:
         SimpleHTTPRequestHandler.do_HEAD(self)
 
-    def log_message(self, format, *args):
+    def log_message(self, format: str, *args: object) -> None:
         logger.info(
             f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
         )
@@ -80,7 +84,7 @@ class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
         is_ipv6: bool = False,
         use_https: bool = False,
         certfile: Path | None = None,
-        requestHandler=BaseRequestHandler,
+        requestHandler: type[SimpleHTTPRequestHandler] = BaseRequestHandler,
     ):
         """Initialize HTTP server.
 

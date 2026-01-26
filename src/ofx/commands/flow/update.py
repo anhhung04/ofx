@@ -2,11 +2,9 @@ from pathlib import Path
 
 import git
 import typer
-from rich.panel import Panel
 
-from ofx.settings import DEFAULT_WORKFLOWS_DIR, get_console
-
-console = get_console()
+from ofx.commands.ui_helpers import print_info, print_success, print_warning
+from ofx.settings import DEFAULT_WORKFLOWS_DIR
 
 
 class UpdateHandler:
@@ -15,24 +13,22 @@ class UpdateHandler:
             self._update_workflows(DEFAULT_WORKFLOWS_DIR)
 
     def _update_workflows(self, wf_path: Path):
-        console.print(Panel(
+        print_info(
+            "Update Workflows",
             f"[bold]Location:[/bold] [cyan]{wf_path}[/cyan]",
-            title="[~] Update Workflows",
-            border_style="cyan"
-        ))
+        )
 
         want_update = typer.confirm("Do you want to update workflows?")
         if not want_update:
-            console.print("[yellow]Update cancelled[/yellow]")
+            print_warning("Update Cancelled", "No changes were made.")
             return
 
-        console.print("[bold green]Updating workflows...[/bold green]")
+        print_info("Updating Workflows", "[bold green]Pulling latest changes...[/bold green]")
         repo = git.Repo(wf_path)
         repo.remotes.origin.pull()
 
-        console.print(Panel(
-            f"[bold green]Workflows updated successfully![/bold green]\n"
-            f"[dim]Location: {wf_path}[/dim]",
-            title="[bold green][OK] Update Complete[/bold green]",
-            border_style="green"
-        ))
+        print_success(
+            "Update Complete",
+            "Workflows updated successfully!",
+            {"Location": wf_path},
+        )

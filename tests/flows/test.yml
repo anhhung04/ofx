@@ -8,7 +8,7 @@ jobs:
     name: Run Flow Tests
     steps:
       - name: Test Templates
-        run: echo "${{ file_read('/etc/passwd')}}"
+        run: echo "${{ file_read('/etc/passwd') }}"
 
       - name: Test Command
         log_stdout: true
@@ -19,4 +19,4 @@ jobs:
     name: Run Flow Tests in Subworkflow
     steps:
       - name: Run Flow Tests in Docker
-        uses: subworkflow
+        uses: ./subworkflow
