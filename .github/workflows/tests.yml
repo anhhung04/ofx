@@ -5,6 +5,11 @@ on:
     branches: [ main, develop, feat/* ]
   pull_request:
     branches: [ main, develop ]
+  workflow_call:
+    inputs:
+      python-version:
+        type: string
+        default: "3.12"
 
 jobs:
   test:
@@ -14,7 +19,7 @@ jobs:
         python-version: ["3.12"]
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: https://github.com/actions/checkout@v4
     
     - name: Install uv
       uses: https://github.com/astral-sh/setup-uv@v7
@@ -22,11 +27,14 @@ jobs:
         version: "latest"
     
     - name: Set up Python ${{ matrix.python-version }}
-      run: uv python install ${{ matrix.python-version }}
+      uses: https://github.com/actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: "pip"
     
     - name: Install dependencies
       run: |
-        uv sync --extra test
+        uv sync --extra test --locked
     
     - name: Run tests with coverage
       run: |
