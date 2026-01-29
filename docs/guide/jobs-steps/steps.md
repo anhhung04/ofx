@@ -43,21 +43,56 @@ jobs:
 
 ---
 
-## Example: Python Step
+## Python Scripts and Inter-Job Communication
+
+Steps can execute inline Python code using the `script` field. Python scripts have access to workflow context, environment variables, and special functions for inter-job communication.
+
+### Available Variables in Scripts
+
+Python scripts automatically have access to:
+- `__job__`: The current job model object
+- `__step__`: The current step model object  
+- `__workflow__`: The current workflow model object
+- `__ctx__`: The run context object
+
+### Channel Communication Functions
+
+Scripts can communicate between jobs using channel functions:
+
+- `publish(channel, data)`: Publish data to a named channel
+- `subscribe(channel)`: Returns a generator that yields data when it changes (auto-emit)
+- `wait_for(channel, condition, timeout=60)`: Wait for data matching a condition
+
+### Example: Inter-Job Communication
 ```yaml
-name: Python Calculation
+name: Channel Communication Example
 jobs:
-  calculate:
-    name: Run Calculation
+  producer:
     steps:
-      - name: Calculate result
-        run: |
-          result = 2 + 2
-          print(f"Result: {result}")
-        script: python
-        outputs:
-          calc: "${{ step.stdout }}"
+      - name: Send data
+        script: |
+          publish('results', {'status': 'complete', 'data': [1, 2, 3]})
+          
+  consumer:
+    needs: producer
+    steps:
+      - name: Receive data
+        script: |
+          # Wait for data
+          data = wait_for('results', lambda d: d.get('status') == 'complete')
+          print(f"Received: {data}")
+          
+      - name: Subscribe to changes
+        script: |
+          # Subscribe returns a generator
+          gen = subscribe('results')
+          for update in gen:
+              print(f"Update: {update}")
+              if update.get('status') == 'complete':
+                  break
 ```
+
+Channels are scoped to the workflow level and allow jobs to coordinate asynchronously.
 
 ---
 

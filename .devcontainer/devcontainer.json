@@ -42,7 +42,7 @@
     },
     "forwardPorts": [],
     "remoteUser": "root",
-    "postCreateCommand": "uv venv --clear && uv sync --extra test --extra docs",
+    "postCreateCommand": "uv venv --clear && uv sync --all-extras",
     "mounts": [
         "source=ofx-venv,target=${containerWorkspaceFolder}/.venv,type=volume"
     ],

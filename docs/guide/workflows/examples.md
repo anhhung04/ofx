@@ -102,7 +102,48 @@ jobs:
 
 ---
 
-## Example 6: Interactive Debugging
+## Example 6: Inter-Job Communication with Channels
+```yaml
+name: Channel Communication
+jobs:
+  producer:
+    name: Data Producer
+    steps:
+      - name: Generate and publish data
+        script: |
+          import time
+          results = []
+          for i in range(3):
+              results.append(f"result_{i}")
+              publish('progress', {'count': i+1, 'results': results})
+              time.sleep(1)
+          publish('final', {'status': 'complete', 'data': results})
+          
+  consumer:
+    name: Data Consumer  
+    needs: producer
+    steps:
+      - name: Wait for completion
+        script: |
+          # Wait for final results
+          final_data = wait_for('final', lambda d: d.get('status') == 'complete')
+          print(f"Final results: {final_data['data']}")
+          
+      - name: Monitor progress
+        script: |
+          # Subscribe to progress updates
+          gen = subscribe('progress')
+          for update in gen:
+              print(f"Progress: {update['count']}/3 - {update['results']}")
+              if update['count'] >= 3:
+                  break
+```
+
+Channels enable asynchronous communication between jobs, allowing producers to send updates that consumers can react to in real-time.
+
+---
+
+## Example 7: Interactive Debugging
 ```yaml
 name: Debug Session
 jobs:

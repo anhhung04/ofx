@@ -88,8 +88,7 @@ class TestScriptModel:
     def test_script_str_short(self):
         """Test Script __str__ with short script"""
         script = Script(script="print('test')")
-        assert "Script(script_file=" in str(script)
-        assert "memory" in str(script)
+        assert "Script(inline," in str(script)
 
     def test_script_model_dump(self):
         """Test Script model_dump"""

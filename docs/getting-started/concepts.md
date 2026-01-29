@@ -29,12 +29,15 @@ jobs:
 
 - Exactly one of `run`, `script`, `uses`.
 - Key fields: `name`, `timeout`, `retry`/`retry_delay`, `continue_on_error`, `working_directory`, `env`.
+- `script` runs Python code with access to workflow context and inter-job communication functions.
+
 ```yaml
 - name: Bash command
   run: echo "Hello"
-- name: Python
+- name: Python with channels
   script: |
-    print("hi")
+    publish('status', {'state': 'running'})
+    data = wait_for('config', lambda d: d.get('ready'))
 - name: Subflow
   uses: ./other.yml
 ```

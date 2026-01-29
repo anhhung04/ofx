@@ -8,8 +8,8 @@ import pytest
 
 from ofx.models.command import Command, Script
 from ofx.models.workflow import ToolConfig
-from ofx.runner.core import RunContext, RunnerStatus
 from ofx.runner.commands.command import CommandRunner, ScriptRunner
+from ofx.runner.core import RunContext, RunnerStatus
 from ofx.runner.execution.tool_installer import ToolInstallation, ToolInstallerRunner
 
 
@@ -202,7 +202,7 @@ class TestScriptRunnerEdgeCases:
 
     @pytest.mark.asyncio
     async def test_script_large_code(self):
-        """Test script with large code (> 2000 chars) that uses temp file"""
+        """Test script with large code (> 2000 chars)"""
         large_script = "# " + ("x" * 3000) + "\nprint('large script executed')"
         from ofx.models.command import Script
 
@@ -212,7 +212,6 @@ class TestScriptRunnerEdgeCases:
             ctx=RunContext(),
         )
         result = await script.run()
-        # Should use temp file
         assert result.status == RunnerStatus.COMPLETED
 
     @pytest.mark.asyncio
@@ -236,6 +235,37 @@ print(json.dumps(data))
         result = await script.run()
         assert result.status == RunnerStatus.COMPLETED
         # assert "test" in result.outputs.get("stdout", "")
+
+    @pytest.mark.asyncio
+    async def test_script_with_injected_variables(self):
+        """Test script with injected internal variables"""
+        from ofx.models.command import Script
+        from ofx.runner.core import RunContext
+
+        script_model = Script(
+            script="""
+publish('test_channel', {'message': 'hello from script'})
+gen = subscribe('test_channel')
+data = next(gen)
+print(f"Subscribed data: {data}")
+print(f"Job: {__job__}")
+print(f"Step: {__step__}")
+print(f"Workflow: {__workflow__}")
+print(f"Context has inputs: {hasattr(__ctx__, 'inputs')}")
+print("Injected variables work!")
+"""
+        )
+
+        script_runner = ScriptRunner(script_model, ctx=RunContext())
+        result = await script_runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+        stdout = result.outputs.get("stdout", "")
+        assert "Subscribed data: {'message': 'hello from script'}" in stdout
+        assert "Job: None" in stdout
+        assert "Step: None" in stdout
+        assert "Workflow: None" in stdout
+        assert "Context has inputs: True" in stdout
+        assert "Injected variables work!" in stdout
 
 
 class TestToolInstallerEdgeCases:

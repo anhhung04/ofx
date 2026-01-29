@@ -1,4 +1,4 @@
-"""HTTP server utilities."""
+"""Base HTTP server classes and utilities."""
 
 from __future__ import annotations
 
@@ -14,8 +14,6 @@ from pathlib import Path
 from ofx.api.exploitation.exploit.utils import check_port, get_host_ip, get_host_ipv6
 from ofx.settings import settings
 
-__all__ = ["PHTTPServer"]
-
 logger = logging.getLogger(settings.app_branding)
 
 
@@ -25,9 +23,9 @@ class PHTTPSingleton(type):
     Ensures only one instance of PHTTPServer exists.
     """
 
-    _instance: "PHTTPServer | None" = None
+    _instance: PHTTPServer | None = None
 
-    def __call__(cls, *args: object, **kwargs: object) -> "PHTTPServer":
+    def __call__(cls, *args: object, **kwargs: object) -> PHTTPServer:
         if cls._instance is None:
             cls._instance = super().__call__(*args, **kwargs)
         return cls._instance

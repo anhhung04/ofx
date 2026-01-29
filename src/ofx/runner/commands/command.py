@@ -1,13 +1,24 @@
 """Command and script runners for executing shell commands and Python scripts"""
 
+import asyncio
+import builtins
+import contextlib
+import io
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
 from ofx.models.command import Command, Script
-from ofx.runner.core import BaseRunner, RunContext, RunnerRegistryKeys
-from ofx.runner.registry import RegistryAdapter
 from ofx.runner.commands.command_executor import CommandExecutionResult, CommandExecutor
+from ofx.runner.core import (
+    BaseRunner,
+    RunContext,
+    RunnerRegistryKeys,
+    RunnerStatus,
+    RunResult,
+)
+from ofx.runner.registry import RegistryAdapter
 from ofx.settings import DEFAULT_SHELL, settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -107,33 +118,147 @@ class CommandRunner(BaseRunner[Command]):
 
 
 class ScriptRunner(BaseRunner[Script]):
-    def __init__(
-        self,
-        script_model: Script,
-        ctx: RunContext,
-        parent: "BaseRunner | None" = None,
-    ):
-        super().__init__(script_model, ctx, parent)
-        command_model = Command(
-            cmd=script_model.cmd,
-            shell=script_model.shell,
-            working_directory=script_model.working_directory,
-            timeout_minutes=script_model.timeout_minutes,
-            interactive=script_model.interactive,
-        )
-        self._command_runner: CommandRunner = CommandRunner(
-            command_model,
-            ctx=self.ctx,
-            parent=self.parent,
-        )
-
     async def _do_run(self) -> None:
-        """Execute a Python script"""
-        result = await self._command_runner.run()
-        await self.reg_set(RunnerRegistryKeys.OUTPUTS, result.outputs or {})
-        self._result = result
-        if result.status.value != "completed":
-            raise RuntimeError(result.error or "Script execution failed")
+        """Execute a Python script using exec"""
+        try:
+            result = await asyncio.wait_for(
+                self._exec_script(), timeout=self.model.timeout_minutes * 60
+            )
+            outputs = {
+                "exit_code": result["exit_code"],
+                "stdout": result["stdout"],
+                "stderr": result["stderr"],
+            }
+            await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
+            status = (
+                RunnerStatus.COMPLETED
+                if result["exit_code"] == 0
+                else RunnerStatus.FAILED
+            )
+            error = result["stderr"] if status == RunnerStatus.FAILED else None
+            self._result = RunResult(
+                name=self.name,
+                run_id=self.run_id,
+                status=status,
+                error=error,
+                outputs=outputs,
+            )
+            if status != RunnerStatus.COMPLETED:
+                raise RuntimeError(error or "Script execution failed")
+        except TimeoutError as timeout_exc:
+            raise RuntimeError(
+                f"Script timed out after {self.model.timeout_minutes} minutes"
+            ) from timeout_exc
+
+    async def _exec_script(self):
+        """Run the script execution in a thread pool"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._exec_script_sync, loop)
+
+    def _exec_script_sync(self, loop):
+        """Synchronously execute the script with exec and capture output"""
+        # Prepare injected variables
+        step_model = self.parent.model if self.parent else None
+        job_model = (
+            self.parent.parent.model if self.parent and self.parent.parent else None
+        )
+        workflow_model = (
+            self.parent.parent.parent.model
+            if self.parent and self.parent.parent and self.parent.parent.parent
+            else None
+        )
+        ctx_model = self.ctx
+
+        # Channel communication functions
+        def publish(channel: str, data):
+            """Publish data to a channel"""
+            reg_set = (
+                self.parent.parent.reg_set
+                if self.parent and self.parent.parent
+                else self.reg_set
+            )
+            coro = reg_set(f"channels:{channel}", data)
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            future.result()  # Wait for completion
+
+        def subscribe(channel: str):
+            """Subscribe to data from a channel, returns a generator that yields data when it changes"""
+
+            def generator():
+                import time
+
+                last_data = None
+                reg_get = (
+                    self.parent.parent.reg_get
+                    if self.parent and self.parent.parent
+                    else self.reg_get
+                )
+                while True:
+                    coro = reg_get(f"channels:{channel}")
+                    future = asyncio.run_coroutine_threadsafe(coro, loop)
+                    data = future.result()
+                    if data != last_data:
+                        yield data
+                        last_data = data
+                    time.sleep(0.01)
+
+            return generator()
+
+        def wait_for(channel: str, condition, timeout: int = 60):
+            """Wait for a condition on channel data to be true"""
+            import time
+
+            reg_get = (
+                self.parent.parent.reg_get
+                if self.parent and self.parent.parent
+                else self.reg_get
+            )
+            start = time.time()
+            while time.time() - start < timeout:
+                coro = reg_get(f"channels:{channel}")
+                future = asyncio.run_coroutine_threadsafe(coro, loop)
+                data = future.result()
+                if condition(data):
+                    return data
+                time.sleep(0.01)
+            raise TimeoutError(f"Timeout waiting for channel {channel}")
+
+        globals_dict = {
+            "__builtins__": builtins.__dict__,
+            "__name__": "__main__",
+            "__job__": job_model,
+            "__step__": step_model,
+            "__workflow__": workflow_model,
+            "__ctx__": ctx_model,
+            "publish": publish,
+            "subscribe": subscribe,
+            "wait_for": wait_for,
+        }
+
+        # Capture stdout and stderr
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+
+        exit_code = 0
+        original_cwd = os.getcwd()
+
+        try:
+            os.chdir(self.model.working_directory)
+            with (
+                contextlib.redirect_stdout(stdout_capture),
+                contextlib.redirect_stderr(stderr_capture),
+            ):
+                exec(self.model.script, globals_dict)
+        except Exception as e:
+            exit_code = 1
+            stderr_capture.write(str(e))
+        finally:
+            os.chdir(original_cwd)
+
+        stdout = stdout_capture.getvalue()
+        stderr = stderr_capture.getvalue()
+
+        return {"exit_code": exit_code, "stdout": stdout, "stderr": stderr}
 
     async def _pre_run(self) -> None:
         """Pre-run hook"""
@@ -142,8 +267,9 @@ class ScriptRunner(BaseRunner[Script]):
     async def _post_run(self) -> None:
         if self._error:
             self._log_error(f"Script failed: {self._error}")
-        if self.model.script_file and self.model.script_file.exists():
-            self.model.script_file.unlink(missing_ok=True)
+        self._log_debug(
+            f"script result: \n---\n{await self.get_result()}\n---\n with context: \n---\n{self.ctx}\n---"
+        )
 
     def _produce_log(self, message: Any) -> str:
         msg = str(message)

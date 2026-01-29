@@ -36,6 +36,21 @@ steps:
 
 Your script can import `ofx` modules and external dependencies already installed in the environment. Environment variables and secrets provided to the step are available in the process environment.
 
+Python scripts executed via `script_file` have access to the same injected variables and channel communication functions as inline scripts.
+
+### Available Variables in Scripts
+
+- `__job__`: The current job model object
+- `__step__`: The current step model object  
+- `__workflow__`: The current workflow model object
+- `__ctx__`: The run context object
+
+### Channel Communication Functions
+
+- `publish(channel, data)`: Publish data to a named channel
+- `subscribe(channel)`: Returns a generator that yields data when it changes
+- `wait_for(channel, condition, timeout=60)`: Wait for data matching a condition
+
 ```python
 #!/usr/bin/env python3
 import os
@@ -43,6 +58,10 @@ from ofx.settings import settings
 
 print(f"Brand: {settings.app_branding}")
 print(f"HELLO env: {os.getenv('HELLO')}")
+
+# Inter-job communication
+publish('status', {'state': 'running'})
+data = wait_for('config', lambda d: d.get('ready'))
 ```
 
 ## Failure cases

