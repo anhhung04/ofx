@@ -10,9 +10,9 @@ logger = logging.getLogger(settings.app_branding)
 class ValidateHandler:
     def run(self, workflow_name: str):
         """Validate a workflow configuration"""
-        import yaml
-
         from ofx.models.workflow import Workflow
+        from ofx.utils.workflow_utils import find_workflow
+        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
 
         logger.info(f"Validating workflow: {workflow_name}")
 
@@ -21,15 +21,13 @@ class ValidateHandler:
             f"[bold]Validating:[/bold] [cyan]{workflow_name}[/cyan]",
         )
 
-        src_object = yaml.safe_load(
-            Path(f"{workflow_name.rstrip('.yml')}.yml").read_text()
-        )
         try:
-            Workflow.model_validate(src_object)
+             # Just loading it validates it via Pydantic model
+            workflow = find_workflow(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
             print_success(
                 "Validation Successful",
-                f"Workflow '{workflow_name}' is valid!",
-                {"Details": "All schema validations passed"},
+                f"Workflow '{workflow.name}' is valid!",
+                {"Details": "All schema validations passed", "Path": str(workflow.workflow_path)},
             )
         except Exception as e:
             logger.error(f"Validation failed for workflow {workflow_name}: {e}")

@@ -42,9 +42,9 @@ ofx flow tools ./workflows/attack-chain.yml
 ofx flow tools --all
 ```
 
-This will scan all workflow files in:
+This will scan all workflow files (`.yml`, `.yaml`) in:
 - Current directory
-- `~/.local/share/ofx/workflows/`
+- `~/.local/share/ofx/workflows/` (and other configured directories)
 
 ## Tool Installation
 

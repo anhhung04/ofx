@@ -119,24 +119,11 @@ class FlowRunHandler:
         return result
 
     def _process_inputs(self):
-        processed_inputs = {}
-        for inp in self.preprocess_input or []:
-            try:
-                key, value = inp.split("=", 1)
-            except Exception:
-                raise ValueError(
-                    f"Invalid input format: {inp}. Expected key=value."
-                ) from None
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                pass
-            if key not in processed_inputs:
-                processed_inputs[key] = [value]
-            else:
-                processed_inputs[key].append(value)
-        for key in processed_inputs:
-            if len(processed_inputs[key]) == 1:
-                processed_inputs[key] = processed_inputs[key][0]
-        logger.debug(f"Processed inputs: {processed_inputs}")
-        self.input = processed_inputs
+        from ofx.utils.args import parse_key_value_pairs
+        
+        try:
+            self.input = parse_key_value_pairs(self.preprocess_input)
+        except ValueError as e:
+            # Re-raise with same message logic if needed, or let bubble up
+            # The utility raises ValueError with clear message
+            raise e

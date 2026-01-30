@@ -23,6 +23,9 @@ class ToolsInstallHandler:
 
     async def run(self):
         """Install tools from workflow configurations"""
+        from ofx.utils.workflow_utils import find_all_workflows, find_workflow
+        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+
         if not self.workflow_name and not self.all_workflows:
             print_warning(
                 "Missing Input",
@@ -33,19 +36,22 @@ class ToolsInstallHandler:
         workflows_to_process = []
 
         if self.all_workflows:
-            workflows_to_process = self._find_all_workflows()
+            workflows_to_process = find_all_workflows(DEFAULT_WORKFLOWS_DIRS)
             if not workflows_to_process:
                 print_warning("No Workflows", "No workflow files found.")
                 return
         elif self.workflow_name:
-            workflow_path = self._find_workflow_file(self.workflow_name)
-            if not workflow_path:
+            try:
+                # Use find_workflow to locate the workflow object, then get its path
+                # Note: find_workflow returns a Workflow object
+                workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+                workflows_to_process = [workflow.workflow_path]
+            except RuntimeError:
                 print_warning(
                     "Workflow Not Found",
                     f"Workflow '{self.workflow_name}' not found.",
                 )
                 return
-            workflows_to_process = [workflow_path]
 
         all_tools = self._collect_tools_from_workflows(workflows_to_process)
 
@@ -66,55 +72,57 @@ class ToolsInstallHandler:
 
         await self._install_tools(installer)
 
-    def _find_all_workflows(self) -> list[Path]:
-        """Find all workflow YAML files in the configured directories"""
-        workflow_files = []
-        for directory in DEFAULT_WORKFLOWS_DIRS:
-            if directory.exists():
-                workflow_files.extend(directory.glob("*.yml"))
-                workflow_files.extend(directory.glob("*.yaml"))
-        return workflow_files
-
-    def _find_workflow_file(self, workflow_name: str) -> Path | None:
-        """Find a specific workflow file by name using DEFAULT_WORKFLOWS_DIRS search logic"""
-        if Path(workflow_name).exists():
-            return Path(workflow_name)
-
-        for directory in DEFAULT_WORKFLOWS_DIRS:
-            for ext in [".yml", ".yaml"]:
-                path = directory / f"{workflow_name.rstrip('.yml').rstrip('.yaml')}{ext}"
-                if path.exists():
-                    return path
-
-        return None
-
     def _collect_tools_from_workflows(
         self, workflow_paths: list[Path]
     ) -> dict[str, str]:
         """Collect all unique tools from the given workflows"""
         import yaml
+        from ofx.models.workflow import Workflow
+
         all_tools = {}
 
         for workflow_path in workflow_paths:
             try:
+                # Use Workflow model for validation logic
                 with open(workflow_path) as f:
                     workflow_data = yaml.safe_load(f)
+                
+                # We try to validate model, partial or full, to access .tools in a standard way
+                # Or simply respect the structure if validation fails for other reasons (e.g. missing jobs in partial view)?
+                # Ideally, we should use the model. Let's try to model_validate.
+                try:
+                    workflow = Workflow.model_validate(workflow_data)
+                    tools_config = workflow.tools
+                except Exception:
+                    # Fallback to raw dict access if full validation fails but we just want tools
+                    # or if the file IS valid but has some other issue not related to tools?
+                    # The user file might be incomplete. Let's stick to raw parsing for robustness here
+                    # effectively duplicating logic? No, let's use model if possible, or fall back.
+                    # Wait, duplicate task logic was to "Use Workflow model instead of raw YAML parsing".
+                    # If I use model_validate, I get standardized ToolConfig objects or strings.
+                    workflow = Workflow.model_validate(workflow_data)
+                    tools_config = workflow.tools
 
-                tools = workflow_data.get("tools", {})
-                if not tools:
-                    tools = workflow_data.get("defaults", {}).get("tools", {})
+                if not tools_config:
+                    # Check defaults (legacy or structured default?) 
+                    # Workflow model has 'defaults' which is DefaultConfig
+                    if workflow.defaults and workflow.defaults.tools:
+                        tools_config = workflow.defaults.tools
 
-                if tools and isinstance(tools, dict):
-                    for tool_bin, tool_config in tools.items():
-                        if isinstance(tool_config, str):
-                            all_tools[tool_bin] = tool_config
-                        elif isinstance(tool_config, dict):
-                            install_cmd = tool_config.get("install", "")
-                            if install_cmd:
-                                all_tools[tool_bin] = install_cmd
+                if tools_config:
+                    for tool_bin, tool_val in tools_config.items():
+                        # tool_val can be string or ToolConfig
+                        if isinstance(tool_val, str):
+                            all_tools[tool_bin] = tool_val
+                        # ToolConfig object (pydantic model)
+                        elif hasattr(tool_val, "install"): 
+                            all_tools[tool_bin] = tool_val.install
+                        # Dict (if raw parsing)
+                        elif isinstance(tool_val, dict):
+                             all_tools[tool_bin] = tool_val.get("install", "")
 
                     logger.debug(
-                        f"Found {len(tools)} tools in workflow: {workflow_path.name}"
+                        f"Found {len(tools_config)} tools in workflow: {workflow_path.name}"
                     )
             except Exception as e:
                 logger.error(f"Error loading workflow {workflow_path}: {e}")

@@ -99,3 +99,25 @@ def find_workflow(
     workflow = Workflow.model_validate(yaml.safe_load(main_path.read_text().strip()))
     workflow.workflow_path = main_path
     return workflow
+
+
+def find_all_workflows(search_dirs: list[Path]) -> list[Path]:
+    """Find all workflow files in the specified directories.
+
+    Args:
+        search_dirs: List of directories to search
+    
+    Returns:
+        List of paths to valid workflow files
+    """
+    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
+
+    workflow_files = []
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+            
+        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            workflow_files.extend(directory.glob(f"*{ext}"))
+            
+    return sorted(list(set(workflow_files)))  # Deduplicate and sort
