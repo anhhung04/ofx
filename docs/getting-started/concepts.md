@@ -1,255 +1,303 @@
-# Basic Concepts
+# Core Concepts
 
-Essentials for writing OFX workflows.
+> Essential building blocks for writing OFX workflows
 
-## Workflow
+---
 
-- Top-level YAML: `name`, optional `description`, `inputs`, `secrets`, `jobs`, optional `hooks`.
-- Keep IDs simple; use `needs` for ordering.
+## 🏗️ Workflow Structure
 
-Example:
+A workflow is a YAML file with these key sections:
+
 ```yaml
-name: workflow-name
+name: my-workflow
+description: Optional description
+
+inputs:          # User-provided parameters
+  target:
+    required: true
+
+secrets:         # Secure credentials
+  API_KEY:
+    required: false
+
+jobs:            # Execution units
+  scan:
+    steps:
+      - run: nmap -sV {{ inputs.target }}
+
+hooks:           # Lifecycle events (optional)
+  on_success:
+    - run: echo "Done"
+```
+
+---
+
+## 📦 Jobs
+
+Jobs are independent execution units that can run in parallel.
+
+| Property | Description |
+|----------|-------------|
+| `steps` | List of steps to execute sequentially |
+| `needs` | Dependencies on other jobs |
+| `envs` | Environment variables for all steps |
+| `continue_on_error` | Don't stop on failure |
+| `hooks` | Job-level lifecycle events |
+
+```yaml
 jobs:
   recon:
     steps:
-      - run: nmap -sV ${{ inputs.target }}
+      - run: nmap -sV {{ inputs.target }}
+  
   exploit:
-    needs: [recon]
+    needs: [recon]  # Waits for recon to complete
     steps:
       - run: python exploit.py
 ```
 
-## Job
+---
 
-- Runs steps sequentially; `needs` controls dependencies; can set env and hooks.
-- Fail-fast unless steps set `continue_on_error`.
+## 📝 Steps
 
-## Step
+Steps execute commands within a job. Each step uses exactly **one** of:
 
-- Exactly one of `run`, `script`, `uses`.
-- Key fields: `name`, `timeout`, `retry`/`retry_delay`, `continue_on_error`, `working_directory`, `env`.
-- `script` runs Python code with access to workflow context and inter-job communication functions.
+| Type | Description |
+|------|-------------|
+| `run` | Shell command |
+| `script` | Python code |
+| `uses` | Subflow reference |
+
+### Step Properties
+
+| Property | Description |
+|----------|-------------|
+| `name` | Descriptive step name |
+| `timeout` | Max execution time (seconds) |
+| `retry` | Retry attempts on failure |
+| `retry_delay` | Delay between retries |
+| `continue_on_error` | Continue on failure |
+| `working_directory` | Execution directory |
+| `envs` | Step environment variables |
+
+### Examples
 
 ```yaml
-- name: Bash command
-  run: echo "Hello"
-- name: Python with channels
-  script: |
-    publish('status', {'state': 'running'})
-    data = wait_for('config', lambda d: d.get('ready'))
-- name: Subflow
-  uses: ./other.yml
+steps:
+  # Shell command
+  - name: Scan ports
+    run: nmap -sS {{ inputs.target }}
+    timeout: 300
+
+  # Python script
+  - name: Process results
+    script: |
+      publish('status', {'state': 'running'})
+      data = wait_for('config', lambda d: d.get('ready'))
+
+  # Subflow
+  - name: Run recon module
+    uses: ./recon.yml
 ```
 
-## Inputs
+---
 
-- Defined under `inputs`; use via `${{ inputs.key }}`.
-- Provide via CLI: `--input key=value` (JSON parsed when possible).
+## 📥 Inputs
+
+Define parameters users can provide at runtime:
+
 ```yaml
 inputs:
   target:
     required: true
-    default: "127.0.0.1"
+    description: Target host or IP
+  
+  ports:
+    default: "80,443"
+    description: Ports to scan
 ```
 
-## Secrets
+**Usage in templates:** `{{ inputs.target }}`
 
-- Defined under `secrets`; use via `${{ secrets.KEY }}`.
-- Provide with `--secret KEY=val` or store via `ofx secret set KEY`.
+**CLI:** `ofx flow run scan --input target=example.com --input ports=22,80`
 
-## Hooks
+---
 
-- Optional `hooks` at workflow/job/step; propagate downward.
-- Common: `on_start`, `on_success`, `on_failure`, `before_step`, `after_step`.
+## 🔐 Secrets
 
-## Templates
+Secure credentials that are masked in logs:
 
-- Jinja2 `${{ ... }}` on strings/nums/bools/maps/lists.
-- Variables: `inputs`, `secrets`, `envs`, `ctx` (run_id, output_path, workflow/job/step metadata).
-- Helpers: `uv_install`, `go_install`, `npm_install`, `cargo_install`, `tools_dir`, `tools_bin_dir`, `file_read`, `file_write`.
+```yaml
+secrets:
+  API_KEY:
+    required: true
+    description: API authentication key
+```
 
-## Dependencies
+**Usage:** `{{ secrets.API_KEY }}`
 
-- Use `needs` to gate jobs; jobs without `needs` run in parallel.
+**Set secrets:**
+```bash
+ofx secret set API_KEY
+# Or via CLI: --secret API_KEY=value
+```
+
+---
+
+## 🔗 Job Dependencies
+
+Control execution order with `needs`:
+
 ```yaml
 jobs:
   a:
-    steps: [{ run: echo a }]
+    steps: [{ run: echo "A" }]
+  
   b:
-    needs: [a]
-    steps: [{ run: echo b }]
-```
-```
-
-### Execution Flow
-
-```
-recon ─┐
-       ├─→ analyze
-scan ──┘
+    needs: [a]  # Runs after A
+    steps: [{ run: echo "B" }]
+  
+  c:
+    needs: [a]  # Also runs after A (parallel with B)
+    steps: [{ run: echo "C" }]
 ```
 
-Jobs `recon` and `scan` run in parallel (if possible), then `analyze` runs.
+**Execution flow:**
+```
+     ┌─→ B
+A ───┤
+     └─→ C
+```
 
-## Environment Variables
+> Jobs without `needs` run in parallel when possible.
 
-Define environment variables at different levels:
+---
+
+## 🌍 Environment Variables
+
+Set environment variables at different scopes:
 
 ### Workflow Level
-
 ```yaml
-name: Environment Variables Demo
 envs:
   GLOBAL_VAR: "value"
 
 jobs:
   job1:
-    name: Use Global Env
     steps:
-      - name: Print global variable
-        run: echo $GLOBAL_VAR  # Available
+      - run: echo $GLOBAL_VAR  # Available everywhere
 ```
 
 ### Job Level
-
 ```yaml
 jobs:
   job1:
     envs:
       JOB_VAR: "value"
     steps:
-      - run: echo $JOB_VAR  # Available
+      - run: echo $JOB_VAR  # Available in this job
 ```
 
 ### Step Level
-
 ```yaml
 steps:
-  - name: With env
+  - name: With custom env
     envs:
       STEP_VAR: "value"
-    run: echo $STEP_VAR
+    run: echo $STEP_VAR  # Available in this step only
 ```
 
-## Error Handling
+---
 
-Control error behavior at different levels:
+## ⚠️ Error Handling
 
 ### Continue on Error
-
 ```yaml
 jobs:
   resilient:
-    continue_on_error: true  # Job continues even if step fails
+    continue_on_error: true
     steps:
-      - run: false  # Fails but job continues
-      - run: echo "Still runs"
+      - run: may-fail-command
+      - run: echo "Still runs even if above fails"
 ```
 
-### Retry Configuration
-
+### Retry on Failure
 ```yaml
 steps:
-  - name: Flaky command
-    retry:
-      max_attempts: 3
-      delay: 5  # seconds
+  - name: Flaky API call
     run: curl https://api.example.com
+    retry: 3
+    retry_delay: 5  # seconds
 ```
 
 ### Timeout
-
 ```yaml
 steps:
-  - name: Long task
-    timeout: 300  # 5 minutes
+  - name: Long operation
     run: long-running-command
+    timeout: 300  # 5 minutes
 ```
 
-## Output Management
+---
 
-Control where outputs are saved:
-
-### Output Directory
-
-```yaml
-# Set at workflow level
-output_dir: "./results"
-
-jobs:
-  scan:
-    steps:
-      - run: nmap -oN output.txt ${{ inputs.target }}
-        # Saves to ./results/output.txt
-```
-
-### Custom Output Path
-
-```bash
-# From CLI
-ofx flow run scan --output /tmp/scan-results
-```
-
-### Accessing Outputs
-
-```yaml
-steps:
-  - name: Save results
-    run: echo "Results" > ${{ output_path('data.txt') }}
-  
-  - name: Read results
-    run: cat ${{ output_path('data.txt') }}
-```
-
-## Context Variables
+## 📄 Context Variables
 
 Access runtime information via `ctx`:
 
-### Workflow Context
+| Variable | Description |
+|----------|-------------|
+| `ctx.run_id` | Unique run identifier |
+| `ctx.output_path` | Output directory |
+| `ctx.workflow.name` | Workflow name |
+| `ctx.job.name` | Current job name |
+| `ctx.step.name` | Current step name |
+| `ctx.step.index` | Step number |
+| `ctx.system.os` | Operating system |
+| `ctx.system.user` | Current user |
 
 ```yaml
-${{ ctx.workflow.name }}        # Workflow name
-${{ ctx.workflow.description }} # Description
+- run: echo "Run ID: {{ ctx.run_id }}"
+- run: cp results.txt {{ ctx.output_path }}/
 ```
 
-### Job Context
+---
+
+## 🪝 Hooks
+
+Execute actions at lifecycle events:
+
+| Hook | When |
+|------|------|
+| `on_start` | Before execution begins |
+| `on_success` | After successful completion |
+| `on_failure` | After failure |
+| `before_step` | Before each step |
+| `after_step` | After each step |
 
 ```yaml
-${{ ctx.job.name }}             # Current job name
-${{ ctx.job.id }}               # Job ID
+hooks:
+  on_start:
+    - run: echo "🚀 Starting at $(date)"
+  on_success:
+    - run: echo "✅ Completed"
+  on_failure:
+    - run: echo "❌ Failed" >&2
 ```
 
-### Step Context
+---
 
+## ✅ Best Practices
+
+### Use Descriptive Names
 ```yaml
-${{ ctx.step.name }}            # Current step name
-${{ ctx.step.index }}           # Step number
-```
-
-### System Context
-
-```yaml
-${{ ctx.system.os }}            # Operating system
-${{ ctx.system.arch }}          # Architecture
-${{ ctx.system.user }}          # Current user
-```
-
-## Best Practices
-
-### 1. Use Descriptive Names
-
-**Good:**
-```yaml
+# ✅ Good
 name: comprehensive-web-app-security-scan
 jobs:
   subdomain-enumeration:
     steps:
       - name: Run subfinder for subdomain discovery
-```
 
-**Bad:**
-```yaml
+# ❌ Bad
 name: scan
 jobs:
   job1:
@@ -257,8 +305,7 @@ jobs:
       - name: step1
 ```
 
-### 2. Validate Inputs
-
+### Document Inputs
 ```yaml
 inputs:
   target:
@@ -270,55 +317,27 @@ inputs:
     default: 300
 ```
 
-### 3. Use Hooks for Logging
-
-```yaml
-hooks:
-  on_start:
-    - run: echo "=== Scan started at $(date) ==="
-  on_success:
-    - run: echo "=== Scan completed at $(date) ==="
-  on_failure:
-    - run: echo "=== Scan failed at $(date) ===" >&2
-```
-
-### 4. Organize with Dependencies
-
+### Use Dependencies for Organization
 ```yaml
 jobs:
   setup:
-    steps:
-      - run: mkdir -p results
+    steps: [{ run: mkdir -p results }]
   
   scan:
     needs: [setup]
-    steps:
-      - run: nmap -oN results/nmap.txt target
+    steps: [{ run: nmap -oN results/scan.txt target }]
   
   cleanup:
     needs: [scan]
-    steps:
-      - run: tar -czf results.tar.gz results/
+    steps: [{ run: tar -czf results.tar.gz results/ }]
 ```
 
-### 5. Handle Errors Gracefully
+---
 
-```yaml
-steps:
-  - name: Optional step
-    continue_on_error: true
-    run: experimental-tool
-  
-  - name: Critical step
-    retry:
-      max_attempts: 3
-    run: important-command
-```
+## ➡️ Next Steps
 
-## Next Steps
-
-- [Workflows](../guide/workflows.md) - Comprehensive workflow guide
-- [Jobs & Steps](../guide/jobs-steps.md) - Job and step configuration
-- [Hooks](../guide/hooks.md) - Hook system deep dive
-- [Templates](../guide/templates.md) - Template syntax and functions
-- [API Overview](../api/overview.md) - Red teaming APIs
+- [**Workflows**](../guide/workflows.md) — Complete workflow reference
+- [**Jobs & Steps**](../guide/jobs-steps.md) — Detailed configuration
+- [**Templates**](../guide/templates.md) — Jinja2 templating & helpers
+- [**Hooks**](../guide/hooks.md) — Lifecycle system
+- [**API Overview**](../api/overview.md) — Python API

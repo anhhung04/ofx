@@ -1,45 +1,81 @@
 # Workflows
 
-Top-level container: define inputs, secrets, jobs, hooks.
+> Complete guide to OFX workflow structure and configuration
 
-## Skeleton
+---
+
+## 📋 Workflow Structure
 
 ```yaml
 name: my-workflow
+description: Optional description
+
 inputs:
-  target: { required: true }
+  target:
+    required: true
+    description: Target host
+
 secrets:
-  API_KEY: { required: false }
+  API_KEY:
+    required: false
+
+envs:
+  GLOBAL_VAR: "value"
+
 jobs:
   scan:
     steps:
-      - run: nmap -sV ${{ inputs.target }}
+      - run: nmap -sV {{ inputs.target }}
+  
   analyze:
     needs: [scan]
     steps:
       - run: python analyze.py
+
+hooks:
+  on_success:
+    - run: echo "Done"
 ```
 
-## Key fields
+---
 
-- `name`, optional `description`.
-- `inputs`/`secrets`: declare and reference with `${{ inputs.* }}` / `${{ secrets.* }}`.
-- `envs`: workflow-wide env vars.
-- `jobs`: required map; see [jobs & steps](jobs-steps.md).
+## 🔧 Key Fields
 
-## Run
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | ✅ | Unique workflow identifier |
+| `description` | ❌ | Human-readable description |
+| `inputs` | ❌ | User-provided parameters |
+| `secrets` | ❌ | Secure credentials |
+| `envs` | ❌ | Global environment variables |
+| `jobs` | ✅ | Map of jobs to execute |
+| `hooks` | ❌ | Lifecycle event handlers |
+
+---
+
+## ▶️ Running Workflows
 
 ```bash
+# Validate first
 ofx flow validate my-workflow
-ofx flow run my-workflow --input target=example.com --secret API_KEY=xxx
+
+# Run with inputs
+ofx flow run my-workflow --input target=example.com
+
+# Run with secrets
+ofx flow run my-workflow --secret API_KEY=xxx
+
+# Combined
+ofx flow run my-workflow \
+  --input target=example.com \
+  --secret API_KEY=xxx
 ```
 
-## Workflow Sources
+---
 
-OFX can load workflows from multiple sources:
+## 📂 Workflow Sources
 
 ### Local Files
-
 ```bash
 # Current directory
 ofx flow run my-workflow.yml
@@ -47,12 +83,11 @@ ofx flow run my-workflow.yml
 # Absolute path
 ofx flow run /path/to/workflow.yml
 
-# From workflow directories
-ofx flow run my-workflow  # Searches ~/.local/share/ofx/workflows
+# From workflow directories (~/.local/share/ofx/workflows)
+ofx flow run my-workflow
 ```
 
 ### Git Repositories
-
 ```bash
 # Clone and run main workflow
 ofx flow run https://github.com/user/repo
@@ -62,104 +97,103 @@ ofx flow run https://github.com/user/repo/workflows/scan.yml
 ```
 
 ### HTTP/HTTPS URLs
-
 ```bash
-# Direct URL to workflow file
 ofx flow run https://example.com/workflows/security-scan.yml
 ```
 
 ### S3 Buckets
-
 ```bash
-# S3 URI with full path
-ofx flow run s3://my-workflows-bucket/prod/main.yml
+# S3 URI
+ofx flow run s3://my-bucket/workflows/scan.yml
 
-# Automatic extension detection
-ofx flow run s3://my-workflows-bucket/workflows/scan
-
-# With AWS credentials from environment or ~/.aws/credentials
+# With AWS credentials
 export AWS_ACCESS_KEY_ID=your_key
 export AWS_SECRET_ACCESS_KEY=your_secret
 ofx flow run s3://my-bucket/workflow.yml
 ```
 
-**S3 Requirements:**
-- boto3 installed (included by default in OFX)
-- AWS credentials configured via environment variables, ~/.aws/credentials, or IAM role
-- Read permissions on the S3 bucket and object
+> **Requirements:** boto3, AWS credentials, S3 read permissions
 
-**Supported extensions:** `.yml`, `.yaml`
+---
 
-## Dependencies
+## 🔗 Job Dependencies
 
-- `needs` controls order; missing `needs` = parallel.
+Control execution order with `needs`:
+
 ```yaml
 jobs:
-  a: { steps: [{ run: echo a }] }
+  a:
+    steps: [{ run: echo "A" }]
+  
   b:
     needs: [a]
-    steps: [{ run: echo b }]
+    steps: [{ run: echo "B" }]
+  
   c:
     needs: [a]
-    steps: [{ run: echo c }]
+    steps: [{ run: echo "C" }]
 ```
 
-## Hooks (workflow-level)
+**Execution flow:**
+```
+     ┌─→ B
+A ───┤
+     └─→ C
+```
+
+> Jobs without `needs` run in parallel when resources allow.
+
+---
+
+## 🪝 Workflow Hooks
 
 ```yaml
 hooks:
   on_start:
-    - run: echo "start"
+    - run: echo "Starting workflow"
+  
   on_success:
-    - run: echo "ok"
-```
-
-## Python entry (minimal)
-
-```python
-import yaml, asyncio
-from pathlib import Path
-from ofx.runner import WorkflowRunner, RunContext
-from ofx.models.workflow import Workflow
-
-async def main():
-    data = yaml.safe_load(Path("workflow.yml").read_text())
-    wf = Workflow(**data)
-    res = await WorkflowRunner(wf, RunContext()).run()
-    print(res.status)
-
-asyncio.run(main())
-```
+    - run: echo "Workflow succeeded"
+  
+  on_failure:
+    - run: echo "Workflow failed" >&2
 ```
 
 See [Hooks System](hooks.md) for complete documentation.
 
-## Template Variables
+---
 
-Workflows support Jinja2 templates with `${{ }}` syntax:
+## 📝 Template Variables
+
+Use Jinja2 templates with `{{ }}` syntax:
 
 ```yaml
 jobs:
   scan:
     steps:
       - name: Scan target
-        run: nmap -p ${{ inputs.ports }} ${{ inputs.target }}
+        run: nmap -p {{ inputs.ports }} {{ inputs.target }}
       
       - name: Save results
-        run: cp results.txt ${{ ctx.output_path }}/scan_${{ ctx.run_id }}.txt
+        run: cp results.txt {{ ctx.output_path }}/scan_{{ ctx.run_id }}.txt
 ```
 
-Available template variables:
-- `${{ inputs.name }}` - Input values
-- `${{ secrets.name }}` - Secret values
-- `${{ ctx.output_path }}` - Output directory path
-- `${{ ctx.run_id }}` - Unique run identifier
-- `${{ tools_dir }}` - Tool installation directory
-- `${{ tools_bin_dir }}` - Tool binaries directory
+| Variable | Description |
+|----------|-------------|
+| `{{ inputs.name }}` | Input value |
+| `{{ secrets.name }}` | Secret value |
+| `{{ ctx.output_path }}` | Output directory |
+| `{{ ctx.run_id }}` | Unique run ID |
+| `{{ tools_dir }}` | Tool installation directory |
+| `{{ tools_bin_dir }}` | Tool binaries directory |
+| `{{ local_ip() }}` | Local IP address |
+| `{{ random_port() }}` | Random port number |
 
-See [Templates](templates.md) for more details.
+See [Templates](templates.md) for all available functions.
 
-## Output Management
+---
+
+## 📁 Output Management
 
 Workflows automatically create output directories:
 
@@ -167,216 +201,165 @@ Workflows automatically create output directories:
 jobs:
   scan:
     steps:
-      - name: Save scan results
-        run: nmap ${{ inputs.target }} -oX ${{ ctx.output_path }}/scan.xml
+      - run: nmap {{ inputs.target }} -oX {{ ctx.output_path }}/scan.xml
 ```
 
-Output structure:
+**Output structure:**
 ```
 output/
 └── <run_id>/
     └── scan.xml
 ```
 
-## Error Handling
+**Custom output path:**
+```bash
+ofx flow run scan --output /tmp/scan-results
+```
+
+---
+
+## ⚠️ Error Handling
 
 ### Continue on Error
-
-By default, workflows stop on first error. Continue execution:
-
 ```yaml
 jobs:
   scan:
     continue_on_error: true
     steps:
-      - name: Port scan
-        run: nmap ${{ inputs.target }}
+      - run: may-fail-command
+      - run: echo "Still runs"
 ```
 
 ### Retry Logic
-
-Steps can be retried on failure:
-
 ```yaml
-jobs:
-  api_call:
-    steps:
-      - name: Call API
-        run: curl https://api.example.com
-        retry: 3
-        retry_delay: 5  # seconds
+steps:
+  - name: API call
+    run: curl https://api.example.com
+    retry: 3
+    retry_delay: 5  # seconds
 ```
 
-## Best Practices
+---
+
+## ✅ Best Practices
 
 ### 1. Use Descriptive Names
-
 ```yaml
-name: "Production Environment Security Scan"
-description: "Comprehensive security assessment including port scanning, vulnerability detection, and configuration review"
+name: production-security-scan
+description: Comprehensive security assessment
 ```
 
 ### 2. Document Inputs
-
 ```yaml
 inputs:
   target:
-    description: "Target hostname or IP address (e.g., example.com or 192.168.1.1)"
+    description: Target hostname or IP (e.g., example.com)
     required: true
   
   scan_type:
-    description: "Scan type: quick, standard, or comprehensive"
-    required: false
+    description: "Scan type: quick, standard, comprehensive"
     default: "standard"
 ```
 
-### 3. Validate Inputs
-
+### 3. Validate Inputs Early
 ```yaml
 jobs:
   validate:
     steps:
       - name: Check target format
         run: |
-          if [[ ! "${{ inputs.target }}" =~ ^[a-zA-Z0-9.-]+$ ]]; then
-            echo "Invalid target format"
-            exit 1
+          if [[ ! "{{ inputs.target }}" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+            echo "Invalid target format" && exit 1
           fi
-```
-
-### 4. Use Meaningful Job Names
-
-```yaml
-jobs:
-  network_reconnaissance:
-    # Clear what this job does
-    
-  vulnerability_assessment:
-    # Clear purpose
-    
-  post_exploitation:
-    # Clear phase
-```
-
-### 5. Organize Complex Workflows
-
-Break large workflows into smaller, reusable workflows:
-
-```yaml
-# main_workflow.yml
-jobs:
-  reconnaissance:
-    workflow: ./recon_workflow.yml
   
-  exploitation:
-    needs: [reconnaissance]
-    workflow: ./exploit_workflow.yml
-```
-
-## Examples
-
-### Post-Exploitation + Evasion (Short)
-
-```yaml
-jobs:
-  post_exploitation:
+  scan:
+    needs: [validate]
     steps:
-      - name: Classify target + jitter
-        run: |
-          from ofx.api.post import detect_os, is_root_from_id
-          from ofx.api.evasion import jitter_delay
-
-          os_type = detect_os("${{ inputs.uname_output }}")
-          print(f"os={os_type}")
-          print(f"is_root={is_root_from_id('${{ inputs.id_output }}')}")
-          print(f"sleep={jitter_delay(5, jitter_pct=0.2):.2f}s")
-        outputs:
-          os: "${{ step.stdout_lines[0] }}"
+      - run: nmap {{ inputs.target }}
 ```
 
-### Simple Scan Workflow
 
+
+---
+
+## 📖 Examples
+
+### Simple Scan
 ```yaml
-name: Simple Port Scan
-
+name: port-scan
 inputs:
-  target:
-    description: Target host
-    required: true
+  target: { required: true }
 
 jobs:
   scan:
     steps:
-      - name: TCP SYN scan
-        run: nmap -sS ${{ inputs.target }}
-      
-      - name: Service detection
-        run: nmap -sV ${{ inputs.target }}
+      - run: nmap -sS {{ inputs.target }}
+      - run: nmap -sV {{ inputs.target }}
 ```
 
-### Complex Assessment Workflow
-
+### Full Assessment
 ```yaml
-name: Comprehensive Security Assessment
-
+name: security-assessment
 inputs:
-  target:
-    description: Target network or host
-    required: true
-  
-  depth:
-    description: Assessment depth (1-5)
-    required: false
-    default: "3"
+  target: { required: true, description: Target network }
+  depth: { default: "3", description: "Assessment depth (1-5)" }
 
 secrets:
-  SHODAN_KEY:
-    description: Shodan API key
-    required: false
+  SHODAN_KEY: { description: Shodan API key }
 
 hooks:
   on_start:
-    script: echo "Starting assessment of ${{ inputs.target }}"
-    language: shell
-  
+    - run: echo "Starting assessment of {{ inputs.target }}"
   on_success:
-    script: python notify_team.py --status success
-    language: shell
+    - run: python notify_team.py --status success
 
 jobs:
   passive_recon:
     steps:
-      - name: OSINT gathering
-        run: python osint.py --target ${{ inputs.target }}
-      
-      - name: Shodan lookup
-        run: |
-          if [ -n "${{ secrets.SHODAN_KEY }}" ]; then
-            shodan host ${{ inputs.target }}
-          fi
-  
+      - run: python osint.py --target {{ inputs.target }}
+      - run: |
+          {% if secrets.SHODAN_KEY %}
+          shodan host {{ inputs.target }}
+          {% endif %}
+
   active_scan:
     needs: [passive_recon]
     steps:
-      - name: Port scan
-        run: nmap -sS -sV -p- ${{ inputs.target }}
-      
-      - name: Vulnerability scan
-        run: nmap --script vuln ${{ inputs.target }}
-  
+      - run: nmap -sS -sV -p- {{ inputs.target }}
+      - run: nmap --script vuln {{ inputs.target }}
+
   analysis:
     needs: [active_scan]
     steps:
-      - name: Analyze results
-        run: python analyze.py --input ${{ ctx.output_path }}/scan.xml
-      
-      - name: Generate report
-        run: python report.py --output ${{ ctx.output_path }}/report.pdf
+      - run: python analyze.py --input {{ ctx.output_path }}/scan.xml
+      - run: python report.py --output {{ ctx.output_path }}/report.pdf
 ```
 
-## See Also
+---
 
-- [Jobs & Steps](jobs-steps.md) - Detailed job and step configuration
-- [Hooks System](hooks.md) - Lifecycle hooks
-- [Templates](templates.md) - Template syntax and functions
-- [Secrets & Inputs](secrets-inputs.md) - Managing secrets and inputs
+## 🐍 Python API
+
+```python
+import asyncio
+import yaml
+from pathlib import Path
+from ofx.runner import WorkflowRunner, RunContext
+from ofx.models.workflow import Workflow
+
+async def main():
+    data = yaml.safe_load(Path("workflow.yml").read_text())
+    wf = Workflow(**data)
+    result = await WorkflowRunner(wf, RunContext()).run()
+    print(result.status)
+
+asyncio.run(main())
+```
+
+---
+
+## ➡️ See Also
+
+- [**Jobs & Steps**](jobs-steps.md) — Detailed configuration
+- [**Templates**](templates.md) — Template functions
+- [**Hooks**](hooks.md) — Lifecycle events
+- [**Secrets & Inputs**](secrets-inputs.md) — Credential management

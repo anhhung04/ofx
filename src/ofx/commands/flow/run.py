@@ -10,6 +10,7 @@ from ofx.settings import (
     DEFAULT_WORKFLOWS_DIRS,
     SECRETS_DIR,
     TEMP_DIR,
+    ensure_dir,
     get_console,
     settings,
 )
@@ -26,7 +27,8 @@ def get_tmp_dir(output: str = "") -> Path:
         return Path(output)
     return Path(
         tempfile.mkdtemp(
-            prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_", dir=TEMP_DIR
+            prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_",
+            dir=ensure_dir(TEMP_DIR),
         )
     )
 
@@ -73,7 +75,7 @@ class FlowRunHandler:
                 ctx=RunContext(
                     inputs=self.input,
                     output_path=self.output,
-                    secrets=load_secrets(SECRETS_DIR),
+                    secrets=load_secrets(ensure_dir(SECRETS_DIR)),
                     workflow_dirs=add_workflow_dir(
                         DEFAULT_WORKFLOWS_DIRS, workflow.workflow_path.parent
                     ),

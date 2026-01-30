@@ -1,12 +1,17 @@
+"""Storage handlers for remote synchronization."""
+
 import getpass
 import logging
-import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
+from ofx.commands.project.encryption import EncryptionHandler
+
 
 class SSHHandler:
+    """Handles SSH/rsync-based remote synchronization."""
+    
     def __init__(self, config: dict):
         self.host = config.get("host")
         self.user = config.get("user")
@@ -16,6 +21,7 @@ class SSHHandler:
         self._ensure_ssh_key()
 
     def _find_ssh_key(self) -> Path:
+        """Find existing SSH key or return default path."""
         ssh_dir = Path.home() / ".ssh"
         common_keys = ["id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"]
 
@@ -27,6 +33,7 @@ class SSHHandler:
         return ssh_dir / "ofx_id_rsa"
 
     def _ensure_ssh_key(self) -> None:
+        """Ensure SSH key exists, generate if needed."""
         if not self.key_path.exists():
             logger = logging.getLogger("ofx")
             logger.info(f"Generating SSH key at {self.key_path}")
@@ -34,16 +41,11 @@ class SSHHandler:
             subprocess.run(
                 [
                     "ssh-keygen",
-                    "-t",
-                    "rsa",
-                    "-b",
-                    "4096",
-                    "-f",
-                    str(self.key_path),
-                    "-N",
-                    "",
-                    "-C",
-                    "ofx-project-sync",
+                    "-t", "rsa",
+                    "-b", "4096",
+                    "-f", str(self.key_path),
+                    "-N", "",
+                    "-C", "ofx-project-sync",
                 ],
                 check=True,
                 capture_output=True,
@@ -54,24 +56,19 @@ class SSHHandler:
             pub_key_path = Path(str(self.key_path) + ".pub")
             pub_key = pub_key_path.read_text().strip()
 
-            logger.info(
-                "SSH key generated. Attempting to add public key to remote server..."
-            )
+            logger.info("SSH key generated. Attempting to add public key to remote server...")
 
             try:
                 self._add_key_to_remote(pub_key)
                 logger.info("✓ Public key successfully added to remote server")
             except Exception as e:
                 logger.warning(f"Could not automatically add key to remote: {e}")
-                logger.info(
-                    "Please manually add this public key to your remote server:"
-                )
+                logger.info("Please manually add this public key to your remote server:")
                 logger.info(f"\n{pub_key}\n")
-                logger.info(
-                    f"Run on remote: echo '{pub_key}' >> ~/.ssh/authorized_keys"
-                )
+                logger.info(f"Run on remote: echo '{pub_key}' >> ~/.ssh/authorized_keys")
 
     def _add_key_to_remote(self, pub_key: str) -> None:
+        """Add public key to remote server."""
         password = getpass.getpass(
             f"Enter password for {self.user}@{self.host} to add SSH key: "
         )
@@ -79,16 +76,11 @@ class SSHHandler:
         try:
             subprocess.run(
                 [
-                    "sshpass",
-                    "-p",
-                    password,
+                    "sshpass", "-p", password,
                     "ssh-copy-id",
-                    "-i",
-                    str(self.key_path),
-                    "-p",
-                    str(self.port),
-                    "-o",
-                    "StrictHostKeyChecking=no",
+                    "-i", str(self.key_path),
+                    "-p", str(self.port),
+                    "-o", "StrictHostKeyChecking=no",
                     f"{self.user}@{self.host}",
                 ],
                 check=True,
@@ -100,14 +92,10 @@ class SSHHandler:
 
             subprocess.run(
                 [
-                    "sshpass",
-                    "-p",
-                    password,
+                    "sshpass", "-p", password,
                     "ssh",
-                    "-p",
-                    str(self.port),
-                    "-o",
-                    "StrictHostKeyChecking=no",
+                    "-p", str(self.port),
+                    "-o", "StrictHostKeyChecking=no",
                     f"{self.user}@{self.host}",
                     cmd,
                 ],
@@ -117,17 +105,15 @@ class SSHHandler:
             )
 
     def sync(self, local_path: Path) -> None:
+        """Sync local directory to remote via rsync."""
         logger = logging.getLogger("ofx")
         remote_uri = f"{self.user}@{self.host}:{self.remote_path}"
 
         try:
             result = subprocess.run(
                 [
-                    "rsync",
-                    "-avz",
-                    "--delete",
-                    "-e",
-                    f"ssh -i {self.key_path} -p {self.port} -o StrictHostKeyChecking=no",
+                    "rsync", "-avz", "--delete",
+                    "-e", f"ssh -i {self.key_path} -p {self.port} -o StrictHostKeyChecking=no",
                     f"{local_path}/",
                     remote_uri,
                 ],
@@ -143,18 +129,16 @@ class SSHHandler:
             raise RuntimeError(f"SSH sync failed: {e.stderr}") from e
 
     def upload(self, local_path: str, remote_path: str) -> None:
+        """Upload single file via SCP."""
         remote_file = f"{self.user}@{self.host}:{self.remote_path}/{remote_path}"
 
         try:
             subprocess.run(
                 [
                     "scp",
-                    "-i",
-                    str(self.key_path),
-                    "-P",
-                    str(self.port),
-                    "-o",
-                    "StrictHostKeyChecking=no",
+                    "-i", str(self.key_path),
+                    "-P", str(self.port),
+                    "-o", "StrictHostKeyChecking=no",
                     local_path,
                     remote_file,
                 ],
@@ -165,84 +149,9 @@ class SSHHandler:
             raise RuntimeError(f"SCP upload failed: {e.stderr}") from e
 
 
-class EncryptionHandler:
-    def __init__(self, key: str):
-        from cryptography.hazmat.backends import default_backend
-        from cryptography.hazmat.primitives import hashes
-        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA512(),
-            length=32,
-            salt=b"ofx-project-encryption-salt",
-            iterations=100000,
-            backend=default_backend(),
-        )
-        self.key = kdf.derive(key.encode())
-
-    def encrypt_file(self, file_path: str) -> bytes:
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-        with open(file_path, "rb") as f:
-            data = f.read()
-
-        nonce = os.urandom(12)
-        aesgcm = AESGCM(self.key)
-        ciphertext = aesgcm.encrypt(nonce, data, None)
-
-        return nonce + ciphertext
-
-    def decrypt_file(self, encrypted_data: bytes) -> bytes:
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-        nonce = encrypted_data[:12]
-        ciphertext = encrypted_data[12:]
-
-        aesgcm = AESGCM(self.key)
-        plaintext = aesgcm.decrypt(nonce, ciphertext, None)
-
-        return plaintext
-
-    def encrypt_data(self, data: bytes) -> bytes:
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-
-        nonce = os.urandom(12)
-        aesgcm = AESGCM(self.key)
-        ciphertext = aesgcm.encrypt(nonce, data, None)
-        return nonce + ciphertext
-
-    def setup_git_filters(self, repo_path: Path, patterns: list | None = None) -> None:
-        import git
-
-        if patterns is None:
-            patterns = ["*"]
-
-        ofx_cmd = "ofx"
-
-        gitattributes = repo_path / ".gitattributes"
-        with open(gitattributes, "w") as f:
-            f.write("\n".join(f"{p} filter=ofx-crypt diff=ofx-crypt" for p in patterns))
-            f.write("\n[attr]binary -diff -merge -text\n")
-
-        repo = git.Repo(repo_path)
-        config = repo.config_writer()
-
-        config.set_value(
-            "filter.ofx-crypt", "clean", f"{ofx_cmd} project encrypt-filter"
-        )
-        config.set_value(
-            "filter.ofx-crypt", "smudge", f"{ofx_cmd} project decrypt-filter"
-        )
-        config.set_value("filter.ofx-crypt", "required", "true")
-
-        config.set_value(
-            "diff.ofx-crypt", "textconv", f"{ofx_cmd} project decrypt-filter"
-        )
-
-        config.release()
-
-
 class GitHandler:
+    """Handles Git-based remote synchronization."""
+    
     def __init__(
         self,
         project_path: str,
@@ -262,6 +171,7 @@ class GitHandler:
             self.encryptor = None
 
     def sync(self) -> None:
+        """Sync with git remote."""
         import git
 
         try:
@@ -281,9 +191,7 @@ class GitHandler:
                 if remote_url:
                     repo.create_remote("origin", remote_url)
                 else:
-                    raise RuntimeError(
-                        "No git remote configured. Add a remote URL in config."
-                    )
+                    raise RuntimeError("No git remote configured. Add a remote URL in config.")
 
             origin = repo.remotes.origin
 

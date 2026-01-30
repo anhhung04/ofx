@@ -40,7 +40,6 @@ class RunnerStateMachine:
             RunnerStatus.COMPLETED: [],
             RunnerStatus.CANCELED: [],
         }
-        self._log_level = logging.getLogger().getEffectiveLevel()
 
     def can_transition(self, to_state: RunnerStatus) -> bool:
         """Check if transition to the given state is allowed"""
@@ -98,6 +97,7 @@ class BaseRunner[TModel]:
         self._finished_at: float | None = None
         self._started_at_utc: str | None = None
         self._finished_at_utc: str | None = None
+        self._log_level = logging.getLogger().getEffectiveLevel()
 
     async def run(self) -> RunResult:
         """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""

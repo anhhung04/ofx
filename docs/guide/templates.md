@@ -8,129 +8,161 @@ Jinja2 uses `{{ ... }}` for variables. `${{ ... }}` is also accepted, but it kee
 - Secrets: `{{ secrets.API_KEY }}` (masked)
 - Context: `{{ ctx.run_id }}`, `{{ ctx.output_path }}`
 
-## Handy helpers
+## Shell Helper Functions
 
-- `{{ tools_dir }}` / `{{ tools_bin_dir }}`
-- `{{ uv_install('requests') }}`
-- `{{ go_install('module@latest') }}`
-- `{{ cargo_install('ripgrep') }}`
-- `{{ npm_install('http-server') }}`
-- `{{ sudo }}` is set when available.
+These functions are available as actual shell functions prepended to your commands:
 
-## Quick examples
+| Function | Bash (Linux/macOS) | PowerShell (Windows) |
+|----------|-------------------|---------------------|
+| `fapt <pkg>` | `apt-get install` | `winget install` |
+| `pip_install <pkg>` | Python pip | Python pip |
+| `uv_install <pkg>` | uv tool install | uv tool install |
+| `go_install <pkg>` | go install | go install |
+| `cargo_install <pkg>` | cargo install | cargo install |
+| `npm_install <pkg>` | npm install -g | npm install -g |
+| `static_install <url> [name]` | curl + chmod | Invoke-WebRequest |
+
+**Usage (direct shell function calls):**
+```yaml
+- run: |
+    fapt python3
+    go_install github.com/projectdiscovery/httpx/cmd/httpx
+    $OFX_TOOLS_BIN_DIR/httpx -u https://{{ inputs.target }}
+```
+
+## Template Variables
+
+### Path Variables
+```yaml
+{{ tools_dir }}         # Tool installation directory
+{{ tools_bin_dir }}     # Tool binary directory
+{{ temp_dir }}          # Temporary directory
+{{ python }}            # Python executable path
+{{ sudo }}              # "sudo" if available, empty string otherwise
+```
+
+### Platform Detection
+```yaml
+{{ is_windows }}        # true/false
+{{ platform }}          # "windows" or "unix"
+
+# Conditional commands
+{% if is_windows %}
+  dir
+{% else %}
+  ls -la
+{% endif %}
+```
+
+## Support Functions
+
+### File Utilities
+```yaml
+{{ file_read('/path/to/file') }}              # Read file content
+{{ file_write('/path/to/file', 'content') }}  # Write to file
+{{ file_append('/path/to/file', 'content') }} # Append to file
+{{ file_lines('/path/to/file') }}             # Read file as list of lines
+{{ file_exists('/path/to/file') }}            # Check if file exists
+{{ is_file('/path') }}                        # Check if path is file
+{{ is_dir('/path') }}                         # Check if path is directory
+```
+
+### Path Utilities
+```yaml
+{{ join_path(tools_dir, 'bin', 'tool') }}     # Join path components
+{{ basename('/path/to/file.txt') }}           # Get filename: "file.txt"
+{{ dirname('/path/to/file.txt') }}            # Get directory: "/path/to"
+{{ glob('*.txt', '/path/to/dir') }}           # List matching files
+{{ cwd() }}                                    # Current working directory
+{{ home() }}                                   # User home directory
+```
+
+### String Encoding
+```yaml
+{{ b64encode('hello world') }}                # Base64 encode
+{{ b64decode('aGVsbG8gd29ybGQ=') }}           # Base64 decode
+{{ url_encode('hello world') }}               # URL encode: "hello%20world"
+{{ url_decode('hello%20world') }}             # URL decode
+{{ hex_encode('hello') }}                     # Hex encode: "68656c6c6f"
+{{ hex_decode('68656c6c6f') }}                # Hex decode
+```
+
+### Hash Functions
+```yaml
+{{ md5('password') }}                         # MD5 hash
+{{ sha1('password') }}                        # SHA1 hash
+{{ sha256('password') }}                      # SHA256 hash
+```
+
+### Random Generators
+```yaml
+{{ random_string(8) }}                        # Random alphanumeric string
+{{ random_string(16, 'hex') }}                # Random hex string
+{{ random_int(1, 100) }}                      # Random integer
+{{ random_port() }}                           # Random port (1024-65535)
+{{ uuid() }}                                  # UUID v4
+{{ token(32) }}                               # URL-safe token
+```
+
+### Network Utilities
+```yaml
+{{ local_ip() }}                              # Local IP address
+{{ is_port_open('127.0.0.1', 80) }}          # Check if port is open
+```
+
+### Date/Time
+```yaml
+{{ now() }}                                   # Current datetime
+{{ now('%Y-%m-%d') }}                         # Formatted datetime
+{{ timestamp() }}                             # Unix timestamp
+```
+
+### JSON
+```yaml
+{{ to_json({'key': 'value'}) }}               # Object to JSON string
+{{ from_json('{"key": "value"}') }}           # JSON string to object
+```
+
+### Regex
+```yaml
+{{ regex_match('^[0-9]+$', '123') }}          # Match at start
+{{ regex_search('[0-9]+', 'abc123def') }}     # Search anywhere
+{{ regex_findall('[0-9]+', 'a1b2c3') }}       # Find all matches
+{{ regex_sub('[0-9]', 'X', 'a1b2') }}         # Replace matches
+```
+
+## Quick Examples
 
 ```yaml
-- run: echo "Target {{ inputs.target }}"
+- name: Scan with encoded payload
+  run: |
+    PAYLOAD="{{ b64encode(inputs.payload) }}"
+    curl -X POST -d "$PAYLOAD" https://{{ inputs.target }}
 
-- run: {{ uv_install('python-nmap') }}
+- name: Generate temp file with unique name
+  run: |
+    OUTPUT="{{ join_path(temp_dir, random_string(8) + '.txt') }}"
+    echo "Results" > "$OUTPUT"
 
-- run: |
-    {{ go_install('github.com/projectdiscovery/httpx/cmd/httpx@latest') }}
-    {{ tools_bin_dir }}/httpx -u https://{{ inputs.target }}
+- name: Platform-aware command
+  run: |
+    {% if is_windows %}
+    netstat -an | findstr LISTEN
+    {% else %}
+    netstat -tlnp
+    {% endif %}
 
-- script: |
-    from pathlib import Path
-    Path('{{ ctx.output_path }}').mkdir(parents=True, exist_ok=True)
-    print('{{ ctx.run_id }}')
-  language: python
+- name: Get local IP for reverse shell
+  run: |
+    echo "Callback: {{ local_ip() }}:{{ random_port() }}"
 ```
 
 ## Tips
 
-- In shell commands, prefer `{{ ... }}` to avoid `$` expansion. `${{ ... }}` keeps a literal `$` in the rendered output.
-- If you must keep `${{ ... }}` in shell, escape it: `"\${{ inputs.target }}"` or use single quotes.
-- Quote template values in shell commands: `"{{ inputs.ports }}"`.
-- Keep templates simple; move heavy logic into scripts.
-- Validate inputs before using them in templates.
-
-```yaml
-steps:
-  - name: Call API with rate limiting
-    # Template variables:
-    # - api_endpoint: Base URL for API calls
-    # - rate_limit: Throttle requests
-    run: python api_client.py --url "{{ inputs.api_endpoint }}" --rate {{ inputs.rate_limit }}
-```
-
-## Troubleshooting Templates
-
-### Template Not Resolving
-
-```yaml
-# Check for typos
-{{ inputs.traget }}  # Wrong: traget
-{{ inputs.target }}  # Correct: target
-
-# Check for undefined variables
-{{ inputs.nonexistent }}  # Error: nonexistent not defined
-
-# Verify input is declared
-inputs:
-  target:  # Must be declared
-    required: true
-```
-
-### Shell Escaping Issues
-
-```yaml
-# Problem: Special characters or unintended $ expansion
-- run: echo {{ inputs.message }}  # Breaks if message contains quotes
-
-# Solution: Proper quoting
-- run: echo "{{ inputs.message }}"
-
-# Alternative: Use script block
-- script: |
-    message="{{ inputs.message }}"
-    echo "$message"
-  language: bash
-```
-
-### Path Issues
-
-```yaml
-# Problem: Relative paths
-- run: cp file.txt output/  # Where is output/?
-
-# Solution: Use ctx.output_path
-- run: cp file.txt {{ ctx.output_path }}/
-
-# Problem: Path with spaces
-- run: cd /path with spaces/  # Breaks
-
-# Solution: Quote the path
-- run: cd "{{ ctx.output_path }}/"
-```
-
-## Template Reference
-
-### Complete Variable List
-
-```yaml
-# Inputs
-{{ inputs.variable_name }}
-
-# Secrets
-{{ secrets.secret_name }}
-
-# Context
-{{ ctx.run_id }}           # Unique run identifier
-{{ ctx.output_path }}      # Output directory path
-
-# Environment
-{{ env.VARIABLE_NAME }}    # Environment variables
-
-# Tool Functions
-{{ uv_install('package') }}           # Install Python package with uv
-{{ pip_install('package') }}          # Install Python package with pip
-{{ go_install('package@version') }}   # Install Go package
-{{ cargo_install('package') }}        # Install Rust package
-{{ npm_install('package') }}          # Install Node package
-
-# Tool Paths
-{{ tools_dir }}            # Tool installation directory
-{{ tools_bin_dir }}        # Tool binary directory
-```
+- In shell commands, prefer `{{ ... }}` to avoid `$` expansion
+- Quote template values in shell commands: `"{{ inputs.ports }}"`
+- Shell functions like `fapt`, `go_install` are called directly (not as Jinja templates)
+- Template functions like `b64encode()`, `local_ip()` are used with `{{ }}`
 
 ## See Also
 

@@ -1,17 +1,23 @@
+"""Project management CLI commands."""
+
+from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.panel import Panel
+from rich.table import Table
 
 from ofx.settings import get_console
 
+from .encryption import GitFilterHandler
+from .handlers import ImportHandler, InitHandler, SyncHandler
+from .handlers.init import InitConfig
 from .project_manager import ProjectManager
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = get_console()
 
 NAME = "project"
-
 HELP = "Manage Red Team projects."
 
 
@@ -24,61 +30,13 @@ def init(
     ] = False,
 ):
     """Init new OFX project"""
-
     console.print(f"[bold green]Creating project '{name}'...[/bold green]")
     base = ProjectManager.create_project(name)
-
+    
     console.print(f"[bold green]✓[/] Project created: [cyan]{name}[/]")
     console.print(f"[dim]Location: {base}[/]")
 
-    from ofx.commands.project.init import InitHandler
-
-    console.print("\n[bold]Initializing local git repository...[/]")
-    remote_type = "git"
-    remote_config = {"url": "", "branch": "main"}
-    encrypt = False
-    encryption_key = ""
-
-    console.print("\n[bold]Remote Storage Setup (Optional)[/]")
-    setup_remote = typer.confirm(
-        "Would you like to set up remote storage?", default=False
-    )
-
-    if setup_remote:
-        console.print("\n[cyan]Available storage types:[/] git")
-        storage_type = typer.prompt("Select remote storage type", default="git")
-
-        if storage_type not in ["git"]:
-            console.print(f"[red]Invalid storage type: {storage_type}[/]")
-        elif storage_type == "git":
-            git_url = typer.prompt("Enter Git repository URL")
-            remote_config = {"url": git_url, "branch": "main"}
-
-            console.print("\n[bold]Encryption Setup[/]")
-            encrypt = typer.confirm(
-                "Enable encryption for files in git repository?", default=False
-            )
-            if encrypt:
-                encryption_key = typer.prompt(
-                    "Enter encryption key (or press Enter to generate one)",
-                    default="",
-                    show_default=False,
-                )
-                if not encryption_key:
-                    import secrets
-
-                    encryption_key = secrets.token_urlsafe(32)
-                    console.print(
-                        f"\n[yellow]Generated encryption key:[/] {encryption_key}"
-                    )
-                    console.print(
-                        "[yellow]⚠️  Save this key securely! You'll need it to decrypt files.[/]"
-                    )
-
-    console.print("[bold green]Initializing project...[/bold green]")
-    InitHandler(
-        base, is_multiphase, remote_type, remote_config, encrypt, encryption_key
-    ).run()
+    InitHandler.run_interactive(Path(base), is_multiphase)
 
     console.print(
         Panel(
@@ -91,17 +49,10 @@ def init(
 
 @app.command()
 def sync(
-    project: Annotated[
-        str,
-        typer.Argument(help="Project name or path"),
-    ],
+    project: Annotated[str, typer.Argument(help="Project name or path")],
     remote_type: Annotated[
         str,
-        typer.Option(
-            "--remote-type",
-            "-t",
-            help="Remote storage type: git (default) or ssh",
-        ),
+        typer.Option("--remote-type", "-t", help="Remote storage type: git or ssh"),
     ] = "git",
     remote_config: Annotated[
         str,
@@ -113,18 +64,11 @@ def sync(
     ] = False,
     encryption_key: Annotated[
         str,
-        typer.Option(
-            "--encryption-key",
-            help="Encryption key (or set OFX_ENCRYPTION_KEY env var)",
-        ),
+        typer.Option("--encryption-key", help="Encryption key (or set OFX_ENCRYPTION_KEY env var)"),
     ] = "",
     message: Annotated[
         str,
-        typer.Option(
-            "--message",
-            "-m",
-            help="Custom commit message for sync (default: auto-generated)",
-        ),
+        typer.Option("--message", "-m", help="Custom commit message for sync"),
     ] = "",
 ):
     """Sync local project with remote storage (git by default)"""
@@ -135,10 +79,8 @@ def sync(
     if encrypt:
         console.print("[dim]Encryption: enabled[/]")
 
-    from ofx.commands.project.sync import SyncProjectHandler
-
     with console.status("[bold green]Syncing...[/]", spinner="dots"):
-        SyncProjectHandler(
+        SyncHandler(
             path,
             remote_type=remote_type,
             remote_config=remote_config,
@@ -166,13 +108,10 @@ def import_project(
 ):
     """Import project by cloning from remote git repository"""
     if not name:
-        # Extract name from URL
         name = url.split("/")[-1].replace(".git", "")
 
     console.print(f"[bold blue]⟳[/] Importing project: [cyan]{name}[/]")
     console.print(f"[dim]From: {url}[/]")
-
-    from ofx.commands.project.import_ import ImportHandler
 
     ImportHandler(url, name).run()
 
@@ -187,10 +126,8 @@ def import_project(
 
 @app.command(name="list")
 @app.command(name="ls", hidden=True)
-def list():
+def list_projects():
     """List all projects in default project path"""
-    from rich.table import Table
-
     projects = ProjectManager.list_projects()
 
     if not projects:
@@ -227,7 +164,6 @@ def list():
 @app.command(name="rm", hidden=True)
 def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     """Remove a project by name"""
-
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():
@@ -255,8 +191,7 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
         console.print("[yellow]Deletion cancelled[/yellow]")
         return
 
-    ok = ProjectManager.delete_project(name)
-    if ok:
+    if ProjectManager.delete_project(name):
         console.print(
             Panel(
                 f"[bold green]Project '{name}' deleted successfully[/bold green]",
@@ -277,76 +212,10 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
 @app.command(hidden=True)
 def encrypt_filter():
     """Git clean filter: Encrypt stdin to stdout (used by git attributes)"""
-    import sys
-    from pathlib import Path
-
-    try:
-        current = Path.cwd()
-        key_file = None
-
-        check_dirs = [current]
-        check_dirs.extend(current.parents)
-
-        for parent in check_dirs:
-            candidate = parent / ".ofx-encryption-key"
-            if candidate.exists():
-                key_file = candidate
-                break
-
-        if not key_file:
-            sys.stdout.buffer.write(sys.stdin.buffer.read())
-            return
-
-        encryption_key = key_file.read_text().strip()
-
-        data = sys.stdin.buffer.read()
-
-        from .storage import EncryptionHandler
-
-        encryptor = EncryptionHandler(encryption_key)
-        encrypted = encryptor.encrypt_data(data)
-
-        sys.stdout.buffer.write(encrypted)
-    except Exception:
-        sys.stdout.buffer.write(sys.stdin.buffer.read())
+    GitFilterHandler.encrypt_stdin_to_stdout()
 
 
 @app.command(hidden=True)
 def decrypt_filter():
     """Git smudge filter: Decrypt stdin to stdout (used by git attributes)"""
-    import sys
-    from pathlib import Path
-
-    try:
-        current = Path.cwd()
-        key_file = None
-
-        check_dirs = [current]
-        check_dirs.extend(current.parents)
-
-        for parent in check_dirs:
-            candidate = parent / ".ofx-encryption-key"
-            if candidate.exists():
-                key_file = candidate
-                break
-
-        if not key_file:
-            sys.stdout.buffer.write(sys.stdin.buffer.read())
-            return
-
-        encryption_key = key_file.read_text().strip()
-
-        data = sys.stdin.buffer.read()
-
-        if len(data) < 13:
-            sys.stdout.buffer.write(data)
-            return
-
-        from .storage import EncryptionHandler
-
-        encryptor = EncryptionHandler(encryption_key)
-        decrypted = encryptor.decrypt_file(data)
-
-        sys.stdout.buffer.write(decrypted)
-    except Exception:
-        sys.stdout.buffer.write(sys.stdin.buffer.read())
+    GitFilterHandler.decrypt_stdin_to_stdout()

@@ -1,112 +1,156 @@
 # Jobs & Steps
 
-Jobs group steps; jobs in the same stage run in parallel, steps inside a job run sequentially.
+> Jobs run in parallel (unless dependent), steps run sequentially within a job
 
-## Jobs (key fields)
+---
+
+## 📦 Jobs Overview
+
+Jobs are the main execution units in a workflow:
 
 ```yaml
 jobs:
   scan:
-    needs: []           # dependencies; missing = parallel
-    continue_on_error: false
-    envs: { LOG_LEVEL: INFO }
-    steps: [...]        # required
+    needs: []                  # Dependencies (empty = parallel)
+    continue_on_error: false   # Stop workflow on failure
+    envs:
+      LOG_LEVEL: INFO          # Job-wide environment
+    steps:
+      - run: nmap {{ inputs.target }}
 ```
 
-- `needs`: order jobs; parallel if omitted.
-- `continue_on_error`: keep running later stages if this job fails.
-- `envs`: job-wide env vars.
+### Job Properties
 
-## Steps (one action each)
+| Property | Type | Description |
+|----------|------|-------------|
+| `steps` | list | **Required.** Steps to execute |
+| `needs` | list | Job dependencies (for ordering) |
+| `continue_on_error` | bool | Don't fail workflow if job fails |
+| `envs` | dict | Environment variables for all steps |
+| `hooks` | dict | Job lifecycle events |
 
-Exactly one of `run`, `script`, or `uses`.
+---
+
+## 📝 Steps Overview
+
+Each step executes exactly **one** action:
+
+| Action | Description |
+|--------|-------------|
+| `run` | Shell command |
+| `script` | Python code block |
+
+
+### Step Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `name` | str | - | Descriptive name |
+| `run` / `script` | str | - | **Required.** Action to execute |
+| `timeout` | int | 30 | Max duration (minutes) |
+| `retry` | int | 0 | Retry attempts on failure |
+| `retry_delay` | int | 5 | Seconds between retries |
+| `continue_on_error` | bool | false | Continue on failure |
+| `envs` | dict | {} | Step environment variables |
+| `working_directory` | str | - | Execution directory |
+
+---
+
+## 🖥️ Shell Commands (`run`)
 
 ```yaml
-- name: run command
-  run: nmap -p ${{ inputs.ports }} ${{ inputs.target }}
-  timeout: 30       # minutes
-  retry: 1
-  retry_delay: 5
-  continue_on_error: false
-  envs: { MODE: fast }
-  working_directory: ./scans
-  hooks:
-    before_step: { script: echo "starting" }
+steps:
+  - name: Port scan
+    run: nmap -p {{ inputs.ports }} {{ inputs.target }}
+    timeout: 30
+    retry: 1
+    retry_delay: 5
+    envs:
+      MODE: fast
+    working_directory: ./scans
+```
 
-- name: multi-line script
+### Multi-line Commands
+```yaml
+- name: Complex scan
+  run: |
+    echo "Starting scan..."
+    nmap -sS {{ inputs.target }} -oX scan.xml
+    mv scan.xml {{ ctx.output_path }}/
+```
+
+---
+
+## 🐍 Python Scripts (`script`)
+
+```yaml
+steps:
+  - name: Process data
+    script: |
+      import json
+      
+      data = {"target": "{{ inputs.target }}"}
+      with open("{{ ctx.output_path }}/data.json", "w") as f:
+          json.dump(data, f)
+```
+
+### Inter-Step Communication
+```yaml
+- name: Publish status
   script: |
-    #!/bin/bash
-    echo "$TARGET"
-  envs: { TARGET: ${{ inputs.target }} }
+    publish('status', {'state': 'running', 'progress': 50})
+    
+- name: Wait for config
+  script: |
+    config = wait_for('config', lambda d: d.get('ready'))
+    print(f"Got config: {config}")
 ```
 
-## Nested workflow
+---
 
-```yaml
-- name: reuse workflow
-  uses: ./subflow.yml
-  run_with: { target: ${{ inputs.target }} }
-  secrets: inherit
-```
 
-## Outputs
 
-Use `${{ ctx.output_path }}` for files; set structured outputs from steps with `OFX_OUTPUTS` in your command or script.
+---
 
-## Handy template helpers
+## 📁 Working with Outputs
 
-- `${{ tools_bin_dir }}` for installed tool binaries.
-- `${{ uv_install('pkg1 pkg2') }}` / `${{ go_install('module@latest') }}` for quick installs.
-
-See also: [templates](templates.md) for `${{ }}` rendering and [hooks](hooks.md) for step lifecycle triggers.
-    mv *.xml ${{ ctx.output_path }}/scans/
-    tar -czf ${{ ctx.output_path }}/results.tar.gz ${{ ctx.output_path }}/scans
-```
-
-## Working with Job Output
-
-### Capturing Output
-
+### Save to Output Directory
 ```yaml
 - name: Save scan results
-  run: nmap ${{ inputs.target }} > ${{ ctx.output_path }}/scan.txt
-
-- name: Parse scan results
-  script: |
-    with open('${{ ctx.output_path }}/scan.txt') as f:
-      content = f.read()
-      if '22/tcp open' in content:
-        print("SSH is available")
-  language: python
+  run: nmap {{ inputs.target }} > {{ ctx.output_path }}/scan.txt
 ```
 
-### Sharing Data Between Steps
-
-Use the output directory:
-
+### Share Data Between Steps
 ```yaml
 steps:
   - name: Generate data
     script: |
       import json
       data = {"ports": [80, 443, 8080]}
-      with open('${{ ctx.output_path }}/data.json', 'w') as f:
-        json.dump(data, f)
-    language: python
-  
+      with open("{{ ctx.output_path }}/data.json", "w") as f:
+          json.dump(data, f)
+
   - name: Use data
     script: |
       import json
-      with open('${{ ctx.output_path }}/data.json') as f:
-        data = json.load(f)
-      print(f"Scanning ports: {data['ports']}")
-    language: python
+      with open("{{ ctx.output_path }}/data.json") as f:
+          data = json.load(f)
+      print(f"Ports: {data['ports']}")
 ```
 
-## Error Handling
+### Output Variables with OFX_OUTPUTS
+```yaml
+- name: Export variables
+  run: |
+    echo "PORT=8080" >> $OFX_OUTPUTS
+    echo "STATUS=ready" >> $OFX_OUTPUTS
+```
+
+---
+
+## ⚠️ Error Handling
 
 ### Exit Codes
-
 ```yaml
 - name: Check service
   script: |
@@ -114,60 +158,66 @@ steps:
     import socket
     
     try:
-      s = socket.socket()
-      s.connect(('${{ inputs.target }}', 80))
-      print("Service is up")
-      sys.exit(0)
+        s = socket.socket()
+        s.connect(("{{ inputs.target }}", 80))
+        print("Service is up")
+        sys.exit(0)
     except:
-      print("Service is down")
-      sys.exit(1)
-  language: python
+        print("Service is down")
+        sys.exit(1)
 ```
 
-### Try-Catch in Steps
-
+### Continue on Error
 ```yaml
-- name: Safe operation
-  script: |
-    try:
-      # Risky operation
-      result = dangerous_function()
-      print(f"Success: {result}")
-    except Exception as e:
-      print(f"Error occurred: {e}")
-      # Don't exit with error code if you want to continue
-  language: python
-  continue_on_error: true
+- name: Optional notification
+  run: python notify.py
+  continue_on_error: true  # Won't fail the workflow
 ```
 
-## Best Practices
+### Retry Logic
+```yaml
+- name: Flaky API call
+  run: curl https://api.example.com
+  retry: 3
+  retry_delay: 5
+```
+
+---
+
+## ✅ Best Practices
 
 ### 1. Descriptive Step Names
-
 ```yaml
-# Good
-- name: "Scan target for open HTTP/HTTPS ports"
-  run: nmap -p 80,443,8080,8443 ${{ inputs.target }}
+# ✅ Good
+- name: Scan target for open HTTP/HTTPS ports
+  run: nmap -p 80,443,8080 {{ inputs.target }}
 
-# Bad
-- name: "scan"
-  run: nmap ${{ inputs.target }}
+# ❌ Bad
+- name: scan
+  run: nmap {{ inputs.target }}
 ```
 
-### 2. Use Templates for Dynamic Values
-
+### 2. Use Dynamic Paths
 ```yaml
-# Good
-- name: Save results
-  run: cp scan.txt ${{ ctx.output_path }}/scan_${{ ctx.run_id }}.txt
+# ✅ Good
+- run: cp scan.txt {{ ctx.output_path }}/scan_{{ ctx.run_id }}.txt
 
-# Bad
-- name: Save results
-  run: cp scan.txt /tmp/scan.txt  # Hardcoded path
+# ❌ Bad
+- run: cp scan.txt /tmp/scan.txt
 ```
 
-### 3. Handle Errors Appropriately
+### 3. Appropriate Timeouts
+```yaml
+- name: Quick ping
+  run: ping -c 1 {{ inputs.target }}
+  timeout: 1
 
+- name: Full port scan
+  run: nmap -p- {{ inputs.target }}
+  timeout: 60
+```
+
+### 4. Separate Critical and Optional Steps
 ```yaml
 - name: Critical validation
   run: python validate.py
@@ -175,93 +225,68 @@ steps:
 
 - name: Optional notification
   run: python notify.py
-  continue_on_error: true  # Doesn't fail workflow
+  continue_on_error: true
 ```
 
-### 4. Use Appropriate Timeouts
+---
 
-```yaml
-- name: Quick check
-  run: ping -c 1 ${{ inputs.target }}
-  timeout: 5
+## 📖 Examples
 
-- name: Full scan
-  run: nmap -p- ${{ inputs.target }}
-  timeout: 3600  # 1 hour for complete scan
-```
-
-### 5. Organize Complex Scripts
-
-```yaml
-# For complex logic, use external scripts
-- name: Complex analysis
-  run: python ${{ ctx.workflow_dirs }}/scripts/analyze.py --input ${{ ctx.output_path }}
-```
-
-## Examples
-
-### Sequential Steps
-
+### Sequential Processing
 ```yaml
 jobs:
-  setup_and_scan:
+  process:
     steps:
       - name: Install tools
-        run: ${{ uv_install('python-nmap') }}
+        run: uv_install python-nmap
       
       - name: Run scan
         script: |
           import nmap
           nm = nmap.PortScanner()
-          nm.scan('${{ inputs.target }}', '22-443')
+          nm.scan("{{ inputs.target }}", "22-443")
           print(nm.csv())
-        language: python
       
-      - name: Save results
-        run: echo "Scan complete" > ${{ ctx.output_path }}/status.txt
+      - name: Save status
+        run: echo "Complete" > {{ ctx.output_path }}/status.txt
 ```
 
-### Conditional Execution
-
-```yaml
-jobs:
-  conditional_scan:
-    steps:
-      - name: Check if target is up
-        run: ping -c 1 ${{ inputs.target }}
-        continue_on_error: false
-      
-      - name: Full scan
-        run: nmap -sS -sV -A ${{ inputs.target }}
-        # Only runs if ping succeeds
-```
-
-### Parallel Jobs with Sequential Steps
-
+### Parallel Jobs with Dependencies
 ```yaml
 jobs:
   scan_tcp:
     steps:
-      - name: TCP SYN scan
-        run: nmap -sS ${{ inputs.target }}
-      
-      - name: Analyze TCP results
-        run: python analyze_tcp.py
+      - run: nmap -sS {{ inputs.target }} -oX tcp.xml
   
   scan_udp:
     steps:
-      - name: UDP scan
-        run: nmap -sU ${{ inputs.target }}
-      
-      - name: Analyze UDP results
-        run: python analyze_udp.py
+      - run: nmap -sU {{ inputs.target }} -oX udp.xml
   
-  # Both jobs run in parallel, steps within each job run sequentially
+  analyze:
+    needs: [scan_tcp, scan_udp]  # Waits for both
+    steps:
+      - run: python analyze.py tcp.xml udp.xml
 ```
 
-## See Also
+### Conditional Flow
+```yaml
+jobs:
+  check:
+    steps:
+      - name: Verify target is reachable
+        run: ping -c 1 {{ inputs.target }}
+  
+  exploit:
+    needs: [check]  # Only runs if check succeeds
+    steps:
+      - run: python exploit.py {{ inputs.target }}
+```
 
-- [Workflows](workflows.md) - Workflow configuration
-- [Hooks System](hooks.md) - Lifecycle hooks
-- [Templates](templates.md) - Template functions
-- [CLI Commands](../cli/commands.md) - Running workflows
+---
+
+## ➡️ See Also
+
+- [**Workflows**](workflows.md) — Workflow structure
+- [**Templates**](templates.md) — Template functions
+- [**Hooks**](hooks.md) — Lifecycle events
+- [**CLI Reference**](../cli/commands.md) — Running workflows

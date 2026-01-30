@@ -5,7 +5,7 @@ from pathlib import Path
 from ofx.commands.ui_helpers import print_info, print_warning
 from ofx.runner import RunContext
 from ofx.runner.tool_installer import ToolInstallerRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIRS, TOOLS_BIN_DIR, settings
+from ofx.settings import DEFAULT_WORKFLOWS_DIRS, TOOLS_BIN_DIR, ensure_dir, settings
 
 logger = logging.getLogger(settings.app_branding)
 

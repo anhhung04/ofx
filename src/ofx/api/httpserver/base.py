@@ -17,20 +17,6 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class PHTTPSingleton(type):
-    """Metaclass implementing the Singleton pattern for HTTP server.
-
-    Ensures only one instance of PHTTPServer exists.
-    """
-
-    _instance: PHTTPServer | None = None
-
-    def __call__(cls, *args: object, **kwargs: object) -> PHTTPServer:
-        if cls._instance is None:
-            cls._instance = super().__call__(*args, **kwargs)
-        return cls._instance
-
-
 class BaseRequestHandler(SimpleHTTPRequestHandler):
     """Custom HTTP request handler with logging.
 
@@ -62,10 +48,10 @@ class HTTPServerV4(HTTPServer):
     address_family = socket.AF_INET
 
 
-class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
+class PHTTPServer(threading.Thread):
     """Threaded HTTP/HTTPS server with SSL support.
 
-    A singleton HTTP server that runs in a separate thread and supports
+    An HTTP server that runs in a separate thread and supports
     both HTTP and HTTPS protocols with automatic certificate generation.
 
     Example:
@@ -239,7 +225,7 @@ class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
             return
 
         self.server_locked = True
-        self.setDaemon(daemon)
+        self.daemon = daemon
         threading.Thread.start(self)
 
         logger.info(f"Detect {self.scheme} server is runing or not...")
@@ -283,7 +269,7 @@ class PHTTPServer(threading.Thread, metaclass=PHTTPSingleton):
                             logger.error("You must provide certfile to use https")
                             break
                     thread = threading.Thread(target=self.httpd.serve_forever)
-                    thread.setDaemon(True)
+                    thread.daemon = True
                     thread.start()
                     self.server_started = True
                     self.__flag.clear()

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import logging
-import os
 import tempfile
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from ofx.api.httpserver.base import PHTTPServer
+from ofx.api.httpserver.server_base import BaseServerFacade
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -196,7 +195,7 @@ class ExfilRequestHandler(BaseHTTPRequestHandler):
             self.send_error(500, "Internal server error")
 
 
-class ExfilServer:
+class ExfilServer(BaseServerFacade):
     """HTTP server for data exfiltration and file collection.
 
     Provides an HTTP server designed for collecting files and data from
@@ -205,7 +204,7 @@ class ExfilServer:
     directory traversal attacks.
 
     Example:
-        >>> server = ExfilServer(bind_ip='0.0.0.0', bind_port=8080, upload_dir='/tmp/uploads')
+        >>> server = ExfilServer(host='0.0.0.0', port=8080, save_dir='/tmp/uploads')
         >>> server.start()
         >>> # Server is now accepting file uploads at http://0.0.0.0:8080
         >>> # Files can be listed at http://0.0.0.0:8080/ and downloaded individually
@@ -218,50 +217,40 @@ class ExfilServer:
         save_dir: str | Path | None = None,
         auto_timestamp: bool = True,
         host: str = "0.0.0.0",
+        is_ipv6: bool = False,
+        use_https: bool = False,
+        certfile: Path | None = None,
     ):
         """Initialize ExfilServer.
 
         Args:
-            bind_ip: IP address to bind to (default: '0.0.0.0')
-            bind_port: Port to bind to (default: 6666)
-            upload_dir: Directory to store uploaded files (default: temp directory)
+            port: Server port (default: 9000)
+            save_dir: Directory to store uploaded files (default: ./exfil)
+            auto_timestamp: Add timestamp to uploaded files (default: True)
+            host: IP address to bind to (default: '0.0.0.0')
             is_ipv6: Use IPv6 addressing (default: False)
             use_https: Enable HTTPS with SSL (default: False)
             certfile: Path to SSL certificate file (auto-generated if None)
         """
-        self.bind_ip = host
-        self.bind_port = port
+        super().__init__(
+            host=host,
+            port=port,
+            is_ipv6=is_ipv6,
+            use_https=use_https,
+            certfile=certfile,
+        )
+
         self.upload_dir = Path(save_dir) if save_dir else Path("./exfil")
         self._auto_timestamp = auto_timestamp
-        self.is_ipv6 = False
-        self.use_https = False
-        self.certfile = None
 
         # Create upload directory if it doesn't exist
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Upload directory: {self.upload_dir}")
 
-        self.server = PHTTPServer(
-            bind_ip=host,
-            bind_port=port,
-            is_ipv6=False,
-            use_https=False,
-            certfile=None,
-            requestHandler=ExfilRequestHandler,
-        )
+        self._server = self._create_server(ExfilRequestHandler)
 
         # Store upload directory in server instance for handler access
-        self.server.upload_dir = self.upload_dir
-
-    @property
-    def port(self) -> int:
-        """Get the server port."""
-        return self.bind_port
-
-    @property
-    def host(self) -> str:
-        """Get the server host."""
-        return self.bind_ip
+        self._server.upload_dir = self.upload_dir
 
     @property
     def save_dir(self) -> Path:
@@ -272,63 +261,6 @@ class ExfilServer:
     def auto_timestamp(self) -> bool:
         """Get the auto timestamp setting."""
         return self._auto_timestamp
-
-    def start(self, daemon: bool = True) -> None:
-        """Start the HTTP server in a background thread.
-
-        Args:
-            daemon: Run as daemon thread (default: True)
-
-        Example:
-            >>> server.start()
-            [INFO] Starting httpd on http://0.0.0.0:8080
-        """
-        self.server.start(daemon=daemon)
-
-    def stop(self) -> None:
-        """Stop the HTTP server and release resources.
-
-        Example:
-            >>> server.stop()
-            [INFO] Stop httpd server on http://0.0.0.0:8080
-        """
-        self.server.stop()
-
-    def pause(self) -> None:
-        """Pause the HTTP server temporarily.
-
-        Example:
-            >>> server.pause()
-            >>> # Server stops accepting requests
-        """
-        self.server.pause()
-
-    def resume(self) -> None:
-        """Resume a paused HTTP server.
-
-        Example:
-            >>> server.resume()
-            >>> # Server resumes accepting requests
-        """
-        self.server.resume()
-
-    @property
-    def url(self) -> str:
-        """Get the server URL.
-
-        Returns:
-            Server URL including protocol, IP, and port
-        """
-        return self.server.url
-
-    @property
-    def is_running(self) -> bool:
-        """Check if the server is currently running.
-
-        Returns:
-            True if server is running, False otherwise
-        """
-        return self.server.server_started
 
     def list_files(self) -> list[str]:
         """List all uploaded files.

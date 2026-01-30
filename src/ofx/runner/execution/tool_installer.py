@@ -13,7 +13,7 @@ from ofx.models.command import Command
 from ofx.models.workflow import ToolConfig
 from ofx.runner.core import BaseRunner, RunContext
 from ofx.runner.commands.command import CommandRunner
-from ofx.settings import TOOLS_BIN_DIR, settings
+from ofx.settings import TOOLS_BIN_DIR, ensure_dir, settings
 
 logger = logging.getLogger(settings.app_branding)
 console = Console()
@@ -83,6 +83,7 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
 
         current_path = self.ctx.envs.get("PATH", os.environ.get("PATH", ""))
         if str(TOOLS_BIN_DIR) not in current_path:
+            ensure_dir(TOOLS_BIN_DIR)
             self.ctx.envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
 
         for tool_bin, tool_config in self.model.tools.items():

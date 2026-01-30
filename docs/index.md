@@ -1,21 +1,43 @@
 # Welcome to OFX
 
-Build and run red-team workflows with async execution, reusable subflows, hooks, and tool installers. Use this page as a launchpad to the rest of the docs.
+> **OFX** — Build and run red-team workflows with async execution, reusable subflows, hooks, and tool installers.
 
-## Before You Start
+---
 
-- Install: `uv sync` (or `pip install .`), Python 3.14+, `git`
-- Check: `ofx --help` and `ofx doctor`
-- Docs locally: `ofx docs serve`
+## 🚀 Quick Start
 
-## Quick Commands
+```bash
+# Install
+uv sync                    # or: pip install .
 
-- Validate: `ofx flow validate <workflow>`
-- Run: `ofx flow run <workflow> --input key=val --secret NAME=val`
-- Secrets: `ofx secret set NAME`
-- Explore: `ofx x run <workflow>` (alias)
+# Verify installation
+ofx --help
+ofx doctor
 
-## Minimal Workflow (runnable)
+# Serve docs locally
+ofx docs serve
+```
+
+**Requirements:** Python 3.14+, Git
+
+---
+
+## ⚡ Essential Commands
+
+| Command | Description |
+|---------|-------------|
+| `ofx flow validate <workflow>` | Validate workflow syntax |
+| `ofx flow run <workflow>` | Execute a workflow |
+| `ofx flow run <workflow> --input key=val` | Run with inputs |
+| `ofx secret set NAME` | Add a secret |
+| `ofx secret list` | List all secrets |
+| `ofx x run <workflow>` | Shorthand alias |
+
+---
+
+## 📝 Your First Workflow
+
+Create `hello.yml`:
 
 ```yaml
 name: hello
@@ -25,17 +47,31 @@ jobs:
       - run: echo "Hello from OFX"
 ```
 
-Save as `hello.yml` and run:
+Run it:
 
 ```bash
 ofx flow run hello
 ```
 
-Expected output: progress spinner plus a single `Hello from OFX` line.
+**Expected:** Progress spinner → `Hello from OFX`
 
-## Where to Go Next
+---
 
-- Start: [quickstart](getting-started/quickstart.md), [concepts](getting-started/concepts.md)
-- Build: [workflows](guide/workflows.md), [jobs & steps](guide/jobs-steps.md), [templates](guide/templates.md)
-- Operate: [secrets & inputs](guide/secrets-inputs.md), [interactive mode](guide/interactive-mode.md)
-- Reference: [commands](cli/commands.md), [API overview](api/overview.md)
+## 📚 Documentation Guide
+
+### Getting Started
+- [**Quick Start**](getting-started/quickstart.md) — 5-minute tutorial
+- [**Core Concepts**](getting-started/concepts.md) — Architecture overview
+
+### Building Workflows
+- [**Workflows**](guide/workflows.md) — Workflow structure and syntax
+- [**Jobs & Steps**](guide/jobs-steps.md) — Parallel execution
+- [**Templates**](guide/templates.md) — Jinja2 templating & helper functions
+
+### Operations
+- [**Secrets & Inputs**](guide/secrets-inputs.md) — Secure credential handling
+- [**Interactive Mode**](guide/interactive-mode.md) — Real-time interaction
+
+### Reference
+- [**CLI Commands**](cli/commands.md) — Full command reference
+- [**API Overview**](api/overview.md) — Python API documentation
