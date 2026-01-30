@@ -5,13 +5,13 @@ from ofx.runner.registry.factory import (
     RegistryFactory,
     cleanup_registry,
 )
-from ofx.runner.registry.file import FileJobRegistry
+from ofx.runner.registry.file import FileRegistry
 from ofx.runner.registry.memory import MemoryJobRegistry
 
 __all__ = [
     "RegistryAdapter",
     "MemoryJobRegistry",
-    "FileJobRegistry",
+    "FileRegistry",
     "RegistryFactory",
     "cleanup_registry",
 ]

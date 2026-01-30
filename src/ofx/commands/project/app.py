@@ -7,7 +7,7 @@ from ofx.settings import get_console
 
 from .project_manager import ProjectManager
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = get_console()
 
 NAME = "project"
@@ -45,10 +45,10 @@ def init(
     )
 
     if setup_remote:
-        console.print("\n[cyan]Available storage types:[/] git, s3")
+        console.print("\n[cyan]Available storage types:[/] git")
         storage_type = typer.prompt("Select remote storage type", default="git")
 
-        if storage_type not in ["git", "s3"]:
+        if storage_type not in ["git"]:
             console.print(f"[red]Invalid storage type: {storage_type}[/]")
         elif storage_type == "git":
             git_url = typer.prompt("Enter Git repository URL")
@@ -74,32 +74,6 @@ def init(
                     console.print(
                         "[yellow]⚠️  Save this key securely! You'll need it to decrypt files.[/]"
                     )
-        elif storage_type == "s3":
-            bucket = typer.prompt("Enter S3 bucket name")
-            region = typer.prompt("Enter AWS region", default="us-east-1")
-            remote_config = {"bucket": bucket, "region_name": region}
-            remote_type = "s3"
-
-            console.print("\n[bold]Encryption Setup[/]")
-            encrypt = typer.confirm(
-                "Enable encryption for synced files?", default=False
-            )
-            if encrypt:
-                encryption_key = typer.prompt(
-                    "Enter encryption key (or press Enter to generate one)",
-                    default="",
-                    show_default=False,
-                )
-                if not encryption_key:
-                    import secrets
-
-                    encryption_key = secrets.token_urlsafe(32)
-                    console.print(
-                        f"\n[yellow]Generated encryption key:[/] {encryption_key}"
-                    )
-                    console.print(
-                        "[yellow][!] Save this key securely! You'll need it to decrypt files.[/]"
-                    )
 
     console.print("[bold green]Initializing project...[/bold green]")
     InitHandler(
@@ -110,7 +84,7 @@ def init(
         Panel(
             f"[bold green]Project '{name}' initialized successfully![/]",
             border_style="green",
-            title="[OK] Project Created"
+            title="[OK] Project Created",
         )
     )
 
@@ -126,7 +100,7 @@ def sync(
         typer.Option(
             "--remote-type",
             "-t",
-            help="Remote storage type: git (default) or s3",
+            help="Remote storage type: git (default) or ssh",
         ),
     ] = "git",
     remote_config: Annotated[
@@ -142,6 +116,14 @@ def sync(
         typer.Option(
             "--encryption-key",
             help="Encryption key (or set OFX_ENCRYPTION_KEY env var)",
+        ),
+    ] = "",
+    message: Annotated[
+        str,
+        typer.Option(
+            "--message",
+            "-m",
+            help="Custom commit message for sync (default: auto-generated)",
         ),
     ] = "",
 ):
@@ -162,13 +144,43 @@ def sync(
             remote_config=remote_config,
             encrypt=encrypt,
             encryption_key=encryption_key,
+            message=message,
         ).run()
 
     console.print(
         Panel(
             f"[bold green]Sync completed successfully![/]\nProject: {project}",
             border_style="green",
-            title="[OK] Sync Status"
+            title="[OK] Sync Status",
+        )
+    )
+
+
+@app.command(name="import")
+def import_project(
+    url: Annotated[str, typer.Argument(help="Git repository URL to clone")],
+    name: Annotated[
+        str,
+        typer.Option("--name", "-n", help="Custom name for the imported project"),
+    ] = "",
+):
+    """Import project by cloning from remote git repository"""
+    if not name:
+        # Extract name from URL
+        name = url.split("/")[-1].replace(".git", "")
+
+    console.print(f"[bold blue]⟳[/] Importing project: [cyan]{name}[/]")
+    console.print(f"[dim]From: {url}[/]")
+
+    from ofx.commands.project.import_ import ImportHandler
+
+    ImportHandler(url, name).run()
+
+    console.print(
+        Panel(
+            f"[bold green]Project imported successfully![/]\nName: {name}\nURL: {url}",
+            border_style="green",
+            title="[OK] Import Complete",
         )
     )
 
@@ -179,17 +191,18 @@ def list():
     """List all projects in default project path"""
     from rich.table import Table
 
-
     projects = ProjectManager.list_projects()
 
     if not projects:
-        console.print(Panel(
-            "[yellow]No projects found[/yellow]\n"
-            f"[dim]Default path: {ProjectManager._get_default_path()}\n"
-            "Use 'ofx project init <name>' to create a project[/dim]",
-            title="[+] Projects",
-            border_style="yellow"
-        ))
+        console.print(
+            Panel(
+                "[yellow]No projects found[/yellow]\n"
+                f"[dim]Default path: {ProjectManager._get_default_path()}\n"
+                "Use 'ofx project init <name>' to create a project[/dim]",
+                title="[+] Projects",
+                border_style="yellow",
+            )
+        )
         return
 
     table = Table(
@@ -197,7 +210,7 @@ def list():
         show_header=True,
         header_style="bold cyan",
         expand=True,
-        border_style="cyan"
+        border_style="cyan",
     )
     table.add_column("#", style="dim", width=4)
     table.add_column("Project Name", style="cyan")
@@ -218,21 +231,25 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():
-        console.print(Panel(
-            f"[bold red]Project '{name}' not found[/bold red]\n"
-            "[dim]Use 'ofx project list' to see available projects[/dim]",
-            title="[X] Not Found",
-            border_style="red"
-        ))
+        console.print(
+            Panel(
+                f"[bold red]Project '{name}' not found[/bold red]\n"
+                "[dim]Use 'ofx project list' to see available projects[/dim]",
+                title="[X] Not Found",
+                border_style="red",
+            )
+        )
         return
 
-    console.print(Panel(
-        f"[bold red]Project:[/bold red] {name}\n"
-        f"[bold]Path:[/bold] [dim]{project_path}[/dim]\n\n"
-        "[yellow]This action cannot be undone![/yellow]",
-        title="[!] Delete Project",
-        border_style="red"
-    ))
+    console.print(
+        Panel(
+            f"[bold red]Project:[/bold red] {name}\n"
+            f"[bold]Path:[/bold] [dim]{project_path}[/dim]\n\n"
+            "[yellow]This action cannot be undone![/yellow]",
+            title="[!] Delete Project",
+            border_style="red",
+        )
+    )
 
     if not typer.confirm("Are you sure you want to delete this project?"):
         console.print("[yellow]Deletion cancelled[/yellow]")
@@ -240,17 +257,21 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
 
     ok = ProjectManager.delete_project(name)
     if ok:
-        console.print(Panel(
-            f"[bold green]Project '{name}' deleted successfully[/bold green]",
-            title="[OK] Deleted",
-            border_style="green"
-        ))
+        console.print(
+            Panel(
+                f"[bold green]Project '{name}' deleted successfully[/bold green]",
+                title="[OK] Deleted",
+                border_style="green",
+            )
+        )
     else:
-        console.print(Panel(
-            f"[bold red]Failed to delete project '{name}'[/bold red]",
-            title="[X] Error",
-            border_style="red"
-        ))
+        console.print(
+            Panel(
+                f"[bold red]Failed to delete project '{name}'[/bold red]",
+                title="[X] Error",
+                border_style="red",
+            )
+        )
 
 
 @app.command(hidden=True)

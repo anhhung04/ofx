@@ -319,6 +319,12 @@
           "description": "Secrets to pass to the reusable workflow (key-value pairs)",
           "title": "Secrets",
           "type": "object"
+        },
+        "alias": {
+          "default": null,
+          "description": "Alias for the workflow call, used for mapping in workflow calls",
+          "title": "Alias",
+          "type": "string"
         }
       },
       "title": "WorkflowCall",
@@ -364,6 +370,12 @@
           ],
           "title": "Type",
           "type": "string"
+        },
+        "alias": {
+          "default": null,
+          "description": "Alias for the input parameter, used for mapping in workflow calls",
+          "title": "Alias",
+          "type": "string"
         }
       },
       "title": "WorkflowInput",
@@ -388,6 +400,12 @@
             "boolean"
           ],
           "title": "Type",
+          "type": "string"
+        },
+        "alias": {
+          "default": null,
+          "description": "Alias for the secret parameter, used for mapping in workflow calls",
+          "title": "Alias",
           "type": "string"
         }
       },

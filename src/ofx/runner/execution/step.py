@@ -89,9 +89,6 @@ class StepRunner(BaseRunner[Step]):
             except TimeoutError as e:
                 raise RuntimeError(step_timeout_error(self.model.timeout)) from e
             except Exception as e:
-                self._log_error(
-                    f"Step failed on attempt {attempt + 1}/{max_attempts}. Error: {e}"
-                )
                 if attempt < max_attempts - 1:
                     self._log_info(f"Retrying in {delay}s...")
                     await asyncio.sleep(delay)
@@ -134,6 +131,10 @@ class StepRunner(BaseRunner[Step]):
             if self.model.log_stdout and self.ctx.output_path:
                 log_path = self.ctx.output_path / "logs"
                 log_path.mkdir(parents=True, exist_ok=True)
+                if not self.parent:
+                    raise RuntimeError(
+                        "Cannot log step stdout: parent runner is missing"
+                    )
                 tmp_file = (
                     log_path
                     / f"stdout_{self.parent.model.jid}_{self.model.name.replace(' ', '-')}__{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -206,8 +207,6 @@ class StepRunner(BaseRunner[Step]):
                 parent=self,
             )
         elif self._run_type is RunType.SCRIPT:
-            import sys
-
             from ofx.runner.commands.command import Script, ScriptRunner
 
             assert self.model.script is not None, (
@@ -215,7 +214,6 @@ class StepRunner(BaseRunner[Step]):
             )
             script_model = Script(
                 script=self.model.script,
-                interpreter=sys.executable,
                 shell=self.model.shell,
                 working_directory=self.model.working_directory,
                 timeout_minutes=self.model.timeout,
@@ -245,7 +243,7 @@ class StepRunner(BaseRunner[Step]):
         elif self._run_type is RunType.SCRIPT_FILE:
             import sys
 
-            from ofx.runner.commands.command import Command, CommandRunner
+            from ofx.runner.commands.command import Script, ScriptRunner
 
             assert self.model.script_file is not None, (
                 "script_file cannot be None for SCRIPT_FILE run type"
@@ -262,19 +260,17 @@ class StepRunner(BaseRunner[Step]):
             if not script_path.exists():
                 raise FileNotFoundError(f"Script file '{script_path}' does not exist.")
 
-            cmd = f"{sys.executable} {script_path.as_posix()}"
-            working_dir = script_path.parent
-
-            command_model = Command(
-                cmd=cmd,
+            script_content = script_path.read_text()
+            script_model = Script(
+                script=script_content,
                 shell=self.model.shell,
-                working_directory=working_dir,
+                working_directory=self.model.working_directory,
                 timeout_minutes=self.model.timeout,
-                interactive=is_interactive,
+                interactive=self.model.interactive,
             )
 
-            return CommandRunner(
-                command_model,
+            return ScriptRunner(
+                script_model,
                 self._child_context(),
                 parent=self,
             )

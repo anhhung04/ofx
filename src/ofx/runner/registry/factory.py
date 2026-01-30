@@ -6,7 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from ofx.runner.registry.base import RegistryAdapter
-from ofx.runner.registry.file import FileJobRegistry
+from ofx.runner.registry.file import FileRegistry
 from ofx.runner.registry.memory import MemoryJobRegistry
 from ofx.settings import settings
 
@@ -55,7 +55,7 @@ class RegistryFactory:
         if filepath:
             kwargs["filepath"] = filepath
         _log_debug(f"Creating FileJobRegistry with kwargs: {kwargs}")
-        return FileJobRegistry(**kwargs)
+        return FileRegistry(**kwargs)
 
     @classmethod
     def create_redis(

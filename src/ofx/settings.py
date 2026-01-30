@@ -25,6 +25,7 @@ DATA_DIR = Path(__file__).parent / "data"
 USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
 USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
+SCRIPT_COMMUNICATION_REGISTRY = TEMP_DIR / "script_channels.json"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
@@ -69,6 +70,7 @@ os.makedirs(USER_SHELLCODE_CONNECTORS_DIR, exist_ok=True)
 os.makedirs(USER_WEBSHELL_CONNECTORS_DIR, exist_ok=True)
 TOOLS_DIR.mkdir(parents=True, exist_ok=True)
 TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
+SCRIPT_COMMUNICATION_REGISTRY.parent.mkdir(parents=True, exist_ok=True)
 
 _console = None
 
@@ -137,6 +139,10 @@ class Settings(BaseSettings):
     registry_file_path: str | None = Field(
         default=None,
         description="File path for file-based registry (defaults to ~/.local/share/ofx/job_registry.json)",
+    )
+    script_communication_registry_path: str = Field(
+        default=str(SCRIPT_COMMUNICATION_REGISTRY),
+        description="File path for script inter-job communication registry",
     )
     registry_redis: RedisRegistrySettings | None = Field(
         default=None,

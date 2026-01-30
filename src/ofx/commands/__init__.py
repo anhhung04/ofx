@@ -2,9 +2,9 @@ import typer
 
 from ofx.commands.ui_helpers import print_banner, print_error
 
-app = typer.Typer(pretty_exceptions_show_locals=False)
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
-from ofx.commands import asset, docs, doctor, dump, flow, project, secret
+from ofx.commands import asset, docs, doctor, dump, flow, project, secret  # noqa: E402
 
 COMMAND_ALIASES = {
     flow: ["x"],

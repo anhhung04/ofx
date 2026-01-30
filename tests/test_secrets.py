@@ -1,11 +1,15 @@
 import os
+import tempfile
 from pathlib import Path
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from pydantic import ValidationError
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+TEMP_DIR = Path(tempfile.gettempdir())
 
 # --- Setup a guaranteed clean test environment ---
-SECRETS_DIR = Path("./temp_secrets")
-ENV_FILE = Path(".env_test")
+SECRETS_DIR = TEMP_DIR / Path("./temp_secrets")
+ENV_FILE = TEMP_DIR / Path(".env_test")
 os.makedirs(SECRETS_DIR, exist_ok=True)
 
 # Create a secret file
@@ -40,7 +44,6 @@ def test_secrets():
         print("\n❌ FAILURE! Pydantic could not load the settings.")
         print(e)
     finally:
-        # --- Cleanup ---
         print("\n🧹 Cleaning up test environment...")
         os.remove(SECRETS_DIR / "secret_from_file")
         os.rmdir(SECRETS_DIR)

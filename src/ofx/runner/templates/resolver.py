@@ -9,7 +9,7 @@ from jinja2 import Template
 from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
-from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR
+from ofx.settings import TEMP_DIR, TOOLS_BIN_DIR, TOOLS_DIR
 
 
 class TemplateResolver:
@@ -133,6 +133,7 @@ class TemplateResolver:
                 "sudo": sudo,
                 "tools_dir": tools_dir_str,
                 "tools_bin_dir": tools_bin_dir_str,
+                "temp_dir": TEMP_DIR.absolute().as_posix(),
                 "fapt": lambda app: f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends {app}',
                 "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
                 "go_install": lambda pkg: f"GO111MODULE=on GOBIN={tools_bin_dir_str} go install {pkg}@latest",

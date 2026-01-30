@@ -33,9 +33,6 @@ class Script(Command):
     """Model for Python script execution"""
 
     script: str = Field(..., description="Python script code to execute")
-    interpreter: str = Field(
-        default="python3", description="Code interpreter to use for execution"
-    )
 
     def __str__(self):
         return f"Script(inline,cwd='{self.working_directory}')"

@@ -133,7 +133,7 @@ class PayloadServer:
         )
 
         # Store payload path in server instance for handler access
-        self.server.payload_path = self.payload_path
+        setattr(self.server, "payload_path", self.payload_path)
 
     def add_payload(
         self, path: str, content: str | None = None, file: str | Path | None = None
@@ -179,11 +179,11 @@ class PayloadServer:
         if path in self.hits:
             del self.hits[path]
 
-    def start(self, daemon: bool = True) -> None:
+    def start(self, daemon: bool = False) -> None:
         """Start the HTTP server in a background thread.
 
         Args:
-            daemon: Run as daemon thread (default: True)
+            daemon: Run as daemon thread (default: False)
 
         Example:
             >>> server.start()

@@ -3,7 +3,7 @@ from typing import Annotated
 import typer
 from async_typer import AsyncTyper
 
-app = AsyncTyper()
+app = AsyncTyper(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
 NAME = "flow"
 
@@ -11,11 +11,10 @@ ALIAS = ["x", "task"]
 
 HELP = "Manage and run workflows in the OFX system"
 
+
 @app.async_command()
 async def run(
-    workflow_name: Annotated[
-        str, typer.Argument(help="Name of the workflow to run")
-    ],
+    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to run")],
     input: Annotated[
         list[str],
         typer.Option(

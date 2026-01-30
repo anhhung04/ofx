@@ -4,13 +4,14 @@ import logging
 import os
 from typing import Any
 
+from pydantic import constr
+
 from ofx.models.config import DefaultConfig
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunnerContextBuilder
-from ofx.runner.core import BaseRunner, RegistryAdapter, RunContext
-from ofx.runner.execution.job import JobRunner, MatrixJobRunner
-from ofx.runner.core import RunnerRegistryKeys
+from ofx.runner.core import BaseRunner, RegistryAdapter, RunContext, RunnerRegistryKeys
 from ofx.runner.execution.execution_summary import ExecutionSummaryReporter
+from ofx.runner.execution.job import JobRunner, MatrixJobRunner
 from ofx.runner.execution.tool_installer import ToolInstallerRunner
 from ofx.runner.execution.workflow_execution import WorkflowExecutionManager
 from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
@@ -37,9 +38,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
         await self._resolve_template_fields(
             ["name", "description", "tags", "env", "defaults"]
         )
-        self._log_debug(
-            f"Resolved workflow: {self.model.model_dump(exclude={'jobs'})}"
-        )
+        self._log_debug(f"Resolved workflow: {self.model.model_dump(exclude={'jobs'})}")
 
         output_path = self.ctx.output_path
         if output_path:
@@ -122,7 +121,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
         execution = WorkflowExecutionManager(self)
         result = await execution.run(self._schedule, self._staged_jobs)
         if result.errors:
-            error_summary = "====\n".join(result.errors)
+            error_summary = "\n====\n".join(result.errors)
             await self.reg_set(
                 RunnerRegistryKeys.ERRORS,
                 {
@@ -174,19 +173,45 @@ class WorkflowRunner(BaseRunner[Workflow]):
             f"Processing inputs: {req_inputs} with blueprint: {input_blueprint}"
         )
 
+        def find_alias(alias: str | list[str] | None, names: set[str]) -> str | None:
+            if not alias:
+                return None
+            if isinstance(alias, str):
+                alias = [alias]
+            for a in alias:
+                if a in names:
+                    return a
+            return None
+
+        inputs_names = set(req_inputs.keys())
+
         for key, constraint in input_blueprint.items():
-            if key not in req_inputs and constraint.required:
-                raise ValueError(
-                    f"Input '{key}' is required but not provided in the inputs."
-                )
-            if key in req_inputs:
-                value = req_inputs[key]
+            alias = find_alias(constraint.alias, inputs_names)
+            if key in req_inputs or alias:
+                value = None
+                if alias:
+                    if key in req_inputs:
+                        self._log_warning(
+                            f"Both input '{key}' and its alias '{alias}' are provided. "
+                            f"Using value from '{key}' and ignoring alias."
+                        )
+                        req_inputs.pop(alias)
+                        continue
+                    else:
+                        value = req_inputs[alias]
+                        req_inputs[key] = value
+                else:
+                    value = req_inputs[key]
                 if not self._check_input_type(value, constraint.type):
                     raise ValueError(
                         f"Input '{key}' has invalid type: {type(value).__name__}. "
                         f"Expected type: {constraint.type}."
                     )
             else:
+                if constraint.required:
+                    raise ValueError(
+                        f"Input '{key}' is required but not provided in the inputs."
+                    )
                 req_inputs[key] = constraint.default
         for key, value in req_inputs.items():
             req_inputs[key] = await self._resolve_template(value)

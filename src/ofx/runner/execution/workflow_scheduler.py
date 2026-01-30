@@ -34,10 +34,7 @@ class WorkflowScheduler:
     @staticmethod
     def dependencies(jobs: dict[str, Job]) -> list[tuple[str, str]]:
         return [
-            (dep, job_id)
-            for job_id, job in jobs.items()
-            for dep in job.needs
-            if dep
+            (dep, job_id) for job_id, job in jobs.items() for dep in job.needs if dep
         ]
 
     @staticmethod

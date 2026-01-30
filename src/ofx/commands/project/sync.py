@@ -8,7 +8,7 @@ import typer
 
 from ofx.settings import settings
 
-from .storage import EncryptionHandler, GitHandler, S3Handler
+from .storage import EncryptionHandler, GitHandler, SSHHandler
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -21,12 +21,14 @@ class SyncProjectHandler:
         remote_config: str = "",
         encrypt: bool = False,
         encryption_key: str = "",
+        message: str = "",
     ):
         self._project_path = Path(path)
         self._remote_type = remote_type
         self._remote_config = remote_config
         self._encrypt = encrypt
         self._encryption_key = encryption_key or os.getenv("OFX_ENCRYPTION_KEY")
+        self._message = message
 
         self._load_project_config()
 
@@ -76,8 +78,8 @@ class SyncProjectHandler:
 
         if self._remote_type == "git":
             self._sync_git()
-        elif self._remote_type == "s3":
-            self._sync_remote_storage()
+        elif self._remote_type == "ssh":
+            self._sync_ssh()
         else:
             logger.warning(f"Unknown remote type: {self._remote_type}")
             raise ValueError(f"Unsupported remote type: {self._remote_type}")
@@ -93,10 +95,13 @@ class SyncProjectHandler:
                 repo.index.add(repo.untracked_files)
                 repo.git.add(A=True)
 
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                hostname = os.getenv("HOSTNAME", "unknown")
-                user = os.getenv("USER", "unknown")
-                commit_msg = f"Auto-sync: {timestamp} by {user}@{hostname}"
+                if self._message:
+                    commit_msg = self._message
+                else:
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    hostname = os.getenv("HOSTNAME", "unknown")
+                    user = os.getenv("USER", "unknown")
+                    commit_msg = f"Auto-sync: {timestamp} by {user}@{hostname}"
 
                 repo.index.commit(commit_msg)
                 logger.info(f"Auto-committed changes: {commit_msg}")
@@ -119,6 +124,19 @@ class SyncProjectHandler:
             logger.info("Successfully synced with git remote.")
         except Exception as e:
             logger.error(f"Git sync failed: {e}")
+            raise
+
+    def _sync_ssh(self) -> None:
+        """Sync with SSH remote."""
+        config = json.loads(self._remote_config) if self._remote_config else {}
+        handler = SSHHandler(
+            config,
+        )
+        try:
+            handler.sync(self._project_path)
+            logger.info("Successfully synced with SSH remote.")
+        except Exception as e:
+            logger.error(f"SSH sync failed: {e}")
             raise
 
     def _encrypt_local_files(self, encryptor: EncryptionHandler) -> None:
@@ -148,27 +166,6 @@ class SyncProjectHandler:
                         logger.debug(f"Encrypted: {file_path}")
                     except Exception as e:
                         logger.warning(f"Failed to encrypt {file_path}: {e}")
-
-    def _sync_remote_storage(self) -> None:
-        """Sync project files to remote storage using git bundles."""
-        config = json.loads(self._remote_config) if self._remote_config else {}
-
-        if self._remote_type == "s3":
-            handler = S3Handler(**config)
-            try:
-                try:
-                    handler.fetch(self._project_path)
-                    logger.info("Fetched changes from S3")
-                except Exception:
-                    logger.info("No existing remote found, will create initial sync")
-
-                handler.sync(self._project_path)
-                logger.info("Synced project to S3 remote storage.")
-            except Exception as e:
-                logger.error(f"S3 sync failed: {e}")
-                raise
-        else:
-            logger.warning(f"Unknown remote storage type: {self._remote_type}")
 
     def _upload_files(self, handler, encryptor=None) -> None:
         """Upload all project files using the given handler."""

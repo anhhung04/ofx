@@ -6,6 +6,8 @@ import contextlib
 import io
 import logging
 import os
+import time
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -18,10 +20,100 @@ from ofx.runner.core import (
     RunnerStatus,
     RunResult,
 )
-from ofx.runner.registry import RegistryAdapter
+from ofx.runner.registry.file import FileRegistry
 from ofx.settings import DEFAULT_SHELL, settings
 
 logger = logging.getLogger(settings.app_branding)
+
+
+def exec_script_in_process(
+    script,
+    working_directory,
+    job_model,
+    step_model,
+    workflow_model,
+    ctx_model,
+    inputs,
+    secrets,
+    registry_filepath,
+):
+    """Execute script in a separate process with registry-based channel communication"""
+    registry = FileRegistry(registry_filepath)
+
+    def sync_reg_set(key, value):
+        import asyncio
+
+        asyncio.run(registry.set(key, value))
+
+    def sync_reg_get(key):
+        import asyncio
+
+        return asyncio.run(registry.get(key))
+
+    def publish(channel: str, data):
+        sync_reg_set(f"channels:{channel}", data)
+
+    def subscribe(channel: str):
+        def generator():
+            last_data = None
+            while True:
+                data = sync_reg_get(f"channels:{channel}")
+                if data is not None and data != last_data:
+                    yield data
+                    last_data = data
+                time.sleep(0.01)
+
+        return generator()
+
+    def wait_for(channel: str, condition, timeout: int = 60):
+        start = time.time()
+        while time.time() - start < timeout:
+            data = sync_reg_get(f"channels:{channel}")
+            if data is not None and condition(data):
+                return data
+            time.sleep(0.01)
+        raise TimeoutError(f"Timeout waiting for channel {channel}")
+
+    globals_dict = {
+        "__builtins__": builtins.__dict__,
+        "__name__": "__main__",
+        "__job__": job_model,
+        "__step__": step_model,
+        "__workflow__": workflow_model,
+        "__inputs__": inputs,
+        "__ctx__": ctx_model,
+        "__secrets__": secrets,
+        "publish": publish,
+        "subscribe": subscribe,
+        "wait_for": wait_for,
+    }
+
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
+    exit_code = 0
+    original_cwd = os.getcwd()
+
+    try:
+        os.chdir(working_directory)
+        with (
+            contextlib.redirect_stdout(stdout_capture),
+            contextlib.redirect_stderr(stderr_capture),
+        ):
+            exec(script, globals_dict)
+    except Exception as e:
+        exit_code = 1
+        stderr_capture.write(str(e))
+    finally:
+        os.chdir(original_cwd)
+
+    stdout = stdout_capture.getvalue()
+    stderr = stderr_capture.getvalue()
+
+    return {
+        "exit_code": exit_code,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
 
 
 class CommandRunner(BaseRunner[Command]):
@@ -33,7 +125,7 @@ class CommandRunner(BaseRunner[Command]):
         self,
         command_model: Command,
         ctx: RunContext,
-        parent: "BaseRunner | None" = None,
+        parent: BaseRunner | None = None,
     ):
         super().__init__(command_model, ctx, parent)
         self._outputs_file: Path | None = None
@@ -151,114 +243,39 @@ class ScriptRunner(BaseRunner[Script]):
             ) from timeout_exc
 
     async def _exec_script(self):
-        """Run the script execution in a thread pool"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._exec_script_sync, loop)
+        """Run the script execution in a separate process"""
+        # Use shared registry for inter-job communication
+        registry_filepath = settings.script_communication_registry_path
 
-    def _exec_script_sync(self, loop):
-        """Synchronously execute the script with exec and capture output"""
-        # Prepare injected variables
-        step_model = self.parent.model if self.parent else None
-        job_model = (
-            self.parent.parent.model if self.parent and self.parent.parent else None
-        )
-        workflow_model = (
-            self.parent.parent.parent.model
-            if self.parent and self.parent.parent and self.parent.parent.parent
-            else None
-        )
-        ctx_model = self.ctx
-
-        # Channel communication functions
-        def publish(channel: str, data):
-            """Publish data to a channel"""
-            reg_set = (
-                self.parent.parent.reg_set
+        with ProcessPoolExecutor() as executor:
+            future = executor.submit(
+                exec_script_in_process,
+                self.model.script,
+                str(self.model.working_directory),
+                self.parent.parent.model
                 if self.parent and self.parent.parent
-                else self.reg_set
+                else None,
+                self.parent.model if self.parent else None,
+                self.parent.parent.parent.model
+                if self.parent and self.parent.parent and self.parent.parent.parent
+                else None,
+                self.ctx,
+                self.ctx.inputs,
+                self.ctx.secrets,
+                registry_filepath,
             )
-            coro = reg_set(f"channels:{channel}", data)
-            future = asyncio.run_coroutine_threadsafe(coro, loop)
-            future.result()  # Wait for completion
+            result = await asyncio.get_event_loop().run_in_executor(None, future.result)
 
-        def subscribe(channel: str):
-            """Subscribe to data from a channel, returns a generator that yields data when it changes"""
+            # Read published data from the shared registry
+            script_registry = FileRegistry(registry_filepath)
+            # Get all channel keys
+            all_data = await script_registry._read_registry()
+            for key, data in all_data.items():
+                if key.startswith("channels:"):
+                    channel = key[9:]  # Remove "channels:" prefix
+                    await self.reg_set(f"channels:{channel}", data)
 
-            def generator():
-                import time
-
-                last_data = None
-                reg_get = (
-                    self.parent.parent.reg_get
-                    if self.parent and self.parent.parent
-                    else self.reg_get
-                )
-                while True:
-                    coro = reg_get(f"channels:{channel}")
-                    future = asyncio.run_coroutine_threadsafe(coro, loop)
-                    data = future.result()
-                    if data != last_data:
-                        yield data
-                        last_data = data
-                    time.sleep(0.01)
-
-            return generator()
-
-        def wait_for(channel: str, condition, timeout: int = 60):
-            """Wait for a condition on channel data to be true"""
-            import time
-
-            reg_get = (
-                self.parent.parent.reg_get
-                if self.parent and self.parent.parent
-                else self.reg_get
-            )
-            start = time.time()
-            while time.time() - start < timeout:
-                coro = reg_get(f"channels:{channel}")
-                future = asyncio.run_coroutine_threadsafe(coro, loop)
-                data = future.result()
-                if condition(data):
-                    return data
-                time.sleep(0.01)
-            raise TimeoutError(f"Timeout waiting for channel {channel}")
-
-        globals_dict = {
-            "__builtins__": builtins.__dict__,
-            "__name__": "__main__",
-            "__job__": job_model,
-            "__step__": step_model,
-            "__workflow__": workflow_model,
-            "__ctx__": ctx_model,
-            "publish": publish,
-            "subscribe": subscribe,
-            "wait_for": wait_for,
-        }
-
-        # Capture stdout and stderr
-        stdout_capture = io.StringIO()
-        stderr_capture = io.StringIO()
-
-        exit_code = 0
-        original_cwd = os.getcwd()
-
-        try:
-            os.chdir(self.model.working_directory)
-            with (
-                contextlib.redirect_stdout(stdout_capture),
-                contextlib.redirect_stderr(stderr_capture),
-            ):
-                exec(self.model.script, globals_dict)
-        except Exception as e:
-            exit_code = 1
-            stderr_capture.write(str(e))
-        finally:
-            os.chdir(original_cwd)
-
-        stdout = stdout_capture.getvalue()
-        stderr = stderr_capture.getvalue()
-
-        return {"exit_code": exit_code, "stdout": stdout, "stderr": stderr}
+            return result
 
     async def _pre_run(self) -> None:
         """Pre-run hook"""

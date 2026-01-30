@@ -49,6 +49,8 @@ class FlowRunHandler:
         import pstats
         import time
 
+        from rich.align import Align
+
         start_time = time.time()
 
         if self.profile:
@@ -62,11 +64,9 @@ class FlowRunHandler:
             logger.info("Workflow: %s", self.workflow_name)
             logger.info("Output: %s", self.output.as_posix())
             if self.input:
-                console.print(inputs_table(self.input))
+                console.print(Align.center(inputs_table(self.input)))
 
-            workflow = find_workflow(
-                self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS)
-            )
+            workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
 
             runner = WorkflowRunner(
                 workflow,
@@ -79,14 +79,13 @@ class FlowRunHandler:
                     ),
                 ),
             )
-            res = await runner.run()
+            runner.log_level = logging.ERROR
+            _ = await runner.run()
 
-            if res.status.value != "completed":
-                logger.error(
-                    "Workflow failed: status=%s error=%s", res.status.value, res.error
-                )
-            else:
+            if runner.is_success:
                 logger.info("Workflow completed successfully!")
+            else:
+                logger.error("Workflow failed")
 
             result = await runner.get_result()
 

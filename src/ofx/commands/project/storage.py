@@ -1,9 +1,7 @@
 import getpass
-import json
 import logging
 import os
 import subprocess
-import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -184,6 +182,7 @@ class EncryptionHandler:
 
     def encrypt_file(self, file_path: str) -> bytes:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
         with open(file_path, "rb") as f:
             data = f.read()
 
@@ -195,6 +194,7 @@ class EncryptionHandler:
 
     def decrypt_file(self, encrypted_data: bytes) -> bytes:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
         nonce = encrypted_data[:12]
         ciphertext = encrypted_data[12:]
 
@@ -205,15 +205,15 @@ class EncryptionHandler:
 
     def encrypt_data(self, data: bytes) -> bytes:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
         nonce = os.urandom(12)
         aesgcm = AESGCM(self.key)
         ciphertext = aesgcm.encrypt(nonce, data, None)
         return nonce + ciphertext
 
-    def setup_git_filters(
-        self, repo_path: Path, patterns: list | None = None
-    ) -> None:
+    def setup_git_filters(self, repo_path: Path, patterns: list | None = None) -> None:
         import git
+
         if patterns is None:
             patterns = ["*"]
 
@@ -263,6 +263,7 @@ class GitHandler:
 
     def sync(self) -> None:
         import git
+
         try:
             repo = git.Repo(self.project_path)
         except (git.InvalidGitRepositoryError, git.NoSuchPathError):
@@ -312,213 +313,3 @@ class GitHandler:
 
         except Exception as e:
             raise RuntimeError(f"Git sync failed: {e}") from e
-
-
-class S3Handler:
-    def __init__(
-        self,
-        bucket: str,
-        aws_access_key_id: str | None = None,
-        aws_secret_access_key: str | None = None,
-        region_name: str | None = None,
-        prefix: str = "",
-    ):
-        import boto3
-
-        self.bucket = bucket
-        self.prefix = prefix.strip("/")
-        self.s3 = boto3.client(
-            "s3",
-            aws_access_key_id=aws_access_key_id,
-            aws_secret_access_key=aws_secret_access_key,
-            region_name=region_name,
-        )
-
-    def sync(self, local_path: Path) -> None:
-        import git
-        logger = logging.getLogger("ofx")
-
-        try:
-            repo = git.Repo(local_path)
-        except (git.InvalidGitRepositoryError, git.NoSuchPathError):
-            raise RuntimeError(f"No git repository found at {local_path}") from None
-
-        bundle_key = f"{self.prefix}/repo.bundle" if self.prefix else "repo.bundle"
-        refs_key = f"{self.prefix}/refs.json" if self.prefix else "refs.json"
-
-        with tempfile.NamedTemporaryFile(suffix=".bundle", delete=False) as bundle_file:
-            bundle_path = bundle_file.name
-
-        try:
-            repo.git.bundle("create", bundle_path, "--all")
-            logger.info(f"Created git bundle: {bundle_path}")
-
-            self.s3.upload_file(bundle_path, self.bucket, bundle_key)
-            logger.info(f"Uploaded bundle to s3://{self.bucket}/{bundle_key}")
-
-            refs_data = {
-                "refs": {ref.name: ref.commit.hexsha for ref in repo.refs},
-                "head": repo.head.commit.hexsha if repo.head.is_valid() else None,
-            }
-
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False
-            ) as refs_file:
-                json.dump(refs_data, refs_file)
-                refs_path = refs_file.name
-
-            self.s3.upload_file(refs_path, self.bucket, refs_key)
-            logger.info(f"Uploaded refs to s3://{self.bucket}/{refs_key}")
-
-            os.unlink(bundle_path)
-            os.unlink(refs_path)
-
-        except Exception as e:
-            if os.path.exists(bundle_path):
-                os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to sync to S3: {e}") from e
-
-    def fetch(self, local_path: Path) -> None:
-        import git
-        logger = logging.getLogger("ofx")
-
-        bundle_key = f"{self.prefix}/repo.bundle" if self.prefix else "repo.bundle"
-
-        try:
-            repo = git.Repo(local_path)
-        except (git.InvalidGitRepositoryError, git.NoSuchPathError):
-            repo = git.Repo.init(local_path)
-
-        with tempfile.NamedTemporaryFile(suffix=".bundle", delete=False) as bundle_file:
-            bundle_path = bundle_file.name
-
-        try:
-            self.s3.download_file(self.bucket, bundle_key, bundle_path)
-            logger.info(f"Downloaded bundle from s3://{self.bucket}/{bundle_key}")
-
-            repo.git.fetch(bundle_path)
-            logger.info("Fetched changes from bundle")
-
-            try:
-                if "main" in [ref.name for ref in repo.refs]:
-                    repo.git.checkout("main")
-                    logger.info("Checked out main branch")
-                elif "master" in [ref.name for ref in repo.refs]:
-                    repo.git.checkout("master")
-                    logger.info("Checked out master branch")
-            except Exception as e:
-                logger.debug(f"Could not checkout branch: {e}")
-
-            os.unlink(bundle_path)
-
-        except Exception as e:
-            if os.path.exists(bundle_path):
-                os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to fetch from S3: {e}") from e
-
-    def upload(self, local_path: str, remote_path: str) -> None:
-        key = f"{self.prefix}/{remote_path}" if self.prefix else remote_path
-        self.s3.upload_file(local_path, self.bucket, key)
-
-    def download(self, remote_path: str, local_path: str) -> None:
-        key = f"{self.prefix}/{remote_path}" if self.prefix else remote_path
-        self.s3.download_file(self.bucket, key, local_path)
-
-
-class WebDAVHandler:
-    def __init__(self, webdav_options: dict):
-        from webdav3.client import Client as WebDAVClient
-        self.client = WebDAVClient(webdav_options)
-        self.base_path = webdav_options.get("webdav_root", "/")
-
-    def sync(self, local_path: Path) -> None:
-        import git
-        logger = logging.getLogger("ofx")
-
-        try:
-            repo = git.Repo(local_path)
-        except (git.InvalidGitRepositoryError, git.NoSuchPathError):
-            raise RuntimeError(f"No git repository found at {local_path}") from None
-
-        bundle_path_remote = f"{self.base_path}/repo.bundle".replace("//", "/")
-        refs_path_remote = f"{self.base_path}/refs.json".replace("//", "/")
-
-        with tempfile.NamedTemporaryFile(suffix=".bundle", delete=False) as bundle_file:
-            bundle_path = bundle_file.name
-
-        try:
-            repo.git.bundle("create", bundle_path, "--all")
-            logger.info(f"Created git bundle: {bundle_path}")
-
-            self.client.upload_sync(
-                remote_path=bundle_path_remote, local_path=bundle_path
-            )
-            logger.info(f"Uploaded bundle to WebDAV: {bundle_path_remote}")
-
-            refs_data = {
-                "refs": {ref.name: ref.commit.hexsha for ref in repo.refs},
-                "head": repo.head.commit.hexsha if repo.head.is_valid() else None,
-            }
-
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False
-            ) as refs_file:
-                json.dump(refs_data, refs_file)
-                refs_path = refs_file.name
-
-            self.client.upload_sync(remote_path=refs_path_remote, local_path=refs_path)
-            logger.info(f"Uploaded refs to WebDAV: {refs_path_remote}")
-
-            os.unlink(bundle_path)
-            os.unlink(refs_path)
-
-        except Exception as e:
-            if os.path.exists(bundle_path):
-                os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to sync to WebDAV: {e}") from e
-
-    def fetch(self, local_path: Path) -> None:
-        import git
-        logger = logging.getLogger("ofx")
-
-        bundle_path_remote = f"{self.base_path}/repo.bundle".replace("//", "/")
-
-        try:
-            repo = git.Repo(local_path)
-        except (git.InvalidGitRepositoryError, git.NoSuchPathError):
-            repo = git.Repo.init(local_path)
-
-        with tempfile.NamedTemporaryFile(suffix=".bundle", delete=False) as bundle_file:
-            bundle_path = bundle_file.name
-
-        try:
-            self.client.download_sync(
-                remote_path=bundle_path_remote, local_path=bundle_path
-            )
-            logger.info(f"Downloaded bundle from WebDAV: {bundle_path_remote}")
-
-            repo.git.fetch(bundle_path)
-            logger.info("Fetched changes from bundle")
-
-            try:
-                if "main" in [ref.name for ref in repo.refs]:
-                    repo.git.checkout("main")
-                    logger.info("Checked out main branch")
-                elif "master" in [ref.name for ref in repo.refs]:
-                    repo.git.checkout("master")
-                    logger.info("Checked out master branch")
-            except Exception as e:
-                logger.debug(f"Could not checkout branch: {e}")
-
-            os.unlink(bundle_path)
-
-        except Exception as e:
-            if os.path.exists(bundle_path):
-                os.unlink(bundle_path)
-            raise RuntimeError(f"Failed to fetch from WebDAV: {e}") from e
-
-    def upload(self, local_path: str, remote_path: str) -> None:
-        self.client.upload_sync(remote_path=remote_path, local_path=local_path)
-
-    def download(self, remote_path: str, local_path: str) -> None:
-        self.client.download_sync(remote_path=remote_path, local_path=local_path)

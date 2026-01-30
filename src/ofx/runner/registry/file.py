@@ -13,7 +13,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class FileJobRegistry(RegistryAdapter):
+class FileRegistry(RegistryAdapter):
     """File-based implementation of job registry
 
     Stores job data in a JSON file for persistence across process restarts.
