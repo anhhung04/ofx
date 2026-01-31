@@ -24,11 +24,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     devscripts \
     debhelper \
     dh-python \
+    pybuild-plugin-pyproject \
     python3-all \
     python3-pip \
     python3-setuptools \
     python3-build \
+    python3-hatchling \
     fakeroot \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -36,10 +39,12 @@ WORKDIR /build
 # Copy source
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
-COPY debian/ ./debian/
+COPY packaging/debian/ ./debian/
 
-# Make rules executable
-RUN chmod +x debian/rules
+# Fix Windows line endings, set correct permissions
+RUN find debian -type f -exec dos2unix {} \; && \
+    chmod +x debian/rules && \
+    chmod -x debian/ofx.manpages debian/ofx.1
 
 # Build the .deb package
 RUN dpkg-buildpackage -us -uc -b
@@ -59,6 +64,7 @@ RUN dnf install -y \
     python3-setuptools \
     rpm-build \
     rpmdevtools \
+    dos2unix \
     && dnf clean all
 
 WORKDIR /build
@@ -67,6 +73,9 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 COPY packaging/rpm/ ./packaging/rpm/
+
+# Fix Windows line endings
+RUN dos2unix packaging/rpm/*
 
 # Setup RPM build tree
 RUN rpmdev-setuptree

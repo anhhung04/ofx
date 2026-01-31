@@ -75,6 +75,7 @@ plugins:
 nav:
         - Home: index.md
         - Getting Started:
+                  - Installation: getting-started/installation.md
                   - Quick Start: getting-started/quickstart.md
                   - Quickstart Examples: getting-started/quickstart/examples.md
                   - Concepts: getting-started/concepts.md
@@ -136,12 +137,14 @@ nav:
                             - Exploit Utilities: api/exploitation/exploit.md
                   - Post-Exploitation:
                             - Overview: api/post-exploitation.md
+                            - Post Runners: api/post-exploitation/post.md
                             - File Operations: api/post-exploitation/file.md
                             - Network: api/post-exploitation/network.md
                             - HTTP Server: api/post-exploitation/httpserver.md
                             - String Utilities: api/post-exploitation/strings.md
                             - Utilities: api/post-exploitation/utils.md
                             - Credentials: api/post-exploitation/creds.md
+                            - Evasion: api/post-exploitation/evasion.md
                             - Workflow Integration: api/post-exploitation/workflow.md
         - CLI Reference:
                   - Overview: cli/commands.md

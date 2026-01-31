@@ -33,9 +33,9 @@ echo ""
 echo "[1/6] Updating pyproject.toml..."
 sed -i "s/^version = \".*\"/version = \"${NEW_VERSION}\"/" pyproject.toml
 
-# 2. Update debian/changelog
-echo "[2/6] Updating debian/changelog..."
-cat > debian/changelog.new << EOF
+# 2. Update packaging/debian/changelog
+echo "[2/6] Updating packaging/debian/changelog..."
+cat > packaging/debian/changelog.new << EOF
 ofx (${NEW_VERSION}-1) unstable; urgency=medium
 
   * ${CHANGELOG_MSG}
@@ -43,8 +43,8 @@ ofx (${NEW_VERSION}-1) unstable; urgency=medium
  -- OFX Developer <dev.hah4@gmail.com>  ${DATE}
 
 EOF
-cat debian/changelog >> debian/changelog.new
-mv debian/changelog.new debian/changelog
+cat packaging/debian/changelog >> packaging/debian/changelog.new
+mv packaging/debian/changelog.new packaging/debian/changelog
 
 # 3. Update packaging/rpm/ofx.spec
 echo "[3/6] Updating packaging/rpm/ofx.spec..."
@@ -62,10 +62,10 @@ sed -i "s|/v[0-9.]*-1/|/v${NEW_VERSION}/|g" packaging/winget/redteam.OFX.yaml
 sed -i "s|/v[0-9.]*/|/v${NEW_VERSION}/|g" packaging/winget/redteam.OFX.yaml
 sed -i "s/ofx-[0-9.]*-windows/ofx-${NEW_VERSION}-windows/g" packaging/winget/redteam.OFX.yaml
 
-# 5. Update debian/ofx.1 (man page)
-echo "[5/6] Updating debian/ofx.1..."
+# 5. Update packaging/debian/ofx.1 (man page)
+echo "[5/6] Updating packaging/debian/ofx.1..."
 MONTH_YEAR=$(date -u +"%B %Y")
-sed -i "s/^.TH OFX 1 \".*\" \"OFX .*\"/.TH OFX 1 \"${MONTH_YEAR}\" \"OFX ${NEW_VERSION}\"/" debian/ofx.1
+sed -i "s/^.TH OFX 1 \".*\" \"OFX .*\"/.TH OFX 1 \"${MONTH_YEAR}\" \"OFX ${NEW_VERSION}\"/" packaging/debian/ofx.1
 
 # 6. Update src/ofx/_version.py if it exists
 echo "[6/6] Updating src/ofx/_version.py..."
@@ -80,10 +80,10 @@ echo "=========================================="
 echo ""
 echo "Files updated:"
 echo "  - pyproject.toml"
-echo "  - debian/changelog"
+echo "  - packaging/debian/changelog"
 echo "  - packaging/rpm/ofx.spec"
-echo "  - packaging/winget/OFX.OFX.yaml"
-echo "  - debian/ofx.1"
+echo "  - packaging/winget/redteam.OFX.yaml"
+echo "  - packaging/debian/ofx.1"
 echo "  - src/ofx/_version.py"
 echo ""
 echo "Next steps:"

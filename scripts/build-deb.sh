@@ -5,7 +5,7 @@
 # Usage: ./scripts/build-deb.sh
 #
 # Requirements (install on Debian/Ubuntu):
-#   sudo apt-get install build-essential devscripts debhelper dh-python python3-all python3-pip python3-build
+#   sudo apt-get install build-essential devscripts debhelper dh-python pybuild-plugin-pyproject python3-all python3-pip python3-build
 #
 set -e
 
@@ -33,17 +33,25 @@ check_cmd dpkg-buildpackage devscripts
 check_cmd dh debhelper
 check_cmd python3 python3
 
+# Create symlink for debian directory (dpkg-buildpackage expects it in root)
+if [ ! -L "debian" ] && [ ! -d "debian" ]; then
+    ln -s packaging/debian debian
+fi
+
 # Ensure debian/rules is executable
-chmod +x debian/rules
+chmod +x packaging/debian/rules
 
 # Clean previous builds
 echo "Cleaning previous builds..."
-rm -rf debian/.debhelper debian/ofx debian/files debian/*.debhelper* debian/*.substvars
+rm -rf packaging/debian/.debhelper packaging/debian/ofx packaging/debian/files packaging/debian/*.debhelper* packaging/debian/*.substvars
 rm -f ../ofx_*.deb ../ofx_*.changes ../ofx_*.buildinfo 2>/dev/null || true
 
 # Build the package
 echo "Building package..."
 dpkg-buildpackage -us -uc -b
+
+# Remove symlink
+rm -f debian 2>/dev/null || true
 
 # Move built package to project directory
 echo ""

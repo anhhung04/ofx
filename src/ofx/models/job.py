@@ -1,39 +1,18 @@
-from pathlib import Path
-from typing import Any, Optional
+"""Job model for workflow execution."""
 
-from pydantic import BaseModel, Field, model_validator
+from typing import Any
 
+from pydantic import Field, model_validator
+
+from ofx.models.base import OFXBaseModel
 from ofx.models.config import DefaultConfig
 from ofx.models.step import Step
-from ofx.settings import DEFAULT_SHELL
+from ofx.models.strategy import MatrixStrategy
 
 
-class MatrixStrategy(BaseModel):
-    """Matrix strategy for running job variations"""
+class Job(OFXBaseModel):
+    """Job definition within a workflow."""
 
-    matrix: dict[str, list[Any]] = Field(
-        ...,
-        description="Matrix variables with lists of values to create job combinations",
-    )
-    max_parallel: int = Field(
-        default=10000000,
-        description="Maximum number of matrix jobs to run in parallel per stage (default: unlimited)",
-    )
-    fail_fast: bool = Field(
-        default=True,
-        description="Whether to fail the entire matrix if one job fails (default: true)",
-    )
-    include: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Additional matrix combinations to include",
-    )
-    exclude: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Matrix combinations to exclude from execution",
-    )
-
-
-class Job(BaseModel):
     name: str = Field(default="", description="Name of the job")
     needs: str | list[str] = Field(
         default_factory=list,

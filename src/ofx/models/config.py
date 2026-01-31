@@ -1,10 +1,16 @@
+"""Configuration models for workflows and jobs."""
+
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL, DEFAULT_WORKFLOWS_DIR
 
-class RunConfig(BaseModel):
+
+class RunConfig(OFXBaseModel):
+    """Shell and working directory configuration."""
+
     shell: str = Field(
         default=DEFAULT_SHELL,
         description="Shell to use for running commands in the workflow",
@@ -15,7 +21,9 @@ class RunConfig(BaseModel):
     )
 
 
-class DefaultConfig(BaseModel):
+class DefaultConfig(OFXBaseModel):
+    """Default configuration for workflows."""
+
     run: RunConfig = Field(
         default_factory=RunConfig,
         description="Default run configuration for the workflow",
@@ -26,5 +34,5 @@ class DefaultConfig(BaseModel):
     )
     flow_registry_url: str = Field(
         default="https://github.com",
-        description="Base URL for the flow registry"
+        description="Base URL for the flow registry",
     )

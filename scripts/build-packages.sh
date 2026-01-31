@@ -1,10 +1,14 @@
 #!/bin/bash
 #
-# Build OFX packages for all platforms using Docker
+# Build OFX Linux packages (deb, rpm, wheel) using Docker
 #
 # Usage:
 #   ./scripts/build-packages.sh              # Build for current arch
 #   ./scripts/build-packages.sh --multiarch  # Build for amd64 and arm64
+#
+# Note: Windows executable must be built on Windows using:
+#   scripts\build-windows.bat
+#   or: make pkg-windows
 #
 set -e
 
@@ -70,3 +74,7 @@ echo "    sudo rpm -i dist/packages/ofx-${VERSION}-1.noarch.rpm"
 echo ""
 echo "  Any platform (pip):"
 echo "    pip install dist/packages/ofx-${VERSION}-py3-none-any.whl"
+echo ""
+echo "  Windows (build on Windows):"
+echo "    scripts\\build-windows.bat"
+echo "    or: make pkg-windows"

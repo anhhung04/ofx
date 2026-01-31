@@ -90,18 +90,19 @@ deb:
 	@chmod +x scripts/build-deb.sh
 	bash scripts/build-deb.sh
 
-# Build Windows executable
+# Build Windows executable (run on Windows only)
 pkg-windows:
 	@echo "Building Windows executable..."
-	uv pip install pyinstaller
-	uv run python packaging/windows/build-exe.py
+	pip install pyinstaller
+	python packaging/windows/build-exe.py
+	@echo "Windows executable built in dist/"
 
 # Clean all package artifacts
 pkg-clean:
 	@echo "Cleaning package build artifacts..."
 	rm -rf dist/packages dist/*.deb dist/*.rpm dist/*.exe dist/*.whl
-	rm -rf debian/.debhelper debian/ofx debian/files
-	rm -f debian/*.debhelper* debian/*.substvars
+	rm -rf packaging/debian/.debhelper packaging/debian/ofx packaging/debian/files
+	rm -f packaging/debian/*.debhelper* packaging/debian/*.substvars
 	rm -f ../ofx_*.deb ../ofx_*.changes ../ofx_*.buildinfo 2>/dev/null || true
 	@echo "Package build artifacts cleaned."
 
