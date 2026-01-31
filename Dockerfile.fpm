@@ -1,0 +1,254 @@
+# =============================================================================
+# OFX Multi-Platform Package Builder using FPM
+# =============================================================================
+# Builds .deb, .rpm, and .whl packages using FPM for stable, reliable builds.
+# Dependencies are installed via pip post-install for compatibility.
+#
+# Usage:
+#   # Build for current platform
+#   docker build -f Dockerfile.fpm --target=export --output type=local,dest=dist/packages .
+#
+#   # Build for multiple architectures (requires docker buildx)
+#   docker buildx build -f Dockerfile.fpm --platform linux/amd64,linux/arm64 \
+#     --target=export --output type=local,dest=dist/packages .
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: Build Python Wheel
+# -----------------------------------------------------------------------------
+FROM python:3.12-slim-bookworm AS wheel-builder
+
+# Install uv for fast builds
+RUN pip install --no-cache-dir uv
+
+WORKDIR /build
+COPY pyproject.toml README.md uv.lock ./
+COPY src/ ./src/
+
+RUN uv build --wheel
+RUN mkdir -p /output && cp dist/*.whl /output/
+
+# -----------------------------------------------------------------------------
+# Stage 2: Build Packages with FPM
+# -----------------------------------------------------------------------------
+FROM ruby:3.2-slim-bookworm AS fpm-builder
+
+# Install FPM and required dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    rpm \
+    dos2unix \
+    cpio \
+    binutils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install FPM
+RUN gem install fpm --no-document
+
+WORKDIR /build
+
+# Copy wheel from previous stage
+COPY --from=wheel-builder /output/*.whl ./
+
+# Copy package metadata
+COPY pyproject.toml ./
+COPY packaging/ofx.1 ./
+
+# Extract version from wheel filename  
+RUN WHEEL=$(ls ofx-*.whl | head -1) && \
+    VERSION=$(echo $WHEEL | sed -n 's/ofx-\([0-9.]*\)-.*/\1/p') && \
+    echo "$VERSION" > /build/VERSION && \
+    echo "Building OFX version: $VERSION"
+
+# Install ofx wheel (no deps) into staging for the package
+RUN pip3 install --no-cache-dir --no-deps --target=/staging/usr/lib/python3/dist-packages *.whl
+
+# Create wrapper script that uses system Python
+RUN mkdir -p /staging/usr/bin && \
+    printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "/usr/lib/python3/dist-packages")\nfrom ofx import main\nmain()\n' > /staging/usr/bin/ofx && \
+    chmod +x /staging/usr/bin/ofx
+
+# Create data directory
+RUN mkdir -p /staging/usr/share/ofx
+
+# Create man page directory and copy man page
+RUN mkdir -p /staging/usr/share/man/man1 && \
+    dos2unix ofx.1 2>/dev/null || true && \
+    cp ofx.1 /staging/usr/share/man/man1/
+
+# Create output directory
+RUN mkdir -p /output
+
+# Create robust post-install script that handles dependencies and locks
+RUN cat > /build/postinst.sh << 'POSTINST'
+#!/bin/bash
+set -e
+
+LOG_FILE="/var/log/ofx_install.log"
+echo "OFX: Post-install script started" > $LOG_FILE
+
+# Dependencies lists
+SYSTEM_DEPS="python3 python3-pip python3-aiofiles python3-cryptography python3-filelock python3-git python3-httpx python3-jinja2 python3-yaml python3-requests python3-rich python3-tabulate"
+PIP_DEPS="pydantic>=2.11.7 pydantic-settings>=2.10.1 pydantic-file-secrets>=0.4.4 typer>=0.16.0 async-typer>=0.1.9 pycryptodomex>=3.21.0 pykeepass>=4.1.1"
+
+install_dependencies() {
+echo "Starting dependency installation..." >> $LOG_FILE
+
+# Update and install system deps
+if apt-get update -qq >> $LOG_FILE 2>&1; then
+if apt-get install -y --no-install-recommends $SYSTEM_DEPS >> $LOG_FILE 2>&1; then
+echo "System dependencies installed successfully." >> $LOG_FILE
+else
+echo "Failed to install system dependencies." >> $LOG_FILE
+return 1
+fi
+else
+echo "apt-get update failed." >> $LOG_FILE
+return 1
+fi
+
+# Install pip deps
+echo "Installing pip dependencies..." >> $LOG_FILE
+if pip3 install --help 2>&1 | grep -q "break-system-packages"; then
+pip3 install --no-cache-dir --break-system-packages $PIP_DEPS >> $LOG_FILE 2>&1
+else
+pip3 install --no-cache-dir $PIP_DEPS >> $LOG_FILE 2>&1
+fi
+}
+
+install_background() {
+# Detached background process to wait for lock release
+(
+echo "Waiting for dpkg lock to release..." >> $LOG_FILE
+# Wait up to 5 minutes for lock
+COUNTER=0
+while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
+sleep 2
+COUNTER=$((COUNTER+1))
+if [ $COUNTER -gt 150 ]; then
+echo "Timeout waiting for lock." >> $LOG_FILE
+exit 1
+fi
+done
+
+# Lock released, wait a moment for dpkg to fully finish
+sleep 2
+
+echo "Lock released. Installing dependencies..." >> $LOG_FILE
+install_dependencies
+
+echo "Background installation complete." >> $LOG_FILE
+) &
+}
+
+# Main execution logic
+if fuser /var/lib/dpkg/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+echo "DPKG lock is currently held. Scheduling background dependency installation..."
+echo "Please check /var/log/ofx_install.log for progress."
+install_background
+else
+echo "No lock detected. Installing dependencies directly..."
+install_dependencies || {
+echo "Direct installation failed."
+}
+fi
+
+echo "OFX setup initiated."
+POSTINST
+
+RUN dos2unix /build/postinst.sh && chmod +x /build/postinst.sh
+
+# Create post-remove script to clean up __pycache__ directories
+RUN cat > /build/postrm.sh << 'POSTRM'
+#!/bin/bash
+# Clean up Python cache files on package removal
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+find /usr/lib/python3/dist-packages/ofx -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+rm -rf /usr/lib/python3/dist-packages/ofx 2>/dev/null || true
+fi
+POSTRM
+
+RUN dos2unix /build/postrm.sh && chmod +x /build/postrm.sh
+
+# Build Debian package using FPM from directory
+RUN VERSION=$(cat /build/VERSION) && \
+    fpm -s dir \
+    -t deb \
+    -C /staging \
+    -n ofx \
+    -v "$VERSION" \
+    --iteration 1 \
+    --architecture all \
+    --description "Offensive Flow Executor - Red Team Automation Tool. OFX is a comprehensive toolkit for red team operations including exploitation, post-exploitation, enumeration utilities, and webshell management." \
+    --url "https://anhung04.github.io/ofx" \
+    --license "MIT" \
+    --maintainer "OFX Developer <dev.hah4@gmail.com>" \
+    --vendor "OFX Project" \
+    --category "utils" \
+    --depends "python3 >= 3.10" \
+    --depends "python3-pip" \
+    --depends "python3-aiofiles" \
+    --depends "python3-cryptography" \
+    --depends "python3-filelock" \
+    --depends "python3-git" \
+    --depends "python3-httpx" \
+    --depends "python3-jinja2" \
+    --depends "python3-yaml" \
+    --depends "python3-requests" \
+    --depends "python3-rich" \
+    --depends "python3-tabulate" \
+    --after-install /build/postinst.sh \
+    --after-remove /build/postrm.sh \
+    -p /output/ofx_${VERSION}-1_all.deb \
+    . && \
+    echo "Debian package built successfully"
+
+# Build RPM package using FPM from directory
+# Note: RPM package names may differ from Debian; these are common Fedora/RHEL names
+RUN VERSION=$(cat /build/VERSION) && \
+    fpm -s dir \
+    -t rpm \
+    -C /staging \
+    -n ofx \
+    -v "$VERSION" \
+    --iteration 1 \
+    --architecture noarch \
+    --description "Offensive Flow Executor - Red Team Automation Tool. OFX is a comprehensive toolkit for red team operations including exploitation, post-exploitation, enumeration utilities, and webshell management." \
+    --url "https://anhung04.github.io/ofx" \
+    --license "MIT" \
+    --maintainer "OFX Developer <dev.hah4@gmail.com>" \
+    --vendor "OFX Project" \
+    --category "utils" \
+    --depends "python3 >= 3.10" \
+    --depends "python3-pip" \
+    --depends "python3-aiofiles" \
+    --depends "python3-cryptography" \
+    --depends "python3-filelock" \
+    --depends "python3-GitPython" \
+    --depends "python3-httpx" \
+    --depends "python3-jinja2" \
+    --depends "python3-pyyaml" \
+    --depends "python3-requests" \
+    --depends "python3-rich" \
+    --depends "python3-tabulate" \
+    --after-install /build/postinst.sh \
+    --after-remove /build/postrm.sh \
+    -p /output/ofx-${VERSION}-1.noarch.rpm \
+    . && \
+    echo "RPM package built successfully"
+
+# Copy wheel to output
+RUN cp *.whl /output/
+
+# List output
+RUN echo "=== Built packages ===" && ls -la /output/
+
+# -----------------------------------------------------------------------------
+# Stage 3: Export all packages
+# -----------------------------------------------------------------------------
+FROM scratch AS export
+
+# Copy all built packages
+COPY --from=fpm-builder /output/* /

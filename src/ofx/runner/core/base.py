@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -66,7 +66,7 @@ class RunnerStateMachine:
         self._current_state = state
 
 
-class BaseRunner[TModel]:
+class BaseRunner(Generic[TModel]):
     """Abstract base class for all runners (workflow, job, step, command)
     Type Parameters:
         TModel: The model type this runner executes (Workflow, Job, Step, etc.)

@@ -41,15 +41,44 @@ if [[ "$1" == "--multiarch" ]] || [[ "$1" == "-m" ]]; then
     
     # Build for both architectures
     docker buildx build \
-        -f Dockerfile.pkg \
+        -f Dockerfile.fpm \
         --platform linux/amd64,linux/arm64 \
         --target=export \
         --output type=local,dest=dist/packages \
         .
+        
+    # Organize and rename files from subdirectories
+    echo "Organizing multiarch packages..."
+    
+    # Handle linux_amd64
+    if [ -d "dist/packages/linux_amd64" ]; then
+        echo "Processing amd64 packages..."
+        # Rename and move debs
+        find "dist/packages/linux_amd64" -name "*_all.deb" -exec sh -c 'mv "$1" "dist/packages/$(basename "$1" | sed "s/_all.deb/_amd64.deb/")"' _ {} \;
+        # Rename and move rpms
+        find "dist/packages/linux_amd64" -name "*.noarch.rpm" -exec sh -c 'mv "$1" "dist/packages/$(basename "$1" | sed "s/.noarch.rpm/.x86_64.rpm/")"' _ {} \;
+        # Move wheels (overwrite since they are identical)
+        find "dist/packages/linux_amd64" -name "*.whl" -exec mv {} "dist/packages/" \;
+        
+        # Cleanup
+        rm -rf "dist/packages/linux_amd64"
+    fi
+
+    # Handle linux_arm64
+    if [ -d "dist/packages/linux_arm64" ]; then
+        echo "Processing arm64 packages..."
+        # Rename and move debs
+        find "dist/packages/linux_arm64" -name "*_all.deb" -exec sh -c 'mv "$1" "dist/packages/$(basename "$1" | sed "s/_all.deb/_arm64.deb/")"' _ {} \;
+        # Rename and move rpms
+        find "dist/packages/linux_arm64" -name "*.noarch.rpm" -exec sh -c 'mv "$1" "dist/packages/$(basename "$1" | sed "s/.noarch.rpm/.aarch64.rpm/")"' _ {} \;
+        
+        # Cleanup (wheel already moved from amd64 or will be overwritten, it's fine)
+        rm -rf "dist/packages/linux_arm64"
+    fi
 else
     echo "Building for current architecture..."
     docker build \
-        -f Dockerfile.pkg \
+        -f Dockerfile.fpm \
         --target=export \
         --output type=local,dest=dist/packages \
         .

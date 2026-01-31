@@ -3,7 +3,7 @@ name = "ofx"
 version = "0.3.2"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
   "aiofiles>=23.2.1",
   "async-typer>=0.1.9",

@@ -36,7 +36,7 @@ jobs:
       - name: Build packages
         run: |
           docker buildx build \
-            -f Dockerfile.pkg \
+            -f Dockerfile.fpm \
             --platform linux/${{ matrix.arch }} \
             --target=export \
             --output type=local,dest=dist/packages-${{ matrix.arch }} \

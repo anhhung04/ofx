@@ -231,7 +231,8 @@ class CEye:
         if type in ["request", "http"]:
             url = f"http://{ranstr}.{domain}/{ranstr}{value}{ranstr}"
         elif type == "dns":
-            url = f"{ranstr}{re.sub(r'\W', '', value)}{ranstr}.{domain}"
+            clean_value = re.sub(r'\W', '', value)
+            url = f"{ranstr}{clean_value}{ranstr}.{domain}"
         return {"url": url, "flag": ranstr}
 
     def getsubdomain(self) -> str:

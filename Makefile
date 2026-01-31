@@ -59,7 +59,7 @@ clean:
 dist:
 	@echo "Exporting distribution from Docker build..."
 	@mkdir -p dist
-	docker build -f Dockerfile.build --target=export --output type=local,dest=./dist .
+	docker build -f Dockerfile.fpm --target=export --output type=local,dest=./dist .
 	@echo "Distribution exported to: dist/"
 
 docs:
