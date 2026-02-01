@@ -17,7 +17,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build Python Wheel
 # -----------------------------------------------------------------------------
-FROM python:3.10-slim-bookworm AS wheel-builder
+FROM python:3.12-slim-bookworm AS wheel-builder
 
 # Install uv for fast builds
 RUN pip install --no-cache-dir uv
@@ -28,7 +28,7 @@ COPY src/ ./src/
 
 RUN uv build --wheel
 RUN mkdir -p /output/site-packages && \
-    pip install --no-cache-dir --target=/output/site-packages dist/*.whl && \
+    pip install --no-cache-dir --no-deps --target=/output/site-packages dist/*.whl && \
     cp dist/*.whl /output/
 
 # -----------------------------------------------------------------------------
@@ -70,8 +70,28 @@ RUN mkdir -p /staging/opt/ofx/site-packages
 # Create wrapper script that uses the bundled site-packages
 RUN mkdir -p /staging/usr/bin && \
     printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'PYTHONPATH=/opt/ofx/site-packages exec /usr/bin/python3 -c "from ofx import main; main()" "$@"' \
+    '#!/usr/bin/env python3' \
+    '# -*- coding: utf-8 -*' \
+    'import sys' \
+    'import os' \
+    '' \
+    '# Ensure a valid working directory (handles deleted CWD)' \
+    'try:' \
+    '    os.getcwd()' \
+    'except FileNotFoundError:' \
+    '    os.chdir(os.path.expanduser("~") or "/tmp")' \
+    '' \
+    '# Add OFX site-packages to sys.path' \
+    'ofx_site_packages = os.path.join("/opt/ofx", "site-packages")' \
+    'if ofx_site_packages not in sys.path:' \
+    '    sys.path.insert(0, ofx_site_packages)' \
+    '' \
+    '# Import and run the OFX main function' \
+    'from ofx.__main__ import main' \
+    'if __name__ == "__main__":' \
+    '    if sys.argv[0].endswith("-script.pyw"):' \
+    '        sys.argv[0] = sys.argv[0][:-11]' \
+    '    sys.exit(main())' \
     > /staging/usr/bin/ofx && \
     chmod +x /staging/usr/bin/ofx
 
@@ -90,13 +110,14 @@ RUN mkdir -p /staging/usr/share/man/man1 && \
 # Create output directory
 RUN mkdir -p /output
 
-# Create lightweight post-install script (no apt/dnf to avoid dpkg lock issues)
+# Create post-install script (deps installed via apt)
 RUN printf '%s\n' \
     '#!/bin/bash' \
     'set -e' \
     '' \
     'LOG_FILE="/var/log/ofx_install.log"' \
-    'echo "OFX: Post-install script completed" > $LOG_FILE' \
+    'echo "OFX: Dependencies are managed by apt; no pip install performed" >> "$LOG_FILE"' \
+    'echo "OFX: Post-install script completed" >> "$LOG_FILE"' \
     > /build/postinst.sh
 
 RUN dos2unix /build/postinst.sh && chmod +x /build/postinst.sh
@@ -122,12 +143,26 @@ RUN VERSION=$(cat /build/VERSION) && \
     --iteration 1 \
     --architecture all \
     --description "Offensive Flow Executor - Red Team Automation Tool. OFX is a comprehensive toolkit for red team operations including exploitation, post-exploitation, enumeration utilities, and webshell management." \
-    --url "https://anhung04.github.io/ofx" \
+    --url "https://anhhung04.github.io/ofx" \
     --license "MIT" \
     --maintainer "OFX Developer <dev.hah4@gmail.com>" \
     --vendor "OFX Project" \
     --category "utils" \
-    --depends "python3 >= 3.10" \
+    --depends "python3 >= 3.12" \
+    --depends "python3-aiofiles" \
+    --depends "python3-cryptography" \
+    --depends "python3-filelock" \
+    --depends "python3-git" \
+    --depends "python3-httpx" \
+    --depends "python3-jinja2" \
+    --depends "python3-pydantic" \
+    --depends "python3-pydantic-settings" \
+    --depends "python3-pykeepass" \
+    --depends "python3-yaml" \
+    --depends "python3-requests" \
+    --depends "python3-rich" \
+    --depends "python3-tabulate" \
+    --depends "python3-typer" \
     --after-install /build/postinst.sh \
     --after-remove /build/postrm.sh \
     -p /output/ofx_${VERSION}-1_all.deb \
@@ -145,81 +180,32 @@ RUN VERSION=$(cat /build/VERSION) && \
     --iteration 1 \
     --architecture noarch \
     --description "Offensive Flow Executor - Red Team Automation Tool. OFX is a comprehensive toolkit for red team operations including exploitation, post-exploitation, enumeration utilities, and webshell management." \
-    --url "https://anhung04.github.io/ofx" \
+    --url "https://anhhung04.github.io/ofx" \
     --license "MIT" \
     --maintainer "OFX Developer <dev.hah4@gmail.com>" \
     --vendor "OFX Project" \
     --category "utils" \
-    --depends "python3 >= 3.10" \
+    --depends "python3 >= 3.12" \
+    --depends "python3-aiofiles" \
+    --depends "python3-cryptography" \
+    --depends "python3-filelock" \
+    --depends "python3-git" \
+    --depends "python3-httpx" \
+    --depends "python3-jinja2" \
+    --depends "python3-pydantic" \
+    --depends "python3-pydantic-settings" \
+    --depends "python3-pykeepass" \
+    --depends "python3-yaml" \
+    --depends "python3-requests" \
+    --depends "python3-rich" \
+    --depends "python3-tabulate" \
+    --depends "python3-typer" \
     --after-install /build/postinst.sh \
     --after-remove /build/postrm.sh \
     -p /output/ofx-${VERSION}-1.noarch.rpm \
     . && \
     echo "RPM package built successfully"
 
-# Build Debian deps package
-RUN VERSION=$(cat /build/VERSION) && \
-    mkdir -p /staging-deps/usr/share/doc/ofx-deps && \
-    echo "This package declares dependencies for OFX." > /staging-deps/usr/share/doc/ofx-deps/README && \
-    fpm -s dir \
-    -t deb \
-    -C /staging-deps \
-    -n ofx-deps \
-    -v "$VERSION" \
-    --iteration 1 \
-    --architecture all \
-    --description "OFX Dependencies - Python packages required by OFX" \
-    --url "https://anhhung04.github.io/ofx" \
-    --license "MIT" \
-    --maintainer "OFX Developer <dev.hah4@gmail.com>" \
-    --vendor "OFX Project" \
-    --category "utils" \
-    --depends "python3-aiofiles" \
-    --depends "python3-cryptography" \
-    --depends "python3-filelock" \
-    --depends "python3-git" \
-    --depends "python3-jinja2" \
-    --depends "python3-pydantic" \
-    --depends "python3-yaml" \
-    --depends "python3-requests" \
-    --depends "python3-rich" \
-    --depends "python3-tabulate" \
-    --depends "python3-typer" \
-    -p /output/ofx-deps_${VERSION}-1_all.deb \
-    . && \
-    echo "Debian deps package built successfully"
-
-# Build RPM deps package
-RUN VERSION=$(cat /build/VERSION) && \
-    mkdir -p /staging-deps/usr/share/doc/ofx-deps && \
-    echo "This package declares dependencies for OFX." > /staging-deps/usr/share/doc/ofx-deps/README && \
-    fpm -s dir \
-    -t rpm \
-    -C /staging-deps \
-    -n ofx-deps \
-    -v "$VERSION" \
-    --iteration 1 \
-    --architecture noarch \
-    --description "OFX Dependencies - Python packages required by OFX" \
-    --url "https://anhhung04.github.io/ofx" \
-    --license "MIT" \
-    --maintainer "OFX Developer <dev.hah4@gmail.com>" \
-    --vendor "OFX Project" \
-    --category "utils" \
-    --depends "python3-aiofiles" \
-    --depends "python3-cryptography" \
-    --depends "python3-filelock" \
-    --depends "python3-git" \
-    --depends "python3-jinja2" \
-    --depends "python3-pydantic" \
-    --depends "python3-yaml" \
-    --depends "python3-requests" \
-    --depends "python3-rich" \
-    --depends "python3-tabulate" \
-    --depends "python3-typer" \
-    -p /output/ofx-deps-${VERSION}-1.noarch.rpm \
-    . && \
-    echo "RPM deps package built successfully"
 
 # Copy wheel to output
 RUN cp *.whl /output/

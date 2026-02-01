@@ -55,6 +55,7 @@ def main():
         _register_commands()
         print_banner()
         app()
+        return typer.Exit(code=0)
     except Exception as e:
         import os
         import traceback
