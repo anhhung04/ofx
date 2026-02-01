@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.singleton.1.4.0.schema.json
 PackageIdentifier: redteam.OFX
-PackageVersion: 0.3.2
+PackageVersion: 0.3.3
 PackageLocale: en-US
 Publisher: OFX Developer
 PublisherUrl: https://github.com/devhah4
@@ -36,14 +36,14 @@ ReleaseNotesUrl: https://github.com/devhah4/ofx/releases/tag/v0.3.1
 Installers:
   - Architecture: x64
     InstallerType: exe
-    InstallerUrl: https://github.com/devhah4/ofx/releases/download/v0.3.2/ofx-0.3.2-windows-x64.exe
+    InstallerUrl: https://github.com/devhah4/ofx/releases/download/v0.3.3/ofx-0.3.3-windows-x64.exe
     InstallerSha256: PLACEHOLDER_SHA256_X64
     InstallerSwitches:
       Silent: /S
       SilentWithProgress: /S
   - Architecture: arm64
     InstallerType: exe
-    InstallerUrl: https://github.com/devhah4/ofx/releases/download/v0.3.2/ofx-0.3.2-windows-arm64.exe
+    InstallerUrl: https://github.com/devhah4/ofx/releases/download/v0.3.3/ofx-0.3.3-windows-arm64.exe
     InstallerSha256: PLACEHOLDER_SHA256_ARM64
     InstallerSwitches:
       Silent: /S
