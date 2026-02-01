@@ -12,6 +12,7 @@ from ofx.runner.execution.job import JobRunner
 from ofx.runner.execution.step import StepRunner
 from ofx.runner.execution.tool_installer import ToolInstallerRunner
 from ofx.runner.execution.workflow import WorkflowRunner
+from ofx.runner.api import run_workflow
 
 __all__ = [
     "RunnerStatus",
@@ -25,4 +26,5 @@ __all__ = [
     "ToolInstallerRunner",
     "JobRunner",
     "WorkflowRunner",
+    "run_workflow",
 ]

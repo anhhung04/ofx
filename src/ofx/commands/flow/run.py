@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ofx.commands.ui_helpers import inputs_table
-from ofx.runner import RunContext, WorkflowRunner
+from ofx.runner import run_workflow
 from ofx.settings import (
     DEFAULT_WORKFLOWS_DIRS,
     SECRETS_DIR,
@@ -68,28 +68,22 @@ class FlowRunHandler:
             if self.input:
                 console.print(Align.center(inputs_table(self.input)))
 
-            workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+            if self.input:
+                console.print(Align.center(inputs_table(self.input)))
 
-            runner = WorkflowRunner(
-                workflow,
-                ctx=RunContext(
-                    inputs=self.input,
-                    output_path=self.output,
-                    secrets=load_secrets(ensure_dir(SECRETS_DIR)),
-                    workflow_dirs=add_workflow_dir(
-                        DEFAULT_WORKFLOWS_DIRS, workflow.workflow_path.parent
-                    ),
-                ),
+            # Use the new programmatic API
+            result = await run_workflow(
+                workflow=self.workflow_name,
+                inputs=self.input,
+                output_path=self.output,
+                workflow_search_paths=tuple(DEFAULT_WORKFLOWS_DIRS),
+                quiet=False
             )
-            runner.log_level = logging.ERROR
-            _ = await runner.run()
 
-            if runner.is_success:
+            if result.is_success:
                 logger.info("Workflow completed successfully!")
             else:
                 logger.error("Workflow failed")
-
-            result = await runner.get_result()
 
         finally:
             if self.profile:

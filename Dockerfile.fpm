@@ -17,7 +17,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Build Python Wheel
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS wheel-builder
+FROM python:3.10-slim-bookworm AS wheel-builder
 
 # Install uv for fast builds
 RUN pip install --no-cache-dir uv
@@ -27,7 +27,9 @@ COPY pyproject.toml README.md uv.lock ./
 COPY src/ ./src/
 
 RUN uv build --wheel
-RUN mkdir -p /output && cp dist/*.whl /output/
+RUN mkdir -p /output/site-packages && \
+    pip install --no-cache-dir --target=/output/site-packages dist/*.whl && \
+    cp dist/*.whl /output/
 
 # -----------------------------------------------------------------------------
 # Stage 2: Build Packages with FPM
@@ -37,7 +39,6 @@ FROM ruby:3.2-slim-bookworm AS fpm-builder
 # Install FPM and required dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
-    python3-pip \
     rpm \
     dos2unix \
     cpio \
@@ -49,8 +50,9 @@ RUN gem install fpm --no-document
 
 WORKDIR /build
 
-# Copy wheel from previous stage
+# Copy wheel and vendored site-packages from previous stage
 COPY --from=wheel-builder /output/*.whl ./
+COPY --from=wheel-builder /output/site-packages /staging/opt/ofx/site-packages
 
 # Copy package metadata
 COPY pyproject.toml ./
@@ -62,16 +64,23 @@ RUN WHEEL=$(ls ofx-*.whl | head -1) && \
     echo "$VERSION" > /build/VERSION && \
     echo "Building OFX version: $VERSION"
 
-# Install ofx wheel (no deps) into staging for the package
-RUN pip3 install --no-cache-dir --no-deps --target=/staging/usr/lib/python3/dist-packages *.whl
+# Ensure OFX site-packages directory exists (populated by copy)
+RUN mkdir -p /staging/opt/ofx/site-packages
 
-# Create wrapper script that uses system Python
+# Create wrapper script that uses the bundled site-packages
 RUN mkdir -p /staging/usr/bin && \
-    printf '#!/usr/bin/python3\nimport sys\nsys.path.insert(0, "/usr/lib/python3/dist-packages")\nfrom ofx import main\nmain()\n' > /staging/usr/bin/ofx && \
+    printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'PYTHONPATH=/opt/ofx/site-packages exec /usr/bin/python3 -c "from ofx import main; main()" "$@"' \
+    > /staging/usr/bin/ofx && \
     chmod +x /staging/usr/bin/ofx
 
 # Create data directory
 RUN mkdir -p /staging/usr/share/ofx
+
+# Expose OFX site-packages to system Python
+RUN mkdir -p /staging/usr/lib/python3/dist-packages && \
+    printf '%s\n' '/opt/ofx/site-packages' > /staging/usr/lib/python3/dist-packages/ofx.pth
 
 # Create man page directory and copy man page
 RUN mkdir -p /staging/usr/share/man/man1 && \
@@ -81,94 +90,25 @@ RUN mkdir -p /staging/usr/share/man/man1 && \
 # Create output directory
 RUN mkdir -p /output
 
-# Create robust post-install script that handles dependencies and locks
-RUN cat > /build/postinst.sh << 'POSTINST'
-#!/bin/bash
-set -e
-
-LOG_FILE="/var/log/ofx_install.log"
-echo "OFX: Post-install script started" > $LOG_FILE
-
-# Dependencies lists
-SYSTEM_DEPS="python3 python3-pip python3-aiofiles python3-cryptography python3-filelock python3-git python3-httpx python3-jinja2 python3-yaml python3-requests python3-rich python3-tabulate"
-PIP_DEPS="pydantic>=2.11.7 pydantic-settings>=2.10.1 pydantic-file-secrets>=0.4.4 typer>=0.16.0 async-typer>=0.1.9 pycryptodomex>=3.21.0 pykeepass>=4.1.1"
-
-install_dependencies() {
-echo "Starting dependency installation..." >> $LOG_FILE
-
-# Update and install system deps
-if apt-get update -qq >> $LOG_FILE 2>&1; then
-if apt-get install -y --no-install-recommends $SYSTEM_DEPS >> $LOG_FILE 2>&1; then
-echo "System dependencies installed successfully." >> $LOG_FILE
-else
-echo "Failed to install system dependencies." >> $LOG_FILE
-return 1
-fi
-else
-echo "apt-get update failed." >> $LOG_FILE
-return 1
-fi
-
-# Install pip deps
-echo "Installing pip dependencies..." >> $LOG_FILE
-if pip3 install --help 2>&1 | grep -q "break-system-packages"; then
-pip3 install --no-cache-dir --break-system-packages $PIP_DEPS >> $LOG_FILE 2>&1
-else
-pip3 install --no-cache-dir $PIP_DEPS >> $LOG_FILE 2>&1
-fi
-}
-
-install_background() {
-# Detached background process to wait for lock release
-(
-echo "Waiting for dpkg lock to release..." >> $LOG_FILE
-# Wait up to 5 minutes for lock
-COUNTER=0
-while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do
-sleep 2
-COUNTER=$((COUNTER+1))
-if [ $COUNTER -gt 150 ]; then
-echo "Timeout waiting for lock." >> $LOG_FILE
-exit 1
-fi
-done
-
-# Lock released, wait a moment for dpkg to fully finish
-sleep 2
-
-echo "Lock released. Installing dependencies..." >> $LOG_FILE
-install_dependencies
-
-echo "Background installation complete." >> $LOG_FILE
-) &
-}
-
-# Main execution logic
-if fuser /var/lib/dpkg/lock >/dev/null 2>&1 || fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
-echo "DPKG lock is currently held. Scheduling background dependency installation..."
-echo "Please check /var/log/ofx_install.log for progress."
-install_background
-else
-echo "No lock detected. Installing dependencies directly..."
-install_dependencies || {
-echo "Direct installation failed."
-}
-fi
-
-echo "OFX setup initiated."
-POSTINST
+# Create lightweight post-install script (no apt/dnf to avoid dpkg lock issues)
+RUN printf '%s\n' \
+    '#!/bin/bash' \
+    'set -e' \
+    '' \
+    'LOG_FILE="/var/log/ofx_install.log"' \
+    'echo "OFX: Post-install script completed" > $LOG_FILE' \
+    > /build/postinst.sh
 
 RUN dos2unix /build/postinst.sh && chmod +x /build/postinst.sh
 
-# Create post-remove script to clean up __pycache__ directories
-RUN cat > /build/postrm.sh << 'POSTRM'
-#!/bin/bash
-# Clean up Python cache files on package removal
-if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-find /usr/lib/python3/dist-packages/ofx -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-rm -rf /usr/lib/python3/dist-packages/ofx 2>/dev/null || true
-fi
-POSTRM
+# Create post-remove script to clean up OFX files
+RUN printf '%s\n' \
+    '#!/bin/bash' \
+    '# Clean up OFX site-packages on package removal' \
+    'if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then' \
+    'rm -rf /opt/ofx 2>/dev/null || true' \
+    'fi' \
+    > /build/postrm.sh
 
 RUN dos2unix /build/postrm.sh && chmod +x /build/postrm.sh
 
@@ -188,17 +128,6 @@ RUN VERSION=$(cat /build/VERSION) && \
     --vendor "OFX Project" \
     --category "utils" \
     --depends "python3 >= 3.10" \
-    --depends "python3-pip" \
-    --depends "python3-aiofiles" \
-    --depends "python3-cryptography" \
-    --depends "python3-filelock" \
-    --depends "python3-git" \
-    --depends "python3-httpx" \
-    --depends "python3-jinja2" \
-    --depends "python3-yaml" \
-    --depends "python3-requests" \
-    --depends "python3-rich" \
-    --depends "python3-tabulate" \
     --after-install /build/postinst.sh \
     --after-remove /build/postrm.sh \
     -p /output/ofx_${VERSION}-1_all.deb \
@@ -222,17 +151,6 @@ RUN VERSION=$(cat /build/VERSION) && \
     --vendor "OFX Project" \
     --category "utils" \
     --depends "python3 >= 3.10" \
-    --depends "python3-pip" \
-    --depends "python3-aiofiles" \
-    --depends "python3-cryptography" \
-    --depends "python3-filelock" \
-    --depends "python3-GitPython" \
-    --depends "python3-httpx" \
-    --depends "python3-jinja2" \
-    --depends "python3-pyyaml" \
-    --depends "python3-requests" \
-    --depends "python3-rich" \
-    --depends "python3-tabulate" \
     --after-install /build/postinst.sh \
     --after-remove /build/postrm.sh \
     -p /output/ofx-${VERSION}-1.noarch.rpm \

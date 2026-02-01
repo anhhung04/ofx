@@ -108,18 +108,6 @@ wheels = [
 ]
 
 [[package]]
-name = "async-typer"
-version = "0.1.10"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/25/5f/04c052bf7f8633f7fd3dd67cd8f3542a2aff432fa1e5b14b737465b44e0f/async_typer-0.1.10.tar.gz", hash = "sha256:69a857a2b66a8604e4bac3b5c44a6384b35da9f5314c7847da561e874b2bad39", size = 2093, upload-time = "2025-08-27T14:22:04.073Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b7/97/1d78783a1a568537f5d29c236dfc3e1723fbc651d3c94005ac5724aa26ca/async_typer-0.1.10-py3-none-any.whl", hash = "sha256:25aadaf6e54c1d47a9c2d6a2bbb0832a2a2fe700be4bb52f38843514d724b380", size = 2598, upload-time = "2025-08-27T14:22:02.964Z" },
-]
-
-[[package]]
 name = "babel"
 version = "2.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1190,16 +1178,12 @@ version = "0.3.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
-    { name = "async-typer" },
     { name = "cryptography" },
     { name = "filelock" },
     { name = "gitpython" },
     { name = "httpx" },
     { name = "jinja2" },
-    { name = "pip" },
-    { name = "pycryptodomex" },
     { name = "pydantic" },
-    { name = "pydantic-file-secrets" },
     { name = "pydantic-settings" },
     { name = "pykeepass" },
     { name = "pyyaml" },
@@ -1217,6 +1201,9 @@ docs = [
 ]
 etcd = [
     { name = "etcd3" },
+]
+interactsh = [
+    { name = "pycryptodomex" },
 ]
 memcached = [
     { name = "aiomcache" },
@@ -1242,7 +1229,6 @@ dev = [
 requires-dist = [
     { name = "aiofiles", specifier = ">=23.2.1" },
     { name = "aiomcache", marker = "extra == 'memcached'", specifier = ">=0.8.2" },
-    { name = "async-typer", specifier = ">=0.1.9" },
     { name = "cryptography", specifier = ">=43.0.0" },
     { name = "etcd3", marker = "extra == 'etcd'", specifier = ">=0.12.0" },
     { name = "faker", marker = "extra == 'test'", specifier = ">=34.0.0" },
@@ -1252,10 +1238,8 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.5.0" },
     { name = "mkdocs-material", marker = "extra == 'docs'", specifier = ">=9.5.0" },
-    { name = "pip", specifier = ">=25.3" },
-    { name = "pycryptodomex", specifier = ">=3.21.0" },
+    { name = "pycryptodomex", marker = "extra == 'interactsh'", specifier = ">=3.21.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
-    { name = "pydantic-file-secrets", specifier = ">=0.4.4" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
     { name = "pykeepass", specifier = ">=4.1.1.post1" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.7.0" },
@@ -1269,7 +1253,7 @@ requires-dist = [
     { name = "tabulate", specifier = ">=0.9.0" },
     { name = "typer", specifier = ">=0.16.0" },
 ]
-provides-extras = ["test", "docs", "redis", "memcached", "etcd"]
+provides-extras = ["test", "docs", "redis", "memcached", "etcd", "interactsh"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1303,15 +1287,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/4c/b2/bb8e495d5262bfec41ab5cb18f522f1012933347fb5d9e62452d446baca2/pathspec-1.0.3.tar.gz", hash = "sha256:bac5cf97ae2c2876e2d25ebb15078eb04d76e4b98921ee31c6f85ade8b59444d", size = 130841, upload-time = "2026-01-09T15:46:46.009Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/2b/121e912bd60eebd623f873fd090de0e84f322972ab25a7f9044c056804ed/pathspec-1.0.3-py3-none-any.whl", hash = "sha256:e80767021c1cc524aa3fb14bedda9c34406591343cc42797b386ce7b9354fb6c", size = 55021, upload-time = "2026-01-09T15:46:44.652Z" },
-]
-
-[[package]]
-name = "pip"
-version = "25.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fe/6e/74a3f0179a4a73a53d66ce57fdb4de0080a8baa1de0063de206d6167acc2/pip-25.3.tar.gz", hash = "sha256:8d0538dbbd7babbd207f261ed969c65de439f6bc9e5dbd3b3b9a77f25d95f343", size = 1803014, upload-time = "2025-10-25T00:55:41.394Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/3c/d717024885424591d5376220b5e836c2d5293ce2011523c9de23ff7bf068/pip-25.3-py3-none-any.whl", hash = "sha256:9655943313a94722b7774661c21049070f6bbb0a1516bf02f7c8d5d9201514cd", size = 1778622, upload-time = "2025-10-25T00:55:39.247Z" },
 ]
 
 [[package]]
@@ -1522,19 +1497,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1f/f2/f11dd73284122713f5f89fc940f370d035fa8e1e078d446b3313955157fe/pydantic_core-2.41.5-pp311-pypy311_pp73-musllinux_1_1_armv7l.whl", hash = "sha256:a668ce24de96165bb239160b3d854943128f4334822900534f2fe947930e5770", size = 2330317, upload-time = "2025-11-04T13:43:40.406Z" },
     { url = "https://files.pythonhosted.org/packages/88/9d/b06ca6acfe4abb296110fb1273a4d848a0bfb2ff65f3ee92127b3244e16b/pydantic_core-2.41.5-pp311-pypy311_pp73-musllinux_1_1_x86_64.whl", hash = "sha256:f14f8f046c14563f8eb3f45f499cc658ab8d10072961e07225e507adb700e93f", size = 2316992, upload-time = "2025-11-04T13:43:43.602Z" },
     { url = "https://files.pythonhosted.org/packages/36/c7/cfc8e811f061c841d7990b0201912c3556bfeb99cdcb7ed24adc8d6f8704/pydantic_core-2.41.5-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:56121965f7a4dc965bff783d70b907ddf3d57f6eba29b6d2e5dabfaf07799c51", size = 2145302, upload-time = "2025-11-04T13:43:46.64Z" },
-]
-
-[[package]]
-name = "pydantic-file-secrets"
-version = "0.4.4"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pydantic-settings" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/d2/84/888ca64f606c11cf4c6b60f882d4c24ab8d76162fbc49399e3ff1bd84dbc/pydantic_file_secrets-0.4.4.tar.gz", hash = "sha256:16cf16efeed0eeae91f2f52e3aaa910344ffe6d4e2ce0f1499aacc48fb90a905", size = 100892, upload-time = "2025-05-24T19:18:59.395Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/73/cdcc022b33a80eba6b4085e2cbf1f769a32486da33eab10e57dc7d7c85dd/pydantic_file_secrets-0.4.4-py3-none-any.whl", hash = "sha256:3c8ca6d1950a6c851ea93487f8602a6c26d18a801552efcb12b3012570ae5a1e", size = 9959, upload-time = "2025-05-24T19:18:57.594Z" },
 ]
 
 [[package]]

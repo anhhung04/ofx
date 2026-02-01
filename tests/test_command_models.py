@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from ofx.models.command import Command, Script
+from ofx.settings import DEFAULT_SHELL
 
 
 class TestCommandModel:
@@ -12,7 +13,7 @@ class TestCommandModel:
         """Test creating a Command with minimal required fields"""
         cmd = Command(cmd="echo hello")
         assert cmd.cmd == "echo hello"
-        assert cmd.shell == "/bin/bash"
+        assert cmd.shell == DEFAULT_SHELL
         assert cmd.working_directory == Path.cwd()
         assert cmd.timeout_minutes == 1440
         assert cmd.interactive is False
@@ -65,7 +66,7 @@ class TestScriptModel:
         """Test creating a Script with minimal required fields"""
         script = Script(script="print('hello')")
         assert script.script == "print('hello')"
-        assert script.shell == "/bin/bash"
+        assert script.shell == DEFAULT_SHELL
         assert script.working_directory == Path.cwd()
         assert script.timeout_minutes == 1440
         assert script.interactive is False

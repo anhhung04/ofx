@@ -1,6 +1,19 @@
 """OFX API modules for red teaming operations."""
 
-from . import exploitation, file, http, httpserver, network, oob, post, search, strings, utils, evasion, creds
+from . import (
+    creds,
+    evasion,
+    exploitation,
+    file,
+    http,
+    httpserver,
+    network,
+    oob,
+    post,
+    search,
+    strings,
+    utils,
+)
 
 __all__ = [
     "http",

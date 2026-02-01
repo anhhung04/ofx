@@ -30,13 +30,13 @@ dev:
 	uv sync
 
 test:
-	uv run --extra test pytest
+	UV_LINK_MODE=copy uv run --extra test pytest
 
 coverage:
-	uv run --extra test pytest --cov=src/ofx --cov-report=term-missing
+	UV_LINK_MODE=copy uv run --extra test pytest --cov=src/ofx --cov-report=term-missing
 
 coverage-html:
-	uv run --extra test pytest --cov=src/ofx --cov-report=html --cov-report=term-missing
+	UV_LINK_MODE=copy uv run --extra test pytest --cov=src/ofx --cov-report=html --cov-report=term-missing
 	@echo "Coverage report generated in: htmlcov/index.html"
 
 coverage-report:

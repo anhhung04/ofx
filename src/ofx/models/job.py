@@ -67,9 +67,9 @@ class Job(OFXBaseModel):
     def normalize_needs(self):
         """Normalize needs to always be a list."""
         if isinstance(self.needs, str):
-            self.needs = [self.needs] if self.needs else []
+            object.__setattr__(self, "needs", [self.needs] if self.needs else [])
         elif self.needs is None:
-            self.needs = []
+            object.__setattr__(self, "needs", [])
         return self
 
     @model_validator(mode="after")
@@ -77,9 +77,9 @@ class Job(OFXBaseModel):
         """Set max_parallel and fail_fast from strategy if present."""
         if self.strategy:
             if self.strategy.max_parallel is not None:
-                self.max_parallel = self.strategy.max_parallel
+                object.__setattr__(self, "max_parallel", self.strategy.max_parallel)
             if self.strategy.fail_fast is not None:
-                self.fail_fast = self.strategy.fail_fast
+                object.__setattr__(self, "fail_fast", self.strategy.fail_fast)
         return self
 
     def __str__(self):
