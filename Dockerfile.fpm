@@ -157,6 +157,70 @@ RUN VERSION=$(cat /build/VERSION) && \
     . && \
     echo "RPM package built successfully"
 
+# Build Debian deps package
+RUN VERSION=$(cat /build/VERSION) && \
+    mkdir -p /staging-deps/usr/share/doc/ofx-deps && \
+    echo "This package declares dependencies for OFX." > /staging-deps/usr/share/doc/ofx-deps/README && \
+    fpm -s dir \
+    -t deb \
+    -C /staging-deps \
+    -n ofx-deps \
+    -v "$VERSION" \
+    --iteration 1 \
+    --architecture all \
+    --description "OFX Dependencies - Python packages required by OFX" \
+    --url "https://anhhung04.github.io/ofx" \
+    --license "MIT" \
+    --maintainer "OFX Developer <dev.hah4@gmail.com>" \
+    --vendor "OFX Project" \
+    --category "utils" \
+    --depends "python3-aiofiles" \
+    --depends "python3-cryptography" \
+    --depends "python3-filelock" \
+    --depends "python3-git" \
+    --depends "python3-jinja2" \
+    --depends "python3-pydantic" \
+    --depends "python3-yaml" \
+    --depends "python3-requests" \
+    --depends "python3-rich" \
+    --depends "python3-tabulate" \
+    --depends "python3-typer" \
+    -p /output/ofx-deps_${VERSION}-1_all.deb \
+    . && \
+    echo "Debian deps package built successfully"
+
+# Build RPM deps package
+RUN VERSION=$(cat /build/VERSION) && \
+    mkdir -p /staging-deps/usr/share/doc/ofx-deps && \
+    echo "This package declares dependencies for OFX." > /staging-deps/usr/share/doc/ofx-deps/README && \
+    fpm -s dir \
+    -t rpm \
+    -C /staging-deps \
+    -n ofx-deps \
+    -v "$VERSION" \
+    --iteration 1 \
+    --architecture noarch \
+    --description "OFX Dependencies - Python packages required by OFX" \
+    --url "https://anhhung04.github.io/ofx" \
+    --license "MIT" \
+    --maintainer "OFX Developer <dev.hah4@gmail.com>" \
+    --vendor "OFX Project" \
+    --category "utils" \
+    --depends "python3-aiofiles" \
+    --depends "python3-cryptography" \
+    --depends "python3-filelock" \
+    --depends "python3-git" \
+    --depends "python3-jinja2" \
+    --depends "python3-pydantic" \
+    --depends "python3-yaml" \
+    --depends "python3-requests" \
+    --depends "python3-rich" \
+    --depends "python3-tabulate" \
+    --depends "python3-typer" \
+    -p /output/ofx-deps-${VERSION}-1.noarch.rpm \
+    . && \
+    echo "RPM deps package built successfully"
+
 # Copy wheel to output
 RUN cp *.whl /output/
 
