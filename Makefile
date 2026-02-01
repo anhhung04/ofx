@@ -93,8 +93,8 @@ deb:
 # Build Windows executable (run on Windows only)
 pkg-windows:
 	@echo "Building Windows executable..."
-	pip install pyinstaller
-	python packaging/windows/build-exe.py
+	uv pip install pyinstaller
+	uv run packaging/windows/build-exe.py
 	@echo "Windows executable built in dist/"
 
 # Clean all package artifacts
