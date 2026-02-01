@@ -131,23 +131,6 @@ jobs:
 
 ---
 
-## 6️⃣ Add Lifecycle Hooks
-
-Execute actions at workflow start/end:
-
-```yaml
-name: with-hooks
-hooks:
-  on_start:
-    - run: echo "🚀 Starting workflow for {{ inputs.target }}"
-  on_success:
-    - run: echo "✅ Workflow completed successfully"
-  on_failure:
-    - run: echo "❌ Workflow failed"
-```
-
----
-
 ## 📋 Command Reference
 
 | Command | Description |

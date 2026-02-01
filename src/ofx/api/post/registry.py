@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Type
+from typing import TYPE_CHECKING, Callable, Type, Any
 
 if TYPE_CHECKING:
     from .base import PostRunnerBase
@@ -71,12 +71,12 @@ class RunnerRegistry:
         return list(cls._runners.keys())
     
     @classmethod
-    def create(cls, name: str, **kwargs) -> PostRunnerBase:
+    def create(cls, name: str, **kwargs: Any) -> PostRunnerBase:
         """Factory method to instantiate a runner by name.
         
         Args:
             name: Runner identifier
-            **kwargs: Arguments passed to runner constructor
+            kwargs: Arguments passed to runner constructor
             
         Returns:
             Instantiated runner

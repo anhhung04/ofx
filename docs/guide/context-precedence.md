@@ -4,10 +4,10 @@ OFX resolves execution context in layers. Each layer can add or override values.
 
 ## Precedence order
 
-1) **Workflow** defaults and env
-2) **Job** env / defaults
-3) **Step** env / working directory / run inputs
-4) **Runtime updates** (template resolution, run_if evaluation, hooks)
+1) **Workflow** defaults and envs
+2) **Job** envs / defaults
+3) **Step** envs / working directory / run inputs
+4) **Runtime updates** (template resolution, run_if evaluation)
 
 ## What merges vs replaces
 
@@ -22,10 +22,10 @@ OFX resolves execution context in layers. Each layer can add or override values.
 ```yaml
 jobs:
   build:
-    env: { ENV: "job", PATH: "/job" }
+    envs: { ENV: "job", PATH: "/job" }
     steps:
       - run: echo "hello"
-        env: { ENV: "step" }
+        envs: { ENV: "step" }
 ```
 
 Effective env:

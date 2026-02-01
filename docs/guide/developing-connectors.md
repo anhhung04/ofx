@@ -445,7 +445,7 @@ jobs:
           runner = ExploitRunner()
           result = runner.run_exploit(
               connector="webmin_rce",
-              target="${{ inputs.target }}",
+              target="{{ inputs.target }}",
               mode=ExploitMode.VERIFY
           )
           

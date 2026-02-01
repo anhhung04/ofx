@@ -68,7 +68,7 @@ python benchmark_perf.py
 
 1. **Reuse templates**: Identical template strings benefit from compilation caching
 2. **Keep workflows concise**: Fewer unique templates = better cache hit rate
-3. **Use variables**: `${{ variable }}` templates are cached and fast
+3. **Use variables**: `{{ variable }}` templates are cached and fast
 
 ### For Developers
 

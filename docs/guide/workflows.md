@@ -32,9 +32,6 @@ jobs:
     steps:
       - run: python analyze.py
 
-hooks:
-  on_success:
-    - run: echo "Done"
 ```
 
 ---
@@ -48,8 +45,12 @@ hooks:
 | `inputs` | ❌ | User-provided parameters |
 | `secrets` | ❌ | Secure credentials |
 | `envs` | ❌ | Global environment variables |
+| `tools` | ❌ | Tool installers for workflow runs |
+| `defaults` | ❌ | Default run settings (shell, working directory, etc.) |
+| `dispatch` | ❌ | Manual trigger inputs configuration |
+| `call` | ❌ | Reusable workflow inputs/outputs configuration |
+| `tags` | ❌ | Tags for organizing workflows |
 | `jobs` | ✅ | Map of jobs to execute |
-| `hooks` | ❌ | Lifecycle event handlers |
 
 ---
 
@@ -116,6 +117,17 @@ ofx flow run s3://my-bucket/workflow.yml
 
 ---
 
+## 🔁 Reusable Workflows (`uses`)
+
+Steps with `uses:` can reference reusable workflows using the same discovery logic as `ofx flow run`:
+
+- Local file path (relative or absolute)
+- Workflow name in search paths
+- Remote HTTP/HTTPS URL to a workflow file
+- Git repository (e.g., `https://github.com/user/repo` or `github.com/user/repo`)
+
+---
+
 ## 🔗 Job Dependencies
 
 Control execution order with `needs`:
@@ -144,22 +156,6 @@ A ───┤
 > Jobs without `needs` run in parallel when resources allow.
 
 ---
-
-## 🪝 Workflow Hooks
-
-```yaml
-hooks:
-  on_start:
-    - run: echo "Starting workflow"
-  
-  on_success:
-    - run: echo "Workflow succeeded"
-  
-  on_failure:
-    - run: echo "Workflow failed" >&2
-```
-
-See [Hooks System](hooks.md) for complete documentation.
 
 ---
 
@@ -307,12 +303,6 @@ inputs:
 secrets:
   SHODAN_KEY: { description: Shodan API key }
 
-hooks:
-  on_start:
-    - run: echo "Starting assessment of {{ inputs.target }}"
-  on_success:
-    - run: python notify_team.py --status success
-
 jobs:
   passive_recon:
     steps:
@@ -361,5 +351,4 @@ asyncio.run(main())
 
 - [**Jobs & Steps**](jobs-steps.md) — Detailed configuration
 - [**Templates**](templates.md) — Template functions
-- [**Hooks**](hooks.md) — Lifecycle events
 - [**Secrets & Inputs**](secrets-inputs.md) — Credential management

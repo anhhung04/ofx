@@ -3,10 +3,10 @@ description: Minimal test to verify matrix values
 
 jobs:
   test:
-    name: "Job ${{ matrix.x }}"
+    name: "Job {{ matrix.x }}"
     strategy:
       matrix:
         x: [1, 2, 3]
     steps:
       - name: Show value
-        run: echo "Value is ${{ matrix.x }}"
+        run: echo "Value is {{ matrix.x }}"

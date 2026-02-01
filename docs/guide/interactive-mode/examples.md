@@ -41,11 +41,11 @@ jobs:
   db:
     steps:
       - name: MySQL Shell
-        run: mysql -h ${{ inputs.db_host }} -u ${{ inputs.db_user }} -p${{ secrets.db_pass }}
+        run: mysql -h {{ inputs.db_host }} -u {{ inputs.db_user }} -p{{ secrets.db_pass }}
         interactive: true
         timeout: 15
       - name: Export Data
-        run: mysqldump ${{ inputs.db_name }} > dump.sql
+        run: mysqldump {{ inputs.db_name }} > dump.sql
 ```
 **Why:** Use for manual queries, schema inspection, or troubleshooting.
 
@@ -60,7 +60,7 @@ jobs:
   netcat:
     steps:
       - name: Open Netcat
-        run: nc ${{ inputs.target_ip }} ${{ inputs.target_port }}
+        run: nc {{ inputs.target_ip }} {{ inputs.target_port }}
         interactive: true
         timeout: 10
       - name: Log
@@ -74,7 +74,7 @@ jobs:
   ssh:
     steps:
       - name: SSH Login
-        run: ssh user@${{ inputs.host }}
+        run: ssh user@{{ inputs.host }}
         interactive: true
         timeout: 20
 ```
@@ -175,35 +175,17 @@ jobs:
 
 ---
 
-## 8. Interactive with Hooks
-
-Prepare the environment before an interactive session:
-```yaml
-jobs:
-  session:
-    hooks:
-      on_start:
-        run: echo "Starting interactive session"
-        language: shell
-    steps:
-      - name: Custom Tool
-        run: ./custom_tool
-        interactive: true
-```
-
----
-
-## 9. Best Practices
+## 8. Best Practices
 
 - Always set a `timeout` to avoid hanging sessions.
 - Use job dependencies (`needs:`) to ensure only one interactive job runs at a time.
-- Use `env:` to set environment variables for your session.
+- Use `envs:` to set environment variables for your session.
 - Use `run_if:` for conditional debugging.
 - Save session logs or history for later review.
 
 ---
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 - If interactive mode doesn't work, check for parallel jobs in the same stage.
 - Use `ofx flow run workflow.yml --debug` to inspect execution stages.

@@ -12,7 +12,7 @@ jobs:
     name: Scan Target
     steps:
       - name: Run nmap scan
-        run: nmap ${{ inputs.target }}
+        run: nmap {{ inputs.target }}
 ```
 
 ---
@@ -25,13 +25,13 @@ jobs:
     name: Reconnaissance
     steps:
       - name: Scan target
-        run: nmap ${{ inputs.target }}
+        run: nmap {{ inputs.target }}
   exploit:
     name: Exploitation
     needs: recon
     steps:
       - name: Run exploit
-        run: python exploit.py --target ${{ inputs.target }}
+        run: python exploit.py --target {{ inputs.target }}
   loot:
     name: Data Collection
     needs: exploit
@@ -70,12 +70,12 @@ jobs:
   scan:
     name: Port Scan
     outputs:
-      open_ports: "${{ steps.0.outputs.open_ports }}"
+      open_ports: "{{ steps.0.outputs.open_ports }}"
     steps:
       - name: Scan and capture ports
         run: |
           # Run scan and extract open ports
-          nmap ${{ inputs.target }} | grep "^[0-9]" | cut -d'/' -f1 > ports.txt
+          nmap {{ inputs.target }} | grep "^[0-9]" | cut -d'/' -f1 > ports.txt
           # Save to outputs
           echo "open_ports=$(cat ports.txt | tr '\n' ',')" >> $OFX_OUTPUTS
   
@@ -84,7 +84,7 @@ jobs:
     needs: [scan]
     steps:
       - name: Display results
-        run: echo "Open ports: ${{ jobs.scan.outputs.open_ports }}"
+        run: echo "Open ports: {{ jobs.scan.outputs.open_ports }}"
 ```
 
 ---
@@ -97,7 +97,7 @@ jobs:
     name: Call API
     steps:
       - name: Make authenticated request
-        run: curl -H "Authorization: Bearer ${{ secrets.API_KEY }}" https://api.example.com
+        run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
 ```
 
 ---
@@ -158,7 +158,23 @@ jobs:
 
 ---
 
-## Example 7: Comprehensive Web Reconnaissance
+## Example 8: Reusable Workflow from GitHub
+
+This example calls a reusable workflow hosted in a GitHub repo. OFX will clone the repo and load its main workflow file.
+
+```yaml
+name: Repo Reuse Example
+
+jobs:
+  run-recon:
+    steps:
+      - name: Run recon workflow
+        uses: https://github.com/user/recon-workflows
+```
+
+---
+
+## Example 9: Comprehensive Web Reconnaissance
 
 This example demonstrates a multi-job workflow that takes a domain, finds subdomains, checks for open web ports, and generates a report.
 
@@ -180,7 +196,7 @@ jobs:
   discover_subdomains:
     name: Discover Subdomains
     outputs:
-      subdomains: "${{ steps.0.outputs.subdomains }}"
+      subdomains: "{{ steps.0.outputs.subdomains }}"
     steps:
       - name: Search with FOFA
         run: |
@@ -189,10 +205,10 @@ jobs:
           import os
           
           fofa = FofaClient(
-              user=os.getenv('FOFA_USER', '${{ secrets.FOFA_USER }}'),
-              token=os.getenv('FOFA_TOKEN', '${{ secrets.FOFA_TOKEN }}')
+              user=os.getenv('FOFA_USER', '{{ secrets.FOFA_USER }}'),
+              token=os.getenv('FOFA_TOKEN', '{{ secrets.FOFA_TOKEN }}')
           )
-          results = fofa.search(f'domain="${{ inputs.domain }}"')
+          results = fofa.search(f'domain="{{ inputs.domain }}"')
           
           # Extract hosts from results
           hosts = [res.split('//')[1].split(':')[0] for res in results]
@@ -206,7 +222,7 @@ jobs:
     name: Check for Open Web Ports
     needs: [discover_subdomains]
     outputs:
-      live_hosts: "${{ steps.0.outputs.live_hosts }}"
+      live_hosts: "{{ steps.0.outputs.live_hosts }}"
     steps:
       - name: Check ports 80 and 443
         run: |
@@ -214,7 +230,7 @@ jobs:
           from ofx.api.exploitation.exploit.utils import check_port
           import os
           
-          subdomains = "${{ jobs.discover_subdomains.outputs.subdomains }}".split(',')
+          subdomains = "{{ jobs.discover_subdomains.outputs.subdomains }}".split(',')
           open_hosts = []
           
           for host in subdomains:
@@ -240,9 +256,9 @@ jobs:
           from ofx.api.file import write_file
           import re
           
-          live_hosts = "${{ jobs.check_web_ports.outputs.live_hosts }}".split(',')
+          live_hosts = "{{ jobs.check_web_ports.outputs.live_hosts }}".split(',')
           report = "# Web Reconnaissance Report\n\n"
-          report += f"## Target: ${{ inputs.domain }}\n\n"
+          report += f"## Target: {{ inputs.domain }}\n\n"
           
           for host in live_hosts:
               if host:
@@ -254,7 +270,7 @@ jobs:
                   except Exception as e:
                       report += f"- **{host}**: Failed to fetch ({str(e)})\n"
           
-          output_file = "${{ ctx.output_path }}/recon_report.md"
+          output_file = "{{ ctx.output_path }}/recon_report.md"
           write_file(report, output_file)
           print(f"Report saved to {output_file}")
           EOF

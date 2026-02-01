@@ -112,7 +112,7 @@ jobs:
 echo "my-api-key-123" > ~/.local/share/ofx/secrets/my_api_key
 
 # Use in workflow
-ofx flow run workflow --input api_key='${{ secrets.my_api_key }}'
+ofx flow run workflow --input api_key='{{ secrets.my_api_key }}'
 ```
 
 #### Option 2: Encrypted store (recommended for production)

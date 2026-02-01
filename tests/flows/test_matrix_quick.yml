@@ -3,16 +3,16 @@ description: Quick test for matrix features
 
 jobs:
   basic:
-    name: "Test ${{ matrix.os }}"
+    name: "Test {{ matrix.os }}"
     strategy:
       matrix:
         os: [linux, windows]
     steps:
       - name: Display OS
-        run: 'echo "OS: ${{ matrix.os }}"'
+        run: 'echo "OS: {{ matrix.os }}"'
 
   excluded:
-    name: "Browser ${{ matrix.browser }}"
+    name: "Browser {{ matrix.browser }}"
     needs: basic
     strategy:
       matrix:
@@ -23,10 +23,10 @@ jobs:
           os: ubuntu
     steps:
       - name: Test browser
-        run: 'echo "Testing ${{ matrix.browser }} on ${{ matrix.os }}"'
+        run: 'echo "Testing {{ matrix.browser }} on {{ matrix.os }}"'
 
   included:
-    name: "Build ${{ matrix.arch }}"
+    name: "Build {{ matrix.arch }}"
     needs: excluded
     strategy:
       matrix:
@@ -37,8 +37,8 @@ jobs:
     steps:
       - name: Build
         run: |
-          echo "Building for ${{ matrix.arch }}"
-          if [ "${{ matrix.experimental }}" = "true" ]; then
+          echo "Building for {{ matrix.arch }}"
+          if [ "{{ matrix.experimental }}" = "true" ]; then
             echo "Experimental build"
           fi
 

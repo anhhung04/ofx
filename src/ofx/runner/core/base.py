@@ -159,7 +159,12 @@ class BaseRunner(Generic[TModel]):
         context_vars = self.ctx.vars.copy()
         context_vars.update(self.ctx.model_dump(exclude={"vars"}))
         context_vars.update(
-            {"self": self.model, "registry": self._registry, "runner": self}
+            {
+                "self": self.model,
+                "registry": self._registry,
+                "runner": self,
+                "ctx": self.ctx,
+            }
         )
         return await self._template_resolver.resolve(
             value,

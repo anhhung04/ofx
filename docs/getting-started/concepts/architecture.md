@@ -9,7 +9,6 @@ OFX is designed as a modular, extensible workflow engine for red teaming, automa
 - **Job Runner:** Handles parallel and sequential job execution
 - **Step Runner:** Executes commands, scripts, or code blocks
 - **API Modules:** Provide reusable functions for recon, exploitation, post-exploitation
-- **Hooks System:** Injects custom logic at workflow, job, or step level
 - **Template Engine:** Uses Jinja2 for dynamic variables and logic
 
 ---
@@ -19,15 +18,14 @@ OFX is designed as a modular, extensible workflow engine for red teaming, automa
 2. Resolve templates with inputs/secrets
 3. Execute jobs (respecting dependencies)
 4. Run steps within each job
-5. Trigger hooks at each lifecycle stage
-6. Collect outputs and results
+5. Collect outputs and results
 
 ---
 
 ## Extending OFX
 - Add new API modules in `src/ofx/api/`
 - Add custom connectors for new data sources
-- Use hooks and templates for advanced logic
+- Use templates for advanced logic
 
 ---
 

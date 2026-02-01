@@ -234,4 +234,3 @@ If you lose your encryption key:
 
 - [project init](init.md) - Initialize projects with storage
 - [project](project.md) - Project management commands
-- [S3 Workflows](../../guide/workflows/s3-workflows.md) - Using S3 for workflows

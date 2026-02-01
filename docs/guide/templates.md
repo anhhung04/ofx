@@ -1,6 +1,6 @@
 # Templates
 
-Jinja2 uses `{{ ... }}` for variables. `${{ ... }}` is also accepted, but it keeps a literal `$` in the rendered output.
+Jinja2 uses `{{ ... }}` for variables.
 
 ## What you can reference
 

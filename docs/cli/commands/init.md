@@ -227,5 +227,4 @@ Contains encryption key for Git filter encryption.
 
 - [project sync](sync.md) - Sync project to remote storage
 - [project list](project.md) - List all projects
-- [S3 Workflows](../../guide/workflows/s3-workflows.md) - Using S3 for workflows
 - [Secrets Management](../../guide/secrets-inputs.md) - Managing secrets

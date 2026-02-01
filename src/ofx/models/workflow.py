@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from ofx.models.base import OFXBaseModel
 from ofx.models.config import DefaultConfig
@@ -35,7 +35,7 @@ class WorkflowDispatch(OFXBaseModel):
     )
 
 
-class Workflow(OFXBaseModel):
+class Workflow(BaseModel):
     """Main workflow definition."""
 
     name: str = Field(..., description="Name of the workflow")

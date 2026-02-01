@@ -20,7 +20,7 @@ jobs:
         python: ["3.10", "3.11", "3.12"]
     steps:
       - name: Run tests
-        run: echo "Testing on ${{ matrix.os }} with Python ${{ matrix.python }}"
+        run: echo "Testing on {{ matrix.os }} with Python {{ matrix.python }}"
 ```
 
 This creates 9 job instances (3 OS × 3 Python versions).
@@ -39,8 +39,8 @@ jobs:
     steps:
       - name: Build
         run: |
-          echo "Building version ${{ matrix.version }}"
-          echo "Target architecture: ${{ matrix.arch }}"
+          echo "Building version {{ matrix.version }}"
+          echo "Target architecture: {{ matrix.arch }}"
 ```
 
 ## Controlling Parallelism
@@ -57,7 +57,7 @@ jobs:
       matrix:
         region: [us-east, us-west, eu-central, ap-south]
     steps:
-      - run: echo "Deploying to ${{ matrix.region }}"
+      - run: echo "Deploying to {{ matrix.region }}"
 ```
 
 Without `max_parallel`, all matrix jobs in a stage run concurrently (limited only by the global `workers` setting).
@@ -74,7 +74,7 @@ jobs:
       matrix:
         browser: [chrome, firefox, safari]
     steps:
-      - run: test_browser.sh ${{ matrix.browser }}
+      - run: test_browser.sh {{ matrix.browser }}
 ```
 
 Set `fail_fast: false` to allow all matrix jobs to complete even if some fail:
@@ -87,7 +87,7 @@ jobs:
       matrix:
         browser: [chrome, firefox, safari]
     steps:
-      - run: test_browser.sh ${{ matrix.browser }}
+      - run: test_browser.sh {{ matrix.browser }}
 ```
 
 ## Including Additional Combinations
@@ -112,7 +112,7 @@ jobs:
     steps:
       - run: node --version
       - run: |
-          if [ "${{ matrix.experimental }}" = "true" ]; then
+          if [ "{{ matrix.experimental }}" = "true" ]; then
             echo "Running experimental build"
           fi
 ```
@@ -175,14 +175,14 @@ jobs:
       - name: Configure
         run: |
           cmake -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_C_COMPILER=${{ matrix.compiler }}
+            -DCMAKE_BUILD_TYPE={{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER={{ matrix.compiler }}
       
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }}
+        run: cmake --build build --config {{ matrix.build_type }}
       
       - name: Test
-        run: ctest --build-config ${{ matrix.build_type }}
+        run: ctest --build-config {{ matrix.build_type }}
         working_directory: build
 ```
 
@@ -202,7 +202,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     steps:
-      - run: run_tests.sh --shard=${{ matrix.shard }}/4
+      - run: run_tests.sh --shard={{ matrix.shard }}/4
   
   report:
     needs: test
@@ -219,7 +219,7 @@ Use matrix values in job names for better visibility:
 ```yaml
 jobs:
   test:
-    name: "Test ${{ matrix.os }} - Python ${{ matrix.python }}"
+    name: "Test {{ matrix.os }} - Python {{ matrix.python }}"
     strategy:
       matrix:
         os: [ubuntu, windows]
@@ -261,10 +261,10 @@ jobs:
   build:
     strategy:
       matrix:
-        platform: ${{ inputs.platforms }}
+        platform: {{ inputs.platforms }}
         config: [debug, release]
     steps:
-      - run: echo "Building ${{ matrix.config }} on ${{ matrix.platform }}"
+      - run: echo "Building {{ matrix.config }} on {{ matrix.platform }}"
 ```
 
 ## Debugging Matrix Jobs

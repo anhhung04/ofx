@@ -72,37 +72,6 @@ def update():
 
 
 @app.command()
-def visualize(
-    workflow_name: Annotated[
-        str, typer.Argument(..., help="Name of the workflow to visualize")
-    ],
-    output: Annotated[
-        str,
-        typer.Option(
-            "-o",
-            "--output",
-            help="Output path for the visualization file. If not specified, displays in terminal.",
-        ),
-    ] = "",
-    format: Annotated[
-        str,
-        typer.Option(
-            "--format",
-            help="Output format for visualization (dot, png, svg, pdf). Default is dot.",
-        ),
-    ] = "dot",
-):
-    """Visualize workflow as a directed acyclic graph (DAG)"""
-    from ofx.commands.flow.visualize import VisualizeHandler
-
-    VisualizeHandler(
-        workflow_name=workflow_name,
-        output=output,
-        format=format,
-    ).run()
-
-
-@app.command()
 def tools(
     workflow_name: Annotated[
         str,

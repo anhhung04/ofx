@@ -8,9 +8,9 @@ defaults:
 tools:
   # Tool with full ToolConfig
   test_tool:
-    install: "printf '#!/bin/bash\\necho test tool works' > ${{ tools_bin_dir }}/test_tool && chmod +x ${{ tools_bin_dir }}/test_tool"
-    check: "test -x ${{ tools_bin_dir }}/test_tool"
-    post_install: "echo 'test_tool installed successfully to ${{ tools_bin_dir }}'"
+    install: "printf '#!/bin/bash\\necho test tool works' > {{ tools_bin_dir }}/test_tool && chmod +x {{ tools_bin_dir }}/test_tool"
+    check: "test -x {{ tools_bin_dir }}/test_tool"
+    post_install: "echo 'test_tool installed successfully to {{ tools_bin_dir }}'"
 
   # Tool with custom check and post-install
   custom_tool:
@@ -26,8 +26,8 @@ jobs:
         run: |
           echo "Tools are ready!"
           echo "PATH: $PATH"
-          echo "TOOLS_DIR: ${{ tools_dir }}"
-          echo "TOOLS_BIN_DIR: ${{ tools_bin_dir }}"
+          echo "TOOLS_DIR: {{ tools_dir }}"
+          echo "TOOLS_BIN_DIR: {{ tools_bin_dir }}"
 
       - name: Test test_tool
         run: |

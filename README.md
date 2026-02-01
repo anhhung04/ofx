@@ -1,6 +1,6 @@
 # Offensive Flow Executor (OFX)
 
-Workflow runner for red-team style automation: YAML workflows, parallel jobs, lifecycle hooks, templating, and built-in APIs for recon, exploitation, and post-exploitation.
+Workflow runner for red-team style automation: YAML workflows, parallel jobs, templating, and built-in APIs for recon, exploitation, and post-exploitation.
 
 - **Docs:** https://anhhung04.github.io/ofx/
 
@@ -32,7 +32,6 @@ ofx flow run hello.yml
 ## Core Capabilities
 
 - YAML workflows with job dependencies and parallel stages
-- Lifecycle hooks on steps, plus retries/timeouts and conditional `run_if`
 - Built-in APIs for recon/exploitation/post-exploitation tasks
 - Jinja templating for inputs, envs, secrets, and commands
 - Async-first engine with rich progress output

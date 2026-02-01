@@ -28,7 +28,7 @@ jobs:
       matrix:
         value: [1, 2, 3]
     steps:
-      - run: echo ${{ matrix.value }}
+      - run: echo {{ matrix.value }}
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -56,7 +56,7 @@ jobs:
         os: [linux, macos]
         arch: [amd64, arm64]
     steps:
-      - run: echo ${{ matrix.os }}-${{ matrix.arch }}
+      - run: echo {{ matrix.os }}-{{ matrix.arch }}
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -91,7 +91,7 @@ jobs:
         - os: windows
           browser: safari
     steps:
-      - run: echo ${{ matrix.os }}-${{ matrix.browser }}
+      - run: echo {{ matrix.os }}-{{ matrix.browser }}
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -120,7 +120,7 @@ jobs:
         - platform: arm64
         - platform: riscv
     steps:
-      - run: echo ${{ matrix.platform }}
+      - run: echo {{ matrix.platform }}
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -151,7 +151,7 @@ jobs:
       matrix:
         id: [1, 2, 3, 4, 5]
     steps:
-      - run: echo "${{ matrix.id }}"
+      - run: echo "{{ matrix.id }}"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -174,7 +174,7 @@ jobs:
       matrix:
         task: [a, b, c]
     steps:
-      - run: echo "${{ matrix.task }}"
+      - run: echo "{{ matrix.task }}"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -197,7 +197,7 @@ jobs:
         config: ['{"name": "dev", "port": 3000}', '{"name": "prod", "port": 8080}']
         debug: ["true", "false"]
     steps:
-      - run: echo "${{ matrix.config.name }}"
+      - run: echo "{{ matrix.config.name }}"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -232,7 +232,7 @@ jobs:
       matrix:
         version: [1, 2]
     steps:
-      - run: echo "Building ${{ matrix.version }}"
+      - run: echo "Building {{ matrix.version }}"
   
   test:
     needs: build
@@ -240,7 +240,7 @@ jobs:
       matrix:
         env: [dev, prod]
     steps:
-      - run: echo "Testing in ${{ matrix.env }}"
+      - run: echo "Testing in {{ matrix.env }}"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -267,7 +267,7 @@ jobs:
     #       matrix:
     #         id: [1, 2]
     #     steps:
-    #       - run: echo "${{ matrix.id }}"
+    #       - run: echo "{{ matrix.id }}"
     # """
     #     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
     #     runner = WorkflowRunner(workflow, RunContext())
@@ -299,7 +299,7 @@ jobs:
       matrix:
         only: [single]
     steps:
-      - run: echo "${{ matrix.only }}"
+      - run: echo "{{ matrix.only }}"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -327,7 +327,7 @@ jobs:
         y: [a, b]
         z: [true, false]
     steps:
-      - run: echo "${{ matrix.x }}-${{ matrix.y }}-${{ matrix.z }}"
+      - run: echo "{{ matrix.x }}-{{ matrix.y }}-{{ matrix.z }}"
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -377,7 +377,7 @@ jobs:
         - env: canary
           version: "2.0"
     steps:
-      - run: echo ${{ matrix.env }}-${{ matrix.version }}
+      - run: echo {{ matrix.env }}-{{ matrix.version }}
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
@@ -404,7 +404,7 @@ jobs:
 name: Name Template Test
 jobs:
   test:
-    name: "Build for ${{ matrix.platform }}"
+    name: "Build for {{ matrix.platform }}"
     strategy:
       matrix:
         platform: [linux, macos]
@@ -417,7 +417,7 @@ jobs:
         await runner._plan_jobs()
 
         assert len(runner._staged_jobs) == 1
-        assert runner._staged_jobs["test"].name == "Build for ${{ matrix.platform }}"
+        assert runner._staged_jobs["test"].name == "Build for {{ matrix.platform }}"
 
     @pytest.mark.asyncio
     async def test_get_expanded_job_ids(self):
@@ -430,7 +430,7 @@ jobs:
       matrix:
         id: [1, 2, 3]
     steps:
-      - run: echo "${{ matrix.id }}"
+      - run: echo "{{ matrix.id }}"
   
   normal_job:
     steps:
@@ -457,7 +457,7 @@ jobs:
       matrix:
         value: ["plain", "with-dash", "with_underscore"]
     steps:
-      - run: echo ${{ matrix.value }}
+      - run: echo {{ matrix.value }}
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())

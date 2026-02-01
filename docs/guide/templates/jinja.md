@@ -9,7 +9,7 @@ OFX uses the Jinja2 template engine for dynamic variable substitution, logic, an
 - `{% if ... %} ... {% endif %}`: Conditional logic
 - `{% for ... %} ... {% endfor %}`: Loops
 
-`${{ variable }}` is also accepted, but it renders with a leading `$`.
+Use `{{ variable }}` for all template expressions.
 
 ---
 

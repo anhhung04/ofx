@@ -24,10 +24,6 @@ jobs:            # Execution units
   scan:
     steps:
       - run: nmap -sV {{ inputs.target }}
-
-hooks:           # Lifecycle events (optional)
-  on_success:
-    - run: echo "Done"
 ```
 
 ---
@@ -40,9 +36,10 @@ Jobs are independent execution units that can run in parallel.
 |----------|-------------|
 | `steps` | List of steps to execute sequentially |
 | `needs` | Dependencies on other jobs |
+| `run_if` | Conditional execution (alias: `if`) |
+| `strategy` | Matrix strategy configuration |
 | `envs` | Environment variables for all steps |
-| `continue_on_error` | Don't stop on failure |
-| `hooks` | Job-level lifecycle events |
+| `outputs` | Job outputs (template-resolved) |
 
 ```yaml
 jobs:
@@ -66,6 +63,7 @@ Steps execute commands within a job. Each step uses exactly **one** of:
 |------|-------------|
 | `run` | Shell command |
 | `script` | Python code |
+| `script_file` | Python file path |
 | `uses` | Subflow reference |
 
 ### Step Properties
@@ -73,7 +71,7 @@ Steps execute commands within a job. Each step uses exactly **one** of:
 | Property | Description |
 |----------|-------------|
 | `name` | Descriptive step name |
-| `timeout` | Max execution time (seconds) |
+| `timeout` | Max execution time (minutes) |
 | `retry` | Retry attempts on failure |
 | `retry_delay` | Delay between retries |
 | `continue_on_error` | Continue on failure |
@@ -98,6 +96,12 @@ steps:
   # Subflow
   - name: Run recon module
     uses: ./recon.yml
+
+Reusable workflows can be referenced by:
+- Local path (relative or absolute)
+- Workflow name in search paths
+- Remote HTTP/HTTPS URL to a workflow file
+- Git repository (e.g., `https://github.com/user/repo` or `github.com/user/repo`)
 ```
 
 ---
@@ -215,9 +219,9 @@ steps:
 ```yaml
 jobs:
   resilient:
-    continue_on_error: true
     steps:
       - run: may-fail-command
+        continue_on_error: true
       - run: echo "Still runs even if above fails"
 ```
 
@@ -262,39 +266,7 @@ Access runtime information via `ctx`:
 
 ---
 
-## 🪝 Hooks
-
-Execute actions at lifecycle events:
-
-| Hook | When |
-|------|------|
-| `on_start` | Before execution begins |
-| `on_success` | After successful completion |
-| `on_failure` | After failure |
-| `before_step` | Before each step |
-| `after_step` | After each step |
-
-```yaml
-hooks:
-  on_start:
-    - run: echo "🚀 Starting at $(date)"
-  on_success:
-    - run: echo "✅ Completed"
-  on_failure:
-    - run: echo "❌ Failed" >&2
-```
-
 ---
-
-## ✅ Best Practices
-
-### Use Descriptive Names
-```yaml
-# ✅ Good
-name: comprehensive-web-app-security-scan
-jobs:
-  subdomain-enumeration:
-    steps:
       - name: Run subfinder for subdomain discovery
 
 # ❌ Bad
@@ -339,5 +311,4 @@ jobs:
 - [**Workflows**](../guide/workflows.md) — Complete workflow reference
 - [**Jobs & Steps**](../guide/jobs-steps.md) — Detailed configuration
 - [**Templates**](../guide/templates.md) — Jinja2 templating & helpers
-- [**Hooks**](../guide/hooks.md) — Lifecycle system
 - [**API Overview**](../api/overview.md) — Python API

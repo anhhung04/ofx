@@ -19,6 +19,7 @@ def _is_admin() -> bool:
     if IS_WINDOWS:
         try:
             import ctypes
+
             return ctypes.windll.shell32.IsUserAnAdmin() != 0
         except Exception:
             return False
@@ -41,17 +42,18 @@ def is_powershell(shell: str) -> bool:
 
 def get_shell_functions(shell: str | None = None) -> str:
     """Get shell helper function definitions based on shell type.
-    
+
     Args:
         shell: Shell executable path. Auto-detects if None.
-        
+
     Returns:
         Shell script containing function definitions to prepend to commands.
     """
     if shell is None:
         from ofx.settings import DEFAULT_SHELL
+
         shell = DEFAULT_SHELL
-    
+
     if is_powershell(shell):
         return _get_powershell_functions()
     else:
@@ -84,7 +86,7 @@ uv_install() {{
 }}
 
 go_install() {{
-    GO111MODULE=on GOBIN="{tools_bin_dir}" go install "${{1}}@latest"
+    GO111MODULE=on GOBIN="{tools_bin_dir}" go install "{{1}}@latest"
 }}
 
 cargo_install() {{
@@ -97,7 +99,7 @@ npm_install() {{
 
 static_install() {{
     local url="$1"
-    local name="${{2:-$(basename "$url")}}"
+    local name="{{2:-$(basename "$url")}}"
     curl -fSsL "$url" -o "{tools_bin_dir}/$name" && chmod +x "{tools_bin_dir}/$name"
 }}
 
@@ -167,7 +169,7 @@ function pip_install {{
 
 def get_shell_exports() -> dict[str, str]:
     """Get shell variable exports for templates.
-    
+
     Returns:
         Dictionary of variable names to values for template resolution.
     """

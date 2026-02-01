@@ -199,9 +199,6 @@ class PHTTPServer(threading.Thread):
         Args:
             daemon: Run as daemon thread that exits when main program exits (default: True)
 
-        Raises:
-            Logs error if port is already occupied and returns without starting
-
         Example:
             >>> server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)
             >>> server.start()

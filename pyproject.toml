@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.3.4"
+version = "0.3.5"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,7 @@ docs = [
   "mkdocs>=1.5.0",
   "mkdocs-material>=9.5.0",
   "pymdown-extensions>=10.7.0",
+
 ]
 redis = [
   "redis>=5.0.0",

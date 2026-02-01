@@ -7,7 +7,7 @@
 - If the path is **relative**, it is resolved against the workflow directory (`workflow_dir`).
 - If the path is **absolute**, it is used as-is.
 - If the file has no `.py` suffix, `.py` is appended.
-- The runner changes the working directory to the script’s parent before execution.
+- The script runs with the step’s `working_directory` (default: current working directory).
 
 ## Example (relative path)
 
@@ -32,7 +32,7 @@ steps:
     script_file: /tmp/custom_task.py
 ```
 
-## Using workflow context, envs, and secrets
+## Using workflow context, env, and secrets
 
 Your script can import `ofx` modules and external dependencies already installed in the environment. Environment variables and secrets provided to the step are available in the process environment.
 

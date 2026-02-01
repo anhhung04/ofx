@@ -25,20 +25,6 @@ jobs:
         run_if: failure()  # Only run if previous step failed
 ```
 
-## Combine with Hooks
-Use hooks to prepare the environment before interactive sessions:
-```yaml
-jobs:
-  interactive_session:
-    hooks:
-      on_start:
-        run: echo "Starting interactive session..."
-        language: shell
-    steps:
-      - name: Interactive Tool
-        run: ./custom_tool
-        interactive: true
-```
 
 ## Sequential Dependencies
 Ensure interactive jobs run sequentially:

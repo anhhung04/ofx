@@ -4,4 +4,4 @@ jobs:
   test:
     steps:
       - name: Test step
-        run: "echo ${{python}}"
+        run: "echo {{python}}"

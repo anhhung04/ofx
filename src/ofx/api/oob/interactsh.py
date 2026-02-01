@@ -87,8 +87,6 @@ class Interactsh:
         Sends public key and correlation ID to establish encrypted session.
         Called automatically during initialization.
 
-        Raises:
-            Logs error if registration fails or authentication is invalid
         """
         data = {
             "public-key": self.encoded,

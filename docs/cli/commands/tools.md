@@ -149,8 +149,8 @@ Tool installation commands support Jinja2 templates for dynamic configuration:
 ```yaml
 tools:
   custom-tool: |
-    ${{ sudo }} apt-get install -y my-tool
-    ${{ tools_bin_dir }}/my-tool --version
+    {{ sudo }} apt-get install -y my-tool
+    {{ tools_bin_dir }}/my-tool --version
 ```
 
 **Available template variables:**

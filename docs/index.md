@@ -1,77 +1,91 @@
-# Welcome to OFX
-
-> **OFX** — Build and run red-team workflows with async execution, reusable subflows, hooks, and tool installers.
-
 ---
+hide:
+  - navigation
+  - toc
+---
+
+<div class="hero-section">
+  <h1>OFX</h1>
+  <p>The Advanced Offensive Flow Executor for Red Teaming Operations</p>
+  <div class="hero-actions">
+    <a href="getting-started/quickstart/" class="hero-button primary">Get Started</a>
+    <a href="reference/api/" class="hero-button secondary">API Reference</a>
+  </div>
+</div>
+
+<div class="grid cards" markdown>
+
+-   :material-rocket-launch: **Powerful Workflows**
+
+    Build complex attack chains with YAML-based workflows. Support for async execution, dependencies, and matrix strategies.
+
+-   :material-api: **Rich API Ecosystem**
+
+    Extensive Python API for reconnaissance, exploitation, and post-exploitation. Integrate seamlessly with your custom tools.
+
+-   :material-console: **CLI First**
+
+    Robust CLI for managing projects, secrets, and assets. verifying workflows and running interactive sessions.
+    
+-   :material-puzzle: **Modular Design**
+
+    Plugin-based architecture. Easily extend with new runners, connectors, and exploit modules.
+
+</div>
 
 ## 🚀 Quick Start
 
+Install OFX and get running in seconds:
+
 ```bash
-# Install
-uv sync                    # or: pip install .
+# Install with uv
+uv tool install ofx
+
+# Or with pip
+pip install ofx
 
 # Verify installation
-ofx --help
-ofx doctor
-
-# Serve docs locally
-ofx docs serve
+ofx --version
 ```
 
-**Requirements:** Python 3.14+, Git
+## ⚡ Key Features
 
----
+=== "Workflow Engine"
 
-## ⚡ Essential Commands
+    ```yaml
+    name: simple-scan
+    jobs:
+      nmap-scan:
+        steps:
+          - run: nmap -sV {{ inputs.target }}
+            id: scan_result
+    ```
 
-| Command | Description |
-|---------|-------------|
-| `ofx flow validate <workflow>` | Validate workflow syntax |
-| `ofx flow run <workflow>` | Execute a workflow |
-| `ofx flow run <workflow> --input key=val` | Run with inputs |
-| `ofx secret set NAME` | Add a secret |
-| `ofx secret list` | List all secrets |
-| `ofx x run <workflow>` | Shorthand alias |
+    Define your operations as code. Share, version, and repeat your red team engagements with confidence.
 
----
+=== "Python API"
 
-## 📝 Your First Workflow
+    ```python
+    from ofx.api.reconnaissance import ShodanClient
 
-Create `hello.yml`:
+    shodan = ShodanClient()
+    results = shodan.search("org:TargetCorp")
+    for host in results:
+        print(f"Found: {host.ip_str}")
+    ```
 
-```yaml
-name: hello
-jobs:
-  greet:
-    steps:
-      - run: echo "Hello from OFX"
-```
+    Leverage the power of Python to script advanced logic and integrations.
 
-Run it:
+=== "Interactive Mode"
 
-```bash
-ofx flow run hello
-```
+    ```bash
+    ofx interactive
+    ```
 
-**Expected:** Progress spinner → `Hello from OFX`
+    Drop into a fully loaded shell with all your tools and context ready to go.
 
----
+## 📚 Documentation
 
-## 📚 Documentation Guide
-
-### Getting Started
-- [**Quick Start**](getting-started/quickstart.md) — 5-minute tutorial
-- [**Core Concepts**](getting-started/concepts.md) — Architecture overview
-
-### Building Workflows
-- [**Workflows**](guide/workflows.md) — Workflow structure and syntax
-- [**Jobs & Steps**](guide/jobs-steps.md) — Parallel execution
-- [**Templates**](guide/templates.md) — Jinja2 templating & helper functions
-
-### Operations
-- [**Secrets & Inputs**](guide/secrets-inputs.md) — Secure credential handling
-- [**Interactive Mode**](guide/interactive-mode.md) — Real-time interaction
-
-### Reference
-- [**CLI Commands**](cli/commands.md) — Full command reference
-- [**API Overview**](api/overview.md) — Python API documentation
+[**Getting Started**](getting-started/quickstart.md){ .md-button }
+[**User Guide**](guide/workflows.md){ .md-button }
+[**API Reference**](reference/api.md){ .md-button }

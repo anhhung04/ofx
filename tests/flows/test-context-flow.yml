@@ -31,8 +31,8 @@ jobs:
       SHARED_ENV: "from_job" # Override workflow env
 
     outputs:
-      job_output: "${{ steps.1.outputs.stdout }}"
-      workflow_input_check: "${{ inputs.workflow_level }}"
+      job_output: "{{ steps.1.outputs.stdout }}"
+      workflow_input_check: "{{ inputs.workflow_level }}"
 
     hooks:
       pre_run: |

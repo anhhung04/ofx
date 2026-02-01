@@ -12,7 +12,7 @@ Jobs are the main execution units in a workflow:
 jobs:
   scan:
     needs: []                  # Dependencies (empty = parallel)
-    continue_on_error: false   # Stop workflow on failure
+    run_if: success()           # Optional conditional
     envs:
       LOG_LEVEL: INFO          # Job-wide environment
     steps:
@@ -23,11 +23,14 @@ jobs:
 
 | Property | Type | Description |
 |----------|------|-------------|
+| `name` | str | Job display name |
 | `steps` | list | **Required.** Steps to execute |
-| `needs` | list | Job dependencies (for ordering) |
-| `continue_on_error` | bool | Don't fail workflow if job fails |
+| `needs` | list\|str | Job dependencies (for ordering) |
+| `run_if` | bool\|str | Conditional execution (alias: `if`) |
+| `strategy` | object | Matrix strategy config |
 | `envs` | dict | Environment variables for all steps |
-| `hooks` | dict | Job lifecycle events |
+| `outputs` | dict | Job outputs (template-resolved) |
+| `defaults` | object | Default run config overrides |
 
 ---
 
@@ -38,7 +41,9 @@ Each step executes exactly **one** action:
 | Action | Description |
 |--------|-------------|
 | `run` | Shell command |
-| `script` | Python code block |
+| `script` | Inline Python code |
+| `script_file` | Python file path |
+| `uses` | Reusable workflow reference |
 
 
 ### Step Properties
@@ -46,13 +51,19 @@ Each step executes exactly **one** action:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `name` | str | - | Descriptive name |
-| `run` / `script` | str | - | **Required.** Action to execute |
-| `timeout` | int | 30 | Max duration (minutes) |
+| `run` / `script` / `script_file` / `uses` | str | - | **Required.** Exactly one action |
+| `timeout` | int | 1440 | Max duration (minutes) |
 | `retry` | int | 0 | Retry attempts on failure |
-| `retry_delay` | int | 5 | Seconds between retries |
-| `continue_on_error` | bool | false | Continue on failure |
+| `retry_delay` | int | 5 | Seconds between retries (alias: `retry-delay`) |
+| `continue_on_error` | bool | false | Continue on failure (alias: `continue-on-error`) |
+| `run_if` | bool\|str | true | Conditional execution (alias: `if`) |
 | `envs` | dict | {} | Step environment variables |
-| `working_directory` | str | - | Execution directory |
+| `shell` | str | /bin/bash | Shell for `run`/`script` |
+| `working_directory` | str | cwd | Execution directory (alias: `working-directory`) |
+| `log_stdout` | bool\|str | false | Save stdout to output logs (alias: `log-stdout`) |
+| `interactive` | bool | false | Interactive mode (ignored for `uses`) |
+| `run_with` | dict | {} | Inputs for `uses` (alias: `with`) |
+| `secrets` | dict\|"inherit" | {} | Secrets for `uses` |
 
 ---
 
@@ -89,8 +100,8 @@ steps:
     script: |
       import json
       
-      data = {"target": "{{ inputs.target }}"}
-      with open("{{ ctx.output_path }}/data.json", "w") as f:
+        data = {"target": "{{ inputs.target }}"}
+        with open("{{ ctx.output_path }}/data.json", "w") as f:
           json.dump(data, f)
 ```
 
@@ -105,10 +116,6 @@ steps:
     config = wait_for('config', lambda d: d.get('ready'))
     print(f"Got config: {config}")
 ```
-
----
-
-
 
 ---
 
@@ -127,13 +134,13 @@ steps:
     script: |
       import json
       data = {"ports": [80, 443, 8080]}
-      with open("{{ ctx.output_path }}/data.json", "w") as f:
+        with open("{{ ctx.output_path }}/data.json", "w") as f:
           json.dump(data, f)
 
   - name: Use data
     script: |
       import json
-      with open("{{ ctx.output_path }}/data.json") as f:
+        with open("{{ ctx.output_path }}/data.json") as f:
           data = json.load(f)
       print(f"Ports: {data['ports']}")
 ```
@@ -288,5 +295,4 @@ jobs:
 
 - [**Workflows**](workflows.md) — Workflow structure
 - [**Templates**](templates.md) — Template functions
-- [**Hooks**](hooks.md) — Lifecycle events
 - [**CLI Reference**](../cli/commands.md) — Running workflows

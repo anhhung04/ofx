@@ -59,7 +59,7 @@ The terminal visualization shows:
 2. **Workflow Statistics**
    - Job count, stage count
    - Dependencies, outputs
-   - Hooks, conditionals
+   - Conditionals
 
 3. **Dependency Graph**
    - ASCII art representation
@@ -70,7 +70,7 @@ The terminal visualization shows:
 4. **Job Specifications**
    - Detailed job information
    - Steps, dependencies
-   - Outputs, hooks
+   - Outputs
 
 ## Graph Formats
 

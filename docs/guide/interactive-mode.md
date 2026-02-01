@@ -28,7 +28,7 @@ jobs:
   session:
     needs: prepare
     steps:
-      - run: mysql -h ${{ inputs.db_host }} -u ${{ inputs.db_user }} -p${{ secrets.db_pass }}
+      - run: mysql -h {{ inputs.db_host }} -u {{ inputs.db_user }} -p{{ secrets.db_pass }}
         interactive: true
 ```
 

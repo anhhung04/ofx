@@ -22,20 +22,20 @@ jobs:
           - value: 1
           - value: 3
     steps:
-      - run: echo "Value: ${{ matrix.value }}"
+      - run: echo "Value: {{ matrix.value }}"
 
   mixed_types:
-    name: Mixed Types - ${{ matrix.value }}
+    name: Mixed Types - {{ matrix.value }}
     strategy:
       matrix:
         value: [1, "2", true, 3.14]
     steps:
       - run: |
-          echo "Value: ${{ matrix.value }}"
-          echo "Type: $(python3 -c 'print(type(${{ matrix.value }}).__name__)')"
+          echo "Value: {{ matrix.value }}"
+          echo "Type: $(python3 -c 'print(type({{ matrix.value }}).__name__)')"
 
   partial_exclude:
-    name: Partial Exclude - ${{ matrix.a }}-${{ matrix.b }}
+    name: Partial Exclude - {{ matrix.a }}-{{ matrix.b }}
     strategy:
       matrix:
         a: [1, 2, 3]
@@ -43,7 +43,7 @@ jobs:
         exclude:
           - a: 2
     steps:
-      - run: echo "Combo: ${{ matrix.a }}-${{ matrix.b }}"
+      - run: echo "Combo: {{ matrix.a }}-{{ matrix.b }}"
 
   include_new_keys:
     name: Include New Keys
@@ -56,12 +56,12 @@ jobs:
           - newkey: standalone
     steps:
       - run: |
-          echo "Base: ${{ matrix.base }}"
-          if [ ! -z "${{ matrix.extra }}" ]; then
-            echo "Extra: ${{ matrix.extra }}"
+          echo "Base: {{ matrix.base }}"
+          if [ ! -z "{{ matrix.extra }}" ]; then
+            echo "Extra: {{ matrix.extra }}"
           fi
-          if [ ! -z "${{ matrix.newkey }}" ]; then
-            echo "Newkey: ${{ matrix.newkey }}"
+          if [ ! -z "{{ matrix.newkey }}" ]; then
+            echo "Newkey: {{ matrix.newkey }}"
           fi
 
   large_matrix:
@@ -72,7 +72,7 @@ jobs:
         a: [1, 2, 3, 4, 5]
         b: [x, y, z]
     steps:
-      - run: echo "${{ matrix.a }}-${{ matrix.b }}"
+      - run: echo "{{ matrix.a }}-{{ matrix.b }}"
 
   nested_json:
     name: Nested JSON
@@ -81,8 +81,8 @@ jobs:
         config: ['{"app": {"name": "test", "settings": {"port": 3000}}}']
     steps:
       - run: |
-          echo "App name: ${{ matrix.config.app.name }}"
-          echo "Port: ${{ matrix.config.app.settings.port }}"
+          echo "App name: {{ matrix.config.app.name }}"
+          echo "Port: {{ matrix.config.app.settings.port }}"
 
   array_in_matrix:
     name: Array in Matrix
@@ -90,23 +90,23 @@ jobs:
       matrix:
         tags: ['["tag1", "tag2"]', '["tag3"]']
     steps:
-      - run: echo "First tag: ${{ matrix.tags[0] }}"
+      - run: echo "First tag: {{ matrix.tags[0] }}"
 
   special_characters:
-    name: Special Chars - ${{ matrix.value }}
+    name: Special Chars - {{ matrix.value }}
     strategy:
       matrix:
         value: ["test-value", "test_value", "test.value", "test@value"]
     steps:
-      - run: echo "Value with special chars: ${{ matrix.value }}"
+      - run: echo "Value with special chars: {{ matrix.value }}"
 
   long_matrix_name:
-    name: ${{ matrix.very_long_variable_name_that_tests_template_length }}
+    name: {{ matrix.very_long_variable_name_that_tests_template_length }}
     strategy:
       matrix:
         very_long_variable_name_that_tests_template_length: [short1, short2]
     steps:
-      - run: echo "Long name: ${{ matrix.very_long_variable_name_that_tests_template_length }}"
+      - run: echo "Long name: {{ matrix.very_long_variable_name_that_tests_template_length }}"
 
   verify_edge_cases:
     name: Verify Edge Cases

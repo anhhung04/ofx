@@ -1,6 +1,6 @@
 # Steps
 
-Steps are the smallest unit of execution in an OFX workflow. Each step runs a command, script, or code block, and can have its own environment, outputs, and error handling.
+Steps are the smallest unit of execution in an OFX workflow. Each step runs a command, script, or reusable workflow and can have its own environment and error handling.
 
 ---
 
@@ -13,11 +13,9 @@ jobs:
     steps:
       - name: Run Script
         run: ./myscript.sh
-        env:
+        envs:
           VAR: value
         timeout: 10
-        outputs:
-          result: "${{ step.stdout }}"
         continue_on_error: true
 ```
 
@@ -25,21 +23,27 @@ jobs:
 
 ## Step Fields
 - `name`: (optional) Description of the step
-- `run`: Command, script, or code to execute
-- `language`: (optional) Language for code blocks (e.g., python)
-- `env`: (optional) Environment variables
-- `timeout`: (optional) Max time in minutes
-- `outputs`: (optional) Exported values from this step
-- `continue_on_error`: (optional) Continue even if this step fails
-- `run_if`: (optional) Conditional execution (e.g., `failure()`)
+- `run` / `script` / `script_file` / `uses`: **Exactly one** action per step
+- `envs`: (optional) Environment variables
+- `timeout`: (optional) Max time in minutes (default: 1440)
+- `retry`: (optional) Retry attempts on failure
+- `retry_delay`: (optional) Seconds between retries (alias: `retry-delay`)
+- `continue_on_error`: (optional) Continue even if this step fails (alias: `continue-on-error`)
+- `run_if`: (optional) Conditional execution (alias: `if`)
+- `shell`: (optional) Shell for `run`/`script`
+- `working_directory`: (optional) Execution directory (alias: `working-directory`)
+- `log_stdout`: (optional) Save stdout to output logs (alias: `log-stdout`)
+- `interactive`: (optional) Interactive mode (ignored for `uses`)
+- `with`: (optional) Inputs for `uses` (model field: `run_with`)
+- `secrets`: (optional) Secrets for `uses` (`inherit` to pass parent secrets)
 
 ---
 
 ## Advanced Usage
 - Use `script:` to run inline Python code
 - Use `script_file:` to execute an existing Python file (resolved relative to the workflow directory)
-- Use `outputs:` to pass data between steps and jobs
-- Use `run_if:` for conditional logic (see [Hooks & Conditions](../hooks.md))
+- Use `uses:` to call a reusable workflow
+- Use `run_if:` for conditional logic
 
 ---
 

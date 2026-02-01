@@ -5,9 +5,9 @@ jobs:
   set_outputs:
     name: Set Custom Outputs
     outputs:
-      build_number: "${{ steps.0.outputs.build_number }}"
-      commit_sha: "${{ steps.0.outputs.commit_sha }}"
-      status: "${{ steps.0.outputs.status }}"
+      build_number: "{{ steps.0.outputs.build_number }}"
+      commit_sha: "{{ steps.0.outputs.commit_sha }}"
+      status: "{{ steps.0.outputs.status }}"
     steps:
       - name: Capture basic outputs
         run: |
@@ -21,18 +21,18 @@ jobs:
     steps:
       - name: Display captured outputs
         run: |
-          echo "Build: ${{ jobs.set_outputs.outputs.build_number }}"
-          echo "Commit: ${{ jobs.set_outputs.outputs.commit_sha }}"
-          echo "Status: ${{ jobs.set_outputs.outputs.status }}"
+          echo "Build: {{ jobs.set_outputs.outputs.build_number }}"
+          echo "Commit: {{ jobs.set_outputs.outputs.commit_sha }}"
+          echo "Status: {{ jobs.set_outputs.outputs.status }}"
 
   generate_metadata:
     name: Generate Build Metadata
     outputs:
-      timestamp: "${{ steps.0.outputs.timestamp }}"
-      hostname: "${{ steps.0.outputs.hostname }}"
-      user: "${{ steps.0.outputs.user }}"
-      pwd: "${{ steps.0.outputs.pwd }}"
-      json_data: "${{ steps.1.outputs.json_data }}"
+      timestamp: "{{ steps.0.outputs.timestamp }}"
+      hostname: "{{ steps.0.outputs.hostname }}"
+      user: "{{ steps.0.outputs.user }}"
+      pwd: "{{ steps.0.outputs.pwd }}"
+      json_data: "{{ steps.1.outputs.json_data }}"
     steps:
       - name: Create metadata
         run: |
@@ -53,7 +53,7 @@ jobs:
     steps:
       - name: Check metadata exists
         run: |
-          echo "Timestamp: ${{ jobs.generate_metadata.outputs.timestamp }}"
-          echo "Host: ${{ jobs.generate_metadata.outputs.hostname }}"
-          echo "User: ${{ jobs.generate_metadata.outputs.user }}"
-          echo "Directory: ${{ jobs.generate_metadata.outputs.pwd }}"
+          echo "Timestamp: {{ jobs.generate_metadata.outputs.timestamp }}"
+          echo "Host: {{ jobs.generate_metadata.outputs.hostname }}"
+          echo "User: {{ jobs.generate_metadata.outputs.user }}"
+          echo "Directory: {{ jobs.generate_metadata.outputs.pwd }}"

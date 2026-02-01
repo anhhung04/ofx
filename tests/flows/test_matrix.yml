@@ -4,7 +4,7 @@ description: Test workflow demonstrating matrix strategy features
 jobs:
   # Basic matrix test
   basic_matrix:
-    name: "Test ${{ matrix.os }} - v${{ matrix.version }}"
+    name: "Test {{ matrix.os }} - v{{ matrix.version }}"
     strategy:
       matrix:
         os: [linux, windows, macos]
@@ -12,13 +12,13 @@ jobs:
     steps:
       - name: Display matrix values
         run: |
-          echo "Operating System: ${{ matrix.os }}"
-          echo "Version: ${{ matrix.version }}"
+          echo "Operating System: {{ matrix.os }}"
+          echo "Version: {{ matrix.version }}"
           echo "Job completed successfully"
 
   # Matrix with max_parallel
   parallel_limited:
-    name: "Limited Parallel ${{ matrix.id }}"
+    name: "Limited Parallel {{ matrix.id }}"
     needs: basic_matrix
     strategy:
       max_parallel: 2
@@ -27,13 +27,13 @@ jobs:
     steps:
       - name: Simulate work
         run: |
-          echo "Starting job ${{ matrix.id }}"
+          echo "Starting job {{ matrix.id }}"
           sleep 1
-          echo "Finished job ${{ matrix.id }}"
+          echo "Finished job {{ matrix.id }}"
 
   # Matrix with exclude
   excluded_combinations:
-    name: "Test ${{ matrix.browser }} on ${{ matrix.os }}"
+    name: "Test {{ matrix.browser }} on {{ matrix.os }}"
     needs: parallel_limited
     strategy:
       matrix:
@@ -46,11 +46,11 @@ jobs:
           os: windows
     steps:
       - name: Run browser test
-        run: echo "Testing ${{ matrix.browser }} on ${{ matrix.os }}"
+        run: echo "Testing {{ matrix.browser }} on {{ matrix.os }}"
 
   # Matrix with include
   included_combinations:
-    name: "Build ${{ matrix.platform }}"
+    name: "Build {{ matrix.platform }}"
     needs: excluded_combinations
     strategy:
       matrix:
@@ -63,8 +63,8 @@ jobs:
     steps:
       - name: Build for platform
         run: |
-          echo "Building for ${{ matrix.platform }}"
-          if [ "${{ matrix.experimental }}" = "true" ]; then
+          echo "Building for {{ matrix.platform }}"
+          if [ "{{ matrix.experimental }}" = "true" ]; then
             echo "This is an experimental build"
           fi
 

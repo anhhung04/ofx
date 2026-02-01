@@ -3,16 +3,16 @@ description: Comprehensive test covering all matrix strategy features
 
 jobs:
   basic_matrix:
-    name: Basic Matrix - ${{ matrix.version }}
+    name: Basic Matrix - {{ matrix.version }}
     strategy:
       matrix:
         version: [1, 2, 3]
     steps:
       - name: Test basic matrix
-        run: echo "Testing version ${{ matrix.version }}"
+        run: echo "Testing version {{ matrix.version }}"
 
   multi_dimensional:
-    name: Multi-dimensional - ${{ matrix.os }}-${{ matrix.arch }}
+    name: Multi-dimensional - {{ matrix.os }}-{{ matrix.arch }}
     needs: basic_matrix
     strategy:
       matrix:
@@ -20,10 +20,10 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - name: Test multi-dimensional
-        run: echo "Building for ${{ matrix.os }} on ${{ matrix.arch }}"
+        run: echo "Building for {{ matrix.os }} on {{ matrix.arch }}"
 
   with_exclude:
-    name: With Exclude - ${{ matrix.os }}-${{ matrix.browser }}
+    name: With Exclude - {{ matrix.os }}-{{ matrix.browser }}
     needs: multi_dimensional
     strategy:
       matrix:
@@ -36,10 +36,10 @@ jobs:
             browser: safari
     steps:
       - name: Test with exclude
-        run: echo "Testing ${{ matrix.browser }} on ${{ matrix.os }}"
+        run: echo "Testing {{ matrix.browser }} on {{ matrix.os }}"
 
   with_include:
-    name: With Include - ${{ matrix.platform }}
+    name: With Include - {{ matrix.platform }}
     needs: with_exclude
     strategy:
       matrix:
@@ -52,13 +52,13 @@ jobs:
     steps:
       - name: Test with include
         run: |
-          echo "Platform: ${{ matrix.platform }}"
-          if [ "${{ matrix.experimental }}" = "true" ]; then
+          echo "Platform: {{ matrix.platform }}"
+          if [ "{{ matrix.experimental }}" = "true" ]; then
             echo "Experimental platform"
           fi
 
   max_parallel_limit:
-    name: Max Parallel - ${{ matrix.id }}
+    name: Max Parallel - {{ matrix.id }}
     needs: with_include
     strategy:
       max_parallel: 2
@@ -67,11 +67,11 @@ jobs:
     steps:
       - name: Test max parallel
         run: |
-          echo "Running job ${{ matrix.id }}"
+          echo "Running job {{ matrix.id }}"
           sleep 1
 
   complex_exclude_include:
-    name: Complex Filter - ${{ matrix.env }}-${{ matrix.version }}
+    name: Complex Filter - {{ matrix.env }}-{{ matrix.version }}
     needs: max_parallel_limit
     strategy:
       matrix:
@@ -89,14 +89,14 @@ jobs:
     steps:
       - name: Test complex filtering
         run: |
-          echo "Environment: ${{ matrix.env }}"
-          echo "Version: ${{ matrix.version }}"
-          if [ ! -z "${{ matrix.experimental }}" ]; then
-            echo "Experimental: ${{ matrix.experimental }}"
+          echo "Environment: {{ matrix.env }}"
+          echo "Version: {{ matrix.version }}"
+          if [ ! -z "{{ matrix.experimental }}" ]; then
+            echo "Experimental: {{ matrix.experimental }}"
           fi
 
   matrix_with_types:
-    name: Matrix Types - ${{ matrix.config }}
+    name: Matrix Types - {{ matrix.config }}
     needs: complex_exclude_include
     strategy:
       matrix:
@@ -106,40 +106,40 @@ jobs:
     steps:
       - name: Test matrix types
         run: |
-          echo "Config name: ${{ matrix.config.name }}"
-          echo "Config port: ${{ matrix.config.port }}"
-          echo "Debug enabled: ${{ matrix.debug }}"
-          echo "Workers: ${{ matrix.workers }}"
-          echo "Debug is boolean: $(python3 -c 'print(type(${{ matrix.debug }}).__name__)')"
+          echo "Config name: {{ matrix.config.name }}"
+          echo "Config port: {{ matrix.config.port }}"
+          echo "Debug enabled: {{ matrix.debug }}"
+          echo "Workers: {{ matrix.workers }}"
+          echo "Debug is boolean: $(python3 -c 'print(type({{ matrix.debug }}).__name__)')"
 
   matrix_in_env:
-    name: Matrix in Env - ${{ matrix.stage }}
+    name: Matrix in Env - {{ matrix.stage }}
     needs: matrix_with_types
     strategy:
       matrix:
         stage: [dev, qa, prod]
     env:
-      STAGE: ${{ matrix.stage }}
-      API_URL: https://api.${{ matrix.stage }}.example.com
+      STAGE: {{ matrix.stage }}
+      API_URL: https://api.{{ matrix.stage }}.example.com
     steps:
       - name: Test matrix in env
         run: |
           echo "Stage from env: $STAGE"
           echo "API URL: $API_URL"
-          [ "$STAGE" = "${{ matrix.stage }}" ] && echo "Environment variable matches matrix value"
+          [ "$STAGE" = "{{ matrix.stage }}" ] && echo "Environment variable matches matrix value"
 
   single_value_matrix:
-    name: Single Value - ${{ matrix.only }}
+    name: Single Value - {{ matrix.only }}
     needs: matrix_in_env
     strategy:
       matrix:
         only: [single]
     steps:
       - name: Test single value
-        run: echo "Single matrix value: ${{ matrix.only }}"
+        run: echo "Single matrix value: {{ matrix.only }}"
 
   three_dimensional:
-    name: 3D Matrix - ${{ matrix.cloud }}-${{ matrix.region }}-${{ matrix.tier }}
+    name: 3D Matrix - {{ matrix.cloud }}-{{ matrix.region }}-{{ matrix.tier }}
     needs: single_value_matrix
     strategy:
       max_parallel: 3
@@ -153,10 +153,10 @@ jobs:
             tier: free
     steps:
       - name: Test 3D matrix
-        run: echo "Deploying to ${{ matrix.cloud }} ${{ matrix.region }} (${{ matrix.tier }} tier)"
+        run: echo "Deploying to {{ matrix.cloud }} {{ matrix.region }} ({{ matrix.tier }} tier)"
 
   matrix_fail_fast:
-    name: Fail Fast - ${{ matrix.task }}
+    name: Fail Fast - {{ matrix.task }}
     needs: three_dimensional
     strategy:
       fail_fast: true
@@ -164,7 +164,7 @@ jobs:
         task: [task1, task2, task3]
     steps:
       - name: Test fail fast
-        run: echo "Executing ${{ matrix.task }}"
+        run: echo "Executing {{ matrix.task }}"
 
   verify_all_completed:
     name: Verify All Matrix Jobs

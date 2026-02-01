@@ -192,7 +192,7 @@ class WorkflowValidator:
 
         def check_templates(obj: Any, location: str = ""):
             if isinstance(obj, str):
-                open_count = obj.count("${{")
+                open_count = obj.count("{{")
                 close_count = obj.count("}}")
                 if open_count != close_count:
                     self.warnings.append(
