@@ -76,11 +76,11 @@ class FlowRunHandler:
                 workflow=self.workflow_name,
                 inputs=self.input,
                 output_path=self.output,
-                workflow_search_paths=tuple(DEFAULT_WORKFLOWS_DIRS),
-                quiet=False
+                workflow_search_paths=DEFAULT_WORKFLOWS_DIRS,
+                quiet=False,
             )
 
-            if result.is_success:
+            if result.status.value == "completed":
                 logger.info("Workflow completed successfully!")
             else:
                 logger.error("Workflow failed")
@@ -114,7 +114,7 @@ class FlowRunHandler:
 
     def _process_inputs(self):
         from ofx.utils.args import parse_key_value_pairs
-        
+
         try:
             self.input = parse_key_value_pairs(self.preprocess_input)
         except ValueError as e:
