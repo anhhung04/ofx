@@ -19,7 +19,7 @@ Creates visual representations of workflow structure, dependencies, and executio
 
 ## Arguments
 
-- `workflow` - Workflow file or name to visualize
+- `workflow` - Workflow name (searched in default paths) or direct path to file
 
 ## Options
 

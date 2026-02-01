@@ -12,7 +12,7 @@ from rich.table import Table
 
 from ofx.settings import DEFAULT_WORKFLOWS_DIR, get_console
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = get_console()
 
 NAME = "asset"
@@ -45,7 +45,9 @@ class AssetManager:
             name = Path(url).stem
 
         if name in self.assets:
-            raise ValueError(f"Asset collection with name '{name}' already exists.") from None
+            raise ValueError(
+                f"Asset collection with name '{name}' already exists."
+            ) from None
 
         target_path = self.workflows_dir / name
         if target_path.exists():
@@ -64,13 +66,15 @@ class AssetManager:
         self.assets[name] = {"url": url, "path": str(target_path)}
         self._save_assets()
 
-        console.print(Panel(
-            f"[bold]Name:[/bold] [green]{name}[/green]\n"
-            f"[bold]Source:[/bold] [cyan]{url}[/cyan]\n"
-            f"[bold]Location:[/bold] [dim]{target_path}[/dim]",
-            title="[bold green][OK] Asset Collection Added[/bold green]",
-            border_style="green"
-        ))
+        console.print(
+            Panel(
+                f"[bold]Name:[/bold] [green]{name}[/green]\n"
+                f"[bold]Source:[/bold] [cyan]{url}[/cyan]\n"
+                f"[bold]Location:[/bold] [dim]{target_path}[/dim]",
+                title="[bold green][OK] Asset Collection Added[/bold green]",
+                border_style="green",
+            )
+        )
         return name, target_path
 
     def list(self) -> dict:
@@ -85,7 +89,9 @@ class AssetManager:
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             hostname = os.getenv("HOSTNAME", "unknown")
             user = os.getenv("USER", "unknown")
-            commit_msg = f"Auto-sync asset '{asset_name}': {timestamp} by {user}@{hostname}"
+            commit_msg = (
+                f"Auto-sync asset '{asset_name}': {timestamp} by {user}@{hostname}"
+            )
 
             repo.index.commit(commit_msg)
             console.print(f"  ✅ Auto-committed local changes for '{asset_name}'.")
@@ -97,7 +103,9 @@ class AssetManager:
         try:
             repo = git.Repo(path)
             if not repo.remotes:
-                console.print(f"  ⚠️ Asset '{asset_name}' has no remote configured, skipping pull.")
+                console.print(
+                    f"  ⚠️ Asset '{asset_name}' has no remote configured, skipping pull."
+                )
                 return
 
             origin = repo.remotes.origin
@@ -106,14 +114,18 @@ class AssetManager:
         except GitCommandError as e:
             console.print(f"  ❌ Failed to pull changes for '{asset_name}': {e}")
         except Exception as e:
-            console.print(f"  ❌ An unexpected error occurred while pulling '{asset_name}': {e}")
+            console.print(
+                f"  ❌ An unexpected error occurred while pulling '{asset_name}': {e}"
+            )
 
     def _push_asset(self, asset_name: str, path: str):
         """Performs a git push for a specific asset."""
         try:
             repo = git.Repo(path)
             if not repo.remotes:
-                console.print(f"  ⚠️ Asset '{asset_name}' has no remote configured, skipping push.")
+                console.print(
+                    f"  ⚠️ Asset '{asset_name}' has no remote configured, skipping push."
+                )
                 return
 
             self._auto_commit_asset_changes(repo, asset_name)
@@ -124,7 +136,9 @@ class AssetManager:
         except GitCommandError as e:
             console.print(f"  ❌ Failed to push changes for '{asset_name}': {e}")
         except Exception as e:
-            console.print(f"  ❌ An unexpected error occurred while pushing '{asset_name}': {e}")
+            console.print(
+                f"  ❌ An unexpected error occurred while pushing '{asset_name}': {e}"
+            )
 
     def sync(self, name: str = "", pull: bool = False, push: bool = False):
         assets_to_sync = {}
@@ -150,19 +164,23 @@ class AssetManager:
             path = details["path"]
 
             action = "Pulling" if pull else "Pushing" if push else "Syncing"
-            console.print(Panel(
-                f"[bold]Asset:[/bold] [cyan]{asset_name}[/cyan]\n"
-                f"[bold]Action:[/bold] {action}",
-                title="[~] Syncing Asset",
-                border_style="cyan"
-            ))
+            console.print(
+                Panel(
+                    f"[bold]Asset:[/bold] [cyan]{asset_name}[/cyan]\n"
+                    f"[bold]Action:[/bold] {action}",
+                    title="[~] Syncing Asset",
+                    border_style="cyan",
+                )
+            )
 
             if pull:
                 self._pull_asset(asset_name, path)
             if push:
                 self._push_asset(asset_name, path)
 
-            console.print(f"[green][OK][/green] Finished syncing [cyan]{asset_name}[/cyan]")
+            console.print(
+                f"[green][OK][/green] Finished syncing [cyan]{asset_name}[/cyan]"
+            )
 
     def remove(self, name: str):
         from rich.panel import Panel
@@ -175,70 +193,42 @@ class AssetManager:
                 del self.assets[name]
                 self._save_assets()
             except Exception as e:
-                console.print(Panel(
-                    f"[bold red]Failed to remove directory[/bold red]\n"
-                    f"[red]{e}[/red]",
-                    title="[X] Error",
-                    border_style="red"
-                ))
+                console.print(
+                    Panel(
+                        f"[bold red]Failed to remove directory[/bold red]\n"
+                        f"[red]{e}[/red]",
+                        title="[X] Error",
+                        border_style="red",
+                    )
+                )
                 return
 
-            console.print(Panel(
-                f"[bold green]Asset collection '{name}' removed successfully[/bold green]\n"
-                f"[dim]Path: {path}[/dim]",
-                title="[OK] Removed",
-                border_style="green"
-            ))
+            console.print(
+                Panel(
+                    f"[bold green]Asset collection '{name}' removed successfully[/bold green]\n"
+                    f"[dim]Path: {path}[/dim]",
+                    title="[OK] Removed",
+                    border_style="green",
+                )
+            )
         else:
-            console.print(Panel(
-                f"[yellow]Asset collection '{name}' not found[/yellow]",
-                title="[!] Not Found",
-                border_style="yellow"
-            ))
+            console.print(
+                Panel(
+                    f"[yellow]Asset collection '{name}' not found[/yellow]",
+                    title="[!] Not Found",
+                    border_style="yellow",
+                )
+            )
 
 
 asset_manager = AssetManager()
 
 
 @app.command()
-def init():
-    """Initialize the default asset collection if none are installed."""
-    from rich.panel import Panel
-
-    if asset_manager.list():
-        console.print(Panel(
-            "[yellow]Asset collections already exist[/yellow]\n"
-            "[dim]Use 'ofx asset list' to view or 'ofx asset add <url>' to add more[/dim]",
-            title="[!] Already Initialized",
-            border_style="yellow"
-        ))
-        return
-
-    default_url = "https://github.com/anhhung04/ofx-hub.git"
-    console.print(Panel(
-        f"[bold]Default collection:[/bold] [cyan]{default_url}[/cyan]\n"
-        "[dim]This will download the official OFX workflow collection[/dim]",
-        title="[#] Initialize Asset Collections",
-        border_style="cyan"
-    ))
-
-    add_default = typer.confirm("Add the default collection?" , default=True)
-
-    if add_default:
-        try:
-            asset_manager.add(default_url, "default")
-        except Exception as e:
-            console.print(Panel(
-                f"[bold red]Failed to initialize default assets[/bold red]\n"
-                f"[red]{e}[/red]",
-                title="[X] Error",
-                border_style="red"
-            ))
-
-
-@app.command()
 def add(
-    url: Annotated[str, typer.Argument(help="Git URL of the asset collection to add.")] = "",
+    url: Annotated[
+        str, typer.Argument(help="Git URL of the asset collection to add.")
+    ] = "",
     name: Annotated[
         str,
         typer.Option(
@@ -263,18 +253,20 @@ def list_assets():
 
     assets = asset_manager.list()
     if not assets:
-        console.print(Panel(
-            "[yellow]No asset collections installed[/yellow]\n"
-            "[dim]Use 'ofx asset add <url>' to add a collection[/dim]",
-            title="[#] Asset Collections",
-            border_style="yellow"
-        ))
+        console.print(
+            Panel(
+                "[yellow]No asset collections installed[/yellow]\n"
+                "[dim]Use 'ofx asset add <url>' to add a collection[/dim]",
+                title="[#] Asset Collections",
+                border_style="yellow",
+            )
+        )
         return
 
     table = Table(
         title=f"[#] Installed Asset Collections ({len(assets)})",
         border_style="cyan",
-        header_style="bold cyan"
+        header_style="bold cyan",
     )
     table.add_column("Name", style="cyan bold", no_wrap=True)
     table.add_column("Source URL", style="green")
@@ -288,7 +280,9 @@ def list_assets():
 
 @app.command()
 def sync(
-    name: Annotated[str, typer.Argument(help="Name of asset to sync. If none, syncs all.")] = "",
+    name: Annotated[
+        str, typer.Argument(help="Name of asset to sync. If none, syncs all.")
+    ] = "",
     pull: Annotated[
         bool,
         typer.Option(
@@ -311,9 +305,15 @@ def sync(
 
 
 @app.command()
-def remove(name: Annotated[str, typer.Argument(..., help="Name of the asset collection to remove.")]):
+def remove(
+    name: Annotated[
+        str, typer.Argument(..., help="Name of the asset collection to remove.")
+    ],
+):
     """Remove a workflow asset collection."""
-    if typer.confirm(f"Are you sure you want to remove the asset collection '{name}'? This will delete the files from your system."):
+    if typer.confirm(
+        f"Are you sure you want to remove the asset collection '{name}'? This will delete the files from your system."
+    ):
         asset_manager.remove(name)
     else:
         console.print("Removal cancelled.")

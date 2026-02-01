@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -66,7 +66,7 @@ class RunnerStateMachine:
         self._current_state = state
 
 
-class BaseRunner[TModel]:
+class BaseRunner(Generic[TModel]):
     """Abstract base class for all runners (workflow, job, step, command)
     Type Parameters:
         TModel: The model type this runner executes (Workflow, Job, Step, etc.)
@@ -80,8 +80,8 @@ class BaseRunner[TModel]:
         registry: RegistryAdapter | None = None,
     ):
         assert model is not None, "Model cannot be None"
-        self.name = f"{str(model)}[RUNNER]"
         self.run_id = str(uuid.uuid4())
+        self.name = f"[RUNNER][{self.run_id}]"
         self.model = model
         self.ctx = ctx
         self.parent = parent
@@ -95,6 +95,7 @@ class BaseRunner[TModel]:
         self._finished_at: float | None = None
         self._started_at_utc: str | None = None
         self._finished_at_utc: str | None = None
+        self._log_level = logging.getLogger().getEffectiveLevel()
 
     async def run(self) -> RunResult:
         """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
@@ -258,7 +259,8 @@ class BaseRunner[TModel]:
 
     async def _on_error(self, error: Exception) -> None:
         """Lifecycle hook called when an error is raised."""
-        self._log_error(f"runner error: {error}")
+        if self.log_level <= logging.ERROR:
+            self._log_error(f"runner error: {error}")
 
     async def _on_finish(self) -> None:
         """Lifecycle hook called at the end of run regardless of outcome."""
@@ -346,3 +348,13 @@ class BaseRunner[TModel]:
         if self.parent:
             return self.parent.get_key(key)
         return key
+
+    @property
+    def log_level(self) -> int:
+        """Get the current log level"""
+        return self._log_level
+
+    @log_level.setter
+    def log_level(self, level: int) -> None:
+        """Set the log level"""
+        self._log_level = level

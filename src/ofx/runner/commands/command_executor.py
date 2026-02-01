@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from ofx.models.command import Command
+from ofx.runner.commands.shell_functions import get_shell_functions
 from ofx.settings import settings
 
 
@@ -47,8 +48,12 @@ class CommandExecutor:
             self._envs["OFX_OUTPUTS"] = str(self._outputs_file)
 
     async def _run_interactive(self) -> CommandExecutionResult:
+        # Prepend shell helper functions to the command
+        shell_funcs = get_shell_functions(self._command.shell)
+        full_cmd = f"{shell_funcs}\n{self._command.cmd}"
+
         proc = await asyncio.create_subprocess_shell(
-            self._command.cmd,
+            full_cmd,
             executable=self._command.shell,
             cwd=self._command.working_directory,
             env=self._envs,
@@ -75,8 +80,12 @@ class CommandExecutor:
         )
 
     async def _run_non_interactive(self) -> CommandExecutionResult:
+        # Prepend shell helper functions to the command
+        shell_funcs = get_shell_functions(self._command.shell)
+        full_cmd = f"{shell_funcs}\n{self._command.cmd}"
+
         proc = await asyncio.create_subprocess_shell(
-            self._command.cmd,
+            full_cmd,
             executable=self._command.shell,
             cwd=self._command.working_directory,
             env=self._envs,

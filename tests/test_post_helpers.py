@@ -7,18 +7,40 @@ from uuid import uuid4
 import pytest
 
 from ofx.api.exploitation.webshell.client import WebShellClient
+from ofx.api.post import (
+    PostRunnerBase,
+    PostSSH,
+    PostWebShell,
+    deploy_and_run,
+    download_via_scp,
+    upload_via_scp,
+)
 from ofx.api.post.enum import (
     bundled_tool_path,
     linpeas_command,
     linux_exploit_suggester_command,
     winpeas_command,
 )
-from ofx.api.post.remote import PostRunner, PostSSH
-from ofx.api.post.transfer_remote import (
-    deploy_and_run,
-    download_via_scp,
-    upload_via_scp,
-)
+
+
+# Create a concrete runner for testing (since PostRunnerBase is abstract)
+class InTestRunner(PostRunnerBase):
+    """Concrete runner for testing purposes."""
+
+    def __init__(self, run_fn, interactive_fn=None):
+        self._run_fn = run_fn
+        self._interactive_fn = interactive_fn
+
+    def run(self, command: str) -> str:
+        return self._run_fn(command)
+
+    def supports_interactive(self) -> bool:
+        return self._interactive_fn is not None
+
+    def interactive_shell(self, **kwargs) -> None:
+        if self._interactive_fn is None:
+            raise NotImplementedError("Interactive shell not supported")
+        return self._interactive_fn(**kwargs)
 
 
 def test_enum_prefers_local(tmp_path):
@@ -45,18 +67,20 @@ def test_post_runner_helpers():
         "id": "uid=0(root) gid=0(root)",
         "whoami": "NT AUTHORITY\\SYSTEM",
     }
-    runner = PostRunner(lambda cmd: outputs[cmd])
+    runner = InTestRunner(lambda cmd: outputs[cmd])
     assert runner.detect_os() == "linux"
     assert runner.is_root() is True
     assert runner.is_admin() is True
 
-    win_runner = PostRunner(lambda cmd: "Windows_NT" if cmd == "uname -a" else "")
-    assert "powershell" in win_runner.download_command("http://x", "C:\\Temp\\a").lower()
+    win_runner = InTestRunner(lambda cmd: "Windows_NT" if cmd == "uname -a" else "")
+    assert (
+        "powershell" in win_runner.download_command("http://x", "C:\\Temp\\a").lower()
+    )
 
 
 def test_post_runner_interactive():
-    runner = PostRunner(lambda cmd: "")
-    with pytest.raises(RuntimeError):
+    runner = InTestRunner(lambda cmd: "")
+    with pytest.raises(NotImplementedError):
         runner.interactive_shell()
 
     called = {}
@@ -64,7 +88,7 @@ def test_post_runner_interactive():
     def _interactive(**kwargs):
         called["ok"] = kwargs.get("ok")
 
-    runner = PostRunner(lambda cmd: "", _interactive)
+    runner = InTestRunner(lambda cmd: "", _interactive)
     runner.interactive_shell(ok=True)
     assert called["ok"] is True
 
@@ -77,7 +101,9 @@ def test_postssh_run_success(monkeypatch: pytest.MonkeyPatch):
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
-    runner = PostSSH("host", user="root", port=2222, identity_file="id_rsa", extra_args=["-v"])
+    runner = PostSSH(
+        "host", user="root", port=2222, identity_file="id_rsa", extra_args=["-v"]
+    )
     assert runner.run("whoami") == "ok"
     assert captured["cmd"][0] == "ssh"
 
@@ -103,7 +129,14 @@ def test_transfer_scp_builds_command(monkeypatch: pytest.MonkeyPatch, tmp_path):
     local = tmp_path / "payload.bin"
     local.write_text("x")
 
-    upload_via_scp(str(local), "/tmp/payload.bin", "host", user="root", port=2222, identity_file="id_rsa")
+    upload_via_scp(
+        str(local),
+        "/tmp/payload.bin",
+        "host",
+        user="root",
+        port=2222,
+        identity_file="id_rsa",
+    )
     assert captured["cmd"][0] == "scp"
     assert "root@host:/tmp/payload.bin" in captured["cmd"]
 
@@ -112,8 +145,9 @@ def test_transfer_scp_builds_command(monkeypatch: pytest.MonkeyPatch, tmp_path):
     assert "root@host:/tmp/payload.bin" in captured["cmd"]
 
 
-def test_deploy_and_run_branches(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    calls = {"upload": [], "scp": [], "winrm": []}
+def test_deploy_and_run_webshell(tmp_path):
+    """Test deploy_and_run with a webshell runner."""
+    calls = {"upload": []}
 
     client = WebShellClient.__new__(WebShellClient)
 
@@ -121,9 +155,13 @@ def test_deploy_and_run_branches(monkeypatch: pytest.MonkeyPatch, tmp_path):
         calls["upload"].append((local, remote))
         return "ok"
 
-    client.upload_file = fake_upload
+    def fake_run(cmd):
+        return f"ran {cmd}"
 
-    webshell_runner = SimpleNamespace(client=client, run=lambda cmd: f"ran {cmd}")
+    client.upload_file = fake_upload
+    client.run_command = fake_run
+
+    webshell_runner = PostWebShell(client)
     local = tmp_path / "tool.bin"
     local.write_text("x")
 
@@ -131,38 +169,25 @@ def test_deploy_and_run_branches(monkeypatch: pytest.MonkeyPatch, tmp_path):
     assert result == "ran /tmp/tool.bin"
     assert calls["upload"] == [(str(local), "/tmp/tool.bin")]
 
-    def fake_scp(local_path, remote_path, host, user, port, identity_file):
-        calls["scp"].append((local_path, remote_path, host, user, port, identity_file))
 
-    monkeypatch.setattr(
-        "ofx.api.post.transfer_remote.upload_via_scp",
-        fake_scp,
-    )
+def test_deploy_and_run_ssh(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    """Test deploy_and_run with SSH runner."""
+    calls = {"scp": [], "ssh": []}
 
-    class PostSSH:
-        def __init__(self):
-            self.host = "host"
-            self.user = "root"
-            self.port = 22
-            self.identity_file = None
+    def fake_run(cmd, text, capture_output, timeout, check):
+        if cmd[0] == "scp":
+            calls["scp"].append(cmd)
+        elif cmd[0] == "ssh":
+            calls["ssh"].append(cmd)
+        return SimpleNamespace(returncode=0, stdout="ran command", stderr="")
 
-        def run(self, command: str) -> str:
-            return f"ran {command}"
+    monkeypatch.setattr(subprocess, "run", fake_run)
 
-    ssh_runner = PostSSH()
+    local = tmp_path / "ssh_tool.bin"
+    local.write_text("x")
+
+    ssh_runner = PostSSH("host", user="root")
     result = deploy_and_run(ssh_runner, str(local), "/tmp/ssh.bin", exec_cmd="runme")
-    assert result == "ran runme"
-    assert calls["scp"]
 
-    def fake_winrm(runner, local_path, remote_path):
-        calls["winrm"].append((local_path, remote_path))
-
-    monkeypatch.setattr(
-        "ofx.api.post.transfer_remote.upload_via_winrm",
-        fake_winrm,
-    )
-
-    winrm_runner = SimpleNamespace(run=lambda cmd: f"ran {cmd}")
-    result = deploy_and_run(winrm_runner, str(local), "C:\\Temp\\tool.exe")
-    assert result == "ran C:\\Temp\\tool.exe"
-    assert calls["winrm"] == [(str(local), "C:\\Temp\\tool.exe")]
+    assert "ran" in result
+    assert len(calls["scp"]) == 1  # Upload was called

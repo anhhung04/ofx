@@ -5,11 +5,12 @@ from datetime import datetime
 from pathlib import Path
 
 from ofx.commands.ui_helpers import inputs_table
-from ofx.runner import RunContext, WorkflowRunner
+from ofx.runner import run_workflow
 from ofx.settings import (
     DEFAULT_WORKFLOWS_DIRS,
     SECRETS_DIR,
     TEMP_DIR,
+    ensure_dir,
     get_console,
     settings,
 )
@@ -26,7 +27,8 @@ def get_tmp_dir(output: str = "") -> Path:
         return Path(output)
     return Path(
         tempfile.mkdtemp(
-            prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_", dir=TEMP_DIR
+            prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_",
+            dir=ensure_dir(TEMP_DIR),
         )
     )
 
@@ -49,6 +51,8 @@ class FlowRunHandler:
         import pstats
         import time
 
+        from rich.align import Align
+
         start_time = time.time()
 
         if self.profile:
@@ -62,33 +66,24 @@ class FlowRunHandler:
             logger.info("Workflow: %s", self.workflow_name)
             logger.info("Output: %s", self.output.as_posix())
             if self.input:
-                console.print(inputs_table(self.input))
+                console.print(Align.center(inputs_table(self.input)))
 
-            workflow = find_workflow(
-                self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS)
+            if self.input:
+                console.print(Align.center(inputs_table(self.input)))
+
+            # Use the new programmatic API
+            result = await run_workflow(
+                workflow=self.workflow_name,
+                inputs=self.input,
+                output_path=self.output,
+                workflow_search_paths=tuple(DEFAULT_WORKFLOWS_DIRS),
+                quiet=False
             )
 
-            runner = WorkflowRunner(
-                workflow,
-                ctx=RunContext(
-                    inputs=self.input,
-                    output_path=self.output,
-                    secrets=load_secrets(SECRETS_DIR),
-                    workflow_dirs=add_workflow_dir(
-                        DEFAULT_WORKFLOWS_DIRS, workflow.workflow_path.parent
-                    ),
-                ),
-            )
-            res = await runner.run()
-
-            if res.status.value != "completed":
-                logger.error(
-                    "Workflow failed: status=%s error=%s", res.status.value, res.error
-                )
-            else:
+            if result.is_success:
                 logger.info("Workflow completed successfully!")
-
-            result = await runner.get_result()
+            else:
+                logger.error("Workflow failed")
 
         finally:
             if self.profile:
@@ -118,24 +113,11 @@ class FlowRunHandler:
         return result
 
     def _process_inputs(self):
-        processed_inputs = {}
-        for inp in self.preprocess_input or []:
-            try:
-                key, value = inp.split("=", 1)
-            except Exception:
-                raise ValueError(
-                    f"Invalid input format: {inp}. Expected key=value."
-                ) from None
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError:
-                pass
-            if key not in processed_inputs:
-                processed_inputs[key] = [value]
-            else:
-                processed_inputs[key].append(value)
-        for key in processed_inputs:
-            if len(processed_inputs[key]) == 1:
-                processed_inputs[key] = processed_inputs[key][0]
-        logger.debug(f"Processed inputs: {processed_inputs}")
-        self.input = processed_inputs
+        from ofx.utils.args import parse_key_value_pairs
+        
+        try:
+            self.input = parse_key_value_pairs(self.preprocess_input)
+        except ValueError as e:
+            # Re-raise with same message logic if needed, or let bubble up
+            # The utility raises ValueError with clear message
+            raise e

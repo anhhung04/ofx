@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+import sys
+from collections.abc import Iterable
+from typing import Any
 
 from rich import box
 from rich.align import Align
-from rich.console import Group
+from rich.console import Console, Group
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from ofx.settings import get_console
+from ofx.settings import RICH_THEME, get_console
 
 console = get_console()
 
@@ -43,15 +45,17 @@ def banner_panel() -> Group:
     title = Text(BANNER_TITLE, style="bright")
     tagline = Text(BANNER_TAGLINE, style="dim")
     content = Group(
-        Align.left(art),
-        Align.left(title),
-        Align.left(tagline),
+        Align.center(art),
+        Align.center(title),
+        Align.center(tagline),
     )
     return content
 
 
 def print_banner() -> None:
-    console.print(banner_panel())
+    # Print banner to stderr to avoid interfering with stdout redirection
+    stderr_console = Console(file=sys.stderr, theme=RICH_THEME)
+    stderr_console.print(banner_panel())
 
 
 def success_panel(

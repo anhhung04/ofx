@@ -20,7 +20,7 @@ The `validate` command checks workflow files for:
 
 ## Arguments
 
-- `workflow` - Path to workflow file or workflow name
+- `workflow` - Workflow name (searched in default paths) or direct path to file
 
 ## Examples
 

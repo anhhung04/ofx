@@ -16,8 +16,11 @@ from ofx.runner.core import (
     RunnerStatus,
     RunResult,
 )
-from ofx.runner.execution.execution_results import JobExecutionResult, StepExecutionResult
 from ofx.runner.execution.error_helpers import job_step_failed
+from ofx.runner.execution.execution_results import (
+    JobExecutionResult,
+    StepExecutionResult,
+)
 from ofx.runner.execution.step import StepRunner
 from ofx.settings import settings
 
@@ -73,6 +76,7 @@ class JobRunner(BaseRunner[Job]):
         )
 
     async def _do_run(self) -> None:
+        self._log_info(f"Starting job '{self.model.name or self.model.jid}'")
         for step in self.model.steps:
             step_ctx = self._child_context(
                 update={
@@ -85,6 +89,7 @@ class JobRunner(BaseRunner[Job]):
                 step_ctx,
                 self,
             )
+            step_runner.log_level = logging.CRITICAL
             self._runners[str(step.step_index)] = step_runner
             result = await step_runner.run()
             if step_runner.is_failed and not step.continue_on_error:

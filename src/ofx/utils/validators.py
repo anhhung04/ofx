@@ -9,10 +9,32 @@ from typing import Any
 from ofx.models.workflow import Workflow
 
 
+def validate_aliases(inputs):
+    input_names = set(inputs.keys())
+    aliases = set()
+    for input_name, input_model in inputs.items():
+        alias = input_model.alias
+        if alias is not None:
+            if alias == input_name:
+                raise ValueError(
+                    f"Input '{input_name}' has an alias identical to its name."
+                )
+            elif alias in input_names:
+                raise ValueError(
+                    f"Input '{input_name}' has an alias '{alias}' that conflicts with another input name."
+                )
+            elif alias in aliases:
+                raise ValueError(
+                    f"Alias '{alias}' is used by multiple inputs, causing a conflict."
+                )
+            aliases.add(alias)
+    return True
+
+
 class ValidationError:
     """Represents a validation error."""
 
-    def __init__(self, severity: str, message: str, location: str = None):
+    def __init__(self, severity: str, message: str, location: str = ""):
         self.severity = severity
         self.message = message
         self.location = location
@@ -45,34 +67,30 @@ class WorkflowValidator:
     def _validate_jobs(self):
         """Validate job configuration."""
         if not self.workflow.jobs:
-            self.errors.append(ValidationError(
-                "error",
-                "Workflow must have at least one job"
-            ))
+            self.errors.append(
+                ValidationError("error", "Workflow must have at least one job")
+            )
             return
 
         job_ids = set(self.workflow.jobs.keys())
 
         if len(job_ids) != len(self.workflow.jobs):
-            self.errors.append(ValidationError(
-                "error",
-                "Duplicate job IDs found"
-            ))
+            self.errors.append(ValidationError("error", "Duplicate job IDs found"))
 
         for job_id, job in self.workflow.jobs.items():
             if not job.name and not job_id:
-                self.warnings.append(ValidationError(
-                    "warning",
-                    f"Job '{job_id}' has no name",
-                    f"jobs.{job_id}"
-                ))
+                self.warnings.append(
+                    ValidationError(
+                        "warning", f"Job '{job_id}' has no name", f"jobs.{job_id}"
+                    )
+                )
 
             if not job.steps:
-                self.errors.append(ValidationError(
-                    "error",
-                    f"Job '{job_id}' has no steps",
-                    f"jobs.{job_id}"
-                ))
+                self.errors.append(
+                    ValidationError(
+                        "error", f"Job '{job_id}' has no steps", f"jobs.{job_id}"
+                    )
+                )
 
     def _validate_dependencies(self):
         """Validate job dependencies and check for cycles."""
@@ -87,11 +105,13 @@ class WorkflowValidator:
 
                 for dep in needs:
                     if dep not in job_ids:
-                        self.errors.append(ValidationError(
-                            "error",
-                            f"Job '{job_id}' depends on '{dep}', which doesn't exist",
-                            f"jobs.{job_id}.needs"
-                        ))
+                        self.errors.append(
+                            ValidationError(
+                                "error",
+                                f"Job '{job_id}' depends on '{dep}', which doesn't exist",
+                                f"jobs.{job_id}.needs",
+                            )
+                        )
                     else:
                         graph[dep].append(job_id)
 
@@ -115,10 +135,11 @@ class WorkflowValidator:
         for job_id in job_ids:
             if job_id not in visited:
                 if has_cycle(job_id):
-                    self.errors.append(ValidationError(
-                        "error",
-                        "Circular dependency detected in job dependencies"
-                    ))
+                    self.errors.append(
+                        ValidationError(
+                            "error", "Circular dependency detected in job dependencies"
+                        )
+                    )
                     break
 
     def _validate_steps(self):
@@ -129,47 +150,56 @@ class WorkflowValidator:
 
                 has_action = any([step.run, step.script, step.uses])
                 if not has_action:
-                    self.errors.append(ValidationError(
-                        "error",
-                        f"Step '{step.name or idx}' must have 'run', 'script', or 'uses'",
-                        step_loc
-                    ))
+                    self.errors.append(
+                        ValidationError(
+                            "error",
+                            f"Step '{step.name or idx}' must have 'run', 'script', or 'uses'",
+                            step_loc,
+                        )
+                    )
 
                 action_count = sum([bool(step.run), bool(step.script), bool(step.uses)])
                 if action_count > 1:
-                    self.errors.append(ValidationError(
-                        "error",
-                        f"Step '{step.name or idx}' has multiple actions (run/script/uses)",
-                        step_loc
-                    ))
+                    self.errors.append(
+                        ValidationError(
+                            "error",
+                            f"Step '{step.name or idx}' has multiple actions (run/script/uses)",
+                            step_loc,
+                        )
+                    )
 
                 if step.uses:
                     if not isinstance(step.uses, str):
-                        self.errors.append(ValidationError(
-                            "error",
-                            f"Step '{step.name or idx}' 'uses' must be a string",
-                            step_loc
-                        ))
+                        self.errors.append(
+                            ValidationError(
+                                "error",
+                                f"Step '{step.name or idx}' 'uses' must be a string",
+                                step_loc,
+                            )
+                        )
 
                 if step.timeout and step.timeout <= 0:
-                    self.warnings.append(ValidationError(
-                        "warning",
-                        f"Step '{step.name or idx}' has invalid timeout: {step.timeout}",
-                        step_loc
-                    ))
+                    self.warnings.append(
+                        ValidationError(
+                            "warning",
+                            f"Step '{step.name or idx}' has invalid timeout: {step.timeout}",
+                            step_loc,
+                        )
+                    )
 
     def _validate_template_syntax(self):
         """Validate template syntax (basic check)."""
+
         def check_templates(obj: Any, location: str = ""):
             if isinstance(obj, str):
                 open_count = obj.count("${{")
                 close_count = obj.count("}}")
                 if open_count != close_count:
-                    self.warnings.append(ValidationError(
-                        "warning",
-                        "Possibly unclosed template expression",
-                        location
-                    ))
+                    self.warnings.append(
+                        ValidationError(
+                            "warning", "Possibly unclosed template expression", location
+                        )
+                    )
             elif isinstance(obj, dict):
                 for key, value in obj.items():
                     check_templates(value, f"{location}.{key}" if location else key)
@@ -185,22 +215,36 @@ class WorkflowValidator:
             for idx, step in enumerate(job.steps):
                 if step.secrets and step.secrets != "inherit":
                     if not isinstance(step.secrets, dict):
-                        self.warnings.append(ValidationError(
-                            "warning",
-                            f"Step '{step.name or idx}' secrets should be a dict or 'inherit'",
-                            f"jobs.{job_id}.steps[{idx}].secrets"
-                        ))
+                        self.warnings.append(
+                            ValidationError(
+                                "warning",
+                                f"Step '{step.name or idx}' secrets should be a dict or 'inherit'",
+                                f"jobs.{job_id}.steps[{idx}].secrets",
+                            )
+                        )
 
     def _validate_inputs(self):
         """Validate workflow inputs."""
-        if self.workflow.inputs:
-            for input_name, input_spec in self.workflow.inputs.items():
-                if input_spec.required and input_spec.default is not None:
-                    self.warnings.append(ValidationError(
+        inputs = (
+            self.workflow.call.inputs
+            if self.workflow.call
+            else (self.workflow.dispatch.inputs if self.workflow.dispatch else {})
+        )
+        if not inputs:
+            return
+        for input_name, input_spec in inputs.items():
+            if input_spec.required and input_spec.default is not None:
+                self.warnings.append(
+                    ValidationError(
                         "warning",
                         f"Required input '{input_name}' has a default value",
-                        f"inputs.{input_name}"
-                    ))
+                        f"inputs.{input_name}",
+                    )
+                )
+        try:
+            validate_aliases(inputs)
+        except Exception as e:
+            self.errors.append(ValidationError("error", str(e), "inputs"))
 
     def is_valid(self) -> bool:
         """Check if workflow is valid (no errors)."""
@@ -267,8 +311,8 @@ def validate_workflow_file(workflow_path: Path) -> tuple[bool, str]:
 
 
 __all__ = [
-    'ValidationError',
-    'WorkflowValidator',
-    'validate_workflow',
-    'validate_workflow_file',
+    "ValidationError",
+    "WorkflowValidator",
+    "validate_workflow",
+    "validate_workflow_file",
 ]

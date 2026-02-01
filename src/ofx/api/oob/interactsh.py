@@ -7,10 +7,6 @@ import random
 import time
 from uuid import uuid4
 
-from Cryptodome.Cipher import AES, PKCS1_OAEP
-from Cryptodome.Hash import SHA256
-from Cryptodome.PublicKey import RSA
-
 from ofx.api.exploitation.exploit.utils import random_str
 from ofx.api.http import requests
 from ofx.settings import settings
@@ -49,6 +45,14 @@ class Interactsh:
             server: Interactsh server hostname (default: 'oast.me')
             token: Optional authentication token for private servers
         """
+        try:
+            from Cryptodome.PublicKey import RSA
+        except ImportError:
+            raise ImportError(
+                "Interactsh support requires the 'pycryptodomex' package. "
+                "Install it with: pip install pycryptodomex"
+            )
+
         rsa = RSA.generate(2048)
         self.public_key = rsa.publickey().exportKey()
         self.private_key = rsa.exportKey()
@@ -154,6 +158,10 @@ class Interactsh:
         Returns:
             Decrypted interaction data as dictionary
         """
+        from Cryptodome.Cipher import AES, PKCS1_OAEP
+        from Cryptodome.Hash import SHA256
+        from Cryptodome.PublicKey import RSA
+
         private_key = RSA.importKey(self.private_key)
         cipher = PKCS1_OAEP.new(private_key, hashAlgo=SHA256)
         aes_plain_key = cipher.decrypt(base64.b64decode(aes_key))

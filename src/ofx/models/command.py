@@ -1,14 +1,15 @@
-"""Command and tool installation models"""
+"""Command and script execution models."""
 
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL
 
 
-class Command(BaseModel):
-    """Model for shell command execution"""
+class Command(OFXBaseModel):
+    """Model for shell command execution."""
 
     cmd: str = Field(
         default="<should_be_replaced>", description="Shell command to execute"
@@ -30,12 +31,9 @@ class Command(BaseModel):
 
 
 class Script(Command):
-    """Model for Python script execution"""
+    """Model for Python script execution."""
 
     script: str = Field(..., description="Python script code to execute")
-    interpreter: str = Field(
-        default="python3", description="Code interpreter to use for execution"
-    )
 
     def __str__(self):
         return f"Script(inline,cwd='{self.working_directory}')"

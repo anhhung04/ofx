@@ -6,7 +6,7 @@ import logging
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from ofx.api.httpserver.base import PHTTPServer
+from ofx.api.httpserver.server_base import BaseServerFacade
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -78,7 +78,7 @@ class PayloadRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"OK")
 
 
-class PayloadServer:
+class PayloadServer(BaseServerFacade):
     """HTTP server for delivering payloads and collecting data.
 
     Provides an HTTP server specifically designed for delivering malicious
@@ -86,7 +86,7 @@ class PayloadServer:
     HTTP and HTTPS protocols.
 
     Example:
-        >>> server = PayloadServer(bind_ip='0.0.0.0', bind_port=8080, payload_path='/path/to/payload.exe')
+        >>> server = PayloadServer(host='0.0.0.0', port=8080, payload_path='/path/to/payload.exe')
         >>> server.start()
         >>> # Server is now serving payload at http://0.0.0.0:8080/payload
         >>> server.stop()
@@ -111,29 +111,27 @@ class PayloadServer:
             use_https: Enable HTTPS with SSL (default: False)
             certfile: Path to SSL certificate file (auto-generated if None)
         """
-        self.port = port
-        self.host = host
+        super().__init__(
+            host=host,
+            port=port,
+            is_ipv6=is_ipv6,
+            use_https=use_https,
+            certfile=certfile,
+        )
+
         self.payload_path = Path(payload_path) if payload_path else None
-        self.is_ipv6 = is_ipv6
-        self.use_https = use_https
-        self.certfile = certfile
-        self.payloads = {}  # path -> content
-        self.hits = {}  # path -> count
+        self.payloads: dict[str, bytes] = {}  # path -> content
+        self.hits: dict[str, int] = {}  # path -> count
 
         if self.payload_path and not self.payload_path.exists():
             logger.warning(f"Payload file {self.payload_path} does not exist")
 
-        self.server = PHTTPServer(
-            bind_ip=host,
-            bind_port=port,
-            is_ipv6=is_ipv6,
-            use_https=use_https,
-            certfile=certfile,
-            requestHandler=PayloadRequestHandler,
-        )
+        self._server = self._create_server(PayloadRequestHandler)
 
         # Store payload path in server instance for handler access
-        self.server.payload_path = self.payload_path
+        setattr(self._server, "payload_path", self.payload_path)
+        setattr(self._server, "payloads", self.payloads)
+        setattr(self._server, "hits", self.hits)
 
     def add_payload(
         self, path: str, content: str | None = None, file: str | Path | None = None
@@ -178,60 +176,3 @@ class PayloadServer:
             del self.payloads[path]
         if path in self.hits:
             del self.hits[path]
-
-    def start(self, daemon: bool = True) -> None:
-        """Start the HTTP server in a background thread.
-
-        Args:
-            daemon: Run as daemon thread (default: True)
-
-        Example:
-            >>> server.start()
-            [INFO] Starting httpd on http://0.0.0.0:8080
-        """
-        self.server.start(daemon=daemon)
-
-    def stop(self) -> None:
-        """Stop the HTTP server and release resources.
-
-        Example:
-            >>> server.stop()
-            [INFO] Stop httpd server on http://0.0.0.0:8080
-        """
-        self.server.stop()
-
-    def pause(self) -> None:
-        """Pause the HTTP server temporarily.
-
-        Example:
-            >>> server.pause()
-            >>> # Server stops accepting requests
-        """
-        self.server.pause()
-
-    def resume(self) -> None:
-        """Resume a paused HTTP server.
-
-        Example:
-            >>> server.resume()
-            >>> # Server resumes accepting requests
-        """
-        self.server.resume()
-
-    @property
-    def url(self) -> str:
-        """Get the server URL.
-
-        Returns:
-            Server URL including protocol, IP, and port
-        """
-        return self.server.url
-
-    @property
-    def is_running(self) -> bool:
-        """Check if the server is currently running.
-
-        Returns:
-            True if server is running, False otherwise
-        """
-        return self.server.server_started

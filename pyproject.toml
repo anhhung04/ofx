@@ -1,20 +1,16 @@
 [project]
 name = "ofx"
-version = "0.3.1"
+version = "0.3.2"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 dependencies = [
   "aiofiles>=23.2.1",
-  "async-typer>=0.1.9",
   "cryptography>=43.0.0",
   "filelock>=3.18.0",
   "gitpython>=3.1.45",
   "httpx>=0.28.1",
   "jinja2>=3.1.6",
-  "pip>=25.3",
-  "pycryptodomex>=3.21.0",
-  "pydantic-file-secrets>=0.4.4",
   "pydantic-settings>=2.10.1",
   "pydantic>=2.11.7",
   "pykeepass>=4.1.1.post1",
@@ -46,6 +42,9 @@ memcached = [
 etcd = [
   "etcd3>=0.12.0",
 ]
+interactsh = [
+  "pycryptodomex>=3.21.0",
+]
 
 [project.scripts]
 ofx = "ofx:main"
@@ -63,7 +62,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = [
@@ -91,6 +90,9 @@ markers = [
 ]
 asyncio_mode = "auto"
 addopts = "-v"
+filterwarnings = [
+  "ignore:This process .* is multi-threaded, use of fork\\(\\) may lead to deadlocks in the child\\.:DeprecationWarning",
+]
 
 [tool.coverage.run]
 source = ["src/ofx"]

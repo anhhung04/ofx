@@ -2,9 +2,10 @@
 
 from collections import deque
 
+
 def find_parallel_schedule(
     jobs: list[str], dependencies: list[tuple[str, str]]
-) -> list[set[str]]:
+) -> list[list[str]]:
     """Groups jobs into stages that can be run in parallel.
 
     Uses topological sorting with BFS for optimal parallelization.
@@ -25,11 +26,11 @@ def find_parallel_schedule(
 
     while queue:
         stage_size = len(queue)
-        current_stage: set[str] = set()
+        current_stage: list[str] = []
 
         for _ in range(stage_size):
             current_job = queue.popleft()
-            current_stage.add(current_job)
+            current_stage.append(current_job)
             job_count += 1
 
             for next_job in graph[current_job]:

@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
 import itertools
+from dataclasses import dataclass, field
 
 from ofx.runner.execution.job import JobRunner, MatrixJobRunner
-from ofx.runner.execution.step import StepRunner
 
 
 @dataclass
@@ -64,21 +63,32 @@ class WorkflowExecutionManager:
         stage_runners: dict[str, JobRunner | MatrixJobRunner],
     ) -> tuple[list[str], list[str]]:
         job_ids = list(stage_runners.keys())
-        coros = [stage_runners[job_id].run() for job_id in job_ids]
-        results = await asyncio.gather(*coros, return_exceptions=True)
+        tasks = {
+            job_id: asyncio.create_task(stage_runners[job_id].run())
+            for job_id in job_ids
+        }
         errors: list[str] = []
         failed_jobs: list[str] = []
-        for job_id, runner, result in zip(
-            job_ids, stage_runners.values(), results, strict=False
-        ):
-            job_result = await runner.get_result()
-            if isinstance(result, Exception):
-                errors.append(f"{job_id}: {result}")
-                failed_jobs.append(job_id)
-            elif not runner.is_success:
-                error = job_result.error or "Unknown error"
-                errors.append(f"job '{job_id}': {error}")
-                failed_jobs.append(job_id)
+        while tasks:
+            done, _ = await asyncio.wait(
+                tasks.values(), timeout=0.01, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in done:
+                job_id = next(jid for jid, t in tasks.items() if t is task)
+                runner = stage_runners[job_id]
+                try:
+                    result = task.result()
+                except Exception as e:
+                    result = e
+                job_result = await runner.get_result()
+                if isinstance(result, Exception):
+                    errors.append(f"{job_id}: {result}")
+                    failed_jobs.append(job_id)
+                elif not runner.is_success:
+                    error = job_result.error or "Unknown error"
+                    errors.append(f"job '{job_id}': {error}")
+                    failed_jobs.append(job_id)
+                del tasks[job_id]
         if errors:
             self._parent._log_stage_failure(stage_index, errors)
         return errors, failed_jobs

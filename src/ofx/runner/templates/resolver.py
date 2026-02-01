@@ -1,7 +1,5 @@
 """Template resolver for Jinja2-based workflow templates"""
 
-import os
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +7,6 @@ from jinja2 import Template
 from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
-from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR
 
 
 class TemplateResolver:
@@ -113,7 +110,23 @@ class TemplateResolver:
 
     def get_support_functions(self) -> dict[str, Any]:
         """Get template support functions with caching"""
+        import base64
+        import hashlib
+        import json
+        import os
+        import random
+        import re
+        import secrets
+        import socket
+        import string
+        import uuid
+        from datetime import datetime
+        from urllib.parse import quote, unquote
 
+        from ofx.runner.commands.shell_functions import get_shell_exports
+        from ofx.settings import IS_WINDOWS
+
+        # File utilities
         def _read_file(path: str) -> str:
             file_path = Path(path)
             if not file_path.exists():
@@ -122,30 +135,171 @@ class TemplateResolver:
 
         def _write_file(path: str, content: str) -> None:
             file_path = Path(path)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content)
 
+        def _append_file(path: str, content: str) -> None:
+            file_path = Path(path)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            with file_path.open("a") as f:
+                f.write(content)
+
+        def _file_lines(path: str) -> list[str]:
+            file_path = Path(path)
+            if not file_path.exists():
+                return []
+            return file_path.read_text().splitlines()
+
+        # String encoding utilities
+        def _b64encode(s: str) -> str:
+            return base64.b64encode(s.encode()).decode()
+
+        def _b64decode(s: str) -> str:
+            return base64.b64decode(s.encode()).decode()
+
+        def _url_encode(s: str) -> str:
+            return quote(s, safe="")
+
+        def _url_decode(s: str) -> str:
+            return unquote(s)
+
+        def _hex_encode(s: str) -> str:
+            return s.encode().hex()
+
+        def _hex_decode(s: str) -> str:
+            return bytes.fromhex(s).decode()
+
+        # Hash functions
+        def _md5(s: str) -> str:
+            return hashlib.md5(s.encode()).hexdigest()
+
+        def _sha1(s: str) -> str:
+            return hashlib.sha1(s.encode()).hexdigest()
+
+        def _sha256(s: str) -> str:
+            return hashlib.sha256(s.encode()).hexdigest()
+
+        # Random generators
+        def _random_string(length: int = 8, charset: str = "alphanumeric") -> str:
+            if charset == "alpha":
+                chars = string.ascii_letters
+            elif charset == "numeric":
+                chars = string.digits
+            elif charset == "hex":
+                chars = string.hexdigits[:16]
+            else:  # alphanumeric
+                chars = string.ascii_letters + string.digits
+            return "".join(random.choices(chars, k=length))
+
+        def _random_int(min_val: int = 0, max_val: int = 100) -> int:
+            return random.randint(min_val, max_val)
+
+        def _random_port(start: int = 1024, end: int = 65535) -> int:
+            return random.randint(start, end)
+
+        # Network utilities
+        def _get_local_ip() -> str:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                ip = s.getsockname()[0]
+                s.close()
+                return ip
+            except Exception:
+                return "127.0.0.1"
+
+        def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(timeout)
+                result = s.connect_ex((host, port))
+                s.close()
+                return result == 0
+            except Exception:
+                return False
+
+        # Date/time utilities
+        def _now(fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
+            return datetime.now().strftime(fmt)
+
+        def _timestamp() -> int:
+            return int(datetime.now().timestamp())
+
+        # JSON utilities
+        def _to_json(obj: Any) -> str:
+            return json.dumps(obj)
+
+        def _from_json(s: str) -> Any:
+            return json.loads(s)
+
+        # Path utilities
+        def _join_path(*parts: str) -> str:
+            return str(Path(*parts))
+
+        def _basename(path: str) -> str:
+            return Path(path).name
+
+        def _dirname(path: str) -> str:
+            return str(Path(path).parent)
+
+        def _glob(pattern: str, directory: str = ".") -> list[str]:
+            return [str(p) for p in Path(directory).glob(pattern)]
+
         if self._support_funcs_cache is None:
-            sudo = "sudo" if os.geteuid() != 0 and shutil.which("sudo") else ""
-            tools_dir_str = str(TOOLS_DIR.absolute())
-            tools_bin_dir_str = str(TOOLS_BIN_DIR.absolute())
+            shell_exports = get_shell_exports()
 
             self._support_funcs_cache = {
-                "sudo": sudo,
-                "tools_dir": tools_dir_str,
-                "tools_bin_dir": tools_bin_dir_str,
-                "fapt": lambda app: f'if [ -z "$( ls -A /var/lib/apt/lists/ )" ]; then {sudo} apt-get update; fi && {sudo} apt-get install -y --no-install-recommends {app}',
-                "uv_install": lambda name: f"uv tool install --python-preference managed --force --reinstall {name}",
-                "go_install": lambda pkg: f"GO111MODULE=on GOBIN={tools_bin_dir_str} go install {pkg}@latest",
-                "cargo_install": lambda name: f"cargo install --root {tools_dir_str} {name}",
-                "npm_install": lambda name: f"npm install -g --prefix {tools_dir_str} {name}",
-                "static_install": lambda url, name=None: (
-                    f"curl -fSsL {url} -o {tools_bin_dir_str}/{name if name else Path(url).name} && chmod +x {tools_bin_dir_str}/{name if name else Path(url).name}"
-                ),
+                # Shell variables
+                **shell_exports,
+                # Platform info
+                "is_windows": IS_WINDOWS,
+                "platform": "windows" if IS_WINDOWS else "unix",
+                # File utilities
                 "file_read": _read_file,
                 "file_write": _write_file,
+                "file_append": _append_file,
+                "file_lines": _file_lines,
                 "file_exists": lambda path: Path(path).exists(),
-                "python": __import__("sys").executable,
-                "pip_install": lambda pkg: f'"{__import__("sys").executable}" -m pip install --upgrade {pkg}',
+                "is_file": lambda path: Path(path).is_file(),
+                "is_dir": lambda path: Path(path).is_dir(),
+                # Path utilities
+                "join_path": _join_path,
+                "basename": _basename,
+                "dirname": _dirname,
+                "glob": _glob,
+                "cwd": lambda: str(Path.cwd()),
+                "home": lambda: str(Path.home()),
+                # String encoding
+                "b64encode": _b64encode,
+                "b64decode": _b64decode,
+                "url_encode": _url_encode,
+                "url_decode": _url_decode,
+                "hex_encode": _hex_encode,
+                "hex_decode": _hex_decode,
+                # Hash functions
+                "md5": _md5,
+                "sha1": _sha1,
+                "sha256": _sha256,
+                # Random generators
+                "random_string": _random_string,
+                "random_int": _random_int,
+                "random_port": _random_port,
+                "uuid": lambda: str(uuid.uuid4()),
+                "token": lambda n=32: secrets.token_urlsafe(n),
+                # Network utilities
+                "local_ip": _get_local_ip,
+                "is_port_open": _is_port_open,
+                # Date/time
+                "now": _now,
+                "timestamp": _timestamp,
+                # JSON
+                "to_json": _to_json,
+                "from_json": _from_json,
+                # Regex
+                "regex_match": lambda pattern, s: bool(re.match(pattern, s)),
+                "regex_search": lambda pattern, s: bool(re.search(pattern, s)),
+                "regex_findall": lambda pattern, s: re.findall(pattern, s),
+                "regex_sub": lambda pattern, repl, s: re.sub(pattern, repl, s),
             }
 
         support_funcs = self._support_funcs_cache.copy()

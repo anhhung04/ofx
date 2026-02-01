@@ -1,0 +1,159 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.3.1)'
+        required: true
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # ===========================================================================
+  # Build Linux Packages (Debian + RPM)
+  # ===========================================================================
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+      
+      - name: Set up QEMU (for ARM64 emulation)
+        if: matrix.arch == 'arm64'
+        uses: https://github.com/docker/setup-qemu-action@v3
+      
+      - name: Set up Docker Buildx
+        uses: https://github.com/docker/setup-buildx-action@v3
+      
+      - name: Build packages
+        run: |
+          docker buildx build \
+            -f Dockerfile.fpm \
+            --platform linux/${{ matrix.arch }} \
+            --target=export \
+            --output type=local,dest=dist/packages-${{ matrix.arch }} \
+            .
+      
+      - name: Rename packages with arch suffix
+        run: |
+          cd dist/packages-${{ matrix.arch }}
+          for f in *.deb; do
+            [ -f "$f" ] && mv "$f" "${f%.deb}_${{ matrix.arch }}.deb"
+          done
+          for f in *.rpm; do
+            [ -f "$f" ] && mv "$f" "${f%.rpm}_${{ matrix.arch }}.rpm"
+          done
+      
+      - name: Upload Linux packages
+        uses: https://github.com/actions/upload-artifact@v4
+        with:
+          name: linux-packages-${{ matrix.arch }}
+          path: dist/packages-${{ matrix.arch }}/
+
+  # ===========================================================================
+  # Build Windows Executables
+  # ===========================================================================
+  build-windows:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            arch: x64
+          - os: windows-11-arm64
+            arch: arm64
+    
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+      
+      - name: Set up Python
+        uses: https://github.com/actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e .
+      
+      - name: Build executable
+        run: python packaging/windows/build-exe.py --arch ${{ matrix.arch }}
+      
+      - name: Upload Windows executable
+        uses: https://github.com/actions/upload-artifact@v4
+        with:
+          name: windows-exe-${{ matrix.arch }}
+          path: dist/*.exe
+
+  # ===========================================================================
+  # Build Python Wheel (universal)
+  # ===========================================================================
+  build-wheel:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+      
+      - name: Set up Python
+        uses: https://github.com/actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build --wheel
+      
+      - name: Upload wheel
+        uses: https://github.com/actions/upload-artifact@v4
+        with:
+          name: python-wheel
+          path: dist/*.whl
+
+  # ===========================================================================
+  # Create Release
+  # ===========================================================================
+  release:
+    needs: [build-linux, build-windows, build-wheel]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - uses: https://github.com/actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: https://github.com/actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.deb" -o -name "*.rpm" -o -name "*.whl" -o -name "*.exe" \) \
+            -exec cp {} release/ \;
+          ls -la release/
+      
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      
+      - name: Create Release
+        uses: https://github.com/softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}

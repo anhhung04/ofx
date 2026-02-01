@@ -1,15 +1,17 @@
+"""Step model for workflow execution."""
+
 from enum import Enum
 from pathlib import Path
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
-from ofx.models.config import DefaultConfig
+from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL
 
 
 class RunType(Enum):
-    """Type of step execution"""
+    """Type of step execution."""
 
     SCRIPT = "script"
     COMMAND = "command"
@@ -17,7 +19,9 @@ class RunType(Enum):
     SCRIPT_FILE = "script_file"
 
 
-class Step(BaseModel):
+class Step(OFXBaseModel):
+    """Step definition within a job."""
+
     name: str = Field(default="<should_be_replaced>", description="Name of the step")
     run_if: str | bool = Field(
         default=True,

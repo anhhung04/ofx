@@ -24,8 +24,9 @@ class VisualizeHandler:
     def run(self) -> None:
         """Generate and display/save workflow visualization"""
         try:
-            workflow_dirs = [DEFAULT_WORKFLOWS_DIR.absolute(), Path.cwd().absolute()]
-            workflow = find_workflow(self.workflow_name, tuple(workflow_dirs))
+            from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+            # remove explicit workflow_dirs list
+            workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
 
             if not workflow:
                 self.console.print(

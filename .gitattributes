@@ -1,0 +1,38 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force LF line endings for shell scripts and packaging files
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Debian packaging - must have LF
+packaging/debian/* text eol=lf
+packaging/debian/**/* text eol=lf
+
+# RPM packaging - must have LF
+packaging/rpm/* text eol=lf
+*.spec text eol=lf
+
+# Dockerfiles
+Dockerfile* text eol=lf
+
+# Python
+*.py text eol=lf
+
+# Config files
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.whl binary
+*.deb binary
+*.rpm binary
+*.exe binary

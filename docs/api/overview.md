@@ -9,6 +9,7 @@ OFX provides comprehensive red teaming APIs to reduce scripting overhead by 80-9
 - **[Reconnaissance APIs](reconnaissance.md)** - Search engines, OOB testing, network scanning, HTTP server
 - **[Exploitation APIs](exploitation.md)** - HTTP client, shellcode generation, webshells, binary exploitation  
 - **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation, credential helpers
+- **[Evasion APIs](evasion.md)** - Payload obfuscation, command evasion
 
 ## Categories
 
@@ -59,14 +60,20 @@ File operations, process management, cryptography, and credential handling.
 |-----|---------|---------|
 | **file** | File operations | `file.read_file(path)` |
 | **post** | Post-exploitation helpers | `post.detect_os(uname)` |
-| **evasion** | Evasion helpers | `evasion.jitter_delay(10)` |
+| **evasion** | [Evasion helpers](evasion.md) | `evasion.obfuscate_payload(code)` |
 | **creds** | Credential helpers | `creds.ExegolHistoryDB()` |
-<!--
-| **ProcessUtils** | Command execution | `ProcessUtils.run_command(cmd)` |
-| **CryptoUtils** | Hashing and encoding | `CryptoUtils.md5(data)` |
-| **DataTransformer** | Format conversion | `transformer.to_json(data)` |
-| **CredentialManager** | Secure credential storage | `manager.store(key, value)` |
 -->
+
+### :material-lan: Network
+
+Network utilities for bind and reverse shells, and shellcode generation.
+
+| API | Purpose | Example |
+|-----|---------|---------|
+| **bind_shell** | Create bind shell | `network.bind_shell('0.0.0.0', 4444)` |
+| **reverse_shell** | Create reverse shell | `network.reverse_shell('10.0.0.1', 8080)` |
+| **generate_shellcode_list** | Generate shellcode | `network.generate_shellcode_list('x64', 'linux')` |
+
 
 ## Quick Start
 

@@ -1,7 +1,20 @@
 # Copilot Instructions for OFX
+
 **Note:** The documentation in this repository is intended for end users only. There is no developer or internal guide included or distributed. All documentation updates should focus on end-user guidance, not internal or developer-facing details.
 
-## Runner Architecture (Modular Structure)
+## Project Overview
+
+OFX (Offensive Flow Executor) is a red team automation toolkit providing:
+- Workflow execution engine with matrix strategies
+- Post-exploitation runners (SSH, WebShell, WinRM, SMBExec, WMIExec)
+- Webshell generators and clients
+- Enumeration tool integrations
+
+**Python Version:** 3.12+ (downgraded from 3.14 for Debian compatibility)
+
+## Architecture
+
+### Runner Module (Workflow Execution)
 
 The runner module uses a **modular architecture** organized into specialized subdirectories:
 
@@ -28,7 +41,28 @@ The runner module uses a **modular architecture** organized into specialized sub
   - `TemplateResolver`: Async template resolution with caching and registry-based data access
   - `TemplateHelpers`: Helper functions for templates (sudo, uv_install, file_read, etc.)
 
-**Import convention**: Use public API `from ofx.runner import WorkflowRunner, RunContext, ...` or explicit paths `from ofx.runner.execution import WorkflowRunner`, `from ofx.runner.commands import CommandRunner`.
+### Post-Exploitation Module (Extendable Architecture)
+
+The post module ([src/ofx/api/post/](../src/ofx/api/post/)) uses an **extendable runner pattern**:
+
+- **Base class** ([src/ofx/api/post/base.py](../src/ofx/api/post/base.py)):
+  - `PostRunnerBase`: Abstract base class with `run()`, `upload()`, `download()`, `interactive_shell()` methods
+  - `CommandRunner`: Protocol for duck-typing compatibility
+- **Registry** ([src/ofx/api/post/registry.py](../src/ofx/api/post/registry.py)):
+  - `RunnerRegistry`: Dynamic runner discovery and factory creation
+  - Use `@RunnerRegistry.register("name")` decorator to add new runners
+- **Runners** ([src/ofx/api/post/runners/](../src/ofx/api/post/runners/)):
+  - `PostSSH`: SSH command execution with SCP file transfers
+  - `PostWebShell`: Wrapper around `WebShellClient`
+  - `PostWinRM`: PowerShell execution with base64 file transfers
+  - `PostSMBExec`: SMB-based execution via impacket
+  - `PostWMIExec`: WMI-based execution via impacket
+
+**Import convention**: 
+```python
+from ofx.api.post import RunnerRegistry, PostSSH, PostWebShell
+runner = RunnerRegistry.create("ssh", host="192.168.1.100", user="root")
+```
 
 ## Workflows & Models
 
@@ -67,7 +101,49 @@ The runner module uses a **modular architecture** organized into specialized sub
 
 ## Development
 
-- Testing: prefer `uv run --extra test pytest` for unit/integration tests; YAML flow fixtures live in [tests/flows](../tests/flows) and cover hooks, parallelism, and tool installs.
-- Docs: mkdocs sources in [docs](../docs); build with `uv run --extra docs mkdocs build --clean --strict -f mkdocs.yml -d src/ofx/data/site` or `make docs`. Serve via `uv run ofx docs serve` after build output exists.
-- Packaging & deps: `uv sync` installs dependencies (`uv sync --extra test` adds test deps); CLI entry point is `ofx=ofx:main` set in [pyproject.toml](../pyproject.toml).
-- Style: Ruff enforces linting rules (line length via black), Python 3.12; async-first execution, so keep new runners/commands async-aware and propagate `RunContext` consistently.
+### Testing
+- Use `uv run --extra test pytest` for unit/integration tests
+- YAML flow fixtures live in [tests/flows](../tests/flows) and cover hooks, parallelism, and tool installs
+
+### Documentation
+- MkDocs sources in [docs](../docs)
+- Build with `make docs` or `uv run --extra docs mkdocs build --clean --strict -f mkdocs.yml -d src/ofx/data/site`
+- Serve via `uv run ofx docs serve` after build
+
+### Packaging & Distribution
+
+Multi-platform distribution via Docker:
+
+```bash
+# Build all packages (deb, rpm, wheel)
+make packages
+
+# Build for AMD64 + ARM64
+make packages-multiarch
+
+# Build Windows executable
+make pkg-windows
+
+# Bump version across all files
+make version V=0.4.0
+```
+
+**Package files:**
+- `debian/` - Debian package configuration
+- `packaging/rpm/ofx.spec` - RPM spec for Fedora/RHEL
+- `packaging/winget/redteam.OFX.yaml` - Windows Package Manager manifest
+- `packaging/windows/build-exe.py` - PyInstaller build script
+- `Dockerfile.pkg` - Multi-stage Docker builder
+
+### CI/CD
+
+GitHub Actions workflows (using absolute URLs for Gitea runner compatibility):
+- `.github/workflows/release.yml` - Build packages and create releases
+- `.github/workflows/publish.yml` - Publish to PyPI/Gitea registry
+- `.github/workflows/tests.yml` - Run tests
+
+### Style Guide
+- Ruff enforces linting rules (line length via black), Python 3.12
+- Async-first execution, so keep new runners/commands async-aware
+- Propagate `RunContext` consistently
+- Use absolute GitHub URLs in workflow files for Gitea compatibility: `https://github.com/actions/checkout@v4`

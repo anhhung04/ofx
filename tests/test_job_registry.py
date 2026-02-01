@@ -8,7 +8,7 @@ import pytest
 
 from ofx.runner.core import RegistryFactory, cleanup_registry
 from ofx.runner.registry import (
-    FileJobRegistry,
+    FileRegistry,
     MemoryJobRegistry,
 )
 
@@ -27,7 +27,7 @@ async def file_registry():
     with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
         filepath = Path(f.name)
 
-    registry = FileJobRegistry(filepath=filepath)
+    registry = FileRegistry(filepath=filepath)
     yield registry
     await cleanup_registry(registry)
 
@@ -133,12 +133,12 @@ class TestFileJobRegistry:
 
         try:
             # First registry instance
-            registry1 = FileJobRegistry(filepath=filepath)
+            registry1 = FileRegistry(filepath=filepath)
             await registry1.set("job1", {"name": "persistent-job"})
             await cleanup_registry(registry1)
 
             # Second registry instance
-            registry2 = FileJobRegistry(filepath=filepath)
+            registry2 = FileRegistry(filepath=filepath)
             result = await registry2.get("job1")
             assert result["name"] == "persistent-job"
             await cleanup_registry(registry2)
@@ -197,7 +197,7 @@ class TestRegistryFactory:
 
         try:
             registry = RegistryFactory.create_file(filepath=str(filepath))
-            assert isinstance(registry, FileJobRegistry)
+            assert isinstance(registry, FileRegistry)
 
             await registry.set("test", {"data": "value"})
             result = await registry.get("test")
@@ -230,7 +230,7 @@ class TestAdapterContract:
         elif request.param == "file":
             with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
                 filepath = Path(f.name)
-            reg = FileJobRegistry(filepath=filepath)
+            reg = FileRegistry(filepath=filepath)
 
         yield reg
 

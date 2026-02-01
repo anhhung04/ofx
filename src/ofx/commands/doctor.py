@@ -11,7 +11,7 @@ from rich.panel import Panel
 
 from ofx.settings import get_console
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = get_console()
 
 NAME = "doctor"

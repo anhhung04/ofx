@@ -1,9 +1,9 @@
+import asyncio
 from typing import Annotated
 
 import typer
-from async_typer import AsyncTyper
 
-app = AsyncTyper()
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
 NAME = "flow"
 
@@ -11,11 +11,10 @@ ALIAS = ["x", "task"]
 
 HELP = "Manage and run workflows in the OFX system"
 
-@app.async_command()
-async def run(
-    workflow_name: Annotated[
-        str, typer.Argument(help="Name of the workflow to run")
-    ],
+
+@app.command()
+def run(
+    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to run")],
     input: Annotated[
         list[str],
         typer.Option(
@@ -42,12 +41,14 @@ async def run(
 ):
     from ofx.commands.flow.run import FlowRunHandler
 
-    await FlowRunHandler(
-        workflow_name=workflow_name,
-        input=input,
-        output=output,
-        profile=profile,
-    ).run()
+    asyncio.run(
+        FlowRunHandler(
+            workflow_name=workflow_name,
+            input=input,
+            output=output,
+            profile=profile,
+        ).run()
+    )
 
 
 @app.command()
@@ -101,8 +102,8 @@ def visualize(
     ).run()
 
 
-@app.async_command()
-async def tools(
+@app.command()
+def tools(
     workflow_name: Annotated[
         str,
         typer.Argument(
@@ -120,7 +121,9 @@ async def tools(
     """Install workflow tool dependencies"""
     from ofx.commands.flow.tools import ToolsInstallHandler
 
-    await ToolsInstallHandler(
-        workflow_name=workflow_name,
-        all_workflows=all_workflows,
-    ).run()
+    asyncio.run(
+        ToolsInstallHandler(
+            workflow_name=workflow_name,
+            all_workflows=all_workflows,
+        ).run()
+    )

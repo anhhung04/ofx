@@ -1,4 +1,5 @@
 import os
+import platform
 import tempfile
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from rich.console import Console
 from rich.theme import Theme
 
 from ofx.utils.log import reload_logging_config
+
+IS_WINDOWS = platform.system() == "Windows"
 
 BASE_DIR = Path(__file__).parent.absolute()
 USER_DIR = Path.home()
@@ -25,10 +28,11 @@ DATA_DIR = Path(__file__).parent / "data"
 USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
 USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
+SCRIPT_COMMUNICATION_REGISTRY = TEMP_DIR / "script_channels.json"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
-DEFAULT_SHELL = "/bin/bash"
+DEFAULT_SHELL = "powershell.exe" if IS_WINDOWS else "/bin/bash"
 
 RICH_THEME = Theme(
     {
@@ -61,14 +65,13 @@ RICH_THEME = Theme(
     }
 )
 
-os.makedirs(BASE_DATA_DIR, exist_ok=True)
-os.makedirs(TEMP_DIR, exist_ok=True)
-os.makedirs(SECRETS_DIR, exist_ok=True)
-os.makedirs(USER_EXPLOITS_DIR, exist_ok=True)
-os.makedirs(USER_SHELLCODE_CONNECTORS_DIR, exist_ok=True)
-os.makedirs(USER_WEBSHELL_CONNECTORS_DIR, exist_ok=True)
-TOOLS_DIR.mkdir(parents=True, exist_ok=True)
-TOOLS_BIN_DIR.mkdir(parents=True, exist_ok=True)
+def ensure_dir(path: Path) -> Path:
+    """Create directory only if it doesn't exist. Call this when a command needs the directory."""
+    if not path.exists():
+        path.mkdir(parents=True, exist_ok=True)
+    return path
+
+ensure_dir(SECRETS_DIR)
 
 _console = None
 
@@ -137,6 +140,10 @@ class Settings(BaseSettings):
     registry_file_path: str | None = Field(
         default=None,
         description="File path for file-based registry (defaults to ~/.local/share/ofx/job_registry.json)",
+    )
+    script_communication_registry_path: str = Field(
+        default=str(SCRIPT_COMMUNICATION_REGISTRY),
+        description="File path for script inter-job communication registry",
     )
     registry_redis: RedisRegistrySettings | None = Field(
         default=None,

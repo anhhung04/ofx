@@ -9,18 +9,20 @@ from rich.panel import Panel
 from ofx.models.job import Job
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
-from ofx.settings import BASE_DATA_DIR, get_console, settings
+from ofx.settings import BASE_DATA_DIR, ensure_dir, get_console, settings
 
 NAME = "dump"
 HELP = "Dump the workflow configuration and outputs."
 
-app = typer.Typer()
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = get_console()
 
 logger = logging.getLogger(settings.app_branding)
 
 
-def get_property_type(prop_info: dict[str, Any], definitions: dict[str, Any] = {}) -> str:
+def get_property_type(
+    prop_info: dict[str, Any], definitions: dict[str, Any] = {}
+) -> str:
     """Extract property type from schema information."""
     if "type" in prop_info:
         t = prop_info["type"]
@@ -209,7 +211,6 @@ def dump_workflow():
     display_schema_tree(schema, "Workflow Properties", console)
 
 
-
 @app.command("job")
 def dump_job():
     """
@@ -221,7 +222,6 @@ def dump_job():
 
     console.print("\n[bold]Job Model Schema[/]\n", style="cyan")
     display_schema_tree(schema, "Job Properties", console)
-
 
 
 @app.command("step")
@@ -237,13 +237,14 @@ def dump_step():
     display_schema_tree(schema, "Step Properties", console)
 
 
-
 @app.command("schema")
 def export_schema(
     output: Annotated[
         str,
         typer.Option(
-            "-o", "--output", help="Output file path for the JSON schema (default: workflow_schema.json in data dir)"
+            "-o",
+            "--output",
+            help="Output file path for the JSON schema (default: workflow_schema.json in data dir)",
         ),
     ] = "",
 ):
@@ -253,19 +254,20 @@ def export_schema(
     By default, writes the full JSON schema for workflows to 'workflow_schema.json' in the data directory. You can specify a custom output path with -o/--output. This schema is suitable for validation, tooling, or integration with editors and CI systems.
     """
 
-
     if not output:
-        output = (BASE_DATA_DIR / "workflow_schema.json").as_posix()
+        output = (ensure_dir(BASE_DATA_DIR) / "workflow_schema.json").as_posix()
     output_path = Path(output)
     schema = Workflow.model_json_schema()
     if not output_path.parent.exists():
         output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(schema, indent=2))
 
-    console.print(Panel(
-        f"[bold green]Schema exported successfully[/bold green]\n"
-        f"[bold]File:[/bold] [cyan]{output_path}[/cyan]\n"
-        f"[dim]Use this schema for validation and IDE support[/dim]",
-        title="[OK] Schema Export",
-        border_style="green"
-    ))
+    console.print(
+        Panel(
+            f"[bold green]Schema exported successfully[/bold green]\n"
+            f"[bold]File:[/bold] [cyan]{output_path}[/cyan]\n"
+            f"[dim]Use this schema for validation and IDE support[/dim]",
+            title="[OK] Schema Export",
+            border_style="green",
+        )
+    )
