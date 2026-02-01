@@ -68,15 +68,11 @@ class FlowRunHandler:
             if self.input:
                 console.print(Align.center(inputs_table(self.input)))
 
-            if self.input:
-                console.print(Align.center(inputs_table(self.input)))
-
-            # Use the new programmatic API
             result = await run_workflow(
                 workflow=self.workflow_name,
                 inputs=self.input,
                 output_path=self.output,
-                workflow_search_paths=DEFAULT_WORKFLOWS_DIRS,
+                workflow_search_paths=DEFAULT_WORKFLOWS_DIRS,  # type: ignore
                 quiet=False,
             )
 
@@ -118,6 +114,4 @@ class FlowRunHandler:
         try:
             self.input = parse_key_value_pairs(self.preprocess_input)
         except ValueError as e:
-            # Re-raise with same message logic if needed, or let bubble up
-            # The utility raises ValueError with clear message
             raise e

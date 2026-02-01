@@ -21,6 +21,7 @@ class Job(OFXBaseModel):
     run_if: str | bool = Field(
         default=True,
         description="Condition to run the job (e.g., 'success()', 'failure()')",
+        alias="if",
     )
     strategy: MatrixStrategy | None = Field(
         default=None,
@@ -57,10 +58,12 @@ class Job(OFXBaseModel):
     max_parallel: int | None = Field(
         default=None,
         description="Maximum number of matrix jobs to run in parallel",
+        alias="max-parallel",
     )
     fail_fast: bool = Field(
         default=True,
         description="Whether to fail the entire matrix if one job fails",
+        alias="fail-fast",
     )
 
     @model_validator(mode="after")

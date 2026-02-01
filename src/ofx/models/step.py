@@ -26,13 +26,16 @@ class Step(OFXBaseModel):
     run_if: str | bool = Field(
         default=True,
         description="Condition to run the step (e.g., 'success()', 'failure()')",
+        alias="if",
     )
     env: dict[str, str] = Field(
         default_factory=dict,
         description="Environment variables for the step",
     )
     continue_on_error: bool = Field(
-        default=False, description="Continue execution even if the step fails"
+        default=False,
+        description="Continue execution even if the step fails",
+        alias="continue-on-error",
     )
     timeout: int = Field(
         default=60 * 24, description="Timeout in minutes for the step execution"
@@ -42,17 +45,23 @@ class Step(OFXBaseModel):
         description="Number of retry attempts on failure (default: 0, no retries)",
     )
     retry_delay: int = Field(
-        default=5, description="Delay in seconds between retry attempts (default: 5)"
+        default=5,
+        description="Delay in seconds between retry attempts (default: 5)",
+        alias="retry-delay",
     )
     shell: str = Field(
         default=DEFAULT_SHELL,
         description="Shell to use for running commands in the step",
     )
     working_directory: Path = Field(
-        default_factory=Path.cwd, description="Working directory for the step execution"
+        default_factory=Path.cwd,
+        description="Working directory for the step execution",
+        alias="working-directory",
     )
     log_stdout: bool | str = Field(
-        default=False, description="Whether to capture standard output of the step"
+        default=False,
+        description="Whether to capture standard output of the step",
+        alias="log-stdout",
     )
     uses: str | None = Field(
         default=None,
@@ -68,6 +77,7 @@ class Step(OFXBaseModel):
     run_with: dict[str, Any] = Field(
         default_factory=dict,
         description="Define inputs for the step if it uses a reusable workflow",
+        alias="with",
     )
     secrets: dict[str, str] | Literal["inherit"] = Field(
         default_factory=dict,
