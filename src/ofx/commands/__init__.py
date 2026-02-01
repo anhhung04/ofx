@@ -38,6 +38,9 @@ def add_aliases():
             )
 
 
+app.callback()(print_banner)
+
+
 def _register_commands():
     add_app(flow)
     add_app(dump)
@@ -53,7 +56,6 @@ def main():
     """Main entry point for the OFX CLI application"""
     try:
         _register_commands()
-        print_banner()
         app()
         return typer.Exit(code=0)
     except Exception as e:
