@@ -56,7 +56,7 @@ COPY --from=wheel-builder /output/site-packages /staging/opt/ofx/site-packages
 
 # Copy package metadata
 COPY pyproject.toml ./
-COPY packaging/ofx.1 ./
+COPY packaging/OFX.1 ./
 
 # Extract version from wheel filename  
 RUN WHEEL=$(ls ofx-*.whl | head -1) && \
@@ -104,8 +104,8 @@ RUN mkdir -p /staging/usr/lib/python3/dist-packages && \
 
 # Create man page directory and copy man page
 RUN mkdir -p /staging/usr/share/man/man1 && \
-    dos2unix ofx.1 2>/dev/null || true && \
-    cp ofx.1 /staging/usr/share/man/man1/
+    dos2unix OFX.1 2>/dev/null || true && \
+    cp OFX.1 /staging/usr/share/man/man1/
 
 # Create output directory
 RUN mkdir -p /output
