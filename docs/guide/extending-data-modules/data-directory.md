@@ -1,6 +1,6 @@
 # Data Directory Structure
 
-The data directory in OFX stores reusable assets, payloads, templates, and other resources used by workflows and custom connectors. You can extend it with user data under `~/.local/share/ofx/`.
+The data directory in OFX stores reusable assets, payloads, templates, and other resources used by workflows and custom connectors. You can extend it with user data under `~/.ofx/`.
 
 ---
 
@@ -16,7 +16,7 @@ src/ofx/data/
 
 User extension layout:
 ```
-~/.local/share/ofx/
+~/.ofx/
 	exploits/
 	shellcode/connectors/
 	webshell/connectors/
@@ -26,7 +26,7 @@ User extension layout:
 
 ## How to Use
 - Reference built-in files via `DATA_DIR`
-- Store user extensions in `~/.local/share/ofx/` subdirectories
+- Store user extensions in `~/.ofx/` subdirectories
 - Use in custom connectors to load payloads or templates
 
 ---

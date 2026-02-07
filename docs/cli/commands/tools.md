@@ -44,7 +44,7 @@ ofx flow tools --all
 
 This will scan all workflow files (`.yml`, `.yaml`) in:
 - Current directory
-- `~/.local/share/ofx/workflows/` (and other configured directories)
+- `~/.ofx/workflows/` (and other configured directories)
 
 ## Tool Installation
 

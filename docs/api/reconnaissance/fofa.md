@@ -15,7 +15,7 @@ FOFA (https://fofa.info) is a powerful search engine for internet-connected asse
 ## Setup
 You need a FOFA account and API key. The client will prompt for these on first use, or you can provide them in a config file:
 
-**Config file location:** `~/.local/share/ofx/config.ini`
+**Config file location:** `~/.ofx/config.ini`
 
 ```ini
 [Fofa]

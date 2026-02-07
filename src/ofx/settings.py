@@ -15,13 +15,16 @@ IS_WINDOWS = platform.system() == "Windows"
 BASE_DIR = Path(__file__).parent.absolute()
 USER_DIR = Path.home()
 
-BASE_DATA_DIR = Path.home() / ".local" / "share" / "ofx"
-TEMP_DIR = Path(tempfile.gettempdir()) / ".ofx"
+BASE_DATA_DIR = Path.home() / ".ofx"
+TEMP_DIR = Path(
+    tempfile.TemporaryDirectory(prefix="ofx_", dir=str(tempfile.gettempdir())).name
+).absolute()
+CONFIG_FILE = BASE_DATA_DIR / "config.ini"
 SECRETS_STORE = Path(os.getenv("OFX_SECRETS_STORE", BASE_DATA_DIR / "secrets.enc"))
 SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
 DEFAULT_WORKFLOWS_DIRS = [Path.cwd().absolute(), DEFAULT_WORKFLOWS_DIR.absolute()]
-DEFAULT_PROJECTS_PATH = Path.home() / "ofx-projects"
+DEFAULT_PROJECTS_PATH = BASE_DATA_DIR / "projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
 DATA_DIR = Path(__file__).parent / "data"
@@ -65,12 +68,16 @@ RICH_THEME = Theme(
     }
 )
 
+
 def ensure_dir(path: Path) -> Path:
     """Create directory only if it doesn't exist. Call this when a command needs the directory."""
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     return path
 
+
+ensure_dir(BASE_DATA_DIR)
+ensure_dir(TEMP_DIR)
 ensure_dir(SECRETS_DIR)
 
 _console = None
@@ -132,6 +139,11 @@ class Settings(BaseSettings):
         description="Maximum output size in bytes before truncation",
     )
 
+    default_remote_registry: str = Field(
+        default="https://github.com",
+        description="Default remote registry URL for cloning repositories",
+    )
+
     # Job Registry Settings
     registry_backend: str = Field(
         default="memory",
@@ -139,7 +151,7 @@ class Settings(BaseSettings):
     )
     registry_file_path: str | None = Field(
         default=None,
-        description="File path for file-based registry (defaults to ~/.local/share/ofx/job_registry.json)",
+        description="File path for file-based registry (defaults to ~/.ofx/job_registry.json)",
     )
     script_communication_registry_path: str = Field(
         default=str(SCRIPT_COMMUNICATION_REGISTRY),

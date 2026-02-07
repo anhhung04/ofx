@@ -71,6 +71,8 @@ class CommandExecutor:
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
             ) from None
+        finally:
+            self._close_process(proc)
 
         return CommandExecutionResult(
             exit_code=exit_code,
@@ -103,6 +105,8 @@ class CommandExecutor:
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
             ) from None
+        finally:
+            self._close_process(proc)
 
         stdout, stderr, outputs = self._decode_output(stdout_bytes, stderr_bytes)
         return CommandExecutionResult(
@@ -164,6 +168,16 @@ class CommandExecutor:
         if exit_code != 0:
             stderr = stderr or f"Command failed with exit code {exit_code}"
             raise RuntimeError(f"Command failed: {stderr}") from None
+
+    @staticmethod
+    def _close_process(proc: asyncio.subprocess.Process) -> None:
+        transport = getattr(proc, "_transport", None)
+        if transport is None:
+            return
+        try:
+            transport.close()
+        except Exception:
+            pass
 
     async def capture_outputs_file(self, runner, key: str, log_fn) -> None:
         if not self._outputs_file or not self._outputs_file.exists():

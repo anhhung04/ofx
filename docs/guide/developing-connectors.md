@@ -249,7 +249,7 @@ if result.success:
 Place exploit connectors in:
 
 - **Built-in**: `{package}/ofx/api/exploitation/exploit/connectors/`
-- **Custom**: `~/.local/share/ofx/exploits/`
+- **Custom**: `~/.ofx/exploits/`
 
 File naming: `cve_2023_1234.py` or `app_name_vulnerability.py`
 
@@ -257,7 +257,7 @@ File naming: `cve_2023_1234.py` or `app_name_vulnerability.py`
 
 Webshell connectors generate and manage web shells for various platforms.
 
-Custom connector files can be dropped into `~/.local/share/ofx/webshell/connectors/`
+Custom connector files can be dropped into `~/.ofx/webshell/connectors/`
 and are auto-discovered on startup.
 
 ### Base Class
@@ -330,7 +330,7 @@ code = shell.get_webshell()  # Uses mini template
 
 Shellcode connectors generate platform-specific shellcode.
 
-Custom connector files can be dropped into `~/.local/share/ofx/shellcode/connectors/`
+Custom connector files can be dropped into `~/.ofx/shellcode/connectors/`
 and are auto-discovered on startup.
 
 ### Base Class

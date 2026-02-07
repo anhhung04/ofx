@@ -8,9 +8,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ofx.models.config import DurableRunConfig
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunContext
 from ofx.runner.core import RunResult
+from ofx.runner.core.durable import find_running_checkpoints
 from ofx.runner.execution.workflow import WorkflowRunner
 from ofx.settings import (
     DEFAULT_WORKFLOWS_DIRS,
@@ -51,6 +53,7 @@ async def run_workflow(
     output_path: str | Path | None = None,
     workflow_search_paths: list[str | Path] | None = None,
     quiet: bool = False,
+    durable_overrides: DurableRunConfig | None = None,
 ) -> RunResult:
     """
     Run an OFX workflow programmatically.
@@ -81,6 +84,20 @@ async def run_workflow(
     resolved_workflow: Workflow = find_workflow(str(workflow), tuple(search_paths))
 
     output_dir = _get_tmp_dir(output_path)
+    if durable_overrides is not None:
+        resolved_workflow.defaults.durable = durable_overrides
+    durable_config = resolved_workflow.defaults.durable
+    if durable_config and durable_config.enabled:
+        running_checkpoints = await find_running_checkpoints(output_dir, durable_config)
+        if running_checkpoints and not durable_config.resume:
+            names = [
+                (checkpoint.get("name") or checkpoint.get("checkpoint_id") or "unknown")
+                for checkpoint in running_checkpoints
+            ]
+            raise RuntimeError(
+                "Durable checkpoints indicate in-progress execution in the output directory. "
+                f"Abort to avoid inconsistent state. In-progress: {', '.join(names)}"
+            )
 
     runner_secrets = secrets
     if runner_secrets is None:
@@ -96,6 +113,7 @@ async def run_workflow(
         workflow_dirs=add_workflow_dir(
             search_paths, resolved_workflow.workflow_path.parent
         ),
+        durable=durable_config,
     )
 
     runner = WorkflowRunner(resolved_workflow, ctx=ctx)

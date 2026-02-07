@@ -214,7 +214,7 @@ aws s3api put-bucket-policy --bucket my-ofx-projects --policy file://policy.json
 If remote has diverged:
 ```bash
 # Navigate to project
-cd ~/.local/share/ofx/projects/my-project
+cd ~/.ofx/projects/my-project
 
 # Pull and merge
 git pull --rebase

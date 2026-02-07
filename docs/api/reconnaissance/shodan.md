@@ -15,7 +15,7 @@ Shodan (https://www.shodan.io) is a search engine for internet-connected devices
 ## Setup
 You need a Shodan account and API key. The client will prompt for these on first use, or you can provide them in a config file:
 
-**Config file location:** `~/.local/share/ofx/config.ini`
+**Config file location:** `~/.ofx/config.ini`
 
 ```ini
 [Shodan]

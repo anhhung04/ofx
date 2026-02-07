@@ -124,7 +124,7 @@ ofx secret export --output backup.json
 Secrets are stored encrypted in:
 
 ```
-~/.local/share/ofx/secrets.enc
+~/.ofx/secrets.enc
 ```
 
 Encryption uses a master key derived from your system credentials.

@@ -17,7 +17,7 @@ The documentation is auto-generated from docstrings and type hints with beautifu
 ## Data Directories
 
 ### User Data Directory
-**Location:** `~/.local/share/ofx/`
+**Location:** `~/.ofx/`
 
 This is where you can add custom content to extend OFX:
 
@@ -87,7 +87,7 @@ Shows documentation for a specific class method.
 ### Adding Custom Workflows
 
 1. Create a YAML workflow file (e.g., `my-custom-workflow.yml`)
-2. Place it in `~/.local/share/ofx/workflows/`
+2. Place it in `~/.ofx/workflows/`
 3. Run it with `ofx flow run my-custom-workflow`
 
 Example custom workflow structure:
@@ -109,7 +109,7 @@ jobs:
 #### Option 1: Plain text files (for development)
 ```bash
 # Create a secret file
-echo "my-api-key-123" > ~/.local/share/ofx/secrets/my_api_key
+echo "my-api-key-123" > ~/.ofx/secrets/my_api_key
 
 # Use in workflow
 ofx flow run workflow --input api_key='{{ secrets.my_api_key }}'
@@ -185,7 +185,7 @@ Documentation is available for:
 
 ## Tips
 
-- **Workflow Discovery**: Workflows in `~/.local/share/ofx/workflows/` are automatically discovered
+- **Workflow Discovery**: Workflows in `~/.ofx/workflows/` are automatically discovered
 - **Current Directory**: Workflows in the current directory take precedence over user data directory
 - **Secret Priority**: Encrypted secrets (`secrets.enc`) take priority over plain text files
 - **Data Isolation**: User data is isolated from built-in data, making updates safe

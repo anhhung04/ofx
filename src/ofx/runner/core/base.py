@@ -9,6 +9,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel
 
+from ofx.runner.core.durable import get_checkpoint, write_checkpoint
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import RegistryAdapter, cleanup_registry
@@ -96,10 +97,14 @@ class BaseRunner(Generic[TModel]):
         self._started_at_utc: str | None = None
         self._finished_at_utc: str | None = None
         self._log_level = logging.getLogger().getEffectiveLevel()
+        self._durable_outputs: dict[str, Any] | None = None
 
     async def run(self) -> RunResult:
         """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
         self._mark_start()
+        if await self._restore_from_checkpoint():
+            return await self.get_result()
+        await self._write_checkpoint("running")
         try:
             await self.reg_set(
                 "metadata",
@@ -133,9 +138,93 @@ class BaseRunner(Generic[TModel]):
                 self._state_machine.transition(RunnerStatus.FAILED)
         finally:
             self._mark_finish()
+            await self._write_checkpoint(self._checkpoint_status())
             await self._on_finish()
             await cleanup_registry(self._registry)
         return await self.get_result()
+
+    async def _write_checkpoint(self, status: str) -> None:
+        config = self._durable_config()
+        if not config or not self.ctx.output_path:
+            return
+
+        payload: dict[str, Any] = {
+            "run_id": self.run_id,
+            "checkpoint_id": self._checkpoint_id(),
+            "status": status,
+            "runner_type": self.__class__.__name__,
+            "model_type": type(self.model).__name__,
+            "name": getattr(self.model, "name", None),
+            "parent_run_id": self.parent.run_id if self.parent else None,
+            "started_at": self._started_at_utc,
+            "finished_at": self._finished_at_utc,
+            "duration_ms": self.duration_ms(),
+            "error": self._error,
+            "job_id": getattr(self.model, "jid", None),
+            "step_index": getattr(self.model, "step_index", None),
+        }
+
+        if status != "running":
+            try:
+                result = await self.get_result()
+                payload["outputs"] = result.outputs
+            except Exception:
+                payload["outputs"] = {}
+
+        await write_checkpoint(
+            self.ctx.output_path,
+            config,
+            self._checkpoint_id(),
+            payload,
+        )
+
+    async def _restore_from_checkpoint(self) -> bool:
+        config = self._durable_config()
+        if not config or not config.resume or not self.ctx.output_path:
+            return False
+
+        checkpoint = await get_checkpoint(
+            self.ctx.output_path,
+            config,
+            self._checkpoint_id(),
+        )
+        if not checkpoint or checkpoint.get("status") != "completed":
+            return False
+
+        self._error = checkpoint.get("error")
+        self._durable_outputs = checkpoint.get("outputs") or {}
+        self._started_at_utc = checkpoint.get("started_at")
+        self._finished_at_utc = checkpoint.get("finished_at")
+        self._state_machine.set_state(RunnerStatus.COMPLETED)
+        await self.reg_set(RunnerRegistryKeys.OUTPUTS, self._durable_outputs)
+        return True
+
+    def _durable_config(self):
+        if self.ctx.durable and self.ctx.durable.enabled:
+            return self.ctx.durable
+        if self.parent and self.parent.ctx.durable and self.parent.ctx.durable.enabled:
+            return self.parent.ctx.durable
+        return None
+
+    def _checkpoint_id(self) -> str:
+        parent_id = self.parent._checkpoint_id() if self.parent else "workflow"
+        if hasattr(self.model, "jid") and hasattr(self.model, "step_index"):
+            local_id = (
+                f"job:{getattr(self.model, 'jid')}:{getattr(self.model, 'step_index')}"
+            )
+        elif hasattr(self.model, "jid"):
+            local_id = f"job:{getattr(self.model, 'jid')}"
+        elif hasattr(self.model, "name"):
+            local_id = f"{self.__class__.__name__}:{getattr(self.model, 'name')}"
+        else:
+            local_id = f"{self.__class__.__name__}:{self.run_id}"
+        return f"{parent_id}/{local_id}"
+
+    def _checkpoint_status(self) -> str:
+        status = self.status
+        if status == RunnerStatus.FINISHED:
+            status = RunnerStatus.COMPLETED
+        return status.value
 
     async def _do_run(self) -> None:
         """Execute the runner's main logic - must be implemented by subclasses"""
@@ -303,12 +392,15 @@ class BaseRunner(Generic[TModel]):
             if self.status == RunnerStatus.FINISHED
             else self.status
         )
+        outputs = await self.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
+        if self._durable_outputs is not None and not outputs:
+            outputs = self._durable_outputs
         return RunResult(
             name=self.name,
             run_id=self.run_id,
             status=status,
             error=self._error,
-            outputs=await self.reg_get(RunnerRegistryKeys.OUTPUTS) or {},
+            outputs=outputs,
         )
 
     async def reg_set(self, key: str, value: dict[str, Any]) -> None:

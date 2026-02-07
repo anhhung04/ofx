@@ -8,7 +8,7 @@ from configparser import ConfigParser
 from pathlib import Path
 
 from ofx.api.http import requests
-from ofx.settings import settings
+from ofx.settings import CONFIG_FILE, settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -52,7 +52,7 @@ class Fofa:
         Automatically validates token on initialization.
 
         Args:
-            conf_path: Path to config file (default: ~/.local/share/ofx/config.ini)
+            conf_path: Path to config file (default: ~/.ofx/config.ini)
             user: FOFA account email (optional, will prompt if not provided)
             token: FOFA API key (optional, will prompt if not provided)
         """
@@ -63,7 +63,7 @@ class Fofa:
         self.api_url = "https://fofa.info/api/v1"
 
         if conf_path is None:
-            conf_path = Path.home() / ".local" / "share" / "ofx" / "config.ini"
+            conf_path = CONFIG_FILE
 
         self.conf_path = conf_path
         self.parser = ConfigParser()

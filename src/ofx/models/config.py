@@ -21,6 +21,27 @@ class RunConfig(OFXBaseModel):
     )
 
 
+class DurableRunConfig(OFXBaseModel):
+    """Durable execution configuration for workflows."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable durable checkpoints for workflow execution",
+    )
+    resume: bool = Field(
+        default=True,
+        description="Resume from last completed step when checkpoints exist",
+    )
+    backend: str = Field(
+        default="file",
+        description="Durable backend: file or redis",
+    )
+    redis_prefix: str = Field(
+        default="ofx:durable:",
+        description="Redis key prefix for durable checkpoints",
+    )
+
+
 class DefaultConfig(OFXBaseModel):
     """Default configuration for workflows."""
 
@@ -35,4 +56,8 @@ class DefaultConfig(OFXBaseModel):
     flow_registry_url: str = Field(
         default="https://github.com",
         description="Base URL for the flow registry",
+    )
+    durable: DurableRunConfig = Field(
+        default_factory=DurableRunConfig,
+        description="Durable execution configuration",
     )

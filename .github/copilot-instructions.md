@@ -73,7 +73,7 @@ runner = RunnerRegistry.create("ssh", host="192.168.1.100", user="root")
 
 ## Execution & Context
 
-- Workflow discovery: `find_workflow` searches current dir, `~/.local/share/ofx/workflows`, then remote URL or git repo clones; file extensions `.yml/.yaml` only ([src/ofx/utils/workflow_utils.py](../src/ofx/utils/workflow_utils.py)).
+- Workflow discovery: `find_workflow` searches current dir, `~/.ofx/workflows`, then remote URL or git repo clones; file extensions `.yml/.yaml` only ([src/ofx/utils/workflow_utils.py](../src/ofx/utils/workflow_utils.py)).
 - Execution plan: dependencies topologically sorted into parallel stages via `find_parallel_schedule`; jobs in the same stage run concurrently; matrix jobs expanded before scheduling ([src/ofx/runner/execution/workflow.py](../src/ofx/runner/execution/workflow.py)).
 - Run contexts: `RunContext` merges env vars with PATH prepended by `~/Tools/bin` and sets `UV_TOOL_BIN_DIR`; matrix context available as `ctx.vars['matrix']` during job execution ([src/ofx/runner/core/models.py](../src/ofx/runner/core/models.py) and [src/ofx/utils/env.py](../src/ofx/utils/env.py)).
 - Registry: runners use namespaced keys and `RunnerRegistryKeys` constants; supports memory, file, Redis, etcd, and memcached backends; provides data access in templates via `jobs` and `steps` variables ([src/ofx/runner/registry/](../src/ofx/runner/registry/)).
@@ -93,9 +93,9 @@ runner = RunnerRegistry.create("ssh", host="192.168.1.100", user="root")
 
 - CLI entry: Typer app `ofx` registers `flow` (aliases `x`, `task`), `dump`, `asset`, `project`, `docs`, `doctor`, `secret` ([src/ofx/commands/__init__.py](../src/ofx/commands/__init__.py)).
 - CLI commands: use `typing.Annotated` for all `typer.Option`/`typer.Argument` declarations; provide defaults inside `typer.Option` (strings default to `""`, bools to `False`) to avoid `NoneType.isidentifier` issues with Click/Typer.
-- Running workflows: `ofx flow run <name> --input key=val --output <dir>`; inputs are JSON-decoded when possible and shown via table; default output is a temp dir under `/tmp/.ofx` ([src/ofx/commands/flow/run.py](../src/ofx/commands/flow/run.py)).
+- Running workflows: `ofx flow run <name> --input key=val --output <dir>`; inputs are JSON-decoded when possible and shown via table; default output is a temp dir under `~/.ofx/tmp` ([src/ofx/commands/flow/run.py](../src/ofx/commands/flow/run.py)).
 - Validation & visualization: `ofx flow validate <name>` checks schema; `ofx flow visualize <name> --format dot|png|svg|pdf|mermaid|plantuml|d2|json|yaml` renders the DAG ([src/ofx/commands/flow/validate.py](../src/ofx/commands/flow/validate.py), [src/ofx/commands/flow/visualize.py](../src/ofx/commands/flow/visualize.py)).
-- Secrets: CLI loads secrets from `~/.local/share/ofx/secrets` and falls back to `secrets.enc`; `secrets: inherit` passes parent secrets into reusable workflows ([src/ofx/utils/secrets.py](../src/ofx/utils/secrets.py)).
+- Secrets: CLI loads secrets from `~/.ofx/secrets` and falls back to `secrets.enc`; `secrets: inherit` passes parent secrets into reusable workflows ([src/ofx/utils/secrets.py](../src/ofx/utils/secrets.py)).
 - Progress UX: workflow/job runners use `rich` progress bars; interactive steps suppress nested progress to keep TTY usable.
 
 ## Development

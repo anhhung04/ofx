@@ -36,7 +36,7 @@ registry = create_job_registry("memory")
 ```python
 from ofx.runner.core import create_job_registry
 
-# Use default path (~/.local/share/ofx/job_registry.json)
+# Use default path (~/.ofx/job_registry.json)
 registry = create_job_registry("file")
 
 # Or specify custom path
@@ -278,8 +278,8 @@ asyncio.run(test_redis())
 Ensure the directory for file-based registry exists and is writable:
 
 ```bash
-mkdir -p ~/.local/share/ofx
-chmod 755 ~/.local/share/ofx
+mkdir -p ~/.ofx
+chmod 755 ~/.ofx
 ```
 
 ### Import Errors
@@ -326,7 +326,7 @@ async def cleanup_registry(registry: RegistryAdapter) -> None
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OFX_REGISTRY_BACKEND` | `memory` | Registry type: memory, file, or redis |
-| `OFX_REGISTRY_FILE_PATH` | `~/.local/share/ofx/job_registry.json` | File path for file backend |
+| `OFX_REGISTRY_FILE_PATH` | `~/.ofx/job_registry.json` | File path for file backend |
 | `OFX_REGISTRY_REDIS_HOST` | `localhost` | Redis server host |
 | `OFX_REGISTRY_REDIS_PORT` | `6379` | Redis server port |
 | `OFX_REGISTRY_REDIS_DB` | `0` | Redis database number |

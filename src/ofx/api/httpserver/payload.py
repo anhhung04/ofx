@@ -12,70 +12,83 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class PayloadRequestHandler(BaseHTTPRequestHandler):
-    """Custom HTTP request handler for PayloadServer.
+def build_payload_handler(
+    payload_path: Path | None,
+    payloads: dict[str, bytes],
+    hits: dict[str, int],
+) -> type[BaseHTTPRequestHandler]:
+    """Create a request handler with injected payload dependencies."""
 
-    Handles GET and POST requests for payload delivery and logging.
-    """
+    class PayloadRequestHandler(BaseHTTPRequestHandler):
+        """Custom HTTP request handler for PayloadServer.
 
-    def log_message(self, format: str, *args: object) -> None:
-        logger.info(
-            f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
-        )
-
-    def do_GET(self) -> None:
-        """Handle GET requests for payload delivery.
-
-        Serves the payload file if it exists, otherwise returns 404.
+        Handles GET and POST requests for payload delivery and logging.
         """
-        if self.path == "/payload":
-            payload_path = getattr(self.server, "payload_path", None)
-            if payload_path and payload_path.exists():
-                self.send_response(200)
-                self.send_header("Content-type", "application/octet-stream")
-                self.send_header(
-                    "Content-Disposition", f'attachment; filename="{payload_path.name}"'
-                )
-                self.end_headers()
 
-                with open(payload_path, "rb") as f:
-                    self.wfile.write(f.read())
-                logger.info(f"Payload served to {self.client_address[0]}")
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self._payload_path = payload_path
+            self._payloads = payloads
+            self._hits = hits
+            super().__init__(*args, **kwargs)
+
+        def log_message(self, format: str, *args: object) -> None:
+            print(
+                f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
+            )
+
+        def do_GET(self) -> None:
+            """Handle GET requests for payload delivery.
+
+            Serves the payload file if it exists, otherwise returns 404.
+            """
+            if self.path == "/payload":
+                if self._payload_path and self._payload_path.exists():
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/octet-stream")
+                    self.send_header(
+                        "Content-Disposition",
+                        f'attachment; filename="{self._payload_path.name}"',
+                    )
+                    self.end_headers()
+
+                    with open(self._payload_path, "rb") as f:
+                        self.wfile.write(f.read())
+                    logger.info(f"Payload served to {self.client_address[0]}")
+                else:
+                    self.send_error(404, "Payload not found")
             else:
-                self.send_error(404, "Payload not found")
-        else:
-            # Check if path matches a registered payload
-            server = getattr(self, "server", None)
-            if server and hasattr(server, "payloads") and self.path in server.payloads:
-                self.send_response(200)
-                self.send_header("Content-type", "application/octet-stream")
-                self.end_headers()
-                self.wfile.write(server.payloads[self.path])
+                if self.path in self._payloads:
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/octet-stream")
+                    self.end_headers()
+                    self.wfile.write(self._payloads[self.path])
 
-                # Track hits
-                if hasattr(server, "hits"):
-                    server.hits[self.path] = server.hits.get(self.path, 0) + 1
+                    self._hits[self.path] = self._hits.get(self.path, 0) + 1
 
-                logger.info(f"Payload {self.path} served to {self.client_address[0]}")
-            else:
-                self.send_error(404, "Not found")
+                    logger.info(
+                        f"Payload {self.path} served to {self.client_address[0]}"
+                    )
+                else:
+                    self.send_error(404, "Not found")
 
-    def do_POST(self) -> None:
-        """Handle POST requests for logging or data collection.
+        def do_POST(self) -> None:
+            """Handle POST requests for logging or data collection.
 
-        Logs POST data and returns success response.
-        """
-        content_length = int(self.headers.get("Content-Length", 0))
-        post_data = self.rfile.read(content_length) if content_length > 0 else b""
+            Logs POST data and returns success response.
+            """
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length) if content_length > 0 else b""
 
-        logger.info(
-            f"POST request from {self.client_address[0]}: {post_data.decode('utf-8', errors='ignore')}"
-        )
+            logger.info(
+                f"POST request from {self.client_address[0]}: {post_data.decode('utf-8', errors='ignore')}"
+            )
 
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"OK")
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
+
+    return PayloadRequestHandler
 
 
 class PayloadServer(BaseServerFacade):
@@ -120,18 +133,17 @@ class PayloadServer(BaseServerFacade):
         )
 
         self.payload_path = Path(payload_path) if payload_path else None
+        self.payload_path.mkdir(
+            parents=True, exist_ok=True
+        ) if self.payload_path else None
         self.payloads: dict[str, bytes] = {}  # path -> content
         self.hits: dict[str, int] = {}  # path -> count
 
         if self.payload_path and not self.payload_path.exists():
             logger.warning(f"Payload file {self.payload_path} does not exist")
 
-        self._server = self._create_server(PayloadRequestHandler)
-
-        # Store payload path in server instance for handler access
-        setattr(self._server, "payload_path", self.payload_path)
-        setattr(self._server, "payloads", self.payloads)
-        setattr(self._server, "hits", self.hits)
+        handler = build_payload_handler(self.payload_path, self.payloads, self.hits)
+        self._server = self._create_server(handler)
 
     def add_payload(
         self, path: str, content: str | None = None, file: str | Path | None = None

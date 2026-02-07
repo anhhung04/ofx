@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=workflow.schema.json
+name: Durable Test
+
+defaults:
+  durable:
+    enabled: true
+    resume: true
+    backend: file
+
+jobs:
+  durable_job:
+    steps:
+      - name: Write durable marker
+        run: printf "run\n" >> {{ ctx.output_path }}/durable.txt

@@ -131,6 +131,27 @@ jobs:
 
 ---
 
+## 6️⃣ Durable Execution (Resume)
+
+Durable execution writes checkpoints to the output directory so you can resume
+from the last completed step after a restart:
+
+```bash
+ofx flow run basic-recon --output ./runs/basic-recon --durable --resume
+```
+
+To use Redis-backed checkpoints:
+
+```bash
+ofx flow run basic-recon \
+  --output ./runs/basic-recon \
+  --durable \
+  --durable-backend redis \
+  --durable-redis-prefix ofx:durable:
+```
+
+---
+
 ## 📋 Command Reference
 
 | Command | Description |

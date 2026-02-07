@@ -54,6 +54,25 @@ jobs:
 
 ---
 
+## 🧱 Durable Execution
+
+Enable durable checkpoints and resume behavior under `defaults.durable`:
+
+```yaml
+defaults:
+  durable:
+    enabled: true
+    resume: true
+    backend: file   # file or redis
+    redis_prefix: ofx:durable:
+```
+
+**Notes:**
+- Durable checkpoints are stored per run output directory when using the file backend.
+- Use `backend: redis` to centralize checkpoints in Redis for multi-runner environments.
+
+---
+
 ## ▶️ Running Workflows
 
 ```bash
@@ -84,7 +103,7 @@ ofx flow run my-workflow.yml
 # Absolute path
 ofx flow run /path/to/workflow.yml
 
-# From workflow directories (~/.local/share/ofx/workflows)
+# From workflow directories (~/.ofx/workflows)
 ofx flow run my-workflow
 ```
 

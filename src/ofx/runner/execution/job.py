@@ -191,10 +191,16 @@ class MatrixJobRunner(BaseRunner[Job]):
         super().__init__(job, ctx, parent)
         self.name = f"Matrix{self.name}"
 
+    def _produce_log(self, message: Any) -> str:
+        message_str = str(message)
+        msg = f"'{self.model.jid}' › {message_str}"
+        if self.parent:
+            return self.parent._produce_log(msg)
+        return msg
+
     async def _do_run(self) -> None:
         """Run all matrix combinations with optional parallelism limit"""
         if not self._matrix_combinations:
-            self._state_machine.transition(RunnerStatus.COMPLETED)
             return
 
         strategy = self.model.strategy
@@ -228,10 +234,7 @@ class MatrixJobRunner(BaseRunner[Job]):
                 errors.append(f"Matrix combination {i}: {result.error or 'Failed'}")
 
         if failed:
-            self._state_machine.transition(RunnerStatus.FAILED)
-            self._error = "; ".join(errors)
-        else:
-            self._state_machine.transition(RunnerStatus.COMPLETED)
+            raise RuntimeError("; ".join(errors))
 
     async def _run_single_job(self, matrix_idx: int, matrix_values: dict[str, Any]):
         """Run a single job instance with specific matrix values"""

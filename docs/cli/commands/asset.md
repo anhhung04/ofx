@@ -106,7 +106,7 @@ ofx asset delete outdated-collection
 ## Asset Collection Structure
 
 ```
-~/.local/share/ofx/workflows/
+~/.ofx/workflows/
 └── recon-tools/
     ├── subdomain-enum.yaml
     ├── port-scan.yaml
@@ -148,13 +148,13 @@ workflows:
 Export collection:
 
 ```bash
-tar -czf recon-tools.tar.gz ~/.local/share/ofx/workflows/recon-tools/
+tar -czf recon-tools.tar.gz ~/.ofx/workflows/recon-tools/
 ```
 
 Import collection:
 
 ```bash
-tar -xzf recon-tools.tar.gz -C ~/.local/share/ofx/workflows/
+tar -xzf recon-tools.tar.gz -C ~/.ofx/workflows/
 ```
 
 ## See Also

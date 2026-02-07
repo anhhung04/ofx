@@ -22,6 +22,10 @@ ofx x run <workflow.yml> [OPTIONS]      # Shorthand alias
 | `--output <dir>` | Output directory for artifacts |
 | `--dry-run` | Validate without executing |
 | `--debug` | Show verbose execution logs |
+| `--durable/--no-durable` | Enable or disable durable checkpoints |
+| `--resume/--no-resume` | Resume from last completed step when checkpoints exist |
+| `--durable-backend <file|redis>` | Durable backend to use |
+| `--durable-redis-prefix <prefix>` | Redis key prefix for durable checkpoints |
 
 ---
 
@@ -46,6 +50,23 @@ ofx flow run exploit.yml \
   --input target=10.0.0.1 \
   --secret API_KEY=xxx \
   --output results/
+```
+
+### Durable Execution (Resume)
+```bash
+ofx flow run scan.yml \
+  --output results/ \
+  --durable \
+  --resume
+```
+
+### Durable Execution with Redis
+```bash
+ofx flow run scan.yml \
+  --output results/ \
+  --durable \
+  --durable-backend redis \
+  --durable-redis-prefix ofx:durable:
 ```
 
 ### Dry Run (Validate Only)

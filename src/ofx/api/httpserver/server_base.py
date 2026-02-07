@@ -53,9 +53,7 @@ class BaseServerFacade(ABC):
         self.certfile = certfile
         self._server: PHTTPServer | None = None
 
-    def _create_server(
-        self, handler: type[BaseHTTPRequestHandler]
-    ) -> "PHTTPServer":
+    def _create_server(self, handler: type[BaseHTTPRequestHandler]) -> PHTTPServer:
         """Create a PHTTPServer instance with the specified handler.
 
         Args:

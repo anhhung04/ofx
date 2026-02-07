@@ -144,7 +144,7 @@
 - JSON file storage with file locking
 - Survives process restarts
 - Single-node deployments
-- Default path: `~/.local/share/ofx/job_registry.json`
+- Default path: `~/.ofx/job_registry.json`
 
 ### Redis Adapter (`RedisJobRegistry`)
 - Optional (requires `redis>=5.0.0`)

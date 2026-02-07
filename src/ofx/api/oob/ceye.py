@@ -10,7 +10,7 @@ from pathlib import Path
 
 from ofx.api.exploitation.exploit.utils import get_middle_text, random_str
 from ofx.api.http import requests
-from ofx.settings import settings
+from ofx.settings import CONFIG_FILE, settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -41,7 +41,7 @@ class CEye:
         """Initialize CEye client with optional configuration.
 
         Args:
-            conf_path: Path to config file (default: ~/.local/share/ofx/config.ini)
+            conf_path: Path to config file (default: ~/.ofx/config.ini)
             token: CEye API token (will prompt if not provided)
         """
         self.url = "http://api.ceye.io/v1"
@@ -50,7 +50,7 @@ class CEye:
         self.token = token
 
         if conf_path is None:
-            conf_path = Path.home() / ".local" / "share" / "ofx" / "config.ini"
+            conf_path = CONFIG_FILE
 
         self.conf_path = conf_path
         self.parser = ConfigParser()
@@ -231,7 +231,7 @@ class CEye:
         if type in ["request", "http"]:
             url = f"http://{ranstr}.{domain}/{ranstr}{value}{ranstr}"
         elif type == "dns":
-            clean_value = re.sub(r'\W', '', value)
+            clean_value = re.sub(r"\W", "", value)
             url = f"{ranstr}{clean_value}{ranstr}.{domain}"
         return {"url": url, "flag": ranstr}
 

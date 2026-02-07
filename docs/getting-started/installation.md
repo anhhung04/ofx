@@ -1,60 +1,22 @@
 # Installation
 
-Install OFX using your preferred method.
+OFX distributes official packages for Debian/Ubuntu only. Use source installs for other environments.
 
-## Quick Install (pip/uv)
-
-```bash
-# Using pip
-pip install ofx
-
-# Using uv (recommended)
-uv pip install ofx
-
-# Verify
-ofx --version
-```
-
-## Package Managers
-
-### Debian/Ubuntu (.deb)
+## Debian/Ubuntu (.deb)
 
 ```bash
 # Download from releases
-wget https://github.com/devhah4/ofx/releases/latest/download/ofx_0.3.2-1_all.deb
+wget https://github.com/devhah4/ofx/releases/latest/download/ofx_0.4.0-1_all.deb
 
 # Install
-sudo dpkg -i ofx_0.3.2-1_all.deb
+sudo dpkg -i ofx_0.4.0-1_all.deb
 sudo apt-get install -f  # Fix any missing dependencies
 
 # Verify
 ofx --version
 ```
 
-### Fedora/RHEL/CentOS (.rpm)
-
-```bash
-# Download from releases
-wget https://github.com/devhah4/ofx/releases/latest/download/ofx-0.3.2-1.noarch.rpm
-
-# Install
-sudo rpm -i ofx-0.3.2-1.noarch.rpm
-
-# Verify
-ofx --version
-```
-
-### Windows (winget)
-
-```powershell
-# Install via winget
-winget install redteam.OFX
-
-# Verify
-ofx --version
-```
-
-### From Source
+## From Source (All Platforms)
 
 ```bash
 # Clone repository
@@ -64,9 +26,6 @@ cd ofx
 # Install with uv
 uv sync
 uv run ofx --version
-
-# Or install globally
-pip install -e .
 ```
 
 ## System-Wide Python Import
@@ -85,7 +44,7 @@ print(RunnerRegistry.list_runners())
 ## Requirements
 
 - **Python:** 3.12 or higher
-- **OS:** Linux, macOS, Windows
+- **OS:** Linux (Debian/Ubuntu) for packages; source installs are supported on other platforms
 
 ## Optional Dependencies
 

@@ -38,6 +38,34 @@ def run(
             help="Enable performance profiling and output timing information.",
         ),
     ] = False,
+    durable: Annotated[
+        bool | None,
+        typer.Option(
+            "--durable/--no-durable",
+            help="Enable or disable durable execution checkpoints.",
+        ),
+    ] = None,
+    resume: Annotated[
+        bool | None,
+        typer.Option(
+            "--resume/--no-resume",
+            help="Resume from last completed step when checkpoints exist.",
+        ),
+    ] = None,
+    durable_backend: Annotated[
+        str | None,
+        typer.Option(
+            "--durable-backend",
+            help="Durable backend to use: file or redis.",
+        ),
+    ] = None,
+    durable_redis_prefix: Annotated[
+        str | None,
+        typer.Option(
+            "--durable-redis-prefix",
+            help="Redis key prefix for durable checkpoints.",
+        ),
+    ] = None,
 ):
     from ofx.commands.flow.run import FlowRunHandler
 
@@ -47,6 +75,10 @@ def run(
             input=input,
             output=output,
             profile=profile,
+            durable=durable,
+            resume=resume,
+            durable_backend=durable_backend,
+            durable_redis_prefix=durable_redis_prefix,
         ).run()
     )
 

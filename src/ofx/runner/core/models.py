@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ofx.models.config import DurableRunConfig
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS
 from ofx.utils.env import populate_env
 
@@ -40,6 +41,10 @@ class RunContext(BaseModel):
     workflow_dirs: list[Path] = Field(
         default=DEFAULT_WORKFLOWS_DIRS,
         description="Directories to search for workflow files",
+    )
+    durable: DurableRunConfig | None = Field(
+        default=None,
+        description="Durable execution configuration",
     )
 
 

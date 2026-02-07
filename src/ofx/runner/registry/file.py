@@ -8,7 +8,7 @@ from typing import Any
 from filelock import FileLock
 
 from ofx.runner.registry.base import RegistryAdapter
-from ofx.settings import settings
+from ofx.settings import BASE_DATA_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -25,10 +25,10 @@ class FileRegistry(RegistryAdapter):
 
         Args:
             filepath: Path to the JSON file for storing job data.
-                     Defaults to ~/.local/share/ofx/job_registry.json
+                     Defaults to ~/.ofx/job_registry.json
         """
         if filepath is None:
-            filepath = Path.home() / ".local" / "share" / "ofx" / "job_registry.json"
+            filepath = BASE_DATA_DIR / "job_registry.json"
 
         self.filepath = Path(filepath)
         self.filepath.parent.mkdir(parents=True, exist_ok=True)

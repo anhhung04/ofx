@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import tempfile
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
@@ -13,186 +12,185 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class ExfilRequestHandler(BaseHTTPRequestHandler):
-    """Custom HTTP request handler for ExfilServer.
+def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
+    """Create a request handler with injected upload directory."""
 
-    Handles file uploads via POST requests and serves uploaded files via GET.
-    """
+    class ExfilRequestHandler(BaseHTTPRequestHandler):
+        """Custom HTTP request handler for ExfilServer.
 
-    def log_message(self, format: str, *args: object) -> None:
-        logger.info(
-            f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
-        )
-
-    def do_GET(self) -> None:
-        """Handle GET requests for listing or downloading uploaded files.
-
-        Supports:
-        - / : List all uploaded files
-        - /<filename> : Download specific file
+        Handles file uploads via POST requests and serves uploaded files via GET.
         """
-        if self.path == "/":
-            self._list_files()
-        else:
-            filename = self.path.lstrip("/")
-            self._serve_file(filename)
 
-    def do_POST(self) -> None:
-        """Handle POST requests for file uploads.
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            self._upload_dir = upload_dir
+            super().__init__(*args, **kwargs)
 
-        Expects multipart/form-data with file uploads.
-        Files are saved to the server's upload directory.
-        """
-        content_type = self.headers.get("Content-Type", "")
-        if not content_type.startswith("multipart/form-data"):
-            self.send_error(400, "Expected multipart/form-data")
-            return
+        def log_message(self, format: str, *args: object) -> None:
+            logger.info(
+                f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
+            )
 
-        content_length = int(self.headers.get("Content-Length", 0))
-        if content_length == 0:
-            self.send_error(400, "No content provided")
-            return
+        def do_GET(self) -> None:
+            """Handle GET requests for listing or downloading uploaded files.
 
-        body = self.rfile.read(content_length)
-        boundary = self._get_boundary(content_type)
+            Supports:
+            - / : List all uploaded files
+            - /<filename> : Download specific file
+            """
+            if self.path == "/":
+                self._list_files()
+            else:
+                filename = self.path.lstrip("/")
+                self._serve_file(filename)
 
-        if not boundary:
-            self.send_error(400, "Invalid multipart data")
-            return
+        def do_POST(self) -> None:
+            """Handle POST requests for file uploads.
 
-        files_saved = self._parse_multipart(body, boundary)
+            Expects multipart/form-data with file uploads.
+            Files are saved to the server's upload directory.
+            """
+            content_type = self.headers.get("Content-Type", "")
+            if not content_type.startswith("multipart/form-data"):
+                self.send_error(400, "Expected multipart/form-data")
+                return
 
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(f"Files uploaded: {', '.join(files_saved)}".encode())
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length == 0:
+                self.send_error(400, "No content provided")
+                return
 
-    def _get_boundary(self, content_type: str) -> str | None:
-        """Extract boundary from Content-Type header."""
-        for part in content_type.split(";"):
-            part = part.strip()
-            if part.startswith("boundary="):
-                boundary = part.split("=", 1)[1].strip()
-                if boundary.startswith('"') and boundary.endswith('"'):
-                    boundary = boundary[1:-1]
-                return boundary
-        return None
+            body = self.rfile.read(content_length)
+            boundary = self._get_boundary(content_type)
 
-    def _parse_multipart(self, body: bytes, boundary: str) -> list[str]:
-        """Parse multipart form data and save files."""
-        boundary_bytes = f"--{boundary}".encode()
-        parts = body.split(boundary_bytes)
+            if not boundary:
+                self.send_error(400, "Invalid multipart data")
+                return
 
-        files_saved = []
-        upload_dir = getattr(
-            self.server, "upload_dir", Path(tempfile.gettempdir()) / "ofx_exfil"
-        )
+            files_saved = self._parse_multipart(body, boundary)
 
-        for part in parts:
-            if not part or part == b"--\r\n" or part == b"--":
-                continue
-
-            headers_end = part.find(b"\r\n\r\n")
-            if headers_end == -1:
-                continue
-
-            headers = part[:headers_end].decode("utf-8", errors="ignore")
-            content = part[headers_end + 4 :]
-
-            # Check for Content-Disposition header
-            if "Content-Disposition: form-data;" in headers:
-                filename = None
-                for line in headers.split("\r\n"):
-                    if "filename=" in line:
-                        filename_part = line.split("filename=")[1].strip()
-                        if filename_part.startswith('"') and filename_part.endswith(
-                            '"'
-                        ):
-                            filename = filename_part[1:-1]
-                        else:
-                            filename = filename_part
-                        break
-
-                if filename:
-                    upload_dir.mkdir(parents=True, exist_ok=True)
-                    file_path = upload_dir / filename
-
-                    # Prevent directory traversal
-                    if ".." in filename or "/" in filename or "\\" in filename:
-                        logger.warning(
-                            f"Blocked potential directory traversal: {filename}"
-                        )
-                        continue
-
-                    try:
-                        with open(file_path, "wb") as f:
-                            f.write(content.rstrip(b"\r\n"))
-                        files_saved.append(filename)
-                        logger.info(
-                            f"File uploaded: {filename} from {self.client_address[0]}"
-                        )
-                    except Exception as e:
-                        logger.error(f"Failed to save file {filename}: {e}")
-
-        return files_saved
-
-    def _list_files(self) -> None:
-        """List all uploaded files."""
-        upload_dir = getattr(
-            self.server, "upload_dir", Path(tempfile.gettempdir()) / "ofx_exfil"
-        )
-
-        if not upload_dir.exists():
             self.send_response(200)
             self.send_header("Content-type", "text/plain")
             self.end_headers()
-            self.wfile.write(b"No files uploaded yet.")
-            return
+            self.wfile.write(f"Files uploaded: {', '.join(files_saved)}".encode())
 
-        files = [f.name for f in upload_dir.iterdir() if f.is_file()]
+        def _get_boundary(self, content_type: str) -> str | None:
+            """Extract boundary from Content-Type header."""
+            for part in content_type.split(";"):
+                part = part.strip()
+                if part.startswith("boundary="):
+                    boundary = part.split("=", 1)[1].strip()
+                    if boundary.startswith('"') and boundary.endswith('"'):
+                        boundary = boundary[1:-1]
+                    return boundary
+            return None
 
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
+        def _parse_multipart(self, body: bytes, boundary: str) -> list[str]:
+            """Parse multipart form data and save files."""
+            boundary_bytes = f"--{boundary}".encode()
+            parts = body.split(boundary_bytes)
 
-        if files:
-            self.wfile.write("Uploaded files:\n".encode())
-            for filename in files:
-                self.wfile.write(f"- {filename}\n".encode())
-        else:
-            self.wfile.write(b"No files uploaded yet.")
+            files_saved = []
 
-    def _serve_file(self, filename: str) -> None:
-        """Serve a specific uploaded file."""
-        upload_dir = getattr(
-            self.server, "upload_dir", Path(tempfile.gettempdir()) / "ofx_exfil"
-        )
-        file_path = upload_dir / filename
+            for part in parts:
+                if not part or part == b"--\r\n" or part == b"--":
+                    continue
 
-        # Prevent directory traversal
-        if ".." in filename or "/" in filename or "\\" in filename:
-            self.send_error(403, "Access denied")
-            return
+                headers_end = part.find(b"\r\n\r\n")
+                if headers_end == -1:
+                    continue
 
-        if not file_path.exists() or not file_path.is_file():
-            self.send_error(404, "File not found")
-            return
+                headers = part[:headers_end].decode("utf-8", errors="ignore")
+                content = part[headers_end + 4 :]
 
-        try:
+                # Check for Content-Disposition header
+                if "Content-Disposition: form-data;" in headers:
+                    filename = None
+                    for line in headers.split("\r\n"):
+                        if "filename=" in line:
+                            filename_part = line.split("filename=")[1].strip()
+                            if filename_part.startswith('"') and filename_part.endswith(
+                                '"'
+                            ):
+                                filename = filename_part[1:-1]
+                            else:
+                                filename = filename_part
+                            break
+
+                    if filename:
+                        self._upload_dir.mkdir(parents=True, exist_ok=True)
+                        file_path = self._upload_dir / filename
+
+                        # Prevent directory traversal
+                        if ".." in filename or "/" in filename or "\\" in filename:
+                            logger.warning(
+                                f"Blocked potential directory traversal: {filename}"
+                            )
+                            continue
+
+                        try:
+                            with open(file_path, "wb") as f:
+                                f.write(content.rstrip(b"\r\n"))
+                            files_saved.append(filename)
+                            logger.info(
+                                f"File uploaded: {filename} from {self.client_address[0]}"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to save file {filename}: {e}")
+
+            return files_saved
+
+        def _list_files(self) -> None:
+            """List all uploaded files."""
+            if not self._upload_dir.exists():
+                self.send_response(200)
+                self.send_header("Content-type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"No files uploaded yet.")
+                return
+
+            files = [f.name for f in self._upload_dir.iterdir() if f.is_file()]
+
             self.send_response(200)
-            self.send_header("Content-type", "application/octet-stream")
-            self.send_header(
-                "Content-Disposition", f'attachment; filename="{filename}"'
-            )
+            self.send_header("Content-type", "text/plain")
             self.end_headers()
 
-            with open(file_path, "rb") as f:
-                self.wfile.write(f.read())
+            if files:
+                self.wfile.write("Uploaded files:\n".encode())
+                for filename in files:
+                    self.wfile.write(f"- {filename}\n".encode())
+            else:
+                self.wfile.write(b"No files uploaded yet.")
 
-            logger.info(f"File served: {filename} to {self.client_address[0]}")
-        except Exception as e:
-            logger.error(f"Failed to serve file {filename}: {e}")
-            self.send_error(500, "Internal server error")
+        def _serve_file(self, filename: str) -> None:
+            """Serve a specific uploaded file."""
+            file_path = self._upload_dir / filename
+
+            # Prevent directory traversal
+            if ".." in filename or "/" in filename or "\\" in filename:
+                self.send_error(403, "Access denied")
+                return
+
+            if not file_path.exists() or not file_path.is_file():
+                self.send_error(404, "File not found")
+                return
+
+            try:
+                self.send_response(200)
+                self.send_header("Content-type", "application/octet-stream")
+                self.send_header(
+                    "Content-Disposition", f'attachment; filename="{filename}"'
+                )
+                self.end_headers()
+
+                with open(file_path, "rb") as f:
+                    self.wfile.write(f.read())
+
+                logger.info(f"File served: {filename} to {self.client_address[0]}")
+            except Exception as e:
+                logger.error(f"Failed to serve file {filename}: {e}")
+                self.send_error(500, "Internal server error")
+
+    return ExfilRequestHandler
 
 
 class ExfilServer(BaseServerFacade):
@@ -247,10 +245,8 @@ class ExfilServer(BaseServerFacade):
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Upload directory: {self.upload_dir}")
 
-        self._server = self._create_server(ExfilRequestHandler)
-
-        # Store upload directory in server instance for handler access
-        self._server.upload_dir = self.upload_dir
+        handler = build_exfil_handler(self.upload_dir)
+        self._server = self._create_server(handler)
 
     @property
     def save_dir(self) -> Path:

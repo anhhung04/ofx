@@ -8,11 +8,11 @@ import socket
 import ssl
 import threading
 import time
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
 from ofx.api.exploitation.exploit.utils import check_port, get_host_ip, get_host_ipv6
-from ofx.settings import settings
+from ofx.settings import BASE_DATA_DIR, TEMP_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -31,8 +31,8 @@ class BaseRequestHandler(SimpleHTTPRequestHandler):
         SimpleHTTPRequestHandler.do_HEAD(self)
 
     def log_message(self, format: str, *args: object) -> None:
-        logger.info(
-            f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
+        print(
+            f"{self.address_string()} -- [{self.log_date_time_string()}] {format % args}\n"
         )
 
 
@@ -68,7 +68,7 @@ class PHTTPServer(threading.Thread):
         is_ipv6: bool = False,
         use_https: bool = False,
         certfile: Path | None = None,
-        requestHandler: type[SimpleHTTPRequestHandler] = BaseRequestHandler,
+        requestHandler: type[BaseHTTPRequestHandler] = BaseRequestHandler,
     ):
         """Initialize HTTP server.
 
@@ -89,9 +89,7 @@ class PHTTPServer(threading.Thread):
         if self.https:
             self.scheme = "https"
             if certfile is None:
-                certfile = (
-                    Path.home() / ".local" / "share" / "ofx" / "tmp" / "cacert.pem"
-                )
+                certfile = TEMP_DIR / "cacert.pem"
             self._gen_cert(certfile)
         else:
             self.scheme = "http"

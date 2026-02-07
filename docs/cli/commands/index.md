@@ -55,6 +55,9 @@ ofx docs --module webshell
 # Run a workflow
 ofx flow run workflow-name
 
+# Run with durable checkpoints
+ofx flow run workflow-name --durable --resume
+
 # Validate workflow syntax
 ofx flow validate workflow-name
 

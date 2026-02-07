@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ofx.commands.ui_helpers import inputs_table
+from ofx.models.config import DurableRunConfig
 from ofx.runner import run_workflow
 from ofx.settings import (
     DEFAULT_WORKFLOWS_DIRS,
@@ -40,11 +41,19 @@ class FlowRunHandler:
         input: list[str] | None = None,
         output: str = "",
         profile: bool = False,
+        durable: bool | None = None,
+        resume: bool | None = None,
+        durable_backend: str | None = None,
+        durable_redis_prefix: str | None = None,
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
         self.output = get_tmp_dir(output)
         self.profile = profile
+        self.durable = durable
+        self.resume = resume
+        self.durable_backend = durable_backend
+        self.durable_redis_prefix = durable_redis_prefix
 
     async def run(self):
         import cProfile
@@ -68,12 +77,14 @@ class FlowRunHandler:
             if self.input:
                 console.print(Align.center(inputs_table(self.input)))
 
+            durable_overrides = self._durable_overrides()
             result = await run_workflow(
                 workflow=self.workflow_name,
                 inputs=self.input,
                 output_path=self.output,
                 workflow_search_paths=DEFAULT_WORKFLOWS_DIRS,  # type: ignore
                 quiet=False,
+                durable_overrides=durable_overrides,
             )
 
             if result.status.value == "completed":
@@ -115,3 +126,23 @@ class FlowRunHandler:
             self.input = parse_key_value_pairs(self.preprocess_input)
         except ValueError as e:
             raise e
+
+    def _durable_overrides(self) -> DurableRunConfig | None:
+        if (
+            self.durable is None
+            and self.resume is None
+            and self.durable_backend is None
+            and self.durable_redis_prefix is None
+        ):
+            return None
+
+        config = DurableRunConfig()
+        if self.durable is not None:
+            config.enabled = self.durable
+        if self.resume is not None:
+            config.resume = self.resume
+        if self.durable_backend is not None:
+            config.backend = self.durable_backend
+        if self.durable_redis_prefix is not None:
+            config.redis_prefix = self.durable_redis_prefix
+        return config
