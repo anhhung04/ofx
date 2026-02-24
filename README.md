@@ -6,6 +6,34 @@ Official distribution packages are Debian/Ubuntu .deb only. Use source installs 
 
 - **Docs:** https://anhhung04.github.io/ofx/
 
+## Virtualenv / uv import tip
+
+If you install from source in a venv or with `uv` and want `python` to import `ofx` without editable installs, drop a `.pth` file pointing at the repo `src` directory:
+
+```bash
+python3 - <<'PY'
+import sysconfig, pathlib, subprocess, os
+uv_tool_dir = subprocess.check_output(["uv", "tool", "dir"]).strip().decode()
+tool_python_path = pathlib.Path(uv_tool_dir) / "ofx" / "bin" / "python"
+tool_module_path = subprocess.check_output([tool_python_path, "-c", "import ofx; print(ofx.__path__[0])"]).strip().decode()
+print(f"OFX module path: {tool_module_path}")
+tool_modules_dir = pathlib.Path(tool_module_path).parent
+tool_modules_dir.mkdir(parents=True, exist_ok=True)
+try:
+  pth_dir = pathlib.Path(sysconfig.get_paths()["purelib"])
+  pth_dir.mkdir(parents=True, exist_ok=True)
+  (pth_dir / "ofx.pth").write_text(str(tool_modules_dir))
+except Exception as e:
+  print(f"Error writing .pth file: {e}")
+  print(f"Write to {os.environ['HOME']}/.local/lib/python{sysconfig.get_python_version()}/site-packages/ofx.pth with content: {tool_modules_dir}")
+else:
+  print(f"Wrote .pth file to {pth_dir/'ofx.pth'} pointing to {tool_modules_dir}")
+print(f"Wrote {pth_dir/'ofx.pth'}")
+PY
+```
+
+Run this from the repository root inside the target environment so `src/ofx` is added to `sys.path`.
+
 ## Install (Debian/Ubuntu)
 
 ```bash

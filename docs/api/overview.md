@@ -10,6 +10,7 @@ OFX provides comprehensive red teaming APIs to reduce scripting overhead by 80-9
 - **[Exploitation APIs](exploitation.md)** - HTTP client, shellcode generation, webshells, binary exploitation  
 - **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation, credential helpers
 - **[Evasion APIs](evasion.md)** - Payload obfuscation, command evasion
+- **Module sheets:** [DNS](dns.md) · [Service](service.md) · [Payloads](payloads.md) · [Packers](packers.md) · [Lateral](lateral.md) · [Persistence](persistence.md) · [C2](c2.md) · [Data](data.md) · [Loot](loot.md)
 
 ## Categories
 
@@ -26,6 +27,8 @@ Search engines, port scanning, service grabbing, DNS resolution, and subdomain e
 | **ZoomEye** | Cyberspace search engine | `zoomeye.search('apache')` |
 | **CEye** | OOB DNS/HTTP callback testing | `ceye.build_request('data')` |
 | **Interactsh** | OOB interaction testing | `interactsh.build_request()` |
+| **DNS** | Resolve/bruteforce subdomains | `dns.bruteforce_subdomains('corp.local', ['vpn','mail'])` |
+| **Service** | Lightweight banner grab | `service.scan_banner('10.0.0.5', 8443, tls=True)` |
 | **PHTTPServer** | Payload hosting with SSL | `server.start(daemon=True)` |
 <!--
 | **PortScanner** | Fast port discovery | `scanner.scan()` |
@@ -45,6 +48,8 @@ Exploit connectors, shellcode generation, webshells, and payload delivery.
 | **ShellcodeGenerator** | Platform-specific shellcode | `gen.generate('linux', 'x64')` |
 | **WebShell** | Web shell generation | `shell.generate('php')` |
 | **HTTPClient** | Advanced HTTP operations | `client.request(url, method='POST')` |
+| **Payloads** | Generate HTA/LNK droppers | `payloads.build_hta(url)` |
+| **Packers** | XOR/gzip/base64 packing | `packers.b64_gzip_pack(data)` |
 <!--
 | **RemoteTarget** | Socket connections | `with RemoteTarget(host, port) as r:` |
 | **BinaryAnalyzer** | Security property analysis | `analyzer.check_pie()` |
@@ -62,6 +67,11 @@ File operations, process management, cryptography, and credential handling.
 | **post** | Post-exploitation helpers | `post.detect_os(uname)` |
 | **evasion** | [Evasion helpers](evasion.md) | `evasion.obfuscate_payload(code)` |
 | **creds** | Credential helpers | `creds.ExegolHistoryDB()` |
+| **lateral** | Copy+execute via runners | `lateral.copy_and_exec('10.0.0.5', 'beacon.exe', 'C:\\Temp\\b.exe', method='smbexec')` |
+| **persistence** | Build schtasks/service/runkey commands | `persistence.schtask_command('Updater', 'C:\\Temp\\b.exe')` |
+| **c2** | Shell/listener snippets | `c2.bash_reverse_shell('10.0.0.1', 4444)` |
+| **data** | Archive/split staging | `data.archive_path('/tmp/loot')` |
+| **loot** | Loot discovery utilities | `loot.find_minidumps('/mnt/share')` |
 -->
 
 ### :material-lan: Network
