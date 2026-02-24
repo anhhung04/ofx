@@ -66,6 +66,34 @@ def run(
             help="Redis key prefix for durable checkpoints.",
         ),
     ] = None,
+    quiet: Annotated[
+        bool,
+        typer.Option(
+            "--quiet",
+            help="Suppress interactive console output (cron/headless mode).",
+        ),
+    ] = False,
+    lock: Annotated[
+        str,
+        typer.Option(
+            "--lock",
+            help="Optional lock file path to prevent overlapping runs (cron-safe).",
+        ),
+    ] = "",
+    log_format: Annotated[
+        str,
+        typer.Option(
+            "--log-format",
+            help="Log format: rich (default), json, or text.",
+        ),
+    ] = "rich",
+    wait_lock: Annotated[
+        int,
+        typer.Option(
+            "--wait-lock",
+            help="Seconds to wait for lock acquisition before failing (cron-safe).",
+        ),
+    ] = 0,
 ):
     from ofx.commands.flow.run import FlowRunHandler
 
@@ -79,6 +107,10 @@ def run(
             resume=resume,
             durable_backend=durable_backend,
             durable_redis_prefix=durable_redis_prefix,
+            quiet=quiet,
+            lock=lock,
+            log_format=log_format,
+            wait_lock=wait_lock,
         ).run()
     )
 

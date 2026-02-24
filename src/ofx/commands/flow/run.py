@@ -1,7 +1,9 @@
+import fcntl
 import json
 import logging
+import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from ofx.commands.ui_helpers import inputs_table
@@ -20,6 +22,21 @@ from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
+
+
+class JsonFormatter(logging.Formatter):
+    """Simple JSON formatter for cron-friendly logs."""
+
+    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+        payload = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname.lower(),
+            "event": record.getMessage(),
+            "logger": record.name,
+        }
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
 
 
 def get_tmp_dir(output: str = "") -> Path:
@@ -45,6 +62,10 @@ class FlowRunHandler:
         resume: bool | None = None,
         durable_backend: str | None = None,
         durable_redis_prefix: str | None = None,
+        quiet: bool = False,
+        lock: str | None = None,
+        log_format: str = "rich",
+        wait_lock: int = 0,
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
@@ -54,6 +75,10 @@ class FlowRunHandler:
         self.resume = resume
         self.durable_backend = durable_backend
         self.durable_redis_prefix = durable_redis_prefix
+        self.quiet = quiet
+        self.lock_path = Path(lock).expanduser() if lock else None
+        self.log_format = log_format
+        self.wait_lock = max(wait_lock, 0)
 
     async def run(self):
         import cProfile
@@ -63,6 +88,7 @@ class FlowRunHandler:
         from rich.align import Align
 
         start_time = time.time()
+        lock_fd: int | None = None
 
         if self.profile:
             logger.info("Profiling enabled (detailed timing data will be collected).")
@@ -70,11 +96,13 @@ class FlowRunHandler:
             profiler.enable()
 
         try:
+            self._configure_logging()
+            lock_fd = self._acquire_lock()
             self._process_inputs()
 
             logger.info("Workflow: %s", self.workflow_name)
             logger.info("Output: %s", self.output.as_posix())
-            if self.input:
+            if self.input and not self.quiet:
                 console.print(Align.center(inputs_table(self.input)))
 
             durable_overrides = self._durable_overrides()
@@ -83,7 +111,7 @@ class FlowRunHandler:
                 inputs=self.input,
                 output_path=self.output,
                 workflow_search_paths=DEFAULT_WORKFLOWS_DIRS,  # type: ignore
-                quiet=False,
+                quiet=self.quiet,
                 durable_overrides=durable_overrides,
             )
 
@@ -93,6 +121,8 @@ class FlowRunHandler:
                 logger.error("Workflow failed")
 
         finally:
+            if lock_fd is not None:
+                self._release_lock(lock_fd)
             if self.profile:
                 profiler.disable()
                 end_time = time.time()
@@ -146,3 +176,54 @@ class FlowRunHandler:
         if self.durable_redis_prefix is not None:
             config.redis_prefix = self.durable_redis_prefix
         return config
+
+    def _configure_logging(self) -> None:
+        if self.log_format not in {"rich", "json", "text"}:
+            return
+        if self.log_format == "rich":
+            return
+
+        branding_logger = logging.getLogger(settings.app_branding)
+        branding_logger.handlers.clear()
+        branding_logger.propagate = False
+
+        handler = logging.StreamHandler()
+        if self.log_format == "json":
+            handler.setFormatter(JsonFormatter())
+        else:
+            handler.setFormatter(
+                logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+            )
+
+        branding_logger.addHandler(handler)
+        branding_logger.setLevel(logging.INFO)
+
+    def _acquire_lock(self) -> int | None:
+        if not self.lock_path:
+            return None
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+        deadline = time.time() + self.wait_lock
+        while True:
+            try:
+                fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except OSError as exc:  # pragma: no cover - platform specific
+                if time.time() >= deadline:
+                    os.close(fd)
+                    raise RuntimeError(
+                        f"Another workflow run is in progress (lock: {self.lock_path})."
+                    ) from exc
+                time.sleep(1)
+        os.write(fd, str(os.getpid()).encode())
+        return fd
+
+    def _release_lock(self, fd: int) -> None:
+        try:
+            os.close(fd)
+        finally:
+            if self.lock_path:
+                try:
+                    self.lock_path.unlink(missing_ok=True)
+                except OSError:
+                    pass

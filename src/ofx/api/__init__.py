@@ -13,7 +13,12 @@ from . import (
     search,
     strings,
     utils,
+    dns,
+    service,
+    payloads,
+    packers,
 )
+from . import lateral, persistence, c2, data, loot
 
 __all__ = [
     "http",
@@ -28,4 +33,13 @@ __all__ = [
     "post",
     "evasion",
     "creds",
+    "dns",
+    "service",
+    "payloads",
+    "packers",
+    "lateral",
+    "persistence",
+    "c2",
+    "data",
+    "loot",
 ]

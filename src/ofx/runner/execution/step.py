@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
+from random import uniform
 from pathlib import Path
 from typing import Any
 
@@ -70,7 +71,6 @@ class StepRunner(BaseRunner[Step]):
         Execute the step's action with retry logic, timeout handling.
         """
         max_attempts = self.model.retry + 1
-        delay = self.model.retry_delay
         timeout_seconds = self.model.timeout * 60
 
         last_res = None
@@ -90,8 +90,14 @@ class StepRunner(BaseRunner[Step]):
                 raise RuntimeError(step_timeout_error(self.model.timeout)) from e
             except Exception as e:
                 if attempt < max_attempts - 1:
-                    self._log_info(f"Retrying in {delay}s...")
-                    await asyncio.sleep(delay)
+                    next_delay = self._retry_delay_seconds(
+                        attempt=attempt,
+                        base_delay=self.model.retry_delay,
+                    )
+                    self._log_info(
+                        f"Retrying in {next_delay:.2f}s (attempt {attempt + 2}/{max_attempts})..."
+                    )
+                    await asyncio.sleep(next_delay)
                 else:
                     if last_res:
                         await self._apply_run_result(last_res)
@@ -316,6 +322,12 @@ class StepRunner(BaseRunner[Step]):
         await self.reg_set(
             RunnerRegistryKeys.RESULT, res.model_dump(exclude={"outputs"})
         )
+
+    def _retry_delay_seconds(self, attempt: int, base_delay: int) -> float:
+        """Compute exponential backoff with jitter capped to 5 minutes."""
+        backoff = base_delay * (2**attempt)
+        delay = min(backoff, 300)
+        return delay * uniform(0.5, 1.0)
 
     def _resolve_working_dir(self) -> Path:
         step = self.model
