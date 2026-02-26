@@ -5,16 +5,14 @@ from pathlib import Path
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
 
-
 class ProjectManager:
-    DEFAULT_PROJECT_PATH = getenv("OFX_PROJECTS_PATH", DEFAULT_PROJECTS_PATH)
-
     @classmethod
     def _get_default_path(cls) -> Path:
         """Get default project path as Path object."""
-        if isinstance(cls.DEFAULT_PROJECT_PATH, Path):
-            return cls.DEFAULT_PROJECT_PATH
-        return Path(cls.DEFAULT_PROJECT_PATH)
+        path = getenv("OFX_PROJECTS_PATH", DEFAULT_PROJECTS_PATH)
+        if isinstance(path, Path):
+            return path
+        return Path(path)
 
     @classmethod
     def resolve_path(cls, project_arg: str) -> str:
