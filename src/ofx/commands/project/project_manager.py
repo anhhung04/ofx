@@ -1,11 +1,13 @@
 import shutil
+
+from os import getenv
 from pathlib import Path
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
 
 
 class ProjectManager:
-    DEFAULT_PROJECT_PATH = DEFAULT_PROJECTS_PATH
+    DEFAULT_PROJECT_PATH = getenv("OFX_PROJECTS_PATH", DEFAULT_PROJECTS_PATH)
 
     @classmethod
     def _get_default_path(cls) -> Path:

@@ -38,7 +38,25 @@ def add_aliases():
             )
 
 
-app.callback()(print_banner)
+
+# Global callback to inject environment variables before any command runs
+# Store envs parsed from -e
+_cli_env_vars = {}
+
+def inject_env_vars(ctx: typer.Context, e: list[str] = typer.Option([], "-e", "--env", help="Inject environment variable (KEY=VAL)", show_default=False)):
+    import os
+    global _cli_env_vars
+    for env in e:
+        try:
+            key, value = env.split("=", 1)
+            os.environ[key] = value
+            _cli_env_vars[key] = value
+        except ValueError:
+            print_error("Invalid environment variable format", f"Expected KEY=VAL, got: {env}")
+            raise typer.Exit(code=1)    
+    print_banner()
+
+app.callback()(inject_env_vars)
 
 
 def _register_commands():
