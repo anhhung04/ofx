@@ -181,16 +181,18 @@ This example demonstrates a multi-job workflow that takes a domain, finds subdom
 ```yaml
 name: Comprehensive Web Recon
 
-inputs:
-  domain:
-    description: The target domain to scan
-    required: true
+dispatch:
+  inputs:
+    domain:
+      description: The target domain to scan
+      required: true
 
-secrets:
-  FOFA_USER:
-    required: false
-  FOFA_TOKEN:
-    required: false
+call:
+  secrets:
+    FOFA_USER:
+      required: false
+    FOFA_TOKEN:
+      required: false
 
 jobs:
   discover_subdomains:

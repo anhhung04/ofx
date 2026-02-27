@@ -251,11 +251,12 @@ Matrix values can use workflow inputs:
 
 ```yaml
 name: Parameterized Matrix
-workflow_dispatch:
+dispatch:
   inputs:
     platforms:
       type: array
       default: ["linux", "windows"]
+```
 
 jobs:
   build:

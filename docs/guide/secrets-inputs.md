@@ -6,10 +6,19 @@ How to declare, pass, and use runtime parameters and sensitive values in OFX wor
 ## Inputs
 
 ```yaml
-inputs:
-  target: { required: true }
-  ports: { default: "80,443" }
+dispatch:
+  inputs:
+    target: { required: true, type: string, description: "Target host" }
+    ports: { default: "80,443", type: string }
+    debug: { default: false, type: boolean }
 ```
+
+**Input Properties:**
+- `required` (bool): Whether the input must be provided. Wait, I will use a bulleted list.
+- `type` (str): Allowed types are `string`, `number`, `array`, `object`, `boolean`. Default is `string`.
+- `default` (Any): Default value if not provided.
+- `description` (str): Description of the input.
+- `alias` (str|list): Alias(es) for mapping inputs in workflow calls.
 
 - Provide at run time: `ofx flow run myflow --input target=example.com --input ports=22,443`
 - From Python: `RunContext(inputs={"target": "example.com"})`
@@ -19,9 +28,14 @@ inputs:
 ## Secrets
 
 ```yaml
-secrets:
-  API_KEY: { required: true }
+call:
+  secrets:
+    API_KEY: { required: true, type: string }
 ```
+
+**Secret Properties:**
+- `required` (bool): Whether the secret must be provided.
+- `type` (str): Allowed types are `string`, `number`, `array`, `object`, `boolean`. Default is `string`.
 
 - Store once: `ofx secret set API_KEY=...` (stored, masked)
 - Provide per run: `--secret API_KEY=...`
@@ -54,14 +68,15 @@ secrets:
 ```yaml
 name: Comprehensive Scan
 
-inputs:
-  target:
-    description: "Target hostname or IP address to scan"
-    required: true
-  ports:
-    default: "80,443"
-  output_format:
-    default: "xml"
+dispatch:
+  inputs:
+    target:
+      description: "Target hostname or IP address to scan"
+      required: true
+    ports:
+      default: "80,443"
+    output_format:
+      default: "xml"
 
 jobs:
   scan:
@@ -79,13 +94,15 @@ jobs:
 ```yaml
 name: Multi-Service Integration
 
-secrets:
-  SHODAN_API_KEY: { required: false }
-  CENSYS_API_ID: { required: false }
-  CENSYS_API_SECRET: { required: false }
+call:
+  secrets:
+    SHODAN_API_KEY: { required: false }
+    CENSYS_API_ID: { required: false }
+    CENSYS_API_SECRET: { required: false }
 
-inputs:
-  target: { required: true }
+dispatch:
+  inputs:
+    target: { required: true }
 
 jobs:
   passive_recon:

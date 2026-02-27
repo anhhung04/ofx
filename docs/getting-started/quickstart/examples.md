@@ -21,10 +21,11 @@ Run: `ofx flow run Hello World` (save as `hello-world.yml`). Expected: a single 
 ## Example 2: Scan a Target
 ```yaml
 name: Scan Target
-inputs:
-  target:
-    description: Target to scan
-    default: "localhost"
+dispatch:
+  inputs:
+    target:
+      description: Target to scan
+      default: "localhost"
 jobs:
   scan:
     name: Network Scan

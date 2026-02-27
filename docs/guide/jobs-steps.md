@@ -13,7 +13,7 @@ jobs:
   scan:
     needs: []                  # Dependencies (empty = parallel)
     run_if: success()           # Optional conditional
-    envs:
+ env:
       LOG_LEVEL: INFO          # Job-wide environment
     steps:
       - run: nmap {{ inputs.target }}
@@ -28,6 +28,8 @@ jobs:
 | `needs` | list\|str | Job dependencies (for ordering) |
 | `run_if` | bool\|str | Conditional execution (alias: `if`) |
 | `strategy` | object | Matrix strategy config |
+| `max_parallel` | int | Max parallel matrix jobs (alias: `max-parallel`) |
+| `fail_fast` | bool | Fail matrix on first job failure (alias: `fail-fast`) |
 | `envs` | dict | Environment variables for all steps |
 | `outputs` | dict | Job outputs (template-resolved) |
 | `defaults` | object | Default run config overrides |
@@ -76,7 +78,7 @@ steps:
     timeout: 30
     retry: 1
     retry_delay: 5
-    envs:
+ env:
       MODE: fast
     working_directory: ./scans
 ```
@@ -100,9 +102,21 @@ steps:
     script: |
       import json
       
-        data = {"target": "{{ inputs.target }}"}
-        with open("{{ ctx.output_path }}/data.json", "w") as f:
-          json.dump(data, f)
+      data = {"target": "{{ inputs.target }}"}
+      with open("{{ ctx.output_path }}/data.json", "w") as f:
+        json.dump(data, f)
+```
+
+### Python Script Files (`script_file`)
+
+Execute an external Python script file. Paths are resolved relative to the workflow directory unless absolute.
+
+```yaml
+steps:
+  - name: Run complex analysis
+    script_file: scripts/analyze_results.py
+    env:
+      THRESHOLD: "0.95"
 ```
 
 ### Inter-Step Communication
@@ -134,14 +148,14 @@ steps:
     script: |
       import json
       data = {"ports": [80, 443, 8080]}
-        with open("{{ ctx.output_path }}/data.json", "w") as f:
-          json.dump(data, f)
+      with open("{{ ctx.output_path }}/data.json", "w") as f:
+        json.dump(data, f)
 
   - name: Use data
     script: |
       import json
-        with open("{{ ctx.output_path }}/data.json") as f:
-          data = json.load(f)
+      with open("{{ ctx.output_path }}/data.json") as f:
+        data = json.load(f)
       print(f"Ports: {data['ports']}")
 ```
 

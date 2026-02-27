@@ -408,13 +408,14 @@ server_v6.start(daemon=True)
 ```yaml
 name: Asset Reconnaissance
 
-inputs:
-  target_query:
-    description: "FOFA search query"
-    required: true
-  max_targets:
-    description: "Maximum targets to scan"
-    default: 50
+dispatch:
+  inputs:
+    target_query:
+      description: "FOFA search query"
+      required: true
+    max_targets:
+      description: "Maximum targets to scan"
+      default: 50
 
 jobs:
   discover:

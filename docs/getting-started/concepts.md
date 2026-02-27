@@ -12,13 +12,15 @@ A workflow is a YAML file with these key sections:
 name: my-workflow
 description: Optional description
 
-inputs:          # User-provided parameters
-  target:
-    required: true
+dispatch:
+  inputs:          # User-provided parameters
+    target:
+      required: true
 
-secrets:         # Secure credentials
-  API_KEY:
-    required: false
+call:
+  secrets:         # Secure credentials
+    API_KEY:
+      required: false
 
 jobs:            # Execution units
   scan:
@@ -111,14 +113,15 @@ Reusable workflows can be referenced by:
 Define parameters users can provide at runtime:
 
 ```yaml
-inputs:
-  target:
-    required: true
-    description: Target host or IP
-  
-  ports:
-    default: "80,443"
-    description: Ports to scan
+dispatch:
+  inputs:
+    target:
+      required: true
+      description: Target host or IP
+    
+    ports:
+      default: "80,443"
+      description: Ports to scan
 ```
 
 **Usage in templates:** `{{ inputs.target }}`
@@ -132,10 +135,11 @@ inputs:
 Secure credentials that are masked in logs:
 
 ```yaml
-secrets:
-  API_KEY:
-    required: true
-    description: API authentication key
+call:
+  secrets:
+    API_KEY:
+      required: true
+      description: API authentication key
 ```
 
 **Usage:** `{{ secrets.API_KEY }}`
@@ -196,7 +200,7 @@ jobs:
 ```yaml
 jobs:
   job1:
-    envs:
+ env:
       JOB_VAR: "value"
     steps:
       - run: echo $JOB_VAR  # Available in this job
@@ -206,7 +210,7 @@ jobs:
 ```yaml
 steps:
   - name: With custom env
-    envs:
+ env:
       STEP_VAR: "value"
     run: echo $STEP_VAR  # Available in this step only
 ```
@@ -279,14 +283,15 @@ jobs:
 
 ### Document Inputs
 ```yaml
-inputs:
-  target:
-    description: Target domain (e.g., example.com)
-    required: true
-  
-  timeout:
-    description: Scan timeout in seconds
-    default: 300
+dispatch:
+  inputs:
+    target:
+      description: Target domain (e.g., example.com)
+      required: true
+    
+    timeout:
+      description: Scan timeout in seconds
+      default: 300
 ```
 
 ### Use Dependencies for Organization

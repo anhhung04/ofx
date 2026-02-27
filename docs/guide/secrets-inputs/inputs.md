@@ -22,7 +22,8 @@ run: echo "Target is {{ inputs.target }}"
 ## Default Values
 You can set default values for inputs in your workflow YAML:
 ```yaml
-inputs:
+dispatch:
+  inputs:
 	target: "localhost"
 	env: "dev"
 ```

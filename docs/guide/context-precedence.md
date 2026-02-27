@@ -22,10 +22,10 @@ OFX resolves execution context in layers. Each layer can add or override values.
 ```yaml
 jobs:
   build:
-    envs: { ENV: "job", PATH: "/job" }
+ env: { ENV: "job", PATH: "/job" }
     steps:
       - run: echo "hello"
-        envs: { ENV: "step" }
+ env: { ENV: "step" }
 ```
 
 Effective env:

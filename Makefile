@@ -1,4 +1,4 @@
-.PHONY: help install dev test clean docs coverage coverage-html coverage-report deb
+.PHONY: help install dev test clean docs coverage coverage-html coverage-report
 
 help:
 	@echo "OFX Makefile Commands:"
@@ -12,8 +12,6 @@ help:
 	@echo "  make clean           - Remove build artifacts"
 	@echo "  make docs            - Build documentation"
 	@echo ""
-	@echo "Packaging:"
-	@echo "  make deb             - Build Debian package via Docker"
 
 install:
 	uv sync --no-dev
@@ -54,9 +52,3 @@ docs:
 	uv run --link-mode=copy --extra docs mkdocs build --clean --strict -f mkdocs.yml -d site
 	@echo "Documentation built successfully in: src/ofx/data/site/"
 	@echo "To serve locally, run: uv run ofx docs serve"
-
-deb:
-	@echo "Building Debian package via Docker..."
-	@mkdir -p dist/packages
-	docker build -f Dockerfile.deb --target=export --output type=local,dest=dist/packages .
-	@echo "Debian package exported to: dist/packages/"

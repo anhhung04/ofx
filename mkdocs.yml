@@ -9,7 +9,6 @@ edit_uri: edit/main/docs/
 
 theme:
   name: material
-  custom_dir: docs/overrides
   palette:
     # Light mode
     - media: "(prefers-color-scheme: light)"
@@ -152,6 +151,15 @@ nav:
                             - Credentials: api/post-exploitation/creds.md
                             - Evasion: api/post-exploitation/evasion.md
                             - Workflow Integration: api/post-exploitation/workflow.md
+                  - Command & Control (C2): api/c2.md
+                  - Data Utilities: api/data.md
+                  - DNS: api/dns.md
+                  - Lateral Movement: api/lateral.md
+                  - Loot & Exfiltration: api/loot.md
+                  - Packers & Obfuscation: api/packers.md
+                  - Payloads: api/payloads.md
+                  - Persistence: api/persistence.md
+                  - Services: api/service.md
         - CLI Reference:
                   - Overview: cli/commands.md
                   - Commands:
@@ -174,6 +182,7 @@ nav:
                                       - Dump: cli/commands/dump.md
                   - Visualization & UX: cli/visualization.md
         - Advanced:
+                  - LLM Agent Guide: advanced/llm-agent-guide.md
                   - Job Registry:
                             - Overview: advanced/job-registry.md
                             - Architecture: advanced/job-registry-architecture.md

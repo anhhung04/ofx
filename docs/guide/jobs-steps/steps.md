@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Run Script
         run: ./myscript.sh
-        envs:
+ env:
           VAR: value
         timeout: 10
         continue_on_error: true

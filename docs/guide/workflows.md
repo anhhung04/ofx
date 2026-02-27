@@ -9,17 +9,20 @@
 ```yaml
 name: my-workflow
 description: Optional description
+tags: [security, reconnaissance]
 
-inputs:
-  target:
-    required: true
-    description: Target host
+dispatch:
+  inputs:
+    target:
+      required: true
+      description: Target host
 
-secrets:
-  API_KEY:
-    required: false
+call:
+  secrets:
+    API_KEY:
+      required: false
 
-envs:
+env:
   GLOBAL_VAR: "value"
 
 jobs:
@@ -42,14 +45,12 @@ jobs:
 |-------|----------|-------------|
 | `name` | ✅ | Unique workflow identifier |
 | `description` | ❌ | Human-readable description |
-| `inputs` | ❌ | User-provided parameters |
-| `secrets` | ❌ | Secure credentials |
-| `envs` | ❌ | Global environment variables |
+| `tags` | ❌ | Tags for organizing workflows |
+| `dispatch` | ❌ | Manual trigger inputs configuration (`inputs`) |
+| `call` | ❌ | Reusable workflow configuration (`inputs`, `secrets`, `outputs`) |
+| `env` | ❌ | Global environment variables |
 | `tools` | ❌ | Tool installers for workflow runs |
 | `defaults` | ❌ | Default run settings (shell, working directory, etc.) |
-| `dispatch` | ❌ | Manual trigger inputs configuration |
-| `call` | ❌ | Reusable workflow inputs/outputs configuration |
-| `tags` | ❌ | Tags for organizing workflows |
 | `jobs` | ✅ | Map of jobs to execute |
 
 ---
@@ -266,14 +267,15 @@ description: Comprehensive security assessment
 
 ### 2. Document Inputs
 ```yaml
-inputs:
-  target:
-    description: Target hostname or IP (e.g., example.com)
-    required: true
-  
-  scan_type:
-    description: "Scan type: quick, standard, comprehensive"
-    default: "standard"
+dispatch:
+  inputs:
+    target:
+      description: Target hostname or IP (e.g., example.com)
+      required: true
+    
+    scan_type:
+      description: "Scan type: quick, standard, comprehensive"
+      default: "standard"
 ```
 
 ### 3. Validate Inputs Early
@@ -302,8 +304,9 @@ jobs:
 ### Simple Scan
 ```yaml
 name: port-scan
-inputs:
-  target: { required: true }
+dispatch:
+  inputs:
+    target: { required: true }
 
 jobs:
   scan:
@@ -315,12 +318,14 @@ jobs:
 ### Full Assessment
 ```yaml
 name: security-assessment
-inputs:
-  target: { required: true, description: Target network }
-  depth: { default: "3", description: "Assessment depth (1-5)" }
+dispatch:
+  inputs:
+    target: { required: true, description: Target network }
+    depth: { default: "3", description: "Assessment depth (1-5)" }
 
-secrets:
-  SHODAN_KEY: { description: Shodan API key }
+call:
+  secrets:
+    SHODAN_KEY: { description: Shodan API key }
 
 jobs:
   passive_recon:

@@ -46,13 +46,14 @@ Make your workflow dynamic with inputs:
 
 ```yaml
 name: port-scanner
-inputs:
-  target:
-    required: true
-    description: Target host to scan
-  ports:
-    default: "80,443"
-    description: Comma-separated ports
+dispatch:
+  inputs:
+    target:
+      required: true
+      description: Target host to scan
+    ports:
+      default: "80,443"
+      description: Comma-separated ports
 
 jobs:
   scan:
@@ -82,9 +83,10 @@ ofx secret set API_KEY
 
 ```yaml
 name: api-test
-secrets:
-  API_KEY:
-    required: true
+call:
+  secrets:
+    API_KEY:
+      required: true
 
 jobs:
   call:
@@ -106,10 +108,11 @@ Create complex workflows with job dependencies:
 
 ```yaml
 name: basic-recon
-inputs:
-  domain:
-    required: true
-    description: Target domain
+dispatch:
+  inputs:
+    domain:
+      required: true
+      description: Target domain
 
 jobs:
   subdomain-enum:
