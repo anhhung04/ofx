@@ -40,7 +40,7 @@ Initialize a new OFX project with workflows, configurations, and directory struc
 
 ### Options
 
-- `--path <path>` - Project location (default: `~/ofx-projects/<name>`)
+- `--path <path>` - Project location (default: `~/.ofx/projects/<name>`)
 - `--template <template>` - Project template to use
 - `--git` - Initialize Git repository
 

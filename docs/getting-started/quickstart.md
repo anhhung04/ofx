@@ -8,7 +8,7 @@
 
 ```bash
 ofx project init quickstart-demo
-cd ~/ofx-projects/quickstart-demo
+cd ~/.ofx/projects/quickstart-demo
 ```
 
 ---
