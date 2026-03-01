@@ -10,8 +10,9 @@ Supports both Bash (Linux/macOS) and PowerShell (Windows).
 import os
 import shutil
 import sys
+from pathlib import Path
 
-from ofx.settings import IS_WINDOWS, TEMP_DIR, TOOLS_BIN_DIR, TOOLS_DIR, ensure_dir
+from ofx.settings import IS_WINDOWS, TEMP_DIR, TOOLS_BIN_DIR, TOOLS_DIR, ensure_dir, settings
 
 
 def _is_admin() -> bool:
@@ -67,12 +68,14 @@ def _get_bash_functions() -> str:
     tools_bin_dir = str(ensure_dir(TOOLS_BIN_DIR).absolute())
     temp_dir = ensure_dir(TEMP_DIR).absolute().as_posix()
     python_exe = sys.executable
+    channels_dir = str(ensure_dir(Path(settings.channels_dir)).absolute())
 
     return f'''# OFX Shell Helper Functions (Bash)
 export OFX_TOOLS_DIR="{tools_dir}"
 export OFX_TOOLS_BIN_DIR="{tools_bin_dir}"
 export OFX_TEMP_DIR="{temp_dir}"
 export OFX_PYTHON="{python_exe}"
+export OFX_CHANNELS_DIR="{channels_dir}"
 
 fapt() {{
     if [ -z "$( ls -A /var/lib/apt/lists/ 2>/dev/null )" ]; then
@@ -107,6 +110,73 @@ pip_install() {{
     "{python_exe}" -m pip install --upgrade "$@"
 }}
 
+# --- OFX Channel Functions (inter-job communication) ---
+# Uses flock for cross-process safety (compatible with Python fcntl.flock)
+
+ofx_publish() {{
+    local channel="$1"
+    shift
+    local data="$*"
+    local channel_file="$OFX_CHANNELS_DIR/$channel"
+    local lock_file="$OFX_CHANNELS_DIR/${{channel}}.lock"
+    mkdir -p "$OFX_CHANNELS_DIR"
+    (
+        flock -x 200
+        printf '%s' "$data" > "$channel_file"
+    ) 200>"$lock_file"
+}}
+
+ofx_get() {{
+    local channel="$1"
+    local channel_file="$OFX_CHANNELS_DIR/$channel"
+    local lock_file="$OFX_CHANNELS_DIR/${{channel}}.lock"
+    if [ ! -f "$channel_file" ]; then
+        return 1
+    fi
+    local value
+    (
+        flock -s 200
+        cat "$channel_file"
+    ) 200>"$lock_file"
+}}
+
+ofx_subscribe() {{
+    local channel="$1"
+    local interval="${{2:-0.1}}"
+    local last_value=""
+    while true; do
+        local value
+        value=$(ofx_get "$channel" 2>/dev/null) || true
+        if [ -n "$value" ] && [ "$value" != "$last_value" ]; then
+            echo "$value"
+            last_value="$value"
+        fi
+        sleep "$interval"
+    done
+}}
+
+ofx_wait_for() {{
+    local channel="$1"
+    local expected="$2"
+    local timeout="${{3:-60}}"
+    local interval="${{4:-0.1}}"
+    local elapsed=0
+    while true; do
+        local value
+        value=$(ofx_get "$channel" 2>/dev/null) || true
+        if [ -n "$value" ] && [ "$value" = "$expected" ]; then
+            echo "$value"
+            return 0
+        fi
+        sleep "$interval"
+        elapsed=$(echo "$elapsed + $interval" | bc)
+        if [ "$(echo "$elapsed >= $timeout" | bc)" -eq 1 ]; then
+            echo "Timeout waiting for channel '$channel'" >&2
+            return 1
+        fi
+    done
+}}
+
 # End of OFX Shell Helper Functions
 '''
 
@@ -117,12 +187,14 @@ def _get_powershell_functions() -> str:
     tools_bin_dir = str(ensure_dir(TOOLS_BIN_DIR).absolute())
     temp_dir = str(ensure_dir(TEMP_DIR).absolute())
     python_exe = sys.executable
+    channels_dir = str(ensure_dir(Path(settings.channels_dir)).absolute())
 
     return f'''# OFX Shell Helper Functions (PowerShell)
 $env:OFX_TOOLS_DIR = "{tools_dir}"
 $env:OFX_TOOLS_BIN_DIR = "{tools_bin_dir}"
 $env:OFX_TEMP_DIR = "{temp_dir}"
 $env:OFX_PYTHON = "{python_exe}"
+$env:OFX_CHANNELS_DIR = "{channels_dir}"
 
 function fapt {{
     param([Parameter(ValueFromRemainingArguments=$true)]$packages)
@@ -161,6 +233,54 @@ function static_install {{
 function pip_install {{
     param([Parameter(ValueFromRemainingArguments=$true)]$packages)
     & "{python_exe}" -m pip install --upgrade $packages
+}}
+
+# --- OFX Channel Functions (inter-job communication) ---
+
+function ofx_publish {{
+    param([string]$Channel, [string]$Data)
+    $dir = $env:OFX_CHANNELS_DIR
+    if (-not (Test-Path $dir)) {{ New-Item -ItemType Directory -Path $dir -Force | Out-Null }}
+    $channelFile = Join-Path $dir $Channel
+    $lockFile = Join-Path $dir "$Channel.lock"
+    $mutex = New-Object System.Threading.Mutex($false, "OFX_CHANNEL_$Channel")
+    try {{
+        [void]$mutex.WaitOne()
+        Set-Content -Path $channelFile -Value $Data -NoNewline
+    }} finally {{
+        $mutex.ReleaseMutex()
+        $mutex.Dispose()
+    }}
+}}
+
+function ofx_get {{
+    param([string]$Channel)
+    $dir = $env:OFX_CHANNELS_DIR
+    $channelFile = Join-Path $dir $Channel
+    if (-not (Test-Path $channelFile)) {{ return $null }}
+    $mutex = New-Object System.Threading.Mutex($false, "OFX_CHANNEL_$Channel")
+    try {{
+        [void]$mutex.WaitOne()
+        return Get-Content -Path $channelFile -Raw
+    }} finally {{
+        $mutex.ReleaseMutex()
+        $mutex.Dispose()
+    }}
+}}
+
+function ofx_wait_for {{
+    param([string]$Channel, [string]$Expected, [int]$Timeout = 60, [double]$Interval = 0.1)
+    $elapsed = 0
+    while ($true) {{
+        $value = ofx_get -Channel $Channel
+        if ($value -eq $Expected) {{ return $value }}
+        Start-Sleep -Milliseconds ([int]($Interval * 1000))
+        $elapsed += $Interval
+        if ($elapsed -ge $Timeout) {{
+            Write-Error "Timeout waiting for channel '$Channel'"
+            return $null
+        }}
+    }}
 }}
 
 # End of OFX Shell Helper Functions

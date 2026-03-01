@@ -116,7 +116,7 @@ class MemcachedJobRegistry(RegistryAdapter):
         except Exception:
             pass
 
-    async def _set(self, key: str, value: dict[str, Any]) -> None:
+    async def _set(self, key: str, value: Any) -> None:
         """Store data in Memcached"""
         client = await self._get_client()
         cache_key = self._make_key(key)
@@ -125,7 +125,7 @@ class MemcachedJobRegistry(RegistryAdapter):
         await self._add_to_index(key)
         self._log_debug(f"Set key '{key}' in MemcachedJobRegistry")
 
-    async def _get(self, key: str) -> dict[str, Any] | None:
+    async def _get(self, key: str) -> Any | None:
         """Retrieve data from Memcached"""
         client = await self._get_client()
         cache_key = self._make_key(key)
@@ -137,7 +137,7 @@ class MemcachedJobRegistry(RegistryAdapter):
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
         existing = await self._get(key)
-        if existing is not None:
+        if isinstance(existing, dict):
             existing.update(updates)
             await self._set(key, existing)
         else:
@@ -165,7 +165,7 @@ class MemcachedJobRegistry(RegistryAdapter):
         value = await client.get(cache_key.encode())
         return value is not None
 
-    async def _get_all(self) -> dict[str, dict[str, Any]]:
+    async def _get_all(self) -> dict[str, Any]:
         """Get all entries from Memcached"""
         client = await self._get_client()
         index_key = self._make_index_key()

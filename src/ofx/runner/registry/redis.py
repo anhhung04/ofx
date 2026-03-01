@@ -74,14 +74,14 @@ class RedisJobRegistry(RegistryAdapter):
         """
         return f"{self.prefix}{key}"
 
-    async def _set(self, key: str, value: dict[str, Any]) -> None:
+    async def _set(self, key: str, value: Any) -> None:
         """Store data in Redis"""
         redis_key = self._make_key(key)
         json_value = json.dumps(value)
         await self._client.set(redis_key, json_value)
         self._log_debug(f"Set key '{key}' in RedisJobRegistry")
 
-    async def _get(self, key: str) -> dict[str, Any] | None:
+    async def _get(self, key: str) -> Any | None:
         """Retrieve data from Redis"""
         redis_key = self._make_key(key)
         value = await self._client.get(redis_key)
@@ -92,7 +92,7 @@ class RedisJobRegistry(RegistryAdapter):
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
         existing = await self._get(key)
-        if existing is not None:
+        if isinstance(existing, dict):
             existing.update(updates)
             await self._set(key, existing)
         else:
@@ -113,7 +113,7 @@ class RedisJobRegistry(RegistryAdapter):
         redis_key = self._make_key(key)
         return bool(await self._client.exists(redis_key))
 
-    async def _get_all(self) -> dict[str, dict[str, Any]]:
+    async def _get_all(self) -> dict[str, Any]:
         """Get all entries from Redis"""
         pattern = f"{self.prefix}*"
         keys = await self._client.keys(pattern)

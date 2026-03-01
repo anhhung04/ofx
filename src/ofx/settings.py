@@ -32,6 +32,7 @@ USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
 USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 SCRIPT_COMMUNICATION_REGISTRY = TEMP_DIR / "script_channels.json"
+CHANNELS_DIR = TEMP_DIR / "channels"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
@@ -156,6 +157,10 @@ class Settings(BaseSettings):
     script_communication_registry_path: str = Field(
         default=str(SCRIPT_COMMUNICATION_REGISTRY),
         description="File path for script inter-job communication registry",
+    )
+    channels_dir: str = Field(
+        default=str(CHANNELS_DIR),
+        description="Directory for per-channel files used by inter-job communication",
     )
     registry_redis: RedisRegistrySettings | None = Field(
         default=None,

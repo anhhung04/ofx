@@ -77,14 +77,14 @@ class EtcdJobRegistry(RegistryAdapter):
         prefix = self.prefix if self.prefix.endswith("/") else f"{self.prefix}/"
         return f"{prefix}{key}"
 
-    async def _set(self, key: str, value: dict[str, Any]) -> None:
+    async def _set(self, key: str, value: Any) -> None:
         """Store data in etcd"""
         etcd_key = self._make_key(key)
         json_value = json.dumps(value)
         self._client.put(etcd_key, json_value)
         self._log_debug(f"Set key '{key}' in EtcdJobRegistry")
 
-    async def _get(self, key: str) -> dict[str, Any] | None:
+    async def _get(self, key: str) -> Any | None:
         """Retrieve data from etcd"""
         etcd_key = self._make_key(key)
         value, _ = self._client.get(etcd_key)
@@ -95,7 +95,7 @@ class EtcdJobRegistry(RegistryAdapter):
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
         existing = await self._get(key)
-        if existing is not None:
+        if isinstance(existing, dict):
             existing.update(updates)
             await self._set(key, existing)
         else:
@@ -120,7 +120,7 @@ class EtcdJobRegistry(RegistryAdapter):
         value, _ = self._client.get(etcd_key)
         return value is not None
 
-    async def _get_all(self) -> dict[str, dict[str, Any]]:
+    async def _get_all(self) -> dict[str, Any]:
         """Get all entries from etcd"""
         # Get all keys with the prefix
         result = {}

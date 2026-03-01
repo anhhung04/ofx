@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ofx.models.command import Command, Script
+from ofx.runner.channels import ChannelStore
 from ofx.runner.commands.command_executor import CommandExecutionResult, CommandExecutor
 from ofx.runner.core import (
     BaseRunner,
@@ -20,7 +21,6 @@ from ofx.runner.core import (
     RunnerStatus,
     RunResult,
 )
-from ofx.runner.registry.file import FileRegistry
 from ofx.settings import DEFAULT_SHELL, settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -35,44 +35,19 @@ def exec_script_in_process(
     ctx_model,
     inputs,
     secrets,
-    registry_filepath,
+    channels_dir,
 ):
-    """Execute script in a separate process with registry-based channel communication"""
-    registry = FileRegistry(registry_filepath)
-
-    def sync_reg_set(key, value):
-        import asyncio
-
-        asyncio.run(registry.set(key, value))
-
-    def sync_reg_get(key):
-        import asyncio
-
-        return asyncio.run(registry.get(key))
+    """Execute script in a separate process with channel communication"""
+    store = ChannelStore(channels_dir)
 
     def publish(channel: str, data):
-        sync_reg_set(f"channels:{channel}", data)
+        store.publish(channel, data)
 
     def subscribe(channel: str):
-        def generator():
-            last_data = None
-            while True:
-                data = sync_reg_get(f"channels:{channel}")
-                if data is not None and data != last_data:
-                    yield data
-                    last_data = data
-                time.sleep(0.01)
-
-        return generator()
+        return store.subscribe(channel)
 
     def wait_for(channel: str, condition, timeout: int = 60):
-        start = time.time()
-        while time.time() - start < timeout:
-            data = sync_reg_get(f"channels:{channel}")
-            if data is not None and condition(data):
-                return data
-            time.sleep(0.01)
-        raise TimeoutError(f"Timeout waiting for channel {channel}")
+        return store.wait_for(channel, condition, timeout=timeout)
 
     globals_dict = {
         "__builtins__": builtins.__dict__,
@@ -244,8 +219,8 @@ class ScriptRunner(BaseRunner[Script]):
 
     async def _exec_script(self):
         """Run the script execution in a separate process"""
-        # Use shared registry for inter-job communication
-        registry_filepath = settings.script_communication_registry_path
+        # Use shared channels directory for inter-job communication
+        channels_dir = settings.channels_dir
 
         with ProcessPoolExecutor() as executor:
             future = executor.submit(
@@ -262,19 +237,9 @@ class ScriptRunner(BaseRunner[Script]):
                 self.ctx,
                 self.ctx.inputs,
                 self.ctx.secrets,
-                registry_filepath,
+                channels_dir,
             )
             result = await asyncio.get_event_loop().run_in_executor(None, future.result)
-
-            # Read published data from the shared registry
-            script_registry = FileRegistry(registry_filepath)
-            # Get all channel keys
-            all_data = await script_registry._read_registry()
-            for key, data in all_data.items():
-                if key.startswith("channels:"):
-                    channel = key[9:]  # Remove "channels:" prefix
-                    await self.reg_set(f"channels:{channel}", data)
-
             return result
 
     async def _pre_run(self) -> None:

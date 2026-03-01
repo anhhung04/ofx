@@ -18,22 +18,23 @@ class MemoryJobRegistry(RegistryAdapter):
 
     def __init__(self):
         """Initialize the in-memory registry"""
-        self._registry: dict[str, dict[str, Any]] = {}
+        self._registry: dict[str, Any] = {}
         self._log_debug("Initialized MemoryJobRegistry")
 
-    async def _set(self, key: str, value: dict[str, Any]) -> None:
+    async def _set(self, key: str, value: Any) -> None:
         """Store data in memory"""
-        self._registry[key] = value.copy()
+        self._registry[key] = value.copy() if isinstance(value, dict) else value
         self._log_debug(f"Set key '{key}' in MemoryJobRegistry")
 
-    async def _get(self, key: str) -> dict[str, Any] | None:
+    async def _get(self, key: str) -> Any | None:
         """Retrieve data from memory"""
         return self._registry.get(key)
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
-        if key in self._registry:
-            self._registry[key].update(updates)
+        existing = self._registry.get(key)
+        if isinstance(existing, dict):
+            existing.update(updates)
         else:
             self._registry[key] = updates.copy()
         self._log_debug(f"Updated key '{key}' in MemoryJobRegistry")
@@ -50,7 +51,7 @@ class MemoryJobRegistry(RegistryAdapter):
         """Check if data exists in memory"""
         return key in self._registry
 
-    async def _get_all(self) -> dict[str, dict[str, Any]]:
+    async def _get_all(self) -> dict[str, Any]:
         """Get all entries from memory"""
         return self._registry.copy()
 

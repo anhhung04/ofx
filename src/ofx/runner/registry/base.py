@@ -11,17 +11,17 @@ class RegistryAdapter(ABC):
     interchangeably for job registry operations.
     """
 
-    async def set(self, key: str, value: dict[str, Any]) -> None:
+    async def set(self, key: str, value: Any) -> None:
         """Store data in the registry
 
         Args:
             key: Unique identifier for the data (job_id, step_id, workflow_id, etc.)
-            value: Data to store (must be JSON-serializable)
+            value: Data to store (must be JSON-serializable: dict, list, str, int, float, bool, or None)
         """
-        self._validate_key_value(key, value)
+        self._validate_key(key)
         await self._set(key, value)
 
-    async def get(self, key: str) -> dict[str, Any] | None:
+    async def get(self, key: str) -> Any | None:
         """Retrieve data from the registry
 
         Args:
@@ -68,7 +68,7 @@ class RegistryAdapter(ABC):
         self._validate_key(key)
         return await self._exists(key)
 
-    async def get_all(self) -> dict[str, dict[str, Any]]:
+    async def get_all(self) -> dict[str, Any]:
         """Get all entries in the registry
 
         Returns:
@@ -89,24 +89,18 @@ class RegistryAdapter(ABC):
         if not isinstance(key, str) or not key.strip():
             raise ValueError("Key must be a non-empty string")
 
-    def _validate_key_value(self, key: str, value: Any) -> None:
-        """Validate key and value parameters"""
-        self._validate_key(key)
-        if not isinstance(value, dict):
-            raise ValueError("Value must be a dictionary")
-
     def _validate_updates(self, updates: dict[str, Any]) -> None:
         """Validate updates parameter"""
         if not isinstance(updates, dict):
             raise ValueError("Updates must be a dictionary")
 
     @abstractmethod
-    async def _set(self, key: str, value: dict[str, Any]) -> None:
+    async def _set(self, key: str, value: Any) -> None:
         """Internal set implementation"""
         pass
 
     @abstractmethod
-    async def _get(self, key: str) -> dict[str, Any] | None:
+    async def _get(self, key: str) -> Any | None:
         """Internal get implementation"""
         pass
 
@@ -126,7 +120,7 @@ class RegistryAdapter(ABC):
         pass
 
     @abstractmethod
-    async def _get_all(self) -> dict[str, dict[str, Any]]:
+    async def _get_all(self) -> dict[str, Any]:
         """Internal get_all implementation"""
         pass
 
