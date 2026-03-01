@@ -78,122 +78,120 @@ markdown_extensions:
 plugins:
   - search
 
-
-
 nav:
-        - Home: index.md
-        - Getting Started:
-                  - Installation: getting-started/installation.md
-                  - Quick Start: getting-started/quickstart.md
-                  - Quickstart Examples: getting-started/quickstart/examples.md
-                  - Concepts: getting-started/concepts.md
-                  - Architecture: getting-started/concepts/architecture.md
-        - User Guide:
-                  - Workflows:
-                            - Overview: guide/workflows.md
-                            - Dependencies: guide/workflows/dependencies.md
-                            - Stages: guide/workflows/stages.md
-                            - Examples: guide/workflows/examples.md
-                  - Jobs & Steps:
-                            - Overview: guide/jobs-steps.md
-                            - Jobs: guide/jobs-steps/jobs.md
-                            - Steps: guide/jobs-steps/steps.md
-                            - Matrix Strategy: guide/jobs-steps/matrix-strategy.md
-                            - Outputs: guide/jobs-steps/outputs.md
-                            - Script files: guide/jobs-steps/script-file.md
-                  - Templates:
-                            - Overview: guide/templates.md
-                            - Jinja Templates: guide/templates/jinja.md
-                            - Examples: guide/templates/examples.md
-                  - Secrets & Inputs:
-                            - Overview: guide/secrets-inputs.md
-                            - Secrets: guide/secrets-inputs/secrets.md
-                            - Inputs: guide/secrets-inputs/inputs.md
-                  - Execution Context:
-                            - Precedence: guide/context-precedence.md
-                  - Interactive Mode:
-                            - Overview: guide/interactive-mode.md
-                            - Usage: guide/interactive-mode/usage.md
-                            - Detection & Execution: guide/interactive-mode/detection.md
-                            - Limitations: guide/interactive-mode/limitations.md
-                            - Examples: guide/interactive-mode/examples.md
-                            - Best Practices: guide/interactive-mode/best-practices.md
-                            - Error Handling & Troubleshooting: guide/interactive-mode/error-handling.md
-                  - Extending Data Modules:
-                            - Overview: guide/extending-data-modules.md
-                            - Custom Connectors: guide/extending-data-modules/custom-connectors.md
-                            - Data Directory: guide/extending-data-modules/data-directory.md
-                  - Developing Connectors: guide/developing-connectors.md
-        - Red Teaming APIs:
-                  - Overview: api/overview.md
-                  - Evasion: api/evasion.md
-                  - HTTP Server: api/httpserver.md
-                  - Reconnaissance:
-                            - Overview: api/reconnaissance.md
-                            - FOFA: api/reconnaissance/fofa.md
-                            - Shodan: api/reconnaissance/shodan.md
-                            - ZoomEye: api/reconnaissance/zoomeye.md
-                            - Out-of-Band (OOB): api/reconnaissance/oob.md
-                  - Exploitation:
-                            - Overview: api/exploitation.md
-                            - Shellcode: api/exploitation/shellcode.md
-                            - Webshell: api/exploitation/webshell.md
-                            - HTTP Client: api/exploitation/http.md
-                            - Exploit Utilities: api/exploitation/exploit.md
-                  - Post-Exploitation:
-                            - Overview: api/post-exploitation.md
-                            - Post Runners: api/post-exploitation/post.md
-                            - File Operations: api/post-exploitation/file.md
-                            - Network: api/post-exploitation/network.md
-                            - HTTP Server: api/post-exploitation/httpserver.md
-                            - String Utilities: api/post-exploitation/strings.md
-                            - Utilities: api/post-exploitation/utils.md
-                            - Credentials: api/post-exploitation/creds.md
-                            - Evasion: api/post-exploitation/evasion.md
-                            - Workflow Integration: api/post-exploitation/workflow.md
-                  - Command & Control (C2): api/c2.md
-                  - Data Utilities: api/data.md
-                  - DNS: api/dns.md
-                  - Lateral Movement: api/lateral.md
-                  - Loot & Exfiltration: api/loot.md
-                  - Packers & Obfuscation: api/packers.md
-                  - Payloads: api/payloads.md
-                  - Persistence: api/persistence.md
-                  - Services: api/service.md
-        - CLI Reference:
-                  - Overview: cli/commands.md
-                  - Commands:
-                            - Overview: cli/commands/index.md
-                            - Flow Commands:
-                                      - Run: cli/commands/run.md
-                                      - Validate: cli/commands/validate.md
-                                      - Visualize: cli/commands/visualize.md
-                                      - Tools: cli/commands/tools.md
-                                      - Update: cli/commands/update.md
-                            - Project Commands:
-                                      - Init: cli/commands/init.md
-                                      - Sync: cli/commands/sync.md
-                                      - Overview: cli/commands/project.md
-                            - Secret Management: cli/commands/secret.md
-                            - Asset Management: cli/commands/asset.md
-                            - Utilities:
-                                      - Docs Server: cli/commands/docs-serve.md
-                                      - Doctor: cli/commands/doctor.md
-                                      - Dump: cli/commands/dump.md
-                  - Visualization & UX: cli/visualization.md
-        - Advanced:
-                  - LLM Agent Guide: advanced/llm-agent-guide.md
-                  - Job Registry:
-                            - Overview: advanced/job-registry.md
-                            - Architecture: advanced/job-registry-architecture.md
-                            - Memcached & etcd: advanced/job-registry-memcached-etcd.md
-                            - Quick Reference: advanced/job-registry-quick-ref.md
-                  - Performance:
-                            - Overview: advanced/performance.md
-                            - Tuning: advanced/performance/tuning.md
-                            - Troubleshooting: advanced/performance/troubleshooting.md
-        - Reference:
-                  - API: reference/api.md
-                  - Core: reference/core.md
-                  - CLI: reference/cli.md
-
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Quickstart Examples: getting-started/quickstart/examples.md
+      - Concepts: getting-started/concepts.md
+      - Architecture: getting-started/concepts/architecture.md
+  - User Guide:
+      - Workflows:
+          - Overview: guide/workflows.md
+          - Dependencies: guide/workflows/dependencies.md
+          - Stages: guide/workflows/stages.md
+          - Examples: guide/workflows/examples.md
+      - Jobs & Steps:
+          - Overview: guide/jobs-steps.md
+          - Jobs: guide/jobs-steps/jobs.md
+          - Steps: guide/jobs-steps/steps.md
+          - Matrix Strategy: guide/jobs-steps/matrix-strategy.md
+          - Outputs: guide/jobs-steps/outputs.md
+          - Script files: guide/jobs-steps/script-file.md
+      - Templates:
+          - Overview: guide/templates.md
+          - Jinja Templates: guide/templates/jinja.md
+          - Examples: guide/templates/examples.md
+      - Secrets & Inputs:
+          - Overview: guide/secrets-inputs.md
+          - Secrets: guide/secrets-inputs/secrets.md
+          - Inputs: guide/secrets-inputs/inputs.md
+      - Execution Context:
+          - Precedence: guide/context-precedence.md
+      - Interactive Mode:
+          - Overview: guide/interactive-mode.md
+          - Usage: guide/interactive-mode/usage.md
+          - Detection & Execution: guide/interactive-mode/detection.md
+          - Limitations: guide/interactive-mode/limitations.md
+          - Examples: guide/interactive-mode/examples.md
+          - Best Practices: guide/interactive-mode/best-practices.md
+          - Error Handling & Troubleshooting: guide/interactive-mode/error-handling.md
+      - Cloud Runners: guide/cloud-runners.md
+      - Extending Data Modules:
+          - Overview: guide/extending-data-modules.md
+          - Custom Connectors: guide/extending-data-modules/custom-connectors.md
+          - Data Directory: guide/extending-data-modules/data-directory.md
+      - Developing Connectors: guide/developing-connectors.md
+  - Red Teaming APIs:
+      - Overview: api/overview.md
+      - Evasion: api/evasion.md
+      - HTTP Server: api/httpserver.md
+      - Reconnaissance:
+          - Overview: api/reconnaissance.md
+          - FOFA: api/reconnaissance/fofa.md
+          - Shodan: api/reconnaissance/shodan.md
+          - ZoomEye: api/reconnaissance/zoomeye.md
+          - Out-of-Band (OOB): api/reconnaissance/oob.md
+      - Exploitation:
+          - Overview: api/exploitation.md
+          - Shellcode: api/exploitation/shellcode.md
+          - Webshell: api/exploitation/webshell.md
+          - HTTP Client: api/exploitation/http.md
+          - Exploit Utilities: api/exploitation/exploit.md
+      - Post-Exploitation:
+          - Overview: api/post-exploitation.md
+          - Post Runners: api/post-exploitation/post.md
+          - File Operations: api/post-exploitation/file.md
+          - Network: api/post-exploitation/network.md
+          - HTTP Server: api/post-exploitation/httpserver.md
+          - String Utilities: api/post-exploitation/strings.md
+          - Utilities: api/post-exploitation/utils.md
+          - Credentials: api/post-exploitation/creds.md
+          - Evasion: api/post-exploitation/evasion.md
+          - Workflow Integration: api/post-exploitation/workflow.md
+      - Command & Control (C2): api/c2.md
+      - Data Utilities: api/data.md
+      - DNS: api/dns.md
+      - Lateral Movement: api/lateral.md
+      - Loot & Exfiltration: api/loot.md
+      - Packers & Obfuscation: api/packers.md
+      - Payloads: api/payloads.md
+      - Persistence: api/persistence.md
+      - Services: api/service.md
+  - CLI Reference:
+      - Overview: cli/commands.md
+      - Commands:
+          - Overview: cli/commands/index.md
+          - Flow Commands:
+              - Run: cli/commands/run.md
+              - Validate: cli/commands/validate.md
+              - Visualize: cli/commands/visualize.md
+              - Tools: cli/commands/tools.md
+              - Update: cli/commands/update.md
+          - Project Commands:
+              - Init: cli/commands/init.md
+              - Sync: cli/commands/sync.md
+              - Overview: cli/commands/project.md
+          - Secret Management: cli/commands/secret.md
+          - Asset Management: cli/commands/asset.md
+          - Utilities:
+              - Docs Server: cli/commands/docs-serve.md
+              - Doctor: cli/commands/doctor.md
+              - Dump: cli/commands/dump.md
+      - Visualization & UX: cli/visualization.md
+  - Advanced:
+      - LLM Agent Guide: advanced/llm-agent-guide.md
+      - Job Registry:
+          - Overview: advanced/job-registry.md
+          - Architecture: advanced/job-registry-architecture.md
+          - Memcached & etcd: advanced/job-registry-memcached-etcd.md
+          - Quick Reference: advanced/job-registry-quick-ref.md
+      - Performance:
+          - Overview: advanced/performance.md
+          - Tuning: advanced/performance/tuning.md
+          - Troubleshooting: advanced/performance/troubleshooting.md
+  - Reference:
+      - API: reference/api.md
+      - Core: reference/core.md
+      - CLI: reference/cli.md

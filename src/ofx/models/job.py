@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import Field, model_validator
 
 from ofx.models.base import OFXBaseModel
+from ofx.models.cloud import CloudConfig, parse_cloud_field
 from ofx.models.config import DefaultConfig
 from ofx.models.step import Step
 from ofx.models.strategy import MatrixStrategy
@@ -65,6 +66,20 @@ class Job(OFXBaseModel):
         description="Whether to fail the entire matrix if one job fails",
         alias="fail-fast",
     )
+    cloud: CloudConfig | str | None = Field(
+        default=None,
+        description="Cloud configuration for running this job on a cloud VPS. "
+        "String value references a profile slug from ~/.ofx/cloud.yml.",
+    )
+
+    @model_validator(mode="after")
+    def parse_cloud_config(self):
+        """Parse cloud field from string slug or dict into CloudConfig."""
+        raw = self.cloud
+        if raw is not None:
+            parsed = parse_cloud_field(raw)
+            object.__setattr__(self, "cloud", parsed)
+        return self
 
     @model_validator(mode="after")
     def normalize_needs(self):

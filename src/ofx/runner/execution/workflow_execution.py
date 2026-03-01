@@ -6,6 +6,7 @@ import asyncio
 import itertools
 from dataclasses import dataclass, field
 
+from ofx.runner.execution.cloud_job import CloudJobRunner
 from ofx.runner.execution.job import JobRunner, MatrixJobRunner
 
 
@@ -42,14 +43,17 @@ class WorkflowExecutionManager:
 
     def _build_stage_runners(
         self, stage: list[str], staged_jobs: dict
-    ) -> dict[str, JobRunner | MatrixJobRunner]:
-        stage_runners: dict[str, JobRunner | MatrixJobRunner] = {}
+    ) -> dict[str, JobRunner | MatrixJobRunner | CloudJobRunner]:
+        stage_runners: dict[str, JobRunner | MatrixJobRunner | CloudJobRunner] = {}
         for job_id in stage:
             job = staged_jobs[job_id]
             job_ctx = self._parent._child_context(
                 update={"allow_interactive": len(stage) == 1}
             )
-            if job.strategy and job.strategy.matrix:
+            if getattr(job, "cloud", None):
+                # Cloud job — run on remote VPS
+                runner = CloudJobRunner(job, job_ctx, parent=self._parent)
+            elif job.strategy and job.strategy.matrix:
                 runner = MatrixJobRunner(job, job_ctx, parent=self._parent)
             else:
                 runner = JobRunner(job, job_ctx, parent=self._parent)

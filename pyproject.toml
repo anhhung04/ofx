@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.4.2"
+version = "0.5.0"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,6 +45,19 @@ etcd = [
 ]
 interactsh = [
   "pycryptodomex>=3.21.0",
+]
+digitalocean = [
+  "pydo>=0.3.0",
+]
+aws = [
+  "boto3>=1.35.0",
+]
+cloud = [
+  "pydo>=0.3.0",
+  "boto3>=1.35.0",
+]
+winrm = [
+  "pywinrm>=0.4.3",
 ]
 
 [project.scripts]

@@ -8,6 +8,7 @@ from ofx.runner.execution.error_helpers import (
 )
 from ofx.runner.execution.execution_results import JobExecutionResult, StepExecutionResult
 from ofx.runner.execution.execution_summary import ExecutionSummary, ExecutionSummaryReporter
+from ofx.runner.execution.cloud_job import CloudJobRunner, CloudStepRunner
 from ofx.runner.execution.job import JobRunner, MatrixJobRunner
 from ofx.runner.execution.step import StepRunner
 from ofx.runner.execution.tool_installer import ToolInstallation, ToolInstallerRunner
@@ -16,6 +17,8 @@ from ofx.runner.execution.workflow_execution import ExecutionResult, WorkflowExe
 from ofx.runner.execution.workflow_scheduler import WorkflowSchedule, WorkflowScheduler
 
 __all__ = [
+    "CloudJobRunner",
+    "CloudStepRunner",
     "JobRunner",
     "MatrixJobRunner",
     "StepRunner",

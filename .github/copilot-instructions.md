@@ -52,9 +52,9 @@ The post module ([src/ofx/api/post/](../src/ofx/api/post/)) uses an **extendable
   - `RunnerRegistry`: Dynamic runner discovery and factory creation
   - Use `@RunnerRegistry.register("name")` decorator to add new runners
 - **Runners** ([src/ofx/api/post/runners/](../src/ofx/api/post/runners/)):
-  - `PostSSH`: SSH command execution with SCP file transfers
+  - `PostSSH`: SSH command execution with SCP file transfers, ControlMaster, password auth (sshpass), opsec mode (command-to-file), retries with backoff, command logging, proxy/jump host support
   - `PostWebShell`: Wrapper around `WebShellClient`
-  - `PostWinRM`: PowerShell execution with base64 file transfers
+  - `PostWinRM`: PowerShell/CMD execution with base64 file transfers, SSL support, retries, AMSI bypass, opsec mode, chunked upload for large files
   - `PostSMBExec`: SMB-based execution via impacket
   - `PostWMIExec`: WMI-based execution via impacket
 
@@ -64,11 +64,46 @@ from ofx.api.post import RunnerRegistry, PostSSH, PostWebShell
 runner = RunnerRegistry.create("ssh", host="192.168.1.100", user="root")
 ```
 
+### Cloud Module (VPS Integration)
+
+The cloud module ([src/ofx/cloud/](../src/ofx/cloud/)) provides cloud VPS lifecycle management and distributed execution:
+
+- **Base & Registry** ([src/ofx/cloud/base.py](../src/ofx/cloud/base.py)):
+  - `CloudProvider`: Abstract base class with async `create_instance()`, `wait_until_ready()`, `destroy_instance()`, `get_instance()`, snapshot methods
+  - `CloudProviderRegistry`: Decorator-based registration (`@CloudProviderRegistry.register("name")`)
+- **Providers** ([src/ofx/cloud/providers/](../src/ofx/cloud/providers/)):
+  - `DigitalOceanProvider`: Droplet lifecycle via pydo (optional dep)
+  - `AWSProvider`: EC2 instance lifecycle via boto3 (optional dep)
+  - `StaticProvider`: Pre-existing VPS wrapper (no provisioning/teardown)
+- **Fleet** ([src/ofx/cloud/fleet_input.py](../src/ofx/cloud/fleet_input.py), [src/ofx/cloud/fleet_distributor.py](../src/ofx/cloud/fleet_distributor.py)):
+  - `FleetInputParser`: Parses IPs, CIDRs, IP ranges, hostnames, files with deduplication and exclusion
+  - `FleetDistributor`: chunk/round-robin/subnet/line distribution across fleet instances
+  - `expand_fleet_to_matrix()`: Bridge between fleet config and MatrixJobRunner
+- **Config** ([src/ofx/cloud/config.py](../src/ofx/cloud/config.py)):
+  - `CloudProfileManager`: Named profiles stored in `~/.ofx/cloud.yml` with resolve/merge logic
+- **Models** ([src/ofx/models/cloud.py](../src/ofx/models/cloud.py)):
+  - `CloudConfig`: Full cloud configuration (provider, region, size, image, SSH/WinRM settings, opsec, lifecycle)
+  - `FleetStrategy` in [src/ofx/models/strategy.py](../src/ofx/models/strategy.py): count, input, distribution mode
+  - Job `cloud` field accepts string (profile name), dict, or `CloudConfig`
+- **CloudJobRunner** ([src/ofx/runner/execution/cloud_job.py](../src/ofx/runner/execution/cloud_job.py)):
+  - Extends `BaseRunner[Job]`, provisions VPS in `_pre_run`, runs steps remotely via PostSSH/PostWinRM in `_do_run`, destroys in `_post_run`
+  - `CloudStepRunner`: Executes individual steps on the remote host
+  - Auto-integrated in `WorkflowExecutionManager._build_stage_runners()` when `job.cloud` is set
+- **CLI** ([src/ofx/commands/cloud/](../src/ofx/commands/cloud/)): `ofx cloud profile|instance|image|fleet|test|providers` subcommands
+
+**Import convention**:
+```python
+from ofx.cloud import CloudProviderRegistry
+provider = CloudProviderRegistry.create("digitalocean", token="...")
+```
+
 ## Workflows & Models
 
 - Workflows: YAML parsed via `Workflow` model ([src/ofx/models/workflow.py](../src/ofx/models/workflow.py)); job IDs must match `[A-Za-z0-9_-]+`, `needs` validated, and steps get `step_index` assigned during validation.
 - Steps: must define exactly one of `run`, `script`, `script_file`, or `uses` ([src/ofx/models/step.py](../src/ofx/models/step.py)); `interactive` only honored when a stage has a single job, otherwise it is ignored.
 - Matrix strategy: jobs with `strategy.matrix` expand into multiple instances with cartesian product of matrix values; supports `max_parallel`, `fail_fast`, `include`, `exclude`; matrix values accessible via `{{ matrix.key }}` context ([src/ofx/models/job.py](../src/ofx/models/job.py), [src/ofx/utils/matrix.py](../src/ofx/utils/matrix.py)).
+- Cloud jobs: jobs with `cloud` field are routed to `CloudJobRunner` which provisions VPS, runs steps remotely via PostSSH/PostWinRM, and destroys on completion; cloud config accepts string (profile name), dict, or `CloudConfig` model ([src/ofx/models/cloud.py](../src/ofx/models/cloud.py)).
+- Fleet strategy: `strategy.fleet` distributes targets across multiple VPS; supports chunk/round-robin/subnet/line distribution; input parsing handles IPs, CIDRs, ranges, hostnames, files ([src/ofx/models/strategy.py](../src/ofx/models/strategy.py)).
 - Reusable workflows: steps with `uses` create a nested `WorkflowRunner`, inheriting envs and optionally secrets (`secrets: inherit`) while respecting workflow search paths ([src/ofx/runner/execution/step.py](../src/ofx/runner/execution/step.py)).
 
 ## Execution & Context
@@ -91,7 +126,7 @@ runner = RunnerRegistry.create("ssh", host="192.168.1.100", user="root")
 
 ## CLI & Commands
 
-- CLI entry: Typer app `ofx` registers `flow` (aliases `x`, `task`), `dump`, `asset`, `project`, `docs`, `doctor`, `secret` ([src/ofx/commands/__init__.py](../src/ofx/commands/__init__.py)).
+- CLI entry: Typer app `ofx` registers `flow` (aliases `x`, `task`), `dump`, `asset`, `cloud`, `project`, `docs`, `doctor`, `secret` ([src/ofx/commands/__init__.py](../src/ofx/commands/__init__.py)).
 - CLI commands: use `typing.Annotated` for all `typer.Option`/`typer.Argument` declarations; provide defaults inside `typer.Option` (strings default to `""`, bools to `False`) to avoid `NoneType.isidentifier` issues with Click/Typer.
 - Running workflows: `ofx flow run <name> --input key=val --output <dir>`; inputs are JSON-decoded when possible and shown via table; default output is a temp dir under `~/.ofx/tmp` ([src/ofx/commands/flow/run.py](../src/ofx/commands/flow/run.py)).
 - Validation & visualization: `ofx flow validate <name>` checks schema; `ofx flow visualize <name> --format dot|png|svg|pdf|mermaid|plantuml|d2|json|yaml` renders the DAG ([src/ofx/commands/flow/validate.py](../src/ofx/commands/flow/validate.py), [src/ofx/commands/flow/visualize.py](../src/ofx/commands/flow/visualize.py)).
