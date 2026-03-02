@@ -4,7 +4,7 @@ from ofx.commands.ui_helpers import print_banner, print_error
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
-from ofx.commands import asset, cloud, docs, dump, flow, project, secret  # noqa: E402
+from ofx.commands import asset, cloud, docs, dump, flow, project, secret, session  # noqa: E402
 
 COMMAND_ALIASES = {
     flow: ["x"],
@@ -64,6 +64,7 @@ def _register_commands():
     add_app(dump)
     add_app(asset)
     add_app(cloud)
+    add_app(session)
     add_app(project)
     add_app(docs)
     add_app(secret)

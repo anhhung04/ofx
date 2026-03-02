@@ -31,6 +31,7 @@ DATA_DIR = Path(__file__).parent / "data"
 USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
 USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
+SESSIONS_DIR = BASE_DATA_DIR / "sessions"
 SCRIPT_COMMUNICATION_REGISTRY = TEMP_DIR / "script_channels.json"
 CHANNELS_DIR = TEMP_DIR / "channels"
 
