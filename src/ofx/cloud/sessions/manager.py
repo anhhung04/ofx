@@ -124,23 +124,33 @@ class SessionManager:
         output_dir = work_dir / "output"
         output_dir.mkdir(exist_ok=True)
 
-        # Build the all-in-one script
+        # Generate at-rest encryption key and write key file
+        at_rest_key = _secrets.token_hex(32)  # 64-char hex → 256-bit
+        key_file = work_dir / ".ofx_key"
+        key_file.write_text(at_rest_key)
+        key_file.chmod(0o600)
+
+        # Build the all-in-one script (with at-rest encryption epilogue)
         script_content = build_session_script(
             job.steps,
             session_id=session.id,
             work_dir=str(work_dir),
             env=env,
             os_type="linux",
+            encrypt_at_rest=True,
         )
 
         script_path = work_dir / "run.sh"
         script_path.write_text(script_content)
-        script_path.chmod(0o755)
+        script_path.chmod(0o700)
 
         log_file_path = work_dir / "output.log"
 
         # Upload any script_file references
         self._stage_script_files(job.steps, work_dir)
+
+        # Restrictive permissions on workspace
+        work_dir.chmod(0o700)
 
         # Update session state
         session = session.model_copy(
@@ -150,6 +160,8 @@ class SessionManager:
                 "remote_log_file": str(log_file_path),
                 "output_path": str(session_dir),
                 "os_type": "linux",
+                "at_rest_key": at_rest_key,
+                "at_rest_encrypted": True,
             }
         )
 
@@ -254,12 +266,21 @@ class SessionManager:
             if is_windows
             else f"/tmp/ofx-session-{session.id}"
         )
+
+        # Generate at-rest encryption key
+        at_rest_key = _secrets.token_hex(32)  # 64-char hex → 256-bit
+
         script_content = build_session_script(
             job.steps,
             session_id=session.id,
             work_dir=remote_work_dir,
             env=env,
             os_type=os_type,
+            encrypt_at_rest=True,
+        )
+
+        session = session.model_copy(
+            update={"at_rest_key": at_rest_key, "at_rest_encrypted": True}
         )
 
         # Create remote runner
@@ -271,6 +292,15 @@ class SessionManager:
 
         if is_windows:
             remote.run(f'mkdir "{remote_work_dir}" 2>nul')
+
+            # Upload key file
+            local_key = tempfile.mktemp(suffix=".key")
+            Path(local_key).write_text(at_rest_key)
+            try:
+                remote.upload(local_key, f"{remote_work_dir}\\.ofx_key")
+            finally:
+                Path(local_key).unlink(missing_ok=True)
+
             # Upload script
             local_script = tempfile.mktemp(suffix=".ps1")
             Path(local_script).write_text(script_content)
@@ -278,6 +308,12 @@ class SessionManager:
                 remote.upload(local_script, f"{remote_work_dir}\\run.ps1")
             finally:
                 Path(local_script).unlink(missing_ok=True)
+
+            # Restrictive permissions on remote dir
+            remote.run(
+                f'powershell "icacls \'{remote_work_dir}\' /inheritance:r '
+                f'/grant:r \'$env:USERNAME:(OI)(CI)F\' /T 2>$null"',
+            )
 
             # Stage script_file references
             self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=True)
@@ -289,7 +325,17 @@ class SessionManager:
             )
             pid_output = remote.run(f'powershell "{start_cmd}"').strip()
         else:
-            remote.run(f"mkdir -p {remote_work_dir}")
+            remote.run(f"mkdir -p {remote_work_dir} && chmod 700 {remote_work_dir}")
+
+            # Upload key file
+            local_key = tempfile.mktemp(suffix=".key")
+            Path(local_key).write_text(at_rest_key)
+            try:
+                remote.upload(local_key, f"{remote_work_dir}/.ofx_key")
+            finally:
+                Path(local_key).unlink(missing_ok=True)
+            remote.run(f"chmod 600 {remote_work_dir}/.ofx_key")
+
             # Upload script
             local_script = tempfile.mktemp(suffix=".sh")
             Path(local_script).write_text(script_content)
@@ -298,7 +344,7 @@ class SessionManager:
             finally:
                 Path(local_script).unlink(missing_ok=True)
 
-            remote.run(f"chmod +x {remote_work_dir}/run.sh")
+            remote.run(f"chmod 700 {remote_work_dir}/run.sh")
 
             # Stage script_file references
             self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=False)
@@ -521,9 +567,14 @@ class SessionManager:
     ) -> Path:
         """Download results from a completed session.
 
+        If the session has at-rest encryption enabled, the encrypted archive
+        is downloaded and transparently decrypted using the stored key before
+        results are written to disk.
+
         Args:
             session_id: Session ID.
-            passphrase: If provided, encrypt results after fetching.
+            passphrase: If provided, re-encrypt results with this passphrase
+                after fetching (user-level encryption).
             output_dir: Override destination directory.
 
         Returns:
@@ -540,25 +591,12 @@ class SessionManager:
         results = output_dir or self.store.results_dir(session_id)
 
         if session.target == SessionTarget.LOCAL:
-            # Results are already local — copy output/ to results/
-            work_output = Path(session.remote_work_dir) / "output"
-            if work_output.exists():
-                for item in work_output.iterdir():
-                    dest = results / item.name
-                    if item.is_file():
-                        shutil.copy2(str(item), str(dest))
-                    elif item.is_dir():
-                        shutil.copytree(str(item), str(dest), dirs_exist_ok=True)
-
-            # Also copy the log
-            log_path = Path(session.remote_log_file)
-            if log_path.exists():
-                shutil.copy2(str(log_path), str(results / "output.log"))
+            self._fetch_local_results(session, results)
         else:
             # Cloud — download via SCP
             await self._fetch_cloud_results(session, results)
 
-        # Encrypt if passphrase given
+        # Re-encrypt with user passphrase if requested
         if passphrase:
             enc_path = encrypt_results(results, passphrase)
             session = session.model_copy(
@@ -580,10 +618,69 @@ class SessionManager:
         self.store.save(session)
         return results if not passphrase else Path(session.encrypted_file)
 
+    def _fetch_local_results(self, session: Session, results: Path) -> None:
+        """Copy local session output to results dir, decrypting if needed."""
+        work_dir = Path(session.remote_work_dir)
+        results.mkdir(parents=True, exist_ok=True)
+
+        enc_file = work_dir / "output.enc"
+        if session.at_rest_encrypted and enc_file.exists():
+            # Decrypt the at-rest archive
+            _decrypt_at_rest_openssl(enc_file, session.at_rest_key, results)
+        else:
+            # Unencrypted fallback — copy output/ contents
+            work_output = work_dir / "output"
+            if work_output.exists():
+                for item in work_output.iterdir():
+                    dest = results / item.name
+                    if item.is_file():
+                        shutil.copy2(str(item), str(dest))
+                    elif item.is_dir():
+                        shutil.copytree(str(item), str(dest), dirs_exist_ok=True)
+
+        # Also copy the log
+        log_path = Path(session.remote_log_file)
+        if log_path.exists():
+            shutil.copy2(str(log_path), str(results / "output.log"))
+
     async def _fetch_cloud_results(self, session: Session, results: Path) -> None:
-        """Download output directory from a cloud VPS via SCP."""
+        """Download output from a cloud VPS via SCP, decrypting if needed."""
         remote = self._reconnect(session)
         try:
+            results.mkdir(parents=True, exist_ok=True)
+
+            if session.at_rest_encrypted:
+                # Download the encrypted archive
+                if session.os_type == "windows":
+                    enc_remote = f"{session.remote_work_dir}\\output.enc"
+                else:
+                    enc_remote = f"{session.remote_work_dir}/output.enc"
+
+                local_enc = results.parent / f"output_{session.id}.enc"
+                try:
+                    remote.download(enc_remote, str(local_enc))
+                except Exception as exc:
+                    logger.warning(
+                        "Encrypted archive not found on VPS (%s); "
+                        "falling back to unencrypted fetch",
+                        exc,
+                    )
+                    # Fall through to unencrypted fetch below
+                    local_enc = None
+
+                if local_enc and local_enc.exists():
+                    _decrypt_at_rest_openssl(local_enc, session.at_rest_key, results)
+                    local_enc.unlink(missing_ok=True)
+                    # Also grab the log (not encrypted)
+                    try:
+                        remote.download(
+                            session.remote_log_file, str(results / "output.log")
+                        )
+                    except Exception:
+                        pass
+                    return
+
+            # Unencrypted fallback — download individual files
             if session.os_type == "windows":
                 files_cmd = (
                     f'powershell "Get-ChildItem -Path \'{session.remote_work_dir}\\output\' '
@@ -595,7 +692,6 @@ class SessionManager:
             output = remote.run(files_cmd, timeout=30)
             files = [f.strip() for f in output.strip().split("\n") if f.strip()]
 
-            results.mkdir(parents=True, exist_ok=True)
             for fname in files:
                 if session.os_type == "windows":
                     rpath = f"{session.remote_work_dir}\\output\\{fname}"
@@ -607,9 +703,8 @@ class SessionManager:
                     logger.debug("Failed to download %s: %s", rpath, exc)
 
             # Also grab the log
-            log_remote = session.remote_log_file
             try:
-                remote.download(log_remote, str(results / "output.log"))
+                remote.download(session.remote_log_file, str(results / "output.log"))
             except Exception:
                 pass
         finally:
@@ -816,13 +911,82 @@ class SessionManager:
 # ======================================================================
 
 
+def _decrypt_at_rest_openssl(
+    enc_file: Path, at_rest_key: str, output_dir: Path
+) -> None:
+    """Decrypt an at-rest encrypted archive produced by the session script.
+
+    The session script uses ``openssl enc -aes-256-cbc -pbkdf2`` with the
+    key written to a file.  We replicate the same decryption locally.
+
+    Args:
+        enc_file: Path to the ``output.enc`` file.
+        at_rest_key: The hex key string used for encryption.
+        output_dir: Where to extract the decrypted tar.gz contents.
+    """
+    import tarfile as _tarfile
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write key to a temp file for openssl
+    key_path = enc_file.parent / f".ofx_dec_{_secrets.token_hex(4)}"
+    key_path.write_text(at_rest_key)
+    key_path.chmod(0o600)
+
+    tar_path = enc_file.parent / "output_dec.tar.gz"
+
+    try:
+        result = subprocess.run(
+            [
+                "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2",
+                "-iter", "100000",
+                "-pass", f"file:{key_path}",
+                "-in", str(enc_file),
+                "-out", str(tar_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"openssl decryption failed (rc={result.returncode}): {result.stderr.strip()}"
+            )
+
+        # Extract the tar into output_dir
+        with _tarfile.open(str(tar_path), "r:gz") as tar:
+            # Strip the leading "output/" prefix so files land directly in output_dir
+            for member in tar.getmembers():
+                # e.g. "output/scan.txt" → "scan.txt"
+                parts = Path(member.name).parts
+                if len(parts) > 1 and parts[0] == "output":
+                    member.name = str(Path(*parts[1:]))
+                elif parts[0] == "output":
+                    continue  # skip the bare directory entry
+                tar.extract(member, path=str(output_dir))
+
+        logger.debug("At-rest decrypted %s → %s", enc_file, output_dir)
+    finally:
+        key_path.unlink(missing_ok=True)
+        tar_path.unlink(missing_ok=True)
+
+
 def _pid_alive(pid: int) -> bool:
-    """Check whether a local PID is still running."""
+    """Check whether a local PID is still running (not a zombie)."""
     try:
         os.kill(pid, 0)
-        return True
     except (ProcessLookupError, PermissionError):
         return False
+    # os.kill(pid, 0) succeeds for zombie processes too.  Check /proc
+    # to distinguish zombies from genuinely alive processes.
+    try:
+        with open(f"/proc/{pid}/status") as fh:
+            for line in fh:
+                if line.startswith("State:"):
+                    return "Z" not in line  # 'Z (zombie)'
+    except (FileNotFoundError, PermissionError, OSError):
+        pass
+    return True
 
 
 def _read_log_marker(path: Path) -> str | None:

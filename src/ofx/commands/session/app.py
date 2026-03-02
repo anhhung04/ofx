@@ -51,16 +51,10 @@ def session_submit(
     By default runs locally. Use --cloud <profile> for VPS execution.
     """
     from ofx.cloud.sessions import SessionManager, SessionTarget
+    from ofx.utils.args import parse_key_value_pairs
 
     # Parse inputs
-    parsed_inputs: dict = {}
-    for inp in inputs:
-        if "=" in inp:
-            k, v = inp.split("=", 1)
-            parsed_inputs[k] = v
-        else:
-            console.print(f"[red]Invalid input format: {inp} (expected KEY=VALUE)[/red]")
-            raise typer.Exit(code=1)
+    parsed_inputs: dict = parse_key_value_pairs(inputs)
 
     # Parse env
     parsed_env: dict = {}

@@ -90,6 +90,13 @@ The cloud module ([src/ofx/cloud/](../src/ofx/cloud/)) provides cloud VPS lifecy
   - `CloudStepRunner`: Executes individual steps on the remote host
   - Auto-integrated in `WorkflowExecutionManager._build_stage_runners()` when `job.cloud` is set
 - **CLI** ([src/ofx/commands/cloud/](../src/ofx/commands/cloud/)): `ofx cloud profile|instance|image|fleet|test|providers` subcommands
+- **Sessions** ([src/ofx/cloud/sessions/](../src/ofx/cloud/sessions/)): Detached fire-and-forget execution with lifecycle management
+  - `SessionManager`: Submit, status, fetch, cancel, destroy for local and cloud sessions
+  - `SessionStore`: JSON file persistence with `fcntl` file locking under `~/.ofx/sessions/<id>/`
+  - `build_session_script()`: Generates self-contained bash/PowerShell scripts from job steps
+  - **At-rest encryption**: Per-session random AES-256 key; output encrypted with `openssl enc -aes-256-cbc -pbkdf2 -iter 100000` on Linux, .NET AES on Windows; key file shredded after encryption; transparent decryption at fetch time
+  - `encrypt_results()` / `decrypt_results()`: User-level Fernet passphrase encryption (optional second layer)
+  - Session lifecycle: `provisioning → uploading → running → completed → fetched → encrypted → destroyed`
 
 **Import convention**:
 ```python
@@ -126,7 +133,7 @@ provider = CloudProviderRegistry.create("digitalocean", token="...")
 
 ## CLI & Commands
 
-- CLI entry: Typer app `ofx` registers `flow` (aliases `x`, `task`), `dump`, `asset`, `cloud`, `project`, `docs`, `doctor`, `secret` ([src/ofx/commands/__init__.py](../src/ofx/commands/__init__.py)).
+- CLI entry: Typer app `ofx` registers `flow` (aliases `x`, `task`), `dump`, `asset`, `cloud`, `project`, `docs`, `doctor`, `secret`, `session` ([src/ofx/commands/__init__.py](../src/ofx/commands/__init__.py)).
 - CLI commands: use `typing.Annotated` for all `typer.Option`/`typer.Argument` declarations; provide defaults inside `typer.Option` (strings default to `""`, bools to `False`) to avoid `NoneType.isidentifier` issues with Click/Typer.
 - Running workflows: `ofx flow run <name> --input key=val --output <dir>`; inputs are JSON-decoded when possible and shown via table; default output is a temp dir under `~/.ofx/tmp` ([src/ofx/commands/flow/run.py](../src/ofx/commands/flow/run.py)).
 - Validation & visualization: `ofx flow validate <name>` checks schema; `ofx flow visualize <name> --format dot|png|svg|pdf|mermaid|plantuml|d2|json|yaml` renders the DAG ([src/ofx/commands/flow/validate.py](../src/ofx/commands/flow/validate.py), [src/ofx/commands/flow/visualize.py](../src/ofx/commands/flow/visualize.py)).

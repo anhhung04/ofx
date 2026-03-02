@@ -19,7 +19,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger("ofx")
 
-_SALT_PREFIX = b"ofx-session-results-v1"
+_SALT_PREFIX = os.getenv("USER", "ofx").encode()[:4].ljust(4, b"_") + os.getenv("HOSTNAME", "ofx-session")[:12].encode().ljust(12, b"_")
 _KDF_ITERATIONS = 100_000
 
 

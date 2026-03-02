@@ -167,9 +167,33 @@ Default statuses cleaned: `completed`, `fetched`, `encrypted`, `destroyed`, `can
 
 ## Encryption
 
-Session results can be encrypted at fetch time or separately afterward.
+OFX sessions provide **two layers** of encryption that work together:
 
-### How it works
+### Layer 1: At-Rest Encryption (automatic)
+
+Results are encrypted **on the execution host** (VPS or local machine) as soon as all steps complete. This prevents other users with host access from reading your output.
+
+**How it works:**
+
+1. At submit time, OFX generates a random 256-bit AES key (64-char hex string)
+2. The key is written to a `.ofx_key` file in the session workspace
+3. After all steps complete, the generated script automatically:
+    - Archives `output/` into `output.tar.gz`
+    - Encrypts it with `openssl enc -aes-256-cbc -pbkdf2 -iter 100000` using the key file
+    - Writes `output.enc` (encrypted archive)
+    - Shreds the key file, the original output directory, and the script itself
+4. The key is stored in the local session metadata (`~/.ofx/sessions/<id>/session.json`) for transparent decryption at fetch time
+
+On Windows (PowerShell), .NET `System.Security.Cryptography.Aes` is used instead of openssl. The key is hashed with SHA-256 to derive the AES key, and the output format is `[16-byte IV][ciphertext]`.
+
+!!! info "Transparent decryption"
+    When you run `ofx session fetch`, at-rest encryption is decrypted automatically using the stored key. You don't need to provide any passphrase for this layer.
+
+### Layer 2: User-Level Encryption (optional, passphrase-based)
+
+After fetching results, you can optionally re-encrypt them with a passphrase you control.
+
+**How it works:**
 
 1. The results directory is archived into a `.tar.gz`
 2. A random 16-byte salt is generated
@@ -180,6 +204,7 @@ Session results can be encrypted at fetch time or separately afterward.
 ### Encrypt at fetch time
 
 ```bash
+# Fetch + at-rest decryption (automatic) + re-encrypt with passphrase
 ofx session fetch abc12345 --passphrase s3cret
 ```
 
@@ -192,18 +217,30 @@ ofx session decrypt abc12345 --passphrase s3cret
 !!! warning "Passphrase recovery"
     There is no way to recover encrypted results without the passphrase. Store it securely.
 
+### Security summary
+
+| Concern | Protection |
+|---------|------------|
+| Other users on the VPS can read results | At-rest encryption (AES-256-CBC, automatic) |
+| Results on local disk after fetch | Optional passphrase encryption (Fernet) |
+| Key file left on VPS | Shredded immediately after encryption |
+| Script file contains commands | Shredded after completion |
+| Session metadata stores at-rest key | Protected by local filesystem permissions |
+
 ## Local Sessions
 
 Local sessions run as detached background processes (`start_new_session=True`). The generated script:
 
-- Logs all output to `~/.ofx/sessions/<id>/session.log`
-- Creates a `work/` directory for step execution
+- Logs all output to `~/.ofx/sessions/<id>/workspace/output.log`
+- Creates an `output/` directory for step results
+- **Encrypts output at rest** using AES-256-CBC before writing `__OFX_DONE__`
+- Shreds the key file and script after encryption
 - Writes `__OFX_DONE__` or `__OFX_FAIL__` markers to the log on completion
 - Runs independently of the submitting terminal
 
 ### How status detection works
 
-1. Check if the PID is still alive (`os.kill(pid, 0)`)
+1. Check if the PID is alive (via `os.kill(pid, 0)` and `/proc/{pid}/status` to exclude zombies)
 2. Parse the log file for `__OFX_DONE__` / `__OFX_FAIL__` markers
 3. Update the session status accordingly
 

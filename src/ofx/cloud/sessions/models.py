@@ -90,7 +90,17 @@ class Session(OFXBaseModel):
         default="", description="Local directory where fetched results live"
     )
 
-    # Encryption
+    # At-rest encryption (transparent — key stored locally in session metadata)
+    at_rest_key: str = Field(
+        default="",
+        description="Random AES key for at-rest encryption on VPS/local (hex-encoded)",
+    )
+    at_rest_encrypted: bool = Field(
+        default=False,
+        description="Whether output on the remote/local target is encrypted at rest",
+    )
+
+    # User-requested encryption (passphrase-based, applied at fetch time)
     encrypted: bool = Field(default=False, description="Whether results are encrypted")
     encrypted_file: str = Field(
         default="", description="Path to encrypted results archive"

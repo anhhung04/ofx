@@ -226,6 +226,37 @@ class TestScriptBuilder:
         script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
         assert "scan.sh" in script
 
+    def test_bash_encrypt_at_rest(self):
+        steps = [self._make_step(name="scan", run="echo hi")]
+        script = build_session_script(
+            steps, session_id="aabb", work_dir="/tmp/test",
+            encrypt_at_rest=True,
+        )
+        assert ".ofx_key" in script
+        assert "openssl enc" in script
+        assert "output.enc" in script
+        assert "shred" in script
+        assert "__OFX_DONE__" in script  # marker still present after encryption block
+
+    def test_bash_no_encrypt_by_default(self):
+        steps = [self._make_step(name="scan", run="echo hi")]
+        script = build_session_script(
+            steps, session_id="aabb", work_dir="/tmp/test",
+            encrypt_at_rest=False,
+        )
+        assert "openssl enc" not in script
+        assert "__OFX_DONE__" in script
+
+    def test_powershell_encrypt_at_rest(self):
+        steps = [self._make_step(name="scan", run="Get-Process")]
+        script = build_session_script(
+            steps, session_id="aabb", work_dir="C:\\Temp\\test",
+            os_type="windows", encrypt_at_rest=True,
+        )
+        assert ".ofx_key" in script
+        assert "output.enc" in script
+        assert "AES" in script or "Aes" in script
+
 
 # ======================================================================
 # Encryption tests
@@ -361,9 +392,15 @@ class TestSessionManagerLocal:
         assert session.remote_pid is not None
         assert session.name == "test-local"
 
+        # At-rest encryption should be enabled
+        assert session.at_rest_key
+        assert len(session.at_rest_key) == 64  # 32 bytes hex
+        assert session.at_rest_encrypted
+
         # Should be persisted
         loaded = store.load(session.id)
         assert loaded.id == session.id
+        assert loaded.at_rest_key == session.at_rest_key
 
     def test_submit_local_runs_script(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
@@ -374,10 +411,10 @@ class TestSessionManagerLocal:
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
         )
 
-        # Wait for the process to finish
+        # Wait for the process to finish (longer timeout for encryption step)
         import time
-        for _ in range(30):
-            time.sleep(0.2)
+        for _ in range(60):
+            time.sleep(0.5)
             try:
                 os.kill(session.remote_pid, 0)
             except ProcessLookupError:
@@ -386,6 +423,13 @@ class TestSessionManagerLocal:
         # Check status
         session = asyncio.run(mgr.status(session.id))
         assert session.status == SessionStatus.COMPLETED
+
+        # At-rest encryption: output.enc should exist, output/ should be removed
+        work = Path(session.remote_work_dir)
+        assert (work / "output.enc").exists(), "output.enc missing — at-rest encryption failed"
+        assert not (work / "output").exists(), "output/ dir should be removed after encryption"
+        # Key file should have been shredded
+        assert not (work / ".ofx_key").exists(), "key file should be shredded"
 
     def test_status_completed(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
@@ -396,10 +440,10 @@ class TestSessionManagerLocal:
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
         )
 
-        # Wait for completion
+        # Wait for completion (longer timeout for encryption step)
         import time
-        for _ in range(30):
-            time.sleep(0.2)
+        for _ in range(60):
+            time.sleep(0.5)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
@@ -415,10 +459,10 @@ class TestSessionManagerLocal:
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
         )
 
-        # Wait for completion
+        # Wait for completion (longer timeout for encryption step)
         import time
-        for _ in range(30):
-            time.sleep(0.2)
+        for _ in range(60):
+            time.sleep(0.5)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
@@ -427,6 +471,7 @@ class TestSessionManagerLocal:
         assert "Session" in logs or "started" in logs
 
     def test_fetch_results(self, tmp_path):
+        """Fetch transparently decrypts at-rest encrypted output."""
         wf_path = self._create_test_workflow(tmp_path)
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
@@ -436,14 +481,22 @@ class TestSessionManagerLocal:
         )
 
         import time
-        for _ in range(30):
-            time.sleep(0.2)
+        for _ in range(60):
+            time.sleep(0.5)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
 
+        assert session.status == SessionStatus.COMPLETED
+
         results_path = asyncio.run(mgr.fetch(session.id))
         assert results_path.exists()
+
+        # The at-rest encryption should have been transparently decrypted
+        # and result.txt from "echo result data > output/result.txt" should be there
+        assert (results_path / "result.txt").exists(), \
+            f"result.txt missing; contents: {list(results_path.iterdir())}"
+
         # Fetched status
         session = store.load(session.id)
         assert session.status == SessionStatus.FETCHED
@@ -458,8 +511,8 @@ class TestSessionManagerLocal:
         )
 
         import time
-        for _ in range(30):
-            time.sleep(0.2)
+        for _ in range(60):
+            time.sleep(0.5)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
