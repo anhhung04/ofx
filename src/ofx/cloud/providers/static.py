@@ -140,3 +140,7 @@ class StaticProvider(CloudProvider):
     ) -> list[CloudInstanceInfo]:
         """Static provider doesn't track instances globally."""
         return []
+
+    async def close(self) -> None:
+        """No-op cleanup hook for static provider."""
+        return None
