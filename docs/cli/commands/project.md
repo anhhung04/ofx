@@ -136,9 +136,34 @@ ofx project sync my-project --encrypt --encryption-key "$MY_KEY"
 ```
 
 Encryption options:
-- **Git**: Configured via Git filters during init
-- **S3**: Encrypted before S3 upload
+- **Git**: Configured via Git clean/smudge filters during init
+- **SSH**: Encrypted before SFTP upload
 - Keys must be stored securely (no recovery if lost)
+
+#### Encryption details (v2)
+
+OFX uses AES-256-GCM encryption with the following wire format:
+
+| Segment | Size | Description |
+|---------|------|-------------|
+| Magic header | 8 bytes | `OFX_ENC\x01` — identifies the format |
+| Salt | 16 bytes | Random per-encryption PBKDF2 salt |
+| Nonce | 12 bytes | Random GCM nonce |
+| Ciphertext | Variable | AES-256-GCM encrypted data (includes 16-byte auth tag) |
+
+- A fresh random salt and nonce are generated for every encryption operation
+- PBKDF2-HMAC-SHA256 with 600,000 iterations derives the key from your passphrase
+- Legacy (pre-v2) encrypted files are detected and decrypted transparently
+
+#### Cross-platform SSH sync
+
+On Linux, SSH sync uses the native `ssh`/`scp` commands by default. For Windows and other platforms, install the optional `paramiko` dependency for pure-Python SSH/SFTP support:
+
+```bash
+pip install ofx[ssh]
+```
+
+SSH key generation uses the `cryptography` library (no external tools required).
 
 ## Project list
 

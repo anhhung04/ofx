@@ -32,10 +32,29 @@ USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
 USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 SESSIONS_DIR = BASE_DATA_DIR / "sessions"
+COLLECTIONS_DIR = BASE_DATA_DIR / "collections"
 SCRIPT_COMMUNICATION_REGISTRY = TEMP_DIR / "script_channels.json"
 CHANNELS_DIR = TEMP_DIR / "channels"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
+
+
+def get_workflow_search_dirs() -> list[Path]:
+    """Return all workflow search directories including installed collections.
+
+    Combines ``DEFAULT_WORKFLOWS_DIRS`` with paths of every installed
+    collection that exists on disk.  Called lazily so that collections
+    installed after process start are still found.
+    """
+    dirs = list(DEFAULT_WORKFLOWS_DIRS)
+    collections_dir = COLLECTIONS_DIR
+    if collections_dir.is_dir():
+        for child in sorted(collections_dir.iterdir()):
+            if child.is_dir() and child.name != "__pycache__":
+                abs_child = child.absolute()
+                if abs_child not in dirs:
+                    dirs.append(abs_child)
+    return dirs
 
 DEFAULT_SHELL = "powershell.exe" if IS_WINDOWS else "/bin/bash"
 

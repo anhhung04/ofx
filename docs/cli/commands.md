@@ -6,12 +6,10 @@ OFX provides a comprehensive command-line interface for workflow execution, proj
 
 | Command | Subcommands | Purpose |
 |---------|-------------|---------|
-| **flow** (x, task) | run, validate, update, tools, visualize | Execute and manage workflows |
+| **flow** (x, task) | run, validate, tools, visualize, schema, collection | Execute and manage workflows |
 | **project** | init, sync, list, remove, import | Manage Red Team projects |
 | **secret** | set, get, list, search, delete, export, import, backup, restore, history, clear, store, migrate | Manage encrypted secrets |
-| **dump** | schema, flow, job, step | Display workflow schemas and configurations |
 | **docs** | api | Access documentation and API reference |
-| **asset** | init | Initialize OFX assets |
 | **doctor** | check, install-help | System health and diagnostics |
 
 ## Command Structure
@@ -47,8 +45,13 @@ ofx flow run <workflow_name> [options]
 
 **Options:**
 - `-i, --input <key=value>` - Input parameters (can be specified multiple times)
-- `-o, --output <path>` - Output directory for results (default: current directory)
+- `-o, --output <path>` - Output directory for results (default: temp dir under `~/.ofx/tmp`)
+- `-p, --project <name>` - Run for a specific project, sets output to `<project>/logs` and exposes project vars
 - `--profile` - Enable performance profiling
+- `--quiet` - Suppress interactive console output (cron/headless mode)
+- `--lock <path>` - Lock file path to prevent overlapping runs (cron-safe)
+- `--wait-lock <seconds>` - Seconds to wait for lock acquisition before failing
+- `--log-format <format>` - Log format: `rich` (default), `json`, or `text`
 
 ### flow validate
 
@@ -61,13 +64,39 @@ ofx flow validate [workflow_name]
 **Arguments:**
 - `workflow_name` (optional) - Name of the workflow to validate
 
-### flow update
+### flow schema
 
-Update workflow configuration and dependencies.
+Inspect OFX workflow/job/step model schemas.
 
 ```bash
-ofx flow update
+ofx flow schema <subcommand> [options]
 ```
+
+**Subcommands:**
+- `schema` - Export the workflow model schema as JSON
+- `flow` - Display the Workflow model as a rich tree
+- `job` - Display the Job model as a rich tree
+- `step` - Display the Step model as a rich tree
+
+**Options (schema subcommand):**
+- `-o, --output <path>` - Output file path for the JSON schema
+
+### flow collection
+
+Manage installable workflow collections.
+
+```bash
+ofx flow collection <subcommand> [options]
+```
+
+**Subcommands:**
+- `add <name_or_url>` - Install a collection from Git (supports `--name`, `--ref`, `--no-deps`)
+- `remove <name>` - Remove an installed collection
+- `update [name]` - Pull latest changes (omit name for all)
+- `list` - List installed collections
+- `info <name>` - Show detailed info
+- `search <query>` - Search the community index
+- `migrate` - Migrate from legacy asset system
 
 ### flow tools
 
@@ -363,45 +392,45 @@ ofx secret migrate [options]
 
 ---
 
-## dump
+## flow schema (detailed)
 
-**Dump workflow configuration and outputs**
+**Inspect workflow/job/step model schemas**
 
-Display workflow schema, properties, and data models for reference.
+Schema inspection is available as `ofx flow schema`. See [flow schema reference](cli/commands/schema.md) for full details.
 
-### dump schema
+### flow schema schema
 
 Export the OFX workflow model schema as a JSON file.
 
 ```bash
-ofx dump schema [options]
+ofx flow schema schema [options]
 ```
 
 **Options:**
 - `-o, --output <path>` - Output file path for the JSON schema (default: `workflow_schema.json` in data dir)
 
-### dump flow
+### flow schema flow
 
 Display the OFX workflow model schema as a rich, human-readable tree.
 
 ```bash
-ofx dump flow
+ofx flow schema flow
 ```
 
-### dump job
+### flow schema job
 
 Display the OFX job model schema as a rich, human-readable tree.
 
 ```bash
-ofx dump job
+ofx flow schema job
 ```
 
-### dump step
+### flow schema step
 
 Display the OFX step model schema as a rich, human-readable tree.
 
 ```bash
-ofx dump step
+ofx flow schema step
 ```
 
 ---
@@ -427,16 +456,74 @@ ofx docs api [options]
 
 ---
 
-## asset
+## flow collection (detailed)
 
-**Manage OFX assets**
+**Manage installable workflow collections**
 
-### asset init
+Install, update, remove, search, and inspect packages of reusable workflows. See [flow collection reference](cli/commands/collection.md) and the [Collections Guide](guide/collections.md) for full details.
 
-Initialize new OFX assets.
+### flow collection add
+
+Install a workflow collection from Git.
 
 ```bash
-ofx asset init
+ofx flow collection add <name_or_url> [options]
+```
+
+**Arguments:**
+- `name_or_url` (required) - Collection name, `org/repo`, or full Git URL. Bare names resolve to `https://github.com/ofx-workflows/<name>`.
+
+**Options:**
+- `-n, --name <name>` - Override the local collection name
+- `-r, --ref <ref>` - Pin a Git tag or branch
+- `--no-deps` - Skip installing collection dependencies
+
+### flow collection remove
+
+Remove an installed collection.
+
+```bash
+ofx flow collection remove <name>
+```
+
+### flow collection update
+
+Pull latest changes for installed collections.
+
+```bash
+ofx flow collection update [name]
+```
+
+### flow collection list
+
+List installed collections.
+
+```bash
+ofx flow collection list [--outdated]
+```
+
+### flow collection info
+
+Show detailed info for an installed collection.
+
+```bash
+ofx flow collection info <name>
+```
+
+### flow collection search
+
+Search the community collection index.
+
+```bash
+ofx flow collection search <query> [--refresh]
+```
+
+### flow collection migrate
+
+Migrate legacy asset collections to the new system.
+
+```bash
+ofx flow collection migrate
 ```
 
 ---

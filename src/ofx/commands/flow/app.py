@@ -3,7 +3,12 @@ from typing import Annotated
 
 import typer
 
+from ofx.commands.dump import app as schema_app
+from ofx.commands.flow.collection import app as collection_app
+
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
+app.add_typer(schema_app, name="schema", help="Inspect workflow/job/step model schemas")
+app.add_typer(collection_app, name="collection", help="Manage workflow collections")
 
 NAME = "flow"
 
@@ -94,6 +99,14 @@ def run(
             help="Seconds to wait for lock acquisition before failing (cron-safe).",
         ),
     ] = 0,
+    project: Annotated[
+        str,
+        typer.Option(
+            "-p",
+            "--project",
+            help="Run workflow for a specific project. Sets output to <project>/logs and exposes project vars.",
+        ),
+    ] = "",
 ):
     from ofx.commands.flow.run import FlowRunHandler
 
@@ -111,6 +124,7 @@ def run(
             lock=lock,
             log_format=log_format,
             wait_lock=wait_lock,
+            project=project,
         ).run()
     )
 
@@ -125,14 +139,6 @@ def validate(
     from ofx.commands.flow.validate import ValidateHandler
 
     ValidateHandler().run(workflow_name=workflow_name)
-
-
-@app.command()
-def update():
-    """Update the workflow configuration"""
-    from ofx.commands.flow.update import UpdateHandler
-
-    UpdateHandler().run()
 
 
 @app.command()

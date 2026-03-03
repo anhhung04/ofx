@@ -6,6 +6,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+import typer
+
 from ofx.commands.ui_helpers import inputs_table
 from ofx.models.config import DurableRunConfig
 from ofx.runner import run_workflow
@@ -15,6 +17,7 @@ from ofx.settings import (
     TEMP_DIR,
     ensure_dir,
     get_console,
+    get_workflow_search_dirs,
     settings,
 )
 from ofx.utils.secrets import load_secrets
@@ -66,10 +69,10 @@ class FlowRunHandler:
         lock: str | None = None,
         log_format: str = "rich",
         wait_lock: int = 0,
+        project: str = "",
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
-        self.output = get_tmp_dir(output)
         self.profile = profile
         self.durable = durable
         self.resume = resume
@@ -79,6 +82,33 @@ class FlowRunHandler:
         self.lock_path = Path(lock).expanduser() if lock else None
         self.log_format = log_format
         self.wait_lock = max(wait_lock, 0)
+        self.project_vars: dict[str, str] = {}
+
+        if project:
+            self._resolve_project(project)
+            self.output = get_tmp_dir(output) if output else Path(self.project_vars["project_path"]) / "logs"
+            self.output.mkdir(parents=True, exist_ok=True)
+        else:
+            self.output = get_tmp_dir(output)
+
+    def _resolve_project(self, project: str) -> None:
+        """Resolve project path and populate project variables."""
+        from ofx.commands.project.project_manager import ProjectManager
+
+        project_path = Path(ProjectManager.resolve_path(project))
+        if not project_path.exists():
+            raise typer.BadParameter(f"Project not found: {project}")
+
+        self.project_vars = {
+            "project_name": project_path.name,
+            "project_path": str(project_path),
+            "project_logs": str(project_path / "logs"),
+            "project_scans": str(project_path / "scans"),
+            "project_evidence": str(project_path / "evidence"),
+            "project_scope": str(project_path / "scope"),
+            "project_tools": str(project_path / "tools"),
+            "project_exploits": str(project_path / "exploits"),
+        }
 
     async def run(self):
         import cProfile
@@ -101,6 +131,8 @@ class FlowRunHandler:
             self._process_inputs()
 
             logger.info("Workflow: %s", self.workflow_name)
+            if self.project_vars:
+                logger.info("Project: %s (%s)", self.project_vars["project_name"], self.project_vars["project_path"])
             logger.info("Output: %s", self.output.as_posix())
             if self.input and not self.quiet:
                 console.print(Align.center(inputs_table(self.input)))
@@ -110,9 +142,10 @@ class FlowRunHandler:
                 workflow=self.workflow_name,
                 inputs=self.input,
                 output_path=self.output,
-                workflow_search_paths=DEFAULT_WORKFLOWS_DIRS,  # type: ignore
+                workflow_search_paths=get_workflow_search_dirs(),
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
+                vars=self.project_vars if self.project_vars else None,
             )
 
             if result.status.value == "completed":

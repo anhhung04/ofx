@@ -21,7 +21,7 @@ def _is_admin() -> bool:
         try:
             import ctypes
 
-            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0 #type: ignore
         except Exception:
             return False
     else:
@@ -287,7 +287,7 @@ function ofx_wait_for {{
 '''
 
 
-def get_shell_exports() -> dict[str, str]:
+def get_shell_exports() -> dict[str, str | bool]:
     """Get shell variable exports for templates.
 
     Returns:

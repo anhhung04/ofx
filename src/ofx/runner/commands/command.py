@@ -40,15 +40,6 @@ def exec_script_in_process(
     """Execute script in a separate process with channel communication"""
     store = ChannelStore(channels_dir)
 
-    def publish(channel: str, data):
-        store.publish(channel, data)
-
-    def subscribe(channel: str):
-        return store.subscribe(channel)
-
-    def wait_for(channel: str, condition, timeout: int = 60):
-        return store.wait_for(channel, condition, timeout=timeout)
-
     globals_dict = {
         "__builtins__": builtins.__dict__,
         "__name__": "__main__",
@@ -58,9 +49,9 @@ def exec_script_in_process(
         "__inputs__": inputs,
         "__ctx__": ctx_model,
         "__secrets__": secrets,
-        "publish": publish,
-        "subscribe": subscribe,
-        "wait_for": wait_for,
+        "publish": lambda channel, data: store.publish(channel, data),
+        "subscribe": lambda channel: store.subscribe(channel),
+        "wait_for": lambda channel, condition, timeout=60: store.wait_for(channel, condition, timeout=timeout),
     }
 
     stdout_capture = io.StringIO()

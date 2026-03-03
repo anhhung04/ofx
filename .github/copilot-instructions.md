@@ -104,6 +104,38 @@ from ofx.cloud import CloudProviderRegistry
 provider = CloudProviderRegistry.create("digitalocean", token="...")
 ```
 
+### Collections Module (Workflow Packaging)
+
+The collections module ([src/ofx/collections/](../src/ofx/collections/)) manages installable workflow packages:
+
+- **Manifest** ([src/ofx/collections/manifest.py](../src/ofx/collections/manifest.py)):
+  - `CollectionManifest`: Pydantic model parsed from `collection.yaml` — name, version, description, author, license, min_ofx_version, workflows, tools, dependencies, tags
+  - `InstalledCollection`: Metadata for installed collections stored in `installed.json`
+  - `CollectionIndex` / `CollectionIndexEntry`: Remote community index models with `.search()` method
+  - `from_directory()`: Auto-discovers `.yml`/`.yaml` workflow files when manifest omits them
+- **Manager** ([src/ofx/collections/manager.py](../src/ofx/collections/manager.py)):
+  - `CollectionManager`: Full lifecycle — `add()`, `remove()`, `update()`, `list_installed()`, `get()`, `info()`, `collection_workflow_dirs()`, `migrate_from_assets()`
+  - `DEFAULT_COLLECTION_ORG = "https://github.com/ofx-workflows"` — bare names resolve here
+  - `resolve_source()`: bare name → `ofx-workflows/<name>`, `org/repo` → `github.com/org/repo`, full URL → passthrough
+  - Recursive dependency resolution in `add(install_deps=True)` — installs `dependencies` from manifest
+  - Lightweight semver: `check_version_constraint()` supports `>=`, `>`, `<=`, `<`, `==`, `!=`, `~=`
+  - `min_ofx_version` gate warns when OFX version is below requirement
+  - Storage: `~/.ofx/collections/installed.json` registry + `~/.ofx/collections/<name>/` directories
+- **Index Client** ([src/ofx/collections/index.py](../src/ofx/collections/index.py)):
+  - `IndexClient`: Fetches/caches index from `https://raw.githubusercontent.com/ofx-workflows/index/main/index.json` with 1-hour TTL
+  - `search()`, `get_entry()` for community collection discovery
+- **CLI** ([src/ofx/commands/flow/collection.py](../src/ofx/commands/flow/collection.py)):
+  - `ofx flow collection add|remove|update|list|info|search|migrate` subcommands
+  - `add --no-deps` to skip dependency resolution
+- **Workflow search integration**: `get_workflow_search_dirs()` in settings.py automatically includes all installed collection directories in the workflow search path
+
+**Import convention**:
+```python
+from ofx.collections import CollectionManager, CollectionManifest
+mgr = CollectionManager()
+mgr.add("recon-tools")  # installs from ofx-workflows org
+```
+
 ## Workflows & Models
 
 - Workflows: YAML parsed via `Workflow` model ([src/ofx/models/workflow.py](../src/ofx/models/workflow.py)); job IDs must match `[A-Za-z0-9_-]+`, `needs` validated, and steps get `step_index` assigned during validation.
@@ -115,7 +147,7 @@ provider = CloudProviderRegistry.create("digitalocean", token="...")
 
 ## Execution & Context
 
-- Workflow discovery: `find_workflow` searches current dir, `~/.ofx/workflows`, then remote URL or git repo clones; file extensions `.yml/.yaml` only ([src/ofx/utils/workflow_utils.py](../src/ofx/utils/workflow_utils.py)).
+- Workflow discovery: `find_workflow` searches current dir, `~/.ofx/workflows`, installed collection directories, then remote URL or git repo clones; `get_workflow_search_dirs()` lazily aggregates all search paths including `~/.ofx/collections/*/`; file extensions `.yml/.yaml` only ([src/ofx/utils/workflow_utils.py](../src/ofx/utils/workflow_utils.py), [src/ofx/settings.py](../src/ofx/settings.py)).
 - Execution plan: dependencies topologically sorted into parallel stages via `find_parallel_schedule`; jobs in the same stage run concurrently; matrix jobs expanded before scheduling ([src/ofx/runner/execution/workflow.py](../src/ofx/runner/execution/workflow.py)).
 - Run contexts: `RunContext` merges env vars with PATH prepended by `~/Tools/bin` and sets `UV_TOOL_BIN_DIR`; matrix context available as `ctx.vars['matrix']` during job execution ([src/ofx/runner/core/models.py](../src/ofx/runner/core/models.py) and [src/ofx/utils/env.py](../src/ofx/utils/env.py)).
 - Registry: runners use namespaced keys and `RunnerRegistryKeys` constants; supports memory, file, Redis, etcd, and memcached backends; provides data access in templates via `jobs` and `steps` variables ([src/ofx/runner/registry/](../src/ofx/runner/registry/)).
@@ -133,9 +165,11 @@ provider = CloudProviderRegistry.create("digitalocean", token="...")
 
 ## CLI & Commands
 
-- CLI entry: Typer app `ofx` registers `flow` (aliases `x`, `task`), `dump`, `asset`, `cloud`, `project`, `docs`, `doctor`, `secret`, `session` ([src/ofx/commands/__init__.py](../src/ofx/commands/__init__.py)).
+- CLI entry: Typer app `ofx` registers `flow` (aliases `x`, `task`), `cloud`, `project`, `docs`, `doctor`, `secret`, `session` ([src/ofx/commands/__init__.py](../src/ofx/commands/__init__.py)).
 - CLI commands: use `typing.Annotated` for all `typer.Option`/`typer.Argument` declarations; provide defaults inside `typer.Option` (strings default to `""`, bools to `False`) to avoid `NoneType.isidentifier` issues with Click/Typer.
-- Running workflows: `ofx flow run <name> --input key=val --output <dir>`; inputs are JSON-decoded when possible and shown via table; default output is a temp dir under `~/.ofx/tmp` ([src/ofx/commands/flow/run.py](../src/ofx/commands/flow/run.py)).
+- Running workflows: `ofx flow run <name> --input key=val --output <dir> --project <name>`; inputs are JSON-decoded when possible and shown via table; default output is a temp dir under `~/.ofx/tmp`; `--project` sets output to `<project>/logs` and injects project vars into context ([src/ofx/commands/flow/run.py](../src/ofx/commands/flow/run.py)).
+- Collections: `ofx flow collection add|remove|update|list|info|search|migrate` manages workflow packages from the `ofx-workflows` GitHub org or custom git URLs ([src/ofx/commands/flow/collection.py](../src/ofx/commands/flow/collection.py)).
+- Schema inspection: `ofx flow schema` shows workflow/job/step model schemas ([src/ofx/commands/dump.py](../src/ofx/commands/dump.py)).
 - Validation & visualization: `ofx flow validate <name>` checks schema; `ofx flow visualize <name> --format dot|png|svg|pdf|mermaid|plantuml|d2|json|yaml` renders the DAG ([src/ofx/commands/flow/validate.py](../src/ofx/commands/flow/validate.py), [src/ofx/commands/flow/visualize.py](../src/ofx/commands/flow/visualize.py)).
 - Secrets: CLI loads secrets from `~/.ofx/secrets` and falls back to `secrets.enc`; `secrets: inherit` passes parent secrets into reusable workflows ([src/ofx/utils/secrets.py](../src/ofx/utils/secrets.py)).
 - Progress UX: workflow/job runners use `rich` progress bars; interactive steps suppress nested progress to keep TTY usable.

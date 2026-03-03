@@ -959,9 +959,9 @@ def _decrypt_at_rest_openssl(
             for member in tar.getmembers():
                 # e.g. "output/scan.txt" → "scan.txt"
                 parts = Path(member.name).parts
-                if len(parts) > 1 and parts[0] == "output":
+                if parts and len(parts) > 1 and parts[0] == "output":
                     member.name = str(Path(*parts[1:]))
-                elif parts[0] == "output":
+                elif parts and parts[0] == "output":
                     continue  # skip the bare directory entry
                 tar.extract(member, path=str(output_dir))
 

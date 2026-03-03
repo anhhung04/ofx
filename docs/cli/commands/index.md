@@ -8,7 +8,8 @@ Complete reference for all OFX command-line interface commands.
 - **[flow validate](validate.md)** - Validate workflow syntax
 - **[flow visualize](visualize.md)** - Visualize workflow dependencies
 - **[flow tools](tools.md)** - Manage workflow tools
-- **[flow update](update.md)** - Update workflows
+- **[flow schema](schema.md)** - Inspect workflow/job/step model schemas
+- **[flow collection](collection.md)** - Install and manage workflow collections
 
 ## Project Commands
 
@@ -20,15 +21,10 @@ Complete reference for all OFX command-line interface commands.
 
 - **[secret manage](secret.md)** - Manage secrets and credentials
 
-## Asset Management
-
-- **[asset](asset.md)** - Manage asset collections and workflows
-
 ## Utility Commands
 
 - **[docs](docs-serve.md)** - Display API documentation and data directories
 - **[doctor](doctor.md)** - Diagnose system dependencies
-- **[dump](dump.md)** - Dump and analyze data structures
 
 ## Quick Start
 
@@ -55,6 +51,9 @@ ofx docs --module webshell
 # Run a workflow
 ofx flow run workflow-name
 
+# Run for a specific project
+ofx flow run workflow-name --project my-project
+
 # Run with durable checkpoints
 ofx flow run workflow-name --durable --resume
 
@@ -63,6 +62,19 @@ ofx flow validate workflow-name
 
 # Visualize workflow dependencies
 ofx flow visualize workflow-name
+```
+
+### Managing Collections
+
+```bash
+# Install a collection from the community
+ofx flow collection add recon-tools
+
+# List installed collections
+ofx flow collection list
+
+# Search for collections
+ofx flow collection search scanning
 ```
 
 ### Managing Secrets
@@ -83,13 +95,12 @@ ofx secret list
 | `ofx flow validate` | Validate workflow syntax |
 | `ofx flow visualize` | Visualize workflow dependency graph |
 | `ofx flow tools` | Install and manage workflow tools |
-| `ofx flow update` | Update workflow definitions |
+| `ofx flow schema` | Inspect workflow/job/step model schemas |
+| `ofx flow collection` | Manage workflow collections |
 | `ofx project init` | Initialize new project |
 | `ofx project sync` | Sync project to storage |
 | `ofx secret manage` | Manage secrets |
-| `ofx asset` | Manage asset collections |
 | `ofx docs` | Display API documentation and data directories |
 | `ofx docs --list` | List all available API modules |
 | `ofx docs --module <name>` | View specific module documentation |
 | `ofx doctor` | Check system dependencies |
-| `ofx dump` | Dump data structures |

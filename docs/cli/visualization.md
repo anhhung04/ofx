@@ -11,7 +11,7 @@ All table outputs now intelligently adapt to your terminal width for optimal rea
 - **`ofx project list`** - Full-width project listing
 - **`ofx secret list`** - Full-width secret tables  
 - **`ofx secret search`** - Full-width search results
-- **`ofx asset list`** - Full-width asset collections
+- **`ofx flow collection list`** - Full-width collection tables
 - **`ofx docs api`** - Full-width API documentation tables
 - **`ofx doctor check`** - Full-width system health tables
 
@@ -24,8 +24,8 @@ Long-running operations now display visual feedback:
 - **`ofx project init`** - Animated spinner during project creation and initialization
 - **`ofx project sync`** - Animated spinner during sync operations
 - **`ofx flow run`** - Animated spinner during workflow execution
-- **`ofx asset add`** - Animated spinner during Git clone operations
-- **`ofx asset sync`** - Animated spinner during Git pull/push operations
+- **`ofx flow collection add`** - Animated spinner during Git clone operations
+- **`ofx flow collection update`** - Animated spinner during Git pull operations
 
 #### Progress Bars
 
@@ -135,17 +135,17 @@ Stored Secrets (5 found)
 └──────────────────┴──────────┘
 ```
 
-### Asset Collections
+### Workflow Collections
 
 ```bash
-$ ofx asset list
+$ ofx flow collection list
 
-Installed Workflow Asset Collections
-┌─────────┬──────────────────────────────────┬────────────────────┐
-│ Name    │ Source URL                       │ Local Path         │
-├─────────┼──────────────────────────────────┼────────────────────┤
-│ default │ https://github.com/.../ofx-hub   │ ~/.ofx/default     │
-└─────────┴──────────────────────────────────┴────────────────────┘
+Installed Collections (1)
+┌─────────────┬─────────┬──────────────────────────────────┬──────────┐
+│ Name        │ Version │ Source                           │ Tags     │
+├─────────────┼─────────┼──────────────────────────────────┼──────────┤
+│ recon-tools │ 1.0.0   │ https://github.com/ofx-workflows │ recon    │
+└─────────────┴─────────┴──────────────────────────────────┴──────────┘
 ```
 
 ### System Health Check

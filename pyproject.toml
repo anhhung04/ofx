@@ -59,6 +59,9 @@ cloud = [
 winrm = [
   "pywinrm>=0.4.3",
 ]
+ssh = [
+  "paramiko>=3.4.0",
+]
 
 [project.scripts]
 ofx = "ofx:main"

@@ -20,6 +20,7 @@ from ofx.settings import (
     TEMP_DIR,
     ensure_dir,
     get_console,
+    get_workflow_search_dirs,
     settings,
 )
 from ofx.utils.secrets import load_secrets
@@ -54,6 +55,7 @@ async def run_workflow(
     workflow_search_paths: list[str | Path] | None = None,
     quiet: bool = False,
     durable_overrides: DurableRunConfig | None = None,
+    vars: dict[str, Any] | None = None,
 ) -> RunResult:
     """
     Run an OFX workflow programmatically.
@@ -66,6 +68,8 @@ async def run_workflow(
         workflow_search_paths: List of directories to search for workflows.
             Defaults to standard OFX workflow directories if not provided.
         quiet: If True, suppresses console output (sets log level to ERROR).
+        vars: Dictionary of additional variables to inject into the run context
+            (e.g. project metadata).
 
     Returns:
         RunResult object containing the execution status and outputs.
@@ -74,7 +78,7 @@ async def run_workflow(
         FileNotFoundError: If the workflow file cannot be found.
         ValueError: If inputs break validation.
     """
-    search_paths = workflow_search_paths or DEFAULT_WORKFLOWS_DIRS
+    search_paths = workflow_search_paths or get_workflow_search_dirs()
     search_paths = [Path(p) for p in search_paths]
 
     workflow_path = Path(workflow)
@@ -114,6 +118,7 @@ async def run_workflow(
             search_paths, resolved_workflow.workflow_path.parent
         ),
         durable=durable_config,
+        vars=vars or {},
     )
 
     runner = WorkflowRunner(resolved_workflow, ctx=ctx)
