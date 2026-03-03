@@ -1,6 +1,9 @@
 import os
 import platform
+import shutil
+import subprocess
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -101,6 +104,45 @@ ensure_dir(BASE_DATA_DIR)
 ensure_dir(TEMP_DIR)
 ensure_dir(SECRETS_DIR)
 
+
+# ------------------------------------------------------------------
+# GitHub token resolution: explicit setting → env → gh CLI
+# ------------------------------------------------------------------
+
+@lru_cache(maxsize=1)
+def _gh_cli_token() -> str:
+    """Try to obtain a GitHub token from the ``gh`` CLI.
+
+    Returns an empty string if ``gh`` is not installed or not authenticated.
+    The result is cached for the lifetime of the process.
+    """
+    if not shutil.which("gh"):
+        return ""
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return ""
+
+
+def get_github_token() -> str:
+    """Resolve a GitHub token using the following precedence:
+
+    1. ``OFX_GITHUB_TOKEN`` env var (via ``settings.github_token``)
+    2. ``gh auth token`` (if the ``gh`` CLI is installed and authenticated)
+
+    Returns an empty string when no token is available.
+    """
+    return settings.github_token or _gh_cli_token()
+
+
 _console = None
 
 
@@ -163,6 +205,23 @@ class Settings(BaseSettings):
     default_remote_registry: str = Field(
         default="https://github.com",
         description="Default remote registry URL for cloning repositories",
+    )
+
+    # Collection / Index Settings
+    github_token: str = Field(
+        default="",
+        description=(
+            "GitHub personal access token for private collection repos and index. "
+            "Set via OFX_GITHUB_TOKEN env var."
+        ),
+    )
+    collection_index_url: str = Field(
+        default="",
+        description=(
+            "Override the default community index URL. "
+            "Set via OFX_COLLECTION_INDEX_URL env var. "
+            "Defaults to the ofx-workflows/index repo on GitHub."
+        ),
     )
 
     # Job Registry Settings

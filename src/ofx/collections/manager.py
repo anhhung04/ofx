@@ -201,8 +201,12 @@ class CollectionManager:
         clone_opts = ["--depth=1"]
         if ref:
             clone_opts.append(f"--branch={ref}")
+
+        # Inject token into HTTPS URLs for private repo access
+        clone_url = self._authenticated_url(source)
+
         try:
-            git.Repo.clone_from(source, str(target), multi_options=clone_opts)
+            git.Repo.clone_from(clone_url, str(target), multi_options=clone_opts)
         except GitCommandError as exc:
             raise RuntimeError(f"Failed to clone '{source}': {exc}") from exc
 
@@ -382,6 +386,27 @@ class CollectionManager:
             return str(repo.head.commit)[:12]
         except Exception:
             return ""
+
+    @staticmethod
+    def _authenticated_url(source: str) -> str:
+        """Inject a GitHub token into HTTPS clone URLs for private repo access.
+
+        If no token is available or the URL is not an HTTPS GitHub URL,
+        the original URL is returned unchanged.
+        """
+        from ofx.settings import get_github_token
+
+        token = get_github_token()
+        if not token:
+            return source
+        # Only inject into HTTPS GitHub URLs
+        if source.startswith("https://github.com/"):
+            return source.replace(
+                "https://github.com/",
+                f"https://x-access-token:{token}@github.com/",
+                1,
+            )
+        return source
 
     @staticmethod
     def _check_min_ofx_version(manifest: CollectionManifest, name: str) -> None:

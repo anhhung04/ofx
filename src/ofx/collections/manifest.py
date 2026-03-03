@@ -99,6 +99,7 @@ class CollectionIndexEntry(BaseModel):
     latest: str = ""
     tags: list[str] = Field(default_factory=list)
     author: str = ""
+    private: bool = Field(default=False, description="Whether this collection is in a private repo")
 
 
 class CollectionIndex(BaseModel):

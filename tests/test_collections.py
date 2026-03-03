@@ -523,3 +523,156 @@ class TestIndexClient:
         assert entry.source == "https://github.com/ofx-workflows/my-coll"
 
         assert client.get_entry("nonexistent") is None
+
+
+class TestGitHubTokenResolution:
+    """Tests for GitHub token auto-discovery via settings and gh CLI."""
+
+    def test_get_github_token_from_settings(self, monkeypatch):
+        """Explicit OFX_GITHUB_TOKEN takes priority over gh CLI."""
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod.settings, "github_token", "explicit-token")
+        # Clear lru_cache so it doesn't use a stale value
+        settings_mod._gh_cli_token.cache_clear()
+        assert settings_mod.get_github_token() == "explicit-token"
+
+    def test_get_github_token_falls_back_to_gh_cli(self, monkeypatch):
+        """When no explicit token, falls back to gh auth token."""
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod.settings, "github_token", "")
+        settings_mod._gh_cli_token.cache_clear()
+
+        # Mock shutil.which to say gh exists
+        monkeypatch.setattr(settings_mod.shutil, "which", lambda cmd: "/usr/bin/gh" if cmd == "gh" else None)
+
+        # Mock subprocess.run to return a token
+        class FakeResult:
+            returncode = 0
+            stdout = "  ghp_faketoken123\n"
+
+        monkeypatch.setattr(
+            settings_mod.subprocess,
+            "run",
+            lambda *a, **kw: FakeResult(),
+        )
+
+        assert settings_mod.get_github_token() == "ghp_faketoken123"
+        settings_mod._gh_cli_token.cache_clear()
+
+    def test_get_github_token_empty_when_no_gh(self, monkeypatch):
+        """Returns empty string when gh is not installed and no env token."""
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod.settings, "github_token", "")
+        settings_mod._gh_cli_token.cache_clear()
+        monkeypatch.setattr(settings_mod.shutil, "which", lambda cmd: None)
+
+        assert settings_mod.get_github_token() == ""
+        settings_mod._gh_cli_token.cache_clear()
+
+    def test_get_github_token_empty_when_gh_not_authed(self, monkeypatch):
+        """Returns empty string when gh exists but is not authenticated."""
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod.settings, "github_token", "")
+        settings_mod._gh_cli_token.cache_clear()
+        monkeypatch.setattr(settings_mod.shutil, "which", lambda cmd: "/usr/bin/gh")
+
+        class FakeResult:
+            returncode = 1
+            stdout = ""
+
+        monkeypatch.setattr(
+            settings_mod.subprocess,
+            "run",
+            lambda *a, **kw: FakeResult(),
+        )
+
+        assert settings_mod.get_github_token() == ""
+        settings_mod._gh_cli_token.cache_clear()
+
+
+class TestAuthenticatedUrl:
+    """Tests for CollectionManager._authenticated_url."""
+
+    def test_injects_token_into_github_https(self, monkeypatch):
+        from ofx.collections.manager import CollectionManager
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod, "get_github_token", lambda: "ghp_test123")
+
+        result = CollectionManager._authenticated_url(
+            "https://github.com/ofx-workflows/recon-tools"
+        )
+        assert result == "https://x-access-token:ghp_test123@github.com/ofx-workflows/recon-tools"
+
+    def test_no_token_returns_original(self, monkeypatch):
+        from ofx.collections.manager import CollectionManager
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod, "get_github_token", lambda: "")
+
+        url = "https://github.com/ofx-workflows/recon-tools"
+        assert CollectionManager._authenticated_url(url) == url
+
+    def test_non_github_url_unchanged(self, monkeypatch):
+        from ofx.collections.manager import CollectionManager
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod, "get_github_token", lambda: "ghp_test123")
+
+        url = "https://gitlab.com/my/repo"
+        assert CollectionManager._authenticated_url(url) == url
+
+    def test_ssh_url_unchanged(self, monkeypatch):
+        from ofx.collections.manager import CollectionManager
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod, "get_github_token", lambda: "ghp_test123")
+
+        url = "git@github.com:ofx-workflows/recon-tools.git"
+        assert CollectionManager._authenticated_url(url) == url
+
+
+class TestIndexClientAuth:
+    """Tests for IndexClient token & URL resolution."""
+
+    def test_explicit_token_used(self, tmp_path):
+        from ofx.collections.index import IndexClient
+
+        client = IndexClient(cache_dir=tmp_path, github_token="explicit-tok")
+        headers = client._build_headers()
+        assert headers["Authorization"] == "Bearer explicit-tok"
+
+    def test_no_token_no_auth_header(self, tmp_path, monkeypatch):
+        from ofx.collections.index import IndexClient
+        from ofx import settings as settings_mod
+
+        monkeypatch.setattr(settings_mod, "get_github_token", lambda: "")
+
+        client = IndexClient(cache_dir=tmp_path)
+        headers = client._build_headers()
+        assert "Authorization" not in headers
+
+    def test_resolve_index_url_raw_passthrough(self):
+        from ofx.collections.index import _resolve_index_url
+
+        url = "https://raw.githubusercontent.com/ofx-workflows/index/main/index.json"
+        assert _resolve_index_url(url) == url
+
+    def test_resolve_index_url_github_to_api(self):
+        from ofx.collections.index import _resolve_index_url
+
+        url = "https://github.com/myorg/private-index"
+        result = _resolve_index_url(url)
+        assert "api.github.com" in result
+        assert "myorg" in result
+        assert "private-index" in result
+
+    def test_resolve_index_url_api_passthrough(self):
+        from ofx.collections.index import _resolve_index_url
+
+        url = "https://api.github.com/repos/myorg/index/contents/index.json?ref=main"
+        assert _resolve_index_url(url) == url
