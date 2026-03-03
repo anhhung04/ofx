@@ -144,6 +144,31 @@ def validate(
 
 
 @app.command()
+def init(
+    workflow_name: Annotated[str, typer.Argument(help="Name of the new workflow")],
+    output: Annotated[
+        str,
+        typer.Option(
+            "-o",
+            "--output",
+            help="Output file path or directory for the new workflow (default: <name>.yml in cwd).",
+        ),
+    ] = "",
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            help="Overwrite the file if it already exists.",
+        ),
+    ] = False,
+):
+    """Create a new workflow file pre-configured with YAML language server schema"""
+    from ofx.commands.flow.init import FlowInitHandler
+
+    FlowInitHandler().run(workflow_name=workflow_name, output=output, force=force)
+
+
+@app.command()
 def tools(
     workflow_name: Annotated[
         str,
