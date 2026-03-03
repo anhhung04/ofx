@@ -86,7 +86,7 @@ class FlowRunHandler:
 
         if project:
             self._resolve_project(project)
-            self.output = get_tmp_dir(output) if output else Path(self.project_vars["project_path"]) / "logs"
+            self.output = get_tmp_dir(output) if output else Path(self.project_vars["project_path"])
             self.output.mkdir(parents=True, exist_ok=True)
         else:
             self.output = get_tmp_dir(output)
