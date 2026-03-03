@@ -60,7 +60,7 @@ def add(
         entry = mgr.add(name_or_url, alias=name, ref=ref, install_deps=not no_deps)
     except (ValueError, RuntimeError) as exc:
         console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     console.print(
         Panel(

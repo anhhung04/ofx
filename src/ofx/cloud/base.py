@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Type
+from collections.abc import Callable
+from typing import Any
 
 from ofx.cloud.models import CloudInstanceInfo, SnapshotInfo
 from ofx.models.cloud import CloudConfig
@@ -137,7 +138,7 @@ class CloudProviderRegistry:
         provider = CloudProviderRegistry.create("digitalocean", token="...")
     """
 
-    _providers: dict[str, Type[CloudProvider]] = {}
+    _providers: dict[str, type[CloudProvider]] = {}
 
     @classmethod
     def register(cls, name: str) -> Callable:
@@ -149,7 +150,7 @@ class CloudProviderRegistry:
         Returns:
             Decorator function.
         """
-        def decorator(provider_cls: Type[CloudProvider]) -> Type[CloudProvider]:
+        def decorator(provider_cls: type[CloudProvider]) -> type[CloudProvider]:
             cls._providers[name.lower()] = provider_cls
             logger.debug(f"Registered cloud provider: {name}")
             return provider_cls
@@ -183,7 +184,7 @@ class CloudProviderRegistry:
         return sorted(cls._providers.keys())
 
     @classmethod
-    def get(cls, name: str) -> Type[CloudProvider] | None:
+    def get(cls, name: str) -> type[CloudProvider] | None:
         """Get a provider class by name without instantiation."""
         return cls._providers.get(name.lower())
 

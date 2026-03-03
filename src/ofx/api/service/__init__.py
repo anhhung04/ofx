@@ -64,7 +64,7 @@ def scan_banner(
     max_bytes: int = 1024,
 ) -> ServiceInfo:
     """Grab a simple banner and guess protocol."""
-    sock: Optional[socket.socket] = None
+    sock: socket.socket | None = None
     try:
         sock = socket.create_connection((host, port), timeout=timeout)
         use_tls = bool(tls or port == 443)

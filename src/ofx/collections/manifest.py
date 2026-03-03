@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -83,7 +82,7 @@ class InstalledCollection(BaseModel):
     pinned_ref: str = Field(default="", description="Git tag/branch pinned at install")
     path: str = Field(default="", description="Absolute path to installed directory")
     installed_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     description: str = ""
     author: str = ""

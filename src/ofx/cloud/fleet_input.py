@@ -9,8 +9,8 @@ from __future__ import annotations
 import ipaddress
 import logging
 import re
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 logger = logging.getLogger("ofx")
 

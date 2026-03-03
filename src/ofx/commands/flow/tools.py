@@ -5,7 +5,7 @@ from pathlib import Path
 from ofx.commands.ui_helpers import print_info, print_warning
 from ofx.runner import RunContext
 from ofx.runner.tool_installer import ToolInstallerRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIRS, TOOLS_BIN_DIR, ensure_dir, settings
+from ofx.settings import DEFAULT_WORKFLOWS_DIRS, TOOLS_BIN_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -24,7 +24,6 @@ class ToolsInstallHandler:
     async def run(self):
         """Install tools from workflow configurations"""
         from ofx.utils.workflow_utils import find_all_workflows, find_workflow
-        from ofx.settings import DEFAULT_WORKFLOWS_DIRS
 
         if not self.workflow_name and not self.all_workflows:
             print_warning(
@@ -77,6 +76,7 @@ class ToolsInstallHandler:
     ) -> dict[str, str]:
         """Collect all unique tools from the given workflows"""
         import yaml
+
         from ofx.models.workflow import Workflow
 
         all_tools = {}
@@ -86,7 +86,7 @@ class ToolsInstallHandler:
                 # Use Workflow model for validation logic
                 with open(workflow_path) as f:
                     workflow_data = yaml.safe_load(f)
-                
+
                 # We try to validate model, partial or full, to access .tools in a standard way
                 # Or simply respect the structure if validation fails for other reasons (e.g. missing jobs in partial view)?
                 # Ideally, we should use the model. Let's try to model_validate.
@@ -104,7 +104,7 @@ class ToolsInstallHandler:
                     tools_config = workflow.tools
 
                 if not tools_config:
-                    # Check defaults (legacy or structured default?) 
+                    # Check defaults (legacy or structured default?)
                     # Workflow model has 'defaults' which is DefaultConfig
                     if workflow.defaults and workflow.defaults.tools:
                         tools_config = workflow.defaults.tools
@@ -115,7 +115,7 @@ class ToolsInstallHandler:
                         if isinstance(tool_val, str):
                             all_tools[tool_bin] = tool_val
                         # ToolConfig object (pydantic model)
-                        elif hasattr(tool_val, "install"): 
+                        elif hasattr(tool_val, "install"):
                             all_tools[tool_bin] = tool_val.install
                         # Dict (if raw parsing)
                         elif isinstance(tool_val, dict):

@@ -21,9 +21,11 @@ logger = logging.getLogger(settings.app_branding)
 
 
 def get_property_type(
-    prop_info: dict[str, Any], definitions: dict[str, Any] = {}
+    prop_info: dict[str, Any], definitions: dict[str, Any] = None
 ) -> str:
     """Extract property type from schema information."""
+    if definitions is None:
+        definitions = {}
     if "type" in prop_info:
         t = prop_info["type"]
         if t == "any":
@@ -74,10 +76,14 @@ def get_property_default(prop_info: dict[str, Any]) -> str:
 def extract_schema_properties(
     schema: dict[str, Any],
     parent_name: str = "",
-    properties_list: list[dict[str, str]] = [],
-    definitions: dict[str, Any] = {},
+    properties_list: list[dict[str, str]] = None,
+    definitions: dict[str, Any] = None,
 ) -> list[dict[str, str]]:
     """Extract all properties from a schema into a flat list,"""
+    if definitions is None:
+        definitions = {}
+    if properties_list is None:
+        properties_list = []
     if not definitions and "$defs" in schema:
         definitions = schema.get("$defs", {})
 

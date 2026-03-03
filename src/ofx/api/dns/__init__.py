@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import socket
+from collections.abc import Iterable
 from random import uniform
-from typing import Iterable
 
 __all__ = [
     "resolve_host",

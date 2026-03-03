@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 from pydantic import Field
@@ -75,7 +74,7 @@ class Session(OFXBaseModel):
 
     # Timestamps
     started_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="When the session was submitted",
     )
     finished_at: datetime | None = Field(
@@ -143,7 +142,7 @@ class Session(OFXBaseModel):
 
     def age_display(self) -> str:
         """Human-readable age string."""
-        delta = datetime.now(timezone.utc) - self.started_at
+        delta = datetime.now(UTC) - self.started_at
         secs = int(delta.total_seconds())
         if secs < 60:
             return f"{secs}s"

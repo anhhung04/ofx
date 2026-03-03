@@ -15,7 +15,7 @@ logger = logging.getLogger(settings.app_branding)
 
 class ImportHandler:
     """Handles project import by cloning from git repository."""
-    
+
     def __init__(self, url: str, name: str):
         self.url = url
         self.name = name
@@ -34,7 +34,7 @@ class ImportHandler:
             self._clone_repository()
             self._handle_encryption_setup()
             self._setup_project_config()
-            
+
             logger.info(f"Successfully imported project '{self.name}' from {self.url}")
 
         except Exception as e:

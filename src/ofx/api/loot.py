@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterable
 
 __all__ = ["find_minidumps", "list_browser_profiles", "load_json_lines"]
 

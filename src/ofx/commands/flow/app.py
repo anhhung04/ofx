@@ -27,7 +27,7 @@ def run(
             "--input",
             help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
         ),
-    ] = [],
+    ] = None,
     output: Annotated[
         str,
         typer.Option(
@@ -44,12 +44,12 @@ def run(
         ),
     ] = False,
     durable: Annotated[
-        bool | None,
+        bool,
         typer.Option(
             "--durable/--no-durable",
             help="Enable or disable durable execution checkpoints.",
         ),
-    ] = None,
+    ] = False,
     resume: Annotated[
         bool | None,
         typer.Option(
@@ -110,6 +110,8 @@ def run(
 ):
     from ofx.commands.flow.run import FlowRunHandler
 
+    if input is None:
+        input = []
     asyncio.run(
         FlowRunHandler(
             workflow_name=workflow_name,

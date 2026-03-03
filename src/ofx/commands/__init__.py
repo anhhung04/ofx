@@ -53,7 +53,7 @@ def inject_env_vars(ctx: typer.Context, e: list[str] = typer.Option([], "-e", "-
             _cli_env_vars[key] = value
         except ValueError:
             print_error("Invalid environment variable format", f"Expected KEY=VAL, got: {env}")
-            raise typer.Exit(code=1)    
+            raise typer.Exit(code=1)
     print_banner()
 
 app.callback()(inject_env_vars)

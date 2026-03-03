@@ -7,10 +7,6 @@ detect completion by tailing the log file.
 
 from __future__ import annotations
 
-import textwrap
-from pathlib import Path
-from typing import Any
-
 from ofx.models.step import RunType, Step
 
 

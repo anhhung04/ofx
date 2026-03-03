@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from ofx.cloud.fleet_input import FleetInputParser, split_subnet
+from ofx.cloud.fleet_input import FleetInputParser
 
 logger = logging.getLogger("ofx")
 

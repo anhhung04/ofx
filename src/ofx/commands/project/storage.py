@@ -8,11 +8,8 @@ SSH key generation uses the ``cryptography`` library (always available).
 from __future__ import annotations
 
 import getpass
-import io
 import logging
 import os
-import shutil
-import stat
 import subprocess
 import sys
 from datetime import datetime

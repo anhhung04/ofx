@@ -1,7 +1,6 @@
 """Tests for runner edge cases and error handling"""
 
 import asyncio
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -48,12 +47,11 @@ class TestCommandRunnerEdgeCases:
             ctx=RunContext(),
         )
         # We'll kill it early by using asyncio timeout
-        import asyncio
 
         try:
             await asyncio.wait_for(cmd.run(), timeout=0.5)
             assert False, "Should have timed out"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass  # Expected
 
     @pytest.mark.asyncio

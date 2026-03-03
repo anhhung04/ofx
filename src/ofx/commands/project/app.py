@@ -11,7 +11,6 @@ from ofx.settings import get_console
 
 from .encryption import GitFilterHandler
 from .handlers import ImportHandler, InitHandler, SyncHandler
-from .handlers.init import InitConfig
 from .project_manager import ProjectManager
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
@@ -32,7 +31,7 @@ def init(
     """Init new OFX project"""
     console.print(f"[bold green]Creating project '{name}'...[/bold green]")
     base = ProjectManager.create_project(name)
-    
+
     console.print(f"[bold green]✓[/] Project created: [cyan]{name}[/]")
     console.print(f"[dim]Location: {base}[/]")
 

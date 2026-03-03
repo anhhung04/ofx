@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import re
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import git
@@ -50,7 +49,7 @@ def _semver_cmp(a: str, b: str) -> int:
     """Compare two semver strings. Returns -1|0|1."""
     pa, pb = _parse_semver(a), _parse_semver(b)
     # Numeric part comparison
-    for x, y in zip(pa[:3], pb[:3]):
+    for x, y in zip(pa[:3], pb[:3], strict=False):
         if x < y:
             return -1
         if x > y:
@@ -222,7 +221,7 @@ class CollectionManager:
             source=source,
             pinned_ref=ref or self._current_ref(target),
             path=str(target),
-            installed_at=datetime.now(timezone.utc).isoformat(),
+            installed_at=datetime.now(UTC).isoformat(),
             description=manifest.description,
             author=manifest.author,
             tags=manifest.tags,

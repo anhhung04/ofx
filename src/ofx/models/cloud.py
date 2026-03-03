@@ -10,7 +10,6 @@ from ofx.models.base import OFXBaseModel
 
 # FleetStrategy is defined in strategy.py to avoid circular imports.
 # Re-export for convenience.
-from ofx.models.strategy import FleetStrategy
 
 
 class CloudHostEntry(OFXBaseModel):

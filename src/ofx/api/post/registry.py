@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Type, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .base import PostRunnerBase
@@ -12,10 +13,10 @@ __all__ = ["RunnerRegistry"]
 
 class RunnerRegistry:
     """Registry for post-exploitation runners.
-    
+
     Provides dynamic registration and discovery of runner implementations.
     Use the @register decorator to add new runner types.
-    
+
     Example:
         >>> @RunnerRegistry.register("custom")
         ... class CustomRunner(PostRunnerBase):
@@ -26,64 +27,64 @@ class RunnerRegistry:
         ['ssh', 'webshell', 'winrm', 'smbexec', 'wmiexec', 'custom']
         >>> runner = RunnerRegistry.create("custom", host="target")
     """
-    
-    _runners: dict[str, Type[PostRunnerBase]] = {}
-    
+
+    _runners: dict[str, type[PostRunnerBase]] = {}
+
     @classmethod
-    def register(cls, name: str) -> Callable[[Type[PostRunnerBase]], Type[PostRunnerBase]]:
+    def register(cls, name: str) -> Callable[[type[PostRunnerBase]], type[PostRunnerBase]]:
         """Decorator to register a runner class.
-        
+
         Args:
             name: Unique identifier for the runner type
-            
+
         Returns:
             Decorator function
-            
+
         Example:
             >>> @RunnerRegistry.register("myrunner")
             ... class MyRunner(PostRunnerBase):
             ...     pass
         """
-        def decorator(runner_cls: Type[PostRunnerBase]) -> Type[PostRunnerBase]:
+        def decorator(runner_cls: type[PostRunnerBase]) -> type[PostRunnerBase]:
             cls._runners[name] = runner_cls
             return runner_cls
         return decorator
-    
+
     @classmethod
-    def get(cls, name: str) -> Type[PostRunnerBase] | None:
+    def get(cls, name: str) -> type[PostRunnerBase] | None:
         """Get a runner class by name.
-        
+
         Args:
             name: Runner identifier
-            
+
         Returns:
             Runner class or None if not found
         """
         return cls._runners.get(name)
-    
+
     @classmethod
     def list_runners(cls) -> list[str]:
         """List all registered runner names.
-        
+
         Returns:
             List of runner identifiers
         """
         return list(cls._runners.keys())
-    
+
     @classmethod
     def create(cls, name: str, **kwargs: Any) -> PostRunnerBase:
         """Factory method to instantiate a runner by name.
-        
+
         Args:
             name: Runner identifier
             kwargs: Arguments passed to runner constructor
-            
+
         Returns:
             Instantiated runner
-            
+
         Raises:
             ValueError: If runner name is not registered
-            
+
         Example:
             >>> runner = RunnerRegistry.create("ssh", host="192.168.1.1", user="root")
         """
@@ -92,16 +93,16 @@ class RunnerRegistry:
             available = ", ".join(cls.list_runners()) or "none"
             raise ValueError(f"Unknown runner: {name!r}. Available: {available}")
         return runner_cls(**kwargs)
-    
+
     @classmethod
     def unregister(cls, name: str) -> None:
         """Remove a runner from the registry.
-        
+
         Args:
             name: Runner identifier to remove
         """
         cls._runners.pop(name, None)
-    
+
     @classmethod
     def clear(cls) -> None:
         """Clear all registered runners."""

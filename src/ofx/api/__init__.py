@@ -1,24 +1,28 @@
 """OFX API modules for red teaming operations."""
 
 from . import (
+    c2,
     creds,
+    data,
+    dns,
     evasion,
     exploitation,
     file,
     http,
     httpserver,
+    lateral,
+    loot,
     network,
     oob,
+    packers,
+    payloads,
+    persistence,
     post,
     search,
+    service,
     strings,
     utils,
-    dns,
-    service,
-    payloads,
-    packers,
 )
-from . import lateral, persistence, c2, data, loot
 
 __all__ = [
     "http",

@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from ofx.commands.ui_helpers import print_error, print_info, print_success
 from ofx.settings import settings
@@ -10,9 +9,8 @@ logger = logging.getLogger(settings.app_branding)
 class ValidateHandler:
     def run(self, workflow_name: str):
         """Validate a workflow configuration"""
-        from ofx.models.workflow import Workflow
-        from ofx.utils.workflow_utils import find_workflow
         from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+        from ofx.utils.workflow_utils import find_workflow
 
         logger.info(f"Validating workflow: {workflow_name}")
 

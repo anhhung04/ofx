@@ -12,9 +12,9 @@ Usage:
     await manager.fetch(session.id, passphrase="secret")
 """
 
+from ofx.cloud.sessions.manager import SessionManager
 from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
 from ofx.cloud.sessions.store import SessionStore
-from ofx.cloud.sessions.manager import SessionManager
 
 __all__ = [
     "Session",

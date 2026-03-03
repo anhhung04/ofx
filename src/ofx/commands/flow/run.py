@@ -3,7 +3,8 @@ import json
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
@@ -12,16 +13,12 @@ from ofx.commands.ui_helpers import inputs_table
 from ofx.models.config import DurableRunConfig
 from ofx.runner import run_workflow
 from ofx.settings import (
-    DEFAULT_WORKFLOWS_DIRS,
-    SECRETS_DIR,
     TEMP_DIR,
     ensure_dir,
     get_console,
     get_workflow_search_dirs,
     settings,
 )
-from ofx.utils.secrets import load_secrets
-from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
 logger = logging.getLogger(settings.app_branding)
 console = get_console()
@@ -32,7 +29,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
         payload = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "level": record.levelname.lower(),
             "event": record.getMessage(),
             "logger": record.name,
@@ -119,6 +116,7 @@ class FlowRunHandler:
 
         start_time = time.time()
         lock_fd: int | None = None
+        profiler: cProfile.Profile | None = None
 
         if self.profile:
             logger.info("Profiling enabled (detailed timing data will be collected).")
@@ -142,7 +140,7 @@ class FlowRunHandler:
                 workflow=self.workflow_name,
                 inputs=self.input,
                 output_path=self.output,
-                workflow_search_paths=get_workflow_search_dirs(),
+                workflow_search_paths=get_workflow_search_dirs(), #type: ignore
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
                 vars=self.project_vars if self.project_vars else None,
@@ -156,7 +154,7 @@ class FlowRunHandler:
         finally:
             if lock_fd is not None:
                 self._release_lock(lock_fd)
-            if self.profile:
+            if self.profile and profiler is not None:
                 profiler.disable()
                 end_time = time.time()
 

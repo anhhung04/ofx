@@ -1,9 +1,9 @@
 import shutil
-
 from os import getenv
 from pathlib import Path
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
+
 
 class ProjectManager:
     @classmethod

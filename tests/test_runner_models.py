@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-import pytest
-
 from ofx.models.step import RunType
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 

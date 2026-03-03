@@ -196,7 +196,7 @@ class AWSProvider(CloudProvider):
                 writer.close()
                 await writer.wait_closed()
                 return True
-            except (OSError, asyncio.TimeoutError):
+            except (TimeoutError, OSError):
                 continue
         return False
 

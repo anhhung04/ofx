@@ -1,13 +1,11 @@
 """Tests for workflow directory operations and context isolation"""
 
-import tempfile
 from pathlib import Path
 
 import pytest
 import yaml
 
 from ofx.runner import RunContext, WorkflowRunner
-from ofx.settings import DEFAULT_WORKFLOWS_DIR
 from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
 

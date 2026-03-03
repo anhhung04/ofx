@@ -38,7 +38,7 @@ async def wait_for_ssh(
             await writer.wait_closed()
             logger.debug(f"SSH reachable on {host}:{port} after {attempts} attempts")
             return True
-        except (OSError, asyncio.TimeoutError):
+        except (TimeoutError, OSError):
             pass
         await asyncio.sleep(interval)
 
@@ -75,7 +75,7 @@ async def wait_for_winrm(
             await writer.wait_closed()
             logger.debug(f"WinRM reachable on {host}:{port} after {attempts} attempts")
             return True
-        except (OSError, asyncio.TimeoutError):
+        except (TimeoutError, OSError):
             pass
         await asyncio.sleep(interval)
 

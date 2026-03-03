@@ -4,8 +4,8 @@ import asyncio
 import logging
 import time
 import uuid
-from datetime import datetime, timezone
-from typing import Any, Generic, Optional, TypeVar
+from datetime import UTC, datetime
+from typing import Any, Optional, TypeVar
 
 from pydantic import BaseModel
 
@@ -67,7 +67,7 @@ class RunnerStateMachine:
         self._current_state = state
 
 
-class BaseRunner(Generic[TModel]):
+class BaseRunner[TModel: BaseModel]:
     """Abstract base class for all runners (workflow, job, step, command)
     Type Parameters:
         TModel: The model type this runner executes (Workflow, Job, Step, etc.)
@@ -210,12 +210,12 @@ class BaseRunner(Generic[TModel]):
         parent_id = self.parent._checkpoint_id() if self.parent else "workflow"
         if hasattr(self.model, "jid") and hasattr(self.model, "step_index"):
             local_id = (
-                f"job:{getattr(self.model, 'jid')}:{getattr(self.model, 'step_index')}"
+                f"job:{self.model.jid}:{self.model.step_index}"
             )
         elif hasattr(self.model, "jid"):
-            local_id = f"job:{getattr(self.model, 'jid')}"
+            local_id = f"job:{self.model.jid}"
         elif hasattr(self.model, "name"):
-            local_id = f"{self.__class__.__name__}:{getattr(self.model, 'name')}"
+            local_id = f"{self.__class__.__name__}:{self.model.name}"
         else:
             local_id = f"{self.__class__.__name__}:{self.run_id}"
         return f"{parent_id}/{local_id}"
@@ -322,12 +322,12 @@ class BaseRunner(Generic[TModel]):
 
     def _mark_start(self) -> None:
         self._started_at = time.perf_counter()
-        self._started_at_utc = datetime.now(timezone.utc).isoformat()
+        self._started_at_utc = datetime.now(UTC).isoformat()
 
     def _mark_finish(self) -> None:
         if self._finished_at is None:
             self._finished_at = time.perf_counter()
-            self._finished_at_utc = datetime.now(timezone.utc).isoformat()
+            self._finished_at_utc = datetime.now(UTC).isoformat()
 
     @property
     def started_at(self) -> str | None:

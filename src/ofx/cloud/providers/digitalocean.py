@@ -155,7 +155,7 @@ class DigitalOceanProvider(CloudProvider):
             writer.close()
             await writer.wait_closed()
             return True
-        except (OSError, asyncio.TimeoutError):
+        except (TimeoutError, OSError):
             return False
 
     async def destroy_instance(self, instance_id: str) -> None:

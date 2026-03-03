@@ -1,6 +1,5 @@
 """Tests for job registry adapters"""
 
-import asyncio
 import tempfile
 from pathlib import Path
 

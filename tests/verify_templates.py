@@ -1,8 +1,9 @@
 from ofx.api.exploitation.webshell.connectors.template import TemplateConnector
 
+
 def test_templates():
     connector = TemplateConnector()
-    
+
     print("Testing PHP Obfuscation...")
     php = connector.generate("php", password="pass", obfuscate=True)
     print(f"PHP Preview: {php[:100]}...")

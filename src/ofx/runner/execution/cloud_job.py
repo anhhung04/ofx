@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -17,14 +16,13 @@ from ofx.runner.core import (
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
-    RunResult,
 )
+from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.runner.execution.execution_results import (
     JobExecutionResult,
     StepExecutionResult,
 )
 from ofx.runner.execution.step import StepRunner
-from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)

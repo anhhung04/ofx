@@ -14,7 +14,7 @@ class TestWebShellCodeFactory:
         # Python reverse shell uses base64 encoding or structural checks depending on implementation
         # The generator uses cleartext for this one? Let's check python.py
         # It uses cleartext for reverse_shell unless obfuscate=True
-        # Wait, the failure said: 
+        # Wait, the failure said:
         # assert '192.168.1.1' in code
         # But this failed? Let's check the failure log again.
         # It failed for bash: assert '/dev/tcp/' in 'echo ... | base64 -d | bash'
@@ -31,7 +31,7 @@ class TestWebShellCodeFactory:
         # Let's check python.py again. `reverse_shell` returns cleartext if obfuscate=False.
         # But `read_file` uses `_encode_base64`.
         # So I only need to update the ones that use `_encode_base64` unconditionally.
-        
+
         # Checking generators/python.py:
         # read_file -> uses _encode_base64
         # write_file -> uses _encode_base64
@@ -39,9 +39,9 @@ class TestWebShellCodeFactory:
         # list_directory -> uses _encode_base64
         # download_file -> uses _encode_base64
         # upload_file -> uses _encode_base64
-        # reverse_shell -> uses cleartext (unless wrapped?) 
+        # reverse_shell -> uses cleartext (unless wrapped?)
         # python.py reverse_shell returns fstring with cleartext IP.
-        
+
         # Checking generators/bash.py (not read yet, but assuming)
         # Bash reverse shell likely uses base64 by default?
         assert "socket" in code

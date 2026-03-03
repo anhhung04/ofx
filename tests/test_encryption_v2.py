@@ -9,9 +9,9 @@ import pytest
 def test_v2_round_trip():
     """v2 format: magic + salt + nonce + ciphertext round-trips correctly."""
     from ofx.commands.project.encryption import (
-        EncryptionHandler,
         _HEADER_LEN,
         _MAGIC,
+        EncryptionHandler,
         generate_encryption_key,
         is_encrypted,
     )
@@ -87,7 +87,10 @@ def test_is_encrypted_negative():
 
 def test_different_ciphertext_each_time():
     """Encrypting the same data twice produces different blobs (random salt+nonce)."""
-    from ofx.commands.project.encryption import EncryptionHandler, generate_encryption_key
+    from ofx.commands.project.encryption import (
+        EncryptionHandler,
+        generate_encryption_key,
+    )
 
     key = generate_encryption_key()
     handler = EncryptionHandler(key)
@@ -98,7 +101,10 @@ def test_different_ciphertext_each_time():
 
 def test_wrong_key_raises():
     """Decryption with wrong key raises ValueError."""
-    from ofx.commands.project.encryption import EncryptionHandler, generate_encryption_key
+    from ofx.commands.project.encryption import (
+        EncryptionHandler,
+        generate_encryption_key,
+    )
 
     key1 = generate_encryption_key()
     key2 = generate_encryption_key()
@@ -110,7 +116,11 @@ def test_wrong_key_raises():
 
 def test_storage_imports():
     """SSHHandler and GitHandler can be imported without paramiko."""
-    from ofx.commands.project.storage import GitHandler, SSHHandler, _generate_ssh_keypair
+    from ofx.commands.project.storage import (
+        GitHandler,
+        SSHHandler,
+        _generate_ssh_keypair,
+    )
 
     assert SSHHandler is not None
     assert GitHandler is not None

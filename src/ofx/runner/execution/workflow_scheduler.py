@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from ofx.models.job import Job
 from ofx.utils.scheduling import find_parallel_schedule

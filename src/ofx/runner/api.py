@@ -15,11 +15,9 @@ from ofx.runner.core import RunResult
 from ofx.runner.core.durable import find_running_checkpoints
 from ofx.runner.execution.workflow import WorkflowRunner
 from ofx.settings import (
-    DEFAULT_WORKFLOWS_DIRS,
     SECRETS_DIR,
     TEMP_DIR,
     ensure_dir,
-    get_console,
     get_workflow_search_dirs,
     settings,
 )

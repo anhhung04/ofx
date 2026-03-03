@@ -5,7 +5,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -126,7 +126,7 @@ class SessionStore:
         statuses: list[SessionStatus] | None = None,
     ) -> int:
         """Remove sessions matching criteria. Returns count deleted."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         removed = 0
         for session in self.list_sessions():
             if statuses and session.status not in statuses:

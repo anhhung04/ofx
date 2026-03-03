@@ -5,7 +5,6 @@ Orchestrates both **local** (background subprocess) and **cloud** (VPS) sessions
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import secrets as _secrets
@@ -13,7 +12,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -417,7 +416,7 @@ class SessionManager:
                 update={
                     "status": SessionStatus.FAILED,
                     "error": "No PID recorded",
-                    "finished_at": datetime.now(timezone.utc),
+                    "finished_at": datetime.now(UTC),
                 }
             )
 
@@ -430,14 +429,14 @@ class SessionManager:
                 return session.model_copy(
                     update={
                         "status": SessionStatus.COMPLETED,
-                        "finished_at": datetime.now(timezone.utc),
+                        "finished_at": datetime.now(UTC),
                     }
                 )
             if marker == _FAIL_MARKER:
                 return session.model_copy(
                     update={
                         "status": SessionStatus.FAILED,
-                        "finished_at": datetime.now(timezone.utc),
+                        "finished_at": datetime.now(UTC),
                     }
                 )
             return session  # Still running
@@ -448,14 +447,14 @@ class SessionManager:
             return session.model_copy(
                 update={
                     "status": SessionStatus.COMPLETED,
-                    "finished_at": datetime.now(timezone.utc),
+                    "finished_at": datetime.now(UTC),
                 }
             )
         return session.model_copy(
             update={
                 "status": SessionStatus.FAILED,
                 "error": "Process exited without success marker",
-                "finished_at": datetime.now(timezone.utc),
+                "finished_at": datetime.now(UTC),
             }
         )
 
@@ -492,7 +491,7 @@ class SessionManager:
                 return session.model_copy(
                     update={
                         "status": SessionStatus.COMPLETED,
-                        "finished_at": datetime.now(timezone.utc),
+                        "finished_at": datetime.now(UTC),
                     }
                 )
             if marker == _FAIL_MARKER or (not alive and marker is None):
@@ -500,7 +499,7 @@ class SessionManager:
                     update={
                         "status": SessionStatus.FAILED,
                         "error": "Process exited without success marker" if not marker else "",
-                        "finished_at": datetime.now(timezone.utc),
+                        "finished_at": datetime.now(UTC),
                     }
                 )
 
@@ -774,7 +773,7 @@ class SessionManager:
         session = session.model_copy(
             update={
                 "status": SessionStatus.CANCELED,
-                "finished_at": datetime.now(timezone.utc),
+                "finished_at": datetime.now(UTC),
             }
         )
         self.store.save(session)
@@ -820,7 +819,7 @@ class SessionManager:
         session = session.model_copy(
             update={
                 "status": SessionStatus.DESTROYED,
-                "finished_at": session.finished_at or datetime.now(timezone.utc),
+                "finished_at": session.finished_at or datetime.now(UTC),
             }
         )
         self.store.save(session)

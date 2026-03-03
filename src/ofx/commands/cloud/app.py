@@ -3,6 +3,7 @@
 Provides commands to manage cloud profiles, instances, and images.
 """
 
+import asyncio
 from typing import Annotated
 
 import typer
@@ -103,7 +104,7 @@ def profile_add(
     mgr.add(name, data, default=set_default)
     console.print(f"[green]Profile '{name}' saved.[/green]")
     if set_default:
-        console.print(f"[dim]Set as default profile.[/dim]")
+        console.print("[dim]Set as default profile.[/dim]")
 
 
 @profile_app.command("remove")
@@ -158,9 +159,9 @@ def profile_show(
         console.print(f"[red]Profile '{name}' not found.[/red]")
         raise typer.Exit(code=1)
 
+    import yaml
     from rich.panel import Panel
     from rich.syntax import Syntax
-    import yaml
 
     yaml_str = yaml.safe_dump(data, default_flow_style=False)
     panel = Panel(
@@ -204,7 +205,7 @@ def instance_list(
 
     try:
         cloud = CloudProviderRegistry.create(provider)
-        instances = cloud.list_instances()
+        instances = asyncio.run(cloud.list_instances())
     except Exception as e:
         console.print(f"[red]Error listing instances: {e}[/red]")
         raise typer.Exit(code=1)
@@ -265,7 +266,7 @@ def instance_destroy(
 
     try:
         cloud = CloudProviderRegistry.create(provider)
-        cloud.destroy_instance(instance_id)
+        asyncio.run(cloud.destroy_instance(instance_id))
         console.print(f"[green]Instance {instance_id} destroyed.[/green]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
@@ -285,7 +286,6 @@ def instance_create(
     """Create a cloud instance manually."""
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
-    from ofx.models.cloud import CloudConfig
 
     if profile:
         mgr = get_cloud_profile_manager()
@@ -302,26 +302,32 @@ def instance_create(
         console.print("[red]Specify --provider or --profile[/red]")
         raise typer.Exit(code=1)
 
+    from ofx.models.cloud import CloudConfig
+
+    cfg = CloudConfig(
+        provider=provider,
+        region=region,
+        size=size,
+        image=image,
+    )
+
+    async def _create():
+        cloud = CloudProviderRegistry.create(provider)
+        inst = await cloud.create_instance(cfg)
+        if wait:
+            console.print(f"[dim]Waiting for instance {inst.instance_id}...[/dim]")
+            await cloud.wait_until_ready(inst.instance_id)
+            inst = await cloud.get_instance(inst.instance_id) or inst
+        return inst
+
     with console.status("Creating instance..."):
         try:
-            cloud = CloudProviderRegistry.create(provider)
-            instance = cloud.create_instance(
-                name=name,
-                region=region,
-                size=size,
-                image=image,
-            )
-
-            if wait:
-                console.print(f"[dim]Waiting for instance {instance.instance_id}...[/dim]")
-                cloud.wait_until_ready(instance.instance_id)
-                instance = cloud.get_instance(instance.instance_id) or instance
-
+            instance = asyncio.run(_create())
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(code=1)
 
-    console.print(f"[green]Instance created:[/green]")
+    console.print("[green]Instance created:[/green]")
     console.print(f"  ID:     {instance.instance_id}")
     console.print(f"  IP:     {instance.ip or 'pending'}")
     console.print(f"  Status: {instance.status}")
@@ -361,7 +367,7 @@ def image_list(
 
     try:
         cloud = CloudProviderRegistry.create(provider)
-        snapshots = cloud.list_snapshots()
+        snapshots = asyncio.run(cloud.list_snapshots())
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         raise typer.Exit(code=1)
@@ -417,12 +423,12 @@ def image_create(
     with console.status(f"Creating snapshot '{snapshot_name}'..."):
         try:
             cloud = CloudProviderRegistry.create(provider)
-            snapshot = cloud.create_snapshot(instance_id, snapshot_name)
+            snapshot = asyncio.run(cloud.create_snapshot(instance_id, snapshot_name))
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
             raise typer.Exit(code=1)
 
-    console.print(f"[green]Snapshot created:[/green]")
+    console.print("[green]Snapshot created:[/green]")
     console.print(f"  ID:   {snapshot.snapshot_id}")
     console.print(f"  Name: {snapshot.name}")
 
@@ -457,11 +463,11 @@ def image_delete(
 
     try:
         cloud = CloudProviderRegistry.create(provider)
-        cloud.delete_snapshot(snapshot_id)
+        asyncio.run(cloud.delete_snapshot(snapshot_id))
         console.print(f"[green]Snapshot {snapshot_id} deleted.[/green]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 # ---------------------------------------------------------------------------
@@ -485,7 +491,6 @@ def fleet_create(
     image: Annotated[str, typer.Option("--image", "-i", help="OS image")] = "",
 ):
     """Create a fleet of cloud instances."""
-    import asyncio
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -502,40 +507,50 @@ def fleet_create(
         console.print("[red]Specify --provider or --profile[/red]")
         raise typer.Exit(code=1)
 
-    cloud = CloudProviderRegistry.create(provider)
-    instances = []
+    from ofx.models.cloud import CloudConfig
 
-    with console.status(f"Creating {count} instances..."):
+    cloud = CloudProviderRegistry.create(provider)
+
+    async def _create_fleet():
+        instances = []
         for i in range(count):
-            name = f"{name_prefix}-{i}"
+            iname = f"{name_prefix}-{i}"
+            cfg = CloudConfig(
+                provider=provider,
+                region=region,
+                size=size,
+                image=image,
+            )
             try:
-                inst = cloud.create_instance(
-                    name=name,
-                    region=region,
-                    size=size,
-                    image=image,
-                )
+                inst = await cloud.create_instance(cfg)
                 instances.append(inst)
                 console.print(f"  [dim]Created {inst.instance_id}[/dim]")
             except Exception as e:
-                console.print(f"  [red]Failed to create {name}: {e}[/red]")
+                console.print(f"  [red]Failed to create {iname}: {e}[/red]")
+        return instances
+
+    with console.status(f"Creating {count} instances..."):
+        instances = asyncio.run(_create_fleet())
 
     if not instances:
         console.print("[red]No instances created.[/red]")
         raise typer.Exit(code=1)
 
+    async def _wait_all():
+        for inst in instances:
+            try:
+                await cloud.wait_until_ready(inst.instance_id)
+                refreshed = await cloud.get_instance(inst.instance_id)
+                if refreshed:
+                    console.print(
+                        f"  [green]{refreshed.instance_id}[/green] → {refreshed.ip or 'no IP'}"
+                    )
+            except Exception as e:
+                console.print(f"  [yellow]{inst.instance_id}: {e}[/yellow]")
+
     # Wait for all
     console.print(f"[dim]Waiting for {len(instances)} instances...[/dim]")
-    for inst in instances:
-        try:
-            cloud.wait_until_ready(inst.instance_id)
-            refreshed = cloud.get_instance(inst.instance_id)
-            if refreshed:
-                console.print(
-                    f"  [green]{refreshed.instance_id}[/green] → {refreshed.ip or 'no IP'}"
-                )
-        except Exception as e:
-            console.print(f"  [yellow]{inst.instance_id}: {e}[/yellow]")
+    asyncio.run(_wait_all())
 
     console.print(f"[green]Fleet of {len(instances)} instances ready.[/green]")
 
@@ -565,10 +580,10 @@ def fleet_destroy(
     cloud = CloudProviderRegistry.create(provider)
 
     try:
-        all_instances = cloud.list_instances()
+        all_instances = asyncio.run(cloud.list_instances())
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     # Filter by tag or prefix
     targets = []
@@ -591,13 +606,17 @@ def fleet_destroy(
         if not confirm:
             raise typer.Abort()
 
-    destroyed = 0
-    for inst in targets:
-        try:
-            cloud.destroy_instance(inst.instance_id)
-            destroyed += 1
-        except Exception as e:
-            console.print(f"  [red]Failed to destroy {inst.instance_id}: {e}[/red]")
+    async def _destroy_all():
+        count = 0
+        for inst in targets:
+            try:
+                await cloud.destroy_instance(inst.instance_id)
+                count += 1
+            except Exception as e:
+                console.print(f"  [red]Failed to destroy {inst.instance_id}: {e}[/red]")
+        return count
+
+    destroyed = asyncio.run(_destroy_all())
 
     console.print(f"[green]Destroyed {destroyed}/{len(targets)} instances.[/green]")
 
@@ -614,14 +633,13 @@ def cloud_test(
     timeout: Annotated[int, typer.Option("--timeout", "-t", help="Timeout in seconds")] = 30,
 ):
     """Test connectivity to a remote host."""
-    import asyncio
     from ofx.cloud.ssh import wait_for_connectivity
 
     with console.status(f"Testing {connection} to {host}:{port}..."):
         try:
             asyncio.run(wait_for_connectivity(
                 host=host,
-                connection_type=connection,
+                os_type="windows" if connection == "winrm" else "linux",
                 ssh_port=port if connection == "ssh" else 22,
                 winrm_port=port if connection == "winrm" else 5985,
                 timeout=timeout,
@@ -629,7 +647,7 @@ def cloud_test(
             console.print(f"[green]Connection successful: {host}:{port} ({connection})[/green]")
         except Exception as e:
             console.print(f"[red]Connection failed: {e}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from e
 
 
 # ---------------------------------------------------------------------------

@@ -11,10 +11,9 @@ import typer
 from ofx.settings import get_console, settings
 
 from ..encryption import (
-    EncryptionHandler,
+    ensure_key_in_gitignore,
     generate_encryption_key,
     save_encryption_key,
-    ensure_key_in_gitignore,
 )
 
 logger = logging.getLogger(settings.app_branding)
@@ -38,7 +37,7 @@ DIRECTORY_STRUCTURE: list[str | tuple[str, list]] = [
 
 class InitConfig:
     """Configuration for project initialization."""
-    
+
     def __init__(
         self,
         base_path: Path,
@@ -58,7 +57,7 @@ class InitConfig:
 
 class InitHandler:
     """Handles project initialization."""
-    
+
     def __init__(self, config: InitConfig):
         self._config = config
 
@@ -69,9 +68,9 @@ class InitHandler:
         remote_config: dict[str, Any] = {"url": "", "branch": "main"}
         encrypt = False
         encryption_key = ""
-        
+
         console.print("\n[bold]Initializing local git repository...[/]")
-        
+
         console.print("\n[bold]Remote Storage Setup (Optional)[/]")
         setup_remote = typer.confirm(
             "Would you like to set up remote storage?", default=False
@@ -114,14 +113,14 @@ class InitHandler:
             encrypt=encrypt,
             encryption_key=encryption_key,
         )
-        
+
         console.print("[bold green]Initializing project...[/bold green]")
         cls(config).run()
 
     def run(self) -> None:
         """Execute project initialization."""
         cfg = self._config
-        
+
         if cfg.is_multiphase:
             console.print(f"✅ Initializing multi-phase project at: {cfg.base_path.absolute()}")
             self._make_dir(cfg.base_path, DIRECTORY_STRUCTURE)
@@ -164,7 +163,7 @@ class InitHandler:
     def _setup_git_remote(self) -> None:
         """Setup git remote for existing repository."""
         import git
-        
+
         cfg = self._config
         git_url = cfg.remote_config.get("url")
         branch = cfg.remote_config.get("branch", "main")
@@ -201,7 +200,7 @@ class InitHandler:
         """Setup encryption configuration for the project."""
         cfg = self._config
         config_file = cfg.base_path / ".ofx-remote.json"
-        
+
         config: dict[str, Any] = {
             "type": "git",
             "config": cfg.remote_config,
@@ -211,7 +210,7 @@ class InitHandler:
         if cfg.encryption_key:
             key_hash = hashlib.sha256(cfg.encryption_key.encode()).hexdigest()[:16]
             config["encryption_key_hash"] = key_hash
-            
+
             save_encryption_key(cfg.base_path, cfg.encryption_key)
             ensure_key_in_gitignore(cfg.base_path)
 
@@ -221,7 +220,7 @@ class InitHandler:
     def _make_dir(self, base: Path, items: list[str | tuple[str, list]]) -> None:
         """Recursively create directory structure."""
         base.mkdir(parents=True, exist_ok=True)
-        
+
         for item in items:
             if not isinstance(item, str):
                 self._make_dir(base / item[0], item[1])

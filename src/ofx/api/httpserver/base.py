@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer, SimpleHTTPRequestHan
 from pathlib import Path
 
 from ofx.api.exploitation.exploit.utils import check_port, get_host_ip, get_host_ipv6
-from ofx.settings import BASE_DATA_DIR, TEMP_DIR, settings
+from ofx.settings import TEMP_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
 

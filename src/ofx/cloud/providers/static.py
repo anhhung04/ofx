@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import subprocess
 
 from ofx.cloud.base import CloudProvider, CloudProviderRegistry
 from ofx.cloud.models import CloudInstanceInfo
@@ -119,7 +118,7 @@ class StaticProvider(CloudProvider):
             writer.close()
             await writer.wait_closed()
             return True
-        except (OSError, asyncio.TimeoutError):
+        except (TimeoutError, OSError):
             return False
 
     async def destroy_instance(self, instance_id: str) -> None:

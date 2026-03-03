@@ -1,11 +1,11 @@
 "Step runner for executing workflow steps"
 
 import asyncio
+import base64
 import logging
-import os
 from datetime import datetime
-from random import uniform
 from pathlib import Path
+from random import uniform
 from typing import Any
 
 from ofx.models.job import Job
@@ -148,16 +148,24 @@ class StepRunner(BaseRunner[Step]):
                 self._log_info(
                     f"Saving output of '{self.parent.model.jid}'[{self.model.step_index}] to {tmp_file}"
                 )
-                log_lines = [
-                    f"cmd: {self.model.run or self.model.script or self.model.uses}",
-                ]
+                log_lines = []
+                if self.model.run:
+                    log_lines.append(f">> command: {self.model.run}")
+                elif self.model.uses:
+                    log_lines.append(f">> workflow: {self.model.uses}")
+                elif self.model.script_file:
+                    log_lines.append(f">> script_file: {self.model.script_file}")
+                elif self.model.script:
+                    log_lines.append(f">> script (base64): {base64.b64encode(self.model.script.encode()).decode()}")
+                else:
+                    log_lines.append(">> unknown step type")
                 if is_binary:
                     log_lines.append("[BINARY OUTPUT - base64 encoded]")
                 if is_truncated:
                     log_lines.append("[OUTPUT TRUNCATED]")
                 if stderr_truncated:
                     log_lines.append("[STDERR TRUNCATED]")
-                log_lines.append("===")
+                log_lines.append(">>===<<")
                 log_lines.append(stdout)
                 tmp_file.write_text("\n".join(log_lines))
 
@@ -247,7 +255,6 @@ class StepRunner(BaseRunner[Step]):
                 parent=self,
             )
         elif self._run_type is RunType.SCRIPT_FILE:
-            import sys
 
             from ofx.runner.commands.command import Script, ScriptRunner
 

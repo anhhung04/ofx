@@ -2,7 +2,10 @@
 
 import pytest
 
-from ofx.runner.execution.workflow_execution import ExecutionResult, WorkflowExecutionManager
+from ofx.runner.execution.workflow_execution import (
+    ExecutionResult,
+    WorkflowExecutionManager,
+)
 
 
 class _ParentStub:

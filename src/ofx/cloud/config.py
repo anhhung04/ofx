@@ -148,7 +148,7 @@ class CloudProfileManager:
         # Get overrides from the inline config (non-default values)
         overrides = {}
         default_config = CloudConfig(profile=profile_name)
-        for field_name, field_info in CloudConfig.model_fields.items():
+        for field_name, _field_info in CloudConfig.model_fields.items():
             if field_name == "profile":
                 continue
             current_value = getattr(cloud_config, field_name)

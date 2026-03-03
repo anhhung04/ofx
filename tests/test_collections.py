@@ -8,7 +8,6 @@ and index client.
 from __future__ import annotations
 
 import json
-import os
 import textwrap
 from pathlib import Path
 
@@ -598,8 +597,8 @@ class TestAuthenticatedUrl:
     """Tests for CollectionManager._authenticated_url."""
 
     def test_injects_token_into_github_https(self, monkeypatch):
-        from ofx.collections.manager import CollectionManager
         from ofx import settings as settings_mod
+        from ofx.collections.manager import CollectionManager
 
         monkeypatch.setattr(settings_mod, "get_github_token", lambda: "ghp_test123")
 
@@ -609,8 +608,8 @@ class TestAuthenticatedUrl:
         assert result == "https://x-access-token:ghp_test123@github.com/ofx-workflows/recon-tools"
 
     def test_no_token_returns_original(self, monkeypatch):
-        from ofx.collections.manager import CollectionManager
         from ofx import settings as settings_mod
+        from ofx.collections.manager import CollectionManager
 
         monkeypatch.setattr(settings_mod, "get_github_token", lambda: "")
 
@@ -618,8 +617,8 @@ class TestAuthenticatedUrl:
         assert CollectionManager._authenticated_url(url) == url
 
     def test_non_github_url_unchanged(self, monkeypatch):
-        from ofx.collections.manager import CollectionManager
         from ofx import settings as settings_mod
+        from ofx.collections.manager import CollectionManager
 
         monkeypatch.setattr(settings_mod, "get_github_token", lambda: "ghp_test123")
 
@@ -627,8 +626,8 @@ class TestAuthenticatedUrl:
         assert CollectionManager._authenticated_url(url) == url
 
     def test_ssh_url_unchanged(self, monkeypatch):
-        from ofx.collections.manager import CollectionManager
         from ofx import settings as settings_mod
+        from ofx.collections.manager import CollectionManager
 
         monkeypatch.setattr(settings_mod, "get_github_token", lambda: "ghp_test123")
 
@@ -647,8 +646,8 @@ class TestIndexClientAuth:
         assert headers["Authorization"] == "Bearer explicit-tok"
 
     def test_no_token_no_auth_header(self, tmp_path, monkeypatch):
-        from ofx.collections.index import IndexClient
         from ofx import settings as settings_mod
+        from ofx.collections.index import IndexClient
 
         monkeypatch.setattr(settings_mod, "get_github_token", lambda: "")
 

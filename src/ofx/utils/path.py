@@ -24,7 +24,7 @@ def is_git_repo(url: str) -> bool:
     try:
         Git().ls_remote(url)
         return True
-    except:
+    except Exception:
         return False
 
 

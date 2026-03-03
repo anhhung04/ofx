@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC
 from pathlib import Path
 from typing import Annotated
 
@@ -43,8 +44,8 @@ def session_submit(
     local: Annotated[bool, typer.Option("--local", "-l", help="Run as local background process")] = False,
     cloud: Annotated[str, typer.Option("--cloud", "-c", help="Cloud profile to use")] = "",
     name: Annotated[str, typer.Option("--name", "-n", help="Session name/tag")] = "",
-    inputs: Annotated[list[str], typer.Option("--input", "-i", help="Input key=value pairs")] = [],
-    env_vars: Annotated[list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")] = [],
+    inputs: Annotated[list[str], typer.Option("--input", "-i", help="Input key=value pairs")] = None,
+    env_vars: Annotated[list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")] = None,
 ):
     """Submit a workflow as a detached session.
 
@@ -54,6 +55,10 @@ def session_submit(
     from ofx.utils.args import parse_key_value_pairs
 
     # Parse inputs
+    if env_vars is None:
+        env_vars = []
+    if inputs is None:
+        inputs = []
     parsed_inputs: dict = parse_key_value_pairs(inputs)
 
     # Parse env
@@ -89,10 +94,10 @@ def session_submit(
         )
     except Exception as exc:
         console.print(f"[red]Submit failed:[/red] {exc}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     console.print()
-    console.print(f"[green]Session submitted successfully[/green]")
+    console.print("[green]Session submitted successfully[/green]")
     console.print()
 
     table = Table(show_header=False, box=None, padding=(0, 2))
@@ -135,11 +140,11 @@ def session_list(
 
         try:
             _status = SessionStatus(status)
-        except ValueError:
+        except ValueError as exc:
             console.print(f"[red]Unknown status: {status}[/red]")
             valid = ", ".join(s.value for s in SessionStatus)
             console.print(f"[dim]Valid: {valid}[/dim]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from exc
 
     sessions = store.list_sessions(status=_status, target=target or None)
 
@@ -189,9 +194,9 @@ def session_status(
 
     try:
         session = asyncio.run(mgr.status(session_id))
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         console.print(f"[red]Session '{session_id}' not found[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     status_style = _status_style(session.status.value)
 
@@ -241,9 +246,9 @@ def session_logs(
 
     try:
         output = asyncio.run(mgr.logs(session_id, tail=tail))
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         console.print(f"[red]Session '{session_id}' not found[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     console.print(output)
 
@@ -269,12 +274,12 @@ def session_fetch(
         result_path = asyncio.run(
             mgr.fetch(session_id, passphrase=passphrase, output_dir=output_dir)
         )
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         console.print(f"[red]Session '{session_id}' not found[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
     except RuntimeError as exc:
         console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     if passphrase:
         console.print(f"[green]Results encrypted →[/green] {result_path}")
@@ -303,12 +308,12 @@ def session_decrypt(
         result_path = asyncio.run(
             mgr.decrypt(session_id, passphrase=passphrase, output_dir=output_dir)
         )
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         console.print(f"[red]Session '{session_id}' not found[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
     except (RuntimeError, ValueError) as exc:
         console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     console.print(f"[green]Results decrypted →[/green] {result_path}")
 
@@ -329,9 +334,9 @@ def session_cancel(
 
     try:
         session = asyncio.run(mgr.cancel(session_id))
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         console.print(f"[red]Session '{session_id}' not found[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     console.print(f"[yellow]Session {session_id} → {session.status.value}[/yellow]")
 
@@ -353,12 +358,12 @@ def session_destroy(
 
     try:
         session = asyncio.run(mgr.destroy(session_id, force=force))
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
         console.print(f"[red]Session '{session_id}' not found[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
     except RuntimeError as exc:
         console.print(f"[red]{exc}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
     console.print(f"[yellow]Session {session_id} → {session.status.value}[/yellow]")
 
@@ -396,9 +401,9 @@ def session_clean(
         if s:
             try:
                 statuses.append(SessionStatus(s))
-            except ValueError:
+            except ValueError as e:
                 console.print(f"[red]Unknown status: {s}[/red]")
-                raise typer.Exit(code=1)
+                raise typer.Exit(code=1) from e
 
     # Preview
     all_sessions = store.list_sessions()
@@ -407,8 +412,8 @@ def session_clean(
         if statuses and sess.status not in statuses:
             continue
         if age_seconds:
-            from datetime import datetime, timezone
-            age = (datetime.now(timezone.utc) - sess.started_at).total_seconds()
+            from datetime import datetime
+            age = (datetime.now(UTC) - sess.started_at).total_seconds()
             if age < age_seconds:
                 continue
         matching.append(sess)

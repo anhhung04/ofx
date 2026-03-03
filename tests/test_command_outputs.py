@@ -1,6 +1,5 @@
 """Tests for OFX_OUTPUTS feature in command runner"""
 
-from pathlib import Path
 
 import pytest
 

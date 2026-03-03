@@ -10,7 +10,7 @@ import typer
 
 from ofx.settings import settings
 
-from ..encryption import EncryptionHandler, find_encryption_key
+from ..encryption import find_encryption_key
 from ..storage import GitHandler, SSHHandler
 
 logger = logging.getLogger(settings.app_branding)
@@ -18,7 +18,7 @@ logger = logging.getLogger(settings.app_branding)
 
 class SyncHandler:
     """Handles project synchronization with remote storage."""
-    
+
     def __init__(
         self,
         path: str,
@@ -45,7 +45,7 @@ class SyncHandler:
     def _load_project_config(self) -> None:
         """Load project configuration from .ofx-remote.json."""
         config_file = self._project_path / ".ofx-remote.json"
-        
+
         if config_file.exists():
             try:
                 config = json.loads(config_file.read_text())

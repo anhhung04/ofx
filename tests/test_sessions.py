@@ -3,22 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
-import signal
-import subprocess
 import textwrap
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ofx.cloud.sessions.encryption import decrypt_results, derive_key, encrypt_results
 from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
-from ofx.cloud.sessions.store import SessionStore
 from ofx.cloud.sessions.script_builder import build_session_script
-from ofx.cloud.sessions.encryption import derive_key, encrypt_results, decrypt_results
-
+from ofx.cloud.sessions.store import SessionStore
 
 # ======================================================================
 # Session model tests
@@ -53,7 +48,7 @@ class TestSessionModel:
         s = Session(
             id="test",
             workflow_file="w.yml",
-            started_at=datetime.now(timezone.utc) - timedelta(hours=2, minutes=30),
+            started_at=datetime.now(UTC) - timedelta(hours=2, minutes=30),
         )
         age = s.age_display()
         assert "2h" in age
@@ -140,7 +135,7 @@ class TestSessionStore:
 
     def test_clean(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
-        old_time = datetime.now(timezone.utc) - timedelta(days=10)
+        old_time = datetime.now(UTC) - timedelta(days=10)
         store.save(Session(
             id="old", workflow_file="w.yml",
             status=SessionStatus.COMPLETED, started_at=old_time,
@@ -633,4 +628,5 @@ def _make_manager(store: SessionStore, search_dir: Path):
 
 # Captured once at import time so repeated calls never stack up.
 import ofx.settings as _settings_mod
+
 _ORIGINAL_WORKFLOW_DIRS: list[Path] = list(_settings_mod.DEFAULT_WORKFLOWS_DIRS)

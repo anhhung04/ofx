@@ -4,22 +4,22 @@ from __future__ import annotations
 
 # Core abstractions
 from .base import CommandRunner, PostRunnerBase
-from .registry import RunnerRegistry
 
 # Utilities
 from .detect import detect_os
 from .enum import linpeas_command, linux_exploit_suggester_command, winpeas_command
 from .privilege import is_admin_from_whoami, is_root_from_id
-from .transfer import build_download_command
+from .registry import RunnerRegistry
 
 # Runner implementations
 from .runners import (
+    PostSMBExec,
     PostSSH,
     PostWebShell,
     PostWinRM,
-    PostSMBExec,
     PostWMIExec,
 )
+from .transfer import build_download_command
 
 # Backward compatibility aliases
 PostRunner = PostRunnerBase
@@ -28,7 +28,7 @@ PostRemote = PostWebShell
 # Legacy function aliases for backward compatibility
 def deploy_and_run(runner, local_path: str, remote_path: str, exec_cmd: str | None = None) -> str:
     """Upload and execute a file on the remote target.
-    
+
     DEPRECATED: Use runner.deploy_and_run() instead.
     """
     return runner.deploy_and_run(local_path, remote_path, exec_cmd)

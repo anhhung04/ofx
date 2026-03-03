@@ -1,9 +1,9 @@
 """Post-exploitation runner implementations."""
 
+from .smbexec import PostSMBExec
 from .ssh import PostSSH
 from .webshell import PostWebShell
 from .winrm import PostWinRM
-from .smbexec import PostSMBExec
 from .wmiexec import PostWMIExec
 
 __all__ = [

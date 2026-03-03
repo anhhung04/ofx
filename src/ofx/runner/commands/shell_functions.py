@@ -12,7 +12,14 @@ import shutil
 import sys
 from pathlib import Path
 
-from ofx.settings import IS_WINDOWS, TEMP_DIR, TOOLS_BIN_DIR, TOOLS_DIR, ensure_dir, settings
+from ofx.settings import (
+    IS_WINDOWS,
+    TEMP_DIR,
+    TOOLS_BIN_DIR,
+    TOOLS_DIR,
+    ensure_dir,
+    settings,
+)
 
 
 def _is_admin() -> bool:

@@ -9,9 +9,9 @@ import shutil
 import subprocess
 import tempfile
 import time
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence
 
 from ..base import PostRunnerBase
 from ..registry import RunnerRegistry

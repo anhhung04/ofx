@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from ofx.models.workflow import Workflow
-from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
+from ofx.runner import RunContext, WorkflowRunner
 from ofx.utils.matrix import get_expanded_job_ids
 
 

@@ -155,7 +155,7 @@ def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
 
             if files:
-                self.wfile.write("Uploaded files:\n".encode())
+                self.wfile.write(b"Uploaded files:\n")
                 for filename in files:
                     self.wfile.write(f"- {filename}\n".encode())
             else:

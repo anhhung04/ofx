@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 import types
 from dataclasses import dataclass
-from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,7 +18,7 @@ class FakeEntry:
     password: str
     url: str
     notes: str
-    group: "FakeGroup"
+    group: FakeGroup
     custom_properties: dict
 
 
