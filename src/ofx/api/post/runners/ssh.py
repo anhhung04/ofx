@@ -135,6 +135,12 @@ class PostSSH(PostRunnerBase):
 
         # Has sshpass?
         self._has_sshpass = shutil.which("sshpass") is not None
+        if self.password and not self._has_sshpass:
+            # Without sshpass, SSH would block waiting for a TTY password prompt
+            raise ValueError(
+                "Password authentication requires 'sshpass' installed; "
+                "install it or provide an identity_file."
+            )
 
     def __enter__(self):
         if self.use_controlmaster:
@@ -419,6 +425,8 @@ class PostSSH(PostRunnerBase):
         try:
             self.download(remote_out, local_tmp)
             output = Path(local_tmp).read_text()
+            if len(output) > self.max_output_size:
+                output = output[: self.max_output_size] + "\n[OUTPUT TRUNCATED]"
         finally:
             Path(local_tmp).unlink(missing_ok=True)
             # Clean up remote

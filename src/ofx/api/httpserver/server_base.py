@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from abc import ABC
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -11,7 +10,7 @@ if TYPE_CHECKING:
     from ofx.api.httpserver.base import PHTTPServer
 
 
-class BaseServerFacade(ABC):
+class BaseServerFacade:
     """Abstract base class for HTTP server facades.
 
     Provides common functionality for all HTTP server types including

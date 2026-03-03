@@ -39,7 +39,7 @@ def _obfuscate_python(code: str) -> str:
     """Obfuscate Python code."""
     # exec(base64.b64decode('...'))
     b64 = base64.b64encode(code.encode()).decode()
-    return f"__import__('base64').b64decode('{b64}').decode('utf-8')"
+    return f"exec(__import__('base64').b64decode('{b64}').decode('utf-8'))"
 
 
 def _obfuscate_java(code: str) -> str:

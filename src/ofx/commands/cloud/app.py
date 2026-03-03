@@ -208,7 +208,7 @@ def instance_list(
         instances = asyncio.run(cloud.list_instances())
     except Exception as e:
         console.print(f"[red]Error listing instances: {e}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     if not instances:
         console.print("[dim]No instances found.[/dim]")
@@ -270,7 +270,7 @@ def instance_destroy(
         console.print(f"[green]Instance {instance_id} destroyed.[/green]")
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @instance_app.command("create")
@@ -325,7 +325,7 @@ def instance_create(
             instance = asyncio.run(_create())
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from e
 
     console.print("[green]Instance created:[/green]")
     console.print(f"  ID:     {instance.instance_id}")
@@ -370,7 +370,7 @@ def image_list(
         snapshots = asyncio.run(cloud.list_snapshots())
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     if not snapshots:
         console.print("[dim]No snapshots found.[/dim]")
@@ -426,7 +426,7 @@ def image_create(
             snapshot = asyncio.run(cloud.create_snapshot(instance_id, snapshot_name))
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from e
 
     console.print("[green]Snapshot created:[/green]")
     console.print(f"  ID:   {snapshot.snapshot_id}")

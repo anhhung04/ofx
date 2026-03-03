@@ -47,11 +47,11 @@ class Interactsh:
         """
         try:
             from Cryptodome.PublicKey import RSA
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "Interactsh support requires the 'pycryptodomex' package. "
                 "Install it with: pip install pycryptodomex"
-            )
+            ) from e
 
         rsa = RSA.generate(2048)
         self.public_key = rsa.publickey().exportKey()

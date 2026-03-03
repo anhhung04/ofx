@@ -26,7 +26,6 @@ def split_file(path: str | Path, *, chunk_mb: int, output_dir: str | Path | None
         raise FileNotFoundError(f"File not found: {src}")
     out_dir = Path(output_dir).expanduser().resolve() if output_dir else src.parent
     out_dir.mkdir(parents=True, exist_ok=True)
-    src.stat().st_size
     chunk_size = chunk_mb * 1024 * 1024
     parts: list[Path] = []
     with src.open("rb") as f:

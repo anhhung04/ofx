@@ -60,13 +60,17 @@ class PostSMBExec(PostRunnerBase):
         from impacket.smbconnection import SMBConnection
 
         smb = SMBConnection(self.target, self.target)
-        smb.login(self.username, self.password, self.domain)
-        executor = self._smb_module.SMBEXEC(
-            self.username, self.password, self.domain, self.target, smb
-        )
-        output = executor.execute(command)
-        smb.logoff()
-        return output
+        try:
+            smb.login(self.username, self.password, self.domain)
+            executor = self._smb_module.SMBEXEC(
+                self.username, self.password, self.domain, self.target, smb
+            )
+            return executor.execute(command)
+        finally:
+            try:
+                smb.logoff()
+            except Exception:
+                pass
 
     def upload(self, local_path: str, remote_path: str) -> None:
         """Upload a file via SMB.
@@ -78,17 +82,22 @@ class PostSMBExec(PostRunnerBase):
         from impacket.smbconnection import SMBConnection
 
         smb = SMBConnection(self.target, self.target)
-        smb.login(self.username, self.password, self.domain)
+        try:
+            smb.login(self.username, self.password, self.domain)
 
-        # Parse share and path from remote_path
-        # Expected format: "SHARE/path/to/file" or "C$/path/to/file"
-        parts = remote_path.replace("\\", "/").split("/", 1)
-        share = parts[0]
-        path = parts[1] if len(parts) > 1 else ""
+            # Parse share and path from remote_path
+            # Expected format: "SHARE/path/to/file" or "C$/path/to/file"
+            parts = remote_path.replace("\\", "/").split("/", 1)
+            share = parts[0]
+            path = parts[1] if len(parts) > 1 else ""
 
-        with open(local_path, "rb") as f:
-            smb.putFile(share, path, f.read)
-        smb.logoff()
+            with open(local_path, "rb") as f:
+                smb.putFile(share, path, f.read)
+        finally:
+            try:
+                smb.logoff()
+            except Exception:
+                pass
 
     def download(self, remote_path: str, local_path: str) -> None:
         """Download a file via SMB.
@@ -100,13 +109,18 @@ class PostSMBExec(PostRunnerBase):
         from impacket.smbconnection import SMBConnection
 
         smb = SMBConnection(self.target, self.target)
-        smb.login(self.username, self.password, self.domain)
+        try:
+            smb.login(self.username, self.password, self.domain)
 
-        # Parse share and path
-        parts = remote_path.replace("\\", "/").split("/", 1)
-        share = parts[0]
-        path = parts[1] if len(parts) > 1 else ""
+            # Parse share and path
+            parts = remote_path.replace("\\", "/").split("/", 1)
+            share = parts[0]
+            path = parts[1] if len(parts) > 1 else ""
 
-        with open(local_path, "wb") as f:
-            smb.getFile(share, path, f.write)
-        smb.logoff()
+            with open(local_path, "wb") as f:
+                smb.getFile(share, path, f.write)
+        finally:
+            try:
+                smb.logoff()
+            except Exception:
+                pass

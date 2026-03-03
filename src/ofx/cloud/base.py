@@ -122,6 +122,7 @@ class CloudProvider(ABC):
             f"{self.__class__.__name__} does not support snapshot deletion"
         )
 
+    @abstractmethod
     async def close(self) -> None:
         """Clean up any resources (HTTP sessions, etc.)."""
         pass
