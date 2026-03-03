@@ -253,6 +253,22 @@ class Settings(BaseSettings):
         default=None,
         description="etcd registry configuration",
     )
+    registry_cache_enabled: bool = Field(
+        default=True,
+        description="Enable in-process caching layer for registry reads/writes.",
+    )
+    registry_cache_ttl: float = Field(
+        default=0.25,
+        description="Cache TTL (seconds) for registry entries inside a process.",
+    )
+    registry_cache_max_entries: int = Field(
+        default=1024,
+        description="Maximum number of registry entries cached per process.",
+    )
+    registry_failover_enabled: bool = Field(
+        default=True,
+        description="Switch to in-memory registry if the configured backend errors.",
+    )
 
     model_config = SettingsConfigDict(
         secrets_dir=SECRETS_DIR.absolute(),

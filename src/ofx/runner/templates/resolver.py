@@ -28,6 +28,7 @@ class TemplateResolver:
         self,
         value: Any,
         context_vars: dict[str, Any],
+        _memo: dict[str, Any] | None = None,
     ) -> Any:
         """Resolve Jinja2 templates in values recursively with optimized caching
         Args:
@@ -36,15 +37,19 @@ class TemplateResolver:
         Returns:
             Resolved value with templates expanded
         """
+        memo = _memo or {}
         if value is None:
             return value
         elif isinstance(value, dict):
-            return {k: await self.resolve(v, context_vars) for k, v in value.items()}
+            return {
+                k: await self.resolve(v, context_vars, memo)
+                for k, v in value.items()
+            }
         elif isinstance(value, list):
-            return [await self.resolve(v, context_vars) for v in value]
+            return [await self.resolve(v, context_vars, memo) for v in value]
         elif issubclass(type(value), BaseModel):
             return value.model_copy(
-                update={k: await self.resolve(v, context_vars) for k, v in value}
+                update={k: await self.resolve(v, context_vars, memo) for k, v in value}
             )
         elif not isinstance(value, (str, int, float, bool, dict, list)):
             return value
@@ -53,29 +58,7 @@ class TemplateResolver:
         if "{{" not in value_str and "{%" not in value_str:
             return value
 
-        support_funcs = self.get_support_functions()
-
-        # Add registry-based data for accessing job and step data
-        if "registry" in context_vars:
-            registry = context_vars["registry"]
-            jobs_data: dict[str, Any] = {}
-            steps_data: list[dict[str, Any]] = []
-
-            runner = context_vars.get("runner")
-            if runner is not None:
-                jobs_data = await self._jobs_from_runner(runner)
-                steps_data = await self._steps_from_runner(runner)
-
-            # Fallbacks for legacy registry usage
-            if not jobs_data:
-                jobs_data = await registry.get("jobs:results") or {}
-            if not steps_data and "current_job_id" in context_vars:
-                job_id = context_vars["current_job_id"]
-                step_results = await registry.get(f"jobs:{job_id}:steps") or {}
-                steps_data = list(step_results.values())
-
-            support_funcs["jobs"] = jobs_data
-            support_funcs["steps"] = steps_data
+        support_funcs = await self._build_support_functions(context_vars, memo)
 
         if value_str not in self._template_cache:
             if len(self._template_cache) >= self._template_cache_max_size:
@@ -303,6 +286,45 @@ class TemplateResolver:
 
         support_funcs = self._support_funcs_cache.copy()
 
+        return support_funcs
+
+    async def _build_support_functions(
+        self, context_vars: dict[str, Any], memo: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Build support functions once per resolve call and reuse in recursion."""
+
+        if "support_funcs" in memo:
+            return memo["support_funcs"]
+
+        support_funcs = self.get_support_functions()
+
+        # Add registry-based data for accessing job and step data
+        if "registry" in context_vars:
+            registry = context_vars["registry"]
+            jobs_data: dict[str, Any] = memo.get("jobs_data", {})
+            steps_data: list[dict[str, Any]] = memo.get("steps_data", [])
+
+            runner = context_vars.get("runner")
+            if runner is not None and not jobs_data and not steps_data:
+                jobs_data = await self._jobs_from_runner(runner)
+                steps_data = await self._steps_from_runner(runner)
+                memo["jobs_data"] = jobs_data
+                memo["steps_data"] = steps_data
+
+            # Fallbacks for legacy registry usage
+            if not jobs_data:
+                jobs_data = await registry.get("jobs:results") or {}
+                memo["jobs_data"] = jobs_data
+            if not steps_data and "current_job_id" in context_vars:
+                job_id = context_vars["current_job_id"]
+                step_results = await registry.get(f"jobs:{job_id}:steps") or {}
+                steps_data = list(step_results.values())
+                memo["steps_data"] = steps_data
+
+            support_funcs["jobs"] = jobs_data
+            support_funcs["steps"] = steps_data
+
+        memo["support_funcs"] = support_funcs
         return support_funcs
 
     async def _jobs_from_runner(self, runner: Any) -> dict[str, Any]:

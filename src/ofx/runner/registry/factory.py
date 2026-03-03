@@ -6,6 +6,8 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry.cache import CachedRegistryAdapter
+from ofx.runner.registry.failover import FailoverRegistryAdapter
 from ofx.runner.registry.file import FileRegistry
 from ofx.runner.registry.memory import MemoryJobRegistry
 from ofx.settings import settings
@@ -13,6 +15,9 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 RegistryBackend = Literal["memory", "file", "redis", "memcached", "etcd"]
+
+DEFAULT_CACHE_TTL = 0.25
+DEFAULT_CACHE_MAX_ENTRIES = 1024
 
 
 class RegistryFactory:
@@ -38,14 +43,56 @@ class RegistryFactory:
         # BaseModel - use getattr
         return {key: getattr(config, key, default) for key, default in defaults.items()}
 
-    @classmethod
-    def create_memory(cls) -> RegistryAdapter:
-        """Create in-memory registry"""
-        _log_debug("Creating MemoryJobRegistry")
-        return MemoryJobRegistry()
+    @staticmethod
+    def _wrap_cache(
+        registry: RegistryAdapter,
+        enable_cache: bool,
+        cache_ttl: float,
+        cache_max_entries: int,
+    ) -> RegistryAdapter:
+        if not enable_cache:
+            return registry
+        return CachedRegistryAdapter(
+            registry, ttl=cache_ttl, max_entries=cache_max_entries
+        )
+
+    @staticmethod
+    def _wrap_failover(
+        registry: RegistryAdapter,
+        enable_failover: bool,
+    ) -> RegistryAdapter:
+        if not enable_failover:
+            return registry
+        from ofx.runner.registry.failover import FailoverRegistryAdapter as FRA
+
+        if isinstance(registry, (MemoryJobRegistry, FRA)):
+            return registry
+        return FailoverRegistryAdapter(registry)
 
     @classmethod
-    def create_file(cls, filepath: str | None = None) -> RegistryAdapter:
+    def create_memory(
+        cls,
+        *,
+        enable_cache: bool = False,
+        cache_ttl: float = DEFAULT_CACHE_TTL,
+        cache_max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        enable_failover: bool | None = None,
+    ) -> RegistryAdapter:
+        """Create in-memory registry"""
+        _log_debug("Creating MemoryJobRegistry")
+        registry = MemoryJobRegistry()
+        return cls._wrap_cache(registry, enable_cache, cache_ttl, cache_max_entries)
+
+    @classmethod
+    def create_file(
+        cls,
+        filepath: str | None = None,
+        *,
+        enable_cache: bool = False,
+        cache_ttl: float = DEFAULT_CACHE_TTL,
+        cache_max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        enable_failover: bool = False,
+    ) -> RegistryAdapter:
         """Create file-based registry
 
         Args:
@@ -55,11 +102,20 @@ class RegistryFactory:
         if filepath:
             kwargs["filepath"] = filepath
         _log_debug(f"Creating FileJobRegistry with kwargs: {kwargs}")
-        return FileRegistry(**kwargs)
+        registry = FileRegistry(**kwargs)
+        registry = cls._wrap_cache(registry, enable_cache, cache_ttl, cache_max_entries)
+        return cls._wrap_failover(registry, enable_failover)
 
     @classmethod
     def create_redis(
-        cls, config: BaseModel | dict | None = None, **kwargs
+        cls,
+        config: BaseModel | dict | None = None,
+        *,
+        enable_cache: bool = True,
+        cache_ttl: float = DEFAULT_CACHE_TTL,
+        cache_max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        enable_failover: bool = True,
+        **kwargs,
     ) -> RegistryAdapter:
         """Create Redis-based registry
 
@@ -86,7 +142,11 @@ class RegistryFactory:
                 params.pop("password", None)
 
             _log_debug(f"Creating RedisJobRegistry with kwargs: {params}")
-            return RedisJobRegistry(**params)
+            registry = RedisJobRegistry(**params)
+            registry = cls._wrap_cache(
+                registry, enable_cache, cache_ttl, cache_max_entries
+            )
+            return cls._wrap_failover(registry, enable_failover)
         except ImportError as e:
             raise ImportError(
                 "Redis support requires the 'redis' package. "
@@ -95,7 +155,14 @@ class RegistryFactory:
 
     @classmethod
     def create_memcached(
-        cls, config: BaseModel | dict | None = None, **kwargs
+        cls,
+        config: BaseModel | dict | None = None,
+        *,
+        enable_cache: bool = True,
+        cache_ttl: float = DEFAULT_CACHE_TTL,
+        cache_max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        enable_failover: bool = True,
+        **kwargs,
     ) -> RegistryAdapter:
         """Create Memcached-based registry
 
@@ -116,7 +183,11 @@ class RegistryFactory:
             params.update(kwargs)
 
             _log_debug(f"Creating MemcachedJobRegistry with kwargs: {params}")
-            return MemcachedJobRegistry(**params)
+            registry = MemcachedJobRegistry(**params)
+            registry = cls._wrap_cache(
+                registry, enable_cache, cache_ttl, cache_max_entries
+            )
+            return cls._wrap_failover(registry, enable_failover)
         except ImportError as e:
             raise ImportError(
                 "Memcached support requires the 'aiomcache' package. "
@@ -125,7 +196,14 @@ class RegistryFactory:
 
     @classmethod
     def create_etcd(
-        cls, config: BaseModel | dict | None = None, **kwargs
+        cls,
+        config: BaseModel | dict | None = None,
+        *,
+        enable_cache: bool = True,
+        cache_ttl: float = DEFAULT_CACHE_TTL,
+        cache_max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        enable_failover: bool = True,
+        **kwargs,
     ) -> RegistryAdapter:
         """Create etcd-based registry
 
@@ -146,7 +224,11 @@ class RegistryFactory:
             params.update(kwargs)
 
             _log_debug(f"Creating EtcdJobRegistry with kwargs: {params}")
-            return EtcdJobRegistry(**params)
+            registry = EtcdJobRegistry(**params)
+            registry = cls._wrap_cache(
+                registry, enable_cache, cache_ttl, cache_max_entries
+            )
+            return cls._wrap_failover(registry, enable_failover)
         except ImportError as e:
             raise ImportError(
                 "etcd support requires the 'etcd3' package. "
@@ -155,7 +237,14 @@ class RegistryFactory:
 
     @classmethod
     def create(
-        cls, backend: RegistryBackend = "memory", **kwargs: Any
+        cls,
+        backend: RegistryBackend = "memory",
+        *,
+        enable_cache: bool | None = None,
+        enable_failover: bool = True,
+        cache_ttl: float = DEFAULT_CACHE_TTL,
+        cache_max_entries: int = DEFAULT_CACHE_MAX_ENTRIES,
+        **kwargs: Any,
     ) -> RegistryAdapter:
         """Create a registry adapter based on backend type
 
@@ -169,16 +258,47 @@ class RegistryFactory:
         Raises:
             ValueError: If backend type is unsupported
         """
+        cache_flag = enable_cache if enable_cache is not None else backend != "memory"
+        failover_flag = enable_failover
+
         if backend == "memory":
-            return cls.create_memory()
+            return cls.create_memory(
+                enable_cache=cache_flag,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+            )
         elif backend == "file":
-            return cls.create_file(**kwargs)
+            registry = cls.create_file(
+                enable_cache=cache_flag,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                **kwargs,
+            )
+            return cls._wrap_failover(registry, failover_flag)
         elif backend == "redis":
-            return cls.create_redis(**kwargs)
+            registry = cls.create_redis(
+                enable_cache=cache_flag,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                **kwargs,
+            )
+            return cls._wrap_failover(registry, failover_flag)
         elif backend == "memcached":
-            return cls.create_memcached(**kwargs)
+            registry = cls.create_memcached(
+                enable_cache=cache_flag,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                **kwargs,
+            )
+            return cls._wrap_failover(registry, failover_flag)
         elif backend == "etcd":
-            return cls.create_etcd(**kwargs)
+            registry = cls.create_etcd(
+                enable_cache=cache_flag,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                **kwargs,
+            )
+            return cls._wrap_failover(registry, failover_flag)
         else:
             raise ValueError(
                 f"Unsupported registry backend: {backend}. "
@@ -193,22 +313,58 @@ class RegistryFactory:
             JobRegistryAdapter instance configured from settings
         """
         backend = settings.registry_backend
+        cache_enabled = settings.registry_cache_enabled
+        cache_ttl = settings.registry_cache_ttl
+        cache_max_entries = settings.registry_cache_max_entries
+        failover_enabled = settings.registry_failover_enabled
 
         if backend == "memory":
-            return cls.create_memory()
+            return cls.create_memory(
+                enable_cache=cache_enabled,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+            )
         elif backend == "file":
-            return cls.create_file(filepath=settings.registry_file_path)
+            return cls.create_file(
+                filepath=settings.registry_file_path,
+                enable_cache=cache_enabled,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                enable_failover=failover_enabled,
+            )
         elif backend == "redis":
-            return cls.create_redis(config=settings.registry_redis)
+            return cls.create_redis(
+                config=settings.registry_redis,
+                enable_cache=cache_enabled,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                enable_failover=failover_enabled,
+            )
         elif backend == "memcached":
-            return cls.create_memcached(config=settings.registry_memcached)
+            return cls.create_memcached(
+                config=settings.registry_memcached,
+                enable_cache=cache_enabled,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                enable_failover=failover_enabled,
+            )
         elif backend == "etcd":
-            return cls.create_etcd(config=settings.registry_etcd)
+            return cls.create_etcd(
+                config=settings.registry_etcd,
+                enable_cache=cache_enabled,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+                enable_failover=failover_enabled,
+            )
         else:
             logger.warning(
                 f"Unknown registry backend '{backend}', falling back to memory registry"
             )
-            return cls.create_memory()
+            return cls.create_memory(
+                enable_cache=cache_enabled,
+                cache_ttl=cache_ttl,
+                cache_max_entries=cache_max_entries,
+            )
 
 
 async def cleanup_registry(registry: RegistryAdapter) -> None:

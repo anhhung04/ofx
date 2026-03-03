@@ -1,6 +1,8 @@
 """Job registry adapters using the adapter pattern"""
 
 from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry.cache import CachedRegistryAdapter
+from ofx.runner.registry.failover import FailoverRegistryAdapter
 from ofx.runner.registry.factory import (
     RegistryFactory,
     cleanup_registry,
@@ -12,6 +14,8 @@ __all__ = [
     "RegistryAdapter",
     "MemoryJobRegistry",
     "FileRegistry",
+    "CachedRegistryAdapter",
+    "FailoverRegistryAdapter",
     "RegistryFactory",
     "cleanup_registry",
 ]

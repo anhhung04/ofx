@@ -138,9 +138,39 @@ class BaseRunner[TModel: BaseModel]:
                 self._state_machine.transition(RunnerStatus.FAILED)
         finally:
             self._mark_finish()
-            await self._write_checkpoint(self._checkpoint_status())
-            await self._on_finish()
-            await cleanup_registry(self._registry)
+            initial_checkpoint_status = self._checkpoint_status()
+            try:
+                await self._write_checkpoint(initial_checkpoint_status)
+            except Exception as checkpoint_err:
+                self._log_warning(
+                    f"checkpoint write failed: {checkpoint_err}"
+                )
+
+            try:
+                await self._on_finish()
+            except Exception as finish_err:
+                self._log_error(f"finish hook error: {finish_err}")
+                if self._error is None:
+                    self._error = (
+                        f"Finish hook error ({type(finish_err).__name__}): {finish_err}"
+                    )
+                if not self._state_machine.is_terminal:
+                    try:
+                        self._state_machine.transition(RunnerStatus.FAILED)
+                    except Exception:
+                        pass
+
+            final_status = self._checkpoint_status()
+            if final_status != initial_checkpoint_status:
+                try:
+                    await self._write_checkpoint(final_status)
+                except Exception:
+                    self._log_warning("final checkpoint update skipped due to error")
+
+            try:
+                await cleanup_registry(self._registry)
+            except Exception as cleanup_err:
+                self._log_warning(f"registry cleanup failed: {cleanup_err}")
         return await self.get_result()
 
     async def _write_checkpoint(self, status: str) -> None:
