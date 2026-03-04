@@ -129,14 +129,16 @@ nav:
                   - Developing Connectors: guide/developing-connectors.md
         - Red Teaming APIs:
                   - Overview: api/overview.md
-                  - Evasion: api/evasion.md
-                  - HTTP Server: api/httpserver.md
+                  - Evasion & OPSEC:
+                            - Evasion (AV/EDR Bypass): api/evasion.md
+                            - OPSEC: api/opsec.md
                   - Reconnaissance:
-                            - Overview: api/reconnaissance.md
+                            - Search Engines (Shodan/FOFA/ZoomEye): api/reconnaissance.md
                             - FOFA: api/reconnaissance/fofa.md
                             - Shodan: api/reconnaissance/shodan.md
                             - ZoomEye: api/reconnaissance/zoomeye.md
                             - Out-of-Band (OOB): api/reconnaissance/oob.md
+                            - Port Scan & OSINT: api/recon.md
                   - Exploitation:
                             - Overview: api/exploitation.md
                             - Shellcode: api/exploitation/shellcode.md
@@ -154,20 +156,26 @@ nav:
                             - Credentials: api/post-exploitation/creds.md
                             - Evasion: api/post-exploitation/evasion.md
                             - Workflow Integration: api/post-exploitation/workflow.md
+                  - Privilege Escalation: api/privesc.md
+                  - Active Directory: api/ad.md
                   - Command & Control (C2): api/c2.md
+                  - Exfiltration: api/exfil.md
+                  - Persistence: api/persistence.md
+                  - Bundle & Delivery: api/bundle.md
+                  - HTTP Server: api/httpserver.md
                   - Data Utilities: api/data.md
                   - DNS: api/dns.md
                   - Lateral Movement: api/lateral.md
-                  - Loot & Exfiltration: api/loot.md
+                  - Loot: api/loot.md
                   - Packers & Obfuscation: api/packers.md
                   - Payloads: api/payloads.md
-                  - Persistence: api/persistence.md
                   - Services: api/service.md
         - CLI Reference:
                   - Overview: cli/commands.md
                   - Commands:
                             - Overview: cli/commands/index.md
                             - Flow Commands:
+                                      - Init Workflow: cli/commands/flow-init.md
                                       - Run: cli/commands/run.md
                                       - Validate: cli/commands/validate.md
                                       - Visualize: cli/commands/visualize.md

@@ -63,15 +63,78 @@ safe_cmd = obfuscate_cmd(cmd)
 
 ## API Reference
 
-### `ofx.api.evasion.obfuscate_payload(code: str, language: str) -> str`
+### Payload & Command Obfuscation
+
+#### `obfuscate_payload(code: str, language: str) -> str`
 
 Obfuscates a code snippet for the specified language.
 
 - **code**: Source code to obfuscate.
-- **language**: Target language identifier (e.g., 'php', 'python').
+- **language**: Target language identifier (e.g., `'php'`, `'python'`).
 
-### `ofx.api.evasion.obfuscate_cmd(command: str) -> str`
+#### `obfuscate_cmd(command: str) -> str`
 
 Obfuscates a Windows CMD command using caret insertion.
 
 - **command**: Command string to obfuscate.
+
+#### `chunk_string(s: str, size: int) -> list[str]`
+
+Split a string into fixed-length chunks (e.g., for staged delivery).
+
+#### `xor_bytes(data: bytes, key: bytes) -> bytes`
+
+XOR `data` with a repeating `key`.
+
+#### `rot13(text: str) -> str`
+
+Apply ROT-13 rotation to `text`.
+
+#### `jitter_delay(base_ms: int, jitter_pct: float = 0.3) -> float`
+
+Return a jittered delay in seconds: `base ± base * jitter_pct`.
+
+#### `sleep_with_jitter(base_ms: int, jitter_pct: float = 0.3) -> None`
+
+Sleep for a jittered duration.
+
+---
+
+### AV/EDR Bypass (`evasion.bypass`)
+
+#### `amsi_bypass(technique="reflection") -> str`
+
+Return a PowerShell AMSI bypass snippet.
+
+| technique | Description |
+|-----------|-------------|
+| `reflection` (default) | Set `amsiInitFailed` via reflection |
+| `patch_bytes` | Patch `AmsiScanBuffer` return value in memory |
+| `com_bypass` | Overwrite `amsiInitFailed` via COM / `VirtualProtect` |
+
+```python
+from ofx.api.evasion import amsi_bypass
+
+print(amsi_bypass("reflection"))
+print(amsi_bypass("patch_bytes"))
+```
+
+#### `etw_bypass() -> str`
+
+Return a PowerShell snippet that patches `EtwEventWrite` to a `ret` instruction, suppressing ETW telemetry.
+
+#### `defender_exclusion_command(path: str) -> str`
+
+Return `Add-MpPreference -ExclusionPath '<path>'` (requires admin).
+
+#### `disable_defender_realtime() -> str`
+
+Return `Set-MpPreference -DisableRealtimeMonitoring $true` (requires admin).
+
+#### `scriptblock_logging_disable() -> list[str]`
+
+Return registry commands to disable PowerShell Script Block Logging and Module Logging.
+
+#### `constrained_language_check() -> str`
+
+Return `$ExecutionContext.SessionState.LanguageMode` to check for Constrained Language Mode.
