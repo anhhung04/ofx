@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
 
+from ofx.api.bundle.builder import build_bundle
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
@@ -19,10 +21,10 @@ from ofx.runner.core import (
 )
 from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.runner.execution.execution_results import (
-    JobExecutionResult,
     StepExecutionResult,
+    build_job_execution_result,
+    build_run_if_context,
 )
-from ofx.runner.execution.step import StepRunner
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -51,6 +53,16 @@ class CloudJobRunner(BaseRunner[Job]):
         self._instance = None
         self._remote_runner = None  # PostSSH or PostWinRM
         self._work_dir: str | None = None
+
+    async def run(self, *args, **kwargs):
+        """Override to ensure VPS cleanup on any failure."""
+        try:
+            return await super().run(*args, **kwargs)
+        except Exception:
+            # Ensure remote resources are cleaned up on failure
+            self._cleanup_remote()
+            await self._destroy_instance()
+            raise
 
     # ------------------------------------------------------------------
     # Pre-run: provision + connect
@@ -96,7 +108,7 @@ class CloudJobRunner(BaseRunner[Job]):
         if run_if_expr is True and dep_runners:
             run_if_expr = "success()"
 
-        if not self._evaluate_run_if(run_if_expr, self._run_if_context(dep_runners)):
+        if not self._evaluate_run_if(run_if_expr, build_run_if_context(dep_runners)):
             self._state_machine.transition(RunnerStatus.CANCELED)
             raise Exception(self._produce_log("Job condition is not met"))
 
@@ -152,7 +164,6 @@ class CloudJobRunner(BaseRunner[Job]):
         is_windows = cfg.connection_type == "winrm"
         await wait_for_connectivity(
             host=self._instance.ip,
-            connection_type="winrm" if is_windows else "ssh",
             ssh_port=cfg.ssh_port or 22,
             winrm_port=cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985),
             timeout=cfg.boot_timeout or 180,
@@ -185,7 +196,7 @@ class CloudJobRunner(BaseRunner[Job]):
         provider = cfg.provider or "static"
 
         if provider == "static":
-            kwargs["host"] = cfg.static_host or self._cloud_config.static_host
+            kwargs["host"] = cfg.host or self._cloud_config.host
             kwargs["user"] = cfg.ssh_user
             kwargs["port"] = cfg.ssh_port or 22
             if cfg.ssh_key:
@@ -262,7 +273,6 @@ class CloudJobRunner(BaseRunner[Job]):
                 remote_runner=self._remote_runner,
                 work_dir=self._work_dir,
             )
-            step_runner.log_level = logging.CRITICAL
             self._runners[str(step.step_index)] = step_runner
             result = await step_runner.run()
             if step_runner.is_failed and not step.continue_on_error:
@@ -275,7 +285,6 @@ class CloudJobRunner(BaseRunner[Job]):
     # ------------------------------------------------------------------
 
     async def _post_run(self) -> None:
-        # Handle job outputs (same as JobRunner)
         if self.model.outputs:
             resolved_outputs = {}
             for key, value in self.model.outputs.items():
@@ -283,60 +292,12 @@ class CloudJobRunner(BaseRunner[Job]):
                 resolved_outputs[key] = resolved_value
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
 
-        # Build execution result
-        step_results: list[dict[str, Any]] = []
-        failed_steps: list[int] = []
-        for runner in self._runners.values():
-            if not isinstance(runner, (StepRunner, CloudStepRunner)):
-                continue
-            step_result = await runner.get_result()
-            run_type = (
-                runner._run_type.value
-                if hasattr(runner, "_run_type")
-                else runner.model.get_run_type().value
-            )
-            step_exec = StepExecutionResult(
-                step_index=runner.model.step_index,
-                name=runner.model.name,
-                run_type=run_type,
-                status=step_result.status.value,
-                error=step_result.error,
-                outputs=step_result.outputs,
-            )
-            step_results.append(step_exec.to_dict())
-            if step_result.status == RunnerStatus.FAILED:
-                failed_steps.append(runner.model.step_index)
-
-        status_value = (
-            RunnerStatus.COMPLETED.value
-            if self.status == RunnerStatus.FINISHED
-            else self.status.value
-        )
-        job_exec = JobExecutionResult(
-            jid=self.model.jid,
-            name=self.model.name,
-            status=status_value,
-            error=self._error,
-            total_steps=len(self.model.steps),
-            failed_steps=failed_steps,
-            steps=step_results,
-            duration_ms=self.duration_ms(),
-        )
+        job_exec = build_job_execution_result(self, self._runners)
         await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
 
-        # Download outputs if output_path is set
         await self._download_outputs()
-
-        # Destroy instance if auto_destroy
         await self._destroy_instance()
-
-        # Cleanup remote runner
         self._cleanup_remote()
-
-        self._log_debug(
-            f"Cloud job '{self.model.name or self.model.jid}' result: "
-            f"{await self.get_result()}"
-        )
 
     async def _download_outputs(self) -> None:
         """Download output files from remote VPS."""
@@ -394,7 +355,7 @@ class CloudJobRunner(BaseRunner[Job]):
             )
             await self._provider.destroy_instance(self._instance.instance_id)
         except Exception as e:
-            self._log_debug(f"Instance destroy failed: {e}")
+            self._log_warning(f"Instance destroy failed: {e}")
 
     def _cleanup_remote(self) -> None:
         """Clean up remote runner resources."""
@@ -405,17 +366,7 @@ class CloudJobRunner(BaseRunner[Job]):
                 pass
 
     # ------------------------------------------------------------------
-    # Error handling
-    # ------------------------------------------------------------------
-
-    async def _on_error(self, error: Exception) -> None:
-        """Cleanup on error — destroy VPS to avoid cost leaks."""
-        self._cleanup_remote()
-        await self._destroy_instance()
-        await super()._on_error(error)
-
-    # ------------------------------------------------------------------
-    # Helpers (same as JobRunner)
+    # Helpers
     # ------------------------------------------------------------------
 
     def _produce_log(self, message: Any) -> str:
@@ -428,23 +379,6 @@ class CloudJobRunner(BaseRunner[Job]):
     @property
     def total_steps(self) -> int:
         return len(self.model.steps)
-
-    def _run_if_context(self, dep_runners: list[BaseRunner]) -> dict[str, Any]:
-        if not dep_runners:
-            return {
-                "success": lambda: True,
-                "failure": lambda: False,
-                "canceled": lambda: False,
-                "always": lambda: True,
-            }
-        return {
-            "success": lambda: all(r.is_success for r in dep_runners),
-            "failure": lambda: any(r.is_failed for r in dep_runners),
-            "canceled": lambda: any(
-                r.status == RunnerStatus.CANCELED for r in dep_runners
-            ),
-            "always": lambda: True,
-        }
 
 
 class CloudStepRunner(BaseRunner):
@@ -541,10 +475,25 @@ class CloudStepRunner(BaseRunner):
                     )
                     await asyncio.sleep(retry_delay)
 
-        raise RuntimeError(f"Step failed after {retry + 1} attempts: {last_error}")
+        raise RuntimeError(f"Step failed after {retry + 1} attempts:\n{last_error}")
 
     async def _post_run(self) -> None:
-        pass
+        result = await self.get_result()
+        status_value = (
+            RunnerStatus.COMPLETED.value
+            if result.status == RunnerStatus.FINISHED
+            else result.status.value
+        )
+        execution = StepExecutionResult(
+            step_index=self.model.step_index,
+            name=self.model.name,
+            run_type=self._run_type.value if self._run_type else self.model.get_run_type().value,
+            status=status_value,
+            error=result.error,
+            outputs=result.outputs,
+            duration_ms=self.duration_ms(),
+        )
+        await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
 
     # ------------------------------------------------------------------
     # Remote execution methods
@@ -565,16 +514,60 @@ class CloudStepRunner(BaseRunner):
             self._remote.run, full_cmd, timeout
         )
 
+    async def _discover_python(self) -> str:
+        """Find a working python3/python executable on the remote host."""
+        if hasattr(self, "_cached_python"):
+            return self._cached_python
+
+        candidates = [
+            "python3",
+            "python",
+            "/usr/bin/python3",
+            "/usr/local/bin/python3",
+            "/usr/bin/python",
+            "/usr/local/bin/python",
+        ]
+        for candidate in candidates:
+            try:
+                output = await asyncio.to_thread(
+                    self._remote.run,
+                    f"command -v {candidate} 2>/dev/null && {candidate} --version 2>&1",
+                    10,
+                )
+                if output.strip():
+                    self._cached_python = candidate
+                    self._log_info(f"Discovered Python: {candidate}")
+                    return candidate
+            except Exception:
+                continue
+
+        raise RuntimeError(
+            "No python3 or python executable found on the remote host. "
+            "Checked: " + ", ".join(candidates)
+        )
+
     async def _run_remote_script(self, script: str, timeout: int | None = None) -> str:
-        """Run an inline script on the remote host."""
+        """Run an inline Python script on the remote host.
+
+        The script is bundled with its required ``ofx.api`` modules via
+        :func:`ofx.api.bundle.builder.build_bundle` so that OFX API imports
+        are available on the remote host without installing the package.
+        """
         import secrets as _secrets
 
-        remote_script = f"{self._work_dir}/.ofx_script_{_secrets.token_hex(4)}.sh"
+        # Build bundle to inject ofx.api dependencies
+        bundle = build_bundle(script)
 
-        # Upload script content
-        local_tmp = tempfile.mktemp(prefix="ofx_script_", suffix=".sh")
+        # Discover python on the remote host
+        python_bin = await self._discover_python()
+
+        remote_script = f"{self._work_dir}/.ofx_script_{_secrets.token_hex(4)}.py"
+
+        # Upload bundled script content
+        fd, local_tmp = tempfile.mkstemp(prefix="ofx_script_", suffix=".py")
+        os.close(fd)
         try:
-            Path(local_tmp).write_text(f"#!/bin/bash\n{script}\n")
+            Path(local_tmp).write_text(bundle.bootstrap)
             await asyncio.to_thread(self._remote.upload, local_tmp, remote_script)
         finally:
             Path(local_tmp).unlink(missing_ok=True)
@@ -583,10 +576,10 @@ class CloudStepRunner(BaseRunner):
         try:
             env_prefix = self._build_env_prefix()
             work_dir = self.model.working_directory or self._work_dir
-            full_cmd = f"chmod +x {remote_script} && cd {work_dir} 2>/dev/null && "
+            full_cmd = f"cd {work_dir} 2>/dev/null && "
             if env_prefix:
                 full_cmd += env_prefix + " "
-            full_cmd += remote_script
+            full_cmd += f"{python_bin} {remote_script}"
             return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
         finally:
             # Cleanup remote script
@@ -600,27 +593,48 @@ class CloudStepRunner(BaseRunner):
     async def _run_remote_script_file(
         self, script_file: str, timeout: int | None = None
     ) -> str:
-        """Upload and run a local script file on the remote host."""
-        local_path = str(Path(script_file).expanduser().resolve())
-        if not Path(local_path).exists():
+        """Upload and run a script file on the remote host using the bundle API.
+
+        The script file is bundled with its required ``ofx.api`` modules via
+        :func:`ofx.api.bundle.builder.build_bundle`. The resulting bootstrap is
+        uploaded to the remote host and executed with the discovered python
+        interpreter. The stdout of the remote execution is returned.
+        """
+        # Resolve the absolute path of the script file.
+        local_path = Path(script_file).expanduser().resolve()
+        if not local_path.is_file():
             raise FileNotFoundError(f"Script file not found: {local_path}")
 
-        remote_script = f"{self._work_dir}/{Path(local_path).name}"
-        await asyncio.to_thread(self._remote.upload, local_path, remote_script)
+        script_content = local_path.read_text()
+        # Build a bundle that includes any OFX API imports used by the script.
+        bundle = build_bundle(script_content)
 
+        # Discover python on the remote host.
+        python_bin = await self._discover_python()
+
+        # Write bootstrap to a temporary local file.
+        fd, local_tmp = tempfile.mkstemp(prefix="ofx_bundle_", suffix=".py")
+        os.close(fd)
         try:
-            env_prefix = self._build_env_prefix()
+            Path(local_tmp).write_text(bundle.bootstrap)
+            remote_path = f"{self._work_dir}/{Path(local_tmp).name}"
+            # Upload the bootstrap to the remote host.
+            await asyncio.to_thread(self._remote.upload, local_tmp, remote_path)
+
+            # Execute the bootstrap via discovered python on the remote host.
             work_dir = self.model.working_directory or self._work_dir
-            full_cmd = f"chmod +x {remote_script} && cd {work_dir} 2>/dev/null && "
+            env_prefix = self._build_env_prefix()
+            exec_cmd = f"cd {work_dir} 2>/dev/null && "
             if env_prefix:
-                full_cmd += env_prefix + " "
-            full_cmd += remote_script
-            return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
+                exec_cmd += env_prefix + " "
+            exec_cmd += f"{python_bin} {remote_path}"
+            return await asyncio.to_thread(self._remote.run, exec_cmd, timeout)
         finally:
+            # Clean up temporary local file.
+            Path(local_tmp).unlink(missing_ok=True)
+            # Clean up remote file.
             try:
-                await asyncio.to_thread(
-                    self._remote.run, f"rm -f {remote_script}", 10
-                )
+                await asyncio.to_thread(self._remote.run, f"rm -f {remote_path}", 10)
             except Exception:
                 pass
 

@@ -105,6 +105,20 @@ class Session(OFXBaseModel):
         default="", description="Path to encrypted results archive"
     )
 
+    # Fleet grouping
+    fleet_group_id: str = Field(
+        default="",
+        description="Groups sessions that belong to the same fleet run",
+    )
+    fleet_index: int = Field(
+        default=-1,
+        description="This session's index within the fleet (-1 = not a fleet member)",
+    )
+    fleet_total: int = Field(
+        default=0,
+        description="Total number of sessions in the fleet group",
+    )
+
     # Inputs & metadata
     inputs: dict[str, Any] = Field(
         default_factory=dict, description="Workflow inputs passed at submit time"

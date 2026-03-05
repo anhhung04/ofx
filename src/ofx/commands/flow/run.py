@@ -150,6 +150,7 @@ class FlowRunHandler:
                 logger.info("Workflow completed successfully!")
             else:
                 logger.error("Workflow failed")
+                logger.error("Error details: %s", result.error or "No error message available.")
 
         finally:
             if lock_fd is not None:

@@ -79,11 +79,10 @@ async def run_workflow(
     search_paths = workflow_search_paths or get_workflow_search_dirs()
     search_paths = [Path(p) for p in search_paths]
 
-    workflow_path = Path(workflow)
-    if workflow_path.exists() and workflow_path.is_file():
-        pass
-
-    resolved_workflow: Workflow = find_workflow(str(workflow), tuple(search_paths))
+    try:
+        resolved_workflow: Workflow = find_workflow(str(workflow), tuple(search_paths))
+    except RuntimeError as exc:
+        raise FileNotFoundError(f"Workflow {workflow!r} not found in search paths") from exc
 
     output_dir = _get_tmp_dir(output_path)
     if durable_overrides is not None:

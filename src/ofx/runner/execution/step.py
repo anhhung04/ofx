@@ -111,27 +111,31 @@ class StepRunner(BaseRunner[Step]):
         self._log_debug(f"Final result after retries: {await self.get_result()}")
 
     async def _post_run(self) -> None:
-        """Log stdout, save output if configured"""
-        # if self._error:
-        #     for handler in logger.handlers:
-        #         handler.flush()
-
+        """Log stdout summary, save full output to file if configured."""
         result = await self.get_result()
         stdout = result.outputs.get("stdout", "")
         is_binary = result.outputs.get("binary_output", False)
         is_truncated = result.outputs.get("output_truncated", False)
         stderr_truncated = result.outputs.get("stderr_truncated", False)
         if stdout and isinstance(stdout, str):
-            msg_parts = ["stdout:\n====="]
+            # Log concise summary to console instead of full output
+            byte_count = len(stdout.encode())
+            flags = []
             if is_binary:
-                msg_parts.append("[BINARY OUTPUT - base64 encoded]")
+                flags.append("binary")
             if is_truncated:
-                msg_parts.append("[OUTPUT TRUNCATED]")
+                flags.append("truncated")
             if stderr_truncated:
-                msg_parts.append("[STDERR TRUNCATED]")
-
-            log_msg = " ".join(msg_parts) + f"\n{stdout}\n====="
-            self._log_info(log_msg)
+                flags.append("stderr-truncated")
+            flag_str = f" [{', '.join(flags)}]" if flags else ""
+            lines = stdout.splitlines()
+            preview = lines[0][:120] if lines else ""
+            if len(lines) > 1 or len(preview) < len(lines[0]) if lines else False:
+                preview += "..."
+            self._log_info(
+                f"stdout: {byte_count} bytes, {len(lines)} lines{flag_str}"
+                + (f" | {preview}" if preview else "")
+            )
 
             if self.model.log_stdout and self.ctx.output_path:
                 log_path = self.ctx.output_path / "logs"

@@ -11,13 +11,7 @@ from ofx.runner.execution.job import JobRunner, MatrixJobRunner
 
 
 @dataclass
-class StageResult:
-    errors: list[str]
-
-
-@dataclass
 class ExecutionResult:
-    errors: list[str] = field(default_factory=list)
     failed_job_ids: list[str] = field(default_factory=list)
     failed_stage_indices: list[int] = field(default_factory=list)
 
@@ -32,12 +26,9 @@ class WorkflowExecutionManager:
         result = ExecutionResult()
         for stage_index, stage in enumerate(schedule):
             stage_runners = self._build_stage_runners(stage, staged_jobs)
-            stage_errors, failed_jobs = await self._run_stage(
-                stage_index, stage_runners
-            )
-            if stage_errors:
+            failed_jobs = await self._run_stage(stage_index, stage_runners)
+            if failed_jobs:
                 result.failed_stage_indices.append(stage_index)
-                result.errors.extend(stage_errors)
                 result.failed_job_ids.extend(failed_jobs)
         return result
 
@@ -65,13 +56,12 @@ class WorkflowExecutionManager:
         self,
         stage_index: int,
         stage_runners: dict[str, JobRunner | MatrixJobRunner],
-    ) -> tuple[list[str], list[str]]:
+    ) -> list[str]:
         job_ids = list(stage_runners.keys())
         tasks = {
             job_id: asyncio.create_task(stage_runners[job_id].run())
             for job_id in job_ids
         }
-        errors: list[str] = []
         failed_jobs: list[str] = []
         while tasks:
             done, _ = await asyncio.wait(
@@ -81,21 +71,13 @@ class WorkflowExecutionManager:
                 job_id = next(jid for jid, t in tasks.items() if t is task)
                 runner = stage_runners[job_id]
                 try:
-                    result = task.result()
-                except Exception as e:
-                    result = e
-                job_result = await runner.get_result()
-                if isinstance(result, Exception):
-                    errors.append(f"{job_id}: {result}")
-                    failed_jobs.append(job_id)
-                elif not runner.is_success:
-                    error = job_result.error or "Unknown error"
-                    errors.append(f"job '{job_id}': {error}")
+                    task.result()
+                except Exception:
+                    pass  # Error is captured in runner._error
+                if runner.is_failed:
                     failed_jobs.append(job_id)
                 del tasks[job_id]
-        if errors:
-            self._parent._log_stage_failure(stage_index, errors)
-        return errors, failed_jobs
+        return failed_jobs
 
     def _matrix_combo_count(self, runner: MatrixJobRunner) -> int:
         strategy = runner.model.strategy

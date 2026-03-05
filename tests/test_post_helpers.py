@@ -95,7 +95,7 @@ def test_post_runner_interactive():
 def test_postssh_run_success(monkeypatch: pytest.MonkeyPatch):
     captured = {}
 
-    def fake_run(cmd, text, capture_output, timeout, check):
+    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
         captured["cmd"] = cmd
         return SimpleNamespace(returncode=0, stdout="ok", stderr="")
 
@@ -108,7 +108,7 @@ def test_postssh_run_success(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_postssh_run_failure(monkeypatch: pytest.MonkeyPatch):
-    def fake_run(cmd, text, capture_output, timeout, check):
+    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
         return SimpleNamespace(returncode=1, stdout="", stderr="boom")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -120,7 +120,7 @@ def test_postssh_run_failure(monkeypatch: pytest.MonkeyPatch):
 def test_transfer_scp_builds_command(monkeypatch: pytest.MonkeyPatch, tmp_path):
     captured = {}
 
-    def fake_run(cmd, text, capture_output, timeout, check):
+    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
         captured["cmd"] = cmd
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
@@ -173,7 +173,7 @@ def test_deploy_and_run_ssh(monkeypatch: pytest.MonkeyPatch, tmp_path):
     """Test deploy_and_run with SSH runner."""
     calls = {"scp": [], "ssh": []}
 
-    def fake_run(cmd, text, capture_output, timeout, check):
+    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
         if cmd[0] == "scp":
             calls["scp"].append(cmd)
         elif cmd[0] == "ssh":

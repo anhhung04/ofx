@@ -235,7 +235,6 @@ class CollectionManager:
             self._install_dependencies(manifest.dependencies)
 
         return entry
-        return entry
 
     # ------------------------------------------------------------------
     # Remove

@@ -60,6 +60,8 @@ class CloudConfig(OFXBaseModel):
     ssh_key: str = Field(default="", description="Path to SSH private key file")
     ssh_password: str = Field(default="", description="SSH password (if key not used)")
     ssh_port: int = Field(default=22, description="SSH port")
+    
+    extra: dict[str, Any] = Field(default_factory=dict, description="Extra provider-specific config")
 
     # WinRM config (Windows)
     winrm_user: str = Field(default="Administrator", description="WinRM username")
@@ -104,14 +106,30 @@ class CloudConfig(OFXBaseModel):
     # DigitalOcean-specific
     vpc_uuid: str = Field(default="", description="DigitalOcean VPC UUID")
     project_id: str = Field(default="", description="DigitalOcean project ID")
+    
+    connection_type: Literal["ssh", "winrm"] = Field(
+        default="ssh",
+        description="Connection method to use (ssh or winrm), auto-determined by OS if not set",
+    )
+    
+    boot_timeout: int = Field(
+        default=300,
+        description="Seconds to wait for instance to boot and be reachable",
+    )
 
     @model_validator(mode="after")
-    def set_winrm_port_default(self):
-        """Auto-set WinRM port based on SSL setting."""
+    def normalize(self):
+        """Normalize fields after initialization."""
         if self.winrm_port is None and self.winrm_ssl:
             object.__setattr__(self, "winrm_port", 5986)
         elif self.winrm_port is None and self.os == "windows":
             object.__setattr__(self, "winrm_port", 5985)
+        
+        if not self.provider and self.host:
+            object.__setattr__(self, "provider", "static")
+        if self.os == "windows" and self.connection_type == "ssh":
+            object.__setattr__(self, "connection_type", "winrm")
+        
         return self
 
 

@@ -18,8 +18,8 @@ from ofx.runner.core import (
 )
 from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.runner.execution.execution_results import (
-    JobExecutionResult,
-    StepExecutionResult,
+    build_job_execution_result,
+    build_run_if_context,
 )
 from ofx.runner.execution.step import StepRunner
 from ofx.settings import settings
@@ -60,7 +60,7 @@ class JobRunner(BaseRunner[Job]):
         if run_if_expr is True and dep_runners:
             run_if_expr = "success()"
 
-        if not self._evaluate_run_if(run_if_expr, self._run_if_context(dep_runners)):
+        if not self._evaluate_run_if(run_if_expr, build_run_if_context(dep_runners)):
             self._state_machine.transition(RunnerStatus.CANCELED)
             raise Exception(self._produce_log("Job condition is not met"))
 
@@ -98,7 +98,6 @@ class JobRunner(BaseRunner[Job]):
                 )
 
     async def _post_run(self) -> None:
-        # Handle job outputs
         if self.model.outputs:
             resolved_outputs = {}
             for key, value in self.model.outputs.items():
@@ -106,49 +105,8 @@ class JobRunner(BaseRunner[Job]):
                 resolved_outputs[key] = resolved_value
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
 
-        step_results: list[dict[str, Any]] = []
-        failed_steps: list[int] = []
-        for runner in self._runners.values():
-            if not isinstance(runner, StepRunner):
-                continue
-            step_result = await runner.get_result()
-            run_type = (
-                runner._run_type.value
-                if hasattr(runner, "_run_type")
-                else runner.model.get_run_type().value
-            )
-            step_exec = StepExecutionResult(
-                step_index=runner.model.step_index,
-                name=runner.model.name,
-                run_type=run_type,
-                status=step_result.status.value,
-                error=step_result.error,
-                outputs=step_result.outputs,
-            )
-            step_results.append(step_exec.to_dict())
-            if step_result.status == RunnerStatus.FAILED:
-                failed_steps.append(runner.model.step_index)
-
-        status_value = (
-            RunnerStatus.COMPLETED.value
-            if self.status == RunnerStatus.FINISHED
-            else self.status.value
-        )
-        job_exec = JobExecutionResult(
-            jid=self.model.jid,
-            name=self.model.name,
-            status=status_value,
-            error=self._error,
-            total_steps=len(self.model.steps),
-            failed_steps=failed_steps,
-            steps=step_results,
-            duration_ms=self.duration_ms(),
-        )
+        job_exec = build_job_execution_result(self, self._runners)
         await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
-
-        self._log_debug(
-            f"job '{self.model.name or self.model.jid}' result: {await self.get_result()}"
-        )
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
@@ -160,23 +118,6 @@ class JobRunner(BaseRunner[Job]):
     @property
     def total_steps(self) -> int:
         return len(self.model.steps)
-
-    def _run_if_context(self, dep_runners: list[BaseRunner]) -> dict[str, Any]:
-        if not dep_runners:
-            return {
-                "success": lambda: True,
-                "failure": lambda: False,
-                "canceled": lambda: False,
-                "always": lambda: True,
-            }
-        return {
-            "success": lambda: all(r.is_success for r in dep_runners),
-            "failure": lambda: any(r.is_failed for r in dep_runners),
-            "canceled": lambda: any(
-                r.status == RunnerStatus.CANCELED for r in dep_runners
-            ),
-            "always": lambda: True,
-        }
 
 
 class MatrixJobRunner(BaseRunner[Job]):

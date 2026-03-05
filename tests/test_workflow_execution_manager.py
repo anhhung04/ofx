@@ -11,13 +11,9 @@ from ofx.runner.execution.workflow_execution import (
 class _ParentStub:
     def __init__(self):
         self._runners = {}
-        self.logged = []
 
     def _child_context(self, update=None, **_kwargs):
         return {"ctx": "child", "update": update or {}}
-
-    def _log_stage_failure(self, stage_index, errors):
-        self.logged.append((stage_index, errors))
 
 
 class _ResultStub:
@@ -29,6 +25,7 @@ class _RunnerStub:
     def __init__(self, should_raise=False, success=True, error="boom"):
         self._should_raise = should_raise
         self.is_success = success
+        self.is_failed = not success
         self._error = error
 
     async def run(self):
@@ -51,13 +48,9 @@ async def test_run_stage_collects_errors():
         "job3": _RunnerStub(should_raise=False, success=True, error=None),
     }
 
-    errors, failed_jobs = await manager._run_stage(0, stage_runners)
+    failed_jobs = await manager._run_stage(0, stage_runners)
 
-    assert len(errors) == 2
-    assert any("job1:" in err for err in errors)
-    assert any("job 'job2': failed" in err for err in errors)
     assert set(failed_jobs) == {"job1", "job2"}
-    assert parent.logged == [(0, errors)]
 
 
 def test_build_stage_runners_creates_job_runners(monkeypatch):
@@ -118,4 +111,3 @@ async def test_execution_result_collects_failed_jobs_and_stages():
     assert isinstance(result, ExecutionResult)
     assert result.failed_stage_indices == [0]
     assert result.failed_job_ids == ["a"]
-    assert len(result.errors) == 1

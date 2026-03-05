@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -107,6 +108,15 @@ class SessionStore:
                     logger.debug("Skipping corrupt session %s: %s", child.name, exc)
         return sessions
 
+    def list_by_fleet_group(self, fleet_group_id: str) -> list[Session]:
+        """Return all sessions belonging to a fleet group, sorted by fleet_index."""
+        sessions = [
+            s for s in self.list_sessions()
+            if s.fleet_group_id == fleet_group_id
+        ]
+        sessions.sort(key=lambda s: s.fleet_index)
+        return sessions
+
     def session_dir(self, session_id: str) -> Path:
         """Public accessor for a session's directory."""
         return self._session_dir(session_id)
@@ -147,13 +157,18 @@ class SessionStore:
         return self._base_dir / session_id
 
     def _write_json(self, path: Path, data: dict) -> None:
-        """Write JSON with file-locking for atomicity."""
-        with open(path, "w") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            try:
-                json.dump(data, f, indent=2, default=str)
-            finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
+        """Write JSON atomically: lock before truncate to prevent races."""
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            os.ftruncate(fd, 0)
+            os.lseek(fd, 0, os.SEEK_SET)
+            content = json.dumps(data, indent=2, default=str).encode()
+            os.write(fd, content)
+            os.fsync(fd)
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
 
     def _read_json(self, path: Path) -> dict:
         with open(path) as f:

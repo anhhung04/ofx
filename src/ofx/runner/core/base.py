@@ -119,18 +119,15 @@ class BaseRunner[TModel: BaseModel]:
             )
 
             # Execute lifecycle
-            await self._on_start()
             await self._pre_run()
             self._state_machine.transition(RunnerStatus.RUNNING)
             await self._do_run()
             self._state_machine.transition(RunnerStatus.FINISHED)
             await self._post_run()
-            await self._on_success()
             await cleanup_registry(self._registry)
             self._state_machine.transition(RunnerStatus.COMPLETED)
         except Exception as e:
-            self._error = f"Error ({type(e).__name__}): {e}"
-            await self._on_error(e)
+            self._error = str(e)
             if self._state_machine.current_state not in [
                 RunnerStatus.FAILED,
                 RunnerStatus.CANCELED,
@@ -145,20 +142,6 @@ class BaseRunner[TModel: BaseModel]:
                 self._log_warning(
                     f"checkpoint write failed: {checkpoint_err}"
                 )
-
-            try:
-                await self._on_finish()
-            except Exception as finish_err:
-                self._log_error(f"finish hook error: {finish_err}")
-                if self._error is None:
-                    self._error = (
-                        f"Finish hook error ({type(finish_err).__name__}): {finish_err}"
-                    )
-                if not self._state_machine.is_terminal:
-                    try:
-                        self._state_machine.transition(RunnerStatus.FAILED)
-                    except Exception:
-                        pass
 
             final_status = self._checkpoint_status()
             if final_status != initial_checkpoint_status:
@@ -372,24 +355,7 @@ class BaseRunner[TModel: BaseModel]:
             return None
         end = self._finished_at or time.perf_counter()
         return int((end - self._started_at) * 1000)
-
-    async def _on_start(self) -> None:
-        """Lifecycle hook called before pre_run."""
-        self._log_debug("runner start")
-
-    async def _on_success(self) -> None:
-        """Lifecycle hook called after post_run when completed successfully."""
-        self._log_debug("runner success")
-
-    async def _on_error(self, error: Exception) -> None:
-        """Lifecycle hook called when an error is raised."""
-        if self.log_level <= logging.ERROR:
-            self._log_error(f"runner error: {error}")
-
-    async def _on_finish(self) -> None:
-        """Lifecycle hook called at the end of run regardless of outcome."""
-        self._log_debug("runner finish")
-
+    
     @property
     def status(self) -> RunnerStatus:
         """Get the current status"""

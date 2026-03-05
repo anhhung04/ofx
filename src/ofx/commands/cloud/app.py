@@ -4,6 +4,7 @@ Provides commands to manage cloud profiles, instances, and images.
 """
 
 import asyncio
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -555,6 +556,340 @@ def fleet_create(
     console.print(f"[green]Fleet of {len(instances)} instances ready.[/green]")
 
 
+@fleet_app.command("run")
+def fleet_run(
+    workflow: Annotated[str, typer.Argument(help="Workflow file name or path")],
+    targets: Annotated[str, typer.Option("--targets", "-t", help="Targets: file path, CIDR, comma-separated IPs")] = "",
+    count: Annotated[int, typer.Option("--count", "-n", help="Number of fleet instances (auto if 0)")] = 0,
+    profile: Annotated[str, typer.Option("--profile", help="Cloud profile")] = "",
+    distribution: Annotated[str, typer.Option("--distribution", "-d", help="Distribution mode: chunk, round-robin, subnet, line")] = "chunk",
+    job: Annotated[str, typer.Option("--job", "-j", help="Job ID to run")] = "",
+    name: Annotated[str, typer.Option("--name", help="Fleet run name")] = "",
+    inputs: Annotated[list[str], typer.Option("--input", "-i", help="Input key=value pairs")] = None,
+    env_vars: Annotated[list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")] = None,
+    target_var: Annotated[str, typer.Option("--target-var", help="Input variable name for the target chunk file")] = "targets_file",
+):
+    """Submit a workflow across multiple fleet instances with target distribution.
+
+    Each instance gets a chunk of the targets. Use --target-var to control
+    which workflow input receives the chunk file path (default: targets_file).
+
+    Examples:
+        ofx cloud fleet run scan.yml --targets targets.txt --count 5 --profile do-nyc
+        ofx cloud fleet run scan.yml --targets 10.0.0.0/24 --count 10 --distribution round-robin
+    """
+    import secrets as _secrets
+
+    from ofx.cloud.fleet_distributor import FleetDistributor
+    from ofx.cloud.fleet_input import FleetInputParser
+    from ofx.cloud.sessions import SessionManager, SessionTarget
+    from ofx.utils.args import parse_key_value_pairs
+
+    if inputs is None:
+        inputs = []
+    if env_vars is None:
+        env_vars = []
+
+    parsed_inputs: dict = parse_key_value_pairs(inputs)
+    parsed_env: dict = {}
+    for ev in env_vars:
+        if "=" in ev:
+            k, v = ev.split("=", 1)
+            parsed_env[k] = v
+
+    if not profile:
+        console.print("[red]Fleet run requires --profile for cloud execution[/red]")
+        raise typer.Exit(code=1)
+
+    # Parse and distribute targets
+    parser = FleetInputParser()
+    target_list = parser.parse(targets) if targets else []
+
+    if count == 0:
+        if target_list:
+            count = min(len(target_list), 10)  # sensible default cap
+        else:
+            count = 1
+
+    distributor = FleetDistributor()
+    if target_list:
+        chunk_files = distributor.distribute_to_files(target_list, count, distribution)
+        effective_count = len(chunk_files)
+    else:
+        chunk_files = []
+        effective_count = count
+
+    fleet_group_id = _secrets.token_hex(4)
+    fleet_name = name or f"fleet-{fleet_group_id}"
+
+    console.print(f"[bold]Fleet run:[/bold] {fleet_name}")
+    console.print(f"  Workflow:     {workflow}")
+    console.print(f"  Instances:    {effective_count}")
+    if target_list:
+        console.print(f"  Targets:      {len(target_list)} ({distribution})")
+    console.print(f"  Profile:      {profile}")
+    console.print(f"  Fleet group:  {fleet_group_id}")
+    console.print()
+
+    mgr = SessionManager()
+
+    async def _submit_fleet():
+        sessions = []
+        for i in range(effective_count):
+            instance_inputs = dict(parsed_inputs)
+            if chunk_files and i < len(chunk_files):
+                instance_inputs[target_var] = str(chunk_files[i])
+
+            session_name = f"{fleet_name}-{i}"
+            try:
+                session = await mgr.submit(
+                    workflow,
+                    job_id=job,
+                    target=SessionTarget.CLOUD,
+                    cloud_profile=profile,
+                    inputs=instance_inputs,
+                    name=session_name,
+                    env=parsed_env,
+                    tags={
+                        "fleet_group": fleet_group_id,
+                        "fleet_index": str(i),
+                    },
+                )
+                # Update with fleet metadata
+                session = session.model_copy(
+                    update={
+                        "fleet_group_id": fleet_group_id,
+                        "fleet_index": i,
+                        "fleet_total": effective_count,
+                    }
+                )
+                mgr.store.save(session)
+                sessions.append(session)
+                console.print(
+                    f"  [green]#{i}[/green] session={session.id} "
+                    f"ip={session.instance_ip or 'pending'}"
+                )
+            except Exception as exc:
+                console.print(f"  [red]#{i} failed: {exc}[/red]")
+        return sessions
+
+    with console.status("Submitting fleet sessions..."):
+        sessions = asyncio.run(_submit_fleet())
+
+    console.print()
+    if not sessions:
+        console.print("[red]No sessions submitted.[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"[green]{len(sessions)}/{effective_count} sessions submitted.[/green]")
+    console.print()
+    console.print(f"[dim]Fleet status:  ofx cloud fleet status {fleet_group_id}[/dim]")
+    console.print(f"[dim]Fleet results: ofx cloud fleet results {fleet_group_id}[/dim]")
+
+
+@fleet_app.command("status")
+def fleet_status(
+    fleet_group_id: Annotated[str, typer.Argument(help="Fleet group ID")],
+    refresh: Annotated[bool, typer.Option("--refresh", "-r", help="Probe running sessions for latest status")] = False,
+):
+    """Show status of all sessions in a fleet group."""
+    from ofx.cloud.sessions import SessionManager, SessionStore
+
+    store = SessionStore()
+    sessions = store.list_by_fleet_group(fleet_group_id)
+
+    if not sessions:
+        console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
+        raise typer.Exit(code=1)
+
+    if refresh:
+        mgr = SessionManager(store=store)
+
+        async def _refresh():
+            refreshed = []
+            for s in sessions:
+                try:
+                    refreshed.append(await mgr.status(s.id))
+                except Exception:
+                    refreshed.append(s)
+            return refreshed
+
+        with console.status("Refreshing session statuses..."):
+            sessions = asyncio.run(_refresh())
+
+    # Summary counts
+    status_counts: dict[str, int] = {}
+    for s in sessions:
+        status_counts[s.status.value] = status_counts.get(s.status.value, 0) + 1
+
+    fleet_name = sessions[0].name.rsplit("-", 1)[0] if sessions else fleet_group_id
+    console.print(f"[bold]Fleet:[/bold] {fleet_name}  [dim]({fleet_group_id})[/dim]")
+    console.print(
+        f"  Total: {len(sessions)}  |  "
+        + "  ".join(f"{k}: {v}" for k, v in sorted(status_counts.items()))
+    )
+    console.print()
+
+    table = Table(title="Fleet Sessions")
+    table.add_column("#", justify="right", style="dim")
+    table.add_column("Session ID", style="cyan", no_wrap=True)
+    table.add_column("Status")
+    table.add_column("IP/Host")
+    table.add_column("PID")
+    table.add_column("Age", justify="right")
+    table.add_column("Error")
+
+    for s in sessions:
+        idx = str(s.fleet_index) if s.fleet_index >= 0 else "-"
+        status_style = _fleet_status_style(s.status.value)
+        table.add_row(
+            idx,
+            s.id,
+            f"[{status_style}]{s.status.value}[/{status_style}]",
+            s.instance_ip or "(local)",
+            str(s.remote_pid) if s.remote_pid else "-",
+            s.age_display(),
+            (s.error[:40] + "...") if len(s.error) > 40 else s.error,
+        )
+
+    console.print(table)
+
+
+@fleet_app.command("results")
+def fleet_results(
+    fleet_group_id: Annotated[str, typer.Argument(help="Fleet group ID")],
+    output: Annotated[str, typer.Option("--output", "-o", help="Output directory for aggregated results")] = "",
+    passphrase: Annotated[str, typer.Option("--passphrase", "-p", help="Encrypt results with passphrase")] = "",
+    skip_running: Annotated[bool, typer.Option("--skip-running", help="Skip sessions still running (fetch completed only)")] = False,
+):
+    """Fetch and aggregate results from all sessions in a fleet group.
+
+    Downloads results from each completed session into a subdirectory
+    named by fleet index. Optionally encrypts the aggregate.
+    """
+    from ofx.cloud.sessions import SessionManager, SessionStore
+
+    store = SessionStore()
+    sessions = store.list_by_fleet_group(fleet_group_id)
+
+    if not sessions:
+        console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
+        raise typer.Exit(code=1)
+
+    # Refresh statuses first
+    mgr = SessionManager(store=store)
+
+    async def _refresh_and_fetch():
+        refreshed = []
+        for s in sessions:
+            try:
+                refreshed.append(await mgr.status(s.id))
+            except Exception:
+                refreshed.append(s)
+        return refreshed
+
+    with console.status("Checking fleet session statuses..."):
+        sessions = asyncio.run(_refresh_and_fetch())
+
+    running = [s for s in sessions if s.is_running()]
+    completed = [s for s in sessions if s.status.value == "completed"]
+    failed = [s for s in sessions if s.status.value == "failed"]
+    fetchable = [s for s in sessions if s.is_done() and s.status.value not in ("destroyed",)]
+
+    console.print(f"[bold]Fleet results:[/bold] {fleet_group_id}")
+    console.print(
+        f"  Completed: {len(completed)}  Failed: {len(failed)}  "
+        f"Running: {len(running)}  Fetchable: {len(fetchable)}"
+    )
+
+    if running and not skip_running:
+        console.print(
+            f"[yellow]{len(running)} session(s) still running. "
+            f"Use --skip-running to fetch only completed.[/yellow]"
+        )
+        raise typer.Exit(code=1)
+
+    if not fetchable:
+        console.print("[dim]No results to fetch.[/dim]")
+        return
+
+    # Determine output dir
+    if output:
+        agg_dir = Path(output)
+    else:
+        from ofx.settings import TEMP_DIR, ensure_dir
+
+        agg_dir = ensure_dir(TEMP_DIR) / f"fleet-{fleet_group_id}"
+    agg_dir.mkdir(parents=True, exist_ok=True)
+
+    async def _fetch_all():
+        fetched = 0
+        for s in fetchable:
+            idx_label = str(s.fleet_index) if s.fleet_index >= 0 else s.id
+            dest = agg_dir / f"instance-{idx_label}"
+            try:
+                await mgr.fetch(s.id, output_dir=dest)
+                fetched += 1
+                console.print(f"  [green]#{idx_label}[/green] → {dest}")
+            except Exception as exc:
+                console.print(f"  [red]#{idx_label} fetch failed: {exc}[/red]")
+        return fetched
+
+    console.print()
+    fetched = asyncio.run(_fetch_all())
+
+    console.print()
+    console.print(f"[green]Fetched {fetched}/{len(fetchable)} session results → {agg_dir}[/green]")
+
+    if passphrase:
+        from ofx.cloud.sessions.encryption import encrypt_results
+
+        enc_path = encrypt_results(agg_dir, passphrase)
+        console.print(f"[green]Encrypted → {enc_path}[/green]")
+
+
+@fleet_app.command("cancel")
+def fleet_cancel(
+    fleet_group_id: Annotated[str, typer.Argument(help="Fleet group ID")],
+    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation")] = False,
+):
+    """Cancel all running sessions in a fleet group."""
+    from ofx.cloud.sessions import SessionManager, SessionStore
+
+    store = SessionStore()
+    sessions = store.list_by_fleet_group(fleet_group_id)
+
+    if not sessions:
+        console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
+        raise typer.Exit(code=1)
+
+    running = [s for s in sessions if s.is_running()]
+    if not running:
+        console.print("[dim]No running sessions to cancel.[/dim]")
+        return
+
+    console.print(f"[yellow]{len(running)} running session(s) to cancel.[/yellow]")
+    if not force:
+        confirm = typer.confirm("Cancel all?")
+        if not confirm:
+            raise typer.Abort()
+
+    mgr = SessionManager(store=store)
+
+    async def _cancel_all():
+        canceled = 0
+        for s in running:
+            try:
+                await mgr.cancel(s.id)
+                canceled += 1
+            except Exception as exc:
+                console.print(f"  [red]{s.id} cancel failed: {exc}[/red]")
+        return canceled
+
+    canceled = asyncio.run(_cancel_all())
+    console.print(f"[yellow]Canceled {canceled}/{len(running)} sessions.[/yellow]")
+
+
 @fleet_app.command("destroy")
 def fleet_destroy(
     tag: Annotated[str, typer.Option("--tag", help="Destroy instances with this tag")] = "",
@@ -674,3 +1009,24 @@ def list_providers():
         table.add_row(name, cls_name)
 
     console.print(table)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _fleet_status_style(status: str) -> str:
+    """Rich markup style for a session status in fleet tables."""
+    styles = {
+        "provisioning": "yellow",
+        "uploading": "yellow",
+        "running": "bold cyan",
+        "completed": "green",
+        "failed": "red",
+        "canceled": "dim yellow",
+        "fetched": "bold green",
+        "encrypted": "bold magenta",
+        "destroyed": "dim red",
+    }
+    return styles.get(status, "white")

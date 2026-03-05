@@ -226,20 +226,32 @@ class SessionManager:
 
         instance = await provider.create_instance(resolved)
 
-        if provider_name != "static":
-            instance = await provider.wait_until_ready(
-                instance.instance_id, timeout=resolved.startup_timeout or 300
-            )
-            refreshed = await provider.get_instance(instance.instance_id)
-            if refreshed and refreshed.ip:
-                instance = refreshed
+        try:
+            if provider_name != "static":
+                instance = await provider.wait_until_ready(
+                    instance.instance_id, timeout=resolved.startup_timeout or 300
+                )
+                refreshed = await provider.get_instance(instance.instance_id)
+                if refreshed and refreshed.ip:
+                    instance = refreshed
 
-        if not instance or not instance.ip:
+            if not instance or not instance.ip:
+                raise RuntimeError("Instance has no IP address")
+        except Exception:
+            # Destroy orphaned instance on provisioning failure
+            if provider_name != "static" and instance and instance.instance_id:
+                try:
+                    await provider.destroy_instance(instance.instance_id)
+                except Exception as destroy_err:
+                    logger.warning(
+                        "Failed to destroy orphaned instance %s: %s",
+                        instance.instance_id, destroy_err,
+                    )
             session = session.model_copy(
-                update={"status": SessionStatus.FAILED, "error": "No IP assigned"}
+                update={"status": SessionStatus.FAILED, "error": str(instance)}
             )
             self.store.save(session)
-            raise RuntimeError("Instance has no IP address")
+            raise
 
         session = session.model_copy(
             update={
@@ -291,15 +303,18 @@ class SessionManager:
             remote.run(f'mkdir "{remote_work_dir}" 2>nul')
 
             # Upload key file
-            local_key = tempfile.mktemp(suffix=".key")
+            fd, local_key = tempfile.mkstemp(suffix=".key")
+            os.close(fd)
             Path(local_key).write_text(at_rest_key)
+            os.chmod(local_key, 0o600)
             try:
                 remote.upload(local_key, f"{remote_work_dir}\\.ofx_key")
             finally:
                 Path(local_key).unlink(missing_ok=True)
 
             # Upload script
-            local_script = tempfile.mktemp(suffix=".ps1")
+            fd, local_script = tempfile.mkstemp(suffix=".ps1")
+            os.close(fd)
             Path(local_script).write_text(script_content)
             try:
                 remote.upload(local_script, f"{remote_work_dir}\\run.ps1")
@@ -325,8 +340,10 @@ class SessionManager:
             remote.run(f"mkdir -p {remote_work_dir} && chmod 700 {remote_work_dir}")
 
             # Upload key file
-            local_key = tempfile.mktemp(suffix=".key")
+            fd, local_key = tempfile.mkstemp(suffix=".key")
+            os.close(fd)
             Path(local_key).write_text(at_rest_key)
+            os.chmod(local_key, 0o600)
             try:
                 remote.upload(local_key, f"{remote_work_dir}/.ofx_key")
             finally:
@@ -334,7 +351,8 @@ class SessionManager:
             remote.run(f"chmod 600 {remote_work_dir}/.ofx_key")
 
             # Upload script
-            local_script = tempfile.mktemp(suffix=".sh")
+            fd, local_script = tempfile.mkstemp(suffix=".sh")
+            os.close(fd)
             Path(local_script).write_text(script_content)
             try:
                 remote.upload(local_script, f"{remote_work_dir}/run.sh")

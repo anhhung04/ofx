@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import secrets
@@ -12,6 +13,7 @@ import time
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
+from random import uniform
 
 from ..base import PostRunnerBase
 from ..registry import RunnerRegistry
@@ -126,9 +128,11 @@ class PostSSH(PostRunnerBase):
             if log_path:
                 self._log_file = Path(log_path)
             else:
-                self._log_file = Path(tempfile.mktemp(
-                    prefix=f"ofx_ssh_{host}_", suffix=".log"
-                ))
+                fd, log_tmp = tempfile.mkstemp(
+                    prefix="ofx_ssh_", suffix=".log"
+                )
+                os.close(fd)
+                self._log_file = Path(log_tmp)
 
         # Track temp files on remote for cleanup
         self._remote_temp_files: list[str] = []
@@ -168,12 +172,16 @@ class PostSSH(PostRunnerBase):
             "-f",  # Background
             "-o", f"ControlPath={self._control_path}",
             "-o", "ControlPersist=300",
+            "-o", "BatchMode=yes" if not self.password else "",
+            "-o", "AddKeysToAgent=no",
+            "-o", "KnownHostsFile=/dev/null",
         ])
 
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True,
                 timeout=self.connect_timeout + 10, check=False,
+                env=self._subprocess_env(),
             )
             if result.returncode == 0:
                 self._control_active = True
@@ -217,9 +225,9 @@ class PostSSH(PostRunnerBase):
         """Build SSH command with all configured options."""
         cmd: list[str] = []
 
-        # Password auth via sshpass
+        # Password auth via sshpass (env var to avoid ps visibility)
         if self.password and self._has_sshpass:
-            cmd.extend(["sshpass", "-p", self.password])
+            cmd.extend(["sshpass", "-e"])
 
         cmd.extend(["ssh", "-p", str(self.port)])
         cmd.extend(["-o", "StrictHostKeyChecking=no"])
@@ -234,6 +242,7 @@ class PostSSH(PostRunnerBase):
         # Identity file
         if self.identity_file:
             cmd.extend(["-i", self.identity_file])
+            cmd.extend(["-o", "IdentitiesOnly=yes"])
 
         # Proxy command
         if self.proxy_command:
@@ -260,7 +269,7 @@ class PostSSH(PostRunnerBase):
         cmd: list[str] = []
 
         if self.password and self._has_sshpass:
-            cmd.extend(["sshpass", "-p", self.password])
+            cmd.extend(["sshpass", "-e"])
 
         cmd.extend(["scp", "-P", str(self.port)])
         cmd.extend(["-o", "StrictHostKeyChecking=no"])
@@ -271,6 +280,7 @@ class PostSSH(PostRunnerBase):
 
         if self.identity_file:
             cmd.extend(["-i", self.identity_file])
+            cmd.extend(["-o", "IdentitiesOnly=yes"])
 
         if self.proxy_command:
             cmd.extend(["-o", f"ProxyCommand={self.proxy_command}"])
@@ -315,6 +325,66 @@ class PostSSH(PostRunnerBase):
             return self._run_via_file(command, timeout)
         return self._run_direct(command, timeout)
 
+    # Stderr lines that are SSH connection noise, not remote command errors.
+    _SSH_STDERR_NOISE = (
+        "Warning: Permanently added",
+        "debug1:",
+        "Pseudo-terminal",
+        "Warning: the ECDSA host key",
+        "Warning: the RSA host key",
+    )
+
+    # Stderr patterns that indicate key loading failures (auth-related).
+    _SSH_KEY_FAIL = (
+        "Load key",
+        "no such identity",
+        "identity file",
+    )
+
+    # Stderr patterns that indicate authentication failure.
+    _SSH_AUTH_FAIL = (
+        "Permission denied",
+        "Authentication failed",
+        "no mutual signature supported",
+        "Too many authentication failures",
+    )
+
+    # Stderr patterns that indicate connection failure.
+    _SSH_CONN_FAIL = (
+        "Connection refused",
+        "No route to host",
+        "Connection timed out",
+        "Connection reset by peer",
+        "Network is unreachable",
+        "Could not resolve hostname",
+        "ssh: connect to host",
+    )
+
+    @classmethod
+    def _filter_ssh_noise(cls, stderr: str) -> str:
+        """Remove benign SSH warning lines from stderr, return meaningful lines.
+
+        Note: key-loading errors (``Load key ... error``) are NOT filtered
+        because they indicate real authentication problems.
+        """
+        meaningful = []
+        for line in stderr.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if any(stripped.startswith(prefix) for prefix in cls._SSH_STDERR_NOISE):
+                continue
+            meaningful.append(stripped)
+        return "\n".join(meaningful)
+
+    def _subprocess_env(self) -> dict[str, str] | None:
+        """Build environment dict for subprocess, injecting SSHPASS if needed."""
+        if self.password and self._has_sshpass:
+            env = os.environ.copy()
+            env["SSHPASS"] = self.password
+            return env
+        return None
+
     def _run_direct(self, command: str, timeout: int | None = None) -> str:
         """Execute command directly over SSH with retries."""
         effective_timeout = timeout or self.command_timeout
@@ -329,6 +399,7 @@ class PostSSH(PostRunnerBase):
                     capture_output=True,
                     timeout=effective_timeout,
                     check=False,
+                    env=self._subprocess_env(),
                 )
 
                 self._log_command(command, result.stdout, result.stderr, result.returncode)
@@ -339,31 +410,56 @@ class PostSSH(PostRunnerBase):
                         output = output[: self.max_output_size] + "\n[OUTPUT TRUNCATED]"
                     return output
 
+                raw_stderr = result.stderr.strip()
+                clean_stderr = self._filter_ssh_noise(raw_stderr)
+
                 # Classify errors
-                stderr = result.stderr.strip()
-                if "Permission denied" in stderr or "Authentication failed" in stderr:
-                    raise SSHAuthError(f"SSH auth failed: {stderr}")
-                if "Connection refused" in stderr or "No route to host" in stderr:
-                    raise SSHConnectionError(f"SSH connection failed: {stderr}")
+                if any(p in raw_stderr for p in self._SSH_AUTH_FAIL):
+                    raise SSHAuthError(f"SSH auth failed: {clean_stderr or raw_stderr}")
+                if any(p in raw_stderr for p in self._SSH_CONN_FAIL):
+                    raise SSHConnectionError(f"SSH connection failed: {clean_stderr or raw_stderr}")
+
+                # Key loading failures (e.g. "Load key ... error in libcrypto")
+                # indicate broken/incompatible keys — treat as auth error.
+                has_key_errors = any(p in raw_stderr for p in self._SSH_KEY_FAIL)
+                if result.returncode == 255 and has_key_errors:
+                    raise SSHAuthError(
+                        f"SSH key error: {clean_stderr or raw_stderr}"
+                    )
+
+                # Exit 255 with only noise — unknown SSH-level failure
+                if result.returncode == 255 and not clean_stderr:
+                    raise SSHConnectionError(
+                        f"SSH connection failed (exit 255): {raw_stderr}"
+                    )
 
                 raise SSHCommandError(
-                    stderr or f"SSH command failed: exit {result.returncode}",
+                    clean_stderr or f"Remote command failed: exit {result.returncode}",
                     exit_code=result.returncode,
-                    stderr=stderr,
+                    stderr=clean_stderr,
                 )
 
             except subprocess.TimeoutExpired:
-                raise SSHTimeoutError(
+                last_error = SSHTimeoutError(
                     f"SSH command timed out after {effective_timeout}s"
-                ) from None
-            except (SSHAuthError, SSHTimeoutError):
+                )
+                if attempt < self.max_retries - 1:
+                    delay = min(2 ** attempt, 30) * uniform(0.5, 1.5)
+                    logger.debug(
+                        f"SSH timeout, retrying in {delay:.1f}s "
+                        f"(attempt {attempt + 1}/{self.max_retries})"
+                    )
+                    time.sleep(delay)
+                    continue
+                raise last_error from None
+            except SSHAuthError:
                 raise
             except SSHConnectionError as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
-                    delay = 2 ** attempt
+                    delay = min(2 ** attempt, 30) * uniform(0.5, 1.5)
                     logger.debug(
-                        f"SSH connection failed, retrying in {delay}s "
+                        f"SSH connection failed, retrying in {delay:.1f}s "
                         f"(attempt {attempt + 1}/{self.max_retries})"
                     )
                     time.sleep(delay)
@@ -372,7 +468,7 @@ class PostSSH(PostRunnerBase):
             except Exception as e:
                 last_error = e
                 if attempt < self.max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
 
         raise SSHConnectionError(
             f"SSH failed after {self.max_retries} attempts: {last_error}"
@@ -381,21 +477,21 @@ class PostSSH(PostRunnerBase):
     def _run_via_file(self, command: str, timeout: int | None = None) -> str:
         """Execute command via temp file on target (opsec mode).
 
-        Writes command to a random temp file, executes it, then deletes.
-        The actual command is not visible in process listings — only the
-        temp file path appears.
+        Writes command to a random temp file via base64 decode (avoids
+        heredoc injection), executes it, then deletes. The actual command
+        is not visible in process listings — only the temp file path
+        appears.
         """
         remote_tmp = f"/tmp/.{secrets.token_hex(8)}"
         self._remote_temp_files.append(remote_tmp)
 
-        # Write command to temp file, execute, capture output, clean up
-        # Using heredoc to avoid escaping issues
+        # Encode the script as base64 to prevent injection and escaping issues
+        script_content = f"#!/bin/bash\n{command}\n"
+        b64 = base64.b64encode(script_content.encode()).decode()
         wrapper = (
-            f"cat > {remote_tmp} << 'OFXEOF'\n"
-            f"#!/bin/bash\n"
-            f"{command}\n"
-            f"OFXEOF\n"
-            f"chmod +x {remote_tmp} && {remote_tmp}; _rc=$?; rm -f {remote_tmp}; exit $_rc"
+            f"echo '{b64}' | base64 -d > {remote_tmp} && "
+            f"chmod +x {remote_tmp} && {remote_tmp}; "
+            f"_rc=$?; rm -f {remote_tmp}; exit $_rc"
         )
         return self._run_direct(wrapper, timeout)
 
@@ -421,7 +517,8 @@ class PostSSH(PostRunnerBase):
         self._run_direct(wrapped, timeout)
 
         # Download the output file
-        local_tmp = tempfile.mktemp(prefix="ofx_out_")
+        fd, local_tmp = tempfile.mkstemp(prefix="ofx_out_")
+        os.close(fd)
         try:
             self.download(remote_out, local_tmp)
             output = Path(local_tmp).read_text()
@@ -458,6 +555,7 @@ class PostSSH(PostRunnerBase):
                 result = subprocess.run(
                     cmd, text=True, capture_output=True,
                     timeout=effective_timeout, check=False,
+                    env=self._subprocess_env(),
                 )
                 if result.returncode == 0:
                     self._log_command(
@@ -465,9 +563,19 @@ class PostSSH(PostRunnerBase):
                         "OK", result.stderr, result.returncode,
                     )
                     return
+                raw_stderr = result.stderr.strip()
+                clean = self._filter_ssh_noise(raw_stderr)
+                # Classify SCP errors the same way as SSH
+                if any(p in raw_stderr for p in self._SSH_AUTH_FAIL):
+                    raise SSHAuthError(f"SCP auth failed: {clean or raw_stderr}")
+                has_key_errors = any(p in raw_stderr for p in self._SSH_KEY_FAIL)
+                if result.returncode == 1 and has_key_errors:
+                    raise SSHAuthError(f"SCP key error: {clean or raw_stderr}")
                 last_error = RuntimeError(
-                    result.stderr.strip() or f"SCP upload failed: {result.returncode}"
+                    f"SCP upload failed (exit {result.returncode}): {clean or raw_stderr}"
                 )
+            except (SSHAuthError, SSHTimeoutError):
+                raise
             except subprocess.TimeoutExpired:
                 raise SSHTimeoutError(
                     f"SCP upload timed out after {effective_timeout}s"
@@ -476,7 +584,7 @@ class PostSSH(PostRunnerBase):
                 last_error = e
 
             if attempt < self.max_retries - 1:
-                time.sleep(2 ** attempt)
+                time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
 
         raise RuntimeError(f"SCP upload failed after {self.max_retries} attempts: {last_error}")
 
@@ -497,6 +605,7 @@ class PostSSH(PostRunnerBase):
                 result = subprocess.run(
                     cmd, text=True, capture_output=True,
                     timeout=effective_timeout, check=False,
+                    env=self._subprocess_env(),
                 )
                 if result.returncode == 0:
                     self._log_command(
@@ -504,9 +613,18 @@ class PostSSH(PostRunnerBase):
                         "OK", result.stderr, result.returncode,
                     )
                     return
+                raw_stderr = result.stderr.strip()
+                clean = self._filter_ssh_noise(raw_stderr)
+                if any(p in raw_stderr for p in self._SSH_AUTH_FAIL):
+                    raise SSHAuthError(f"SCP auth failed: {clean or raw_stderr}")
+                has_key_errors = any(p in raw_stderr for p in self._SSH_KEY_FAIL)
+                if result.returncode == 1 and has_key_errors:
+                    raise SSHAuthError(f"SCP key error: {clean or raw_stderr}")
                 last_error = RuntimeError(
-                    result.stderr.strip() or f"SCP download failed: {result.returncode}"
+                    f"SCP download failed (exit {result.returncode}): {clean or raw_stderr}"
                 )
+            except (SSHAuthError, SSHTimeoutError):
+                raise
             except subprocess.TimeoutExpired:
                 raise SSHTimeoutError(
                     f"SCP download timed out after {effective_timeout}s"
@@ -515,7 +633,7 @@ class PostSSH(PostRunnerBase):
                 last_error = e
 
             if attempt < self.max_retries - 1:
-                time.sleep(2 ** attempt)
+                time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
 
         raise RuntimeError(f"SCP download failed after {self.max_retries} attempts: {last_error}")
 

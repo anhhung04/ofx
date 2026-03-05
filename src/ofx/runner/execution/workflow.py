@@ -117,31 +117,37 @@ class WorkflowRunner(BaseRunner[Workflow]):
     async def _run_workflow(self) -> None:
         execution = WorkflowExecutionManager(self)
         result = await execution.run(self._schedule, self._staged_jobs)
-        if result.errors:
-            error_summary = "\n====\n".join(result.errors)
-            await self.reg_set(
-                RunnerRegistryKeys.ERRORS,
-                {
-                    "message": error_summary,
-                    "failed_jobs": result.failed_job_ids,
-                    "failed_stages": result.failed_stage_indices,
-                },
-            )
+        if result.failed_job_ids:
             # Ensure job execution data is present before summarizing
             for runner in self._runners.values():
                 if isinstance(runner, (JobRunner, MatrixJobRunner)):
                     await runner._post_run()
             await self._store_summaries()
-            raise RuntimeError(f"Job failure(s):\n{error_summary}")
+
+            # Build concise error: one line per failed job with root cause
+            from ofx.runner.execution.error_helpers import extract_root_error
+            concise_lines = []
+            for job_id in result.failed_job_ids:
+                runner = self._runners.get(job_id)
+                root = extract_root_error(runner._error if runner else None)
+                concise_lines.append(f"job '{job_id}': {root}")
+
+            error_msg = "Job failure(s):\n" + "\n".join(concise_lines)
+            await self.reg_set(
+                RunnerRegistryKeys.ERRORS,
+                {
+                    "message": error_msg,
+                    "failed_jobs": result.failed_job_ids,
+                    "failed_stages": result.failed_stage_indices,
+                },
+            )
+            raise RuntimeError(error_msg)
 
     async def _plan_jobs(self) -> None:
         schedule = WorkflowScheduler(self.model.jobs).plan()
         self._staged_jobs = schedule.staged_jobs
         self._schedule = schedule.schedule
         self._log_debug(f"Stages: {self._schedule}")
-
-    def _log_stage_failure(self, stage_index: int, errors: list[str]) -> None:
-        self._log_error(f"Stage {stage_index + 1} finished with failures: {errors}")
 
     async def _store_summaries(self) -> None:
         reporter = ExecutionSummaryReporter(self)
