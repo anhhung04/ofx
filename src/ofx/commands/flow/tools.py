@@ -41,8 +41,6 @@ class ToolsInstallHandler:
                 return
         elif self.workflow_name:
             try:
-                # Use find_workflow to locate the workflow object, then get its path
-                # Note: find_workflow returns a Workflow object
                 workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
                 workflows_to_process = [workflow.workflow_path]
             except RuntimeError:
@@ -83,29 +81,17 @@ class ToolsInstallHandler:
 
         for workflow_path in workflow_paths:
             try:
-                # Use Workflow model for validation logic
                 with open(workflow_path) as f:
                     workflow_data = yaml.safe_load(f)
 
-                # We try to validate model, partial or full, to access .tools in a standard way
-                # Or simply respect the structure if validation fails for other reasons (e.g. missing jobs in partial view)?
-                # Ideally, we should use the model. Let's try to model_validate.
                 try:
                     workflow = Workflow.model_validate(workflow_data)
                     tools_config = workflow.tools
                 except Exception:
-                    # Fallback to raw dict access if full validation fails but we just want tools
-                    # or if the file IS valid but has some other issue not related to tools?
-                    # The user file might be incomplete. Let's stick to raw parsing for robustness here
-                    # effectively duplicating logic? No, let's use model if possible, or fall back.
-                    # Wait, duplicate task logic was to "Use Workflow model instead of raw YAML parsing".
-                    # If I use model_validate, I get standardized ToolConfig objects or strings.
                     workflow = Workflow.model_validate(workflow_data)
                     tools_config = workflow.tools
 
                 if not tools_config:
-                    # Check defaults (legacy or structured default?)
-                    # Workflow model has 'defaults' which is DefaultConfig
                     if workflow.defaults and workflow.defaults.tools:
                         tools_config = workflow.defaults.tools
 

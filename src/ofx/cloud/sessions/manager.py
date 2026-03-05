@@ -23,7 +23,6 @@ from ofx.cloud.sessions.store import SessionStore
 
 logger = logging.getLogger("ofx")
 
-# Marker strings the script builder appends on completion/failure
 _DONE_MARKER = "__OFX_DONE__"
 _FAIL_MARKER = "__OFX_FAIL__"
 
@@ -250,7 +249,6 @@ class SessionManager:
         )
         self.store.save(session)
 
-        # Wait for connectivity
         await wait_for_connectivity(
             host=instance.ip,
             os_type="windows" if is_windows else "linux",
@@ -539,7 +537,6 @@ class SessionManager:
                 return _tail_file(log_path, tail)
             return _tail_file(log_path, tail)
 
-        # Cloud: SSH in and tail
         try:
             remote = self._reconnect(session)
             if session.os_type == "windows":

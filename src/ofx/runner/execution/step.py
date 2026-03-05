@@ -113,7 +113,6 @@ class StepRunner(BaseRunner[Step]):
     async def _post_run(self) -> None:
         """Log stdout, save output if configured"""
         # if self._error:
-        #     logger.error(self._produce_log(f"step failed: {self._error}"))
         #     for handler in logger.handlers:
         #         handler.flush()
 

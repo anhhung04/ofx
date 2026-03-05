@@ -118,6 +118,8 @@ class _ParamikoSSH:
 
     def add_authorized_key(self, pub_key: str, password: str) -> None:
         """Connect with password and append *pub_key* to remote authorized_keys."""
+        if not HAS_PARAMIKO:
+            raise RuntimeError("paramiko is required for SSH key deployment.")
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:

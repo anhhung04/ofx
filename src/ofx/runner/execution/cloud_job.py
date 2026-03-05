@@ -133,7 +133,6 @@ class CloudJobRunner(BaseRunner[Job]):
         self._instance = await self._provider.create_instance(cfg)
 
         if provider_name != "static":
-            # Wait for cloud instance to become ready
             self._log_info(
                 f"Waiting for instance {self._instance.instance_id} to be ready..."
             )
@@ -147,7 +146,6 @@ class CloudJobRunner(BaseRunner[Job]):
             if refreshed and refreshed.ip:
                 self._instance = refreshed
 
-        # Wait for SSH/WinRM connectivity
         if not self._instance or not self._instance.ip:
             raise RuntimeError("Instance has no IP address")
 

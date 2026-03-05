@@ -171,7 +171,6 @@ def detect_ofx_imports(
     for node in ast.walk(tree):
         found |= _modules_from_node(node)
 
-    # Validate against known modules (unknown names silently dropped)
     validated = found & KNOWN_API_MODULES
 
     # Merge extra_modules

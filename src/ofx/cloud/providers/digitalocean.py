@@ -235,7 +235,6 @@ class DigitalOceanProvider(CloudProvider):
         )
         action = resp.get("action", {})
 
-        # Wait for snapshot action to complete
         action_id = action.get("id")
         if action_id:
             await self._wait_for_action(action_id)

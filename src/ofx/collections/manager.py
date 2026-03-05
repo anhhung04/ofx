@@ -439,7 +439,6 @@ class CollectionManager:
 
             existing = self._installed.get(dep.name)
             if existing:
-                # Check version constraint if the dep specifies one
                 if dep.version and not check_version_constraint(
                     existing.version, dep.version
                 ):

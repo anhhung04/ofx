@@ -21,7 +21,19 @@ jobs:
     name: Main Job
     steps:
       - name: Hello World
-        run: echo "Hello, World!"
+        run: |
+            echo "Hello, World!"
+
+      - name: Example Step Script
+        script: |
+            print("This is a Python script step.")
+
+      - name: Example ScriptFile Step
+        script_file: ./example_script.py
+
+      - name: Example Reusable Workflow
+        uses: ./path/to/other_workflow.yml
+
 """
 
 

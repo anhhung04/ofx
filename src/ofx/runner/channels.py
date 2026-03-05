@@ -24,7 +24,6 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
-# JSON-serializable primitive or container type
 ChannelValue = str | int | float | bool | list | dict | None
 
 

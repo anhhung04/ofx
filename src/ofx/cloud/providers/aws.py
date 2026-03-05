@@ -155,7 +155,6 @@ class AWSProvider(CloudProvider):
 
         Uses EC2 waiter then polls for SSH/WinRM reachability.
         """
-        # Wait for instance to be in 'running' state
         waiter = self._ec2.get_waiter("instance_running")
         await asyncio.to_thread(
             waiter.wait,
@@ -171,7 +170,6 @@ class AWSProvider(CloudProvider):
                 "Check your VPC/subnet configuration."
             )
 
-        # Wait for SSH/WinRM reachability
         deadline = asyncio.get_event_loop().time() + min(timeout, 120)
         while asyncio.get_event_loop().time() < deadline:
             if await self._check_connectivity(info.ip):
@@ -179,7 +177,6 @@ class AWSProvider(CloudProvider):
                 return info
             await asyncio.sleep(5)
 
-        # Return even if connectivity check fails — instance is running
         logger.warning(
             f"EC2 instance {instance_id} running at {info.ip} but connectivity "
             "check timed out. It may still be booting."
@@ -293,7 +290,6 @@ class AWSProvider(CloudProvider):
         )
         image_id = resp["ImageId"]
 
-        # Wait for AMI to be available
         waiter = self._ec2.get_waiter("image_available")
         try:
             await asyncio.to_thread(
