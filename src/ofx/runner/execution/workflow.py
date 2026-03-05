@@ -1,7 +1,6 @@
 """Workflow runner for parallel job execution and workflow orchestration"""
 
 import logging
-import os
 from typing import Any
 
 from ofx.models.workflow import Workflow
@@ -105,13 +104,6 @@ class WorkflowRunner(BaseRunner[Workflow]):
             job_results[job_id] = result.model_dump()
         await self.reg_set_global("jobs:results", job_results)
         await self._store_summaries()
-
-        if (
-            self.ctx.output_path
-            and self.ctx.output_path.exists()
-            and len(os.listdir(self.ctx.output_path)) == 0
-        ):
-            os.rmdir(self.ctx.output_path)
         self._log_debug(f"result: {await self.get_result()}")
 
     async def _run_workflow(self) -> None:

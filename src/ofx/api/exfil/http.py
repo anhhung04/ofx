@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import math
-from typing import Iterator
+from collections.abc import Iterator
 
 __all__ = [
     "http_chunks",

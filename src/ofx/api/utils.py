@@ -1,9 +1,10 @@
 import ast
-import logging
 import socket
 import urllib.parse
 
-from ofx.settings import settings
+from ofx.api._compat import get_logger
+
+logger = get_logger()
 
 __all__ = [
     "url2ip",
@@ -11,8 +12,6 @@ __all__ = [
     "generate_random_user_agent",
     "minimum_version_required",
 ]
-
-logger = logging.getLogger(settings.app_branding)
 
 
 def url2ip(url: str, with_port: bool = False) -> str | tuple[str, int]:
@@ -90,7 +89,7 @@ def generate_random_user_agent() -> str:
         from faker import Faker
         return Faker().user_agent()
     except ImportError:
-        logger.warning("faker not installed, using default user agent")
+        print("warning: faker not installed, using default user agent")
         return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 
@@ -120,5 +119,5 @@ def minimum_version_required(version: str, current_version: str) -> bool:
     try:
         return parse_version(current_version) >= parse_version(version)
     except ValueError:
-        logger.error(f"Invalid version format: {version} or {current_version}")
+        print(f"error: invalid version format: {version} or {current_version}")
         return False

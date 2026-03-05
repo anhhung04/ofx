@@ -16,8 +16,7 @@ from typing import Any, TypeVar
 
 import httpx
 
-from ofx.exceptions import APIError
-from ofx.exceptions import TimeoutError as OFXTimeoutError
+from ofx.api._compat import APIError, OFXTimeoutError
 
 _http_client: httpx.Client | None = None
 _T = TypeVar("_T")

@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
 
+from ofx.api._compat import get_logger
 from ofx.api.httpserver.server_base import BaseServerFacade
-from ofx.settings import settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 class SimpleHTTPHandler(SimpleHTTPRequestHandler):

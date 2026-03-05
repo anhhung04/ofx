@@ -114,7 +114,7 @@ class TestCollectModules:
         from ofx.api.bundle.collector import collect_modules
 
         files = collect_modules(set())
-        assert set(files.keys()) == {"ofx/__init__.py", "ofx/api/__init__.py"}
+        assert set(files.keys()) == {"ofx/__init__.py", "ofx/api/__init__.py", "ofx/api/_compat.py"}
 
     def test_stub_content(self):
         from ofx.api.bundle.collector import collect_modules, _STUB_INIT

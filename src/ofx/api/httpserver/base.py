@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import random
 import socket
 import ssl
@@ -11,10 +10,10 @@ import time
 from http.server import BaseHTTPRequestHandler, HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 
+from ofx.api._compat import TEMP_DIR, get_logger
 from ofx.api.exploitation.exploit.utils import check_port, get_host_ip, get_host_ipv6
-from ofx.settings import TEMP_DIR, settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 class BaseRequestHandler(SimpleHTTPRequestHandler):

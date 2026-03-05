@@ -192,6 +192,15 @@ class ChannelStore:
                 pass
         self._cache.clear()
 
+    def close(self) -> None:
+        """Clear all channels and remove the channels directory."""
+        self.clear()
+        try:
+            self._dir.rmdir()
+            logger.debug("Removed channels directory %s", self._dir)
+        except OSError:
+            pass
+
 
 # ------------------------------------------------------------------
 # Module-level convenience (singleton per channels_dir)
@@ -205,3 +214,11 @@ def get_channel_store(channels_dir: str | Path | None = None) -> ChannelStore:
     if _default_store is None:
         _default_store = ChannelStore(channels_dir)
     return _default_store
+
+
+def close_channel_store() -> None:
+    """Close and discard the default :class:`ChannelStore`."""
+    global _default_store
+    if _default_store is not None:
+        _default_store.close()
+        _default_store = None

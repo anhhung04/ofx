@@ -52,11 +52,10 @@ def upload_via_scp(
     user: str | None = None,
     port: int = 22,
     identity_file: str | None = None,
-    extra_args=None,
     timeout: int | None = None,
 ) -> None:
     """DEPRECATED: Use PostSSH(...).upload() instead."""
-    runner = PostSSH(host, user=user, port=port, identity_file=identity_file, extra_args=extra_args)
+    runner = PostSSH(host, user=user, port=port, identity_file=identity_file)
     runner.upload(local_path, remote_path, timeout=timeout)
 
 
@@ -67,11 +66,10 @@ def download_via_scp(
     user: str | None = None,
     port: int = 22,
     identity_file: str | None = None,
-    extra_args=None,
     timeout: int | None = None,
 ) -> None:
     """DEPRECATED: Use PostSSH(...).download() instead."""
-    runner = PostSSH(host, user=user, port=port, identity_file=identity_file, extra_args=extra_args)
+    runner = PostSSH(host, user=user, port=port, identity_file=identity_file)
     runner.download(remote_path, local_path, timeout=timeout)
 
 

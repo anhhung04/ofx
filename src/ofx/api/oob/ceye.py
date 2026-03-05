@@ -2,17 +2,16 @@
 
 import getpass
 import json
-import logging
 import re
 import time
 from configparser import ConfigParser
 from pathlib import Path
 
+from ofx.api._compat import CONFIG_FILE, get_logger
 from ofx.api.exploitation.exploit.utils import get_middle_text, random_str
 from ofx.api.http import requests
-from ofx.settings import CONFIG_FILE, settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 class CEye:

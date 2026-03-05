@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from .analyzer import BundleError, KNOWN_API_MODULES  # noqa: F401
+from .analyzer import KNOWN_API_MODULES, BundleError  # noqa: F401
 
 __all__ = ["CollectionError", "collect_modules"]
 
@@ -76,7 +76,7 @@ def _pkg_files(module_name: str, api_root: Path) -> dict[str, bytes]:
 def collect_modules(module_names: set[str]) -> dict[str, bytes]:
     """Return ``{archive_path: bytes}`` for all requested ``ofx.api`` modules.
 
-    Includes minimal ``ofx/__init__.py`` and ``ofx/api/__init__.py`` stubs so
+    Includes minimal ``ofx/api/__init__.py`` stubs so
     the extracted archive is a self-contained importable tree.
 
     Args:
@@ -95,6 +95,15 @@ def collect_modules(module_names: set[str]) -> dict[str, bytes]:
         "ofx/__init__.py": _STUB_INIT,
         "ofx/api/__init__.py": _STUB_INIT,
     }
+
+    # Always include _compat.py — provides stdlib-only shims for
+    # ofx.settings, ofx.exceptions, and ofx.utils.module_loader so
+    # bundled API modules work on remote hosts without the full ofx package.
+    compat_file = api_root / "_compat.py"
+    if compat_file.is_file():
+        site_packages = api_root.parent.parent
+        arc = compat_file.relative_to(site_packages)
+        files[arc.as_posix()] = compat_file.read_bytes()
 
     for name in sorted(module_names):
         files.update(_pkg_files(name, api_root))

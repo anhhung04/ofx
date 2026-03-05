@@ -1,16 +1,15 @@
 """Shodan search client."""
 
 import getpass
-import logging
 import time
 import urllib.parse
 from configparser import ConfigParser
 from pathlib import Path
 
+from ofx.api._compat import CONFIG_FILE, get_logger
 from ofx.api.http import requests
-from ofx.settings import CONFIG_FILE, settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 def is_ipv6_address_format(address: str) -> bool:

@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -222,7 +223,18 @@ class CloudJobRunner(BaseRunner[Job]):
 
         ip = self._instance.ip
         is_windows = cfg.connection_type == "winrm"
-
+        is_log_commands = cfg.log_commands or False
+        log_path = None
+        if is_log_commands:
+            if self.ctx.output_path:
+                log_dir = Path(self.ctx.output_path) / "logs"/ "cloud_commands"
+                log_dir.mkdir(parents=True, exist_ok=True)
+                log_path = log_dir / f"{self.model.jid}_{ip}.log"
+            else:
+                fd, tmp = tempfile.mkstemp(prefix="ofx_cloud_commands_", suffix=".log")
+                os.close(fd)
+                log_path = tmp
+            self._log_info(f"Command logging enabled. Logs will be saved to: {log_path}")
         if is_windows:
             return RunnerRegistry.create(
                 "winrm",
@@ -233,6 +245,7 @@ class CloudJobRunner(BaseRunner[Job]):
                 port=cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985),
                 opsec_mode=cfg.opsec_mode or False,
                 log_commands=cfg.log_commands or False,
+                log_path=str(log_path) if log_path else None,
             )
 
         return RunnerRegistry.create(
@@ -242,10 +255,10 @@ class CloudJobRunner(BaseRunner[Job]):
             port=cfg.ssh_port or 22,
             identity_file=cfg.ssh_key,
             password=cfg.ssh_password,
-            use_controlmaster=True,
             opsec_mode=cfg.opsec_mode or False,
             log_commands=cfg.log_commands or False,
             max_retries=3,
+            log_path=str(log_path) if log_path else None,
         )
 
     # ------------------------------------------------------------------
@@ -479,6 +492,14 @@ class CloudStepRunner(BaseRunner):
 
     async def _post_run(self) -> None:
         result = await self.get_result()
+        stdout = result.outputs.get("stdout", "")
+
+        self._log_output("stdout", stdout)
+
+        # Save full output to log file if configured
+        if self.model.log_stdout and stdout and self.ctx.output_path:
+            self._save_output(stdout)
+
         status_value = (
             RunnerStatus.COMPLETED.value
             if result.status == RunnerStatus.FINISHED
@@ -495,20 +516,26 @@ class CloudStepRunner(BaseRunner):
         )
         await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
 
+    def _log_output(self, stream: str, content: str) -> None:
+        """Log a stdout/stderr stream to the console."""
+        if not content or not isinstance(content, str):
+            return
+        for line in content.splitlines():
+            self._log_info(f"{stream} | {line}")
+
     # ------------------------------------------------------------------
     # Remote execution methods
     # ------------------------------------------------------------------
 
     async def _run_remote_command(self, command: str, timeout: int | None = None) -> str:
         """Run a shell command on the remote host."""
-        # Build environment prefix
         env_prefix = self._build_env_prefix()
-        work_dir = self.model.working_directory or self._work_dir
+        work_dir = self._resolve_remote_work_dir()
 
         full_cmd = ""
         if env_prefix:
             full_cmd += env_prefix + " "
-        full_cmd += f"cd {work_dir} 2>/dev/null; {command}"
+        full_cmd += f"cd {work_dir} && {command}"
 
         return await asyncio.to_thread(
             self._remote.run, full_cmd, timeout
@@ -575,8 +602,8 @@ class CloudStepRunner(BaseRunner):
         # Execute
         try:
             env_prefix = self._build_env_prefix()
-            work_dir = self.model.working_directory or self._work_dir
-            full_cmd = f"cd {work_dir} 2>/dev/null && "
+            work_dir = self._resolve_remote_work_dir()
+            full_cmd = f"cd {work_dir} && "
             if env_prefix:
                 full_cmd += env_prefix + " "
             full_cmd += f"{python_bin} {remote_script}"
@@ -601,7 +628,12 @@ class CloudStepRunner(BaseRunner):
         interpreter. The stdout of the remote execution is returned.
         """
         # Resolve the absolute path of the script file.
-        local_path = Path(script_file).expanduser().resolve()
+        local_path = Path(script_file).expanduser().with_suffix(".py")
+        
+        if not local_path.is_absolute():
+            base_dir = getattr(self.ctx, "workflow_dir", Path.cwd())
+            local_path = (base_dir / local_path).resolve()
+        
         if not local_path.is_file():
             raise FileNotFoundError(f"Script file not found: {local_path}")
 
@@ -615,6 +647,7 @@ class CloudStepRunner(BaseRunner):
         # Write bootstrap to a temporary local file.
         fd, local_tmp = tempfile.mkstemp(prefix="ofx_bundle_", suffix=".py")
         os.close(fd)
+        remote_path = "/tmp/__UNKNOWN__"
         try:
             Path(local_tmp).write_text(bundle.bootstrap)
             remote_path = f"{self._work_dir}/{Path(local_tmp).name}"
@@ -622,9 +655,9 @@ class CloudStepRunner(BaseRunner):
             await asyncio.to_thread(self._remote.upload, local_tmp, remote_path)
 
             # Execute the bootstrap via discovered python on the remote host.
-            work_dir = self.model.working_directory or self._work_dir
+            work_dir = self._resolve_remote_work_dir()
             env_prefix = self._build_env_prefix()
-            exec_cmd = f"cd {work_dir} 2>/dev/null && "
+            exec_cmd = f"cd {work_dir} && "
             if env_prefix:
                 exec_cmd += env_prefix + " "
             exec_cmd += f"{python_bin} {remote_path}"
@@ -642,11 +675,49 @@ class CloudStepRunner(BaseRunner):
     # Helpers
     # ------------------------------------------------------------------
 
+    def _resolve_remote_work_dir(self) -> str:
+        """Resolve the working directory for remote execution.
+
+        Uses the remote work dir (e.g. /tmp/ofx-xxxx) by default.
+        Only honours ``model.working_directory`` when it looks like a
+        remote-appropriate path (absolute *and* different from any local
+        default that leaked from workflow defaults).
+        """
+        model_wd = getattr(self.model, "working_directory", None)
+        if model_wd and model_wd not in (".", ""):
+            # Only use the model value if it's an absolute remote path
+            # and not clearly a local path (heuristic: starts with /tmp,
+            # /home on the remote, /opt, /var, /root, /srv etc. are fine,
+            # but the local cwd like /home/<user>/projects/... is wrong).
+            # Safest: only use it if it starts with the remote work dir prefix
+            # or if the user explicitly set it (not the workflow default).
+            parent_default = None
+            parent = self.parent
+            if parent and hasattr(parent, "model"):
+                defaults = getattr(parent.model, "defaults", None)
+                if defaults and hasattr(defaults, "run"):
+                    parent_default = getattr(defaults.run, "working_directory", None)
+            if model_wd != parent_default and model_wd != ".":
+                # User explicitly set a working_directory on the step — trust it
+                return model_wd
+        return self._work_dir
+
     def _build_env_prefix(self) -> str:
-        """Build environment variable export prefix for remote command."""
-        env_vars = {}
-        # Merge context envs + step envs
-        env_vars.update(self.ctx.envs or {})
+        """Build environment variable export prefix for remote command.
+
+        Only exports env vars explicitly configured in the workflow/job/step
+        model ``env:`` fields — never the local OS environment.
+        """
+        env_vars: dict[str, str] = {}
+
+        # Workflow-level env (propagated through parent job model)
+        parent = self.parent
+        if parent and hasattr(parent, "model") and hasattr(parent.model, "env"):
+            parent_env = parent.model.env
+            if parent_env:
+                env_vars.update(parent_env)
+
+        # Step-level env
         if hasattr(self.model, "env") and self.model.env:
             env_vars.update(self.model.env)
 
@@ -655,19 +726,34 @@ class CloudStepRunner(BaseRunner):
 
         exports = " ".join(
             f'{k}="{v}"' for k, v in env_vars.items()
-            if k not in ("PATH", "HOME", "USER", "SHELL")
         )
         return f"export {exports} &&" if exports else ""
 
     def _save_output(self, output: str) -> None:
-        """Save step output to local file."""
+        """Save step output to local log file (mirrors StepRunner format)."""
         if not self.ctx.output_path:
             return
-        out_dir = Path(self.ctx.output_path)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        step_name = self.model.name or f"step_{self.model.step_index}"
-        out_file = out_dir / f"{step_name}.log"
-        out_file.write_text(output)
+        log_path = Path(self.ctx.output_path) / "logs"
+        log_path.mkdir(parents=True, exist_ok=True)
+
+        job_id = self.parent.model.jid if self.parent else "unknown"
+        step_name = (self.model.name or f"step_{self.model.step_index}").replace(" ", "-")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_file = log_path / f"stdout_{job_id}_{step_name}__{timestamp}.log"
+
+        log_lines = []
+        if self.model.run:
+            log_lines.append(f">> command: {self.model.run}")
+        elif self.model.script_file:
+            log_lines.append(f">> script_file: {self.model.script_file}")
+        elif self.model.script:
+            log_lines.append(">> script (inline)")
+        else:
+            log_lines.append(">> unknown step type")
+        log_lines.append(">>===<<")
+        log_lines.append(output)
+        out_file.write_text("\n".join(log_lines))
+        self._log_info(f"Saved output to {out_file}")
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)

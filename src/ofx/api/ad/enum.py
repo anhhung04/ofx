@@ -59,7 +59,6 @@ def powerview_command(
     *,
     domain: str = "",
     identity: str = "",
-    extra_args: str = "",
 ) -> str:
     """Return a PowerView invocation snippet.
 

@@ -27,6 +27,44 @@ from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 logger = logging.getLogger(settings.app_branding)
 
 
+def _cleanup_run(output_dir: Path) -> None:
+    """Clean up temp artifacts after a workflow run."""
+    # 1. Close channel store (removes channel files + dir)
+    try:
+        from ofx.runner.channels import close_channel_store
+
+        close_channel_store()
+    except Exception:
+        pass
+
+    # 2. Remove empty output subdirectories (bottom-up)
+    if output_dir and output_dir.exists():
+        _remove_empty_dirs(output_dir)
+
+    # 3. Clean up TEMP_DIR if empty
+    try:
+        if TEMP_DIR.exists():
+            _remove_empty_dirs(TEMP_DIR)
+    except Exception:
+        pass
+
+
+def _remove_empty_dirs(root: Path) -> None:
+    """Remove empty directories bottom-up under *root*, including *root* itself."""
+    if not root.is_dir():
+        return
+    for child in sorted(root.rglob("*"), reverse=True):
+        if child.is_dir():
+            try:
+                child.rmdir()  # only succeeds if empty
+            except OSError:
+                pass
+    try:
+        root.rmdir()
+    except OSError:
+        pass
+
+
 def _get_tmp_dir(output: str | Path | None = None) -> Path:
     """Get the temporary directory for workflow runs"""
     if output and Path(output).is_dir():
@@ -123,5 +161,8 @@ async def run_workflow(
     if quiet:
         runner.log_level = logging.ERROR
 
-    result = await runner.run()
-    return result
+    try:
+        result = await runner.run()
+        return result
+    finally:
+        _cleanup_run(output_dir)

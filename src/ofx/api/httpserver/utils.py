@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import logging
-
+from ofx.api._compat import get_logger
 from ofx.api.httpserver.exfil import ExfilServer
 from ofx.api.httpserver.payload import PayloadServer
 from ofx.api.httpserver.simple import SimpleHTTPServer
-from ofx.settings import settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 def start_server(

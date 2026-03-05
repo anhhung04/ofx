@@ -1087,6 +1087,5 @@ def _create_remote_runner(cfg: Any, ip: str) -> Any:
         port=cfg.ssh_port or 22,
         identity_file=cfg.ssh_key or None,
         password=cfg.ssh_password or None,
-        use_controlmaster=True,
         max_retries=3,
     )

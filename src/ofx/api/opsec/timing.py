@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 __all__ = [
     "is_business_hours",
@@ -26,7 +26,7 @@ def is_business_hours(
         end: Last hour (exclusive) of business hours.
         include_weekends: If True, weekends count as business days.
     """
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     adjusted_hour = (now.hour + tz_offset) % 24
     day_shift = (now.hour + tz_offset) // 24
     weekday = (now.weekday() + day_shift) % 7

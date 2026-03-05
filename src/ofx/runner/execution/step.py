@@ -111,66 +111,16 @@ class StepRunner(BaseRunner[Step]):
         self._log_debug(f"Final result after retries: {await self.get_result()}")
 
     async def _post_run(self) -> None:
-        """Log stdout summary, save full output to file if configured."""
+        """Log stdout/stderr to console, save to file if configured."""
         result = await self.get_result()
         stdout = result.outputs.get("stdout", "")
-        is_binary = result.outputs.get("binary_output", False)
-        is_truncated = result.outputs.get("output_truncated", False)
-        stderr_truncated = result.outputs.get("stderr_truncated", False)
-        if stdout and isinstance(stdout, str):
-            # Log concise summary to console instead of full output
-            byte_count = len(stdout.encode())
-            flags = []
-            if is_binary:
-                flags.append("binary")
-            if is_truncated:
-                flags.append("truncated")
-            if stderr_truncated:
-                flags.append("stderr-truncated")
-            flag_str = f" [{', '.join(flags)}]" if flags else ""
-            lines = stdout.splitlines()
-            preview = lines[0][:120] if lines else ""
-            if len(lines) > 1 or len(preview) < len(lines[0]) if lines else False:
-                preview += "..."
-            self._log_info(
-                f"stdout: {byte_count} bytes, {len(lines)} lines{flag_str}"
-                + (f" | {preview}" if preview else "")
-            )
+        stderr = result.outputs.get("stderr", "")
 
-            if self.model.log_stdout and self.ctx.output_path:
-                log_path = self.ctx.output_path / "logs"
-                log_path.mkdir(parents=True, exist_ok=True)
-                if not self.parent:
-                    raise RuntimeError(
-                        "Cannot log step stdout: parent runner is missing"
-                    )
-                tmp_file = (
-                    log_path
-                    / f"stdout_{self.parent.model.jid}_{self.model.name.replace(' ', '-')}__{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-                )
-                self._log_info(
-                    f"Saving output of '{self.parent.model.jid}'[{self.model.step_index}] to {tmp_file}"
-                )
-                log_lines = []
-                if self.model.run:
-                    log_lines.append(f">> command: {self.model.run}")
-                elif self.model.uses:
-                    log_lines.append(f">> workflow: {self.model.uses}")
-                elif self.model.script_file:
-                    log_lines.append(f">> script_file: {self.model.script_file}")
-                elif self.model.script:
-                    log_lines.append(f">> script (base64): {base64.b64encode(self.model.script.encode()).decode()}")
-                else:
-                    log_lines.append(">> unknown step type")
-                if is_binary:
-                    log_lines.append("[BINARY OUTPUT - base64 encoded]")
-                if is_truncated:
-                    log_lines.append("[OUTPUT TRUNCATED]")
-                if stderr_truncated:
-                    log_lines.append("[STDERR TRUNCATED]")
-                log_lines.append(">>===<<")
-                log_lines.append(stdout)
-                tmp_file.write_text("\n".join(log_lines))
+        self._log_output("stdout", stdout)
+        self._log_output("stderr", stderr)
+
+        if self.model.log_stdout and stdout and self.ctx.output_path:
+            self._save_output_file(stdout, result.outputs)
 
         status_value = (
             RunnerStatus.COMPLETED.value
@@ -187,6 +137,47 @@ class StepRunner(BaseRunner[Step]):
             duration_ms=self.duration_ms(),
         )
         await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
+
+    def _log_output(self, stream: str, content: str) -> None:
+        """Log a stdout/stderr stream to the console."""
+        if not content or not isinstance(content, str):
+            return
+        for line in content.splitlines():
+            self._log_info(f"{stream} | {line}")
+
+    def _save_output_file(self, stdout: str, outputs: dict) -> None:
+        """Persist full stdout to a log file under output_path/logs/."""
+        if not self.ctx.output_path:
+            self._log_warning("No output_path configured, skipping log file save.")
+            return
+        log_path = self.ctx.output_path / "logs"
+        log_path.mkdir(parents=True, exist_ok=True)
+        if not self.parent:
+            return
+        step_name = (self.model.name or f"step_{self.model.step_index}").replace(" ", "-")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_file = log_path / f"stdout_{self.parent.model.jid}_{step_name}__{timestamp}.log"
+
+        header = []
+        if self.model.run:
+            header.append(f">> command: {self.model.run}")
+        elif self.model.uses:
+            header.append(f">> workflow: {self.model.uses}")
+        elif self.model.script_file:
+            header.append(f">> script_file: {self.model.script_file}")
+        elif self.model.script:
+            header.append(f">> script (base64): {base64.b64encode(self.model.script.encode()).decode()}")
+        else:
+            header.append(">> unknown step type")
+        if outputs.get("binary_output"):
+            header.append("[BINARY OUTPUT]")
+        if outputs.get("output_truncated"):
+            header.append("[OUTPUT TRUNCATED]")
+        if outputs.get("stderr_truncated"):
+            header.append("[STDERR TRUNCATED]")
+        header.append(">>===<<")
+        out_file.write_text("\n".join(header) + "\n" + stdout)
+        self._log_info(f"Saved output to {out_file}")
 
     def _create_runner(self) -> BaseRunner:
         """Creates the appropriate runner instance based on the step's run type."""

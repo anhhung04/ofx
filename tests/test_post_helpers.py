@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import subprocess
+from io import BytesIO
 from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -92,56 +94,84 @@ def test_post_runner_interactive():
     assert called["ok"] is True
 
 
-def test_postssh_run_success(monkeypatch: pytest.MonkeyPatch):
-    captured = {}
+def _make_channel(exit_code=0, stdout=b"ok", stderr=b""):
+    """Build mock stdout/stderr channel objects for paramiko exec_command."""
+    ch = MagicMock()
+    ch.recv_exit_status.return_value = exit_code
 
-    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
-        captured["cmd"] = cmd
-        return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+    out = MagicMock()
+    out.read.return_value = stdout
+    out.channel = ch
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    err = MagicMock()
+    err.read.return_value = stderr
+
+    return ch, out, err
+
+
+@patch("paramiko.SSHClient")
+def test_postssh_run_success(mock_ssh_cls):
+    mock_client = MagicMock()
+    mock_ssh_cls.return_value = mock_client
+
+    transport = MagicMock()
+    transport.is_active.return_value = True
+    mock_client.get_transport.return_value = transport
+
+    ch, out, err = _make_channel(exit_code=0, stdout=b"ok", stderr=b"")
+    mock_client.exec_command.return_value = (None, out, err)
+
     runner = PostSSH(
-        "host", user="root", port=2222, identity_file="id_rsa", extra_args=["-v"]
+        "host", user="root", port=2222, identity_file="/dev/null"
     )
-    assert runner.run("whoami") == "ok"
-    assert captured["cmd"][0] == "ssh"
+    # Bypass key loading
+    with patch.object(PostSSH, "_load_key", return_value=MagicMock()):
+        assert runner.run("whoami") == "ok"
+
+    mock_client.exec_command.assert_called_once()
+    call_args = mock_client.exec_command.call_args
+    assert call_args[0][0] == "whoami"
 
 
-def test_postssh_run_failure(monkeypatch: pytest.MonkeyPatch):
-    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
-        return SimpleNamespace(returncode=1, stdout="", stderr="boom")
+@patch("paramiko.SSHClient")
+def test_postssh_run_failure(mock_ssh_cls):
+    mock_client = MagicMock()
+    mock_ssh_cls.return_value = mock_client
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    transport = MagicMock()
+    transport.is_active.return_value = True
+    mock_client.get_transport.return_value = transport
+
+    ch, out, err = _make_channel(exit_code=1, stdout=b"", stderr=b"boom")
+    mock_client.exec_command.return_value = (None, out, err)
+
     runner = PostSSH("host")
     with pytest.raises(RuntimeError):
         runner.run("id")
 
 
-def test_transfer_scp_builds_command(monkeypatch: pytest.MonkeyPatch, tmp_path):
-    captured = {}
+@patch("paramiko.SSHClient")
+def test_postssh_upload_download(mock_ssh_cls, tmp_path):
+    mock_client = MagicMock()
+    mock_ssh_cls.return_value = mock_client
 
-    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
-        captured["cmd"] = cmd
-        return SimpleNamespace(returncode=0, stdout="", stderr="")
+    transport = MagicMock()
+    transport.is_active.return_value = True
+    mock_client.get_transport.return_value = transport
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    mock_sftp = MagicMock()
+    mock_sftp.stat.return_value = True
+    mock_client.open_sftp.return_value = mock_sftp
+
     local = tmp_path / "payload.bin"
     local.write_text("x")
 
-    upload_via_scp(
-        str(local),
-        "/tmp/payload.bin",
-        "host",
-        user="root",
-        port=2222,
-        identity_file="id_rsa",
-    )
-    assert captured["cmd"][0] == "scp"
-    assert "root@host:/tmp/payload.bin" in captured["cmd"]
+    runner = PostSSH("host", user="root", port=2222)
+    runner.upload(str(local), "/tmp/payload.bin")
+    mock_sftp.put.assert_called_once_with(str(local), "/tmp/payload.bin")
 
-    download_via_scp("/tmp/payload.bin", str(local), "host", user="root", port=2222)
-    assert captured["cmd"][0] == "scp"
-    assert "root@host:/tmp/payload.bin" in captured["cmd"]
+    runner.download("/tmp/payload.bin", str(local))
+    mock_sftp.get.assert_called_once_with("/tmp/payload.bin", str(local))
 
 
 def test_deploy_and_run_webshell(tmp_path):
@@ -169,18 +199,22 @@ def test_deploy_and_run_webshell(tmp_path):
     assert calls["upload"] == [(str(local), "/tmp/tool.bin")]
 
 
-def test_deploy_and_run_ssh(monkeypatch: pytest.MonkeyPatch, tmp_path):
+@patch("paramiko.SSHClient")
+def test_deploy_and_run_ssh(mock_ssh_cls, tmp_path):
     """Test deploy_and_run with SSH runner."""
-    calls = {"scp": [], "ssh": []}
+    mock_client = MagicMock()
+    mock_ssh_cls.return_value = mock_client
 
-    def fake_run(cmd, text, capture_output, timeout, check, **kwargs):
-        if cmd[0] == "scp":
-            calls["scp"].append(cmd)
-        elif cmd[0] == "ssh":
-            calls["ssh"].append(cmd)
-        return SimpleNamespace(returncode=0, stdout="ran command", stderr="")
+    transport = MagicMock()
+    transport.is_active.return_value = True
+    mock_client.get_transport.return_value = transport
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    mock_sftp = MagicMock()
+    mock_sftp.stat.return_value = True
+    mock_client.open_sftp.return_value = mock_sftp
+
+    ch, out, err = _make_channel(exit_code=0, stdout=b"ran command", stderr=b"")
+    mock_client.exec_command.return_value = (None, out, err)
 
     local = tmp_path / "ssh_tool.bin"
     local.write_text("x")
@@ -189,4 +223,28 @@ def test_deploy_and_run_ssh(monkeypatch: pytest.MonkeyPatch, tmp_path):
     result = deploy_and_run(ssh_runner, str(local), "/tmp/ssh.bin", exec_cmd="runme")
 
     assert "ran" in result
-    assert len(calls["scp"]) == 1  # Upload was called
+    mock_sftp.put.assert_called_once()  # Upload was called
+
+
+@patch("paramiko.SSHClient")
+def test_transfer_scp_compat(mock_ssh_cls, tmp_path):
+    """Test deprecated upload_via_scp / download_via_scp still work."""
+    mock_client = MagicMock()
+    mock_ssh_cls.return_value = mock_client
+
+    transport = MagicMock()
+    transport.is_active.return_value = True
+    mock_client.get_transport.return_value = transport
+
+    mock_sftp = MagicMock()
+    mock_sftp.stat.return_value = True
+    mock_client.open_sftp.return_value = mock_sftp
+
+    local = tmp_path / "payload.bin"
+    local.write_text("x")
+
+    upload_via_scp(str(local), "/tmp/payload.bin", "host", user="root", port=2222)
+    mock_sftp.put.assert_called_once()
+
+    download_via_scp("/tmp/payload.bin", str(local), "host", user="root", port=2222)
+    mock_sftp.get.assert_called_once()

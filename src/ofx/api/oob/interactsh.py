@@ -2,16 +2,15 @@
 
 import base64
 import json
-import logging
 import random
 import time
 from uuid import uuid4
 
+from ofx.api._compat import get_logger
 from ofx.api.exploitation.exploit.utils import random_str
 from ofx.api.http import requests
-from ofx.settings import settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 class Interactsh:
