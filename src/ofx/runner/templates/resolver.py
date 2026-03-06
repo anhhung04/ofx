@@ -42,8 +42,7 @@ class TemplateResolver:
             return value
         elif isinstance(value, dict):
             return {
-                k: await self.resolve(v, context_vars, memo)
-                for k, v in value.items()
+                k: await self.resolve(v, context_vars, memo) for k, v in value.items()
             }
         elif isinstance(value, list):
             return [await self.resolve(v, context_vars, memo) for v in value]

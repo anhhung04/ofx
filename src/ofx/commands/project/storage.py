@@ -234,7 +234,9 @@ class SSHHandler:
         logger.info("Generating SSH key at %s (pure-Python)", self.key_path)
         pub_key = _generate_ssh_keypair(self.key_path)
 
-        logger.info("SSH key generated. Attempting to add public key to remote server...")
+        logger.info(
+            "SSH key generated. Attempting to add public key to remote server..."
+        )
         try:
             self._add_key_to_remote(pub_key)
             logger.info("Public key successfully added to remote server")
@@ -242,9 +244,7 @@ class SSHHandler:
             logger.warning("Could not automatically add key to remote: %s", exc)
             logger.info("Please manually add this public key to your remote server:")
             logger.info("\n%s\n", pub_key)
-            logger.info(
-                "Run on remote: echo '%s' >> ~/.ssh/authorized_keys", pub_key
-            )
+            logger.info("Run on remote: echo '%s' >> ~/.ssh/authorized_keys", pub_key)
 
     def _add_key_to_remote(self, pub_key: str) -> None:
         """Add public key to remote server, prompting for a password."""
@@ -268,14 +268,21 @@ class SSHHandler:
         try:
             subprocess.run(
                 [
-                    "sshpass", "-p", password,
+                    "sshpass",
+                    "-p",
+                    password,
                     "ssh-copy-id",
-                    "-i", str(self.key_path),
-                    "-p", str(self.port),
-                    "-o", "StrictHostKeyChecking=no",
+                    "-i",
+                    str(self.key_path),
+                    "-p",
+                    str(self.port),
+                    "-o",
+                    "StrictHostKeyChecking=no",
                     f"{self.user}@{self.host}",
                 ],
-                check=True, capture_output=True, text=True,
+                check=True,
+                capture_output=True,
+                text=True,
             )
         except (FileNotFoundError, subprocess.CalledProcessError):
             cmd = (
@@ -285,12 +292,20 @@ class SSHHandler:
             )
             subprocess.run(
                 [
-                    "sshpass", "-p", password,
-                    "ssh", "-p", str(self.port),
-                    "-o", "StrictHostKeyChecking=no",
-                    f"{self.user}@{self.host}", cmd,
+                    "sshpass",
+                    "-p",
+                    password,
+                    "ssh",
+                    "-p",
+                    str(self.port),
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    f"{self.user}@{self.host}",
+                    cmd,
                 ],
-                check=True, capture_output=True, text=True,
+                check=True,
+                capture_output=True,
+                text=True,
             )
 
     def sync(self, local_path: Path) -> None:
@@ -301,7 +316,9 @@ class SSHHandler:
                 ssh.sftp_sync(local_path, self.remote_path)
                 logger.info(
                     "Successfully synced to %s@%s:%s (paramiko/SFTP)",
-                    self.user, self.host, self.remote_path,
+                    self.user,
+                    self.host,
+                    self.remote_path,
                 )
             finally:
                 ssh.close()
@@ -318,13 +335,17 @@ class SSHHandler:
         try:
             result = subprocess.run(
                 [
-                    "rsync", "-avz", "--delete",
+                    "rsync",
+                    "-avz",
+                    "--delete",
                     "-e",
                     f"ssh -i {self.key_path} -p {self.port} -o StrictHostKeyChecking=no",
                     f"{local_path}/",
                     remote_uri,
                 ],
-                check=True, capture_output=True, text=True,
+                check=True,
+                capture_output=True,
+                text=True,
             )
             logger.info("Successfully synced to %s (rsync)", remote_uri)
             if result.stdout:
@@ -361,13 +382,17 @@ class SSHHandler:
             subprocess.run(
                 [
                     "scp",
-                    "-i", str(self.key_path),
-                    "-P", str(self.port),
-                    "-o", "StrictHostKeyChecking=no",
+                    "-i",
+                    str(self.key_path),
+                    "-P",
+                    str(self.port),
+                    "-o",
+                    "StrictHostKeyChecking=no",
                     local_path,
                     remote_target,
                 ],
-                check=True, capture_output=True,
+                check=True,
+                capture_output=True,
             )
         except FileNotFoundError:
             raise RuntimeError(
@@ -420,7 +445,9 @@ class GitHandler:
                 if remote_url:
                     repo.create_remote("origin", remote_url)
                 else:
-                    raise RuntimeError("No git remote configured. Add a remote URL in config.")
+                    raise RuntimeError(
+                        "No git remote configured. Add a remote URL in config."
+                    )
 
             origin = repo.remotes.origin
 

@@ -104,7 +104,9 @@ def build_bundle(
         ObfuscationError: If source obfuscation is enabled and any file fails
             to compile.
     """
-    modules = detect_ofx_imports(script, extra_modules=extra_modules, source_name=source_name)
+    modules = detect_ofx_imports(
+        script, extra_modules=extra_modules, source_name=source_name
+    )
     files = collect_modules(modules)
     if obfuscate_sources:
         files = obfuscate_sources_fn(files)

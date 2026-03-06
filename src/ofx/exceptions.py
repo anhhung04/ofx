@@ -8,13 +8,16 @@ from typing import Any
 
 class OFXError(Exception):
     """Base exception for all OFX errors."""
+
     pass
 
 
 class WorkflowError(OFXError):
     """Raised when workflow execution fails."""
 
-    def __init__(self, message: str, workflow_name: str | None = None, job_id: str | None = None):
+    def __init__(
+        self, message: str, workflow_name: str | None = None, job_id: str | None = None
+    ):
         self.workflow_name = workflow_name
         self.job_id = job_id
         super().__init__(message)
@@ -23,7 +26,9 @@ class WorkflowError(OFXError):
 class JobError(OFXError):
     """Raised when job execution fails."""
 
-    def __init__(self, message: str, job_id: str | None = None, step_id: str | None = None):
+    def __init__(
+        self, message: str, job_id: str | None = None, step_id: str | None = None
+    ):
         self.job_id = job_id
         self.step_id = step_id
         super().__init__(message)
@@ -32,7 +37,9 @@ class JobError(OFXError):
 class StepError(OFXError):
     """Raised when step execution fails."""
 
-    def __init__(self, message: str, step_id: str | None = None, exit_code: int | None = None):
+    def __init__(
+        self, message: str, step_id: str | None = None, exit_code: int | None = None
+    ):
         self.step_id = step_id
         self.exit_code = exit_code
         super().__init__(message)
@@ -40,11 +47,13 @@ class StepError(OFXError):
 
 class TemplateError(OFXError):
     """Raised when template resolution fails."""
+
     pass
 
 
 class ConfigurationError(OFXError):
     """Raised when configuration is invalid."""
+
     pass
 
 
@@ -67,7 +76,9 @@ class TimeoutError(OFXError):
 class APIError(OFXError):
     """Raised when API operations fail."""
 
-    def __init__(self, message: str, status_code: int | None = None, response: str | None = None):
+    def __init__(
+        self, message: str, status_code: int | None = None, response: str | None = None
+    ):
         self.status_code = status_code
         self.response = response
         super().__init__(message)
@@ -75,6 +86,7 @@ class APIError(OFXError):
 
 class SecretError(OFXError):
     """Raised when secret operations fail."""
+
     pass
 
 

@@ -85,7 +85,7 @@ def _top_module_from_dotted(dotted: str) -> str | None:
     prefix = "ofx.api."
     if not dotted.startswith(prefix):
         return None
-    rest = dotted[len(prefix):]
+    rest = dotted[len(prefix) :]
     if not rest:
         return None
     return rest.split(".")[0]

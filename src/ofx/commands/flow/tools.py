@@ -17,6 +17,7 @@ class ToolsInstallHandler:
         all_workflows: bool = False,
     ):
         from ofx.settings import get_console
+
         self.console = get_console()
         self.workflow_name = workflow_name
         self.all_workflows = all_workflows
@@ -41,7 +42,9 @@ class ToolsInstallHandler:
                 return
         elif self.workflow_name:
             try:
-                workflow = find_workflow(self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+                workflow = find_workflow(
+                    self.workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS)
+                )
                 workflows_to_process = [workflow.workflow_path]
             except RuntimeError:
                 print_warning(
@@ -105,7 +108,7 @@ class ToolsInstallHandler:
                             all_tools[tool_bin] = tool_val.install
                         # Dict (if raw parsing)
                         elif isinstance(tool_val, dict):
-                             all_tools[tool_bin] = tool_val.get("install", "")
+                            all_tools[tool_bin] = tool_val.get("install", "")
 
                     logger.debug(
                         f"Found {len(tools_config)} tools in workflow: {workflow_path.name}"
@@ -121,7 +124,10 @@ class ToolsInstallHandler:
     def _display_tools_table(self, tools: dict[str, str]):
         """Display tools in a formatted table"""
         from rich.table import Table
-        table = Table(title="Tools to Install", show_header=True, header_style="bold cyan")
+
+        table = Table(
+            title="Tools to Install", show_header=True, header_style="bold cyan"
+        )
         table.add_column("Tool", style="green")
         table.add_column("Install Command", style="yellow")
         table.add_column("Status", style="blue")
@@ -133,7 +139,9 @@ class ToolsInstallHandler:
             status = "✓ Installed" if tool_exists else "✗ Not Installed"
             status_style = "green" if tool_exists else "red"
 
-            display_cmd = install_cmd if len(install_cmd) <= 60 else install_cmd[:57] + "..."
+            display_cmd = (
+                install_cmd if len(install_cmd) <= 60 else install_cmd[:57] + "..."
+            )
 
             table.add_row(
                 tool_bin,

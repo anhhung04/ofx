@@ -32,6 +32,10 @@ def iter_subclasses(module: ModuleType, base_class: type) -> list[type]:
     """Return subclasses of base_class defined in the given module."""
     subclasses: list[type] = []
     for attr in module.__dict__.values():
-        if isinstance(attr, type) and issubclass(attr, base_class) and attr is not base_class:
+        if (
+            isinstance(attr, type)
+            and issubclass(attr, base_class)
+            and attr is not base_class
+        ):
             subclasses.append(attr)
     return subclasses

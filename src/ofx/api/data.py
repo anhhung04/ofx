@@ -8,7 +8,9 @@ from pathlib import Path
 __all__ = ["archive_path", "split_file"]
 
 
-def archive_path(src: str | Path, *, output: str | Path | None = None, fmt: str = "zip") -> Path:
+def archive_path(
+    src: str | Path, *, output: str | Path | None = None, fmt: str = "zip"
+) -> Path:
     src_path = Path(src).expanduser().resolve()
     if not src_path.exists():
         raise FileNotFoundError(f"Source path not found: {src_path}")
@@ -18,7 +20,9 @@ def archive_path(src: str | Path, *, output: str | Path | None = None, fmt: str 
     return Path(archive)
 
 
-def split_file(path: str | Path, *, chunk_mb: int, output_dir: str | Path | None = None) -> list[Path]:
+def split_file(
+    path: str | Path, *, chunk_mb: int, output_dir: str | Path | None = None
+) -> list[Path]:
     if chunk_mb <= 0:
         raise ValueError("chunk_mb must be positive")
     src = Path(path).expanduser().resolve()

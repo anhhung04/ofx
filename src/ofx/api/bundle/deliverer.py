@@ -194,7 +194,7 @@ class HttpAdapter:
             url = f"http://{self.host}:{self.port}{self.route}"
             # urllib.request is stdlib — no curl, no bash process substitution needed.
             cmd = (
-                f'{self.python} -c '
+                f"{self.python} -c "
                 f'"import urllib.request as _r; '
                 f'exec(_r.urlopen({url!r}).read().decode())"'
             )
@@ -237,7 +237,7 @@ class InlineAdapter:
     def deliver(self, bootstrap: str) -> str:
         b64 = base64.b64encode(bootstrap.encode()).decode()
         cmd = (
-            f'{self.python} -c '
+            f"{self.python} -c "
             f'"import base64 as _b, sys as _s; '
             f'exec(_b.b64decode({b64!r}).decode())"'
         )
@@ -297,9 +297,11 @@ def make_adapter(
     Raises:
         ValueError: If *method* is not a recognised string.
     """
-    upload_kwargs = dict(remote_tmp=remote_tmp, python=python, windows=windows)
-    http_kwargs = dict(host=http_host, port=http_port, route=http_route, python=python, windows=windows)
-    inline_kwargs = dict(python=python, windows=windows)
+    upload_kwargs = {"remote_tmp": remote_tmp, "python": python, "windows": windows}
+    http_kwargs = {
+        "host": http_host, "port": http_port, "route": http_route, "python": python, "windows": windows
+    }
+    inline_kwargs = {"python": python, "windows": windows}
 
     if method == "upload":
         return UploadAdapter(runner, **upload_kwargs)
@@ -384,4 +386,6 @@ def deliver_and_run(
     except DeliveryError:
         raise
     except Exception as exc:
-        raise DeliveryError(f"Delivery failed [{type(adapter).__name__}]: {exc}") from exc
+        raise DeliveryError(
+            f"Delivery failed [{type(adapter).__name__}]: {exc}"
+        ) from exc

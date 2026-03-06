@@ -66,9 +66,7 @@ def build_job_execution_result(
             if hasattr(sr, "_run_type") and sr._run_type
             else sr.model.get_run_type().value
         )
-        status_val = (
-            RS.COMPLETED.value if sr.status == RS.FINISHED else sr.status.value
-        )
+        status_val = RS.COMPLETED.value if sr.status == RS.FINISHED else sr.status.value
         step_exec = StepExecutionResult(
             step_index=sr.model.step_index,
             name=sr.model.name,

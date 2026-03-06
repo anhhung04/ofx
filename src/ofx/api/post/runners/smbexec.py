@@ -41,6 +41,7 @@ class PostSMBExec(PostRunnerBase):
             from impacket.examples import smbexec as smbexec_module
             from impacket.examples.secretsdump import RemoteOperations  # noqa: F401
             from impacket.smbconnection import SMBConnection  # noqa: F401
+
             self._smb_module = smbexec_module
         except Exception as exc:  # pragma: no cover - import gate
             raise ImportError(

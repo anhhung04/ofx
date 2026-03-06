@@ -1,5 +1,4 @@
-"""Standalone shims for ofx.api modules so they run without ofx.settings.
-"""
+"""Standalone shims for ofx.api modules so they run without ofx.settings."""
 
 from __future__ import annotations
 
@@ -96,5 +95,7 @@ def iter_subclasses(module: ModuleType, base_class: type) -> list[type]:
     return [
         attr
         for attr in module.__dict__.values()
-        if isinstance(attr, type) and issubclass(attr, base_class) and attr is not base_class
+        if isinstance(attr, type)
+        and issubclass(attr, base_class)
+        and attr is not base_class
     ]

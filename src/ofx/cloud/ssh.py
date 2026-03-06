@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import time
 import asyncio
 import logging
+import time
+
 from ofx.models.cloud import CloudConfig
 
 logger = logging.getLogger("ofx")
@@ -108,21 +109,24 @@ async def wait_for_connectivity(
     else:
         return await wait_for_ssh(host, ssh_port, timeout)
 
+
 async def wait_for_login(
     host: str,
     cfg: CloudConfig,
     timeout: int = 300,
 ) -> bool:
     """
-    Verified login availability by attempting a real connection 
+    Verified login availability by attempting a real connection
     using the provided credentials and transport settings.
     """
     from ofx.api.post.runners.ssh import PostSSH
     from ofx.api.post.runners.winrm import PostWinRM
 
     start_time = time.time()
-    is_windows = cfg.connection_type == "winrm" or getattr(cfg, "os_type", "") == "windows"
-    
+    is_windows = (
+        cfg.connection_type == "winrm" or getattr(cfg, "os_type", "") == "windows"
+    )
+
     ssh_port = cfg.ssh_port or 22
     winrm_port = cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985)
 

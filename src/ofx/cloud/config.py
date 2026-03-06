@@ -105,9 +105,7 @@ class CloudProfileManager:
         profiles = self.profiles
         if name not in profiles:
             available = ", ".join(sorted(profiles.keys())) or "(none)"
-            raise KeyError(
-                f"Cloud profile '{name}' not found. Available: {available}"
-            )
+            raise KeyError(f"Cloud profile '{name}' not found. Available: {available}")
         return dict(profiles[name])
 
     def resolve(self, cloud_config: CloudConfig) -> CloudConfig:

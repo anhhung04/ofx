@@ -39,6 +39,7 @@ class PostWMIExec(PostRunnerBase):
     def __post_init__(self) -> None:
         try:
             from impacket.examples import wmiexec as wmiexec_module
+
             self._wmi_module = wmiexec_module
         except Exception as exc:  # pragma: no cover - import gate
             raise ImportError(

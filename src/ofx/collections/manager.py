@@ -318,9 +318,7 @@ class CollectionManager:
 
     def collection_workflow_dirs(self) -> list[Path]:
         """Return paths of all installed collections for workflow search."""
-        return [
-            Path(e.path) for e in self._installed.values() if Path(e.path).is_dir()
-        ]
+        return [Path(e.path) for e in self._installed.values() if Path(e.path).is_dir()]
 
     # ------------------------------------------------------------------
     # Migration
@@ -455,6 +453,4 @@ class CollectionManager:
                 logger.info("Installing dependency '%s' …", dep.name)
                 self.add(source, alias=dep.name, install_deps=True)
             except (ValueError, RuntimeError) as exc:
-                logger.warning(
-                    "Could not install dependency '%s': %s", dep.name, exc
-                )
+                logger.warning("Could not install dependency '%s': %s", dep.name, exc)

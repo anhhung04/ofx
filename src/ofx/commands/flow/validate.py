@@ -20,12 +20,15 @@ class ValidateHandler:
         )
 
         try:
-             # Just loading it validates it via Pydantic model
+            # Just loading it validates it via Pydantic model
             workflow = find_workflow(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
             print_success(
                 "Validation Successful",
                 f"Workflow '{workflow.name}' is valid!",
-                {"Details": "All schema validations passed", "Path": str(workflow.workflow_path)},
+                {
+                    "Details": "All schema validations passed",
+                    "Path": str(workflow.workflow_path),
+                },
             )
         except Exception as e:
             logger.error(f"Validation failed for workflow {workflow_name}: {e}")

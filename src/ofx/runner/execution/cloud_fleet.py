@@ -135,9 +135,7 @@ class CloudFleetRunner(BaseRunner[Job]):
             await self._report_surviving_instances()
             raise RuntimeError("; ".join(errors))
 
-    async def _run_single_fleet_job(
-        self, idx: int, combo: dict[str, Any]
-    ) -> RunResult:
+    async def _run_single_fleet_job(self, idx: int, combo: dict[str, Any]) -> RunResult:
         """Provision a VPS and run the job for one fleet chunk."""
         job_ctx = self._child_context()
 
@@ -164,13 +162,17 @@ class CloudFleetRunner(BaseRunner[Job]):
             from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
 
             runner = CloudMatrixJobRunner(
-                job_copy, job_ctx, parent=self.parent  # type: ignore
+                job_copy,
+                job_ctx,
+                parent=self.parent,  # type: ignore
             )
         else:
             from ofx.runner.execution.cloud_job import CloudJobRunner
 
             runner = CloudJobRunner(
-                job_copy, job_ctx, parent=self.parent  # type: ignore
+                job_copy,
+                job_ctx,
+                parent=self.parent,  # type: ignore
             )
 
         runner._is_fleet_child = True
@@ -183,7 +185,10 @@ class CloudFleetRunner(BaseRunner[Job]):
 
     async def _report_surviving_instances(self) -> None:
         """Prompt the user to destroy surviving cloud instances after failure."""
-        from ofx.runner.execution.cloud_job import CloudJobRunner, _prompt_destroy_instance
+        from ofx.runner.execution.cloud_job import (
+            CloudJobRunner,
+            _prompt_destroy_instance,
+        )
 
         surviving_runners: list[CloudJobRunner] = []
         surviving_lines: list[str] = []

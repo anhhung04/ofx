@@ -25,12 +25,18 @@ class CollectionManifest(BaseModel):
     author: str = Field(default="", description="Author or team name")
     license: str = Field(default="", description="License identifier")
     min_ofx_version: str = Field(default="", description="Minimum OFX version required")
-    workflows: list[str] = Field(default_factory=list, description="Workflow files in this collection")
-    tools: list[str] = Field(default_factory=list, description="Tool names this collection needs")
+    workflows: list[str] = Field(
+        default_factory=list, description="Workflow files in this collection"
+    )
+    tools: list[str] = Field(
+        default_factory=list, description="Tool names this collection needs"
+    )
     dependencies: list[CollectionDependency] = Field(
         default_factory=list, description="Other collections this depends on"
     )
-    tags: list[str] = Field(default_factory=list, description="Tags for discoverability")
+    tags: list[str] = Field(
+        default_factory=list, description="Tags for discoverability"
+    )
 
     @classmethod
     def from_yaml(cls, path: Path) -> CollectionManifest:
@@ -81,9 +87,7 @@ class InstalledCollection(BaseModel):
     source: str = Field(default="", description="Git URL or shorthand used to install")
     pinned_ref: str = Field(default="", description="Git tag/branch pinned at install")
     path: str = Field(default="", description="Absolute path to installed directory")
-    installed_at: str = Field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    installed_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     description: str = ""
     author: str = ""
     tags: list[str] = Field(default_factory=list)
@@ -98,7 +102,9 @@ class CollectionIndexEntry(BaseModel):
     latest: str = ""
     tags: list[str] = Field(default_factory=list)
     author: str = ""
-    private: bool = Field(default=False, description="Whether this collection is in a private repo")
+    private: bool = Field(
+        default=False, description="Whether this collection is in a private repo"
+    )
 
 
 class CollectionIndex(BaseModel):

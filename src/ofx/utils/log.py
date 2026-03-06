@@ -95,9 +95,7 @@ class SecretRedactFilter(logging.Filter):
             self._pattern = None
             return
         # Sort longest-first so longer secrets are matched before substrings.
-        escaped = sorted(
-            (re.escape(v) for v in self._values), key=len, reverse=True
-        )
+        escaped = sorted((re.escape(v) for v in self._values), key=len, reverse=True)
         self._pattern = re.compile("|".join(escaped))
 
     def _redact(self, text: Any) -> Any:
@@ -107,7 +105,9 @@ class SecretRedactFilter(logging.Filter):
 
     def _redact_args(self, args: Any) -> Any:
         if isinstance(args, dict):
-            return {k: self._redact(v) if isinstance(v, str) else v for k, v in args.items()}
+            return {
+                k: self._redact(v) if isinstance(v, str) else v for k, v in args.items()
+            }
         if isinstance(args, (tuple, list)):
             return tuple(self._redact(a) if isinstance(a, str) else a for a in args)
         return args
@@ -146,9 +146,7 @@ class BeautifiedMetadataHandler(RichHandler):
             line_text = Text.from_markup(raw_line)
             line_plain = line_text.plain
 
-            is_header = any(
-                x in line_plain for x in ["===stdout===", "===stderr==="]
-            )
+            is_header = any(x in line_plain for x in ["===stdout===", "===stderr==="])
             is_footer = "============" in line_plain
 
             if is_header:

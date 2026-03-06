@@ -73,7 +73,9 @@ def scan_banner(
             sock = ctx.wrap_socket(sock, server_hostname=host)
         banner = _recv_banner(sock, max_bytes)
         proto = detect_protocol(port, banner)
-        return ServiceInfo(host=host, port=port, banner=banner, tls=use_tls, protocol=proto)
+        return ServiceInfo(
+            host=host, port=port, banner=banner, tls=use_tls, protocol=proto
+        )
     finally:
         if sock:
             try:

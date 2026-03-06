@@ -41,6 +41,7 @@ class ImportHandler:
             # Clean up on failure
             if self.project_path.exists():
                 import shutil
+
                 shutil.rmtree(self.project_path)
             raise RuntimeError(f"Failed to import project: {e}") from e
 

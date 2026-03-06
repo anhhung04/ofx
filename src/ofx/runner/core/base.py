@@ -139,9 +139,7 @@ class BaseRunner[TModel: BaseModel]:
             try:
                 await self._write_checkpoint(initial_checkpoint_status)
             except Exception as checkpoint_err:
-                self._log_warning(
-                    f"checkpoint write failed: {checkpoint_err}"
-                )
+                self._log_warning(f"checkpoint write failed: {checkpoint_err}")
 
             final_status = self._checkpoint_status()
             if final_status != initial_checkpoint_status:
@@ -222,9 +220,7 @@ class BaseRunner[TModel: BaseModel]:
     def _checkpoint_id(self) -> str:
         parent_id = self.parent._checkpoint_id() if self.parent else "workflow"
         if hasattr(self.model, "jid") and hasattr(self.model, "step_index"):
-            local_id = (
-                f"job:{self.model.jid}:{self.model.step_index}"
-            )
+            local_id = f"job:{self.model.jid}:{self.model.step_index}"
         elif hasattr(self.model, "jid"):
             local_id = f"job:{self.model.jid}"
         elif hasattr(self.model, "name"):
@@ -355,7 +351,7 @@ class BaseRunner[TModel: BaseModel]:
             return None
         end = self._finished_at or time.perf_counter()
         return int((end - self._started_at) * 1000)
-    
+
     @property
     def status(self) -> RunnerStatus:
         """Get the current status"""

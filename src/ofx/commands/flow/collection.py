@@ -84,9 +84,7 @@ def remove(
     name: Annotated[str, typer.Argument(help="Collection name to remove.")],
 ):
     """Remove an installed collection."""
-    if not typer.confirm(
-        f"Remove collection '{name}'? This deletes its files."
-    ):
+    if not typer.confirm(f"Remove collection '{name}'? This deletes its files."):
         console.print("[yellow]Cancelled.[/yellow]")
         return
 
@@ -134,7 +132,9 @@ def update(
 def list_collections(
     outdated: Annotated[
         bool,
-        typer.Option("--outdated", help="Show only collections with newer remote versions."),
+        typer.Option(
+            "--outdated", help="Show only collections with newer remote versions."
+        ),
     ] = False,
 ):
     """List installed collections."""
@@ -267,9 +267,7 @@ def search(
         )
 
     console.print(table)
-    console.print(
-        "\n[dim]Install with:[/dim] ofx flow collection add <name>"
-    )
+    console.print("\n[dim]Install with:[/dim] ofx flow collection add <name>")
 
 
 # ------------------------------------------------------------------

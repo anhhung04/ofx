@@ -50,11 +50,7 @@ class AWSProvider(CloudProvider):
                 "AWS support requires the 'boto3' package. "
                 "Install with: pip install boto3  (or: pip install ofx[aws])"
             )
-        self._region = (
-            region
-            or os.environ.get("AWS_DEFAULT_REGION", "")
-            or "us-east-1"
-        )
+        self._region = region or os.environ.get("AWS_DEFAULT_REGION", "") or "us-east-1"
         session_kwargs = {"region_name": self._region}
         if access_key_id:
             session_kwargs["aws_access_key_id"] = access_key_id
@@ -75,7 +71,9 @@ class AWSProvider(CloudProvider):
         Returns:
             CloudInstanceInfo with the new instance details.
         """
-        instance_name = f"ofx-{config.region or self._region}-{int(datetime.now().timestamp())}"
+        instance_name = (
+            f"ofx-{config.region or self._region}-{int(datetime.now().timestamp())}"
+        )
         tags = [{"Key": "Name", "Value": instance_name}]
         tags.append({"Key": "ofx", "Value": "true"})
         for tag in config.tags:
@@ -110,9 +108,9 @@ class AWSProvider(CloudProvider):
                 "<powershell>\n"
                 f'net user Administrator "{config.winrm_password}"\n'
                 "winrm quickconfig -force\n"
-                "winrm set winrm/config/service/auth @{Basic=\"true\"}\n"
-                "winrm set winrm/config/service @{AllowUnencrypted=\"true\"}\n"
-                "netsh advfirewall firewall add rule name=\"WinRM\" "
+                'winrm set winrm/config/service/auth @{Basic="true"}\n'
+                'winrm set winrm/config/service @{AllowUnencrypted="true"}\n'
+                'netsh advfirewall firewall add rule name="WinRM" '
                 "dir=in action=allow protocol=TCP localport=5985\n"
                 "</powershell>"
             )
@@ -244,9 +242,7 @@ class AWSProvider(CloudProvider):
             },
         ]
 
-        resp = await asyncio.to_thread(
-            self._ec2.describe_instances, Filters=filters
-        )
+        resp = await asyncio.to_thread(self._ec2.describe_instances, Filters=filters)
 
         instances = []
         for reservation in resp.get("Reservations", []):
@@ -275,9 +271,7 @@ class AWSProvider(CloudProvider):
 
         return instances
 
-    async def create_snapshot(
-        self, instance_id: str, name: str
-    ) -> SnapshotInfo:
+    async def create_snapshot(self, instance_id: str, name: str) -> SnapshotInfo:
         """Create an AMI from an EC2 instance."""
         logger.info(f"Creating AMI '{name}' from instance {instance_id}")
 
@@ -310,9 +304,7 @@ class AWSProvider(CloudProvider):
 
     async def list_snapshots(self) -> list[SnapshotInfo]:
         """List AMIs owned by the account."""
-        resp = await asyncio.to_thread(
-            self._ec2.describe_images, Owners=["self"]
-        )
+        resp = await asyncio.to_thread(self._ec2.describe_images, Owners=["self"])
         snapshots = []
         for image in resp.get("Images", []):
             snapshots.append(
@@ -329,9 +321,7 @@ class AWSProvider(CloudProvider):
 
     async def delete_snapshot(self, snapshot_id: str) -> None:
         """Deregister an AMI."""
-        await asyncio.to_thread(
-            self._ec2.deregister_image, ImageId=snapshot_id
-        )
+        await asyncio.to_thread(self._ec2.deregister_image, ImageId=snapshot_id)
 
     async def close(self) -> None:
         """Clean up boto3 resources."""

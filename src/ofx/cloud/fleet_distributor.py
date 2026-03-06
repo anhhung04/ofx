@@ -117,9 +117,7 @@ class FleetDistributor:
                 ungrouped.append(target)
 
         # Sort groups by size (largest first) for better distribution
-        sorted_groups = sorted(
-            subnet_groups.values(), key=len, reverse=True
-        )
+        sorted_groups = sorted(subnet_groups.values(), key=len, reverse=True)
         if ungrouped:
             sorted_groups.append(ungrouped)
 

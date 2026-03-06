@@ -74,7 +74,9 @@ class CloudProvider(ABC):
         """
         ...
 
-    async def list_instances(self, tags: list[str] | None = None) -> list[CloudInstanceInfo]:
+    async def list_instances(
+        self, tags: list[str] | None = None
+    ) -> list[CloudInstanceInfo]:
         """List instances, optionally filtered by tags.
 
         Args:
@@ -85,9 +87,7 @@ class CloudProvider(ABC):
         """
         return []
 
-    async def create_snapshot(
-        self, instance_id: str, name: str
-    ) -> SnapshotInfo:
+    async def create_snapshot(self, instance_id: str, name: str) -> SnapshotInfo:
         """Create a snapshot/image from a running instance.
 
         Args:
@@ -151,10 +151,12 @@ class CloudProviderRegistry:
         Returns:
             Decorator function.
         """
+
         def decorator(provider_cls: type[CloudProvider]) -> type[CloudProvider]:
             cls._providers[name.lower()] = provider_cls
             logger.debug(f"Registered cloud provider: {name}")
             return provider_cls
+
         return decorator
 
     @classmethod
@@ -174,9 +176,7 @@ class CloudProviderRegistry:
         name_lower = name.lower()
         if name_lower not in cls._providers:
             available = ", ".join(sorted(cls._providers.keys()))
-            raise ValueError(
-                f"Unknown cloud provider '{name}'. Available: {available}"
-            )
+            raise ValueError(f"Unknown cloud provider '{name}'. Available: {available}")
         return cls._providers[name_lower](**kwargs)
 
     @classmethod

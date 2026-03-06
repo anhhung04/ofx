@@ -22,28 +22,32 @@ __all__ = [
 ]
 
 
-def schtask_command(name: str, cmd: str, *, trigger: str = "ONLOGON", user: str | None = None) -> str:
+def schtask_command(
+    name: str, cmd: str, *, trigger: str = "ONLOGON", user: str | None = None
+) -> str:
     target_user = f"/RU {user}" if user else "/RU SYSTEM"
     return " ".join(
         [
             "schtasks /Create /F",
             f"/SC {trigger}",
             f"/TN {name}",
-            f"/TR \"{cmd}\"",
+            f'/TR "{cmd}"',
             target_user,
         ]
     )
 
 
-def service_command(name: str, bin_path: str, *, display_name: str | None = None) -> str:
+def service_command(
+    name: str, bin_path: str, *, display_name: str | None = None
+) -> str:
     disp = display_name or name
     sanitized = PureWindowsPath(bin_path)
     return " ".join(
         [
             "sc create",
             name,
-            f"binPath= \"{sanitized}\"",
-            f"DisplayName= \"{disp}\"",
+            f'binPath= "{sanitized}"',
+            f'DisplayName= "{disp}"',
             "start= auto",
         ]
     )
@@ -55,6 +59,7 @@ def runkey_command(name: str, value: str, *, hive: str = "HKCU") -> str:
 
 
 # ── Linux ─────────────────────────────────────────────────────────────────────
+
 
 def crontab_command(
     cmd: str,
@@ -95,7 +100,9 @@ def systemd_user_service(
     unit_dir = "/etc/systemd/system" if system_wide else "~/.config/systemd/user"
     enable_cmd = "systemctl enable" if system_wide else "systemctl --user enable"
     start_cmd = "systemctl start" if system_wide else "systemctl --user start"
-    daemon_reload = "systemctl daemon-reload" if system_wide else "systemctl --user daemon-reload"
+    daemon_reload = (
+        "systemctl daemon-reload" if system_wide else "systemctl --user daemon-reload"
+    )
 
     unit_content = (
         f"[Unit]\\nDescription={description}\\n\\n"

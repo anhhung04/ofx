@@ -27,7 +27,9 @@ def build_hta(payload_url: str, *, title: str = "Updater") -> str:
     ).strip()
 
 
-def build_lnk(command: str, *, icon: str | None = None, workdir: str | None = None) -> str:
+def build_lnk(
+    command: str, *, icon: str | None = None, workdir: str | None = None
+) -> str:
     """Return a PowerShell snippet that creates a LNK pointing to `command`."""
     ps = [
         "$W = New-Object -ComObject WScript.Shell",

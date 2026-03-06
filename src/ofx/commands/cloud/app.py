@@ -4,12 +4,14 @@ Provides commands to manage cloud profiles, instances, and images.
 """
 
 import asyncio
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated
-from datetime import datetime
+
 import typer
 from rich.table import Table
 
+from ofx.commands.ui_helpers import print_error, print_warning
 from ofx.settings import get_console
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
@@ -69,15 +71,28 @@ def profile_list():
 @profile_app.command("add")
 def profile_add(
     name: Annotated[str, typer.Argument(help="Profile name")],
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider (digitalocean, aws, static)")] = "",
-    region: Annotated[str, typer.Option("--region", "-r", help="Region/datacenter")] = "",
+    provider: Annotated[
+        str,
+        typer.Option(
+            "--provider", "-p", help="Cloud provider (digitalocean, aws, static)"
+        ),
+    ] = "",
+    region: Annotated[
+        str, typer.Option("--region", "-r", help="Region/datacenter")
+    ] = "",
     size: Annotated[str, typer.Option("--size", "-s", help="Instance size/type")] = "",
     image: Annotated[str, typer.Option("--image", "-i", help="OS image")] = "",
     ssh_user: Annotated[str, typer.Option("--ssh-user", help="SSH username")] = "",
     ssh_key: Annotated[str, typer.Option("--ssh-key", help="SSH key path")] = "",
-    ssh_password: Annotated[str, typer.Option("--ssh-password", help="SSH password")] = "",
-    connection_type: Annotated[str, typer.Option("--connection", help="Connection type (ssh or winrm)")] = "",
-    set_default: Annotated[bool, typer.Option("--default", help="Set as default profile")] = False,
+    ssh_password: Annotated[
+        str, typer.Option("--ssh-password", help="SSH password")
+    ] = "",
+    connection_type: Annotated[
+        str, typer.Option("--connection", help="Connection type (ssh or winrm)")
+    ] = "",
+    set_default: Annotated[
+        bool, typer.Option("--default", help="Set as default profile")
+    ] = False,
 ):
     """Add or update a cloud profile."""
     from ofx.cloud.config import get_cloud_profile_manager
@@ -101,11 +116,11 @@ def profile_add(
         data["ssh_password"] = ssh_password
     if connection_type:
         data["connection_type"] = connection_type
-    
+
     mgr.add(name, data)
     if set_default:
         mgr.set_default(name)
-        
+
     console.print(f"[green]Profile '{name}' saved.[/green]")
     if set_default:
         console.print("[dim]Set as default profile.[/dim]")
@@ -180,15 +195,15 @@ def profile_show(
 # Instance management
 # ---------------------------------------------------------------------------
 
-instance_app = typer.Typer(
-    no_args_is_help=True, help="Manage cloud instances"
-)
+instance_app = typer.Typer(no_args_is_help=True, help="Manage cloud instances")
 app.add_typer(instance_app, name="instance")
 
 
 @instance_app.command("list")
 def instance_list(
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
 ):
     """List cloud instances."""
@@ -199,23 +214,37 @@ def instance_list(
         mgr = get_cloud_profile_manager()
         data = mgr.get_profile_data(profile)
         if not data:
-            console.print(f"[red]Profile '{profile}' not found.[/red]")
+            print_error(
+                "Profile not found",
+                f"Profile '{profile}' not found.",
+            )
             raise typer.Exit(code=1)
         provider = data.get("provider", provider)
 
     if not provider:
-        console.print("[red]Specify --provider or --profile[/red]")
+        print_error(
+            "Missing provider",
+            "Specify --provider or --profile.",
+            details="Example: ofx cloud instance list --profile default-cloud",
+        )
         raise typer.Exit(code=1)
 
     try:
         cloud = CloudProviderRegistry.create(provider)
         instances = asyncio.run(cloud.list_instances())
     except Exception as e:
-        console.print(f"[red]Error listing instances: {e}[/red]")
+        print_error(
+            "List instances failed",
+            "Error while listing cloud instances.",
+            details=str(e),
+        )
         raise typer.Exit(code=1) from e
 
     if not instances:
-        console.print("[dim]No instances found.[/dim]")
+        print_warning(
+            "Instances",
+            "No instances found for this provider/profile.",
+        )
         return
 
     table = Table(title=f"Instances ({provider})")
@@ -243,9 +272,13 @@ def instance_list(
 @instance_app.command("destroy")
 def instance_destroy(
     instance_id: Annotated[str, typer.Argument(help="Instance ID to destroy")],
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
-    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Skip confirmation")
+    ] = False,
 ):
     """Destroy a cloud instance."""
     from ofx.cloud import CloudProviderRegistry
@@ -280,12 +313,18 @@ def instance_destroy(
 @instance_app.command("create")
 def instance_create(
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
-    name: Annotated[str, typer.Option("--name", "-n", help="Instance name")] = "ofx-manual",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
+    name: Annotated[
+        str, typer.Option("--name", "-n", help="Instance name")
+    ] = "ofx-manual",
     region: Annotated[str, typer.Option("--region", "-r", help="Region")] = "",
     size: Annotated[str, typer.Option("--size", "-s", help="Instance size")] = "",
     image: Annotated[str, typer.Option("--image", "-i", help="OS image")] = "",
-    wait: Annotated[bool, typer.Option("--wait/--no-wait", help="Wait until ready")] = True,
+    wait: Annotated[
+        bool, typer.Option("--wait/--no-wait", help="Wait until ready")
+    ] = True,
 ):
     """Create a cloud instance manually."""
     from ofx.cloud import CloudProviderRegistry
@@ -319,7 +358,9 @@ def instance_create(
         cloud = CloudProviderRegistry.create(provider)
         inst = await cloud.create_instance(cfg)
         if wait:
-            console.print(f"[dim]Waiting for instance '{inst.name}'[{inst.instance_id}]...[/dim]")
+            console.print(
+                f"[dim]Waiting for instance '{inst.name}'[{inst.instance_id}]...[/dim]"
+            )
             await cloud.wait_until_ready(inst.instance_id)
             inst = await cloud.get_instance(inst.instance_id) or inst
         return inst
@@ -342,15 +383,15 @@ def instance_create(
 # Image / Snapshot management
 # ---------------------------------------------------------------------------
 
-image_app = typer.Typer(
-    no_args_is_help=True, help="Manage cloud images/snapshots"
-)
+image_app = typer.Typer(no_args_is_help=True, help="Manage cloud images/snapshots")
 app.add_typer(image_app, name="image")
 
 
 @image_app.command("list")
 def image_list(
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
 ):
     """List available images/snapshots."""
@@ -403,7 +444,9 @@ def image_list(
 def image_create(
     instance_id: Annotated[str, typer.Argument(help="Instance ID to snapshot")],
     name: Annotated[str, typer.Option("--name", "-n", help="Snapshot name")] = "",
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
 ):
     """Create a snapshot/image from an instance."""
@@ -440,9 +483,13 @@ def image_create(
 @image_app.command("delete")
 def image_delete(
     snapshot_id: Annotated[str, typer.Argument(help="Snapshot ID to delete")],
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
-    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Skip confirmation")
+    ] = False,
 ):
     """Delete a snapshot/image."""
     from ofx.cloud import CloudProviderRegistry
@@ -488,8 +535,12 @@ app.add_typer(fleet_app, name="fleet")
 def fleet_create(
     count: Annotated[int, typer.Argument(help="Number of instances to create")],
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
-    name_prefix: Annotated[str, typer.Option("--prefix", help="Instance name prefix")] = "ofx-fleet",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
+    name_prefix: Annotated[
+        str, typer.Option("--prefix", help="Instance name prefix")
+    ] = "ofx-fleet",
     region: Annotated[str, typer.Option("--region", "-r", help="Region")] = "",
     size: Annotated[str, typer.Option("--size", "-s", help="Instance size")] = "",
     image: Annotated[str, typer.Option("--image", "-i", help="OS image")] = "",
@@ -562,15 +613,38 @@ def fleet_create(
 @fleet_app.command("run")
 def fleet_run(
     workflow: Annotated[str, typer.Argument(help="Workflow file name or path")],
-    targets: Annotated[str, typer.Option("--targets", "-t", help="Targets: file path, CIDR, comma-separated IPs")] = "",
-    count: Annotated[int, typer.Option("--count", "-n", help="Number of fleet instances (auto if 0)")] = 0,
+    targets: Annotated[
+        str,
+        typer.Option(
+            "--targets", "-t", help="Targets: file path, CIDR, comma-separated IPs"
+        ),
+    ] = "",
+    count: Annotated[
+        int, typer.Option("--count", "-n", help="Number of fleet instances (auto if 0)")
+    ] = 0,
     profile: Annotated[str, typer.Option("--profile", help="Cloud profile")] = "",
-    distribution: Annotated[str, typer.Option("--distribution", "-d", help="Distribution mode: chunk, round-robin, subnet, line")] = "chunk",
+    distribution: Annotated[
+        str,
+        typer.Option(
+            "--distribution",
+            "-d",
+            help="Distribution mode: chunk, round-robin, subnet, line",
+        ),
+    ] = "chunk",
     job: Annotated[str, typer.Option("--job", "-j", help="Job ID to run")] = "",
     name: Annotated[str, typer.Option("--name", help="Fleet run name")] = "",
-    inputs: Annotated[list[str], typer.Option("--input", "-i", help="Input key=value pairs")] = [],
-    env_vars: Annotated[list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")] = [],
-    target_var: Annotated[str, typer.Option("--target-var", help="Input variable name for the target chunk file")] = "targets_file",
+    inputs: Annotated[
+        list[str], typer.Option("--input", "-i", help="Input key=value pairs")
+    ] = None,
+    env_vars: Annotated[
+        list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")
+    ] = None,
+    target_var: Annotated[
+        str,
+        typer.Option(
+            "--target-var", help="Input variable name for the target chunk file"
+        ),
+    ] = "targets_file",
 ):
     """Submit a workflow across multiple fleet instances with target distribution.
 
@@ -588,6 +662,10 @@ def fleet_run(
     from ofx.cloud.sessions import SessionManager, SessionTarget
     from ofx.utils.args import parse_key_value_pairs
 
+    if env_vars is None:
+        env_vars = []
+    if inputs is None:
+        inputs = []
     if inputs is None:
         inputs = []
     if env_vars is None:
@@ -684,7 +762,9 @@ def fleet_run(
         console.print("[red]No sessions submitted.[/red]")
         raise typer.Exit(code=1)
 
-    console.print(f"[green]{len(sessions)}/{effective_count} sessions submitted.[/green]")
+    console.print(
+        f"[green]{len(sessions)}/{effective_count} sessions submitted.[/green]"
+    )
     console.print()
     console.print(f"[dim]Fleet status:  ofx cloud fleet status {fleet_group_id}[/dim]")
     console.print(f"[dim]Fleet results: ofx cloud fleet results {fleet_group_id}[/dim]")
@@ -693,7 +773,12 @@ def fleet_run(
 @fleet_app.command("status")
 def fleet_status(
     fleet_group_id: Annotated[str, typer.Argument(help="Fleet group ID")],
-    refresh: Annotated[bool, typer.Option("--refresh", "-r", help="Probe running sessions for latest status")] = False,
+    refresh: Annotated[
+        bool,
+        typer.Option(
+            "--refresh", "-r", help="Probe running sessions for latest status"
+        ),
+    ] = False,
 ):
     """Show status of all sessions in a fleet group."""
     from ofx.cloud.sessions import SessionManager, SessionStore
@@ -702,7 +787,9 @@ def fleet_status(
     sessions = store.list_by_fleet_group(fleet_group_id)
 
     if not sessions:
-        console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
+        console.print(
+            f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]"
+        )
         raise typer.Exit(code=1)
 
     if refresh:
@@ -761,9 +848,19 @@ def fleet_status(
 @fleet_app.command("results")
 def fleet_results(
     fleet_group_id: Annotated[str, typer.Argument(help="Fleet group ID")],
-    output: Annotated[str, typer.Option("--output", "-o", help="Output directory for aggregated results")] = "",
-    passphrase: Annotated[str, typer.Option("--passphrase", "-p", help="Encrypt results with passphrase")] = "",
-    skip_running: Annotated[bool, typer.Option("--skip-running", help="Skip sessions still running (fetch completed only)")] = False,
+    output: Annotated[
+        str,
+        typer.Option("--output", "-o", help="Output directory for aggregated results"),
+    ] = "",
+    passphrase: Annotated[
+        str, typer.Option("--passphrase", "-p", help="Encrypt results with passphrase")
+    ] = "",
+    skip_running: Annotated[
+        bool,
+        typer.Option(
+            "--skip-running", help="Skip sessions still running (fetch completed only)"
+        ),
+    ] = False,
 ):
     """Fetch and aggregate results from all sessions in a fleet group.
 
@@ -776,7 +873,9 @@ def fleet_results(
     sessions = store.list_by_fleet_group(fleet_group_id)
 
     if not sessions:
-        console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
+        console.print(
+            f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]"
+        )
         raise typer.Exit(code=1)
 
     # Refresh statuses first
@@ -797,7 +896,9 @@ def fleet_results(
     running = [s for s in sessions if s.is_running()]
     completed = [s for s in sessions if s.status.value == "completed"]
     failed = [s for s in sessions if s.status.value == "failed"]
-    fetchable = [s for s in sessions if s.is_done() and s.status.value not in ("destroyed",)]
+    fetchable = [
+        s for s in sessions if s.is_done() and s.status.value not in ("destroyed",)
+    ]
 
     console.print(f"[bold]Fleet results:[/bold] {fleet_group_id}")
     console.print(
@@ -842,7 +943,9 @@ def fleet_results(
     fetched = asyncio.run(_fetch_all())
 
     console.print()
-    console.print(f"[green]Fetched {fetched}/{len(fetchable)} session results → {agg_dir}[/green]")
+    console.print(
+        f"[green]Fetched {fetched}/{len(fetchable)} session results → {agg_dir}[/green]"
+    )
 
     if passphrase:
         from ofx.cloud.sessions.encryption import encrypt_results
@@ -854,7 +957,9 @@ def fleet_results(
 @fleet_app.command("cancel")
 def fleet_cancel(
     fleet_group_id: Annotated[str, typer.Argument(help="Fleet group ID")],
-    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Skip confirmation")
+    ] = False,
 ):
     """Cancel all running sessions in a fleet group."""
     from ofx.cloud.sessions import SessionManager, SessionStore
@@ -863,7 +968,9 @@ def fleet_cancel(
     sessions = store.list_by_fleet_group(fleet_group_id)
 
     if not sessions:
-        console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
+        console.print(
+            f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]"
+        )
         raise typer.Exit(code=1)
 
     running = [s for s in sessions if s.is_running()]
@@ -895,11 +1002,19 @@ def fleet_cancel(
 
 @fleet_app.command("destroy")
 def fleet_destroy(
-    tag: Annotated[str, typer.Option("--tag", help="Destroy instances with this tag")] = "",
-    prefix: Annotated[str, typer.Option("--prefix", help="Destroy instances matching name prefix")] = "ofx-fleet",
-    provider: Annotated[str, typer.Option("--provider", "-p", help="Cloud provider")] = "",
+    tag: Annotated[
+        str, typer.Option("--tag", help="Destroy instances with this tag")
+    ] = "",
+    prefix: Annotated[
+        str, typer.Option("--prefix", help="Destroy instances matching name prefix")
+    ] = "ofx-fleet",
+    provider: Annotated[
+        str, typer.Option("--provider", "-p", help="Cloud provider")
+    ] = "",
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
-    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Skip confirmation")
+    ] = False,
 ):
     """Destroy fleet instances by tag or name prefix."""
     from ofx.cloud import CloudProviderRegistry
@@ -963,26 +1078,35 @@ def fleet_destroy(
 # Quick connectivity test
 # ---------------------------------------------------------------------------
 
+
 @app.command("test")
 def cloud_test(
     host: Annotated[str, typer.Argument(help="Host to test connectivity")],
     port: Annotated[int, typer.Option("--port", "-p", help="Port to test")] = 22,
-    connection: Annotated[str, typer.Option("--connection", "-c", help="Connection type (ssh/winrm)")] = "ssh",
-    timeout: Annotated[int, typer.Option("--timeout", "-t", help="Timeout in seconds")] = 30,
+    connection: Annotated[
+        str, typer.Option("--connection", "-c", help="Connection type (ssh/winrm)")
+    ] = "ssh",
+    timeout: Annotated[
+        int, typer.Option("--timeout", "-t", help="Timeout in seconds")
+    ] = 30,
 ):
     """Test connectivity to a remote host."""
     from ofx.cloud.ssh import wait_for_connectivity
 
     with console.status(f"Testing {connection} to {host}:{port}..."):
         try:
-            asyncio.run(wait_for_connectivity(
-                host=host,
-                os_type="windows" if connection == "winrm" else "linux",
-                ssh_port=port if connection == "ssh" else 22,
-                winrm_port=port if connection == "winrm" else 5985,
-                timeout=timeout,
-            ))
-            console.print(f"[green]Connection successful: {host}:{port} ({connection})[/green]")
+            asyncio.run(
+                wait_for_connectivity(
+                    host=host,
+                    os_type="windows" if connection == "winrm" else "linux",
+                    ssh_port=port if connection == "ssh" else 22,
+                    winrm_port=port if connection == "winrm" else 5985,
+                    timeout=timeout,
+                )
+            )
+            console.print(
+                f"[green]Connection successful: {host}:{port} ({connection})[/green]"
+            )
         except Exception as e:
             console.print(f"[red]Connection failed: {e}[/red]")
             raise typer.Exit(code=1) from e
@@ -991,6 +1115,7 @@ def cloud_test(
 # ---------------------------------------------------------------------------
 # Provider info
 # ---------------------------------------------------------------------------
+
 
 @app.command("providers")
 def list_providers():

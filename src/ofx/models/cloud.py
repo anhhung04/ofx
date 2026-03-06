@@ -19,7 +19,9 @@ class CloudHostEntry(OFXBaseModel):
     ssh_user: str = Field(default="root", description="SSH username for this host")
     ssh_port: int = Field(default=22, description="SSH port for this host")
     ssh_key: str = Field(default="", description="Override SSH key for this host")
-    ssh_password: str = Field(default="", description="Override SSH password for this host")
+    ssh_password: str = Field(
+        default="", description="Override SSH password for this host"
+    )
 
 
 class CloudConfig(OFXBaseModel):
@@ -45,7 +47,9 @@ class CloudConfig(OFXBaseModel):
 
     # Instance spec (ignored for static provider)
     region: str = Field(default="", description="Cloud region (e.g., nyc3, us-east-1)")
-    size: str = Field(default="", description="Instance size/type (e.g., s-1vcpu-1gb, t3.medium)")
+    size: str = Field(
+        default="", description="Instance size/type (e.g., s-1vcpu-1gb, t3.medium)"
+    )
     image: str = Field(default="", description="Snapshot/AMI name or ID")
     tags: list[str] = Field(default_factory=list, description="Instance tags")
 
@@ -60,15 +64,21 @@ class CloudConfig(OFXBaseModel):
     ssh_key: str = Field(default="", description="Path to SSH private key file")
     ssh_password: str = Field(default="", description="SSH password (if key not used)")
     ssh_port: int = Field(default=22, description="SSH port")
-    
-    extra: dict[str, Any] = Field(default_factory=dict, description="Extra provider-specific config")
+
+    extra: dict[str, Any] = Field(
+        default_factory=dict, description="Extra provider-specific config"
+    )
 
     # WinRM config (Windows)
     winrm_user: str = Field(default="Administrator", description="WinRM username")
     winrm_password: str = Field(default="", description="WinRM password")
     winrm_ssl: bool = Field(default=False, description="Use HTTPS for WinRM")
-    winrm_port: int | None = Field(default=None, description="WinRM port (auto: 5985/5986)")
-    winrm_transport: str = Field(default="ntlm", description="WinRM transport: ntlm, kerberos, credssp")
+    winrm_port: int | None = Field(
+        default=None, description="WinRM port (auto: 5985/5986)"
+    )
+    winrm_transport: str = Field(
+        default="ntlm", description="WinRM transport: ntlm, kerberos, credssp"
+    )
 
     # Opsec
     opsec_mode: bool = Field(
@@ -101,22 +111,24 @@ class CloudConfig(OFXBaseModel):
     key_pair_name: str = Field(default="", description="AWS EC2 key pair name")
     security_group: str = Field(default="", description="AWS security group ID")
     subnet_id: str = Field(default="", description="AWS subnet ID")
-    iam_instance_profile: str = Field(default="", description="AWS IAM instance profile")
+    iam_instance_profile: str = Field(
+        default="", description="AWS IAM instance profile"
+    )
 
     # DigitalOcean-specific
     vpc_uuid: str = Field(default="", description="DigitalOcean VPC UUID")
     project_id: str = Field(default="", description="DigitalOcean project ID")
-    
+
     connection_type: Literal["ssh", "winrm"] = Field(
         default="ssh",
         description="Connection method to use (ssh or winrm), auto-determined by OS if not set",
     )
-    
+
     boot_timeout: int = Field(
         default=300,
         description="Seconds to wait for instance to boot and be reachable",
     )
-    
+
     login_timeout: int = Field(
         default=300,
         description="Seconds to wait for successful login after connectivity",
@@ -129,16 +141,18 @@ class CloudConfig(OFXBaseModel):
             object.__setattr__(self, "winrm_port", 5986)
         elif self.winrm_port is None and self.os == "windows":
             object.__setattr__(self, "winrm_port", 5985)
-        
+
         if not self.provider and self.host:
             object.__setattr__(self, "provider", "static")
         if self.os == "windows" and self.connection_type == "ssh":
             object.__setattr__(self, "connection_type", "winrm")
-        
+
         return self
 
 
-def parse_cloud_field(value: str | dict[str, Any] | CloudConfig | None) -> CloudConfig | None:
+def parse_cloud_field(
+    value: str | dict[str, Any] | CloudConfig | None,
+) -> CloudConfig | None:
     """Parse the cloud field from a job definition.
 
     Accepts:

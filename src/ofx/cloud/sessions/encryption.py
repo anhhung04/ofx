@@ -19,7 +19,9 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 logger = logging.getLogger("ofx")
 
-_SALT_PREFIX = os.getenv("USER", "ofx").encode()[:4].ljust(4, b"_") + os.getenv("HOSTNAME", "ofx-session")[:12].encode().ljust(12, b"_")
+_SALT_PREFIX = os.getenv("USER", "ofx").encode()[:4].ljust(4, b"_") + os.getenv(
+    "HOSTNAME", "ofx-session"
+)[:12].encode().ljust(12, b"_")
 _KDF_ITERATIONS = 100_000
 
 
@@ -46,7 +48,9 @@ def derive_key(passphrase: str, salt: bytes | None = None) -> tuple[bytes, bytes
     return key, salt
 
 
-def encrypt_results(results_dir: Path, passphrase: str, output_file: Path | None = None) -> Path:
+def encrypt_results(
+    results_dir: Path, passphrase: str, output_file: Path | None = None
+) -> Path:
     """Tar + encrypt a results directory.
 
     Args:
@@ -127,7 +131,9 @@ def decrypt_results(
     try:
         tar_data = cipher.decrypt(encrypted)
     except InvalidToken:
-        raise ValueError("Decryption failed — wrong passphrase or corrupt file") from None
+        raise ValueError(
+            "Decryption failed — wrong passphrase or corrupt file"
+        ) from None
 
     if output_dir is None:
         output_dir = enc_file.parent / "results"

@@ -2,11 +2,11 @@
 
 from ofx.runner.registry.base import RegistryAdapter
 from ofx.runner.registry.cache import CachedRegistryAdapter
-from ofx.runner.registry.failover import FailoverRegistryAdapter
 from ofx.runner.registry.factory import (
     RegistryFactory,
     cleanup_registry,
 )
+from ofx.runner.registry.failover import FailoverRegistryAdapter
 from ofx.runner.registry.file import FileRegistry
 from ofx.runner.registry.memory import MemoryJobRegistry
 

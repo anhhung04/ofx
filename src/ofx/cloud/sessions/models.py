@@ -82,9 +82,7 @@ class Session(OFXBaseModel):
     )
 
     # Local paths
-    output_path: str = Field(
-        default="", description="Local directory for session data"
-    )
+    output_path: str = Field(default="", description="Local directory for session data")
     results_path: str = Field(
         default="", description="Local directory where fetched results live"
     )

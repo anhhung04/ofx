@@ -29,7 +29,16 @@ class Credential:
     comment: str = ""
 
     def __iter__(self):
-        return iter([self.id, self.username, self.password, self.hash, self.domain, self.comment])
+        return iter(
+            [
+                self.id,
+                self.username,
+                self.password,
+                self.hash,
+                self.domain,
+                self.comment,
+            ]
+        )
 
 
 @dataclass
@@ -107,7 +116,9 @@ class ExegolHistoryDB:
         grp = self._group(Credential.GROUP_NAME)
         if grp is None:
             return []
-        return [self._to_credential(e, index=idx + 1) for idx, e in enumerate(grp.entries)]
+        return [
+            self._to_credential(e, index=idx + 1) for idx, e in enumerate(grp.entries)
+        ]
 
     def list_hosts(self) -> list[Host]:
         grp = self._group(Host.GROUP_NAME)
@@ -345,7 +356,9 @@ class ExegolHistoryDB:
             password=entry.password or "",
             hash=props.get(Credential.EXEGOL_DB_HASH_PROPERTY, ""),
             domain=props.get(Credential.EXEGOL_DB_DOMAIN_PROPERTY, ""),
-            comment=props.get(Credential.EXEGOL_DB_COMMENT_PROPERTY, "") or entry.notes or "",
+            comment=props.get(Credential.EXEGOL_DB_COMMENT_PROPERTY, "")
+            or entry.notes
+            or "",
         )
 
     def _to_host(self, entry, index: int | None = None) -> Host:

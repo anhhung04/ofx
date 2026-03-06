@@ -2,7 +2,6 @@
 
 import asyncio
 import base64
-import shutil
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -154,9 +153,13 @@ class StepRunner(BaseRunner[Step]):
         log_path.mkdir(parents=True, exist_ok=True)
         if not self.parent:
             return
-        step_name = (self.model.name or f"step_{self.model.step_index}").replace(" ", "-")
+        step_name = (self.model.name or f"step_{self.model.step_index}").replace(
+            " ", "-"
+        )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out_file = log_path / f"stdout_{self.parent.model.jid}_{step_name}__{timestamp}.log"
+        out_file = (
+            log_path / f"stdout_{self.parent.model.jid}_{step_name}__{timestamp}.log"
+        )
 
         header = []
         if self.model.run:
@@ -166,7 +169,9 @@ class StepRunner(BaseRunner[Step]):
         elif self.model.script_file:
             header.append(f">> script_file: {self.model.script_file}")
         elif self.model.script:
-            header.append(f">> script (base64): {base64.b64encode(self.model.script.encode()).decode()}")
+            header.append(
+                f">> script (base64): {base64.b64encode(self.model.script.encode()).decode()}"
+            )
         else:
             header.append(">> unknown step type")
         if outputs.get("binary_output"):
@@ -249,7 +254,6 @@ class StepRunner(BaseRunner[Step]):
                 parent=self,
             )
         elif self._run_type is RunType.SCRIPT_FILE:
-
             from ofx.runner.commands.command import Script, ScriptRunner
 
             assert self.model.script_file is not None, (

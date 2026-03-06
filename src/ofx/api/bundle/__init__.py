@@ -132,7 +132,9 @@ def run_remote(
     Returns:
         stdout/stderr captured from remote execution.
     """
-    result = build_bundle(script, extra_modules=extra_modules, obfuscate_sources=obfuscate_sources)
+    result = build_bundle(
+        script, extra_modules=extra_modules, obfuscate_sources=obfuscate_sources
+    )
     payload = (
         obfuscate_bootstrap(result.bootstrap, key=obfuscation_key)
         if obfuscate

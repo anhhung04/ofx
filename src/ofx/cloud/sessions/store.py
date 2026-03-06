@@ -78,9 +78,7 @@ class SessionStore:
     ) -> Session:
         """Atomically update session status and optional extra fields."""
         session = self.load(session_id)
-        session = session.model_copy(
-            update={"status": status, **extra_fields}
-        )
+        session = session.model_copy(update={"status": status, **extra_fields})
         self.save(session)
         return session
 
@@ -111,8 +109,7 @@ class SessionStore:
     def list_by_fleet_group(self, fleet_group_id: str) -> list[Session]:
         """Return all sessions belonging to a fleet group, sorted by fleet_index."""
         sessions = [
-            s for s in self.list_sessions()
-            if s.fleet_group_id == fleet_group_id
+            s for s in self.list_sessions() if s.fleet_group_id == fleet_group_id
         ]
         sessions.sort(key=lambda s: s.fleet_index)
         return sessions

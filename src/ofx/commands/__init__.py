@@ -4,7 +4,7 @@ from ofx.commands.ui_helpers import print_banner, print_error
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
-from ofx.commands import cloud, docs, flow, project, secret, session  # noqa: E402
+from ofx.commands import api, cloud, flow, project, secret, session  # noqa: E402
 
 COMMAND_ALIASES = {
     flow: ["x"],
@@ -38,13 +38,23 @@ def add_aliases():
             )
 
 
-
 # Global callback to inject environment variables before any command runs
 # Store envs parsed from -e
 _cli_env_vars = {}
 
-def inject_env_vars(ctx: typer.Context, e: list[str] = typer.Option([], "-e", "--env", help="Inject environment variable (KEY=VAL)", show_default=False)):
+
+def inject_env_vars(
+    ctx: typer.Context,
+    e: list[str] = typer.Option(
+        [],
+        "-e",
+        "--env",
+        help="Inject environment variable (KEY=VAL)",
+        show_default=False,
+    ),
+):
     import os
+
     global _cli_env_vars
     for env in e:
         try:
@@ -52,9 +62,12 @@ def inject_env_vars(ctx: typer.Context, e: list[str] = typer.Option([], "-e", "-
             os.environ[key] = value
             _cli_env_vars[key] = value
         except ValueError as e:
-            print_error("Invalid environment variable format", f"Expected KEY=VAL, got: {env}")
+            print_error(
+                "Invalid environment variable format", f"Expected KEY=VAL, got: {env}"
+            )
             raise typer.Exit(code=1) from e
     print_banner()
+
 
 app.callback()(inject_env_vars)
 
@@ -64,7 +77,7 @@ def _register_commands():
     add_app(cloud)
     add_app(session)
     add_app(project)
-    add_app(docs)
+    add_app(api)
     add_app(secret)
     add_aliases()
 

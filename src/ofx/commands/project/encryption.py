@@ -160,7 +160,9 @@ class EncryptionHandler:
             try:
                 return AESGCM(key).decrypt(nonce, ciphertext, _MAGIC)
             except Exception as exc:
-                raise ValueError("Decryption failed — wrong key or corrupt data") from exc
+                raise ValueError(
+                    "Decryption failed — wrong key or corrupt data"
+                ) from exc
 
         # Legacy format: first 12 bytes = nonce, rest = ciphertext, static salt
         if len(blob) < _NONCE_LEN + 1:
@@ -195,19 +197,23 @@ class EncryptionHandler:
         gitattributes = repo_path / ".gitattributes"
         with open(gitattributes, "w") as fh:
             fh.write(
-                "\n".join(
-                    f"{p} filter=ofx-crypt diff=ofx-crypt" for p in patterns
-                )
+                "\n".join(f"{p} filter=ofx-crypt diff=ofx-crypt" for p in patterns)
             )
             fh.write("\n[attr]binary -diff -merge -text\n")
 
         repo = git.Repo(repo_path)
         config = repo.config_writer()
 
-        config.set_value("filter.ofx-crypt", "clean", f"{ofx_cmd} project encrypt-filter")
-        config.set_value("filter.ofx-crypt", "smudge", f"{ofx_cmd} project decrypt-filter")
+        config.set_value(
+            "filter.ofx-crypt", "clean", f"{ofx_cmd} project encrypt-filter"
+        )
+        config.set_value(
+            "filter.ofx-crypt", "smudge", f"{ofx_cmd} project decrypt-filter"
+        )
         config.set_value("filter.ofx-crypt", "required", "true")
-        config.set_value("diff.ofx-crypt", "textconv", f"{ofx_cmd} project decrypt-filter")
+        config.set_value(
+            "diff.ofx-crypt", "textconv", f"{ofx_cmd} project decrypt-filter"
+        )
 
         config.release()
 

@@ -122,10 +122,14 @@ class InitHandler:
         cfg = self._config
 
         if cfg.is_multiphase:
-            console.print(f"✅ Initializing multi-phase project at: {cfg.base_path.absolute()}")
+            console.print(
+                f"✅ Initializing multi-phase project at: {cfg.base_path.absolute()}"
+            )
             self._make_dir(cfg.base_path, DIRECTORY_STRUCTURE)
         else:
-            console.print(f"✅ Initializing single-phase project at: {cfg.base_path.absolute()}")
+            console.print(
+                f"✅ Initializing single-phase project at: {cfg.base_path.absolute()}"
+            )
             self._make_dir(cfg.base_path, ENGAGEMENT_FILE_STRUCTURE)
 
         self._setup_local_git()
@@ -142,7 +146,9 @@ class InitHandler:
         try:
             try:
                 repo = git.Repo(self._config.base_path)
-                logger.info(f"Using existing git repository at {self._config.base_path}")
+                logger.info(
+                    f"Using existing git repository at {self._config.base_path}"
+                )
             except Exception:
                 repo = git.Repo.init(self._config.base_path)
                 logger.info(f"Initialized git repository at {self._config.base_path}")

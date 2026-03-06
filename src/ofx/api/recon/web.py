@@ -56,9 +56,9 @@ def web_fingerprint(headers: dict[str, str]) -> dict[str, str]:
     findings: dict[str, str] = {}
     lh = {k.lower(): v for k, v in headers.items()}
 
-    if (server := lh.get("server", "")):
+    if server := lh.get("server", ""):
         findings["server"] = server
-    if (pb := lh.get("x-powered-by", "")):
+    if pb := lh.get("x-powered-by", ""):
         findings["x-powered-by"] = pb
 
     combined = " ".join(lh.values()).lower()

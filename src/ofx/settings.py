@@ -59,6 +59,7 @@ def get_workflow_search_dirs() -> list[Path]:
                     dirs.append(abs_child)
     return dirs
 
+
 DEFAULT_SHELL = "powershell.exe" if IS_WINDOWS else "/bin/bash"
 
 RICH_THEME = Theme(
@@ -108,6 +109,7 @@ ensure_dir(SECRETS_DIR)
 # ------------------------------------------------------------------
 # GitHub token resolution: explicit setting → env → gh CLI
 # ------------------------------------------------------------------
+
 
 @lru_cache(maxsize=1)
 def _gh_cli_token() -> str:

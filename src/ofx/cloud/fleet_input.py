@@ -18,9 +18,7 @@ logger = logging.getLogger("ofx")
 _RANGE_FULL = re.compile(
     r"^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*-\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$"
 )
-_RANGE_SHORT = re.compile(
-    r"^(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})\s*-\s*(\d{1,3})$"
-)
+_RANGE_SHORT = re.compile(r"^(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})\s*-\s*(\d{1,3})$")
 
 
 class FleetInputParser:
@@ -112,7 +110,9 @@ class FleetInputParser:
 
         return targets
 
-    def _read_input(self, input_data: str | list[str], _seen_files: set[str] | None = None) -> list[str]:
+    def _read_input(
+        self, input_data: str | list[str], _seen_files: set[str] | None = None
+    ) -> list[str]:
         """Read input into a list of raw lines, supporting recursive file inclusion."""
         if _seen_files is None:
             _seen_files = set()
@@ -137,7 +137,9 @@ class FleetInputParser:
         if file_to_read is not None:
             abs_path = str(file_to_read.resolve())
             if abs_path in _seen_files:
-                logger.warning(f"Recursive fleet input: already read file {abs_path}, skipping to avoid loop.")
+                logger.warning(
+                    f"Recursive fleet input: already read file {abs_path}, skipping to avoid loop."
+                )
                 return []
             _seen_files.add(abs_path)
             logger.debug(f"Reading fleet input from file: {file_to_read}")
@@ -148,7 +150,9 @@ class FleetInputParser:
                 if not line or line.startswith("#"):
                     continue
                 possible_path = Path(line)
-                abs_possible = possible_path if possible_path.is_absolute() else Path.cwd() / line
+                abs_possible = (
+                    possible_path if possible_path.is_absolute() else Path.cwd() / line
+                )
                 if abs_possible.is_file():
                     expanded_lines.extend(self._read_input(line, _seen_files))
                 else:

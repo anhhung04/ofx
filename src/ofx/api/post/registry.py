@@ -31,7 +31,9 @@ class RunnerRegistry:
     _runners: dict[str, type[PostRunnerBase]] = {}
 
     @classmethod
-    def register(cls, name: str) -> Callable[[type[PostRunnerBase]], type[PostRunnerBase]]:
+    def register(
+        cls, name: str
+    ) -> Callable[[type[PostRunnerBase]], type[PostRunnerBase]]:
         """Decorator to register a runner class.
 
         Args:
@@ -45,9 +47,11 @@ class RunnerRegistry:
             ... class MyRunner(PostRunnerBase):
             ...     pass
         """
+
         def decorator(runner_cls: type[PostRunnerBase]) -> type[PostRunnerBase]:
             cls._runners[name] = runner_cls
             return runner_cls
+
         return decorator
 
     @classmethod

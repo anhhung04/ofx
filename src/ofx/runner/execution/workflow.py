@@ -123,6 +123,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
 
             # Build concise error: one line per failed job with root cause
             from ofx.runner.execution.error_helpers import extract_root_error
+
             concise_lines = []
             for job_id in result.failed_job_ids:
                 runner = self._runners.get(job_id)

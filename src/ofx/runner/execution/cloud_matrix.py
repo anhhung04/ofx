@@ -7,8 +7,8 @@ Extends ``CloudJobRunner`` to inherit VPS provisioning. Overrides
 from __future__ import annotations
 
 import asyncio
-import logging
 import itertools
+import logging
 from typing import Any
 
 from ofx.models.cloud import CloudConfig
@@ -56,8 +56,10 @@ class CloudMatrixJobRunner(CloudJobRunner):
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        if 'fleet' in self.ctx.vars:
-            msg = f"'{self.model.jid}' [{self.ctx.vars.get('fleet_name', 'cloud-fleet')}]"
+        if "fleet" in self.ctx.vars:
+            msg = (
+                f"'{self.model.jid}' [{self.ctx.vars.get('fleet_name', 'cloud-fleet')}]"
+            )
         else:
             msg = f"'{self.model.jid}'"
         msg += f" [cloud-matrix] › {message_str}"
@@ -87,8 +89,8 @@ class CloudMatrixJobRunner(CloudJobRunner):
             return
 
         strategy = self.model.strategy
-        max_parallel = (
-            getattr(strategy, "max_parallel", None) or len(self._matrix_combinations)
+        max_parallel = getattr(strategy, "max_parallel", None) or len(
+            self._matrix_combinations
         )
         semaphore = asyncio.Semaphore(max_parallel)
 

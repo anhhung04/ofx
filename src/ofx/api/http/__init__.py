@@ -82,6 +82,7 @@ def retry_with_backoff(
     ),
 ) -> Callable[[Callable[..., _T]], Callable[..., _T]]:
     """Decorator for retrying functions with exponential backoff."""
+
     def decorator(func: Callable[..., _T]) -> Callable[..., _T]:
         def wrapper(*args: object, **kwargs: object) -> _T:
             last_exception: Exception | None = None
@@ -91,12 +92,14 @@ def retry_with_backoff(
                 except exceptions as e:  # type: ignore[misc]
                     last_exception = e
                     if attempt < max_retries:
-                        wait_time = backoff_factor ** attempt
+                        wait_time = backoff_factor**attempt
                         time.sleep(wait_time)
             if last_exception is not None:
                 raise last_exception
             raise RuntimeError("Retry wrapper failed without exception")
+
         return wrapper
+
     return decorator
 
 
@@ -136,12 +139,14 @@ def fetch(
             response.raise_for_status()
             return response.text
         except httpx.TimeoutException as e:
-            raise OFXTimeoutError(f"Request to {url} timed out", timeout_seconds=timeout) from e
+            raise OFXTimeoutError(
+                f"Request to {url} timed out", timeout_seconds=timeout
+            ) from e
         except httpx.HTTPStatusError as e:
             raise APIError(
                 f"HTTP {e.response.status_code} error for {url}",
                 status_code=e.response.status_code,
-                response=e.response.text
+                response=e.response.text,
             ) from e
         except httpx.RequestError as e:
             raise APIError(f"Request failed: {str(e)}") from e
@@ -171,17 +176,19 @@ def post(
                 url,
                 json=data if isinstance(data, dict) else None,
                 data=data if isinstance(data, str) else None,
-                **kwargs
+                **kwargs,
             )
             response.raise_for_status()
             return response.text
         except httpx.TimeoutException as e:
-            raise OFXTimeoutError(f"Request to {url} timed out", timeout_seconds=timeout) from e
+            raise OFXTimeoutError(
+                f"Request to {url} timed out", timeout_seconds=timeout
+            ) from e
         except httpx.HTTPStatusError as e:
             raise APIError(
                 f"HTTP {e.response.status_code} error for {url}",
                 status_code=e.response.status_code,
-                response=e.response.text
+                response=e.response.text,
             ) from e
         except httpx.RequestError as e:
             raise APIError(f"Request failed: {str(e)}") from e

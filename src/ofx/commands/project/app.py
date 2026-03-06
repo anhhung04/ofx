@@ -7,6 +7,7 @@ import typer
 from rich.panel import Panel
 from rich.table import Table
 
+from ofx.commands.ui_helpers import print_error, print_success, print_warning
 from ofx.settings import get_console
 
 from .encryption import GitFilterHandler
@@ -37,12 +38,10 @@ def init(
 
     InitHandler.run_interactive(Path(base), is_multiphase)
 
-    console.print(
-        Panel(
-            f"[bold green]Project '{name}' initialized successfully![/]",
-            border_style="green",
-            title="[OK] Project Created",
-        )
+    print_success(
+        "Project Created",
+        f"Project '{name}' initialized successfully!",
+        details={"Location": base},
     )
 
 
@@ -63,7 +62,10 @@ def sync(
     ] = False,
     encryption_key: Annotated[
         str,
-        typer.Option("--encryption-key", help="Encryption key (or set OFX_ENCRYPTION_KEY env var)"),
+        typer.Option(
+            "--encryption-key",
+            help="Encryption key (or set OFX_ENCRYPTION_KEY env var)",
+        ),
     ] = "",
     message: Annotated[
         str,
@@ -88,12 +90,10 @@ def sync(
             message=message,
         ).run()
 
-    console.print(
-        Panel(
-            f"[bold green]Sync completed successfully![/]\nProject: {project}",
-            border_style="green",
-            title="[OK] Sync Status",
-        )
+    print_success(
+        "Sync Status",
+        "Sync completed successfully!",
+        details={"Project": project},
     )
 
 
@@ -114,12 +114,10 @@ def import_project(
 
     ImportHandler(url, name).run()
 
-    console.print(
-        Panel(
-            f"[bold green]Project imported successfully![/]\nName: {name}\nURL: {url}",
-            border_style="green",
-            title="[OK] Import Complete",
-        )
+    print_success(
+        "Import Complete",
+        "Project imported successfully!",
+        details={"Name": name, "URL": url},
     )
 
 
@@ -130,14 +128,13 @@ def list_projects():
     projects = ProjectManager.list_projects()
 
     if not projects:
-        console.print(
-            Panel(
-                "[yellow]No projects found[/yellow]\n"
-                f"[dim]Default path: {ProjectManager._get_default_path()}\n"
-                "Use 'ofx project init <name>' to create a project[/dim]",
-                title="[+] Projects",
-                border_style="yellow",
-            )
+        print_warning(
+            "Projects",
+            "No projects found",
+            hint=(
+                f"Default path: {ProjectManager._get_default_path()}\n"
+                "Use 'ofx project init <name>' to create a project"
+            ),
         )
         return
 
@@ -166,13 +163,10 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():
-        console.print(
-            Panel(
-                f"[bold red]Project '{name}' not found[/bold red]\n"
-                "[dim]Use 'ofx project list' to see available projects[/dim]",
-                title="[X] Not Found",
-                border_style="red",
-            )
+        print_error(
+            "Project Not Found",
+            f"Project '{name}' not found",
+            details="Use 'ofx project list' to see available projects",
         )
         return
 
@@ -191,20 +185,15 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
         return
 
     if ProjectManager.delete_project(name):
-        console.print(
-            Panel(
-                f"[bold green]Project '{name}' deleted successfully[/bold green]",
-                title="[OK] Deleted",
-                border_style="green",
-            )
+        print_success(
+            "Deleted",
+            f"Project '{name}' deleted successfully",
+            details={"Name": name, "Path": str(project_path)},
         )
     else:
-        console.print(
-            Panel(
-                f"[bold red]Failed to delete project '{name}'[/bold red]",
-                title="[X] Error",
-                border_style="red",
-            )
+        print_error(
+            "Delete Failed",
+            f"Failed to delete project '{name}'",
         )
 
 

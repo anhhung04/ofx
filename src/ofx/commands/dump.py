@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from rich.panel import Panel
 
+from ofx.commands.ui_helpers import print_success
 from ofx.models.job import Job
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
@@ -268,12 +268,11 @@ def export_schema(
         output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(schema, indent=2))
 
-    console.print(
-        Panel(
-            f"[bold green]Schema exported successfully[/bold green]\n"
-            f"[bold]File:[/bold] [cyan]{output_path}[/cyan]\n"
-            f"[dim]Use this schema for validation and IDE support[/dim]",
-            title="[OK] Schema Export",
-            border_style="green",
-        )
+    print_success(
+        "Schema Export",
+        "Schema exported successfully",
+        details={
+            "File": str(output_path),
+            "Hint": "Use this schema for validation and IDE support",
+        },
     )

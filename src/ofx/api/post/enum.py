@@ -20,9 +20,7 @@ _PEASS_TAG = "20251201-130af74a"
 LINPEAS_URL = (
     f"https://github.com/peass-ng/PEASS-ng/releases/download/{_PEASS_TAG}/linpeas.sh"
 )
-WINPEAS_URL = (
-    f"https://github.com/peass-ng/PEASS-ng/releases/download/{_PEASS_TAG}/winPEASx64.exe"
-)
+WINPEAS_URL = f"https://github.com/peass-ng/PEASS-ng/releases/download/{_PEASS_TAG}/winPEASx64.exe"
 LES_URL = "https://raw.githubusercontent.com/mzet-/linux-exploit-suggester/master/linux-exploit-suggester.sh"
 
 
@@ -90,6 +88,6 @@ def winpeas_command(
     """
     local_path = local_path or bundled_tool_path("winpeas.exe")
     if prefer_local and _prefer_local(local_path):
-        return f"\"{dest}\""
+        return f'"{dest}"'
     download = build_download_command(url or WINPEAS_URL, dest, platform="windows")
-    return f"{download} && \"{dest}\""
+    return f'{download} && "{dest}"'

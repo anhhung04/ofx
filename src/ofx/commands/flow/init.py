@@ -6,7 +6,7 @@ from pathlib import Path
 
 import typer
 
-from ofx.commands.ui_helpers import print_error, print_success, print_warning
+from ofx.commands.ui_helpers import print_success, print_warning
 from ofx.settings import BASE_DATA_DIR, ensure_dir, settings
 
 logger = logging.getLogger(settings.app_branding)

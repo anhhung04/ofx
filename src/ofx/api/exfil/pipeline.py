@@ -22,7 +22,7 @@ def compress_encrypt(data: bytes, key: bytes) -> bytes:
     """
     compressed = zlib.compress(data, level=9)
     key_stream = (key * (len(compressed) // len(key) + 1))[: len(compressed)]
-    encrypted = bytes(a ^ b for a, b in zip(compressed, key_stream))
+    encrypted = bytes(a ^ b for a, b in zip(compressed, key_stream, strict=False))
     checksum = hashlib.md5(data).digest()[:4]
     return checksum + struct.pack(">I", len(data)) + encrypted
 
@@ -37,7 +37,7 @@ def decompress_decrypt(data: bytes, key: bytes) -> bytes:
     original_len = struct.unpack(">I", data[4:8])[0]
     encrypted = data[8:]
     key_stream = (key * (len(encrypted) // len(key) + 1))[: len(encrypted)]
-    compressed = bytes(a ^ b for a, b in zip(encrypted, key_stream))
+    compressed = bytes(a ^ b for a, b in zip(encrypted, key_stream, strict=False))
     result = zlib.decompress(compressed)
     if len(result) != original_len:
         raise ValueError("Length mismatch after decompression")

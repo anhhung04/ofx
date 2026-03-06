@@ -1,4 +1,5 @@
 """API documentation command for OFX"""
+
 import importlib
 import inspect
 from pathlib import Path
@@ -396,7 +397,7 @@ def format_parameters(params: list[dict[str, Any]]):
         header_style="bold magenta",
         title="Function Parameters",
         expand=True,
-        border_style="cyan"
+        border_style="cyan",
     )
     table.add_column("Parameter", style="cyan", justify="left")
     table.add_column("Type", style="green", justify="left")
@@ -416,10 +417,7 @@ def format_model(schema: list[dict[str, Any]]):
     from rich.table import Table
 
     table = Table(
-        show_header=True,
-        header_style="bold magenta",
-        expand=True,
-        border_style="cyan"
+        show_header=True, header_style="bold magenta", expand=True, border_style="cyan"
     )
     table.add_column("Field", style="cyan", justify="left")
     table.add_column("Type", style="green", justify="left")
@@ -518,6 +516,7 @@ def create_function_tree(
 
         if func.get("type") == "class" and func.get("methods"):
             from rich.table import Table
+
             methods_table = Table(
                 show_header=True, header_style="bold magenta", title="Public Methods"
             )
@@ -583,19 +582,21 @@ def show_api(
 
     if not module and not list_modules:
         console.print()
-        console.print(Panel(
-            f"[bold cyan]User Data:[/bold cyan] [dim]{BASE_DATA_DIR}[/dim]\n"
-            f"  workflows/    - Custom workflow definitions\n"
-            f"  secrets/      - Secure credential storage\n"
-            f"  secrets.enc   - Encrypted secrets store\n\n"
-            f"[bold cyan]Built-in Data:[/bold cyan] [dim]{DATA_DIR}[/dim]\n"
-            f"  shellcode/    - Shellcode templates\n"
-            f"  webshells/    - Webshell templates\n"
-            f"  exploits/     - Exploit modules\n\n"
-            f"[dim]Extend OFX by adding custom workflows and data files to these directories.[/dim]",
-            title="[bold]📁 Data Directories[/bold]",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel(
+                f"[bold cyan]User Data:[/bold cyan] [dim]{BASE_DATA_DIR}[/dim]\n"
+                f"  workflows/    - Custom workflow definitions\n"
+                f"  secrets/      - Secure credential storage\n"
+                f"  secrets.enc   - Encrypted secrets store\n\n"
+                f"[bold cyan]Built-in Data:[/bold cyan] [dim]{DATA_DIR}[/dim]\n"
+                f"  shellcode/    - Shellcode templates\n"
+                f"  webshells/    - Webshell templates\n"
+                f"  exploits/     - Exploit modules\n\n"
+                f"[dim]Extend OFX by adding custom workflows and data files to these directories.[/dim]",
+                title="[bold]📁 Data Directories[/bold]",
+                border_style="cyan",
+            )
+        )
         console.print()
 
     discovered = discover_api_modules()
@@ -608,7 +609,7 @@ def show_api(
             show_header=True,
             header_style="bold magenta",
             expand=True,
-            border_style="cyan"
+            border_style="cyan",
         )
         table.add_column("Module", style="cyan", no_wrap=True)
         table.add_column("Description", style="green")
@@ -674,9 +675,7 @@ def show_api(
 
                     cls = getattr(mod, class_name, None)
                     if not cls:
-                        console.print(
-                            f"❌ Could not load class '{class_name}'"
-                        )
+                        console.print(f"❌ Could not load class '{class_name}'")
                         continue
 
                     method_info = get_method_info(cls, method_name)

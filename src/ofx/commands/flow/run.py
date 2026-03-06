@@ -9,7 +9,6 @@ from pathlib import Path
 
 import typer
 
-from ofx.commands.ui_helpers import inputs_table
 from ofx.models.config import DurableRunConfig
 from ofx.runner import run_workflow
 from ofx.settings import (
@@ -22,6 +21,7 @@ from ofx.settings import (
 
 logger = logging.getLogger(f"{settings.app_branding}.console")
 console = get_console()
+ui = RichCommandUI()
 
 
 class JsonFormatter(logging.Formatter):
@@ -83,7 +83,11 @@ class FlowRunHandler:
 
         if project:
             self._resolve_project(project)
-            self.output = get_tmp_dir(output) if output else Path(self.project_vars["project_path"])
+            self.output = (
+                get_tmp_dir(output)
+                if output
+                else Path(self.project_vars["project_path"])
+            )
             self.output.mkdir(parents=True, exist_ok=True)
         else:
             self.output = get_tmp_dir(output)
@@ -112,8 +116,6 @@ class FlowRunHandler:
         import pstats
         import time
 
-        from rich.align import Align
-
         start_time = time.time()
         lock_fd: int | None = None
         profiler: cProfile.Profile | None = None
@@ -130,17 +132,21 @@ class FlowRunHandler:
 
             logger.info("Workflow: %s", self.workflow_name)
             if self.project_vars:
-                logger.info("Project: %s (%s)", self.project_vars["project_name"], self.project_vars["project_path"])
+                logger.info(
+                    "Project: %s (%s)",
+                    self.project_vars["project_name"],
+                    self.project_vars["project_path"],
+                )
             logger.info("Output: %s", self.output.as_posix())
             if self.input and not self.quiet:
-                console.print(inputs_table(self.input))
+                ui.inputs(self.input)
 
             durable_overrides = self._durable_overrides()
             result = await run_workflow(
                 workflow=self.workflow_name,
                 inputs=self.input,
                 output_path=self.output,
-                workflow_search_paths=get_workflow_search_dirs(), #type: ignore
+                workflow_search_paths=get_workflow_search_dirs(),  # type: ignore
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
                 vars=self.project_vars if self.project_vars else None,
@@ -150,7 +156,9 @@ class FlowRunHandler:
                 logger.info("Workflow completed successfully!")
             else:
                 logger.error("Workflow failed")
-                logger.error("Error details: %s", result.error or "No error message available.")
+                logger.error(
+                    "Error details: %s", result.error or "No error message available."
+                )
 
         finally:
             if lock_fd is not None:

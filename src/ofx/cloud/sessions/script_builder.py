@@ -35,7 +35,9 @@ def build_session_script(
         Script content as a string.
     """
     if os_type == "windows":
-        return _build_powershell(steps, session_id, work_dir, env or {}, encrypt_at_rest)
+        return _build_powershell(
+            steps, session_id, work_dir, env or {}, encrypt_at_rest
+        )
     return _build_bash(steps, session_id, work_dir, env or {}, encrypt_at_rest)
 
 
@@ -70,11 +72,13 @@ def _build_bash(
         lines.append("")
 
     # Logging helper
-    lines.extend([
-        '_log() { echo "[$(date +%Y-%m-%dT%H:%M:%S)] $*" >> "$LOG_FILE"; }',
-        '_log "Session $SESSION_ID started"',
-        "",
-    ])
+    lines.extend(
+        [
+            '_log() { echo "[$(date +%Y-%m-%dT%H:%M:%S)] $*" >> "$LOG_FILE"; }',
+            '_log "Session $SESSION_ID started"',
+            "",
+        ]
+    )
 
     # Each step wrapped with error handling
     for idx, step in enumerate(steps):
@@ -83,37 +87,45 @@ def _build_bash(
 
         cmd = _step_command_bash(step, work_dir)
         if step.continue_on_error:
-            lines.append(f'({cmd}) >> "$LOG_FILE" 2>&1 || _log "Step {idx} failed (continue_on_error)"')
+            lines.append(
+                f'({cmd}) >> "$LOG_FILE" 2>&1 || _log "Step {idx} failed (continue_on_error)"'
+            )
         else:
-            lines.extend([
-                f'({cmd}) >> "$LOG_FILE" 2>&1',
-                "STEP_RC=$?",
-                'if [ $STEP_RC -ne 0 ]; then',
-                f'  _log "Step {idx} FAILED (exit $STEP_RC)"',
-                '  _log "__TASK_ERR__"',
-                "  exit $STEP_RC",
-                "fi",
-            ])
+            lines.extend(
+                [
+                    f'({cmd}) >> "$LOG_FILE" 2>&1',
+                    "STEP_RC=$?",
+                    "if [ $STEP_RC -ne 0 ]; then",
+                    f'  _log "Step {idx} FAILED (exit $STEP_RC)"',
+                    '  _log "__TASK_ERR__"',
+                    "  exit $STEP_RC",
+                    "fi",
+                ]
+            )
         lines.append(f'_log "<<< Step {idx} done"')
         lines.append("")
 
     if encrypt_at_rest:
         lines.extend(_bash_encrypt_epilogue())
 
-    lines.extend([
-        '_log "All steps completed successfully"',
-        '_log "__TASK_OK__"',
-    ])
+    lines.extend(
+        [
+            '_log "All steps completed successfully"',
+            '_log "__TASK_OK__"',
+        ]
+    )
 
     # Self-shred AFTER markers are written so bash can finish cleanly.
     # Must come last — shred overwrites file content on disk and bash
     # may not have buffered the rest of the script yet.
     if encrypt_at_rest:
-        lines.extend([
-            '',
-            '# Self-destruct (after markers written)',
-            'shred -u "$WORK_DIR/run.sh" 2>/dev/null || rm -f "$WORK_DIR/run.sh"',
-        ])
+        lines.extend(
+            [
+                "",
+                "# Self-destruct (after markers written)",
+                'shred -u "$WORK_DIR/run.sh" 2>/dev/null || rm -f "$WORK_DIR/run.sh"',
+            ]
+        )
 
     return "\n".join(lines) + "\n"
 
@@ -160,7 +172,7 @@ def _bash_encrypt_epilogue() -> list[str]:
         '  tar czf "$WORK_DIR/output.tar.gz" -C "$WORK_DIR" output >> "$LOG_FILE" 2>&1',
         "  TAR_RC=$?",
         "  if [ $TAR_RC -eq 0 ]; then",
-        '    openssl enc -aes-256-cbc -pbkdf2 -iter 100000 '
+        "    openssl enc -aes-256-cbc -pbkdf2 -iter 100000 "
         '-pass "file:$KEY_FILE" '
         '-in "$WORK_DIR/output.tar.gz" '
         '-out "$WORK_DIR/output.enc" >> "$LOG_FILE" 2>&1',
@@ -202,7 +214,7 @@ def _build_powershell(
         f'$WORK_DIR = "{work_dir}"',
         '$LOG_FILE = "$WORK_DIR\\output.log"',
         'New-Item -ItemType Directory -Force -Path "$WORK_DIR\\output" | Out-Null',
-        'Set-Location $WORK_DIR',
+        "Set-Location $WORK_DIR",
         "",
     ]
 
@@ -215,11 +227,13 @@ def _build_powershell(
         lines.append("")
 
     # Log helper
-    lines.extend([
-        'function Write-Log($msg) { "[$((Get-Date).ToString(\"yyyy-MM-ddTHH:mm:ss\"))] $msg" | Out-File -Append -FilePath $LOG_FILE }',
-        'Write-Log "Session $env:SESSION_ID started"',
-        "",
-    ])
+    lines.extend(
+        [
+            'function Write-Log($msg) { "[$((Get-Date).ToString("yyyy-MM-ddTHH:mm:ss"))] $msg" | Out-File -Append -FilePath $LOG_FILE }',
+            'Write-Log "Session $env:SESSION_ID started"',
+            "",
+        ]
+    )
 
     for idx, step in enumerate(steps):
         step_name = step.name or f"step_{idx}"
@@ -246,18 +260,22 @@ def _build_powershell(
     if encrypt_at_rest:
         lines.extend(_ps_encrypt_epilogue())
 
-    lines.extend([
-        'Write-Log "All steps completed successfully"',
-        'Write-Log "__TASK_OK__"',
-    ])
+    lines.extend(
+        [
+            'Write-Log "All steps completed successfully"',
+            'Write-Log "__TASK_OK__"',
+        ]
+    )
 
     # Self-destruct AFTER markers are written
     if encrypt_at_rest:
-        lines.extend([
-            '',
-            '# Self-destruct (after markers written)',
-            'Remove-Item -Force "$WORK_DIR\\run.ps1" -ErrorAction SilentlyContinue',
-        ])
+        lines.extend(
+            [
+                "",
+                "# Self-destruct (after markers written)",
+                'Remove-Item -Force "$WORK_DIR\\run.ps1" -ErrorAction SilentlyContinue',
+            ]
+        )
 
     return "\n".join(lines) + "\n"
 
@@ -273,34 +291,34 @@ def _ps_encrypt_epilogue() -> list[str]:
         '$KeyFile = "$WORK_DIR\\.skey"',
         'if ((Test-Path $KeyFile) -and (Test-Path "$WORK_DIR\\output")) {',
         '  Write-Log "Encrypting output at rest..."',
-        '  try {',
+        "  try {",
         '    Compress-Archive -Path "$WORK_DIR\\output\\*" -DestinationPath "$WORK_DIR\\output.zip" -Force',
-        '    $keyBytes = [System.Text.Encoding]::UTF8.GetBytes((Get-Content $KeyFile -Raw).Trim())',
-        '    # Derive 32-byte AES key via SHA256',
-        '    $sha = [System.Security.Cryptography.SHA256]::Create()',
-        '    $aesKey = $sha.ComputeHash($keyBytes)',
+        "    $keyBytes = [System.Text.Encoding]::UTF8.GetBytes((Get-Content $KeyFile -Raw).Trim())",
+        "    # Derive 32-byte AES key via SHA256",
+        "    $sha = [System.Security.Cryptography.SHA256]::Create()",
+        "    $aesKey = $sha.ComputeHash($keyBytes)",
         '    $plainBytes = [System.IO.File]::ReadAllBytes("$WORK_DIR\\output.zip")',
-        '    $aes = [System.Security.Cryptography.Aes]::Create()',
-        '    $aes.Key = $aesKey',
-        '    $aes.GenerateIV()',
-        '    $enc = $aes.CreateEncryptor()',
-        '    $cipherBytes = $enc.TransformFinalBlock($plainBytes, 0, $plainBytes.Length)',
-        '    # Write: [16-byte IV][ciphertext]',
+        "    $aes = [System.Security.Cryptography.Aes]::Create()",
+        "    $aes.Key = $aesKey",
+        "    $aes.GenerateIV()",
+        "    $enc = $aes.CreateEncryptor()",
+        "    $cipherBytes = $enc.TransformFinalBlock($plainBytes, 0, $plainBytes.Length)",
+        "    # Write: [16-byte IV][ciphertext]",
         '    $outStream = [System.IO.File]::Create("$WORK_DIR\\output.enc")',
-        '    $outStream.Write($aes.IV, 0, $aes.IV.Length)',
-        '    $outStream.Write($cipherBytes, 0, $cipherBytes.Length)',
-        '    $outStream.Close()',
+        "    $outStream.Write($aes.IV, 0, $aes.IV.Length)",
+        "    $outStream.Write($cipherBytes, 0, $cipherBytes.Length)",
+        "    $outStream.Close()",
         '    Remove-Item -Recurse -Force "$WORK_DIR\\output"',
         '    Remove-Item -Force "$WORK_DIR\\output.zip"',
-        '    Remove-Item -Force $KeyFile',
+        "    Remove-Item -Force $KeyFile",
         '    Write-Log "Output encrypted -> output.enc"',
-        '  } catch {',
+        "  } catch {",
         '    Write-Log "WARNING: Encryption failed: $_"',
         '    Remove-Item -Force "$WORK_DIR\\output.zip" -ErrorAction SilentlyContinue',
-        '  }',
-        '} else {',
+        "  }",
+        "} else {",
         '  Write-Log "WARNING: No key file or no output -- skipping at-rest encryption"',
-        '}',
+        "}",
         "",
     ]
 

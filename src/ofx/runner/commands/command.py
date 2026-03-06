@@ -50,7 +50,9 @@ def exec_script_in_process(
         "__secrets__": secrets,
         "publish": lambda channel, data: store.publish(channel, data),
         "subscribe": lambda channel: store.subscribe(channel),
-        "wait_for": lambda channel, condition, timeout=60: store.wait_for(channel, condition, timeout=timeout),
+        "wait_for": lambda channel, condition, timeout=60: store.wait_for(
+            channel, condition, timeout=timeout
+        ),
     }
 
     stdout_capture = io.StringIO()

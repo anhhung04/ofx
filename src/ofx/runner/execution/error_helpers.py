@@ -35,6 +35,10 @@ def extract_root_error(error: str | None) -> str:
     # Find the deepest meaningful line (skip wrapper prefixes)
     for line in reversed(lines):
         stripped = line.strip()
-        if stripped and not stripped.startswith("Job failure") and not stripped.startswith("===="):
+        if (
+            stripped
+            and not stripped.startswith("Job failure")
+            and not stripped.startswith("====")
+        ):
             return stripped
     return lines[-1].strip() if lines else error

@@ -21,13 +21,13 @@ def http_chunks(data: bytes, chunk_size: int = 4096) -> Iterator[tuple[int, byte
     """
     total = math.ceil(len(data) / chunk_size)
     for i in range(total):
-        yield i, data[i * chunk_size: (i + 1) * chunk_size]
+        yield i, data[i * chunk_size : (i + 1) * chunk_size]
 
 
 def chunk_b64(data: bytes, chunk_size: int = 2048) -> list[str]:
     """Split *data* into base64-encoded chunks for staged exfiltration."""
     return [
-        base64.b64encode(data[i: i + chunk_size]).decode()
+        base64.b64encode(data[i : i + chunk_size]).decode()
         for i in range(0, len(data), chunk_size)
     ]
 

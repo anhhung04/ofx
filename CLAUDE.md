@@ -33,6 +33,32 @@ uv run mypy src/
 uv run pytest --cov=src/ofx --cov-report=term-missing
 ```
 
+## Quick Start
+
+```bash
+# Run a workflow (example)
+uv run ofx flow run path/to/workflow.yml
+```
+
+## Environment / Profiles
+
+- Cloud profiles are stored in `~/.ofx/cloud.yml`.
+- Useful env var: `OFX_DEBUG=1` enables full tracebacks.
+- Set `OFX_DEBUG=1` when debugging.
+
+## Gotchas & Non‑Obvious Patterns
+
+- Cloud fleet requires the `fleet` section in the matrix strategy; ensure SSH keys are reachable.
+- Opsec mode disables command echoing; use `opsec: true` in `CloudConfig` when needed.
+- Remote steps need a compatible Python interpreter; `CloudStepRunner` probes `python3` then `python`.
+
+## Testing Notes
+
+- Tests reside in `tests/`.
+- Run all tests: `uv run pytest`
+- Run a single test file: `uv run pytest tests/test_flowrun.py`
+- Run with coverage (already listed above).
+
 ## Architecture
 
 OFX is a YAML-based workflow runner. The execution path is:

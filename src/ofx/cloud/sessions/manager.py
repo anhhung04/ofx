@@ -78,9 +78,7 @@ class SessionManager:
         from ofx.settings import DEFAULT_WORKFLOWS_DIRS
         from ofx.utils.workflow_utils import find_workflow
 
-        workflow = find_workflow(
-            workflow_file, tuple(DEFAULT_WORKFLOWS_DIRS)
-        )
+        workflow = find_workflow(workflow_file, tuple(DEFAULT_WORKFLOWS_DIRS))
         job = self._resolve_job(workflow, job_id)
 
         session = Session(
@@ -245,7 +243,8 @@ class SessionManager:
                 except Exception as destroy_err:
                     logger.warning(
                         "Failed to destroy orphaned instance %s: %s",
-                        instance.instance_id, destroy_err,
+                        instance.instance_id,
+                        destroy_err,
                     )
             session = session.model_copy(
                 update={"status": SessionStatus.FAILED, "error": str(instance)}
@@ -323,12 +322,14 @@ class SessionManager:
 
             # Restrictive permissions on remote dir
             remote.run(
-                f'powershell "icacls \'{remote_work_dir}\' /inheritance:r '
-                f'/grant:r \'$env:USERNAME:(OI)(CI)F\' /T 2>$null"',
+                f"powershell \"icacls '{remote_work_dir}' /inheritance:r "
+                f"/grant:r '$env:USERNAME:(OI)(CI)F' /T 2>$null\"",
             )
 
             # Stage script_file references
-            self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=True)
+            self._upload_script_files(
+                job.steps, remote, remote_work_dir, is_windows=True
+            )
 
             # Start detached via PowerShell
             start_cmd = (
@@ -362,7 +363,9 @@ class SessionManager:
             remote.run(f"chmod 700 {remote_work_dir}/run.sh")
 
             # Stage script_file references
-            self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=False)
+            self._upload_script_files(
+                job.steps, remote, remote_work_dir, is_windows=False
+            )
 
             # Start detached via nohup
             pid_output = remote.run(
@@ -394,7 +397,9 @@ class SessionManager:
         self.store.save(session)
         logger.info(
             "Cloud session %s started on %s (PID %s)",
-            session.id, instance.ip, pid,
+            session.id,
+            instance.ip,
+            pid,
         )
 
         # Cleanup remote runner (close ControlMaster etc.)
@@ -485,8 +490,8 @@ class SessionManager:
         try:
             if session.os_type == "windows":
                 check_cmd = (
-                    f"powershell \"(Get-Process -Id {session.remote_pid} "
-                    f"-ErrorAction SilentlyContinue) -ne $null\""
+                    f'powershell "(Get-Process -Id {session.remote_pid} '
+                    f'-ErrorAction SilentlyContinue) -ne $null"'
                 )
             else:
                 check_cmd = f"kill -0 {session.remote_pid} 2>/dev/null && echo alive || echo dead"
@@ -514,7 +519,9 @@ class SessionManager:
                 return session.model_copy(
                     update={
                         "status": SessionStatus.FAILED,
-                        "error": "Process exited without success marker" if not marker else "",
+                        "error": "Process exited without success marker"
+                        if not marker
+                        else "",
                         "finished_at": datetime.now(UTC),
                     }
                 )
@@ -531,9 +538,7 @@ class SessionManager:
     # Logs
     # ------------------------------------------------------------------
 
-    async def logs(
-        self, session_id: str, tail: int = 50, follow: bool = False
-    ) -> str:
+    async def logs(self, session_id: str, tail: int = 50, follow: bool = False) -> str:
         """Retrieve log output from a session.
 
         Args:
@@ -697,7 +702,7 @@ class SessionManager:
             # Unencrypted fallback — download individual files
             if session.os_type == "windows":
                 files_cmd = (
-                    f'powershell "Get-ChildItem -Path \'{session.remote_work_dir}\\output\' '
+                    f"powershell \"Get-ChildItem -Path '{session.remote_work_dir}\\output' "
                     f'-File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name"'
                 )
             else:
@@ -775,11 +780,14 @@ class SessionManager:
                 remote = self._reconnect(session)
                 if session.os_type == "windows":
                     remote.run(
-                        f"powershell \"Stop-Process -Id {session.remote_pid} -Force -ErrorAction SilentlyContinue\"",
+                        f'powershell "Stop-Process -Id {session.remote_pid} -Force -ErrorAction SilentlyContinue"',
                         timeout=15,
                     )
                 else:
-                    remote.run(f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null", timeout=15)
+                    remote.run(
+                        f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null",
+                        timeout=15,
+                    )
                 if hasattr(remote, "cleanup"):
                     remote.cleanup()
             except Exception as exc:
@@ -819,7 +827,11 @@ class SessionManager:
             from ofx.models.cloud import CloudConfig
 
             try:
-                cfg = CloudConfig(profile=session.cloud_profile) if session.cloud_profile else CloudConfig()
+                cfg = (
+                    CloudConfig(profile=session.cloud_profile)
+                    if session.cloud_profile
+                    else CloudConfig()
+                )
                 mgr = get_cloud_profile_manager()
                 resolved = mgr.resolve(cfg)
                 provider_kwargs = _build_provider_kwargs(resolved)
@@ -829,7 +841,9 @@ class SessionManager:
                 )
                 await provider.destroy_instance(session.instance_id)
             except Exception as exc:
-                logger.warning("Failed to destroy instance %s: %s", session.instance_id, exc)
+                logger.warning(
+                    "Failed to destroy instance %s: %s", session.instance_id, exc
+                )
 
         session = session.model_copy(
             update={
@@ -952,11 +966,19 @@ def _decrypt_at_rest_openssl(
     try:
         result = subprocess.run(
             [
-                "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2",
-                "-iter", "100000",
-                "-pass", f"file:{key_path}",
-                "-in", str(enc_file),
-                "-out", str(tar_path),
+                "openssl",
+                "enc",
+                "-d",
+                "-aes-256-cbc",
+                "-pbkdf2",
+                "-iter",
+                "100000",
+                "-pass",
+                f"file:{key_path}",
+                "-in",
+                str(enc_file),
+                "-out",
+                str(tar_path),
             ],
             capture_output=True,
             text=True,

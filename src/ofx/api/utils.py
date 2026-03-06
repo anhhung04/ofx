@@ -87,6 +87,7 @@ def generate_random_user_agent() -> str:
     """
     try:
         from faker import Faker
+
         return Faker().user_agent()
     except ImportError:
         print("warning: faker not installed, using default user agent")

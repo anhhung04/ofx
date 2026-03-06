@@ -82,14 +82,11 @@ class IndexClient:
         self.cache_dir = ensure_dir(cache_dir or BASE_DATA_DIR / "collections")
 
         # Resolve URL: explicit arg → settings override → default
-        self.index_url = (
-            index_url
-            or settings.collection_index_url
-            or DEFAULT_INDEX_URL
-        )
+        self.index_url = index_url or settings.collection_index_url or DEFAULT_INDEX_URL
 
         # Resolve token: explicit arg → settings → gh CLI
         from ofx.settings import get_github_token
+
         self.github_token = github_token or get_github_token()
         self._cache_file = self.cache_dir / "index.json"
 
@@ -169,7 +166,9 @@ class IndexClient:
     # Search helpers
     # ------------------------------------------------------------------
 
-    def search(self, query: str, force_refresh: bool = False) -> list[CollectionIndexEntry]:
+    def search(
+        self, query: str, force_refresh: bool = False
+    ) -> list[CollectionIndexEntry]:
         """Search the community index by name, tag, or description."""
         index = self.fetch(force=force_refresh)
         return index.search(query)

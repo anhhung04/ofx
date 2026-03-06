@@ -67,7 +67,7 @@ class CloudStepRunner(BaseRunner):
             resolve_fields.extend(["script"])
         elif self._run_type == RunType.SCRIPT_FILE:
             resolve_fields.extend(["script_file"])
-        
+
         self.ctx.vars["remote_work_dir"] = self._resolve_remote_work_dir()
         await self._resolve_template_fields(resolve_fields)
 

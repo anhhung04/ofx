@@ -25,20 +25,20 @@ def email_patterns(first: str, last: str, domain: str) -> list[str]:
         last: Last name.
         domain: Email domain (e.g. ``example.com``).
     """
-    f, l = first.lower().strip(), last.lower().strip()
-    fi, li = f[0], l[0]
+    f, last_name = first.lower().strip(), last.lower().strip()
+    fi, li = f[0], last_name[0]
     patterns = [
         f"{f}@{domain}",
-        f"{l}@{domain}",
-        f"{f}.{l}@{domain}",
-        f"{f}{l}@{domain}",
-        f"{fi}{l}@{domain}",
+        f"{last_name}@{domain}",
+        f"{f}.{last_name}@{domain}",
+        f"{f}{last_name}@{domain}",
+        f"{fi}{last_name}@{domain}",
         f"{f}{li}@{domain}",
-        f"{fi}.{l}@{domain}",
-        f"{l}.{f}@{domain}",
-        f"{l}{fi}@{domain}",
-        f"{f}_{l}@{domain}",
-        f"{fi}_{l}@{domain}",
+        f"{fi}.{last_name}@{domain}",
+        f"{last_name}.{f}@{domain}",
+        f"{last_name}{fi}@{domain}",
+        f"{f}_{last_name}@{domain}",
+        f"{fi}_{last_name}@{domain}",
     ]
     return list(dict.fromkeys(patterns))
 
@@ -55,20 +55,35 @@ def domain_permutations(domain: str) -> list[str]:
     perms: list[str] = []
 
     for i in range(len(name)):
-        perms.append(name[:i] + name[i + 1:] + f".{tld}")
-        perms.append(name[:i] + name[i] * 2 + name[i + 1:] + f".{tld}")
+        perms.append(name[:i] + name[i + 1 :] + f".{tld}")
+        perms.append(name[:i] + name[i] * 2 + name[i + 1 :] + f".{tld}")
 
     for alt in ("com", "net", "org", "io", "co", "info", "biz", "us", "uk"):
         if alt != tld:
             perms.append(f"{name}.{alt}")
 
-    for prefix in ("www", "mail", "remote", "vpn", "portal", "login", "dev", "staging", "api", "admin"):
+    for prefix in (
+        "www",
+        "mail",
+        "remote",
+        "vpn",
+        "portal",
+        "login",
+        "dev",
+        "staging",
+        "api",
+        "admin",
+    ):
         perms.append(f"{prefix}-{name}.{tld}")
         perms.append(f"{prefix}.{name}.{tld}")
 
     homoglyphs: dict[str, list[str]] = {
-        "a": ["4", "@"], "e": ["3"], "i": ["1", "l"],
-        "o": ["0"], "s": ["5"], "l": ["1", "i"],
+        "a": ["4", "@"],
+        "e": ["3"],
+        "i": ["1", "l"],
+        "o": ["0"],
+        "s": ["5"],
+        "l": ["1", "i"],
     }
     for char, replacements in homoglyphs.items():
         if char in name:

@@ -9,7 +9,9 @@ from typing import Literal
 
 __all__ = ["obfuscate_payload", "obfuscate_cmd"]
 
-Language = Literal["php", "python", "java", "jsp", "asp", "aspx", "jscript", "bash", "powershell"]
+Language = Literal[
+    "php", "python", "java", "jsp", "asp", "aspx", "jscript", "bash", "powershell"
+]
 
 
 def _random_string(length: int = 8) -> str:
@@ -48,9 +50,9 @@ def _obfuscate_java(code: str) -> str:
     fragments = [code[i : i + 5] for i in range(0, len(code), 5)]
     sb_var = _random_string(5)
 
-    builder = f'StringBuilder {sb_var} = new StringBuilder();'
+    builder = f"StringBuilder {sb_var} = new StringBuilder();"
     for frag in fragments:
-        escaped = frag.replace('"', '\\"').replace('\\', '\\\\').replace('\n', '\\n')
+        escaped = frag.replace('"', '\\"').replace("\\", "\\\\").replace("\n", "\\n")
         builder += f'{sb_var}.append("{escaped}");'
 
     return f"{{ {builder} {sb_var}.toString(); }}"
@@ -98,7 +100,7 @@ def obfuscate_cmd(command: str) -> str:
         else:
             result.append(char)
 
-    escaped = "".join(result).replace("^^", "^") # Fix double carets
+    escaped = "".join(result).replace("^^", "^")  # Fix double carets
     if escaped.endswith("^"):
         escaped = escaped[:-1]
     return escaped
@@ -118,7 +120,7 @@ def obfuscate_payload(code: str, language: Language) -> str:
         "php": _obfuscate_php,
         "python": _obfuscate_python,
         "java": _obfuscate_java,
-        "jsp": _obfuscate_java, # JSP uses Java
+        "jsp": _obfuscate_java,  # JSP uses Java
         "asp": _obfuscate_asp,
         "aspx": _obfuscate_aspx,
         "jscript": _obfuscate_jscript,
@@ -128,6 +130,6 @@ def obfuscate_payload(code: str, language: Language) -> str:
 
     handler = handlers.get(language.lower())
     if not handler:
-        return code # Fallback: return as is
+        return code  # Fallback: return as is
 
     return handler(code)

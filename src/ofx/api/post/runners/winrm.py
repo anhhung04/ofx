@@ -121,9 +121,9 @@ class PostWinRM(PostRunnerBase):
             else:
                 import tempfile
 
-                self._log_file = Path(tempfile.mktemp(
-                    prefix=f".tmp_wrm_{self.host}_", suffix=".log"
-                ))
+                self._log_file = Path(
+                    tempfile.mktemp(prefix=f".tmp_wrm_{self.host}_", suffix=".log")
+                )
 
     # -------------------------------------------------------------------------
     # AMSI Bypass
@@ -278,10 +278,7 @@ class PostWinRM(PostRunnerBase):
 
         # Write command to bat file
         write_script = (
-            f'Set-Content -Path "{remote_tmp}" -Value @"\n'
-            f"@echo off\n"
-            f"{command}\n"
-            f'"@'
+            f'Set-Content -Path "{remote_tmp}" -Value @"\n@echo off\n{command}\n"@'
         )
         self.run_ps(write_script)
 
@@ -291,7 +288,9 @@ class PostWinRM(PostRunnerBase):
         finally:
             # Clean up
             try:
-                self.run_ps(f'Remove-Item -Force "{remote_tmp}" -ErrorAction SilentlyContinue')
+                self.run_ps(
+                    f'Remove-Item -Force "{remote_tmp}" -ErrorAction SilentlyContinue'
+                )
             except Exception:
                 pass
             if remote_tmp in self._remote_temp_files:
@@ -303,7 +302,9 @@ class PostWinRM(PostRunnerBase):
     # File Transfer
     # -------------------------------------------------------------------------
 
-    def upload(self, local_path: str, remote_path: str, timeout: int | None = None) -> None:
+    def upload(
+        self, local_path: str, remote_path: str, timeout: int | None = None
+    ) -> None:
         """Upload a file via WinRM using chunked base64 encoding.
 
         For files larger than 768KB, the file is split into chunks
@@ -327,10 +328,14 @@ class PostWinRM(PostRunnerBase):
 
         self._log_command(
             f"[UPLOAD] {local_path} -> {remote_path}",
-            f"OK ({len(data)} bytes)", "", 0,
+            f"OK ({len(data)} bytes)",
+            "",
+            0,
         )
 
-    def _upload_chunk(self, data: bytes, remote_path: str, append: bool = False) -> None:
+    def _upload_chunk(
+        self, data: bytes, remote_path: str, append: bool = False
+    ) -> None:
         """Upload a single chunk via PowerShell base64 decode."""
         encoded = base64.b64encode(data).decode("ascii")
 
@@ -349,7 +354,9 @@ class PostWinRM(PostRunnerBase):
 
         self.run_ps(script)
 
-    def download(self, remote_path: str, local_path: str, timeout: int | None = None) -> None:
+    def download(
+        self, remote_path: str, local_path: str, timeout: int | None = None
+    ) -> None:
         """Download a file via WinRM using base64 encoding.
 
         Args:
@@ -365,7 +372,9 @@ class PostWinRM(PostRunnerBase):
 
         self._log_command(
             f"[DOWNLOAD] {remote_path} -> {local_path}",
-            f"OK ({len(data)} bytes)", "", 0,
+            f"OK ({len(data)} bytes)",
+            "",
+            0,
         )
 
     # -------------------------------------------------------------------------
@@ -380,10 +389,7 @@ class PostWinRM(PostRunnerBase):
             return
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = (
-            f"[{timestamp}] host={self.host} rc={returncode}\n"
-            f"CMD: {command}\n"
-        )
+        entry = f"[{timestamp}] host={self.host} rc={returncode}\nCMD: {command}\n"
         if stdout:
             entry += f"STDOUT:\n{stdout[:5000]}\n"
         if stderr:

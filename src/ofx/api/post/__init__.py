@@ -25,8 +25,11 @@ from .transfer import build_download_command
 PostRunner = PostRunnerBase
 PostRemote = PostWebShell
 
+
 # Legacy function aliases for backward compatibility
-def deploy_and_run(runner, local_path: str, remote_path: str, exec_cmd: str | None = None) -> str:
+def deploy_and_run(
+    runner, local_path: str, remote_path: str, exec_cmd: str | None = None
+) -> str:
     """Upload and execute a file on the remote target.
 
     DEPRECATED: Use runner.deploy_and_run() instead.
@@ -37,6 +40,7 @@ def deploy_and_run(runner, local_path: str, remote_path: str, exec_cmd: str | No
 def upload_via_webshell(client, local_path: str, remote_path: str) -> str:
     """DEPRECATED: Use PostWebShell(client).upload() instead."""
     from ofx.api.exploitation.webshell.client import WebShellClient
+
     return client.upload_file(local_path, remote_path)
 
 

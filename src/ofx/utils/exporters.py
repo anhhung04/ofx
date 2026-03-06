@@ -33,8 +33,8 @@ class JSONExporter(ResultExporter):
 
     def export(self, output_path: Path, indent: int = 2) -> None:
         """Export results to JSON file."""
-        output_path = Path(output_path).with_suffix('.json')
-        with open(output_path, 'w') as f:
+        output_path = Path(output_path).with_suffix(".json")
+        with open(output_path, "w") as f:
             json.dump(self.results, f, indent=indent, default=str)
 
 
@@ -43,23 +43,23 @@ class CSVExporter(ResultExporter):
 
     def export(self, output_path: Path) -> None:
         """Export results to CSV file."""
-        output_path = Path(output_path).with_suffix('.csv')
+        output_path = Path(output_path).with_suffix(".csv")
 
         rows = self._flatten_results(self.results)
 
         if not rows:
             return
 
-        with open(output_path, 'w', newline='') as f:
+        with open(output_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=rows[0].keys())
             writer.writeheader()
             writer.writerows(rows)
 
-    def _flatten_results(self, data: dict, prefix: str = '') -> list[dict]:
+    def _flatten_results(self, data: dict, prefix: str = "") -> list[dict]:
         """Flatten nested dictionary structure."""
         rows = []
 
-        def flatten(d: Any, parent_key: str = ''):
+        def flatten(d: Any, parent_key: str = ""):
             if isinstance(d, dict):
                 for k, v in d.items():
                     new_key = f"{parent_key}.{k}" if parent_key else k
@@ -242,20 +242,20 @@ class HTMLExporter(ResultExporter):
 
     def export(self, output_path: Path) -> None:
         """Export results to HTML file."""
-        output_path = Path(output_path).with_suffix('.html')
+        output_path = Path(output_path).with_suffix(".html")
 
         template = Template(self.HTML_TEMPLATE)
         html = template.render(
-            workflow_name=self.results.get('name', 'Workflow'),
-            status=self.results.get('status', 'unknown'),
-            timestamp=self.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-            run_id=self.results.get('run_id', 'N/A'),
-            jobs=self.results.get('outputs', {}).get('jobs', {}),
-            outputs=self.results.get('outputs', {}),
-            metadata=self.results.get('metadata', {}),
+            workflow_name=self.results.get("name", "Workflow"),
+            status=self.results.get("status", "unknown"),
+            timestamp=self.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+            run_id=self.results.get("run_id", "N/A"),
+            jobs=self.results.get("outputs", {}).get("jobs", {}),
+            outputs=self.results.get("outputs", {}),
+            metadata=self.results.get("metadata", {}),
         )
 
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             f.write(html)
 
 
@@ -264,7 +264,7 @@ class MarkdownExporter(ResultExporter):
 
     def export(self, output_path: Path) -> None:
         """Export results to Markdown file."""
-        output_path = Path(output_path).with_suffix('.md')
+        output_path = Path(output_path).with_suffix(".md")
 
         md_lines = [
             f"# Workflow Report: {self.results.get('name', 'Workflow')}",
@@ -275,7 +275,7 @@ class MarkdownExporter(ResultExporter):
             "",
         ]
 
-        jobs = self.results.get('outputs', {}).get('jobs', {})
+        jobs = self.results.get("outputs", {}).get("jobs", {})
         if jobs:
             md_lines.extend(["## Jobs", ""])
             for job_id, job in jobs.items():
@@ -283,28 +283,28 @@ class MarkdownExporter(ResultExporter):
                 md_lines.append(f"**Status:** {job.get('status', 'unknown')}")
                 md_lines.append("")
 
-                steps = job.get('steps', {})
+                steps = job.get("steps", {})
                 if steps:
                     md_lines.append("#### Steps")
                     md_lines.append("")
                     for step_id, step in steps.items():
-                        md_lines.append(f"- **{step.get('name', step_id)}**: {step.get('status', 'unknown')}")
+                        md_lines.append(
+                            f"- **{step.get('name', step_id)}**: {step.get('status', 'unknown')}"
+                        )
                     md_lines.append("")
 
-        outputs = self.results.get('outputs', {})
+        outputs = self.results.get("outputs", {})
         if outputs:
             md_lines.extend(["## Outputs", "", "```json"])
             md_lines.append(json.dumps(outputs, indent=2, default=str))
             md_lines.extend(["```", ""])
 
-        with open(output_path, 'w') as f:
-            f.write('\n'.join(md_lines))
+        with open(output_path, "w") as f:
+            f.write("\n".join(md_lines))
 
 
 def export_results(
-    results: dict[str, Any],
-    output_path: Path,
-    formats: list[str] | None = None
+    results: dict[str, Any], output_path: Path, formats: list[str] | None = None
 ) -> list[Path]:
     """Export results in multiple formats.
 
@@ -318,14 +318,14 @@ def export_results(
         List of generated file paths
     """
     if formats is None:
-        formats = ['json', 'html', 'markdown']
+        formats = ["json", "html", "markdown"]
 
     exporters = {
-        'json': JSONExporter,
-        'csv': CSVExporter,
-        'html': HTMLExporter,
-        'markdown': MarkdownExporter,
-        'md': MarkdownExporter,
+        "json": JSONExporter,
+        "csv": CSVExporter,
+        "html": HTMLExporter,
+        "markdown": MarkdownExporter,
+        "md": MarkdownExporter,
     }
 
     exported_files = []
@@ -336,17 +336,17 @@ def export_results(
             exporter = exporters[fmt](results)
             exporter.export(output_path)
             exported_files.append(
-                Path(output_path).with_suffix(f'.{fmt if fmt != "markdown" else "md"}')
+                Path(output_path).with_suffix(f".{fmt if fmt != 'markdown' else 'md'}")
             )
 
     return exported_files
 
 
 __all__ = [
-    'ResultExporter',
-    'JSONExporter',
-    'CSVExporter',
-    'HTMLExporter',
-    'MarkdownExporter',
-    'export_results',
+    "ResultExporter",
+    "JSONExporter",
+    "CSVExporter",
+    "HTMLExporter",
+    "MarkdownExporter",
+    "export_results",
 ]

@@ -191,6 +191,7 @@ class PostRunnerBase(ABC):
         self.upload(local_path, remote_path)
         return self.run(exec_cmd or remote_path)
 
+    @abstractmethod
     def cleanup(self) -> None:
         """
         Override in subclass if cleanup is needed after deploy_and_run.

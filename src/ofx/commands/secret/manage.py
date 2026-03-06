@@ -6,6 +6,7 @@ from typing import Annotated, Any
 import typer
 from rich.panel import Panel
 
+from ofx.commands.ui_helpers import print_error, print_success, print_warning
 from ofx.settings import SECRETS_DIR, get_console, settings
 from ofx.utils import secrets as secrets_store
 
@@ -40,7 +41,13 @@ def _resolve_secret_input(name: str, value: str | None, file: Path | None) -> st
 def _resolve_passphrase(passphrase: str, ask: bool) -> str | None:
     """Return the passphrase from flag or prompt; prompt wins when requested."""
     if ask:
-        return typer.prompt("Enter passphrase for secrets store (leave blank for none)", hide_input=True).strip() or None
+        return (
+            typer.prompt(
+                "Enter passphrase for secrets store (leave blank for none)",
+                hide_input=True,
+            ).strip()
+            or None
+        )
     return passphrase if passphrase else None
 
 
@@ -120,13 +127,10 @@ def set_secret(
 
     secrets_store.set_secret(name, secret_value)
 
-    console.print(
-        Panel(
-            f"[bold green]Secret '{name}' saved successfully[/bold green]\n"
-            "[dim]Stored in encrypted vault[/dim]",
-            title="[bold green][OK] Secret Saved[/bold green]",
-            border_style="green",
-        )
+    print_success(
+        "Secret Saved",
+        f"Secret '{name}' saved successfully",
+        details={"Location": "Encrypted vault"},
     )
 
 
@@ -147,13 +151,10 @@ def get_secret(
     value = secrets_store.get_secret(name)
 
     if value is None:
-        console.print(
-            Panel(
-                f"[bold red]Secret '{name}' not found[/bold red]\n"
-                "[dim]Use 'ofx secret list' to see available secrets[/dim]",
-                title="[X] Not Found",
-                border_style="red",
-            )
+        print_error(
+            "Secret Not Found",
+            f"Secret '{name}' not found",
+            details="Use 'ofx secret list' to see available secrets",
         )
         raise typer.Exit(code=1)
 
@@ -238,13 +239,10 @@ def list_secrets(
         filtered_secrets[name] = value
 
     if not filtered_secrets:
-        console.print(
-            Panel(
-                "[yellow]No secrets match the specified filters[/yellow]\n"
-                "[dim]Try different search criteria[/dim]",
-                title="[?] Search Results",
-                border_style="yellow",
-            )
+        print_warning(
+            "Search Results",
+            "No secrets match the specified filters",
+            hint="Try different search criteria",
         )
         return
 
@@ -304,13 +302,10 @@ def search_secrets(
     secrets = secrets_store.list_secrets()
 
     if not secrets:
-        console.print(
-            Panel(
-                "[yellow]No secrets found in encrypted store[/yellow]\n"
-                "[dim]Use 'ofx secret set <name>' to add secrets[/dim]",
-                title="[*] Secrets",
-                border_style="yellow",
-            )
+        print_warning(
+            "Secrets",
+            "No secrets found in encrypted store",
+            hint="Use 'ofx secret set <name>' to add secrets",
         )
         return
 
@@ -321,13 +316,10 @@ def search_secrets(
             matches[name] = value
 
     if not matches:
-        console.print(
-            Panel(
-                f"[yellow]No secrets match pattern:[/yellow] [cyan]{pattern}[/cyan]\n"
-                "[dim]Try a different search pattern[/dim]",
-                title="🔍 Search Results",
-                border_style="yellow",
-            )
+        print_warning(
+            "Search Results",
+            f"No secrets match pattern: {pattern}",
+            hint="Try a different search pattern",
         )
         return
 
@@ -450,13 +442,10 @@ def delete_secret(
 
     secrets_store.delete_secret(name)
 
-    console.print(
-        Panel(
-            f"[bold green]Secret '{name}' deleted successfully[/bold green]\n"
-            "[dim]Removed from encrypted store[/dim]",
-            title="[OK] Deleted",
-            border_style="green",
-        )
+    print_success(
+        "Deleted",
+        f"Secret '{name}' deleted successfully",
+        details={"Location": "Encrypted store"},
     )
 
 
@@ -497,25 +486,21 @@ def export_secrets(
     count = secrets_store.export_secrets(path_output)
 
     if not count:
-        console.print(
-            Panel(
-                "[yellow]No secrets to export[/yellow]",
-                title="[!] Export",
-                border_style="yellow",
-            )
+        print_warning(
+            "Export",
+            "No secrets to export",
         )
         raise typer.Exit()
 
-    console.print(
-        Panel(
-            f"[bold green]Exported {count} secrets successfully[/bold green]\n"
-            f"[bold]File:[/bold] [cyan]{output}[/cyan]\n\n"
-            "[bold yellow][!] WARNING[/bold yellow]\n"
-            "[yellow]Exported file contains unencrypted secrets!\n"
-            "Keep this file secure.[/yellow]",
-            title="[OK] Export Complete",
-            border_style="green",
-        )
+    print_success(
+        "Export Complete",
+        f"Exported {count} secrets successfully",
+        details={"File": output},
+    )
+    print_warning(
+        "Security Warning",
+        "Exported file contains unencrypted secrets!",
+        hint="Keep this file secure.",
     )
 
 
@@ -551,31 +536,24 @@ def import_secrets(
         _maybe_backup_store(backup_to, None, backup_overwrite)
         imported = secrets_store.import_secrets_from_file(file, overwrite)
     except FileNotFoundError as e:
-        console.print(
-            Panel(
-                f"[bold red]File not found[/bold red]\n[red]{e}[/red]",
-                title="[X] Import Error",
-                border_style="red",
-            )
+        print_error(
+            "Import Error",
+            "File not found",
+            details=str(e),
         )
         raise typer.Exit(code=1) from e
     except ValueError as e:
-        console.print(
-            Panel(
-                f"[bold red]Invalid file format[/bold red]\n[red]{e}[/red]",
-                title="[X] Import Error",
-                border_style="red",
-            )
+        print_error(
+            "Import Error",
+            "Invalid file format",
+            details=str(e),
         )
         raise typer.Exit(code=1) from e
 
-    console.print(
-        Panel(
-            f"[bold green]Imported {imported} secrets successfully[/bold green]\n"
-            f"[dim]File: {file}[/dim]",
-            title="[OK] Import Complete",
-            border_style="green",
-        )
+    print_success(
+        "Import Complete",
+        f"Imported {imported} secrets successfully",
+        details={"File": str(file)},
     )
 
 
@@ -609,12 +587,9 @@ def clear_secrets(
     secrets = secrets_store.list_secrets()
 
     if not secrets:
-        console.print(
-            Panel(
-                "[yellow]No secrets to clear[/yellow]",
-                title="[*] Secrets",
-                border_style="yellow",
-            )
+        print_warning(
+            "Secrets",
+            "No secrets to clear",
         )
         return
 
@@ -751,24 +726,21 @@ def backup_secrets(
         )
 
         file_size = output_path.stat().st_size
-        console.print(
-            Panel(
-                f"[bold green]Backup created successfully[/bold green]\n"
-                f"[bold]File:[/bold] [cyan]{output_path}[/cyan]\n"
-                f"[bold]Secrets:[/bold] {count}\n"
-                f"[bold]Size:[/bold] {_format_file_size(file_size)}",
-                title="[OK] Backup Complete",
-                border_style="green",
-            )
+        print_success(
+            "Backup Complete",
+            "Backup created successfully",
+            details={
+                "File": str(output_path),
+                "Secrets": count,
+                "Size": _format_file_size(file_size),
+            },
         )
 
     except Exception as e:
-        console.print(
-            Panel(
-                f"[bold red]Backup failed[/bold red]\n[red]{e}[/red]",
-                title="[X] Backup Error",
-                border_style="red",
-            )
+        print_error(
+            "Backup Error",
+            "Backup failed",
+            details=str(e),
         )
         raise typer.Exit(1) from e
 
@@ -833,12 +805,10 @@ def restore_secrets(
 
     resolved_passphrase = _resolve_passphrase(passphrase, ask_passphrase)
     if not backup_file.exists():
-        console.print(
-            Panel(
-                f"[bold red]Backup file not found[/bold red]\n[red]{backup_file}[/red]",
-                title="[X] File Not Found",
-                border_style="red",
-            )
+        print_error(
+            "File Not Found",
+            "Backup file not found",
+            details=str(backup_file),
         )
         raise typer.Exit(1)
 
@@ -849,24 +819,21 @@ def restore_secrets(
             backup_file, passphrase=resolved_passphrase
         )
 
-        console.print(
-            Panel(
-                f"[bold]File:[/bold] [cyan]{backup_file}[/cyan]\n"
-                f"[bold]Created:[/bold] {info['created']}\n"
-                f"[bold]Secrets:[/bold] {info['count']}\n"
-                f"[bold]Size:[/bold] {_format_file_size(info['size'])}",
-                title="[#] Backup Information",
-                border_style="cyan",
-            )
+        print_success(
+            "Backup Information",
+            "Backup metadata loaded",
+            details={
+                "File": str(backup_file),
+                "Created": info["created"],
+                "Secrets": info["count"],
+                "Size": _format_file_size(info["size"]),
+            },
         )
 
         if dry_run:
-            console.print(
-                Panel(
-                    "[yellow]Dry run mode - no changes will be made[/yellow]",
-                    title="[?] Preview",
-                    border_style="yellow",
-                )
+            print_warning(
+                "Preview",
+                "Dry run mode - no changes will be made",
             )
             table = Table(
                 title="Secrets to be Restored",
@@ -901,14 +868,12 @@ def restore_secrets(
             if len(conflicts) > 5:
                 conflict_list += f"\n• ... and {len(conflicts) - 5} more"
 
-            console.print(
-                Panel(
-                    f"[yellow]{len(conflicts)} secrets already exist and will be skipped:[/yellow]\n\n"
-                    f"{conflict_list}\n\n"
-                    "[dim]Use --overwrite to replace existing secrets[/dim]",
-                    title="[!] Conflicts Detected",
-                    border_style="yellow",
-                )
+            print_warning(
+                "Conflicts Detected",
+                f"{len(conflicts)} secrets already exist and will be skipped:",
+                hint=(
+                    f"{conflict_list}\n\nUse --overwrite to replace existing secrets"
+                ),
             )
 
             if not typer.confirm("Continue with restore?"):
@@ -928,17 +893,16 @@ def restore_secrets(
                 f"\n[yellow]Skipped {skipped_count} existing secrets[/yellow]"
             )
 
-        console.print(
-            Panel(success_msg, title="[OK] Restore Complete", border_style="green")
+        print_success(
+            "Restore Complete",
+            success_msg,
         )
 
     except Exception as e:
-        console.print(
-            Panel(
-                f"[bold red]Restore failed[/bold red]\n[red]{e}[/red]",
-                title="[X] Restore Error",
-                border_style="red",
-            )
+        print_error(
+            "Restore Error",
+            "Restore failed",
+            details=str(e),
         )
         raise typer.Exit(1) from e
 
@@ -986,15 +950,14 @@ def show_backup_history(
             continue
 
     if not backup_files:
-        console.print(
-            Panel(
-                f"[yellow]No backup files found[/yellow]\n"
-                f"[bold]Directory:[/bold] [cyan]{directory_path}[/cyan]\n\n"
-                "[dim]Backup files should have .enc extension\n"
-                "Use 'ofx secret backup' to create backups[/dim]",
-                title="[#] Backup History",
-                border_style="yellow",
-            )
+        print_warning(
+            "Backup History",
+            "No backup files found",
+            hint=(
+                f"Directory: {directory_path}\n"
+                "Backup files should have .enc extension.\n"
+                "Use 'ofx secret backup' to create backups."
+            ),
         )
         return
 
@@ -1033,27 +996,22 @@ def migrate_from_files(
     new encrypted storage format. Legacy files are preserved after migration.
     """
     if not SECRETS_DIR.exists() or not list(SECRETS_DIR.glob("*")):
-        console.print(
-            Panel(
-                "[yellow]No legacy secrets found to migrate[/yellow]\n"
-                f"[dim]Searched in: {SECRETS_DIR}[/dim]",
-                title="[~] Migration",
-                border_style="yellow",
-            )
+        print_warning(
+            "Migration",
+            "No legacy secrets found to migrate",
+            hint=f"Searched in: {SECRETS_DIR}",
         )
         return
 
     legacy_count = len(list(SECRETS_DIR.glob("*")))
 
     if not force:
-        console.print(
-            Panel(
-                f"[bold]Found:[/bold] {legacy_count} legacy secrets\n"
-                f"[bold]Location:[/bold] [cyan]{SECRETS_DIR}[/cyan]\n\n"
-                "[dim]This will copy secrets to encrypted storage[/dim]",
-                title="[~] Migrate Secrets",
-                border_style="cyan",
-            )
+        print_warning(
+            "Migrate Secrets",
+            f"Found {legacy_count} legacy secrets",
+            hint=(
+                f"Location: {SECRETS_DIR}\nThis will copy secrets to encrypted storage."
+            ),
         )
         confirm = typer.confirm("Migrate to encrypted store?")
         if not confirm:
@@ -1062,12 +1020,13 @@ def migrate_from_files(
 
     migrated = secrets_store.migrate_from_directory(SECRETS_DIR)
 
-    console.print(
-        Panel(
-            f"[bold green]Migrated {migrated} secrets successfully[/bold green]\n\n"
-            f"[bold]Note:[/bold] Legacy files remain in {SECRETS_DIR}\n"
-            "[dim]Delete them manually if no longer needed[/dim]",
-            title="[OK] Migration Complete",
-            border_style="green",
-        )
+    print_success(
+        "Migration Complete",
+        f"Migrated {migrated} secrets successfully",
+        details={
+            "Note": (
+                f"Legacy files remain in {SECRETS_DIR}. "
+                "Delete them manually if no longer needed."
+            )
+        },
     )

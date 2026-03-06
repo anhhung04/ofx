@@ -212,7 +212,9 @@ class CloudJobRunner(BaseRunner[Job]):
             timeout=cfg.boot_timeout or 180,
             os_type="windows" if is_windows else "linux",
         )
-        self._log_info(f"Instance {self._instance.ip} is reachable. Waiting for SSH service...")
+        self._log_info(
+            f"Instance {self._instance.ip} is reachable. Waiting for SSH service..."
+        )
         await wait_for_login(
             host=self._instance.ip,
             cfg=cfg,
@@ -419,9 +421,7 @@ class CloudJobRunner(BaseRunner[Job]):
                     remote = f"{self._work_dir}/output/{fname}"
                 local = str(local_out / fname)
                 try:
-                    await asyncio.to_thread(
-                        self._remote_runner.download, remote, local
-                    )
+                    await asyncio.to_thread(self._remote_runner.download, remote, local)
                 except Exception as e:
                     self._log_debug(f"Failed to download {remote}: {e}")
         except Exception as e:
@@ -502,8 +502,7 @@ class CloudJobRunner(BaseRunner[Job]):
 
         # 2. Decide whether to destroy
         is_static = (
-            self._cloud_config
-            and (self._cloud_config.provider or "static") == "static"
+            self._cloud_config and (self._cloud_config.provider or "static") == "static"
         )
         has_instance = self._provider and self._instance
 
@@ -536,7 +535,7 @@ class CloudJobRunner(BaseRunner[Job]):
         """
         fleet_vars = self.ctx.vars.get("fleet", {})
         local_path = fleet_vars.get("fleet_input_file", "")
-        
+
         # Inject other fleet variables as remote env vars
         for k, v in fleet_vars.items():
             if k != "fleet_input_file":
@@ -585,7 +584,6 @@ class CloudJobRunner(BaseRunner[Job]):
     @property
     def total_steps(self) -> int:
         return len(self.model.steps)
-
 
     @property
     def remote_work_dir(self) -> str | None:

@@ -1,4 +1,4 @@
-"""Cloud command package."""
+"""API command package."""
 
 from .app import HELP, NAME, app
 
