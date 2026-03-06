@@ -4,7 +4,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
 
 from ofx.models.config import DurableRunConfig
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS
@@ -24,8 +24,6 @@ class RunnerStatus(Enum):
 
 class RunContext(BaseModel):
     """Execution context for runners"""
-
-    model_config = ConfigDict(extra="allow")
 
     inputs: dict[str, Any] = Field(default_factory=dict)
     secrets: dict[str, Any] = Field(default_factory=dict)

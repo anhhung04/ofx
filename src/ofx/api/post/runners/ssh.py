@@ -177,11 +177,8 @@ class PostSSH(PostRunnerBase):
         elif self.password:
             connect_kwargs["password"] = self.password
         else:
-            # No explicit auth — allow agent and default keys
-            connect_kwargs["allow_agent"] = True
             connect_kwargs["look_for_keys"] = True
 
-        # If both key and password, set password too (for key passphrase or fallback)
         if self.identity_file and self.password:
             connect_kwargs["password"] = self.password
 
@@ -243,7 +240,7 @@ class PostSSH(PostRunnerBase):
                 continue
         raise SSHAuthError(f"Cannot load key '{path}': unsupported format or corrupt file")
 
-    def _create_proxy_sock(self) -> paramiko.Channel | socket.socket | None:
+    def _create_proxy_sock(self) -> paramiko.Channel | socket.socket | paramiko.ProxyCommand | None:
         """Create a proxy socket for ProxyCommand or jump host."""
         if self.proxy_command:
             return paramiko.ProxyCommand(self.proxy_command)
@@ -283,6 +280,8 @@ class PostSSH(PostRunnerBase):
                     pass
             jump_client.connect(**jump_kwargs)
             transport = jump_client.get_transport()
+            if not transport or not transport.is_active():
+                raise SSHConnectionError(f"Failed to connect to jump host {jump_host}:{jump_port}")
             return transport.open_channel(
                 "direct-tcpip",
                 (self.host, self.port),

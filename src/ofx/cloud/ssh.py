@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import time
 import asyncio
 import logging
+from ofx.models.cloud import CloudConfig
 
 logger = logging.getLogger("ofx")
 
@@ -105,3 +107,55 @@ async def wait_for_connectivity(
         return await wait_for_winrm(host, winrm_port, timeout)
     else:
         return await wait_for_ssh(host, ssh_port, timeout)
+
+async def wait_for_login(
+    host: str,
+    cfg: CloudConfig,
+    timeout: int = 300,
+) -> bool:
+    """
+    Verified login availability by attempting a real connection 
+    using the provided credentials and transport settings.
+    """
+    from ofx.api.post.runners.ssh import PostSSH
+    from ofx.api.post.runners.winrm import PostWinRM
+
+    start_time = time.time()
+    is_windows = cfg.connection_type == "winrm" or getattr(cfg, "os_type", "") == "windows"
+    
+    ssh_port = cfg.ssh_port or 22
+    winrm_port = cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985)
+
+    def _try_ssh():
+        r = PostSSH(
+            host=host,
+            port=ssh_port,
+            user=cfg.ssh_user,
+            identity_file=cfg.ssh_key,
+            password=cfg.ssh_password,
+            connect_timeout=10,
+        )
+        r.run("id")
+
+    def _try_winrm():
+        r = PostWinRM(
+            host=host,
+            port=winrm_port,
+            username=cfg.winrm_user,
+            password=cfg.winrm_password,
+            ssl=cfg.winrm_ssl,
+            transport=cfg.winrm_transport,
+            command_timeout=10,
+        )
+        r.run("whoami")
+
+    probe = _try_winrm if is_windows else _try_ssh
+
+    while time.time() - start_time < timeout:
+        try:
+            await asyncio.to_thread(probe)
+            return True
+        except Exception:
+            await asyncio.sleep(5)
+
+    return False

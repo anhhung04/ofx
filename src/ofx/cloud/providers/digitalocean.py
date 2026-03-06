@@ -10,11 +10,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import secrets
 from datetime import datetime
 
 from ofx.cloud.base import CloudProvider, CloudProviderRegistry
 from ofx.cloud.models import CloudInstanceInfo, SnapshotInfo
 from ofx.models.cloud import CloudConfig
+from ofx.settings import SECRETS_STORE
+from ofx.utils.secrets import get_secret
 
 logger = logging.getLogger("ofx")
 
@@ -42,13 +45,14 @@ class DigitalOceanProvider(CloudProvider):
         if DOClient is None:
             raise ImportError(
                 "DigitalOcean support requires the 'pydo' package. "
-                "Install with: pip install pydo  (or: pip install ofx[digitalocean])"
+                "Install with: pip install pydo  (or install with extras 'digitalocean')"
             )
-        self._token = token or os.environ.get("DIGITALOCEAN_TOKEN", "")
+        token_secret = get_secret("digitalocean_token", SECRETS_STORE)
+        self._token = token or os.environ.get("DIGITALOCEAN_TOKEN", token_secret)
         if not self._token:
             raise ValueError(
-                "DigitalOcean token required. Set DIGITALOCEAN_TOKEN env var "
-                "or pass token= to the provider."
+                "DigitalOcean token required. Set DIGITALOCEAN_TOKEN env var or add a secret named 'digitalocean_token' to your OFX secrets store, "
+                "and it will be automatically loaded."
             )
         self._client = DOClient(token=self._token)
 
@@ -68,7 +72,7 @@ class DigitalOceanProvider(CloudProvider):
             for key in keys_resp.get("ssh_keys", []):
                 ssh_keys.append(key["id"])
 
-        droplet_name = f"ofx-{config.region}-{int(datetime.now().timestamp())}"
+        droplet_name = f"ofx-{config.region}-{int(datetime.now().timestamp())}-{secrets.token_hex(3)}"
         tags = list(config.tags) if config.tags else []
         if "ofx" not in tags:
             tags.append("ofx")
@@ -134,9 +138,7 @@ class DigitalOceanProvider(CloudProvider):
             if info.is_ready and info.ip:
                 # Verify SSH is actually reachable
                 if await self._check_ssh(info.ip):
-                    logger.info(
-                        f"DO droplet {instance_id} ready at {info.ip}"
-                    )
+                    logger.info(f"DO droplet '{info.name}' ready at {info.ip}")
                     return info
 
             await asyncio.sleep(10)
@@ -160,10 +162,10 @@ class DigitalOceanProvider(CloudProvider):
 
     async def destroy_instance(self, instance_id: str) -> None:
         """Delete a DigitalOcean droplet."""
-        logger.info(f"Destroying DO droplet {instance_id}")
         await asyncio.to_thread(
             self._client.droplets.destroy, droplet_id=int(instance_id)
         )
+        logger.info(f"Destroyed DO droplet with id {instance_id}")
 
     async def get_instance(self, instance_id: str) -> CloudInstanceInfo:
         """Get current droplet info."""
@@ -222,9 +224,7 @@ class DigitalOceanProvider(CloudProvider):
 
         return instances
 
-    async def create_snapshot(
-        self, instance_id: str, name: str
-    ) -> SnapshotInfo:
+    async def create_snapshot(self, instance_id: str, name: str) -> SnapshotInfo:
         """Create a snapshot from a droplet."""
         logger.info(f"Creating snapshot '{name}' from droplet {instance_id}")
 
@@ -289,9 +289,7 @@ class DigitalOceanProvider(CloudProvider):
 
     async def delete_snapshot(self, snapshot_id: str) -> None:
         """Delete a snapshot."""
-        await asyncio.to_thread(
-            self._client.snapshots.delete, snapshot_id=snapshot_id
-        )
+        await asyncio.to_thread(self._client.snapshots.delete, snapshot_id=snapshot_id)
 
     async def close(self) -> None:
         """Clean up the pydo client."""

@@ -281,3 +281,107 @@ jobs:
 
         assert copied_ctx.workflow_dirs == new_dirs
         assert ctx.workflow_dirs == original_dirs
+
+
+class TestExtractSecretRefs:
+    """Test selective secret extraction from workflow models."""
+
+    def _make_workflow(self, yaml_str: str):
+        from ofx.models.workflow import Workflow
+
+        data = yaml.safe_load(yaml_str)
+        return Workflow.model_validate(data)
+
+    def test_dot_access(self):
+        from ofx.runner.api import _extract_secret_refs
+
+        wf = self._make_workflow("""
+            name: test
+            jobs:
+              a:
+                steps:
+                  - run: "echo ${{ secrets.API_KEY }}"
+        """)
+        assert _extract_secret_refs(wf) == {"API_KEY"}
+
+    def test_bracket_access(self):
+        from ofx.runner.api import _extract_secret_refs
+
+        wf = self._make_workflow("""
+            name: test
+            jobs:
+              a:
+                steps:
+                  - run: 'echo ${{ secrets["DB_PASS"] }}'
+        """)
+        assert _extract_secret_refs(wf) == {"DB_PASS"}
+
+    def test_multiple_secrets_across_jobs(self):
+        from ofx.runner.api import _extract_secret_refs
+
+        wf = self._make_workflow("""
+            name: test
+            jobs:
+              a:
+                steps:
+                  - run: "curl -H 'Authorization: ${{ secrets.TOKEN }}' ${{ secrets.URL }}"
+              b:
+                steps:
+                  - run: "psql ${{ secrets.DB_CONN }}"
+        """)
+        assert _extract_secret_refs(wf) == {"TOKEN", "URL", "DB_CONN"}
+
+    def test_no_secrets(self):
+        from ofx.runner.api import _extract_secret_refs
+
+        wf = self._make_workflow("""
+            name: test
+            jobs:
+              a:
+                steps:
+                  - run: echo hello
+        """)
+        assert _extract_secret_refs(wf) == set()
+
+    def test_secrets_in_env(self):
+        from ofx.runner.api import _extract_secret_refs
+
+        wf = self._make_workflow("""
+            name: test
+            env:
+              API_KEY: "${{ secrets.MY_API_KEY }}"
+            jobs:
+              a:
+                steps:
+                  - run: echo $API_KEY
+        """)
+        assert "MY_API_KEY" in _extract_secret_refs(wf)
+
+    def test_secrets_in_step_env(self):
+        from ofx.runner.api import _extract_secret_refs
+
+        wf = self._make_workflow("""
+            name: test
+            jobs:
+              a:
+                steps:
+                  - run: echo $TOKEN
+                    env:
+                      TOKEN: "${{ secrets.GH_TOKEN }}"
+        """)
+        assert _extract_secret_refs(wf) == {"GH_TOKEN"}
+
+    def test_deduplication(self):
+        from ofx.runner.api import _extract_secret_refs
+
+        wf = self._make_workflow("""
+            name: test
+            jobs:
+              a:
+                steps:
+                  - run: "${{ secrets.KEY }} and ${{ secrets.KEY }}"
+              b:
+                steps:
+                  - run: "${{ secrets.KEY }}"
+        """)
+        assert _extract_secret_refs(wf) == {"KEY"}

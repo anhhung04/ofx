@@ -25,7 +25,7 @@ jobs:
         input: "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6"
         distribution: chunk
     steps:
-      - run: echo "Fleet index $FLEET_INDEX scanning from $FLEET_INPUT_FILE"
+      - run: echo "Fleet index $REMOTE_FLEET_INDEX scanning from $REMOTE_FLEET_INPUT_FILE"
 
   cloud-matrix-fleet:
     cloud:

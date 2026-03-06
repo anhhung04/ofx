@@ -116,6 +116,11 @@ class CloudConfig(OFXBaseModel):
         default=300,
         description="Seconds to wait for instance to boot and be reachable",
     )
+    
+    login_timeout: int = Field(
+        default=300,
+        description="Seconds to wait for successful login after connectivity",
+    )
 
     @model_validator(mode="after")
     def normalize(self):

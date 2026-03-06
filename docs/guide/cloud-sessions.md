@@ -320,3 +320,36 @@ ofx session submit network-scan.yml --local -i target=10.0.0.0/24
 ```
 
 The session extracts the specified job (or first job), generates a self-contained script from its steps, and runs it detached.
+
+## Cleanup & What to Check
+
+### What gets cleaned up automatically
+
+| Item | Local session | Cloud session |
+|------|--------------|---------------|
+| Background process | Killed on `cancel` | Killed via SSH on `cancel` |
+| VPS instance | N/A | Destroyed on `destroy` |
+| Session workspace | Removed on `clean` | Removed on `clean` |
+| At-rest encryption key | Shredded after encryption | Shredded on VPS after encryption |
+| Generated script | Shredded after completion | Shredded on VPS after completion |
+| Output directory on VPS | N/A | Left until `destroy` (needed for `fetch`) |
+
+### After a cloud session completes
+
+1. **Fetch results** before destroying — `destroy` removes the VPS and all data on it
+2. **Verify VPS destruction** — check your cloud provider dashboard for orphaned instances
+3. **Clean old sessions** — run `ofx session clean --older-than 7d` periodically
+
+### Cost control for cloud sessions
+
+- Cloud sessions leave the VPS running until you explicitly `destroy` — there is no `auto_destroy`
+- Always destroy sessions after fetching results
+- Use `ofx session list --status completed` to find sessions ready for cleanup
+- Set up cloud provider billing alerts
+
+## See Also
+
+- [Cloud Runners](cloud-runners.md) — cloud job execution within workflows
+- [Cloud Configuration](cloud/configuration.md) — profiles, providers, authentication
+- [Variables & Environment](cloud/variables.md) — template variables, env passing, secrets
+- [Lifecycle & Cleanup](cloud/lifecycle.md) — full lifecycle, failure handling, output collection

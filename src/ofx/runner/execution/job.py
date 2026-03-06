@@ -180,12 +180,15 @@ class MatrixJobRunner(BaseRunner[Job]):
     async def _run_single_job(self, matrix_idx: int, matrix_values: dict[str, Any]):
         """Run a single job instance with specific matrix values"""
         job_ctx = self._child_context()
+        if self.model.strategy:
+            job_ctx.vars["strategy"] = self.model.strategy.model_dump()
         job_ctx.vars["matrix"] = matrix_values
         new_jid = f"{self.model.jid}_{str(matrix_idx)}"
         runner = JobRunner(
             self.model.model_copy(
+                deep=True,
                 update={
-                    "name": f"{self.model.name}{{{str(matrix_idx)}}}",
+                    "name": f"[{self.model.name}]{{{str(matrix_idx)}}}",
                     "jid": new_jid,
                     "matrix_values": matrix_values,
                     "matrix_index": matrix_idx,

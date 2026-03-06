@@ -6,9 +6,9 @@ from typing import Any
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunnerContextBuilder
 from ofx.runner.core import BaseRunner, RegistryAdapter, RunContext, RunnerRegistryKeys
+from ofx.runner.execution.cloud_job import CloudJobRunner
 from ofx.runner.execution.execution_summary import ExecutionSummaryReporter
 from ofx.runner.execution.job import JobRunner, MatrixJobRunner
-from ofx.runner.execution.cloud_job import CloudJobRunner
 from ofx.runner.execution.tool_installer import ToolInstallerRunner
 from ofx.runner.execution.workflow_execution import WorkflowExecutionManager
 from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
@@ -60,6 +60,10 @@ class WorkflowRunner(BaseRunner[Workflow]):
             self.ctx = RunnerContextBuilder(self.ctx).with_secrets(
                 await self._process_inputs(self.ctx.secrets, self.model.call.secrets)
             )
+            # Register call-injected secrets for log redaction.
+            from ofx.utils.log import register_secrets
+
+            register_secrets(self.ctx.secrets)
 
         self.ctx = ctx_builder.with_update(
             {

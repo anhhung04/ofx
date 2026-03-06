@@ -6,8 +6,8 @@ import asyncio
 import itertools
 from dataclasses import dataclass, field
 
-from ofx.runner.execution.cloud_job import CloudJobRunner, CloudMatrixJobRunner
-from ofx.runner.execution.job import JobRunner, MatrixJobRunner
+from ofx.runner.core import BaseRunner
+from ofx.runner.execution.runner_factory import create_job_runner
 
 
 @dataclass
@@ -34,29 +34,14 @@ class WorkflowExecutionManager:
 
     def _build_stage_runners(
         self, stage: list[str], staged_jobs: dict
-    ) -> dict[str, JobRunner | MatrixJobRunner | CloudJobRunner | CloudMatrixJobRunner]:
-        stage_runners: dict[
-            str, JobRunner | MatrixJobRunner | CloudJobRunner | CloudMatrixJobRunner
-        ] = {}
+    ) -> dict[str, BaseRunner]:
+        stage_runners: dict[str, BaseRunner] = {}
         for job_id in stage:
             job = staged_jobs[job_id]
             job_ctx = self._parent._child_context(
                 update={"allow_interactive": len(stage) == 1}
             )
-            has_cloud = getattr(job, "cloud", None)
-            has_matrix = job.strategy and job.strategy.matrix
-            has_fleet = job.strategy and job.strategy.fleet
-
-            if has_cloud and (has_matrix or has_fleet):
-                # Cloud + matrix/fleet → expand into per-VPS runners
-                runner = CloudMatrixJobRunner(job, job_ctx, parent=self._parent)
-            elif has_cloud:
-                # Cloud job — single remote VPS
-                runner = CloudJobRunner(job, job_ctx, parent=self._parent)
-            elif has_matrix:
-                runner = MatrixJobRunner(job, job_ctx, parent=self._parent)
-            else:
-                runner = JobRunner(job, job_ctx, parent=self._parent)
+            runner = create_job_runner(job, job_ctx, parent=self._parent)
             stage_runners[job_id] = runner
             self._parent._runners[job_id] = runner
         return stage_runners
@@ -64,9 +49,7 @@ class WorkflowExecutionManager:
     async def _run_stage(
         self,
         stage_index: int,
-        stage_runners: dict[
-            str, JobRunner | MatrixJobRunner | CloudJobRunner | CloudMatrixJobRunner
-        ],
+        stage_runners: dict[str, BaseRunner],
     ) -> list[str]:
         self._parent._log_info(
             f"Starting stage {stage_index + 1} with jobs: {list(stage_runners.keys())}"
@@ -93,7 +76,7 @@ class WorkflowExecutionManager:
                 del tasks[job_id]
         return failed_jobs
 
-    def _matrix_combo_count(self, runner: MatrixJobRunner) -> int:
+    def _matrix_combo_count(self, runner) -> int:
         strategy = runner.model.strategy
         if not strategy or not strategy.matrix:
             return 1

@@ -112,27 +112,52 @@ class FleetInputParser:
 
         return targets
 
-    def _read_input(self, input_data: str | list[str]) -> list[str]:
-        """Read input into a list of raw lines."""
+    def _read_input(self, input_data: str | list[str], _seen_files: set[str] | None = None) -> list[str]:
+        """Read input into a list of raw lines, supporting recursive file inclusion."""
+        if _seen_files is None:
+            _seen_files = set()
+
+        lines = []
         if isinstance(input_data, list):
-            lines = []
             for item in input_data:
-                lines.extend(str(item).strip().splitlines())
+                lines.extend(self._read_input(str(item), _seen_files))
             return lines
 
         input_str = input_data.strip()
 
-        # Check if it's a file path
         path = Path(input_str)
-        if path.is_file():
-            logger.debug(f"Reading fleet input from file: {path}")
-            return path.read_text().splitlines()
+        file_to_read = None
+        if not path.is_absolute():
+            cwd_path = Path.cwd() / input_str
+            if cwd_path.is_file():
+                file_to_read = cwd_path
+        if file_to_read is None and path.is_file():
+            file_to_read = path
 
-        # Check if it's comma-separated
+        if file_to_read is not None:
+            abs_path = str(file_to_read.resolve())
+            if abs_path in _seen_files:
+                logger.warning(f"Recursive fleet input: already read file {abs_path}, skipping to avoid loop.")
+                return []
+            _seen_files.add(abs_path)
+            logger.debug(f"Reading fleet input from file: {file_to_read}")
+            file_lines = file_to_read.read_text().splitlines()
+            expanded_lines = []
+            for line in file_lines:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                possible_path = Path(line)
+                abs_possible = possible_path if possible_path.is_absolute() else Path.cwd() / line
+                if abs_possible.is_file():
+                    expanded_lines.extend(self._read_input(line, _seen_files))
+                else:
+                    expanded_lines.append(line)
+            return expanded_lines
+
         if "," in input_str and "/" not in input_str.split(",")[0]:
             return [item.strip() for item in input_str.split(",")]
 
-        # Single value or multiline string
         return input_str.splitlines()
 
     def _expand_line(self, line: str) -> Iterator[str]:
@@ -142,8 +167,8 @@ class FleetInputParser:
             return
 
         # Remove inline comments
-        if " #" in line:
-            line = line[: line.index(" #")].strip()
+        if "#" in line:
+            line = line[: line.index("#")].strip()
 
         line_type = self._detect_type(line)
 

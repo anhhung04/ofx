@@ -396,7 +396,7 @@ ofx secret migrate [options]
 
 **Inspect workflow/job/step model schemas**
 
-Schema inspection is available as `ofx flow schema`. See [flow schema reference](cli/commands/schema.md) for full details.
+Schema inspection is available as `ofx flow schema`. See [flow schema reference](../cli/commands/schema.md) for full details.
 
 ### flow schema schema
 
@@ -460,7 +460,7 @@ ofx docs api [options]
 
 **Manage installable workflow collections**
 
-Install, update, remove, search, and inspect packages of reusable workflows. See [flow collection reference](cli/commands/collection.md) and the [Collections Guide](guide/collections.md) for full details.
+Install, update, remove, search, and inspect packages of reusable workflows. See [flow collection reference](../cli/commands/collection.md) and the [Collections Guide](../guide/collections.md) for full details.
 
 ### flow collection add
 

@@ -1,13 +1,139 @@
+from __future__ import annotations
+
 import logging
+import re
 import time
+from typing import Any
+
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.text import Text
 
-class RightAlignedHandler(RichHandler):
+# ---------------------------------------------------------------------------
+# Secret redaction
+# ---------------------------------------------------------------------------
+
+# Minimum length for a value to be considered redactable.  Very short values
+# (e.g. "1", "ok") would cause excessive false-positive replacements.
+_MIN_REDACT_LEN = 4
+
+_REDACTED = "***"
+
+# Env-var name patterns that should always be redacted when seen in log output.
+_SENSITIVE_KEY_RE = re.compile(
+    r"(password|passwd|secret|token|api[_-]?key|private[_-]?key|credential"
+    r"|auth|bearer|access[_-]?key|ssh[_-]?key|ssh[_-]?pass)",
+    re.IGNORECASE,
+)
+
+
+class SecretRedactFilter(logging.Filter):
+    """Logging filter that replaces registered secret values with ``***``.
+
+    Usage::
+
+        redact_filter.register_values({"my_api_key_value", "db_password"})
+        # All subsequent log records containing those strings are redacted.
+    """
+
+    _instance: SecretRedactFilter | None = None
+
+    def __new__(cls) -> SecretRedactFilter:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._values: set[str] = set()
+            cls._instance._pattern: re.Pattern | None = None
+        return cls._instance
+
+    @classmethod
+    def get_instance(cls) -> SecretRedactFilter:
+        return cls()
+
+    def register_values(self, values: set[str]) -> None:
+        """Add secret values to redact.  Ignores short/empty values."""
+        new = {v for v in values if isinstance(v, str) and len(v) >= _MIN_REDACT_LEN}
+        if new - self._values:
+            self._values |= new
+            self._rebuild_pattern()
+
+    def register_dict(
+        self, data: dict[str, Any], *, sensitive_only: bool = False
+    ) -> None:
+        """Register values from a dict (e.g. ctx.secrets or ctx.envs).
+
+        Args:
+            data: Key/value mapping.
+            sensitive_only: If True, only register values whose key name
+                matches a sensitive pattern (password, token, key, etc.).
+        """
+        for key, val in data.items():
+            if not isinstance(val, str) or len(val) < _MIN_REDACT_LEN:
+                continue
+            if sensitive_only and not _SENSITIVE_KEY_RE.search(key):
+                continue
+            self._values.add(val)
+        self._rebuild_pattern()
+
+    def clear(self) -> None:
+        """Remove all registered values (useful between test runs)."""
+        self._values.clear()
+        self._pattern = None
+
+    # -- logging.Filter interface ------------------------------------------
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self._pattern and record.msg:
+            record.msg = self._redact(record.msg)
+        if record.args:
+            record.args = self._redact_args(record.args)
+        return True
+
+    # -- internal ----------------------------------------------------------
+
+    def _rebuild_pattern(self) -> None:
+        if not self._values:
+            self._pattern = None
+            return
+        # Sort longest-first so longer secrets are matched before substrings.
+        escaped = sorted(
+            (re.escape(v) for v in self._values), key=len, reverse=True
+        )
+        self._pattern = re.compile("|".join(escaped))
+
+    def _redact(self, text: Any) -> Any:
+        if not isinstance(text, str) or not self._pattern:
+            return text
+        return self._pattern.sub(_REDACTED, text)
+
+    def _redact_args(self, args: Any) -> Any:
+        if isinstance(args, dict):
+            return {k: self._redact(v) if isinstance(v, str) else v for k, v in args.items()}
+        if isinstance(args, (tuple, list)):
+            return tuple(self._redact(a) if isinstance(a, str) else a for a in args)
+        return args
+
+
+def register_secrets(secrets: dict[str, Any]) -> None:
+    """Convenience: register all secret values for redaction."""
+    SecretRedactFilter.get_instance().register_values(
+        {str(v) for v in secrets.values() if v}
+    )
+
+
+def register_sensitive_env(envs: dict[str, Any]) -> None:
+    """Convenience: register env values whose keys look sensitive."""
+    SecretRedactFilter.get_instance().register_dict(envs, sensitive_only=True)
+
+
+# ---------------------------------------------------------------------------
+# Rich logging handler
+# ---------------------------------------------------------------------------
+
+
+class BeautifiedMetadataHandler(RichHandler):
     def __init__(self, *args, **kwargs):
+        self._time_format = kwargs.get("log_time_format", "[%X]")
         super().__init__(*args, **kwargs)
-        self.in_stream_block = False
 
     def emit(self, record):
         if not self.console:
@@ -15,64 +141,70 @@ class RightAlignedHandler(RichHandler):
 
         full_raw_msg = self.format(record)
         lines = full_raw_msg.splitlines()
-
+        in_stream_block = False
         for raw_line in lines:
-            line_plain = Text.from_markup(raw_line).plain
-            
-            is_header = any(x in line_plain for x in ["===stdout===", "===stderr==="])
+            line_text = Text.from_markup(raw_line)
+            line_plain = line_text.plain
+
+            is_header = any(
+                x in line_plain for x in ["===stdout===", "===stderr==="]
+            )
             is_footer = "============" in line_plain
 
             if is_header:
-                self.in_stream_block = True
-                self._print_with_metadata(raw_line, line_plain, record.levelname)
-                continue
+                in_stream_block = True
 
             if is_footer:
-                self.in_stream_block = False
-                self._print_with_metadata(raw_line, line_plain, record.levelname)
-                continue
+                in_stream_block = False
 
-            # Logic for content vs. normal logs
-            if self.in_stream_block:
-                # Content inside the block: No metadata, no highlight, no markup
+            if in_stream_block:
                 self.console.print(raw_line, highlight=False, markup=False)
             else:
-                # Normal log outside blocks
-                self._print_with_metadata(raw_line, line_plain, record.levelname)
+                self._print_formatted(raw_line, record)
 
-    def _print_with_metadata(self, raw_line, plain_line, levelname):
-        """Helper to pad and append Level | Time to the right."""
-        timestamp = time.strftime("[%X]")
-        metadata = f"{levelname} | {timestamp}"
-        
-        width = self.console.width
-        padding_size = width - len(plain_line) - len(metadata) - 1
-        
-        if padding_size > 0:
-            padding = " " * padding_size
-            self.console.print(f"{raw_line}{padding}[dim]{metadata}[/dim]", markup=True)
+    def _print_formatted(self, line_text, record):
+        """Prepends padded Time and Level to the left of the message."""
+        if self.highlighter:
+            message_text = self.highlighter(line_text)
         else:
-            self.console.print(f"{raw_line} [dim]{metadata}[/dim]", markup=True)
+            message_text = Text.from_markup(line_text)
+        time_str = time.strftime(self._time_format or "[%X]")
+        time_text = Text(f"{time_str} ", style="log.time")
+
+        level_text = self.get_level_text(record)
+
+        full_line = Text.assemble(time_text, level_text, message_text)
+        self.console.print(full_line)
+
 
 def reload_logging_config(settings):
     from ofx.settings import RICH_THEME
+
     branding = settings.app_branding
     logger = logging.getLogger(branding)
-    
+
+    # Remove existing console handlers
     for handler in logger.handlers[:]:
         if handler.name == f"{branding}.console":
             logger.removeHandler(handler)
 
     console = Console(theme=RICH_THEME)
-    log_handler = RightAlignedHandler(
+
+    log_handler = BeautifiedMetadataHandler(
         console=console,
         rich_tracebacks=settings.debug,
         show_time=False,
         show_level=False,
-        markup=True
+        markup=True,
+        log_time_format="[%X]",
     )
     log_handler.set_name(f"{branding}.console")
-    
+
     level = logging.DEBUG if settings.debug else logging.INFO
     logger.setLevel(level)
     logger.addHandler(log_handler)
+
+    # Attach the redaction filter to the logger so it applies to all handlers.
+    redact = SecretRedactFilter.get_instance()
+    if redact not in logger.filters:
+        logger.addFilter(redact)

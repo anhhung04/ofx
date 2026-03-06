@@ -6,7 +6,7 @@ Provides commands to manage cloud profiles, instances, and images.
 import asyncio
 from pathlib import Path
 from typing import Annotated
-
+from datetime import datetime
 import typer
 from rich.table import Table
 
@@ -101,8 +101,11 @@ def profile_add(
         data["ssh_password"] = ssh_password
     if connection_type:
         data["connection_type"] = connection_type
-
-    mgr.add(name, data, default=set_default)
+    
+    mgr.add(name, data)
+    if set_default:
+        mgr.set_default(name)
+        
     console.print(f"[green]Profile '{name}' saved.[/green]")
     if set_default:
         console.print("[dim]Set as default profile.[/dim]")
@@ -316,7 +319,7 @@ def instance_create(
         cloud = CloudProviderRegistry.create(provider)
         inst = await cloud.create_instance(cfg)
         if wait:
-            console.print(f"[dim]Waiting for instance {inst.instance_id}...[/dim]")
+            console.print(f"[dim]Waiting for instance '{inst.name}'[{inst.instance_id}]...[/dim]")
             await cloud.wait_until_ready(inst.instance_id)
             inst = await cloud.get_instance(inst.instance_id) or inst
         return inst
@@ -390,7 +393,7 @@ def image_list(
             snap.name or "",
             f"{snap.size_gb:.1f}" if snap.size_gb else "",
             snap.status or "",
-            snap.created_at or "",
+            (snap.created_at or datetime.now()).strftime("%Y-%m-%d %H:%M"),
         )
 
     console.print(table)
@@ -565,8 +568,8 @@ def fleet_run(
     distribution: Annotated[str, typer.Option("--distribution", "-d", help="Distribution mode: chunk, round-robin, subnet, line")] = "chunk",
     job: Annotated[str, typer.Option("--job", "-j", help="Job ID to run")] = "",
     name: Annotated[str, typer.Option("--name", help="Fleet run name")] = "",
-    inputs: Annotated[list[str], typer.Option("--input", "-i", help="Input key=value pairs")] = None,
-    env_vars: Annotated[list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")] = None,
+    inputs: Annotated[list[str], typer.Option("--input", "-i", help="Input key=value pairs")] = [],
+    env_vars: Annotated[list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")] = [],
     target_var: Annotated[str, typer.Option("--target-var", help="Input variable name for the target chunk file")] = "targets_file",
 ):
     """Submit a workflow across multiple fleet instances with target distribution.

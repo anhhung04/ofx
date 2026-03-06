@@ -54,8 +54,18 @@ jobs:
     cloud: do-small          # Reference profile by name
     steps:
       - run: apt-get update && apt-get install -y nmap
-      - run: nmap -sV 10.0.0.0/24 -oA /tmp/ofx-*/output/scan
+      - run: nmap -sV 10.0.0.0/24 -oA output/scan
 ```
+
+## In-Depth Topics
+
+| Topic | Description |
+|-------|-------------|
+| [Cloud Configuration](cloud/configuration.md) | Profiles, providers, inline config, authentication |
+| [Variables & Environment](cloud/variables.md) | Template variables, env passing, secrets on VPS |
+| [Fleet Mode](cloud/fleet.md) | Distributed execution across multiple VPS instances |
+| [Lifecycle & Cleanup](cloud/lifecycle.md) | Provisioning, output collection, failure handling, cleanup |
+| [Sessions](cloud-sessions.md) | Detached fire-and-forget execution with result retrieval |
 
 ## Workflow Configuration
 
@@ -102,17 +112,20 @@ jobs:
 | `image` | string | `""` | OS image ID or slug |
 | `ssh_user` | string | `"root"` | SSH username |
 | `ssh_key` | string | `""` | Path to SSH private key |
-| `ssh_password` | string | `""` | SSH password (uses `sshpass`) |
+| `ssh_password` | string | `""` | SSH password |
 | `ssh_port` | int | `22` | SSH port |
 | `connection_type` | string | `"ssh"` | Connection type (`ssh` or `winrm`) |
 | `winrm_user` | string | `"Administrator"` | WinRM username |
 | `winrm_password` | string | `""` | WinRM password |
 | `winrm_ssl` | bool | `false` | Use HTTPS for WinRM |
 | `winrm_port` | int | auto | WinRM port (auto: 5985/5986) |
+| `host` | string | `""` | Hostname/IP for static provider |
 | `opsec_mode` | bool | `false` | Execute via temp files (avoids ps visibility) |
 | `log_commands` | bool | `false` | Log all commands locally |
 | `auto_destroy` | bool | `true` | Destroy instance after job completes |
 | `startup_timeout` | int | `300` | Max seconds to wait for instance boot |
+| `boot_timeout` | int | `180` | Max seconds to wait for SSH/WinRM port |
+| `login_timeout` | int | `300` | Max seconds to wait for successful SSH/WinRM login |
 | `tags` | list | `[]` | Instance tags |
 
 ### Provider-specific fields
@@ -147,7 +160,7 @@ profiles:
     image: ubuntu-24-04-x64
     ssh_user: root
     ssh_key: ~/.ssh/id_rsa
-  
+
   aws-medium:
     provider: aws
     region: us-east-1
@@ -157,7 +170,7 @@ profiles:
     ssh_key: ~/.ssh/aws-key.pem
     key_pair_name: my-key
     security_group: sg-12345678
-  
+
   lab-box:
     provider: static
     host: 192.168.1.100
@@ -211,95 +224,6 @@ The static provider:
 - Supports single host or fleet of hosts
 - Passes through all SSH/WinRM configuration
 
-## Fleet Mode (Distributed Execution)
-
-Run jobs across multiple VPS simultaneously — like [Axiom](https://github.com/pry0cc/axiom):
-
-```yaml
-jobs:
-  distributed-scan:
-    cloud: do-small
-    strategy:
-      fleet:
-        count: 5                    # Number of VPS instances
-        input: targets.txt          # Input to distribute
-        distribution: chunk         # Split method
-      max_parallel: 5
-    steps:
-      - run: |
-          nmap -iL {{ matrix.fleet_input_file }} \
-               -oA /tmp/ofx-*/output/scan-{{ matrix.fleet_index }}
-```
-
-### Fleet configuration
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `count` | int | required | Number of fleet instances |
-| `input` | string | `""` | Input data or file to distribute |
-| `distribution` | string | `"chunk"` | Split method |
-| `expand_cidrs` | bool | `true` | Expand CIDRs to individual IPs |
-| `min_prefix` | int | `24` | Minimum CIDR prefix for subnet mode |
-| `exclude` | list | `[]` | IPs/CIDRs to exclude |
-
-### Distribution methods
-
-| Method | Description |
-|--------|-------------|
-| `chunk` | Even sequential chunks (default) |
-| `round-robin` | Round-robin distribution |
-| `subnet` | Groups by /24 subnet, assigns to least-full bucket |
-| `line` | One line per instance |
-
-### Input formats
-
-The fleet input parser supports:
-
-- **Single IP**: `192.168.1.1`
-- **CIDR**: `10.0.0.0/24`
-- **IP range**: `10.0.0.1-10.0.0.50`
-- **Short range**: `10.0.0.1-50`
-- **Hostname**: `server1.example.com`
-- **Comma-separated**: `10.0.0.1,10.0.0.2,host.com`
-- **File**: Path to a file with one target per line
-- **Mixed**: Combine any of the above
-
-### Fleet template variables
-
-Each fleet instance gets context variables:
-
-| Variable | Description |
-|----------|-------------|
-| `{{ matrix.fleet_index }}` | Instance index (0-based) |
-| `{{ matrix.fleet_total }}` | Total number of instances |
-| `{{ matrix.fleet_input_file }}` | Path to this instance's input chunk |
-| `{{ matrix.fleet_target_count }}` | Number of targets in this chunk |
-
-### Static fleet
-
-Use pre-existing hosts without provisioning:
-
-```yaml
-jobs:
-  multi-host:
-    cloud:
-      provider: static
-      hosts:
-        - host: 10.0.0.1
-          ssh_user: root
-        - host: 10.0.0.2
-          ssh_user: root
-        - host: 10.0.0.3
-          ssh_user: operator
-    strategy:
-      fleet:
-        count: 3
-        input: targets.txt
-        distribution: round-robin
-    steps:
-      - run: masscan -iL {{ matrix.fleet_input_file }} -p 1-65535 --rate 10000
-```
-
 ## Windows VPS (WinRM)
 
 Cloud jobs support Windows instances via WinRM:
@@ -338,6 +262,46 @@ When `opsec_mode: true`:
 
 This hides the actual command content from `ps`, `top`, and similar enumeration.
 
+## Authentication
+
+### DigitalOcean
+
+Tokens are resolved in this order:
+
+1. `token` field in profile `extra:` config
+2. `DIGITALOCEAN_TOKEN` environment variable
+3. OFX secret named `digitalocean_token` (from `ofx secret set digitalocean_token=dop_v1_...`)
+
+```bash
+# Option 1: Environment variable
+export DIGITALOCEAN_TOKEN="dop_v1_..."
+
+# Option 2: OFX secret store (encrypted, persisted)
+ofx secret set digitalocean_token=dop_v1_...
+
+# Option 3: Profile extras in ~/.ofx/cloud.yml
+```
+
+```yaml
+profiles:
+  do-prod:
+    provider: digitalocean
+    extra:
+      token: dop_v1_...
+```
+
+### AWS EC2
+
+Uses the standard AWS credential chain:
+
+```bash
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+export AWS_DEFAULT_REGION="us-east-1"
+```
+
+Or configure via `~/.aws/credentials`.
+
 ## CLI Instance Management
 
 ```bash
@@ -370,73 +334,7 @@ ofx cloud image list --provider digitalocean
 ofx cloud image delete <snapshot-id> --provider digitalocean
 ```
 
-### Fleet management
-
-```bash
-# Create a fleet of 5 instances
-ofx cloud fleet create 5 --profile do-small --prefix scan-fleet
-
-# Destroy fleet instances by prefix
-ofx cloud fleet destroy --prefix scan-fleet --provider digitalocean
-```
-
-## Authentication
-
-### DigitalOcean
-
-Set the `DIGITALOCEAN_TOKEN` environment variable:
-
-```bash
-export DIGITALOCEAN_TOKEN="dop_v1_..."
-ofx flow run my-cloud-workflow
-```
-
-Or pass via profile extras in `~/.ofx/cloud.yml`:
-
-```yaml
-profiles:
-  do-prod:
-    provider: digitalocean
-    extra:
-      token: dop_v1_...
-```
-
-### AWS EC2
-
-Uses the standard AWS credential chain:
-
-```bash
-export AWS_ACCESS_KEY_ID="..."
-export AWS_SECRET_ACCESS_KEY="..."
-export AWS_DEFAULT_REGION="us-east-1"
-```
-
-Or configure via `~/.aws/credentials`.
-
 ## Example Workflows
-
-### Distributed subdomain enumeration
-
-```yaml
-name: distributed-recon
-jobs:
-  enum:
-    cloud:
-      profile: do-small
-    strategy:
-      fleet:
-        count: 3
-        input: domains.txt
-        distribution: round-robin
-    steps:
-      - run: |
-          apt-get update && apt-get install -y subfinder httpx-toolkit
-      - run: |
-          while read domain; do
-            subfinder -d "$domain" -silent >> subs.txt
-          done < {{ matrix.fleet_input_file }}
-          httpx -l subs.txt -o live-{{ matrix.fleet_index }}.txt
-```
 
 ### Cloud + local hybrid
 
@@ -446,7 +344,7 @@ jobs:
   scan:
     cloud: do-small
     steps:
-      - run: nmap -sV -p- target.com -oA /tmp/ofx-*/output/nmap
+      - run: nmap -sV -p- target.com -oA output/nmap
 
   analyze:
     needs: [scan]
@@ -454,4 +352,31 @@ jobs:
       - run: |
           # Runs locally, uses output from cloud scan
           cat output/scan/nmap.gnmap | grep open
+```
+
+### Multi-cloud
+
+Different jobs can use different providers:
+
+```yaml
+name: multi-cloud
+jobs:
+  recon:
+    cloud: do-nyc
+    steps:
+      - run: subfinder -d target.com -o output/subs.txt
+
+  exploit:
+    cloud:
+      provider: aws
+      region: us-east-1
+      size: t3.medium
+    needs: [recon]
+    steps:
+      - run: nuclei -l targets.txt
+
+  report:
+    needs: [exploit]
+    steps:
+      - run: echo "All done"   # Runs locally
 ```

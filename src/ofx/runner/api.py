@@ -3,6 +3,7 @@ Programmatic API for running OFX workflows.
 """
 
 import logging
+import re
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -21,10 +22,51 @@ from ofx.settings import (
     get_workflow_search_dirs,
     settings,
 )
-from ofx.utils.secrets import load_secrets
+from ofx.utils.log import register_secrets, register_sensitive_env
+from ofx.utils.secrets import load_secrets_by_keys
 from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
 
 logger = logging.getLogger(settings.app_branding)
+
+# Matches secrets.KEY_NAME in Jinja2 template expressions.
+# Handles both dot access (secrets.MY_KEY) and bracket access (secrets["MY_KEY"]).
+_SECRETS_DOT_RE = re.compile(r"\bsecrets\.([a-zA-Z_][a-zA-Z0-9_]*)")
+_SECRETS_BRACKET_RE = re.compile(r"""secrets\[['"]([a-zA-Z_][a-zA-Z0-9_]*)["']\]""")
+
+
+def _extract_secret_refs(workflow: Workflow) -> set[str]:
+    """Scan a workflow model for secret name references in template strings.
+
+    Walks all string values in the workflow dump looking for patterns like
+    ``secrets.MY_KEY`` or ``secrets["MY_KEY"]``.  Also includes keys
+    declared in ``call.secrets`` for reusable workflows.
+    """
+    refs: set[str] = set()
+
+    # Declared secrets in call config (reusable workflows)
+    if workflow.call and workflow.call.secrets:
+        refs.update(workflow.call.secrets.keys())
+
+    # Walk the model dump looking for template references
+    def _walk(obj: Any) -> None:
+        if isinstance(obj, str):
+            refs.update(_SECRETS_DOT_RE.findall(obj))
+            refs.update(_SECRETS_BRACKET_RE.findall(obj))
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                _walk(v)
+        elif isinstance(obj, (list, tuple)):
+            for v in obj:
+                _walk(v)
+
+    # Dump jobs (where templates live) — exclude heavy non-template fields
+    for job in workflow.jobs.values():
+        _walk(job.model_dump(mode="python"))
+
+    # Also scan workflow-level env (may reference secrets)
+    _walk(workflow.env)
+
+    return refs
 
 
 def _cleanup_run(output_dir: Path) -> None:
@@ -120,7 +162,9 @@ async def run_workflow(
     try:
         resolved_workflow: Workflow = find_workflow(str(workflow), tuple(search_paths))
     except RuntimeError as exc:
-        raise FileNotFoundError(f"Workflow {workflow!r} not found in search paths") from exc
+        raise FileNotFoundError(
+            f"Workflow {workflow!r} not found in search paths"
+        ) from exc
 
     output_dir = _get_tmp_dir(output_path)
     if durable_overrides is not None:
@@ -141,9 +185,22 @@ async def run_workflow(
     runner_secrets = secrets
     if runner_secrets is None:
         try:
-            runner_secrets = load_secrets(ensure_dir(SECRETS_DIR))
+            needed = _extract_secret_refs(resolved_workflow)
+            if needed:
+                runner_secrets = load_secrets_by_keys(
+                    needed, secrets_dir=ensure_dir(SECRETS_DIR)
+                )
+            else:
+                runner_secrets = {}
         except Exception:
             runner_secrets = {}
+
+    # Register secret values for log redaction *before* any runner logs.
+    if runner_secrets:
+        register_secrets(runner_secrets)
+    # Redact sensitive-looking env vars (passwords, tokens, keys) from logs.
+    if resolved_workflow.env:
+        register_sensitive_env(resolved_workflow.env)
 
     ctx = RunContext(
         inputs=inputs or {},

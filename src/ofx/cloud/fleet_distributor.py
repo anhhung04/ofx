@@ -73,44 +73,6 @@ class FleetDistributor:
                 logger.warning(f"Unknown distribution mode '{mode}', using chunk")
                 return self._chunk(targets, effective_count)
 
-    def distribute_to_files(
-        self,
-        targets: list[str],
-        count: int,
-        mode: str = "chunk",
-        output_dir: str | Path | None = None,
-    ) -> list[Path]:
-        """Distribute targets and write each chunk to a file.
-
-        Args:
-            targets: List of targets.
-            count: Number of fleet instances.
-            mode: Distribution mode.
-            output_dir: Directory for chunk files. Defaults to temp dir.
-
-        Returns:
-            List of file paths, one per fleet instance.
-        """
-        chunks = self.distribute(targets, count, mode)
-
-        if output_dir is None:
-            output_dir = Path(tempfile.mkdtemp(prefix="ofx_fleet_"))
-        else:
-            output_dir = Path(output_dir)
-            output_dir.mkdir(parents=True, exist_ok=True)
-
-        files = []
-        for i, chunk in enumerate(chunks):
-            chunk_file = output_dir / f"fleet_chunk_{i}.txt"
-            chunk_file.write_text("\n".join(chunk) + "\n" if chunk else "")
-            files.append(chunk_file)
-
-        logger.info(
-            f"Fleet: distributed {len(targets)} targets across {len(files)} "
-            f"chunk files in {output_dir}"
-        )
-        return files
-
     def _chunk(self, targets: list[str], count: int) -> list[list[str]]:
         """Split into N contiguous chunks."""
         if count <= 0:
@@ -205,29 +167,33 @@ def expand_fleet_to_matrix(
     distributor = FleetDistributor()
 
     # Parse targets
-    if input_data:
-        targets = parser.parse(input_data)
-    else:
-        targets = []
+    targets = parser.parse(input_data) if input_data else []
 
-    # Distribute to files
-    chunk_files = distributor.distribute_to_files(
-        targets, count, distribution
+    # Distribute once, then write chunk files from the result
+    chunks = distributor.distribute(targets, count, distribution)
+
+    output_dir = Path(tempfile.mkdtemp(prefix="ofx_fleet_"))
+    chunk_files: list[Path] = []
+    for i, chunk in enumerate(chunks):
+        chunk_file = output_dir / f"fleet_chunk_{i}.txt"
+        chunk_file.write_text("\n".join(chunk) + "\n" if chunk else "")
+        chunk_files.append(chunk_file)
+
+    logger.debug(
+        f"Fleet: distributed {len(targets)} targets across {len(chunk_files)} "
+        f"chunk files in {output_dir}"
     )
-
-    # Effective count (may be reduced if fewer targets than instances)
-    effective_count = len(chunk_files)
 
     # Build matrix combinations
     combinations = []
-    chunks = distributor.distribute(targets, count, distribution)
-
-    for i in range(effective_count):
+    for i, chunk in enumerate(chunks):
         combo = {
             "fleet_index": i,
-            "fleet_total": effective_count,
+            "fleet_total": len(chunks),
             "fleet_input_file": str(chunk_files[i]),
-            "fleet_target_count": len(chunks[i]) if i < len(chunks) else 0,
+            "fleet_target_count": len(chunk),
+            "fleet_input": chunk,
+            "fleet_name": f"[{fleet_config.get('name', 'fleet')}]{{{i}}}",
         }
         combinations.append(combo)
 

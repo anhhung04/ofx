@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -227,17 +225,23 @@ class TestFleetDistributor:
         result = dist.distribute(targets, count=2, mode="line")
         assert len(result) == 4  # line mode: one chunk per line
 
-    def test_distribute_to_files(self, tmp_path):
-        from ofx.cloud.fleet_distributor import FleetDistributor
+    def test_expand_fleet_writes_chunk_files(self):
+        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
 
-        dist = FleetDistributor()
-        targets = [f"10.0.0.{i}" for i in range(1, 7)]
-        files = dist.distribute_to_files(
-            targets, count=2, mode="chunk", output_dir=str(tmp_path)
+        combos, chunk_files = expand_fleet_to_matrix(
+            fleet_config={
+                "input": ",".join(f"10.0.0.{i}" for i in range(1, 7)),
+                "count": 2,
+                "distribution": "chunk",
+            },
         )
-        assert len(files) == 2
-        for f in files:
-            assert Path(f).exists()
+        assert len(chunk_files) == 2
+        for f in chunk_files:
+            assert f.exists()
+        # Cleanup
+        for f in chunk_files:
+            f.unlink(missing_ok=True)
+        chunk_files[0].parent.rmdir()
 
     def test_expand_fleet_to_matrix(self):
         from ofx.cloud.fleet_distributor import expand_fleet_to_matrix

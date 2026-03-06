@@ -1,4 +1,3 @@
-import getpass
 import json
 import logging
 from pathlib import Path
@@ -35,13 +34,13 @@ def _resolve_secret_input(name: str, value: str | None, file: Path | None) -> st
     if value is not None:
         return value
 
-    return getpass.getpass(f"Enter value for secret '{name}': ")
+    return typer.prompt(f"Enter value for secret '{name}'", hide_input=True)
 
 
 def _resolve_passphrase(passphrase: str, ask: bool) -> str | None:
     """Return the passphrase from flag or prompt; prompt wins when requested."""
     if ask:
-        return getpass.getpass("Enter passphrase: ")
+        return typer.prompt("Enter passphrase for secrets store (leave blank for none)", hide_input=True).strip() or None
     return passphrase if passphrase else None
 
 
@@ -78,13 +77,13 @@ def _maybe_backup_store(
 def set_secret(
     name: Annotated[str, typer.Argument(help="Secret name")],
     value: Annotated[
-        str,
+        str | None,
         typer.Option(
             "--value",
             "-v",
             help="Secret value (if not provided, will prompt)",
         ),
-    ],
+    ] = None,
     file: Annotated[
         str,
         typer.Option(
@@ -97,7 +96,6 @@ def set_secret(
         bool,
         typer.Option(
             "--force",
-            "-f",
             help="Overwrite existing secret without prompt",
         ),
     ] = False,

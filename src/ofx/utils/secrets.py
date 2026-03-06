@@ -1,16 +1,19 @@
+from __future__ import annotations
+
 import base64
 import json
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
+import typer
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
 class SecretStore:
-    _instance: Optional["SecretStore"] = None
+    _instance: SecretStore | None = None
     _store_path: Path | None = None
     _passphrase: str | None = None
 
@@ -41,17 +44,39 @@ class SecretStore:
 
             self.store_path = SECRETS_STORE
 
-        env_passphrase = os.getenv("OFX_SECRETS_PASSPHRASE")
-        self._passphrase = passphrase or env_passphrase
-
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         self._cipher = None
         self._initialized = True
 
+        if self.is_store_encrypted(self.store_path) and passphrase is None:
+            env_passphrase = os.getenv(
+                "OFX_SECRETS_PASSPHRASE",
+                typer.prompt(
+                    "Enter passphrase for secrets store (leave blank for none): ",
+                    hide_input=True,
+                ).strip()
+                or None,
+            )
+            self._passphrase = env_passphrase
+        else:
+            self._passphrase = passphrase
+
+    @classmethod
+    def is_store_encrypted(cls, store_path: Path) -> bool:
+        # try decrypt with empty passphrase; if it fails, assume it's encrypted
+        if not store_path.exists():
+            return False
+        try:
+            temp_instance = cls(store_path=store_path, passphrase="")
+            temp_instance._get_cipher().decrypt(store_path.read_bytes())
+            return False
+        except Exception:
+            return True
+
     @classmethod
     def get_instance(
         cls, store_path: Path | None = None, passphrase: str | None = None
-    ) -> "SecretStore":
+    ) -> SecretStore:
         return cls(store_path, passphrase)
 
     def _get_key(self) -> bytes:
@@ -123,6 +148,13 @@ class SecretStore:
             self._save_data(data)
             return True
         return False
+
+    def get_many(self, names: set[str]) -> dict[str, Any]:
+        """Load only the specified secret keys from the store."""
+        if not names:
+            return {}
+        data = self._load_data()
+        return {k: v for k, v in data.items() if k in names}
 
     def list(self) -> dict[str, Any]:
         return self._load_data()
@@ -371,3 +403,34 @@ def load_secrets(secrets_dir: Path | None = None) -> dict[str, str]:
             secrets[secret_file.name] = content
 
     return secrets
+
+
+def load_secrets_by_keys(
+    keys: set[str],
+    secrets_dir: Path | None = None,
+    passphrase: str | None = None,
+) -> dict[str, str]:
+    """Load only the specified secrets from the store.
+
+    Falls back to legacy directory-based secrets for any keys not found
+    in the encrypted store.
+    """
+    if not keys:
+        return {}
+
+    store = SecretStore.get_instance(passphrase=passphrase)
+    result = store.get_many(keys)
+
+    # Fall back to directory files for missing keys
+    missing = keys - result.keys()
+    if missing and secrets_dir and secrets_dir.exists():
+        for secret_file in secrets_dir.glob("*"):
+            if secret_file.name in missing and secret_file.is_file():
+                content = secret_file.read_text()
+                try:
+                    content = json.loads(content)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+                result[secret_file.name] = content
+
+    return result

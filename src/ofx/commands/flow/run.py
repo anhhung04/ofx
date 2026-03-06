@@ -20,7 +20,7 @@ from ofx.settings import (
     settings,
 )
 
-logger = logging.getLogger(settings.app_branding)
+logger = logging.getLogger(f"{settings.app_branding}.console")
 console = get_console()
 
 
@@ -133,7 +133,7 @@ class FlowRunHandler:
                 logger.info("Project: %s (%s)", self.project_vars["project_name"], self.project_vars["project_path"])
             logger.info("Output: %s", self.output.as_posix())
             if self.input and not self.quiet:
-                console.print(Align.center(inputs_table(self.input)))
+                console.print(inputs_table(self.input))
 
             durable_overrides = self._durable_overrides()
             result = await run_workflow(
