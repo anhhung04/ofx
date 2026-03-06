@@ -8,6 +8,7 @@ from ofx.runner.context import RunnerContextBuilder
 from ofx.runner.core import BaseRunner, RegistryAdapter, RunContext, RunnerRegistryKeys
 from ofx.runner.execution.execution_summary import ExecutionSummaryReporter
 from ofx.runner.execution.job import JobRunner, MatrixJobRunner
+from ofx.runner.execution.cloud_job import CloudJobRunner
 from ofx.runner.execution.tool_installer import ToolInstallerRunner
 from ofx.runner.execution.workflow_execution import WorkflowExecutionManager
 from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
@@ -112,7 +113,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
         if result.failed_job_ids:
             # Ensure job execution data is present before summarizing
             for runner in self._runners.values():
-                if isinstance(runner, (JobRunner, MatrixJobRunner)):
+                if isinstance(runner, (JobRunner, MatrixJobRunner, CloudJobRunner)):
                     await runner._post_run()
             await self._store_summaries()
 

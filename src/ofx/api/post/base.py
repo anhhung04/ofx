@@ -26,7 +26,7 @@ class CommandRunner(Protocol):
         ...     return runner.run("id")
     """
 
-    def run(self, command: str) -> str:
+    def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a command and return output."""
         ...
 
@@ -59,11 +59,12 @@ class PostRunnerBase(ABC):
     """
 
     @abstractmethod
-    def run(self, command: str) -> str:
+    def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a command on the remote target.
 
         Args:
             command: Shell command to execute
+            timeout: Optional timeout in seconds for command execution
 
         Returns:
             Command output as string

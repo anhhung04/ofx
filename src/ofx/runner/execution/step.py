@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import shutil
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -142,8 +143,7 @@ class StepRunner(BaseRunner[Step]):
         """Log a stdout/stderr stream to the console."""
         if not content or not isinstance(content, str):
             return
-        for line in content.splitlines():
-            self._log_info(f"{stream} | {line}")
+        self._log_info(f"\n==={stream}===\n{content}===========")
 
     def _save_output_file(self, stdout: str, outputs: dict) -> None:
         """Persist full stdout to a log file under output_path/logs/."""

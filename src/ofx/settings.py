@@ -20,7 +20,7 @@ USER_DIR = Path.home()
 
 BASE_DATA_DIR = Path.home() / ".ofx"
 TEMP_DIR = Path(
-    tempfile.TemporaryDirectory(prefix="ofx_", dir=str(tempfile.gettempdir())).name
+    tempfile.TemporaryDirectory(prefix=".tmp_r_", dir=str(tempfile.gettempdir())).name
 ).absolute()
 CONFIG_FILE = BASE_DATA_DIR / "config.ini"
 SECRETS_STORE = Path(os.getenv("OFX_SECRETS_STORE", BASE_DATA_DIR / "secrets.enc"))

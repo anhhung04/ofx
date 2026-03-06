@@ -1,8 +1,13 @@
-"""Cloud job runner — provisions VPS, runs job remotely, destroys on completion."""
+"""Cloud job runner — provisions VPS, runs job remotely, destroys on completion.
+
+Also contains ``CloudMatrixJobRunner`` which expands matrix/fleet combinations
+and spawns a separate ``CloudJobRunner`` per combination (each on its own VPS).
+"""
 
 from __future__ import annotations
 
 import asyncio
+import itertools
 import logging
 import os
 import tempfile
@@ -19,6 +24,7 @@ from ofx.runner.core import (
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
+    RunResult,
 )
 from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.runner.execution.execution_results import (
@@ -77,12 +83,14 @@ class CloudJobRunner(BaseRunner[Job]):
             ["name", "needs", "run_if", "env", "defaults"]
         )
         from ofx.runner.context import RunnerContextBuilder
+
         self.ctx = RunnerContextBuilder(self.ctx).with_env(self.model.env)
 
         # Resolve cloud profile
         cfg = self._cloud_config
         if isinstance(cfg, str):
             from ofx.models.cloud import parse_cloud_field
+
             cfg = parse_cloud_field(cfg)
         if cfg is None:
             raise RuntimeError("Cloud config is required for CloudJobRunner")
@@ -126,12 +134,15 @@ class CloudJobRunner(BaseRunner[Job]):
             self.model.model_dump(exclude={"steps", "env"}),
         )
         if self._instance:
-            await self.reg_set("cloud_instance", {
-                "instance_id": self._instance.instance_id,
-                "ip": self._instance.ip,
-                "provider": self._instance.provider,
-                "region": self._instance.region,
-            })
+            await self.reg_set(
+                "cloud_instance",
+                {
+                    "instance_id": self._instance.instance_id,
+                    "ip": self._instance.ip,
+                    "provider": self._instance.provider,
+                    "region": self._instance.region,
+                },
+            )
 
     async def _provision_instance(self, cfg: CloudConfig) -> None:
         """Create and connect to cloud instance."""
@@ -173,19 +184,18 @@ class CloudJobRunner(BaseRunner[Job]):
         # Create remote runner
         self._remote_runner = self._create_remote_runner(cfg)
         self._log_info(
-            f"Connected to {self._instance.ip} via "
-            f"{'WinRM' if is_windows else 'SSH'}"
+            f"Connected to {self._instance.ip} via {'WinRM' if is_windows else 'SSH'}"
         )
 
         # Setup working directory on remote
         if not is_windows:
-            self._work_dir = f"/tmp/ofx-{self.run_id[:8]}"
+            self._work_dir = f"/tmp/.run-{self.run_id[:8]}"
             try:
                 self._remote_runner.run(f"mkdir -p {self._work_dir}")
             except Exception:
                 self._work_dir = "/tmp"
         else:
-            self._work_dir = f"C:\\Windows\\Temp\\ofx-{self.run_id[:8]}"
+            self._work_dir = f"C:\\Windows\\Temp\\.run-{self.run_id[:8]}"
             try:
                 self._remote_runner.run(f'mkdir "{self._work_dir}" 2>nul')
             except Exception:
@@ -221,20 +231,24 @@ class CloudJobRunner(BaseRunner[Job]):
         """Create PostSSH or PostWinRM instance for the provisioned instance."""
         from ofx.api.post import RunnerRegistry
 
+        if not self._instance:
+            raise RuntimeError("Cannot create remote runner without instance info")
         ip = self._instance.ip
         is_windows = cfg.connection_type == "winrm"
         is_log_commands = cfg.log_commands or False
         log_path = None
         if is_log_commands:
             if self.ctx.output_path:
-                log_dir = Path(self.ctx.output_path) / "logs"/ "cloud_commands"
+                log_dir = Path(self.ctx.output_path) / "logs" / "cloud_commands"
                 log_dir.mkdir(parents=True, exist_ok=True)
                 log_path = log_dir / f"{self.model.jid}_{ip}.log"
             else:
-                fd, tmp = tempfile.mkstemp(prefix="ofx_cloud_commands_", suffix=".log")
+                fd, tmp = tempfile.mkstemp(prefix=".tmp_rcmd_", suffix=".log")
                 os.close(fd)
                 log_path = tmp
-            self._log_info(f"Command logging enabled. Logs will be saved to: {log_path}")
+            self._log_info(
+                f"Command logging enabled. Logs will be saved to: {log_path}"
+            )
         if is_windows:
             return RunnerRegistry.create(
                 "winrm",
@@ -270,6 +284,9 @@ class CloudJobRunner(BaseRunner[Job]):
             f"Starting cloud job '{self.model.name or self.model.jid}' "
             f"on {self._instance.ip if self._instance else 'unknown'}"
         )
+
+        # Upload fleet input file if present (from CloudMatrixJobRunner)
+        await self._upload_fleet_input()
 
         for step in self.model.steps:
             step_ctx = self._child_context(
@@ -323,7 +340,7 @@ class CloudJobRunner(BaseRunner[Job]):
             if is_windows:
                 # List files in work dir
                 files_output = self._remote_runner.run(
-                    f'powershell "Get-ChildItem -Path \'{self._work_dir}\\output\' '
+                    f"powershell \"Get-ChildItem -Path '{self._work_dir}\\output' "
                     f'-File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name"'
                 )
             else:
@@ -371,12 +388,64 @@ class CloudJobRunner(BaseRunner[Job]):
             self._log_warning(f"Instance destroy failed: {e}")
 
     def _cleanup_remote(self) -> None:
-        """Clean up remote runner resources."""
-        if self._remote_runner and hasattr(self._remote_runner, "cleanup"):
+        """Clean up remote working directory and runner resources."""
+        if not self._remote_runner:
+            return
+        # Remove remote work dir and all contents
+        if self._work_dir and self._work_dir not in ("/tmp", "C:\\Windows\\Temp"):
+            try:
+                is_windows = (
+                    self._cloud_config and self._cloud_config.connection_type == "winrm"
+                )
+                if is_windows:
+                    self._remote_runner.run(
+                        f"powershell \"Remove-Item -Path '{self._work_dir}' -Recurse -Force -ErrorAction SilentlyContinue\"",
+                        timeout=15,
+                    )
+                else:
+                    self._remote_runner.run(f"rm -rf {self._work_dir}", timeout=15)
+            except Exception:
+                pass
+        if hasattr(self._remote_runner, "cleanup"):
             try:
                 self._remote_runner.cleanup()
             except Exception:
                 pass
+
+    async def _upload_fleet_input(self) -> None:
+        """Upload the local fleet chunk file to the remote host.
+
+        When this CloudJobRunner is spawned by CloudMatrixJobRunner with
+        fleet expansion, ``ctx.envs["FLEET_INPUT_FILE"]`` points to a
+        local temp file.  We upload it and rewrite the env var to the
+        remote path so shell steps can use ``$FLEET_INPUT_FILE``.
+        """
+        local_path = self.ctx.envs.get("FLEET_INPUT_FILE", "")
+        if not local_path:
+            return
+
+        local = Path(local_path)
+        if not local.is_file():
+            return
+
+        if not self._remote_runner or not self._work_dir:
+            return
+
+        is_windows = (
+            self._cloud_config and self._cloud_config.connection_type == "winrm"
+        )
+        if is_windows:
+            remote_path = f"{self._work_dir}\\fleet_targets.txt"
+        else:
+            remote_path = f"{self._work_dir}/fleet_targets.txt"
+
+        try:
+            await asyncio.to_thread(self._remote_runner.upload, str(local), remote_path)
+            # Update env to point to the remote path
+            self.ctx.envs["FLEET_INPUT_FILE"] = remote_path
+            self._log_info(f"Uploaded fleet input → {remote_path}")
+        except Exception as e:
+            self._log_warning(f"Failed to upload fleet input: {e}")
 
     # ------------------------------------------------------------------
     # Helpers
@@ -419,8 +488,12 @@ class CloudStepRunner(BaseRunner):
 
         self._run_type = self.model.get_run_type()
         resolve_fields = [
-            "name", "shell", "working_directory", "log_stdout",
-            "env", "run_if",
+            "name",
+            "shell",
+            "working_directory",
+            "log_stdout",
+            "env",
+            "run_if",
         ]
         if self._run_type == RunType.COMMAND:
             resolve_fields.extend(["run"])
@@ -508,7 +581,9 @@ class CloudStepRunner(BaseRunner):
         execution = StepExecutionResult(
             step_index=self.model.step_index,
             name=self.model.name,
-            run_type=self._run_type.value if self._run_type else self.model.get_run_type().value,
+            run_type=self._run_type.value
+            if self._run_type
+            else self.model.get_run_type().value,
             status=status_value,
             error=result.error,
             outputs=result.outputs,
@@ -520,14 +595,15 @@ class CloudStepRunner(BaseRunner):
         """Log a stdout/stderr stream to the console."""
         if not content or not isinstance(content, str):
             return
-        for line in content.splitlines():
-            self._log_info(f"{stream} | {line}")
+        self._log_info(f"\n==={stream}===\n{content}===========")
 
     # ------------------------------------------------------------------
     # Remote execution methods
     # ------------------------------------------------------------------
 
-    async def _run_remote_command(self, command: str, timeout: int | None = None) -> str:
+    async def _run_remote_command(
+        self, command: str, timeout: int | None = None
+    ) -> str:
         """Run a shell command on the remote host."""
         env_prefix = self._build_env_prefix()
         work_dir = self._resolve_remote_work_dir()
@@ -537,9 +613,7 @@ class CloudStepRunner(BaseRunner):
             full_cmd += env_prefix + " "
         full_cmd += f"cd {work_dir} && {command}"
 
-        return await asyncio.to_thread(
-            self._remote.run, full_cmd, timeout
-        )
+        return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
 
     async def _discover_python(self) -> str:
         """Find a working python3/python executable on the remote host."""
@@ -588,10 +662,10 @@ class CloudStepRunner(BaseRunner):
         # Discover python on the remote host
         python_bin = await self._discover_python()
 
-        remote_script = f"{self._work_dir}/.ofx_script_{_secrets.token_hex(4)}.py"
+        remote_script = f"{self._work_dir}/.s_{_secrets.token_hex(6)}.py"
 
         # Upload bundled script content
-        fd, local_tmp = tempfile.mkstemp(prefix="ofx_script_", suffix=".py")
+        fd, local_tmp = tempfile.mkstemp(prefix=".tmp_s_", suffix=".py")
         os.close(fd)
         try:
             Path(local_tmp).write_text(bundle.bootstrap)
@@ -611,9 +685,7 @@ class CloudStepRunner(BaseRunner):
         finally:
             # Cleanup remote script
             try:
-                await asyncio.to_thread(
-                    self._remote.run, f"rm -f {remote_script}", 10
-                )
+                await asyncio.to_thread(self._remote.run, f"rm -f {remote_script}", 10)
             except Exception:
                 pass
 
@@ -629,11 +701,11 @@ class CloudStepRunner(BaseRunner):
         """
         # Resolve the absolute path of the script file.
         local_path = Path(script_file).expanduser().with_suffix(".py")
-        
+
         if not local_path.is_absolute():
             base_dir = getattr(self.ctx, "workflow_dir", Path.cwd())
             local_path = (base_dir / local_path).resolve()
-        
+
         if not local_path.is_file():
             raise FileNotFoundError(f"Script file not found: {local_path}")
 
@@ -645,7 +717,7 @@ class CloudStepRunner(BaseRunner):
         python_bin = await self._discover_python()
 
         # Write bootstrap to a temporary local file.
-        fd, local_tmp = tempfile.mkstemp(prefix="ofx_bundle_", suffix=".py")
+        fd, local_tmp = tempfile.mkstemp(prefix=".tmp_b_", suffix=".py")
         os.close(fd)
         remote_path = "/tmp/__UNKNOWN__"
         try:
@@ -678,7 +750,7 @@ class CloudStepRunner(BaseRunner):
     def _resolve_remote_work_dir(self) -> str:
         """Resolve the working directory for remote execution.
 
-        Uses the remote work dir (e.g. /tmp/ofx-xxxx) by default.
+        Uses the remote work dir (e.g. /tmp/.run-xxxx) by default.
         Only honours ``model.working_directory`` when it looks like a
         remote-appropriate path (absolute *and* different from any local
         default that leaked from workflow defaults).
@@ -724,9 +796,7 @@ class CloudStepRunner(BaseRunner):
         if not env_vars:
             return ""
 
-        exports = " ".join(
-            f'{k}="{v}"' for k, v in env_vars.items()
-        )
+        exports = " ".join(f'{k}="{v}"' for k, v in env_vars.items())
         return f"export {exports} &&" if exports else ""
 
     def _save_output(self, output: str) -> None:
@@ -737,7 +807,9 @@ class CloudStepRunner(BaseRunner):
         log_path.mkdir(parents=True, exist_ok=True)
 
         job_id = self.parent.model.jid if self.parent else "unknown"
-        step_name = (self.model.name or f"step_{self.model.step_index}").replace(" ", "-")
+        step_name = (self.model.name or f"step_{self.model.step_index}").replace(
+            " ", "-"
+        )
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_file = log_path / f"stdout_{job_id}_{step_name}__{timestamp}.log"
 
@@ -761,3 +833,247 @@ class CloudStepRunner(BaseRunner):
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
+
+
+# ======================================================================
+# Cloud Matrix/Fleet Job Runner
+# ======================================================================
+
+
+class CloudMatrixJobRunner(BaseRunner[Job]):
+    """Meta-runner for cloud jobs with matrix and/or fleet expansion.
+
+    Expands matrix combinations and fleet target distribution into
+    individual ``CloudJobRunner`` instances — each provisioning its own
+    VPS (or static host) and running the full job step list.
+
+    Supports three modes:
+    1. **Cloud + matrix** — each matrix combination runs on a separate VPS.
+    2. **Cloud + fleet**  — targets are split across N VPS instances using
+       :func:`expand_fleet_to_matrix`, each VPS receiving a chunk file.
+    3. **Cloud + matrix + fleet** — the Cartesian product of matrix
+       combinations × fleet chunks, each on its own VPS.
+
+    Fleet chunk files are written to a temp directory and cleaned up
+    automatically after all combinations complete.
+
+    YAML example (cloud + fleet)::
+
+        jobs:
+          scan:
+            cloud: do-nyc
+            strategy:
+              fleet:
+                count: 5
+                input: targets.txt
+                distribution: chunk
+            steps:
+              - run: nmap -iL $FLEET_INPUT_FILE -oA output/scan_$FLEET_INDEX
+
+    YAML example (cloud + matrix)::
+
+        jobs:
+          exploit:
+            cloud:
+              provider: aws
+              region: us-east-1
+            strategy:
+              matrix:
+                tool: [sqlmap, nuclei]
+                target: [app1.com, app2.com]
+            steps:
+              - run: ${{ matrix.tool }} -u ${{ matrix.target }}
+    """
+
+    def __init__(
+        self,
+        job: Job,
+        ctx: RunContext,
+        parent: BaseRunner[Workflow],
+    ):
+        super().__init__(job, ctx, parent)
+        self.name = f"CloudMatrix{self.name}"
+        self._combinations: list[dict[str, Any]] = []
+        self._chunk_files: list[Path] = []
+
+    def _produce_log(self, message: Any) -> str:
+        message_str = str(message)
+        msg = f"'{self.model.jid}' [cloud-matrix] › {message_str}"
+        if self.parent:
+            return self.parent._produce_log(msg)
+        return msg
+
+    # ------------------------------------------------------------------
+    # Pre-run: expand combinations
+    # ------------------------------------------------------------------
+
+    async def _pre_run(self) -> None:
+        await self._resolve_template_fields(["strategy"])
+        self._combinations = self._build_combinations()
+        self._log_info(
+            f"Expanded {len(self._combinations)} cloud combination(s) "
+            f"for '{self.model.name or self.model.jid}'"
+        )
+
+    def _build_combinations(self) -> list[dict[str, Any]]:
+        """Build the full list of combinations from matrix × fleet."""
+        strategy = self.model.strategy
+        if not strategy:
+            return [{}]
+
+        matrix_combos = self._expand_matrix(strategy)
+        fleet_combos = self._expand_fleet(strategy)
+
+        if matrix_combos and fleet_combos:
+            # Cartesian product: each matrix combo × each fleet chunk
+            combined = []
+            for mc in matrix_combos:
+                for fc in fleet_combos:
+                    combined.append({**mc, **fc})
+            return combined or [{}]
+
+        return matrix_combos or fleet_combos or [{}]
+
+    def _expand_matrix(self, strategy) -> list[dict[str, Any]]:
+        """Generate matrix combinations with include/exclude rules."""
+        if not strategy.matrix:
+            return []
+
+        matrix_keys = list(strategy.matrix.keys())
+        matrix_values = [strategy.matrix[key] for key in matrix_keys]
+
+        base = [
+            dict(zip(matrix_keys, combo, strict=True))
+            for combo in itertools.product(*matrix_values)
+        ]
+
+        if strategy.exclude:
+            base = [
+                c
+                for c in base
+                if not any(
+                    all(c.get(k) == v for k, v in f.items()) for f in strategy.exclude
+                )
+            ]
+
+        if strategy.include:
+            for inc in strategy.include:
+                if inc not in base:
+                    base.append(inc)
+
+        return base
+
+    def _expand_fleet(self, strategy) -> list[dict[str, Any]]:
+        """Expand fleet strategy into per-instance combinations with chunk files."""
+        if not strategy.fleet:
+            return []
+
+        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+
+        fleet = strategy.fleet
+        combos, self._chunk_files = expand_fleet_to_matrix(
+            fleet_config={
+                "count": fleet.count,
+                "input": fleet.input,
+                "distribution": fleet.distribution,
+                "exclude": fleet.exclude,
+            },
+            expand_cidrs=fleet.expand_cidrs,
+        )
+        return combos
+
+    # ------------------------------------------------------------------
+    # Do-run: spawn CloudJobRunner per combination
+    # ------------------------------------------------------------------
+
+    async def _do_run(self) -> None:
+        if not self._combinations:
+            return
+
+        strategy = self.model.strategy
+        max_parallel = strategy.max_parallel if strategy else len(self._combinations)
+        semaphore = asyncio.Semaphore(max_parallel)
+
+        async def run_instance(idx: int, combo: dict[str, Any]):
+            async with semaphore:
+                return await self._run_single_cloud_job(idx, combo)
+
+        tasks = [
+            asyncio.create_task(run_instance(idx, combo))
+            for idx, combo in enumerate(self._combinations)
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        errors = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                errors.append(f"Combination {i}: {result}")
+            elif (
+                isinstance(result, RunResult)
+                and result.status != RunnerStatus.COMPLETED
+            ):
+                errors.append(f"Combination {i}: {result.error or 'Failed'}")
+
+        if errors:
+            raise RuntimeError("; ".join(errors))
+
+    async def _run_single_cloud_job(self, idx: int, combo: dict[str, Any]) -> RunResult:
+        """Provision a VPS and run the full job for one combination."""
+        job_ctx = self._child_context()
+
+        # Inject matrix variables (tool, target, etc.)
+        matrix_vars = {k: v for k, v in combo.items() if not k.startswith("fleet_")}
+        if matrix_vars:
+            job_ctx.vars["matrix"] = matrix_vars
+
+        # Inject fleet variables as both context vars and env vars
+        fleet_vars = {k: v for k, v in combo.items() if k.startswith("fleet_")}
+        if fleet_vars:
+            job_ctx.vars["fleet"] = fleet_vars
+            # Also export as env vars so shell steps can use $FLEET_INPUT_FILE etc.
+            fleet_env = {k.upper(): str(v) for k, v in fleet_vars.items()}
+            job_ctx.envs = {**job_ctx.envs, **fleet_env}
+
+        new_jid = f"{self.model.jid}_{idx}"
+        runner = CloudJobRunner(
+            self.model.model_copy(
+                update={
+                    "name": f"{self.model.name or self.model.jid}{{{idx}}}",
+                    "jid": new_jid,
+                    "matrix_values": combo,
+                    "matrix_index": idx,
+                },
+            ),
+            job_ctx,
+            parent=self.parent,  # type: ignore
+        )
+        self._runners[new_jid] = runner
+        return await runner.run()
+
+    # ------------------------------------------------------------------
+    # Post-run: cleanup fleet chunk files
+    # ------------------------------------------------------------------
+
+    async def _post_run(self) -> None:
+        self._cleanup_chunk_files()
+
+    def _cleanup_chunk_files(self) -> None:
+        """Remove temporary fleet chunk files and their parent directory."""
+        if not self._chunk_files:
+            return
+        parent_dir = None
+        for f in self._chunk_files:
+            try:
+                if f.exists():
+                    if parent_dir is None:
+                        parent_dir = f.parent
+                    f.unlink()
+            except Exception:
+                pass
+        # Remove the temp dir if it's now empty
+        if parent_dir:
+            try:
+                parent_dir.rmdir()
+            except OSError:
+                pass
+        self._chunk_files.clear()

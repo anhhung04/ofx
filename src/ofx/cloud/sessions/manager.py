@@ -23,8 +23,8 @@ from ofx.cloud.sessions.store import SessionStore
 
 logger = logging.getLogger("ofx")
 
-_DONE_MARKER = "__OFX_DONE__"
-_FAIL_MARKER = "__OFX_FAIL__"
+_DONE_MARKER = "__TASK_OK__"
+_FAIL_MARKER = "__TASK_ERR__"
 
 
 class SessionManager:
@@ -124,7 +124,7 @@ class SessionManager:
 
         # Generate at-rest encryption key and write key file
         at_rest_key = _secrets.token_hex(32)  # 64-char hex → 256-bit
-        key_file = work_dir / ".ofx_key"
+        key_file = work_dir / ".skey"
         key_file.write_text(at_rest_key)
         key_file.chmod(0o600)
 
@@ -172,7 +172,7 @@ class SessionManager:
             cwd=str(work_dir),
             env={
                 **os.environ,
-                "OFX_SESSION_ID": session.id,
+                "SESSION_ID": session.id,
                 **env,
             },
         )
@@ -271,9 +271,9 @@ class SessionManager:
 
         # Build script
         remote_work_dir = (
-            f"C:\\Windows\\Temp\\ofx-session-{session.id}"
+            f"C:\\Windows\\Temp\\.ses-{session.id}"
             if is_windows
-            else f"/tmp/ofx-session-{session.id}"
+            else f"/tmp/.ses-{session.id}"
         )
 
         # Generate at-rest encryption key
@@ -308,7 +308,7 @@ class SessionManager:
             Path(local_key).write_text(at_rest_key)
             os.chmod(local_key, 0o600)
             try:
-                remote.upload(local_key, f"{remote_work_dir}\\.ofx_key")
+                remote.upload(local_key, f"{remote_work_dir}\\.skey")
             finally:
                 Path(local_key).unlink(missing_ok=True)
 
@@ -345,10 +345,10 @@ class SessionManager:
             Path(local_key).write_text(at_rest_key)
             os.chmod(local_key, 0o600)
             try:
-                remote.upload(local_key, f"{remote_work_dir}/.ofx_key")
+                remote.upload(local_key, f"{remote_work_dir}/.skey")
             finally:
                 Path(local_key).unlink(missing_ok=True)
-            remote.run(f"chmod 600 {remote_work_dir}/.ofx_key")
+            remote.run(f"chmod 600 {remote_work_dir}/.skey")
 
             # Upload script
             fd, local_script = tempfile.mkstemp(suffix=".sh")
@@ -943,7 +943,7 @@ def _decrypt_at_rest_openssl(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Write key to a temp file for openssl
-    key_path = enc_file.parent / f".ofx_dec_{_secrets.token_hex(4)}"
+    key_path = enc_file.parent / f".dec_{_secrets.token_hex(4)}"
     key_path.write_text(at_rest_key)
     key_path.chmod(0o600)
 
@@ -1015,7 +1015,7 @@ def _read_log_marker(path: Path) -> str | None:
 
 
 def _parse_marker(text: str) -> str | None:
-    """Find __OFX_DONE__ or __OFX_FAIL__ in text."""
+    """Find __TASK_OK__ or __TASK_ERR__ in text."""
     if _DONE_MARKER in text:
         return _DONE_MARKER
     if _FAIL_MARKER in text:

@@ -80,6 +80,7 @@ Pydantic v2 models define the YAML schema:
 
 ### Cloud job runner (`src/ofx/runner/execution/cloud_job.py`)
 - `CloudJobRunner(BaseRunner[Job])` — provisions VPS via cloud provider, runs steps via `CloudStepRunner`, downloads outputs, destroys VPS on completion
+- `CloudMatrixJobRunner(BaseRunner[Job])` — meta-runner for cloud+matrix and/or cloud+fleet jobs. Expands matrix combinations × fleet target chunks (Cartesian product), then spawns a separate `CloudJobRunner` per combination. Each CloudJobRunner provisions its own VPS. Fleet chunk files are uploaded to each VPS as `$FLEET_INPUT_FILE`. Parallelism controlled by `strategy.max_parallel`. Chunk files cleaned up after all combinations complete.
 - `CloudStepRunner(BaseRunner)` — executes steps remotely via `PostSSH`/`PostWinRM`:
   - `run:` — shell commands sent directly
   - `script:` — inline Python bundled with `ofx.api` deps via `build_bundle()`, uploaded and executed with discovered `python3`
@@ -89,7 +90,7 @@ Pydantic v2 models define the YAML schema:
 - State machine: fully compliant with `BaseRunner` lifecycle (IDLE → RUNNING → FINISHED → COMPLETED/FAILED) with durable checkpoints
 
 ### Multi-cloud support
-Multiple jobs in the same workflow can each have different `cloud:` configs (different providers, profiles, regions). `WorkflowExecutionManager._build_stage_runners()` creates independent `CloudJobRunner` instances per job. Jobs in the same dependency stage run in parallel via `asyncio`. Each runner provisions/destroys its own VPS.
+Multiple jobs in the same workflow can each have different `cloud:` configs (different providers, profiles, regions). `WorkflowExecutionManager._build_stage_runners()` creates independent runner instances per job: `CloudJobRunner` for single-VPS jobs, `CloudMatrixJobRunner` for matrix/fleet expansion. Jobs in the same dependency stage run in parallel via `asyncio`. Each runner provisions/destroys its own VPS.
 
 Example multi-cloud workflow:
 ```yaml
@@ -167,10 +168,9 @@ ofx session clean --older-than 7d
 - **Async**: runner code is async throughout. Sync callers use `asyncio.run()`.
 - **Tests**: `conftest.py` auto-patches Redis/Memcached with in-memory fakes. Integration tests that actually run workflows are in `test_flowrun.py`; test workflow YAMLs live in `tests/flows/`.
 - **Cloud config**: can be a string (profile slug) or an inline `CloudConfig` dict. The `parse_cloud_field()` normalizer handles both. Profiles are managed via `ofx cloud profile add/list/show/remove/default`.
-- **Cloud fleet**: `FleetStrategy` in `MatrixStrategy.fleet` defines target distribution. `expand_fleet_to_matrix()` converts fleet config to matrix combinations. **Note**: fleet integration with `CloudJobRunner` is not yet wired up — fleet currently only works with `MatrixJobRunner` for local execution.
+- **Cloud fleet**: `FleetStrategy` in `MatrixStrategy.fleet` defines target distribution. `expand_fleet_to_matrix()` converts fleet config to matrix combinations. `CloudMatrixJobRunner` handles cloud+fleet expansion.
+- **Cloud + matrix/fleet**: When a job has both `cloud:` and `strategy.matrix` or `strategy.fleet`, `WorkflowExecutionManager` dispatches to `CloudMatrixJobRunner`. This meta-runner expands combinations (matrix × fleet Cartesian product) and spawns a separate `CloudJobRunner` per combination, each provisioning its own VPS. Fleet chunk files are uploaded to each VPS and exposed as `$FLEET_INPUT_FILE`. Parallelism is controlled by `strategy.max_parallel`.
 
 ## Known gaps / future work
 
-- **Cloud + fleet integration**: A job with both `cloud:` and `strategy.fleet` is dispatched as a single `CloudJobRunner` (ignoring fleet). To support fleet on cloud, `WorkflowExecutionManager` needs to expand fleet config into per-instance `CloudJobRunner` instances using `expand_fleet_to_matrix()`.
-- **Cloud + matrix**: A job with both `cloud:` and `strategy.matrix` runs as `CloudJobRunner` (no matrix expansion). Consider `CloudMatrixJobRunner` or expanding matrix into separate cloud jobs.
-- **Cloud fleet result tracking**: See the `ofx cloud fleet results` proposal below for aggregating results from fleet runs.
+- **Cloud fleet result tracking**: Aggregating results from fleet runs across multiple VPS instances into a unified view.

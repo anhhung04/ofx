@@ -1,6 +1,10 @@
 """Workflow/job/step execution runners."""
 
-from ofx.runner.execution.cloud_job import CloudJobRunner, CloudStepRunner
+from ofx.runner.execution.cloud_job import (
+    CloudJobRunner,
+    CloudMatrixJobRunner,
+    CloudStepRunner,
+)
 from ofx.runner.execution.error_helpers import (
     job_step_failed,
     step_execution_error,
@@ -27,6 +31,7 @@ from ofx.runner.execution.workflow_scheduler import WorkflowSchedule, WorkflowSc
 
 __all__ = [
     "CloudJobRunner",
+    "CloudMatrixJobRunner",
     "CloudStepRunner",
     "JobRunner",
     "MatrixJobRunner",

@@ -123,7 +123,7 @@ class PostSSH(PostRunnerBase):
                 self._log_file = Path(log_path)
             else:
                 fd, log_tmp = tempfile.mkstemp(
-                    prefix="ofx_ssh_", suffix=".log"
+                    prefix=".tmp_ssh_", suffix=".log"
                 )
                 os.close(fd)
                 self._log_file = Path(log_tmp)
@@ -434,7 +434,7 @@ class PostSSH(PostRunnerBase):
         self._run_direct(wrapped, timeout)
 
         # Download via SFTP
-        fd, local_tmp = tempfile.mkstemp(prefix="ofx_out_")
+        fd, local_tmp = tempfile.mkstemp(prefix=".tmp_dl_")
         os.close(fd)
         try:
             sftp = self._get_sftp()

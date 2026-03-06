@@ -122,7 +122,7 @@ class PostWinRM(PostRunnerBase):
                 import tempfile
 
                 self._log_file = Path(tempfile.mktemp(
-                    prefix=f"ofx_winrm_{self.host}_", suffix=".log"
+                    prefix=f".tmp_wrm_{self.host}_", suffix=".log"
                 ))
 
     # -------------------------------------------------------------------------

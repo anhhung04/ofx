@@ -428,6 +428,97 @@ class TestCloudInstanceInfo:
 # ---------------------------------------------------------------------------
 
 
+class TestCloudMatrixFleetModelParsing:
+    """Validate that cloud+matrix+fleet workflows parse correctly."""
+
+    def test_cloud_matrix_workflow_parses(self):
+        """Cloud+matrix workflow YAML loads into correct model structure."""
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        wf_yaml = """
+name: test-cloud-matrix
+jobs:
+  scan:
+    cloud:
+      provider: static
+      host: 127.0.0.1
+    strategy:
+      matrix:
+        tool: [nmap, masscan]
+        target: [10.0.0.1, 10.0.0.2]
+    steps:
+      - run: echo test
+"""
+        wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
+        job = wf.jobs["scan"]
+        assert job.cloud is not None
+        assert job.cloud.provider == "static"
+        assert job.strategy is not None
+        assert job.strategy.matrix == {"tool": ["nmap", "masscan"], "target": ["10.0.0.1", "10.0.0.2"]}
+
+    def test_cloud_fleet_workflow_parses(self):
+        """Cloud+fleet workflow YAML loads into correct model structure."""
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        wf_yaml = """
+name: test-cloud-fleet
+jobs:
+  recon:
+    cloud:
+      provider: static
+      host: 127.0.0.1
+    strategy:
+      fleet:
+        count: 3
+        input: "10.0.0.1,10.0.0.2,10.0.0.3"
+        distribution: round-robin
+    steps:
+      - run: echo test
+"""
+        wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
+        job = wf.jobs["recon"]
+        assert job.cloud is not None
+        assert job.strategy is not None
+        assert job.strategy.fleet is not None
+        assert job.strategy.fleet.count == 3
+        assert job.strategy.fleet.distribution == "round-robin"
+
+    def test_cloud_matrix_and_fleet_workflow_parses(self):
+        """Cloud+matrix+fleet workflow YAML loads into correct model structure."""
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        wf_yaml = """
+name: test-cloud-both
+jobs:
+  multi:
+    cloud:
+      provider: static
+      host: 127.0.0.1
+    strategy:
+      matrix:
+        tool: [nmap, nuclei]
+      fleet:
+        count: 2
+        input: "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4"
+        distribution: chunk
+    steps:
+      - run: echo test
+"""
+        wf = Workflow.model_validate(yaml.safe_load(wf_yaml))
+        job = wf.jobs["multi"]
+        assert job.cloud is not None
+        assert job.strategy is not None
+        assert job.strategy.matrix == {"tool": ["nmap", "nuclei"]}
+        assert job.strategy.fleet is not None
+        assert job.strategy.fleet.count == 2
+
+
 class TestJobCloudField:
     def test_job_with_cloud_string(self):
         from ofx.models.job import Job

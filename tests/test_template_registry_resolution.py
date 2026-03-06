@@ -18,12 +18,12 @@ jobs:
       build_number: "{{ steps.0.outputs.build_number }}"
     steps:
       - run: |
-          echo "build_number=12345" >> $OFX_OUTPUTS
+          echo "build_number=12345" >> $RUNNER_OUTPUTS
   consumer:
     needs: [producer]
     steps:
       - run: |
-          echo "value={{ jobs.producer.outputs.build_number }}" >> $OFX_OUTPUTS
+          echo "value={{ jobs.producer.outputs.build_number }}" >> $RUNNER_OUTPUTS
       - run: |
           echo "Final value is {{ steps.0.outputs.value }}"
 """

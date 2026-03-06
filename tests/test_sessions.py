@@ -171,10 +171,10 @@ class TestScriptBuilder:
         steps = [self._make_step(name="recon", run="nmap -sV 10.0.0.1")]
         script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
         assert "#!/bin/bash" in script
-        assert "OFX_SESSION_ID" in script
+        assert "SESSION_ID" in script
         assert "nmap -sV 10.0.0.1" in script
-        assert "__OFX_DONE__" in script
-        assert "__OFX_FAIL__" in script
+        assert "__TASK_OK__" in script
+        assert "__TASK_ERR__" in script
 
     def test_bash_multiple_steps(self):
         steps = [
@@ -212,9 +212,9 @@ class TestScriptBuilder:
             os_type="windows",
         )
         assert "$ErrorActionPreference" in script
-        assert "OFX_SESSION_ID" in script
+        assert "SESSION_ID" in script
         assert "Get-Process" in script
-        assert "__OFX_DONE__" in script
+        assert "__TASK_OK__" in script
 
     def test_script_file_step(self):
         steps = [self._make_step(name="sf", script_file="/opt/scripts/scan.sh")]
@@ -227,11 +227,11 @@ class TestScriptBuilder:
             steps, session_id="aabb", work_dir="/tmp/test",
             encrypt_at_rest=True,
         )
-        assert ".ofx_key" in script
+        assert ".skey" in script
         assert "openssl enc" in script
         assert "output.enc" in script
         assert "shred" in script
-        assert "__OFX_DONE__" in script  # marker still present after encryption block
+        assert "__TASK_OK__" in script  # marker still present after encryption block
 
     def test_bash_no_encrypt_by_default(self):
         steps = [self._make_step(name="scan", run="echo hi")]
@@ -240,7 +240,7 @@ class TestScriptBuilder:
             encrypt_at_rest=False,
         )
         assert "openssl enc" not in script
-        assert "__OFX_DONE__" in script
+        assert "__TASK_OK__" in script
 
     def test_powershell_encrypt_at_rest(self):
         steps = [self._make_step(name="scan", run="Get-Process")]
@@ -248,7 +248,7 @@ class TestScriptBuilder:
             steps, session_id="aabb", work_dir="C:\\Temp\\test",
             os_type="windows", encrypt_at_rest=True,
         )
-        assert ".ofx_key" in script
+        assert ".skey" in script
         assert "output.enc" in script
         assert "AES" in script or "Aes" in script
 
@@ -424,7 +424,7 @@ class TestSessionManagerLocal:
         assert (work / "output.enc").exists(), "output.enc missing — at-rest encryption failed"
         assert not (work / "output").exists(), "output/ dir should be removed after encryption"
         # Key file should have been shredded
-        assert not (work / ".ofx_key").exists(), "key file should be shredded"
+        assert not (work / ".skey").exists(), "key file should be shredded"
 
     def test_status_completed(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)

@@ -6,7 +6,7 @@ import asyncio
 import itertools
 from dataclasses import dataclass, field
 
-from ofx.runner.execution.cloud_job import CloudJobRunner
+from ofx.runner.execution.cloud_job import CloudJobRunner, CloudMatrixJobRunner
 from ofx.runner.execution.job import JobRunner, MatrixJobRunner
 
 
@@ -34,17 +34,26 @@ class WorkflowExecutionManager:
 
     def _build_stage_runners(
         self, stage: list[str], staged_jobs: dict
-    ) -> dict[str, JobRunner | MatrixJobRunner | CloudJobRunner]:
-        stage_runners: dict[str, JobRunner | MatrixJobRunner | CloudJobRunner] = {}
+    ) -> dict[str, JobRunner | MatrixJobRunner | CloudJobRunner | CloudMatrixJobRunner]:
+        stage_runners: dict[
+            str, JobRunner | MatrixJobRunner | CloudJobRunner | CloudMatrixJobRunner
+        ] = {}
         for job_id in stage:
             job = staged_jobs[job_id]
             job_ctx = self._parent._child_context(
                 update={"allow_interactive": len(stage) == 1}
             )
-            if getattr(job, "cloud", None):
-                # Cloud job — run on remote VPS
+            has_cloud = getattr(job, "cloud", None)
+            has_matrix = job.strategy and job.strategy.matrix
+            has_fleet = job.strategy and job.strategy.fleet
+
+            if has_cloud and (has_matrix or has_fleet):
+                # Cloud + matrix/fleet → expand into per-VPS runners
+                runner = CloudMatrixJobRunner(job, job_ctx, parent=self._parent)
+            elif has_cloud:
+                # Cloud job — single remote VPS
                 runner = CloudJobRunner(job, job_ctx, parent=self._parent)
-            elif job.strategy and job.strategy.matrix:
+            elif has_matrix:
                 runner = MatrixJobRunner(job, job_ctx, parent=self._parent)
             else:
                 runner = JobRunner(job, job_ctx, parent=self._parent)
@@ -55,8 +64,13 @@ class WorkflowExecutionManager:
     async def _run_stage(
         self,
         stage_index: int,
-        stage_runners: dict[str, JobRunner | MatrixJobRunner],
+        stage_runners: dict[
+            str, JobRunner | MatrixJobRunner | CloudJobRunner | CloudMatrixJobRunner
+        ],
     ) -> list[str]:
+        self._parent._log_info(
+            f"Starting stage {stage_index + 1} with jobs: {list(stage_runners.keys())}"
+        )
         job_ids = list(stage_runners.keys())
         tasks = {
             job_id: asyncio.create_task(stage_runners[job_id].run())

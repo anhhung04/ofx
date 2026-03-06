@@ -15,6 +15,9 @@ class _ParentStub:
     def _child_context(self, update=None, **_kwargs):
         return {"ctx": "child", "update": update or {}}
 
+    def _log_info(self, msg):
+        pass
+
 
 class _ResultStub:
     def __init__(self, error=None):
@@ -76,9 +79,41 @@ def test_build_stage_runners_creates_job_runners(monkeypatch):
         "ofx.runner.execution.workflow_execution.MatrixJobRunner", _DummyMatrixRunner
     )
 
+    class _DummyCloudRunner:
+        def __init__(self, job, ctx, parent, cloud_config=None):
+            created.append(("cloud", job, ctx, parent))
+            self.is_success = True
+
+    class _DummyCloudMatrixRunner:
+        def __init__(self, job, ctx, parent):
+            created.append(("cloud_matrix", job, ctx, parent))
+            self.is_success = True
+
+    monkeypatch.setattr(
+        "ofx.runner.execution.workflow_execution.CloudJobRunner", _DummyCloudRunner
+    )
+    monkeypatch.setattr(
+        "ofx.runner.execution.workflow_execution.CloudMatrixJobRunner",
+        _DummyCloudMatrixRunner,
+    )
+
     class _Job:
-        def __init__(self, matrix=False):
-            self.strategy = type("S", (), {"matrix": True}) if matrix else None
+        def __init__(self, matrix=False, cloud=None, fleet=False):
+            if matrix and fleet:
+                self.strategy = type(
+                    "S", (), {"matrix": True, "fleet": True}
+                )()
+            elif matrix:
+                self.strategy = type(
+                    "S", (), {"matrix": True, "fleet": None}
+                )()
+            elif fleet:
+                self.strategy = type(
+                    "S", (), {"matrix": None, "fleet": True}
+                )()
+            else:
+                self.strategy = None
+            self.cloud = cloud
 
     staged_jobs = {"a": _Job(matrix=False), "b": _Job(matrix=True)}
     stage_runners = manager._build_stage_runners(["a", "b"], staged_jobs)
@@ -87,6 +122,90 @@ def test_build_stage_runners_creates_job_runners(monkeypatch):
     assert parent._runners["a"] is stage_runners["a"]
     assert parent._runners["b"] is stage_runners["b"]
     assert [c[0] for c in created] == ["job", "matrix"]
+
+
+def test_build_stage_runners_cloud_job(monkeypatch):
+    """Cloud job without matrix/fleet → CloudJobRunner."""
+    parent = _ParentStub()
+    manager = WorkflowExecutionManager(parent)
+
+    created = []
+
+    class _DummyCloudRunner:
+        def __init__(self, job, ctx, parent, cloud_config=None):
+            created.append(("cloud", job))
+            self.is_success = True
+
+    monkeypatch.setattr(
+        "ofx.runner.execution.workflow_execution.CloudJobRunner", _DummyCloudRunner
+    )
+
+    class _Job:
+        def __init__(self):
+            self.cloud = "some-profile"
+            self.strategy = None
+
+    staged_jobs = {"c": _Job()}
+    stage_runners = manager._build_stage_runners(["c"], staged_jobs)
+
+    assert "c" in stage_runners
+    assert created[0][0] == "cloud"
+
+
+def test_build_stage_runners_cloud_matrix(monkeypatch):
+    """Cloud + matrix → CloudMatrixJobRunner."""
+    parent = _ParentStub()
+    manager = WorkflowExecutionManager(parent)
+
+    created = []
+
+    class _DummyCloudMatrixRunner:
+        def __init__(self, job, ctx, parent):
+            created.append(("cloud_matrix", job))
+            self.is_success = True
+
+    monkeypatch.setattr(
+        "ofx.runner.execution.workflow_execution.CloudMatrixJobRunner",
+        _DummyCloudMatrixRunner,
+    )
+
+    class _Job:
+        def __init__(self):
+            self.cloud = "some-profile"
+            self.strategy = type("S", (), {"matrix": {"os": ["a"]}, "fleet": None})()
+
+    staged_jobs = {"d": _Job()}
+    stage_runners = manager._build_stage_runners(["d"], staged_jobs)
+
+    assert created[0][0] == "cloud_matrix"
+
+
+def test_build_stage_runners_cloud_fleet(monkeypatch):
+    """Cloud + fleet → CloudMatrixJobRunner."""
+    parent = _ParentStub()
+    manager = WorkflowExecutionManager(parent)
+
+    created = []
+
+    class _DummyCloudMatrixRunner:
+        def __init__(self, job, ctx, parent):
+            created.append(("cloud_matrix", job))
+            self.is_success = True
+
+    monkeypatch.setattr(
+        "ofx.runner.execution.workflow_execution.CloudMatrixJobRunner",
+        _DummyCloudMatrixRunner,
+    )
+
+    class _Job:
+        def __init__(self):
+            self.cloud = "some-profile"
+            self.strategy = type("S", (), {"matrix": None, "fleet": True})()
+
+    staged_jobs = {"e": _Job()}
+    stage_runners = manager._build_stage_runners(["e"], staged_jobs)
+
+    assert created[0][0] == "cloud_matrix"
 
 
 @pytest.mark.asyncio

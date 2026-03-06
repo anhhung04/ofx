@@ -1,9 +1,4 @@
 """Standalone shims for ofx.api modules so they run without ofx.settings.
-
-When API modules are bundled via ``ofx.api.bundle`` and executed on remote
-hosts, the full ``ofx`` package is unavailable.  This module provides
-lightweight replacements for the constants, exceptions, and utilities that
-API code needs — all using only the Python standard library.
 """
 
 from __future__ import annotations
@@ -11,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import logging
+import secrets as _secrets
 import sys
 import tempfile
 from pathlib import Path
@@ -32,7 +28,8 @@ def get_logger(name: str | None = None) -> logging.Logger:
 # Path constants (mirrors ofx.settings but stdlib-only)
 # ---------------------------------------------------------------------------
 
-BASE_DATA_DIR: Path = Path.home() / ".ofx"
+_TMP_BASE = Path(tempfile.mkdtemp(prefix=f".{_secrets.token_hex(4)}_"))
+BASE_DATA_DIR: Path = _TMP_BASE / ".r"
 TEMP_DIR: Path = Path(tempfile.gettempdir())
 CONFIG_FILE: Path = BASE_DATA_DIR / "config.ini"
 USER_EXPLOITS_DIR: Path = BASE_DATA_DIR / "exploits"
@@ -44,11 +41,11 @@ USER_WEBSHELL_CONNECTORS_DIR: Path = BASE_DATA_DIR / "webshell" / "connectors"
 # ---------------------------------------------------------------------------
 
 
-class OFXError(Exception):
-    """Base exception for all OFX errors."""
+class BaseError(Exception):
+    """Base exception."""
 
 
-class APIError(OFXError):
+class APIError(BaseError):
     """Raised when API operations fail."""
 
     def __init__(
@@ -62,7 +59,7 @@ class APIError(OFXError):
         super().__init__(message)
 
 
-class OFXTimeoutError(OFXError):
+class OFXTimeoutError(BaseError):
     """Raised when operation times out."""
 
     def __init__(self, message: str, timeout_seconds: int | None = None):

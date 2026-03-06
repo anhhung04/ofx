@@ -1,4 +1,4 @@
-"""Tests for OFX_OUTPUTS feature in command runner"""
+"""Tests for RUNNER_OUTPUTS feature in command runner"""
 
 
 import pytest
@@ -8,12 +8,12 @@ from ofx.runner import CommandRunner, RunContext, RunnerStatus
 
 
 class TestCommandOutputs:
-    """Test OFX_OUTPUTS environment variable capture"""
+    """Test RUNNER_OUTPUTS environment variable capture"""
 
     @pytest.mark.asyncio
     async def test_capture_single_output(self):
         """Test capturing a single key-value output"""
-        cmd = 'echo "test_key=test_value" >> $OFX_OUTPUTS'
+        cmd = 'echo "test_key=test_value" >> $RUNNER_OUTPUTS'
         ctx = RunContext()
 
         runner = CommandRunner(Command(cmd=cmd), ctx)
@@ -27,9 +27,9 @@ class TestCommandOutputs:
     async def test_capture_multiple_outputs(self):
         """Test capturing multiple key-value outputs"""
         cmd = """
-echo "name=Alice" >> $OFX_OUTPUTS
-echo "age=30" >> $OFX_OUTPUTS
-echo "city=Paris" >> $OFX_OUTPUTS
+echo "name=Alice" >> $RUNNER_OUTPUTS
+echo "age=30" >> $RUNNER_OUTPUTS
+echo "city=Paris" >> $RUNNER_OUTPUTS
 """
         ctx = RunContext()
 
@@ -44,7 +44,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
     @pytest.mark.asyncio
     async def test_output_with_spaces(self):
         """Test capturing output values with spaces"""
-        cmd = 'echo "message=Hello World" >> $OFX_OUTPUTS'
+        cmd = 'echo "message=Hello World" >> $RUNNER_OUTPUTS'
         ctx = RunContext()
 
         runner = CommandRunner(Command(cmd=cmd), ctx)
@@ -56,7 +56,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
     @pytest.mark.asyncio
     async def test_output_with_special_chars(self):
         """Test capturing output values with special characters"""
-        cmd = 'echo "url=https://example.com/path?key=value&foo=bar" >> $OFX_OUTPUTS'
+        cmd = 'echo "url=https://example.com/path?key=value&foo=bar" >> $RUNNER_OUTPUTS'
         ctx = RunContext()
 
         runner = CommandRunner(Command(cmd=cmd), ctx)
@@ -68,7 +68,7 @@ echo "city=Paris" >> $OFX_OUTPUTS
     @pytest.mark.asyncio
     async def test_outputs_file_cleaned_up(self):
         """Test that the outputs file is cleaned up after execution"""
-        cmd = 'echo "cleanup_test=success" >> $OFX_OUTPUTS'
+        cmd = 'echo "cleanup_test=success" >> $RUNNER_OUTPUTS'
         ctx = RunContext()
 
         runner = CommandRunner(Command(cmd=cmd), ctx)
@@ -102,9 +102,9 @@ echo "city=Paris" >> $OFX_OUTPUTS
     async def test_malformed_output_line_ignored(self):
         """Test that malformed lines are ignored"""
         cmd = """
-echo "valid_key=valid_value" >> $OFX_OUTPUTS
-echo "malformed line without equals" >> $OFX_OUTPUTS
-echo "another_key=another_value" >> $OFX_OUTPUTS
+echo "valid_key=valid_value" >> $RUNNER_OUTPUTS
+echo "malformed line without equals" >> $RUNNER_OUTPUTS
+echo "another_key=another_value" >> $RUNNER_OUTPUTS
 """
         ctx = RunContext()
 
@@ -119,9 +119,9 @@ echo "another_key=another_value" >> $OFX_OUTPUTS
     async def test_outputs_overwrite_previous(self):
         """Test that multiple assignments overwrite previous values"""
         cmd = """
-echo "counter=1" >> $OFX_OUTPUTS
-echo "counter=2" >> $OFX_OUTPUTS
-echo "counter=3" >> $OFX_OUTPUTS
+echo "counter=1" >> $RUNNER_OUTPUTS
+echo "counter=2" >> $RUNNER_OUTPUTS
+echo "counter=3" >> $RUNNER_OUTPUTS
 """
         ctx = RunContext()
 
@@ -134,7 +134,7 @@ echo "counter=3" >> $OFX_OUTPUTS
     @pytest.mark.asyncio
     async def test_output_with_equals_in_value(self):
         """Test capturing values that contain equals signs"""
-        cmd = 'echo "equation=a=b+c" >> $OFX_OUTPUTS'
+        cmd = 'echo "equation=a=b+c" >> $RUNNER_OUTPUTS'
         ctx = RunContext()
 
         runner = CommandRunner(Command(cmd=cmd), ctx)
@@ -146,7 +146,7 @@ echo "counter=3" >> $OFX_OUTPUTS
     @pytest.mark.asyncio
     async def test_multiline_output_value(self):
         """Test that multiline values work with proper quoting"""
-        cmd = """cat << 'EOF' >> $OFX_OUTPUTS
+        cmd = """cat << 'EOF' >> $RUNNER_OUTPUTS
 json={"key": "value", "array": [1, 2, 3]}
 EOF
 """
@@ -161,7 +161,7 @@ EOF
 
     @pytest.mark.asyncio
     async def test_no_outputs_file_in_interactive_mode(self):
-        """Test that OFX_OUTPUTS is not created in interactive mode"""
+        """Test that RUNNER_OUTPUTS is not created in interactive mode"""
         cmd = 'echo "should_not_capture=value"'
         ctx = RunContext()
 
@@ -169,15 +169,15 @@ EOF
 
         await runner._pre_run()
         assert runner._outputs_file is None
-        assert "OFX_OUTPUTS" not in runner.ctx.envs
+        assert "RUNNER_OUTPUTS" not in runner.ctx.envs
 
     @pytest.mark.asyncio
     async def test_numeric_values_as_strings(self):
         """Test that numeric values are captured as strings"""
         cmd = """
-echo "port=8080" >> $OFX_OUTPUTS
-echo "count=42" >> $OFX_OUTPUTS
-echo "ratio=3.14" >> $OFX_OUTPUTS
+echo "port=8080" >> $RUNNER_OUTPUTS
+echo "count=42" >> $RUNNER_OUTPUTS
+echo "ratio=3.14" >> $RUNNER_OUTPUTS
 """
         ctx = RunContext()
 
@@ -193,8 +193,8 @@ echo "ratio=3.14" >> $OFX_OUTPUTS
     async def test_empty_value(self):
         """Test capturing empty values"""
         cmd = """
-echo "empty_key=" >> $OFX_OUTPUTS
-echo "has_value=something" >> $OFX_OUTPUTS
+echo "empty_key=" >> $RUNNER_OUTPUTS
+echo "has_value=something" >> $RUNNER_OUTPUTS
 """
         ctx = RunContext()
 

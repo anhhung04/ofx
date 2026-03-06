@@ -43,9 +43,9 @@ class CommandExecutor:
     def prepare_outputs_file(self) -> None:
         if not self._command.interactive:
             self._outputs_file = Path(
-                tempfile.mkstemp(prefix="ofx_outputs_", suffix=".txt")[1]
+                tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")[1]
             )
-            self._envs["OFX_OUTPUTS"] = str(self._outputs_file)
+            self._envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
 
     async def _run_interactive(self) -> CommandExecutionResult:
         # Prepend shell helper functions to the command
@@ -195,7 +195,7 @@ class CommandExecutor:
                             await runner.reg_update(key, {key_name: value})
                             log_fn(f"Captured output: {key_name}={value}")
         except Exception as e:
-            log_fn(f"Failed to parse OFX_OUTPUTS: {e}")
+            log_fn(f"Failed to parse RUNNER_OUTPUTS: {e}")
         finally:
             try:
                 self._outputs_file.unlink()

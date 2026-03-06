@@ -23,12 +23,12 @@ __all__ = ["BundleResult", "build_bundle"]
 _BOOTSTRAP_TEMPLATE = """\
 import base64 as _b64, io as _io, os as _os, shutil as _sh, sys as _sys, tempfile as _tmp, zipfile as _zf
 _arch = _b64.b64decode({b64_data!r})
-_tdir = _tmp.mkdtemp(prefix='ofx_')
+_tdir = _tmp.mkdtemp(prefix='.tmp_')
 try:
     with _zf.ZipFile(_io.BytesIO(_arch)) as _z:
         _z.extractall(_tdir)
     _sys.path.insert(0, _tdir)
-    exec(compile({script!r}, '<ofx_bundle>', 'exec'), {{'__name__': '__main__'}})
+    exec(compile({script!r}, '<bundle>', 'exec'), {{'__name__': '__main__'}})
 finally:
     _sys.path[:] = [p for p in _sys.path if p != _tdir]
     _sh.rmtree(_tdir, ignore_errors=True)

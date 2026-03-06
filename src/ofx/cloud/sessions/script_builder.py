@@ -1,7 +1,7 @@
 """Build self-contained shell scripts from workflow jobs for detached execution.
 
 The generated script includes all steps, environment setup, timestamped logging,
-and status markers (__OFX_DONE__ / __OFX_FAIL__) so the session manager can
+and status markers (__TASK_OK__ / __TASK_ERR__) so the session manager can
 detect completion by tailing the log file.
 """
 
@@ -29,7 +29,7 @@ def build_session_script(
         os_type: "linux" (bash) or "windows" (powershell).
         encrypt_at_rest: If True, appends an encryption epilogue that tars
             and encrypts the ``output/`` directory using a key file at
-            ``$WORK_DIR/.ofx_key``, then shreds the originals.
+            ``$WORK_DIR/.skey``, then shreds the originals.
 
     Returns:
         Script content as a string.
@@ -53,7 +53,7 @@ def _build_bash(
 ) -> str:
     lines: list[str] = [
         "#!/bin/bash",
-        f'export OFX_SESSION_ID="{session_id}"',
+        f'export SESSION_ID="{session_id}"',
         f'WORK_DIR="{work_dir}"',
         'LOG_FILE="$WORK_DIR/output.log"',
         'mkdir -p "$WORK_DIR/output"',
@@ -72,7 +72,7 @@ def _build_bash(
     # Logging helper
     lines.extend([
         '_log() { echo "[$(date +%Y-%m-%dT%H:%M:%S)] $*" >> "$LOG_FILE"; }',
-        '_log "Session $OFX_SESSION_ID started"',
+        '_log "Session $SESSION_ID started"',
         "",
     ])
 
@@ -90,7 +90,7 @@ def _build_bash(
                 "STEP_RC=$?",
                 'if [ $STEP_RC -ne 0 ]; then',
                 f'  _log "Step {idx} FAILED (exit $STEP_RC)"',
-                '  _log "__OFX_FAIL__"',
+                '  _log "__TASK_ERR__"',
                 "  exit $STEP_RC",
                 "fi",
             ])
@@ -102,7 +102,7 @@ def _build_bash(
 
     lines.extend([
         '_log "All steps completed successfully"',
-        '_log "__OFX_DONE__"',
+        '_log "__TASK_OK__"',
     ])
 
     # Self-shred AFTER markers are written so bash can finish cleanly.
@@ -147,14 +147,14 @@ def _bash_escape(s: str) -> str:
 def _bash_encrypt_epilogue() -> list[str]:
     """Return bash lines that encrypt the output/ directory at rest.
 
-    Expects a key file at ``$WORK_DIR/.ofx_key`` written by the session
+    Expects a key file at ``$WORK_DIR/.skey`` written by the session
     manager before launch.  After encryption the original output dir, the
     tar archive, and the key file are securely deleted.
     """
     return [
         "",
         "# ---- At-rest encryption ----",
-        'KEY_FILE="$WORK_DIR/.ofx_key"',
+        'KEY_FILE="$WORK_DIR/.skey"',
         'if [ -f "$KEY_FILE" ] && [ -d "$WORK_DIR/output" ]; then',
         '  _log "Encrypting output at rest..."',
         '  tar czf "$WORK_DIR/output.tar.gz" -C "$WORK_DIR" output >> "$LOG_FILE" 2>&1',
@@ -198,7 +198,7 @@ def _build_powershell(
 ) -> str:
     lines: list[str] = [
         "$ErrorActionPreference = 'Stop'",
-        f'$env:OFX_SESSION_ID = "{session_id}"',
+        f'$env:SESSION_ID = "{session_id}"',
         f'$WORK_DIR = "{work_dir}"',
         '$LOG_FILE = "$WORK_DIR\\output.log"',
         'New-Item -ItemType Directory -Force -Path "$WORK_DIR\\output" | Out-Null',
@@ -217,7 +217,7 @@ def _build_powershell(
     # Log helper
     lines.extend([
         'function Write-Log($msg) { "[$((Get-Date).ToString(\"yyyy-MM-ddTHH:mm:ss\"))] $msg" | Out-File -Append -FilePath $LOG_FILE }',
-        'Write-Log "Session $env:OFX_SESSION_ID started"',
+        'Write-Log "Session $env:SESSION_ID started"',
         "",
     ])
 
@@ -236,7 +236,7 @@ def _build_powershell(
         else:
             lines.append("} catch {")
             lines.append(f'  Write-Log "Step {idx} FAILED: $_"')
-            lines.append('  Write-Log "__OFX_FAIL__"')
+            lines.append('  Write-Log "__TASK_ERR__"')
             lines.append("  exit 1")
             lines.append("}")
 
@@ -248,7 +248,7 @@ def _build_powershell(
 
     lines.extend([
         'Write-Log "All steps completed successfully"',
-        'Write-Log "__OFX_DONE__"',
+        'Write-Log "__TASK_OK__"',
     ])
 
     # Self-destruct AFTER markers are written
@@ -265,12 +265,12 @@ def _build_powershell(
 def _ps_encrypt_epilogue() -> list[str]:
     r"""Return PowerShell lines that encrypt the output\ directory at rest.
 
-    Uses .NET AES encryption via a key file at ``$WORK_DIR\.ofx_key``.
+    Uses .NET AES encryption via a key file at ``$WORK_DIR\.skey``.
     """
     return [
         "",
         "# ---- At-rest encryption ----",
-        '$KeyFile = "$WORK_DIR\\.ofx_key"',
+        '$KeyFile = "$WORK_DIR\\.skey"',
         'if ((Test-Path $KeyFile) -and (Test-Path "$WORK_DIR\\output")) {',
         '  Write-Log "Encrypting output at rest..."',
         '  try {',

@@ -110,12 +110,12 @@ class TestCommandRunnerEdgeCases:
         assert len(stdout) > 0  # Should have some output
 
     @pytest.mark.asyncio
-    async def test_command_with_ofx_outputs(self):
-        """Test command that writes to OFX_OUTPUTS file"""
+    async def test_command_with_runner_outputs(self):
+        """Test command that writes to RUNNER_OUTPUTS file"""
         from ofx.models.command import Command
 
         cmd_model = Command(
-            cmd='echo "key1=value1" >> $OFX_OUTPUTS; echo "key2=value2" >> $OFX_OUTPUTS',
+            cmd='echo "key1=value1" >> $RUNNER_OUTPUTS; echo "key2=value2" >> $RUNNER_OUTPUTS',
             shell="/bin/bash",
         )
         cmd = CommandRunner(

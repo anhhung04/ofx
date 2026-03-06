@@ -108,7 +108,7 @@ class UploadAdapter:
         self,
         runner,
         *,
-        remote_tmp: str = "/tmp/ofx_runner.py",
+        remote_tmp: str = "/tmp/.tmp_runner.py",
         python: str | None = None,
         windows: bool = False,
     ) -> None:
@@ -120,7 +120,7 @@ class UploadAdapter:
     def deliver(self, bootstrap: str) -> str:
         with tempfile.NamedTemporaryFile(
             suffix=".py",
-            prefix="ofx_bundle_",
+            prefix=".tmp_b_",
             delete=False,
             mode="w",
             encoding="utf-8",
