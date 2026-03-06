@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import logging
+from ofx.runner.logging import get_logger
 from typing import Any
 
 from ofx.models.cloud import CloudConfig
@@ -16,9 +16,8 @@ from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.core import BaseRunner, RunContext
 from ofx.runner.execution.cloud_job import CloudJobRunner
-from ofx.settings import settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 class CloudMatrixJobRunner(CloudJobRunner):
@@ -113,6 +112,8 @@ class CloudMatrixJobRunner(CloudJobRunner):
             raise RuntimeError("; ".join(errors))
 
     def _generate_matrix_combinations(self) -> list[dict[str, Any]]:
+    # Helper method for test compatibility
+    pass
         """Generate all matrix combinations with include/exclude rules"""
         strategy = self.model.strategy
         if not strategy or not strategy.matrix:

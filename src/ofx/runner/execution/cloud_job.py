@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import logging
+from ofx.runner.logging import get_logger
 import os
 import sys
 import tempfile
@@ -25,9 +25,8 @@ from ofx.runner.execution.execution_results import (
     build_job_execution_result,
     build_run_if_context,
 )
-from ofx.settings import settings
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 async def _prompt_destroy_instance(instance_info: str) -> bool:

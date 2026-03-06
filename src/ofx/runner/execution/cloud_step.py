@@ -6,7 +6,7 @@ Extracted from ``cloud_job.py`` to follow the File-Per-Struct rule.
 from __future__ import annotations
 
 import asyncio
-import logging
+from ofx.runner.logging import get_logger
 import os
 import tempfile
 from datetime import datetime
@@ -21,12 +21,11 @@ from ofx.runner.core import (
     RunnerStatus,
 )
 from ofx.runner.execution.execution_results import StepExecutionResult
-from ofx.settings import settings
 
 if TYPE_CHECKING:
     from ofx.runner.execution.cloud_job import CloudJobRunner
 
-logger = logging.getLogger(settings.app_branding)
+logger = get_logger()
 
 
 class CloudStepRunner(BaseRunner):

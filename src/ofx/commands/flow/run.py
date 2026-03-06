@@ -18,11 +18,10 @@ from ofx.settings import (
     get_workflow_search_dirs,
     settings,
 )
+from ofx.commands.ui_helpers import inputs_table
 
 logger = logging.getLogger(f"{settings.app_branding}.console")
 console = get_console()
-ui = RichCommandUI()
-
 
 class JsonFormatter(logging.Formatter):
     """Simple JSON formatter for cron-friendly logs."""
@@ -139,7 +138,7 @@ class FlowRunHandler:
                 )
             logger.info("Output: %s", self.output.as_posix())
             if self.input and not self.quiet:
-                ui.inputs(self.input)
+                inputs_table(self.input)
 
             durable_overrides = self._durable_overrides()
             result = await run_workflow(
