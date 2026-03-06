@@ -1,10 +1,22 @@
 # Quick Start
 
-> **Time:** 5 minutes | **Goal:** Create, validate, and run your first workflow
+> [!INFO]
+> This guide will help you install OFX, initialize a project, and run your first workflow in minutes.
 
 ---
 
-## 1️⃣ Initialize a Project
+## Installation
+
+```bash
+pip install ofx
+```
+
+> [!TIP]
+> For cloud runners, install extras: `pip install ofx[cloud]` or `ofx[digitalocean]`, `ofx[aws]`
+
+---
+
+## Project Initialization
 
 ```bash
 ofx project init quickstart-demo
@@ -13,7 +25,7 @@ cd ~/.ofx/projects/quickstart-demo
 
 ---
 
-## 2️⃣ Create Your First Workflow
+## Create Your First Workflow
 
 Create `hello.yml` in your workflows directory:
 
@@ -23,7 +35,6 @@ jobs:
   greet:
     steps:
       - run: echo "Hello from OFX"
-  
   info:
     needs: [greet]
     steps:
@@ -31,12 +42,25 @@ jobs:
       - run: pwd
 ```
 
-**Validate and run:**
+---
+
+## Validate & Run
 
 ```bash
 ofx flow validate hello-world
 ofx flow run hello-world
 ```
+
+> [!SUCCESS]
+> You’ve just run your first OFX workflow!
+
+---
+
+## Next Steps
+
+- [Workflow Design](../guide/workflows.md)
+- [Cloud Execution](../guide/cloud-runners.md)
+- [API Reference](../reference/api.md)
 
 ---
 

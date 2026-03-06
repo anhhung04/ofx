@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from ofx.runner.logging import get_logger
 import os
 import sys
 import tempfile
@@ -26,7 +25,7 @@ from ofx.runner.execution.execution_results import (
     build_run_if_context,
 )
 
-logger = get_logger()
+# logger will be injected via CloudJobRunner instance
 
 
 async def _prompt_destroy_instance(instance_info: str) -> bool:
@@ -110,21 +109,20 @@ class CloudJobRunner(BaseRunner[Job]):
         resolved = mgr.resolve(cfg)
         self._cloud_config = resolved
 
-        # Register cloud credential values for log redaction.
-        from ofx.utils.log import SecretRedactFilter
-
-        _cred_vals = set()
+        # Register cloud credential values for log redaction using SecretRedactor.
+        from ofx.runner.services.secret_redactor import SecretRedactor
+        _cred_vals = []
         for attr in ("ssh_password", "winrm_password"):
             v = getattr(resolved, attr, None)
             if v:
-                _cred_vals.add(v)
+                _cred_vals.append(v)
         if resolved.extra:
             for k in ("token", "aws_secret_access_key"):
                 v = resolved.extra.get(k)
                 if v:
-                    _cred_vals.add(v)
-        if _cred_vals:
-            SecretRedactFilter.get_instance().register_values(_cred_vals)
+                    _cred_vals.append(v)
+        # Register collected secrets (duplicates are ignored by the service).
+        SecretRedactor.register(_cred_vals)
 
         # Check run_if conditions (same as JobRunner)
         if isinstance(self.model.needs, str):

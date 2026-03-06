@@ -53,7 +53,6 @@ ofx flow collection add https://github.com/myorg/my-workflows.git --name custom-
 
 ### Skip dependency installation
 
-```bash
 ofx flow collection add recon-tools --no-deps
 ```
 
@@ -68,7 +67,6 @@ ofx flow run subdomain-enum --input target=example.com
 ```
 
 OFX searches the following directories in order:
-
 1. Current working directory
 2. `~/.ofx/workflows/`
 3. All installed collection directories (`~/.ofx/collections/*/`)
@@ -101,7 +99,6 @@ ofx flow collection list
 ofx flow collection info recon-tools
 ```
 
-### Update to latest
 
 ```bash
 # Update a single collection
@@ -126,7 +123,6 @@ The community index is a curated list of collections hosted at `https://github.c
 ```bash
 # Search by keyword, tag, or description
 ofx flow collection search recon
-
 # Force-refresh the cached index
 ofx flow collection search recon --refresh
 ```
@@ -138,7 +134,6 @@ ofx flow collection add <name>
 ```
 
 ---
-
 ## Creating Your Own Collection
 
 ### 1. Create a repository
@@ -157,7 +152,6 @@ my-collection/
 name: my-collection
 version: 1.0.0
 description: My recon workflow collection
-author: security-team
 license: MIT
 min_ofx_version: "0.4.0"
 
@@ -209,7 +203,6 @@ Others can now install it:
 
 ```bash
 ofx flow collection add myorg/my-collection
-```
 
 ---
 
@@ -231,7 +224,6 @@ dependencies:
 The following operators are supported:
 
 | Operator | Example | Description |
-|----------|---------|-------------|
 | `>=` | `>=1.0.0` | Greater than or equal |
 | `>` | `>1.0.0` | Greater than |
 | `<=` | `<=2.0.0` | Less than or equal |
@@ -242,7 +234,6 @@ The following operators are supported:
 
 ### Minimum OFX version
 
-Set `min_ofx_version` to warn users if their OFX installation is too old:
 
 ```yaml
 min_ofx_version: "0.4.0"
@@ -260,13 +251,9 @@ If you used the old `ofx asset` system, you can migrate to collections in one st
 ofx flow collection migrate
 ```
 
-This reads the legacy `assets.json` registry and re-installs each entry as a collection.
 
 ---
 
-## Storage Layout
-
-Collections are stored under `~/.ofx/collections/`:
 
 ```
 ~/.ofx/collections/

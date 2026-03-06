@@ -1,10 +1,11 @@
 # Jobs & Steps
 
-> Jobs run in parallel (unless dependent), steps run sequentially within a job
+> [!INFO]
+> Jobs run in parallel (unless dependent), steps run sequentially within a job.
 
 ---
 
-## 📦 Jobs Overview
+## Jobs Overview
 
 Jobs are the main execution units in a workflow:
 
@@ -12,31 +13,32 @@ Jobs are the main execution units in a workflow:
 jobs:
   scan:
     needs: []                  # Dependencies (empty = parallel)
-    run_if: success()           # Optional conditional
- env:
+    run_if: success()          # Optional conditional
+    env:
       LOG_LEVEL: INFO          # Job-wide environment
     steps:
       - run: nmap {{ inputs.target }}
 ```
 
-### Job Properties
+| Property         | Type      | Description                                      |
+|------------------|-----------|--------------------------------------------------|
+| `name`           | str       | Job display name                                 |
+| `steps`          | list      | **Required.** Steps to execute                   |
+| `needs`          | list/str  | Job dependencies (for ordering)                  |
+| `run_if`         | bool/str  | Conditional execution (alias: `if`)              |
+| `strategy`       | object    | Matrix strategy config                           |
+| `max_parallel`   | int       | Max parallel matrix jobs (alias: `max-parallel`) |
+| `fail_fast`      | bool      | Fail matrix on first job failure (alias: `fail-fast`) |
+| `envs`           | dict      | Environment variables for all steps              |
+| `outputs`        | dict      | Job outputs (template-resolved)                  |
+| `defaults`       | object    | Default run config overrides                     |
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | str | Job display name |
-| `steps` | list | **Required.** Steps to execute |
-| `needs` | list\|str | Job dependencies (for ordering) |
-| `run_if` | bool\|str | Conditional execution (alias: `if`) |
-| `strategy` | object | Matrix strategy config |
-| `max_parallel` | int | Max parallel matrix jobs (alias: `max-parallel`) |
-| `fail_fast` | bool | Fail matrix on first job failure (alias: `fail-fast`) |
-| `envs` | dict | Environment variables for all steps |
-| `outputs` | dict | Job outputs (template-resolved) |
-| `defaults` | object | Default run config overrides |
+> [!TIP]
+> See [Job model code](https://github.com/anhhung04/ofx/blob/main/src/ofx/models/job.py) for job model code.
 
 ---
 
-## 📝 Steps Overview
+## Steps Overview
 
 Each step executes exactly **one** action:
 

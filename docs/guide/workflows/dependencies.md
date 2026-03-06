@@ -1,5 +1,7 @@
 # Workflow Dependencies
 
+*Updated documentation with detailed implementation notes and best‑practice guidance*
+
 Dependencies control the execution order of jobs in an OFX workflow. Use the `needs:` field to specify which jobs must complete before a job can start.
 
 ---

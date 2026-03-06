@@ -13,9 +13,8 @@ from ofx.models.command import Command
 from ofx.models.workflow import ToolConfig
 from ofx.runner.commands.command import CommandRunner
 from ofx.runner.core import BaseRunner, RunContext
-from ofx.settings import TOOLS_BIN_DIR, ensure_dir, settings
+from ofx.settings import TOOLS_BIN_DIR, ensure_dir
 
-logger = logging.getLogger(settings.app_branding)
 console = Console()
 
 

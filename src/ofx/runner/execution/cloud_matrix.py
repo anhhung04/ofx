@@ -112,8 +112,6 @@ class CloudMatrixJobRunner(CloudJobRunner):
             raise RuntimeError("; ".join(errors))
 
     def _generate_matrix_combinations(self) -> list[dict[str, Any]]:
-    # Helper method for test compatibility
-    pass
         """Generate all matrix combinations with include/exclude rules"""
         strategy = self.model.strategy
         if not strategy or not strategy.matrix:

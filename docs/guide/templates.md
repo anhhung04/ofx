@@ -1,43 +1,53 @@
 # Templates
 
-Jinja2 uses `{{ ... }}` for variables.
+> [!INFO]
+> OFX uses Jinja2 templates (`{{ ... }}`) for dynamic variables in workflows.
 
-## What you can reference
+---
 
-- Inputs: `{{ inputs.target }}`
-- Secrets: `{{ secrets.API_KEY }}` (masked)
-- Context: `{{ ctx.run_id }}`, `{{ ctx.output_path }}`
+## Referencing Variables
+
+- **Inputs:** `{{ inputs.target }}`
+- **Secrets:** `{{ secrets.API_KEY }}` (masked)
+- **Context:** `{{ ctx.run_id }}`, `{{ ctx.output_path }}`
+
+---
 
 ## Shell Helper Functions
 
-These functions are available as actual shell functions prepended to your commands:
+These functions are available as shell helpers in your commands:
 
-| Function | Bash (Linux/macOS) | PowerShell (Windows) |
-|----------|-------------------|---------------------|
-| `fapt <pkg>` | `apt-get install` | `winget install` |
-| `pip_install <pkg>` | Python pip | Python pip |
-| `uv_install <pkg>` | uv tool install | uv tool install |
-| `go_install <pkg>` | go install | go install |
-| `cargo_install <pkg>` | cargo install | cargo install |
-| `npm_install <pkg>` | npm install -g | npm install -g |
-| `static_install <url> [name]` | curl + chmod | Invoke-WebRequest |
+| Function                | Bash (Linux/macOS)      | PowerShell (Windows)   |
+|-------------------------|------------------------|------------------------|
+| `fapt <pkg>`            | `apt-get install`      | `winget install`       |
+| `pip_install <pkg>`     | Python pip             | Python pip             |
+| `uv_install <pkg>`      | uv tool install        | uv tool install        |
+| `go_install <pkg>`      | go install             | go install             |
+| `cargo_install <pkg>`   | cargo install          | cargo install          |
+| `npm_install <pkg>`     | npm install -g         | npm install -g         |
+| `static_install <url>`  | curl + chmod           | Invoke-WebRequest      |
 
-**Usage (direct shell function calls):**
+**Usage Example:**
 ```yaml
 - run: |
-    fapt python3
-    go_install github.com/projectdiscovery/httpx/cmd/httpx
-    $OFX_TOOLS_BIN_DIR/httpx -u https://{{ inputs.target }}
+  fapt python3
+  go_install github.com/projectdiscovery/httpx/cmd/httpx
+  $OFX_TOOLS_BIN_DIR/httpx -u https://{{ inputs.target }}
 ```
+
+---
 
 ## Template Variables
 
-### Path Variables
-```yaml
-{{ tools_dir }}         # Tool installation directory
-{{ tools_bin_dir }}     # Tool binary directory
-{{ temp_dir }}          # Temporary directory
-{{ python }}            # Python executable path
+| Variable           | Description                       |
+|--------------------|-----------------------------------|
+| `tools_dir`        | Tool installation directory        |
+| `tools_bin_dir`    | Tool binary directory              |
+| `temp_dir`         | Temporary directory                |
+| `python`           | Python executable path             |
+
+> [!TIP]
+> See [Template resolver code](https://github.com/anhhung04/ofx/blob/main/src/ofx/runner/templates/) for template resolver code.
 {{ sudo }}              # "sudo" if available, empty string otherwise
 ```
 

@@ -88,7 +88,6 @@ ofx flow run my-workflow --secret API_KEY=xxx
 
 # Combined
 ofx flow run my-workflow \
-  --input target=example.com \
   --secret API_KEY=xxx
 ```
 
@@ -97,7 +96,6 @@ ofx flow run my-workflow \
 ## 📂 Workflow Sources
 
 ### Local Files
-```bash
 # Current directory
 ofx flow run my-workflow.yml
 
@@ -113,7 +111,6 @@ ofx flow run my-workflow
 # Clone and run main workflow
 ofx flow run https://github.com/user/repo
 
-# Specific workflow in repo
 ofx flow run https://github.com/user/repo/workflows/scan.yml
 ```
 
@@ -124,7 +121,6 @@ ofx flow run https://example.com/workflows/security-scan.yml
 
 ### S3 Buckets
 ```bash
-# S3 URI
 ofx flow run s3://my-bucket/workflows/scan.yml
 
 # With AWS credentials
@@ -135,7 +131,6 @@ ofx flow run s3://my-bucket/workflow.yml
 
 > **Requirements:** boto3, AWS credentials, S3 read permissions
 
----
 
 ## 🔁 Reusable Workflows (`uses`)
 
@@ -148,14 +143,12 @@ Steps with `uses:` can reference reusable workflows using the same discovery log
 
 ---
 
-## 🔗 Job Dependencies
 
 Control execution order with `needs`:
 
 ```yaml
 jobs:
   a:
-    steps: [{ run: echo "A" }]
   
   b:
     needs: [a]
@@ -173,7 +166,6 @@ A ───┤
      └─→ C
 ```
 
-> Jobs without `needs` run in parallel when resources allow.
 
 ---
 
@@ -195,7 +187,6 @@ jobs:
 ```
 
 | Variable | Description |
-|----------|-------------|
 | `{{ inputs.name }}` | Input value |
 | `{{ secrets.name }}` | Secret value |
 | `{{ ctx.output_path }}` | Output directory |
@@ -206,7 +197,6 @@ jobs:
 | `{{ random_port() }}` | Random port number |
 
 See [Templates](templates.md) for all available functions.
-
 ---
 
 ## 📁 Output Management
@@ -217,7 +207,6 @@ Workflows automatically create output directories:
 jobs:
   scan:
     steps:
-      - run: nmap {{ inputs.target }} -oX {{ ctx.output_path }}/scan.xml
 ```
 
 **Output structure:**
@@ -230,7 +219,6 @@ output/
 **Custom output path:**
 ```bash
 ofx flow run scan --output /tmp/scan-results
-```
 
 ---
 
@@ -244,7 +232,6 @@ jobs:
     steps:
       - run: may-fail-command
       - run: echo "Still runs"
-```
 
 ### Retry Logic
 ```yaml
@@ -255,13 +242,9 @@ steps:
     retry_delay: 5  # seconds
 ```
 
----
 
 ## ✅ Best Practices
 
-### 1. Use Descriptive Names
-```yaml
-name: production-security-scan
 description: Comprehensive security assessment
 ```
 

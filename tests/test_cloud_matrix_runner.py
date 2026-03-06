@@ -154,7 +154,7 @@ class TestCloudMatrixExpansion:
     """Test the matrix expansion logic in CloudMatrixJobRunner."""
 
     def test_matrix_expansion(self):
-        """CloudMatrixJobRunner._expand_matrix produces correct combos."""
+        """CloudMatrixJobRunner._generate_matrix_combinations produces correct combos."""
         from ofx.models.job import Job
         from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
 
@@ -170,7 +170,7 @@ class TestCloudMatrixExpansion:
         # We only test the expansion helper, no need for real parent
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._expand_matrix()
+        combos = runner._generate_matrix_combinations()
 
         assert len(combos) == 4
         for c in combos:
@@ -194,7 +194,7 @@ class TestCloudMatrixExpansion:
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._expand_matrix()
+        combos = runner._generate_matrix_combinations()
 
         assert len(combos) == 3
         assert {"tool": "masscan", "mode": "thorough"} not in combos
@@ -216,7 +216,7 @@ class TestCloudMatrixExpansion:
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._expand_matrix()
+        combos = runner._generate_matrix_combinations()
 
         assert len(combos) == 2
         assert {"tool": "nmap"} in combos
@@ -235,5 +235,5 @@ class TestCloudMatrixExpansion:
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._expand_matrix()
+        combos = runner._generate_matrix_combinations()
         assert combos == []

@@ -1,43 +1,46 @@
+
+# OFX: Offensive Flow Executor
+
+> :rocket: **Advanced Red Team Automation Toolkit**
+
 ---
-hide:
-  - navigation
-  - toc
+
+OFX is a modular workflow runner for offensive automation, supporting parallel jobs, templating, and built-in APIs for recon, exploitation, and post-exploitation.
+
+| Feature                | Description                                                                 |
+|------------------------|-----------------------------------------------------------------------------|
+| **YAML Workflows**     | Compose complex attack chains with dependencies and parallel execution.      |
+| **Built-in APIs**      | Recon, exploitation, post-exploitation modules ready for use.                |
+| **Jinja Templates**    | Dynamic inputs, envs, secrets, and commands.                                 |
+| **Async Engine**       | Fast, concurrent execution with rich progress output.                        |
+| **Cloud Integration**  | Run jobs on DigitalOcean, AWS, or static VPS.                                |
+| **Collections**        | Installable workflow packages for easy sharing and reuse.                    |
+
+> [!TIP]
+> See the [Getting Started](getting-started/quickstart.md) guide for your first workflow.
+
 ---
 
-<div class="hero-section">
-  <h1>OFX</h1>
-  <p>The Advanced Offensive Flow Executor for Red Teaming Operations</p>
-  <div class="hero-actions">
-    <a href="getting-started/quickstart/" class="hero-button primary">Get Started</a>
-    <a href="reference/api/" class="hero-button secondary">API Reference</a>
-  </div>
-</div>
+## Project Structure
 
-<div class="grid cards" markdown>
+- **src/ofx/**: Core engine, runners, models, APIs
+- **docs/**: User documentation (split by topic)
+- **tests/**: Unit and integration tests
 
--   :material-rocket-launch: **Powerful Workflows**
+---
 
-    Build complex attack chains with YAML-based workflows. Support for async execution, dependencies, and matrix strategies.
+## Quick Links
 
--   :material-api: **Rich API Ecosystem**
+- [Quickstart](getting-started/quickstart.md)
+- [Workflow Design](guide/workflows.md)
+- [Cloud Execution](guide/cloud-runners.md)
+- [API Reference](reference/api.md)
+- [CLI Reference](cli/commands.md)
 
-    Extensive Python API for reconnaissance, exploitation, and post-exploitation. Integrate seamlessly with your custom tools.
+---
 
--   :material-console: **CLI First**
-
-    Robust CLI for managing projects, secrets, and assets. verifying workflows and running interactive sessions.
-    
--   :material-puzzle: **Modular Design**
-
-    Plugin-based architecture. Easily extend with new runners, connectors, and exploit modules.
-
-</div>
-
-## 🚀 Quick Start
-
-Install OFX and get running in seconds:
-
-```bash
+> [!IMPORTANT]
+> OFX is async-first and modular. All runners, APIs, and cloud providers are extendable. See [Extending Data Modules](guide/extending-data-modules.md).
 # Install with uv
 uv tool install ofx
 

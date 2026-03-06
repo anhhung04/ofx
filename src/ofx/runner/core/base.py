@@ -13,14 +13,11 @@ from ofx.runner.core.durable import get_checkpoint, write_checkpoint
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import RegistryAdapter, cleanup_registry
-from ofx.runner.registry.factory import RegistryFactory
 from ofx.runner.templates import TemplateResolver
 from ofx.settings import settings
-
-logger = logging.getLogger(settings.app_branding)
+from ofx.runner.services.template_service import TemplateService
 
 TModel = TypeVar("TModel", bound=BaseModel)
-
 
 class RunnerStateMachine:
     """Finite State Machine for managing runner execution states"""
@@ -68,10 +65,28 @@ class RunnerStateMachine:
 
 
 class BaseRunner[TModel: BaseModel]:
-    """Abstract base class for all runners (workflow, job, step, command)
-    Type Parameters:
-        TModel: The model type this runner executes (Workflow, Job, Step, etc.)
-    """
+    __slots__ = (
+        "run_id",
+        "name",
+        "model",
+        "ctx",
+        "parent",
+        "_state_machine",
+        "_error",
+        "_registry",
+        "_runners",
+        "_started_at",
+        "_finished_at",
+        "_started_at_utc",
+        "_finished_at_utc",
+        "_log_level",
+        "_durable_outputs",
+        "__lazy_template_resolver",
+        "__lazy_registry",
+        "_cached_durable_config",
+        "_logger",
+        "_template_service",
+    )
 
     def __init__(
         self,
@@ -79,6 +94,8 @@ class BaseRunner[TModel: BaseModel]:
         ctx: RunContext,
         parent: Optional["BaseRunner"] = None,
         registry: RegistryAdapter | None = None,
+        logger: logging.Logger | None = None,
+        template_service: Optional[TemplateService] = None,
     ):
         assert model is not None, "Model cannot be None"
         self.run_id = str(uuid.uuid4())
@@ -89,14 +106,23 @@ class BaseRunner[TModel: BaseModel]:
 
         self._state_machine = RunnerStateMachine()
         self._error: str | None = None
-        self._template_resolver = TemplateResolver()
-        self._registry = registry or RegistryFactory.create_memory()
+        # Lazy import RegistryFactory to avoid import overhead
+        if registry is None:
+            from ofx.runner.registry.factory import RegistryFactory
+            self._registry = RegistryFactory.create_memory()
+        else:
+            self._registry = registry
+        # Logger injection – default to app branding logger if not provided
+        self._logger = logger if logger is not None else logging.getLogger(settings.app_branding)
+        # Template service injection – default to a new TemplateService if not provided
+        from ofx.runner.services.template_service import TemplateService
+        self._template_service = template_service if template_service is not None else TemplateService()
         self._runners: dict[str, BaseRunner] = {}  # child runners
         self._started_at: float | None = None
         self._finished_at: float | None = None
         self._started_at_utc: str | None = None
         self._finished_at_utc: str | None = None
-        self._log_level = logging.getLogger().getEffectiveLevel()
+        self._log_level = self._logger.getEffectiveLevel()
         self._durable_outputs: dict[str, Any] | None = None
 
     async def run(self) -> RunResult:
@@ -124,7 +150,7 @@ class BaseRunner[TModel: BaseModel]:
             await self._do_run()
             self._state_machine.transition(RunnerStatus.FINISHED)
             await self._post_run()
-            await cleanup_registry(self._registry)
+            # cleanup_registry handled in finally block
             self._state_machine.transition(RunnerStatus.COMPLETED)
         except Exception as e:
             self._error = str(e)
@@ -203,18 +229,27 @@ class BaseRunner[TModel: BaseModel]:
             return False
 
         self._error = checkpoint.get("error")
-        self._durable_outputs = checkpoint.get("outputs") or {}
+        self._durable_outputs = checkpoint.get("outputs",{}) 
         self._started_at_utc = checkpoint.get("started_at")
         self._finished_at_utc = checkpoint.get("finished_at")
         self._state_machine.set_state(RunnerStatus.COMPLETED)
-        await self.reg_set(RunnerRegistryKeys.OUTPUTS, self._durable_outputs)
+        if self._durable_outputs is not None:
+            await self.reg_set(RunnerRegistryKeys.OUTPUTS, self._durable_outputs)
         return True
 
     def _durable_config(self):
+        """Return the durable config, cached after first lookup.
+        This avoids repeated attribute traversal for each checkpoint operation.
+        """
+        if hasattr(self, "_cached_durable_config") and self._cached_durable_config is not None:
+            return self._cached_durable_config
         if self.ctx.durable and self.ctx.durable.enabled:
-            return self.ctx.durable
+            self._cached_durable_config = self.ctx.durable
+            return self._cached_durable_config
         if self.parent and self.parent.ctx.durable and self.parent.ctx.durable.enabled:
-            return self.parent.ctx.durable
+            self._cached_durable_config = self.parent.ctx.durable
+            return self._cached_durable_config
+        self._cached_durable_config = None
         return None
 
     def _checkpoint_id(self) -> str:
@@ -247,8 +282,18 @@ class BaseRunner[TModel: BaseModel]:
         """Post-run - must be implemented by subclasses"""
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
+    @property
+    def _template_resolver(self) -> "TemplateResolver":
+        """Lazily import and cache the TemplateResolver.
+        This avoids importing heavy Jinja2 machinery at startup.
+        """
+        if not hasattr(self, "__lazy_template_resolver"):
+            from ofx.runner.templates.resolver import TemplateResolver
+            self.__lazy_template_resolver = TemplateResolver()
+        return self.__lazy_template_resolver
+
     async def _resolve_template(self, value: Any) -> Any:
-        """Resolve Jinja2 templates in values using TemplateResolver
+        """Resolve Jinja2 templates in values using the injected TemplateService.
         Args:
             value: Value to resolve (can be str, dict, list, primitives)
         Returns:
@@ -264,7 +309,7 @@ class BaseRunner[TModel: BaseModel]:
                 "ctx": self.ctx,
             }
         )
-        return await self._template_resolver.resolve(
+        return await self._template_service.resolve(
             value,
             context_vars,
         )
@@ -318,16 +363,16 @@ class BaseRunner[TModel: BaseModel]:
         raise NotImplementedError("Subclasses should implement _produce_log method.")
 
     def _log_debug(self, message: Any) -> None:
-        logger.debug(self._produce_log(message))
+        self._logger.debug(self._produce_log(message))
 
     def _log_info(self, message: Any) -> None:
-        logger.info(self._produce_log(message))
+        self._logger.info(self._produce_log(message))
 
     def _log_warning(self, message: Any) -> None:
-        logger.warning(self._produce_log(message))
+        self._logger.warning(self._produce_log(message))
 
     def _log_error(self, message: Any) -> None:
-        logger.error(self._produce_log(message))
+        self._logger.error(self._produce_log(message))
 
     def _mark_start(self) -> None:
         self._started_at = time.perf_counter()
@@ -374,8 +419,11 @@ class BaseRunner[TModel: BaseModel]:
 
     @property
     def registry(self) -> RegistryAdapter:
-        """Get the registry adapter"""
-        return self._registry
+        """Get the registry adapter, lazily load and cache RegistryFactory."""
+        if not hasattr(self, "__lazy_registry"):
+            from ofx.runner.registry.factory import RegistryFactory
+            self.__lazy_registry = RegistryFactory.create_memory()
+        return self.__lazy_registry
 
     async def get_result(self) -> RunResult:
         """Get the execution result"""

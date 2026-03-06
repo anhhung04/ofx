@@ -1,38 +1,48 @@
 # Cloud Runners
 
-OFX can run jobs on cloud VPS instances — automatically provisioning, executing, and destroying them.
+> [!INFO]
+> OFX can run jobs on cloud VPS instances—provision, execute, and destroy automatically.
+
+---
 
 ## Overview
 
 Cloud runners extend OFX workflows to execute on remote infrastructure:
 
-- **DigitalOcean** — Spin up Droplets via the API
-- **AWS EC2** — Launch instances on EC2
-- **Static** — Use pre-existing VPS without lifecycle management
+| Provider         | Description                                 |
+|------------------|---------------------------------------------|
+| **DigitalOcean** | Spin up Droplets via API                    |
+| **AWS EC2**      | Launch EC2 instances                        |
+| **Static**       | Use pre-existing VPS (no lifecycle)         |
 
-Jobs with a `cloud` configuration are automatically routed to the `CloudJobRunner`, which handles:
+Jobs with a `cloud` configuration are routed to the `CloudJobRunner`:
 
-1. **Provisioning** — Create the VPS (or connect to existing)
-2. **Connectivity** — Wait for SSH/WinRM to be ready
-3. **Execution** — Run each step remotely via SSH or WinRM
-4. **Cleanup** — Download outputs and destroy the VPS
+1. **Provisioning** — Create or connect to VPS
+2. **Connectivity** — Wait for SSH/WinRM
+3. **Execution** — Run steps remotely
+4. **Cleanup** — Download outputs & destroy VPS
+
+---
 
 ## Quick Start
 
-### 1. Install cloud dependencies
+### 1. Install Cloud Dependencies
 
 ```bash
 # DigitalOcean
 pip install ofx[digitalocean]
-
 # AWS EC2
 pip install ofx[aws]
-
 # Both
 pip install ofx[cloud]
 ```
 
-### 2. Set up a cloud profile
+> [!TIP]
+> See [src/ofx/cloud/providers/](../../src/ofx/cloud/providers/) for provider code.
+
+---
+
+### 2. Set Up a Cloud Profile
 
 ```bash
 ofx cloud profile add do-small \

@@ -22,9 +22,6 @@ from ofx.runner.core import (
 )
 from ofx.settings import DEFAULT_SHELL, settings
 
-logger = logging.getLogger(settings.app_branding)
-
-
 def exec_script_in_process(
     script,
     working_directory,
@@ -84,8 +81,6 @@ def exec_script_in_process(
 
 
 class CommandRunner(BaseRunner[Command]):
-    """Optimized command runner with caching."""
-
     _shell_cache: dict[str, str] = {}
 
     def __init__(
@@ -93,8 +88,10 @@ class CommandRunner(BaseRunner[Command]):
         command_model: Command,
         ctx: RunContext,
         parent: BaseRunner | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(command_model, ctx, parent)
+        """Optimized command runner with caching."""
+        super().__init__(command_model, ctx, parent, None, logger=logger)
         self._outputs_file: Path | None = None
 
     async def _do_run(self) -> None:
