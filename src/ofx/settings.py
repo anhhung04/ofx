@@ -8,6 +8,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional
 from rich.console import Console
 from rich.theme import Theme
 
@@ -129,7 +130,7 @@ def _gh_cli_token() -> str:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         pass
     return ""
 
@@ -193,6 +194,11 @@ class Settings(BaseSettings):
 
     app_name: str = "Offensive Flow Executor"
     app_branding: str = "ofx"
+
+    # Active project name (populated from env var or CLI)
+    active_project: Optional[str] = Field(
+        default=None, description="Active project name"
+    )
 
     debug: bool = Field(default=False, description="Enable debug mode")
     timeout: int = Field(

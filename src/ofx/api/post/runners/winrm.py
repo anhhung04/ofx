@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..base import PostRunnerBase
+from ...core.base import BaseRunner, Result
 from ..registry import RunnerRegistry
 
 __all__ = ["PostWinRM"]
@@ -37,7 +37,7 @@ class WinRMCommandError(RuntimeError):
 
 @RunnerRegistry.register("winrm")
 @dataclass
-class PostWinRM(PostRunnerBase):
+class PostWinRM(BaseRunner):
     """Post-exploitation runner over WinRM with stability and opsec features.
 
     Requires the optional ``pywinrm`` package.

@@ -2,6 +2,7 @@ import asyncio
 from typing import Annotated
 
 import typer
+from ofx.commands.project.project_manager import ProjectManager
 
 from ofx.commands.dump import app as schema_app
 from ofx.commands.flow.collection import app as collection_app
@@ -109,6 +110,12 @@ def run(
     ] = "",
 ):
     from ofx.commands.flow.run import FlowRunHandler
+
+    # If no explicit project is supplied, use the active project (if any)
+    if not project:
+        active_path = ProjectManager.get_active_path()
+        if active_path:
+            project = active_path.name
 
     if input is None:
         input = []

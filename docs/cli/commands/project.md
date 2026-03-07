@@ -10,6 +10,23 @@ ofx project <subcommand> [options]
 
 ## Subcommands
 
+### use
+
+Set the active/working project for the session. All OFX commands will resolve relative paths against this project.
+
+```bash
+ofx project use <project-name>
+```
+
+Use `--clear` to unset the active project:
+
+```bash
+ofx project use --clear
+```
+
+When set, commands like `ofx flow run` default to this project without needing `--project`.
+
+
 ### init
 
 Initialize a new project.

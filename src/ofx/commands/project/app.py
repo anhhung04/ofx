@@ -9,6 +9,7 @@ from rich.table import Table
 
 from ofx.commands.ui_helpers import print_error, print_success, print_warning
 from ofx.settings import get_console
+import os
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = get_console()
@@ -31,10 +32,6 @@ def init(
 
     console.print(f"[bold green]Creating project '{name}'...[/bold green]")
     base = ProjectManager.create_project(name)
-
-    console.print(f"[bold green]✓[/] Project created: [cyan]{name}[/]")
-    console.print(f"[dim]Location: {base}[/]")
-
     InitHandler.run_interactive(Path(base), is_multiphase)
 
     print_success(
@@ -204,6 +201,39 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
             f"Failed to delete project '{name}'",
         )
 
+
+@app.command(name="use")
+def use(
+    name: Annotated[str, typer.Argument(help="Project name or path (empty when clearing)")] = "",
+    clear: Annotated[bool, typer.Option("--clear", "-c", help="Clear the active project setting")] = False,
+):
+    """Set or clear the active/working project."""
+    from .project_manager import _load_config, _save_config, ProjectManager
+    if clear:
+        cfg = _load_config()
+        cfg.pop("active_project", None)
+        _save_config(cfg)
+        # Also clear environment variable and Settings field
+        os.environ.pop("OFX_ACTIVE_PROJECT", None)
+        from ofx.settings import settings
+        settings.active_project = None
+        console.print("[yellow]Active project cleared.[/]")
+        return
+    if not name:
+        console.print("[red]Provide a project name/path or use --clear.[/]")
+        raise typer.Exit(code=1)
+    resolved = ProjectManager.resolve_path(name)
+    if not Path(resolved).exists():
+        console.print(f"[red]Project '{name}' not found at {resolved}[/]")
+        raise typer.Exit(code=1)
+    cfg = _load_config()
+    cfg["active_project"] = name
+    _save_config(cfg)
+    # Export to env var and Settings for this and downstream processes
+    os.environ["OFX_ACTIVE_PROJECT"] = name
+    from ofx.settings import settings
+    settings.active_project = name
+    console.print(f"[green]Active project set to:[/] {name} → {resolved}")
 
 @app.command(hidden=True)
 def encrypt_filter():

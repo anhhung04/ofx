@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .base import PostRunnerBase
+    from .core.base import BaseRunner
 
 __all__ = ["RunnerRegistry"]
 

@@ -14,7 +14,7 @@ from random import uniform
 
 import paramiko  # type: ignore[import-untyped]
 
-from ..base import PostRunnerBase
+from ...core.base import BaseRunner, Result
 from ..registry import RunnerRegistry
 
 __all__ = ["PostSSH"]
@@ -44,7 +44,7 @@ class SSHCommandError(RuntimeError):
 
 
 @RunnerRegistry.register("ssh")
-class PostSSH(PostRunnerBase):
+class PostSSH(BaseRunner):
     """Post-exploitation runner over SSH via paramiko.
 
     Features:
@@ -234,7 +234,7 @@ class PostSSH(PostRunnerBase):
         ):
             try:
                 return key_class.from_private_key_file(path)
-            except (paramiko.SSHException, ValueError):
+            except paramiko.SSHException, ValueError:
                 continue
         raise SSHAuthError(
             f"Cannot load key '{path}': unsupported format or corrupt file"

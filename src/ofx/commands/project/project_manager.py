@@ -1,8 +1,32 @@
 import shutil
+import json
+import os
 from os import getenv
 from pathlib import Path
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
+from typing import Optional
+
+# Configuration helpers for active project management
+CONFIG_PATH = Path.home() / ".ofx" / "config.json"
+
+
+def _load_config() -> dict:
+    """Load JSON config from CONFIG_PATH. Return empty dict on error."""
+    try:
+        return json.loads(Path(CONFIG_PATH).read_text())
+    except Exception:
+        return {}
+
+
+def _save_config(data: dict) -> None:
+    """Write `data` as JSON to CONFIG_PATH, or delete the file if empty."""
+    Path(CONFIG_PATH).parent.mkdir(parents=True, exist_ok=True)
+    if data:
+        Path(CONFIG_PATH).write_text(json.dumps(data, indent=2))
+    else:
+        # Remove the config file when it’s empty – Settings will fall back to env var
+        Path(CONFIG_PATH).unlink(missing_ok=True)
 
 
 class ProjectManager:
@@ -15,8 +39,12 @@ class ProjectManager:
         return Path(path)
 
     @classmethod
-    def resolve_path(cls, project_arg: str) -> str:
-        """Resolve project path from name, relative, or absolute path."""
+    def resolve_path(cls, project_arg: Optional[str]) -> str:
+        """Resolve project path from name, relative, or absolute path.
+        Raises ValueError if project_arg is None.
+        """
+        if project_arg is None:
+            raise ValueError("project_arg cannot be None")
         project_path = Path(project_arg)
 
         if project_path.is_absolute():
@@ -70,3 +98,32 @@ class ProjectManager:
             shutil.rmtree(project_path)
             return True
         return False
+
+    @classmethod
+    def get_active_path(cls) -> Optional[Path]:
+        """Return the active project Path considering env var, Settings, or config."""
+        # 1️⃣ Environment variable override
+        env_name = os.getenv("OFX_ACTIVE_PROJECT")
+        if env_name:
+            try:
+                return Path(cls.resolve_path(env_name))
+            except Exception:
+                pass
+        # 2️⃣ Settings field (populated from env var on Settings load)
+        from ofx.settings import settings
+
+        if getattr(settings, "active_project", None):
+            try:
+                return Path(cls.resolve_path(settings.active_project))
+            except Exception:
+                pass
+        # 3️⃣ JSON config fallback
+        cfg = _load_config()
+        name = cfg.get("active_project")
+        if name:
+            try:
+                return Path(cls.resolve_path(name))
+            except Exception:
+                pass
+        # 4️⃣ No active project defined
+        return None
