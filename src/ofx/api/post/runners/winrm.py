@@ -400,8 +400,8 @@ class PostWinRM(PostRunnerBase):
             self._log_file.parent.mkdir(parents=True, exist_ok=True)
             with self._log_file.open("a") as f:
                 f.write(entry)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to write command log: %s", e)
 
     # -------------------------------------------------------------------------
     # Cleanup

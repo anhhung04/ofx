@@ -1,6 +1,7 @@
 import ast
 import socket
 import urllib.parse
+from typing import Any
 
 from ofx.api._compat import get_logger
 
@@ -49,7 +50,7 @@ def url2ip(url: str, with_port: bool = False) -> str | tuple[str, int]:
     return ret if with_port else ret[0]
 
 
-def str_to_dict(value: str) -> dict:
+def str_to_dict(value: str) -> dict[str, Any]:
     """Convert a string representation of a dictionary to an actual dict.
 
     Uses ast.literal_eval to safely parse the string.

@@ -73,7 +73,7 @@ class Fofa:
                 self.user = self.user or self.parser.get("Fofa", "user")
                 self.token = self.token or self.parser.get("Fofa", "token")
             except Exception:
-                pass
+                logger.debug("Fofa credentials not found in config file")
 
         self.check_token()
 
@@ -136,7 +136,8 @@ class Fofa:
             self.parser.set("Fofa", "User", self.user)
             if self.conf_path:
                 self.conf_path.parent.mkdir(parents=True, exist_ok=True)
-                self.parser.write(open(self.conf_path, "w"))
+                with open(self.conf_path, "w") as f:
+                    self.parser.write(f)
         except Exception as ex:
             logger.error(str(ex))
 

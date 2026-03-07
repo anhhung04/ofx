@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 
 __all__ = [
@@ -116,6 +117,9 @@ async def crtsh_subdomains(domain: str, *, timeout: float = 15.0) -> list[str]:
                         names.add(name.lower())
             return sorted(names)
     except Exception:
+        logging.getLogger(__name__).debug(
+            "crtsh subdomain lookup failed for %s", domain
+        )
         return []
 
 

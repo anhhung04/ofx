@@ -64,7 +64,7 @@ class Shodan:
             try:
                 self.token = self.token or self.parser.get("Shodan", "Token")
             except Exception:
-                pass
+                logger.debug("Shodan token not found in config file")
 
         self.check_token()
 
@@ -125,7 +125,8 @@ class Shodan:
             self.parser.set("Shodan", "Token", self.token)
             if self.conf_path:
                 self.conf_path.parent.mkdir(parents=True, exist_ok=True)
-                self.parser.write(open(self.conf_path, "w"))
+                with open(self.conf_path, "w") as f:
+                    self.parser.write(f)
         except Exception as ex:
             logger.error(str(ex))
 

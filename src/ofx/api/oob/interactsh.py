@@ -104,8 +104,9 @@ class Interactsh:
                 logger.error("[PLUGIN] Interactsh: auth error")
             elif "success" not in res.text:
                 logger.error(msg)
-        except Exception:
+        except Exception as exc:
             logger.error(msg)
+            logger.debug("Interactsh register error: %s", exc)
 
     def poll(self) -> list[dict]:
         """Poll the Interactsh server for new interaction callbacks.
@@ -136,7 +137,8 @@ class Interactsh:
                     decrypt_data = self.decrypt_data(aes_key, i)
                     result.append(decrypt_data)
                 return result
-            except Exception:
+            except Exception as exc:
+                logger.debug("Interactsh poll attempt failed: %s", exc)
                 count -= 1
                 time.sleep(1)
                 continue

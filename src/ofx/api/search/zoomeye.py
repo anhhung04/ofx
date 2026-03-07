@@ -73,7 +73,7 @@ class ZoomEye:
                 self.token = self.token or self.parser.get("ZoomEye", "token")
                 self.url = self.url or self.parser.get("ZoomEye", "url")
             except Exception:
-                pass
+                logger.debug("ZoomEye credentials not found in config file")
 
         self.check_token()
 
@@ -147,7 +147,8 @@ class ZoomEye:
             self.parser.set("ZoomEye", "url", self.url)
             if self.conf_path:
                 self.conf_path.parent.mkdir(parents=True, exist_ok=True)
-                self.parser.write(open(self.conf_path, "w"))
+                with open(self.conf_path, "w") as f:
+                    self.parser.write(f)
         except Exception as ex:
             logger.error(str(ex))
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 __all__ = ["find_minidumps", "list_browser_profiles", "load_json_lines"]
 
@@ -31,11 +32,11 @@ def list_browser_profiles(root: str | Path) -> list[Path]:
     return sorted(set(hits))
 
 
-def load_json_lines(path: str | Path) -> list[dict]:
+def load_json_lines(path: str | Path) -> list[dict[str, Any]]:
     file_path = Path(path).expanduser().resolve()
     if not file_path.is_file():
         raise FileNotFoundError(file_path)
-    records: list[dict] = []
+    records: list[dict[str, Any]] = []
     with file_path.open("r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             line = line.strip()

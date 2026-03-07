@@ -278,8 +278,8 @@ class PostSSH(PostRunnerBase):
             if self.identity_file:
                 try:
                     jump_kwargs["pkey"] = self._load_key(self.identity_file)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to load key for jump host: %s", e)
             jump_client.connect(**jump_kwargs)
             transport = jump_client.get_transport()
             if not transport or not transport.is_active():
@@ -593,8 +593,8 @@ class PostSSH(PostRunnerBase):
             self._log_file.parent.mkdir(parents=True, exist_ok=True)
             with self._log_file.open("a") as f:
                 f.write(entry)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("Failed to write command log: %s", e)
 
     # -------------------------------------------------------------------------
     # Cleanup

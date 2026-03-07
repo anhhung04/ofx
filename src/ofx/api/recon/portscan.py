@@ -110,15 +110,15 @@ async def _probe(host: str, port: int, timeout: float) -> PortResult:
         try:
             data = await asyncio.wait_for(reader.read(256), timeout=1.0)
             banner = data.decode(errors="ignore").strip()
-        except Exception:
-            pass
+        except (OSError, TimeoutError):
+            pass  # best-effort banner grab
         writer.close()
         try:
             await writer.wait_closed()
-        except Exception:
-            pass
+        except OSError:
+            pass  # best-effort cleanup
         return PortResult(host=host, port=port, open=True, banner=banner)
-    except Exception:
+    except (OSError, TimeoutError):
         return PortResult(host=host, port=port, open=False)
 
 
