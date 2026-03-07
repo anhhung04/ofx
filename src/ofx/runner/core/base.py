@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any, Optional, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
@@ -13,11 +13,12 @@ from ofx.runner.core.durable import get_checkpoint, write_checkpoint
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import RegistryAdapter, cleanup_registry
+from ofx.runner.services.template_service import TemplateService
 from ofx.runner.templates import TemplateResolver
 from ofx.settings import settings
-from ofx.runner.services.template_service import TemplateService
 
 TModel = TypeVar("TModel", bound=BaseModel)
+
 
 class RunnerStateMachine:
     """Finite State Machine for managing runner execution states"""
@@ -92,10 +93,10 @@ class BaseRunner[TModel: BaseModel]:
         self,
         model: TModel,
         ctx: RunContext,
-        parent: Optional["BaseRunner"] = None,
+        parent: BaseRunner | None = None,
         registry: RegistryAdapter | None = None,
         logger: logging.Logger | None = None,
-        template_service: Optional[TemplateService] = None,
+        template_service: TemplateService | None = None,
     ):
         assert model is not None, "Model cannot be None"
         self.run_id = str(uuid.uuid4())
@@ -109,14 +110,20 @@ class BaseRunner[TModel: BaseModel]:
         # Lazy import RegistryFactory to avoid import overhead
         if registry is None:
             from ofx.runner.registry.factory import RegistryFactory
+
             self._registry = RegistryFactory.create_memory()
         else:
             self._registry = registry
         # Logger injection – default to app branding logger if not provided
-        self._logger = logger if logger is not None else logging.getLogger(settings.app_branding)
+        self._logger = (
+            logger if logger is not None else logging.getLogger(settings.app_branding)
+        )
         # Template service injection – default to a new TemplateService if not provided
         from ofx.runner.services.template_service import TemplateService
-        self._template_service = template_service if template_service is not None else TemplateService()
+
+        self._template_service = (
+            template_service if template_service is not None else TemplateService()
+        )
         self._runners: dict[str, BaseRunner] = {}  # child runners
         self._started_at: float | None = None
         self._finished_at: float | None = None
@@ -229,7 +236,7 @@ class BaseRunner[TModel: BaseModel]:
             return False
 
         self._error = checkpoint.get("error")
-        self._durable_outputs = checkpoint.get("outputs",{}) 
+        self._durable_outputs = checkpoint.get("outputs", {})
         self._started_at_utc = checkpoint.get("started_at")
         self._finished_at_utc = checkpoint.get("finished_at")
         self._state_machine.set_state(RunnerStatus.COMPLETED)
@@ -241,7 +248,10 @@ class BaseRunner[TModel: BaseModel]:
         """Return the durable config, cached after first lookup.
         This avoids repeated attribute traversal for each checkpoint operation.
         """
-        if hasattr(self, "_cached_durable_config") and self._cached_durable_config is not None:
+        if (
+            hasattr(self, "_cached_durable_config")
+            and self._cached_durable_config is not None
+        ):
             return self._cached_durable_config
         if self.ctx.durable and self.ctx.durable.enabled:
             self._cached_durable_config = self.ctx.durable
@@ -283,12 +293,13 @@ class BaseRunner[TModel: BaseModel]:
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
     @property
-    def _template_resolver(self) -> "TemplateResolver":
+    def _template_resolver(self) -> TemplateResolver:
         """Lazily import and cache the TemplateResolver.
         This avoids importing heavy Jinja2 machinery at startup.
         """
         if not hasattr(self, "__lazy_template_resolver"):
             from ofx.runner.templates.resolver import TemplateResolver
+
             self.__lazy_template_resolver = TemplateResolver()
         return self.__lazy_template_resolver
 
@@ -422,6 +433,7 @@ class BaseRunner[TModel: BaseModel]:
         """Get the registry adapter, lazily load and cache RegistryFactory."""
         if not hasattr(self, "__lazy_registry"):
             from ofx.runner.registry.factory import RegistryFactory
+
             self.__lazy_registry = RegistryFactory.create_memory()
         return self.__lazy_registry
 

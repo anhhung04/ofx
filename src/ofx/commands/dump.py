@@ -6,9 +6,6 @@ from typing import Annotated, Any
 import typer
 
 from ofx.commands.ui_helpers import print_success
-from ofx.models.job import Job
-from ofx.models.step import Step
-from ofx.models.workflow import Workflow
 from ofx.settings import BASE_DATA_DIR, ensure_dir, get_console, settings
 
 NAME = "dump"
@@ -211,6 +208,8 @@ def dump_workflow():
 
     This command prints a detailed tree of all workflow properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX workflow definitions.
     """
+    from ofx.models.workflow import Workflow
+
     schema = Workflow.model_json_schema()
 
     console.print("\n[bold]Workflow Model Schema[/]\n", style="cyan")
@@ -224,6 +223,8 @@ def dump_job():
 
     This command prints a detailed tree of all job properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX job definitions.
     """
+    from ofx.models.job import Job
+
     schema = Job.model_json_schema()
 
     console.print("\n[bold]Job Model Schema[/]\n", style="cyan")
@@ -237,6 +238,8 @@ def dump_step():
 
     This command prints a detailed tree of all step properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX step definitions.
     """
+    from ofx.models.step import Step
+
     schema = Step.model_json_schema()
 
     console.print("\n[bold]Step Model Schema[/]\n", style="cyan")
@@ -259,6 +262,8 @@ def export_schema(
 
     By default, writes the full JSON schema for workflows to 'workflow_schema.json' in the data directory. You can specify a custom output path with -o/--output. This schema is suitable for validation, tooling, or integration with editors and CI systems.
     """
+
+    from ofx.models.workflow import Workflow
 
     if not output:
         output = (ensure_dir(BASE_DATA_DIR) / "workflow_schema.json").as_posix()

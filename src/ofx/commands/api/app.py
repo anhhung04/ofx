@@ -2,8 +2,6 @@
 
 import typer
 
-from ofx.commands.api.api import show_api  # noqa: E402
-
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
 NAME = "api"
@@ -23,4 +21,6 @@ def show(
     ),
 ):
     """Proxy to the original show_api implementation."""
+    from ofx.commands.api.api import show_api
+
     show_api(module=module, function=function, list_modules=list_modules)

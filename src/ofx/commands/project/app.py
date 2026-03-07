@@ -10,10 +10,6 @@ from rich.table import Table
 from ofx.commands.ui_helpers import print_error, print_success, print_warning
 from ofx.settings import get_console
 
-from .encryption import GitFilterHandler
-from .handlers import ImportHandler, InitHandler, SyncHandler
-from .project_manager import ProjectManager
-
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 console = get_console()
 
@@ -30,6 +26,9 @@ def init(
     ] = False,
 ):
     """Init new OFX project"""
+    from .handlers.init import InitHandler
+    from .project_manager import ProjectManager
+
     console.print(f"[bold green]Creating project '{name}'...[/bold green]")
     base = ProjectManager.create_project(name)
 
@@ -73,6 +72,9 @@ def sync(
     ] = "",
 ):
     """Sync local project with remote storage (git by default)"""
+    from .handlers.sync import SyncHandler
+    from .project_manager import ProjectManager
+
     path = ProjectManager.resolve_path(project)
 
     console.print(f"[bold blue]⟳[/] Preparing sync for project: [cyan]{project}[/]")
@@ -106,6 +108,8 @@ def import_project(
     ] = "",
 ):
     """Import project by cloning from remote git repository"""
+    from .handlers.import_ import ImportHandler
+
     if not name:
         name = url.split("/")[-1].replace(".git", "")
 
@@ -125,6 +129,8 @@ def import_project(
 @app.command(name="ls", hidden=True)
 def list_projects():
     """List all projects in default project path"""
+    from .project_manager import ProjectManager
+
     projects = ProjectManager.list_projects()
 
     if not projects:
@@ -160,6 +166,8 @@ def list_projects():
 @app.command(name="rm", hidden=True)
 def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     """Remove a project by name"""
+    from .project_manager import ProjectManager
+
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():
@@ -200,10 +208,14 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
 @app.command(hidden=True)
 def encrypt_filter():
     """Git clean filter: Encrypt stdin to stdout (used by git attributes)"""
+    from .encryption import GitFilterHandler
+
     GitFilterHandler.encrypt_stdin_to_stdout()
 
 
 @app.command(hidden=True)
 def decrypt_filter():
     """Git smudge filter: Decrypt stdin to stdout (used by git attributes)"""
+    from .encryption import GitFilterHandler
+
     GitFilterHandler.decrypt_stdin_to_stdout()

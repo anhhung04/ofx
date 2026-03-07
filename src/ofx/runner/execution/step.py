@@ -2,7 +2,6 @@
 
 import asyncio
 import base64
-from ofx.runner.logging import get_logger
 from datetime import datetime
 from pathlib import Path
 from random import uniform
@@ -19,6 +18,7 @@ from ofx.runner.execution.error_helpers import (
     step_timeout_error,
 )
 from ofx.runner.execution.execution_results import StepExecutionResult
+from ofx.runner.logging import get_logger
 
 logger = get_logger()
 

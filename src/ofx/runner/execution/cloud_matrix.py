@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-from ofx.runner.logging import get_logger
 from typing import Any
 
 from ofx.models.cloud import CloudConfig
@@ -16,6 +15,7 @@ from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.core import BaseRunner, RunContext
 from ofx.runner.execution.cloud_job import CloudJobRunner
+from ofx.runner.logging import get_logger
 
 logger = get_logger()
 

@@ -8,7 +8,7 @@ duplicating the import and iteration boilerplate.
 
 from __future__ import annotations
 
-from typing import Iterable, Set
+from collections.abc import Iterable
 
 
 class SecretRedactor:
@@ -29,6 +29,6 @@ class SecretRedactor:
         # startup when redaction is not required.
         from ofx.utils.log import SecretRedactFilter
 
-        secret_set: Set[str] = {v for v in values if v}
+        secret_set: set[str] = {v for v in values if v}
         if secret_set:
             SecretRedactFilter.get_instance().register_values(secret_set)

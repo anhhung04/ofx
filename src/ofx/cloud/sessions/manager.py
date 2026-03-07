@@ -999,7 +999,7 @@ def _decrypt_at_rest_openssl(
                     member.name = str(Path(*parts[1:]))
                 elif parts and parts[0] == "output":
                     continue  # skip the bare directory entry
-                tar.extract(member, path=str(output_dir))
+                tar.extract(member, path=str(output_dir), filter="data")
 
         logger.debug("At-rest decrypted %s → %s", enc_file, output_dir)
     finally:

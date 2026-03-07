@@ -9,6 +9,7 @@ from pathlib import Path
 
 import typer
 
+from ofx.commands.ui_helpers import inputs_table
 from ofx.models.config import DurableRunConfig
 from ofx.runner import run_workflow
 from ofx.settings import (
@@ -18,10 +19,10 @@ from ofx.settings import (
     get_workflow_search_dirs,
     settings,
 )
-from ofx.commands.ui_helpers import inputs_table
 
 logger = logging.getLogger(f"{settings.app_branding}.console")
 console = get_console()
+
 
 class JsonFormatter(logging.Formatter):
     """Simple JSON formatter for cron-friendly logs."""

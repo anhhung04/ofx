@@ -299,7 +299,11 @@ def make_adapter(
     """
     upload_kwargs = {"remote_tmp": remote_tmp, "python": python, "windows": windows}
     http_kwargs = {
-        "host": http_host, "port": http_port, "route": http_route, "python": python, "windows": windows
+        "host": http_host,
+        "port": http_port,
+        "route": http_route,
+        "python": python,
+        "windows": windows,
     }
     inline_kwargs = {"python": python, "windows": windows}
 

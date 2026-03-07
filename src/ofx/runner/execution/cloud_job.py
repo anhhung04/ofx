@@ -111,6 +111,7 @@ class CloudJobRunner(BaseRunner[Job]):
 
         # Register cloud credential values for log redaction using SecretRedactor.
         from ofx.runner.services.secret_redactor import SecretRedactor
+
         _cred_vals = []
         for attr in ("ssh_password", "winrm_password"):
             v = getattr(resolved, attr, None)

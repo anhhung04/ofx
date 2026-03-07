@@ -8,7 +8,7 @@ resolver can be mocked in tests and the import is performed lazily.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 # The actual resolver is imported lazily inside the class to avoid import‑time
 # overhead for code paths that never render templates.
@@ -32,7 +32,7 @@ class TemplateService:
 
             self._resolver = TemplateResolver()
 
-    async def resolve(self, value: Any, context_vars: Dict[str, Any]) -> Any:
+    async def resolve(self, value: Any, context_vars: dict[str, Any]) -> Any:
         """Resolve ``value`` as a Jinja2 template using ``context_vars``.
 
         ``value`` can be any JSON‑serialisable structure.  The underlying
@@ -56,9 +56,7 @@ class TemplateService:
         target_fields = []
         for field in fields:
             if hasattr(runner.model, field):
-                tasks.append(
-                    runner._resolve_template(getattr(runner.model, field))
-                )
+                tasks.append(runner._resolve_template(getattr(runner.model, field)))
                 target_fields.append(field)
         if not tasks:
             return False

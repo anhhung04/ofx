@@ -7,11 +7,10 @@ inheritance principle.
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any
 
-from ofx.models.cloud import CloudConfig
-from ofx.runner.registry.factory import RegistryFactory
 from ofx.cloud.base import CloudProvider
+from ofx.models.cloud import CloudConfig
 
 
 class CloudProvisioner:
@@ -24,7 +23,7 @@ class CloudProvisioner:
     def __init__(self, provider_registry):
         self._provider_registry = provider_registry
 
-    async def provision(self, cfg: CloudConfig) -> Tuple[CloudProvider, Any, Any, str]:
+    async def provision(self, cfg: CloudConfig) -> tuple[CloudProvider, Any, Any, str]:
         """Create a VPS, wait for it to be reachable, and return the tools.
 
         Returns:
@@ -33,8 +32,8 @@ class CloudProvisioner:
             remote_runner – a PostSSH or PostWinRM runner ready for commands
             work_dir – a temporary remote working directory path
         """
-        from ofx.runner.logging import get_logger
         from ofx.cloud.ssh import wait_for_connectivity, wait_for_login
+        from ofx.runner.logging import get_logger
 
         logger = get_logger()
         provider_name = cfg.provider or "static"

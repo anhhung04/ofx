@@ -1,8 +1,10 @@
 import logging
+
 from ofx.settings import settings
 from ofx.utils.log import reload_logging_config
 
 _logger: logging.Logger | None = None
+
 
 def get_logger() -> logging.Logger:
     """Return a shared logger configured for OFX.

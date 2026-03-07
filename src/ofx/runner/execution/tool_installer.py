@@ -1,6 +1,5 @@
 """Tool installer runner for installing workflow tools"""
 
-import logging
 import os
 import shutil
 from collections.abc import Mapping

@@ -22,6 +22,7 @@ from ofx.runner.core import (
 )
 from ofx.settings import DEFAULT_SHELL, settings
 
+
 def exec_script_in_process(
     script,
     working_directory,
