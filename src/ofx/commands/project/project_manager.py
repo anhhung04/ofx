@@ -25,8 +25,8 @@ def _save_config(data: dict) -> None:
     if data:
         Path(CONFIG_PATH).write_text(json.dumps(data, indent=2))
     else:
-        # Remove the config file when it’s empty – Settings will fall back to env var
-        Path(CONFIG_PATH).unlink(missing_ok=True)
+        # Write empty JSON object when config is empty to keep file present for callers
+        Path(CONFIG_PATH).write_text(json.dumps({}, indent=2))
 
 
 class ProjectManager:

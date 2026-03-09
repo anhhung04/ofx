@@ -14,7 +14,7 @@ from random import uniform
 
 import paramiko  # type: ignore[import-untyped]
 
-from ...core.base import BaseRunner, Result
+from ..base import PostRunnerBase
 from ..registry import RunnerRegistry
 
 __all__ = ["PostSSH"]
@@ -44,7 +44,7 @@ class SSHCommandError(RuntimeError):
 
 
 @RunnerRegistry.register("ssh")
-class PostSSH(BaseRunner):
+class PostSSH(PostRunnerBase):
     """Post-exploitation runner over SSH via paramiko.
 
     Features:
