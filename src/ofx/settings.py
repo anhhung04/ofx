@@ -130,7 +130,7 @@ def _gh_cli_token() -> str:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except OSError, subprocess.TimeoutExpired:
+    except (OSError, subprocess.TimeoutExpired):
         pass
     return ""
 
