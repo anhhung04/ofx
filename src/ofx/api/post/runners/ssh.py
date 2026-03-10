@@ -234,7 +234,7 @@ class PostSSH(PostRunnerBase):
         ):
             try:
                 return key_class.from_private_key_file(path)
-            except paramiko.SSHException, ValueError:
+            except (paramiko.SSHException, ValueError):
                 continue
         raise SSHAuthError(
             f"Cannot load key '{path}': unsupported format or corrupt file"
