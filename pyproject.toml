@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.6.2"
+version = "0.7.0"
 description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -64,6 +64,9 @@ winrm = [
 ]
 ssh = [
   "paramiko>=3.4.0",
+]
+ai = [
+  "openai>=1.0.0",
 ]
 
 [project.scripts]

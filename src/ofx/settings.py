@@ -157,6 +157,36 @@ def get_console():
     return _console
 
 
+class AiSettings(BaseModel):
+    """AI assistant configuration.
+
+    Uses the openai SDK — works with any OpenAI-compatible provider.
+
+    Environment variables (OFX_ prefix + double-underscore delimiter):
+      OFX_AI__API_KEY    — provider API key (fallback: OPENAI_API_KEY env var)
+      OFX_AI__MODEL      — model name (default: gpt-4o)
+      OFX_AI__BASE_URL   — base URL for non-OpenAI providers, e.g.:
+                             http://localhost:11434/v1   (Ollama)
+                             https://api.groq.com/openai/v1  (Groq)
+                             https://api.together.xyz/v1  (Together AI)
+      OFX_AI__TEMPERATURE        — sampling temperature (default: 0.7)
+      OFX_AI__MAX_TOKENS         — max response tokens (default: 8192)
+      OFX_AI__MAX_HISTORY_TOKENS — chat history compaction threshold (default: 30000)
+    """
+
+    api_key: str = Field(default="", description="Provider API key")
+    model: str = Field(default="gpt-4o", description="LLM model name")
+    base_url: str = Field(
+        default="",
+        description="Base URL for OpenAI-compatible providers (empty = OpenAI default)",
+    )
+    temperature: float = Field(default=0.7, description="Sampling temperature")
+    max_tokens: int = Field(default=8192, description="Maximum response tokens")
+    max_history_tokens: int = Field(
+        default=30000, description="Chat history token threshold before compaction"
+    )
+
+
 class RedisRegistrySettings(BaseModel):
     """Redis registry configuration"""
 
@@ -194,6 +224,9 @@ class Settings(BaseSettings):
 
     app_name: str = "Offensive Flow Executor"
     app_branding: str = "ofx"
+
+    # AI assistant settings
+    ai: AiSettings = Field(default_factory=AiSettings)
 
     # Active project name (populated from env var or CLI)
     active_project: Optional[str] = Field(
