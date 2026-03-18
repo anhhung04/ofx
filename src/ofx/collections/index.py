@@ -16,7 +16,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 DEFAULT_INDEX_URL = (
-    "https://raw.githubusercontent.com/ofx-workflows/index/main/index.json"
+    "https://raw.githubusercontent.com/ofx-workflows/index/refs/heads/master/index.json"
 )
 INDEX_CACHE_TTL = 3600  # 1 hour
 
@@ -43,7 +43,7 @@ def _resolve_index_url(url: str) -> str:
             # Assume the file is index.json on the default branch
             return (
                 f"https://api.github.com/repos/{owner}/{repo}"
-                f"/contents/index.json?ref=main"
+                f"/contents/index.json?ref=master"
             )
     return url
 

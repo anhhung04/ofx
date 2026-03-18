@@ -658,7 +658,7 @@ class TestIndexClientAuth:
     def test_resolve_index_url_raw_passthrough(self):
         from ofx.collections.index import _resolve_index_url
 
-        url = "https://raw.githubusercontent.com/ofx-workflows/index/main/index.json"
+        url = "https://raw.githubusercontent.com/ofx-workflows/index/refs/heads/master/index.json"
         assert _resolve_index_url(url) == url
 
     def test_resolve_index_url_github_to_api(self):
@@ -673,5 +673,5 @@ class TestIndexClientAuth:
     def test_resolve_index_url_api_passthrough(self):
         from ofx.collections.index import _resolve_index_url
 
-        url = "https://api.github.com/repos/myorg/index/contents/index.json?ref=main"
+        url = "https://api.github.com/repos/myorg/index/contents/index.json?ref=master"
         assert _resolve_index_url(url) == url
