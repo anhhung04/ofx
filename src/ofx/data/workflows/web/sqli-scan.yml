@@ -1,0 +1,76 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: sqli-scan
+description: >
+  SQL injection scanning — tests target URL for SQL injection vulnerabilities
+  with multiple techniques.
+tags: [web, vuln, sqli, injection]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL with parameter (e.g. https://example.com/page?id=1)
+    level:
+      type: string
+      default: "3"
+      description: Injection test level (1-5)
+    risk:
+      type: string
+      default: "2"
+      description: Risk level (1-3)
+
+jobs:
+  sqli-scan:
+    name: "SQL Injection Scan"
+    steps:
+      - name: sqlmap-scan
+        run: |
+          sqlmap -u "{{ inputs.target }}" --batch --level={{ inputs.level }} --risk={{ inputs.risk }} --threads=5 --output-dir=/tmp/sqlmap-output --no-color 2>&1 | tee /tmp/sqlmap-results.txt
+
+      - name: collect-findings
+        script: |
+          import re
+
+          findings = []
+          vulnerable = False
+          try:
+              with open('/tmp/sqlmap-results.txt') as f:
+                  content = f.read()
+
+              if 'is vulnerable' in content or 'injectable' in content:
+                  vulnerable = True
+
+              # Extract injection types found
+              types = re.findall(r'Type: (.+)', content)
+              findings.extend(types)
+
+              # Extract database info if found
+              dbs = re.findall(r'available databases \[(\d+)\]', content)
+              db_count = dbs[0] if dbs else '0'
+          except FileNotFoundError:
+              db_count = '0'
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"vulnerable={'true' if vulnerable else 'false'}\n")
+              f.write(f"injection_types={chr(10).join(findings)}\n")
+              f.write(f"finding_count={len(findings)}\n")
+              f.write(f"db_count={db_count}\n")
+
+          status = "VULNERABLE" if vulnerable else "Not vulnerable"
+          print(f"Target is: {status}")
+          print(f"Injection types found: {len(findings)}")
+
+  summary:
+    name: "SQLi Summary"
+    needs: [sqli-scan]
+    steps:
+      - name: report
+        run: |
+          echo "======================================="
+          echo " SQLi Scan: {{ inputs.target }}"
+          echo "======================================="
+          echo "Level: {{ inputs.level }} | Risk: {{ inputs.risk }}"
+          echo "Vulnerable: {{ jobs['sqli-scan'].outputs.vulnerable }}"
+          echo "Injection types: {{ jobs['sqli-scan'].outputs.finding_count }}"
+          echo "Databases found: {{ jobs['sqli-scan'].outputs.db_count }}"

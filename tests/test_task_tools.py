@@ -19,7 +19,6 @@ from ofx.tasks.output_types import (
     Tag,
 )
 
-
 # ── Nmap Parser ────────────────────────────────────────────────────────────
 
 
@@ -1363,3 +1362,1057 @@ class TestWhoisParser:
     def test_registration(self):
         task = TaskRegistry.create("whois")
         assert task.name == "whois"
+
+
+# ── Gobuster Parser ───────────────────────────────────────────────────
+
+
+class TestGobusterParser:
+    def test_gobuster_metadata(self):
+        task = TaskRegistry.create("gobuster")
+        assert task.name == "gobuster"
+        assert task.cmd == "gobuster"
+        assert task.category == "url/fuzz"
+        assert Url in task.output_types
+        assert "go install" in task.install_cmd
+
+    def test_gobuster_parse_output(self):
+        stdout = (
+            "/admin (Status: 200) [Size: 1234]\n"
+            "/login (Status: 302) [Size: 56]\n"
+            "/secret (Status: 403) [Size: 0]\n"
+        )
+        task = TaskRegistry.create("gobuster")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Url) for r in results)
+        assert results[0].url == "/admin"
+        assert results[0].status_code == 200
+        assert results[0].content_length == 1234
+        assert results[1].url == "/login"
+        assert results[1].status_code == 302
+        assert results[2].status_code == 403
+
+    def test_gobuster_parse_empty(self):
+        task = TaskRegistry.create("gobuster")
+        assert task.parse_output("", "") == []
+        assert task.parse_output("   \n  ", "") == []
+
+    def test_gobuster_parse_line(self):
+        task = TaskRegistry.create("gobuster")
+        result = task.parse_line("/backup (Status: 200) [Size: 999]")
+        assert len(result) == 1
+        assert result[0].url == "/backup"
+        assert result[0].status_code == 200
+        assert result[0].content_length == 999
+
+    def test_gobuster_parse_line_non_matching(self):
+        task = TaskRegistry.create("gobuster")
+        assert task.parse_line("") == []
+        assert task.parse_line("Progress: 100%") == []
+        assert task.parse_line("===============================================================") == []
+
+    def test_gobuster_build_command(self):
+        task = TaskRegistry.create("gobuster")
+        cmd, out_file = task.build_command(
+            "https://example.com",
+            wordlist="/usr/share/seclists/common.txt",
+            threads=50,
+        )
+        assert "gobuster" in cmd
+        assert "dir" in cmd
+        assert "--no-progress" in cmd
+        assert "--no-color" in cmd
+        assert "-w /usr/share/seclists/common.txt" in cmd
+        assert "-t 50" in cmd
+        assert "-u https://example.com" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_gobuster_build_command_dns_mode(self):
+        task = TaskRegistry.create("gobuster")
+        cmd, out_file = task.build_command("example.com", mode="dns")
+        assert "gobuster dns" in cmd
+        assert "-u example.com" in cmd
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+
+# ── Amass Parser ──────────────────────────────────────────────────────
+
+
+class TestAmassParser:
+    def test_amass_metadata(self):
+        task = TaskRegistry.create("amass")
+        assert task.name == "amass"
+        assert task.cmd == "amass"
+        assert task.category == "dns/recon"
+        assert Subdomain in task.output_types
+        assert "go install" in task.install_cmd
+
+    def test_amass_parse_output(self):
+        stdout = "api.example.com\nwww.example.com\nmail.example.com\n"
+        task = TaskRegistry.create("amass")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Subdomain) for r in results)
+        assert results[0].host == "api.example.com"
+        assert results[0].domain == "example.com"
+        assert results[1].host == "www.example.com"
+
+    def test_amass_parse_empty(self):
+        task = TaskRegistry.create("amass")
+        assert task.parse_output("", "") == []
+
+    def test_amass_parse_line(self):
+        task = TaskRegistry.create("amass")
+        result = task.parse_line("sub.example.com")
+        assert len(result) == 1
+        assert result[0].host == "sub.example.com"
+        assert result[0].domain == "example.com"
+
+    def test_amass_parse_line_comment(self):
+        task = TaskRegistry.create("amass")
+        assert task.parse_line("# comment") == []
+        assert task.parse_line("") == []
+
+    def test_amass_build_command(self):
+        task = TaskRegistry.create("amass")
+        cmd, out_file = task.build_command("example.com", brute=True, timeout=30)
+        assert "amass" in cmd
+        assert "enum" in cmd
+        assert "-passive" in cmd
+        assert "-brute" in cmd
+        assert "-timeout 30" in cmd
+        assert "-d example.com" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_amass_build_command_active(self):
+        task = TaskRegistry.create("amass")
+        cmd, _ = task.build_command("example.com", active=True)
+        assert "-active" in cmd
+        assert "-passive" not in cmd
+
+
+# ── Masscan Parser ────────────────────────────────────────────────────
+
+
+class TestMasscanParser:
+    def test_masscan_metadata(self):
+        task = TaskRegistry.create("masscan")
+        assert task.name == "masscan"
+        assert task.cmd == "masscan"
+        assert task.category == "port/scan"
+        assert Port in task.output_types
+        assert Ip in task.output_types
+        assert task.install_cmd == "apt install -y masscan"
+
+    def test_masscan_parse_output(self):
+        data = json.dumps([
+            {
+                "ip": "10.0.0.1",
+                "ports": [
+                    {"port": 80, "proto": "tcp", "status": "open"},
+                    {"port": 443, "proto": "tcp", "status": "open"},
+                ],
+            },
+            {
+                "ip": "10.0.0.2",
+                "ports": [{"port": 22, "proto": "tcp", "status": "open"}],
+            },
+        ])
+        task = TaskRegistry.create("masscan")
+        results = task.parse_output(data, "")
+        ips = [r for r in results if isinstance(r, Ip)]
+        ports = [r for r in results if isinstance(r, Port)]
+        assert len(ips) == 2
+        assert ips[0].ip == "10.0.0.1"
+        assert ips[0].alive is True
+        assert ips[1].ip == "10.0.0.2"
+        assert len(ports) == 3
+        assert ports[0].port == 80
+        assert ports[0].ip == "10.0.0.1"
+        assert ports[0].protocol == "tcp"
+        assert ports[1].port == 443
+        assert ports[2].port == 22
+        assert ports[2].ip == "10.0.0.2"
+
+    def test_masscan_parse_output_with_service(self):
+        data = json.dumps([
+            {
+                "ip": "10.0.0.1",
+                "ports": [
+                    {"port": 80, "proto": "tcp", "status": "open", "service": {"name": "http"}},
+                ],
+            },
+        ])
+        task = TaskRegistry.create("masscan")
+        results = task.parse_output(data, "")
+        ports = [r for r in results if isinstance(r, Port)]
+        assert len(ports) == 1
+        assert ports[0].service_name == "http"
+
+    def test_masscan_parse_empty(self):
+        task = TaskRegistry.create("masscan")
+        assert task.parse_output("", "") == []
+
+    def test_masscan_parse_invalid_json(self):
+        task = TaskRegistry.create("masscan")
+        assert task.parse_output("{broken json", "") == []
+
+    def test_masscan_build_command(self):
+        task = TaskRegistry.create("masscan")
+        cmd, out_file = task.build_command("10.0.0.0/24", ports="80,443", rate=5000)
+        assert "masscan" in cmd
+        assert "--rate=5000" in cmd
+        assert "-p 80,443" in cmd
+        assert "10.0.0.0/24" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_masscan_build_command_default_rate(self):
+        task = TaskRegistry.create("masscan")
+        cmd, out_file = task.build_command("10.0.0.0/24", ports="80")
+        assert "--rate=1000" in cmd
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+
+# ── Assetfinder Parser ───────────────────────────────────────────────
+
+
+class TestAssetfinderParser:
+    def test_assetfinder_metadata(self):
+        task = TaskRegistry.create("assetfinder")
+        assert task.name == "assetfinder"
+        assert task.cmd == "assetfinder"
+        assert task.category == "dns/recon"
+        assert Subdomain in task.output_types
+        assert "go install" in task.install_cmd
+
+    def test_assetfinder_parse_output(self):
+        stdout = "api.example.com\nwww.example.com\ncdn.example.com\n"
+        task = TaskRegistry.create("assetfinder")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Subdomain) for r in results)
+        assert results[0].host == "api.example.com"
+        assert results[0].domain == "example.com"
+        assert results[2].host == "cdn.example.com"
+
+    def test_assetfinder_parse_empty(self):
+        task = TaskRegistry.create("assetfinder")
+        assert task.parse_output("", "") == []
+
+    def test_assetfinder_parse_line(self):
+        task = TaskRegistry.create("assetfinder")
+        result = task.parse_line("dev.example.com")
+        assert len(result) == 1
+        assert result[0].host == "dev.example.com"
+        assert result[0].domain == "example.com"
+
+    def test_assetfinder_parse_line_empty(self):
+        task = TaskRegistry.create("assetfinder")
+        assert task.parse_line("") == []
+        assert task.parse_line("# comment") == []
+
+
+# ── Findomain Parser ─────────────────────────────────────────────────
+
+
+class TestFindomainParser:
+    def test_findomain_metadata(self):
+        task = TaskRegistry.create("findomain")
+        assert task.name == "findomain"
+        assert task.cmd == "findomain"
+        assert task.category == "dns/recon"
+        assert Subdomain in task.output_types
+        assert "findomain" in task.install_cmd
+
+    def test_findomain_parse_output(self):
+        stdout = "test.example.com\nstaging.example.com\n"
+        task = TaskRegistry.create("findomain")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 2
+        assert all(isinstance(r, Subdomain) for r in results)
+        assert results[0].host == "test.example.com"
+        assert results[0].domain == "example.com"
+
+    def test_findomain_parse_empty(self):
+        task = TaskRegistry.create("findomain")
+        assert task.parse_output("", "") == []
+
+    def test_findomain_parse_line(self):
+        task = TaskRegistry.create("findomain")
+        result = task.parse_line("admin.example.com")
+        assert len(result) == 1
+        assert result[0].host == "admin.example.com"
+        assert result[0].domain == "example.com"
+
+    def test_findomain_parse_line_empty(self):
+        task = TaskRegistry.create("findomain")
+        assert task.parse_line("") == []
+        assert task.parse_line("# comment") == []
+
+    def test_findomain_build_command(self):
+        task = TaskRegistry.create("findomain")
+        cmd, out_file = task.build_command("example.com", threads=10)
+        assert "findomain" in cmd
+        assert "-q" in cmd
+        assert "-t example.com" in cmd
+        assert "--threads 10" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+
+# ── Mapcidr Parser ────────────────────────────────────────────────────
+
+
+class TestMapcidrParser:
+    def test_mapcidr_metadata(self):
+        task = TaskRegistry.create("mapcidr")
+        assert task.name == "mapcidr"
+        assert task.cmd == "mapcidr"
+        assert task.category == "ip/util"
+        assert Ip in task.output_types
+        assert "go install" in task.install_cmd
+
+    def test_mapcidr_parse_output(self):
+        stdout = "10.0.0.1\n10.0.0.2\n10.0.0.3\n"
+        task = TaskRegistry.create("mapcidr")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Ip) for r in results)
+        assert results[0].ip == "10.0.0.1"
+        assert results[0].alive is False
+        assert results[2].ip == "10.0.0.3"
+
+    def test_mapcidr_parse_empty(self):
+        task = TaskRegistry.create("mapcidr")
+        assert task.parse_output("", "") == []
+
+    def test_mapcidr_parse_line(self):
+        task = TaskRegistry.create("mapcidr")
+        result = task.parse_line("192.168.1.1")
+        assert len(result) == 1
+        assert result[0].ip == "192.168.1.1"
+        assert result[0].alive is False
+
+    def test_mapcidr_parse_line_empty(self):
+        task = TaskRegistry.create("mapcidr")
+        assert task.parse_line("") == []
+        assert task.parse_line("# comment") == []
+
+
+# ── Fping Parser ──────────────────────────────────────────────────────
+
+
+class TestFpingParser:
+    def test_fping_metadata(self):
+        task = TaskRegistry.create("fping")
+        assert task.name == "fping"
+        assert task.cmd == "fping"
+        assert task.category == "ip/recon"
+        assert Ip in task.output_types
+        assert task.install_cmd == "apt install -y fping"
+
+    def test_fping_parse_output(self):
+        stdout = "10.0.0.1\n10.0.0.5\n10.0.0.10\n"
+        task = TaskRegistry.create("fping")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Ip) for r in results)
+        assert results[0].ip == "10.0.0.1"
+        assert results[0].alive is True
+        assert results[1].ip == "10.0.0.5"
+
+    def test_fping_parse_empty(self):
+        task = TaskRegistry.create("fping")
+        assert task.parse_output("", "") == []
+
+    def test_fping_parse_line(self):
+        task = TaskRegistry.create("fping")
+        result = task.parse_line("192.168.1.100")
+        assert len(result) == 1
+        assert result[0].ip == "192.168.1.100"
+        assert result[0].alive is True
+
+    def test_fping_parse_line_parenthesized(self):
+        task = TaskRegistry.create("fping")
+        result = task.parse_line("(10.0.0.1)")
+        assert len(result) == 1
+        assert result[0].ip == "10.0.0.1"
+
+    def test_fping_parse_line_empty(self):
+        task = TaskRegistry.create("fping")
+        assert task.parse_line("") == []
+
+    def test_fping_build_command(self):
+        task = TaskRegistry.create("fping")
+        cmd, out_file = task.build_command("10.0.0.0/24", generate=True, count=3)
+        assert "fping" in cmd
+        assert "-a" in cmd
+        assert "-q" in cmd
+        assert "-g" in cmd
+        assert "-c 3" in cmd
+        assert "10.0.0.0/24" in cmd
+        assert out_file is None
+
+
+# ── Cariddi Parser ────────────────────────────────────────────────────
+
+
+class TestCariddiParser:
+    def test_cariddi_metadata(self):
+        task = TaskRegistry.create("cariddi")
+        assert task.name == "cariddi"
+        assert task.cmd == "cariddi"
+        assert task.category == "url/crawl"
+        assert Url in task.output_types
+        assert Tag in task.output_types
+        assert "go install" in task.install_cmd
+
+    def test_cariddi_parse_output(self):
+        lines = [
+            json.dumps({
+                "url": "https://example.com/login",
+                "status_code": 200,
+                "matches": [
+                    {"name": "API Key", "match": "AKIA...", "type": "secret"},
+                ],
+            }),
+            json.dumps({
+                "url": "https://example.com/api",
+                "status_code": 200,
+            }),
+        ]
+        task = TaskRegistry.create("cariddi")
+        results = task.parse_output("\n".join(lines), "")
+        urls = [r for r in results if isinstance(r, Url)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(urls) == 2
+        assert urls[0].url == "https://example.com/login"
+        assert urls[0].status_code == 200
+        assert len(tags) == 1
+        assert tags[0].name == "API Key"
+        assert tags[0].value == "AKIA..."
+        assert tags[0].category == "secret"
+        assert tags[0].match == "https://example.com/login"
+
+    def test_cariddi_parse_output_with_secrets_array(self):
+        lines = [
+            json.dumps({
+                "url": "https://example.com/page",
+                "secrets": ["AWS_KEY=AKIA12345"],
+            }),
+        ]
+        task = TaskRegistry.create("cariddi")
+        results = task.parse_output("\n".join(lines), "")
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 1
+        assert tags[0].name == "secret"
+        assert tags[0].value == "AWS_KEY=AKIA12345"
+        assert tags[0].category == "secret"
+
+    def test_cariddi_parse_empty(self):
+        task = TaskRegistry.create("cariddi")
+        assert task.parse_output("", "") == []
+
+    def test_cariddi_parse_line(self):
+        task = TaskRegistry.create("cariddi")
+        result = task.parse_line(json.dumps({
+            "url": "https://example.com/test",
+            "status_code": 404,
+        }))
+        urls = [r for r in result if isinstance(r, Url)]
+        assert len(urls) == 1
+        assert urls[0].url == "https://example.com/test"
+        assert urls[0].status_code == 404
+
+    def test_cariddi_parse_line_non_json(self):
+        task = TaskRegistry.create("cariddi")
+        assert task.parse_line("") == []
+        assert task.parse_line("not json") == []
+
+    def test_cariddi_build_command(self):
+        task = TaskRegistry.create("cariddi")
+        cmd, out_file = task.build_command("https://example.com", threads=10, depth=3)
+        assert "cariddi" in cmd
+        assert "echo" in cmd
+        assert "https://example.com" in cmd
+        assert "-json" in cmd
+        assert "-c 10" in cmd
+        assert "-depth 3" in cmd
+        assert out_file is None
+
+
+# ── Nikto Parser ──────────────────────────────────────────────────────
+
+
+class TestNiktoParser:
+    def test_nikto_metadata(self):
+        task = TaskRegistry.create("nikto")
+        assert task.name == "nikto"
+        assert task.cmd == "nikto"
+        assert task.category == "vuln/scan/web"
+        assert Vulnerability in task.output_types
+        assert task.install_cmd == "apt install -y nikto"
+
+    def test_nikto_parse_output(self):
+        data = {
+            "host": "example.com",
+            "ip": "93.184.216.34",
+            "port": "80",
+            "vulnerabilities": [
+                {
+                    "id": "000001",
+                    "OSVDB": "3092",
+                    "msg": "/admin/: Directory indexing found.",
+                    "url": "/admin/",
+                    "method": "GET",
+                },
+                {
+                    "id": "000002",
+                    "OSVDB": "0",
+                    "msg": "Server leaks info via X-Powered-By header",
+                    "url": "/",
+                    "method": "GET",
+                },
+            ],
+        }
+        task = TaskRegistry.create("nikto")
+        results = task.parse_output(json.dumps(data), "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 2
+        assert vulns[0].name == "/admin/: Directory indexing found."
+        assert vulns[0].id == "3092"
+        assert vulns[0].matched_at == "/admin/"
+        assert vulns[0].severity == Severity.INFO
+        assert vulns[0].provider == "nikto"
+        assert vulns[0].extra_data["method"] == "GET"
+        assert vulns[0].extra_data["host"] == "example.com"
+        assert vulns[1].id == "0"  # OSVDB=0 used as id
+
+    def test_nikto_parse_output_list(self):
+        data = [
+            {
+                "host": "example.com",
+                "ip": "93.184.216.34",
+                "port": "443",
+                "vulnerabilities": [
+                    {
+                        "id": "999",
+                        "OSVDB": "",
+                        "msg": "Test finding",
+                        "url": "/test",
+                        "method": "GET",
+                    },
+                ],
+            },
+        ]
+        task = TaskRegistry.create("nikto")
+        results = task.parse_output(json.dumps(data), "")
+        assert len(results) == 1
+        assert results[0].matched_at == "/test"
+
+    def test_nikto_parse_empty(self):
+        task = TaskRegistry.create("nikto")
+        assert task.parse_output("", "") == []
+
+    def test_nikto_parse_invalid_json(self):
+        task = TaskRegistry.create("nikto")
+        assert task.parse_output("{broken", "") == []
+
+
+# ── WhatWeb Parser ────────────────────────────────────────────────────
+
+
+class TestWhatwebParser:
+    def test_whatweb_metadata(self):
+        task = TaskRegistry.create("whatweb")
+        assert task.name == "whatweb"
+        assert task.cmd == "whatweb"
+        assert task.category == "url/fingerprint"
+        assert Tag in task.output_types
+        assert task.install_cmd == "apt install -y whatweb"
+
+    def test_whatweb_parse_output(self):
+        lines = [
+            json.dumps({
+                "target": "https://example.com",
+                "plugins": {
+                    "nginx": {"version": ["1.18.0"]},
+                    "PHP": {"version": ["7.4"]},
+                    "jQuery": {},
+                },
+            }),
+        ]
+        task = TaskRegistry.create("whatweb")
+        results = task.parse_output("\n".join(lines), "")
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 3
+        names = {t.name for t in tags}
+        assert "nginx" in names
+        assert "PHP" in names
+        assert "jQuery" in names
+        nginx_tag = next(t for t in tags if t.name == "nginx")
+        assert nginx_tag.value == "1.18.0"
+        assert nginx_tag.match == "https://example.com"
+        assert nginx_tag.category == "tech"
+        jquery_tag = next(t for t in tags if t.name == "jQuery")
+        assert jquery_tag.value == ""
+
+    def test_whatweb_parse_empty(self):
+        task = TaskRegistry.create("whatweb")
+        assert task.parse_output("", "") == []
+
+    def test_whatweb_build_command(self):
+        task = TaskRegistry.create("whatweb")
+        cmd, out_file = task.build_command(
+            "https://example.com", aggression=3, threads=10
+        )
+        assert "whatweb" in cmd
+        assert "-q" in cmd
+        assert "--color=never" in cmd
+        assert "-a 3" in cmd
+        assert "-t 10" in cmd
+        assert "https://example.com" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+
+# ── Sqlmap Parser ─────────────────────────────────────────────────────
+
+
+class TestSqlmapParser:
+    def test_sqlmap_metadata(self):
+        task = TaskRegistry.create("sqlmap")
+        assert task.name == "sqlmap"
+        assert task.cmd == "sqlmap"
+        assert task.category == "vuln/scan/sqli"
+        assert Vulnerability in task.output_types
+        assert "sqlmap" in task.install_cmd
+
+    def test_sqlmap_parse_output(self):
+        stdout = (
+            "sqlmap identified the following injection point(s):\n"
+            "---\n"
+            "Parameter: id (GET)\n"
+            "    Type: boolean-based blind\n"
+            "    Title: AND boolean-based blind - WHERE or HAVING clause\n"
+            "    Payload: id=1 AND 5678=5678\n"
+            "---\n"
+            "    Type: time-based blind\n"
+            "    Title: MySQL >= 5.0.12 AND time-based blind\n"
+            "    Payload: id=1 AND SLEEP(5)\n"
+        )
+        task = TaskRegistry.create("sqlmap")
+        results = task.parse_output(stdout, "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 2
+        assert vulns[0].name == "AND boolean-based blind - WHERE or HAVING clause"
+        assert vulns[0].severity == Severity.HIGH
+        assert vulns[0].provider == "sqlmap"
+        assert "sqli" in vulns[0].tags
+        assert vulns[0].extra_data["parameter"] == "id (GET)"
+        assert vulns[0].extra_data["type"] == "boolean-based blind"
+        assert vulns[0].extra_data["payload"] == "id=1 AND 5678=5678"
+        assert vulns[1].name == "MySQL >= 5.0.12 AND time-based blind"
+        assert vulns[1].extra_data["payload"] == "id=1 AND SLEEP(5)"
+
+    def test_sqlmap_parse_output_with_url(self):
+        stdout = (
+            "testing URL 'https://target.com/page?id=1'\n"
+            "Parameter: id (GET)\n"
+            "    Type: UNION query\n"
+            "    Title: Generic UNION query\n"
+            "    Payload: id=1 UNION ALL SELECT NULL\n"
+        )
+        task = TaskRegistry.create("sqlmap")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 1
+        assert results[0].matched_at == "https://target.com/page?id=1"
+
+    def test_sqlmap_parse_empty(self):
+        task = TaskRegistry.create("sqlmap")
+        assert task.parse_output("", "") == []
+
+
+# ── X8 Parser ─────────────────────────────────────────────────────────
+
+
+class TestX8Parser:
+    def test_x8_metadata(self):
+        task = TaskRegistry.create("x8")
+        assert task.name == "x8"
+        assert task.cmd == "x8"
+        assert task.category == "url/fuzz/params"
+        assert Tag in task.output_types
+        assert "cargo install" in task.install_cmd
+
+    def test_x8_parse_output(self):
+        data = [
+            {
+                "url": "https://example.com/api",
+                "method": "GET",
+                "parameters": ["debug", "admin", "token"],
+            },
+        ]
+        task = TaskRegistry.create("x8")
+        results = task.parse_output(json.dumps(data), "")
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 3
+        assert all(t.name == "hidden_param" for t in tags)
+        assert tags[0].value == "debug"
+        assert tags[0].match == "https://example.com/api"
+        assert tags[0].category == "param"
+        assert tags[0].extra_data["method"] == "GET"
+        assert tags[1].value == "admin"
+        assert tags[2].value == "token"
+
+    def test_x8_parse_output_single_object(self):
+        data = {
+            "url": "https://example.com/search",
+            "method": "POST",
+            "parameters": ["q"],
+        }
+        task = TaskRegistry.create("x8")
+        results = task.parse_output(json.dumps(data), "")
+        assert len(results) == 1
+        assert results[0].value == "q"
+        assert results[0].extra_data["method"] == "POST"
+
+    def test_x8_parse_empty(self):
+        task = TaskRegistry.create("x8")
+        assert task.parse_output("", "") == []
+
+    def test_x8_parse_invalid_json(self):
+        task = TaskRegistry.create("x8")
+        assert task.parse_output("{broken", "") == []
+
+
+# ── Dnsrecon Parser ───────────────────────────────────────────────────
+
+
+class TestDnsreconParser:
+    def test_dnsrecon_metadata(self):
+        from ofx.tasks.output_types import Record
+
+        task = TaskRegistry.create("dnsrecon")
+        assert task.name == "dnsrecon"
+        assert task.cmd == "dnsrecon"
+        assert task.category == "dns/recon"
+        assert Record in task.output_types
+        assert Subdomain in task.output_types
+        assert "dnsrecon" in task.install_cmd
+
+    def test_dnsrecon_parse_output(self):
+        from ofx.tasks.output_types import Record
+
+        data = [
+            {"type": "A", "name": "www.example.com", "address": "93.184.216.34"},
+            {"type": "MX", "name": "example.com", "address": "mail.example.com"},
+            {"type": "AAAA", "name": "ipv6.example.com", "address": "2606:2800:220:1::"},
+            {"type": "NS", "name": "example.com", "address": "ns1.example.com"},
+        ]
+        task = TaskRegistry.create("dnsrecon")
+        results = task.parse_output(json.dumps(data), "")
+        records = [r for r in results if isinstance(r, Record)]
+        subs = [r for r in results if isinstance(r, Subdomain)]
+        assert len(records) == 4
+        assert records[0].type == "A"
+        assert records[0].name == "www.example.com"
+        assert records[0].host == "93.184.216.34"
+        # A and AAAA records produce Subdomains
+        assert len(subs) == 2
+        assert subs[0].host == "www.example.com"
+        assert subs[0].domain == "example.com"
+        assert subs[1].host == "ipv6.example.com"
+
+    def test_dnsrecon_parse_empty(self):
+        task = TaskRegistry.create("dnsrecon")
+        assert task.parse_output("", "") == []
+
+    def test_dnsrecon_parse_invalid_json(self):
+        task = TaskRegistry.create("dnsrecon")
+        assert task.parse_output("not json", "") == []
+
+    def test_dnsrecon_parse_non_list(self):
+        task = TaskRegistry.create("dnsrecon")
+        assert task.parse_output(json.dumps({"key": "value"}), "") == []
+
+
+# ── TheHarvester Parser ──────────────────────────────────────────────
+
+
+class TestTheHarvesterParser:
+    def test_theharvester_metadata(self):
+        from ofx.tasks.output_types import UserAccount
+
+        task = TaskRegistry.create("theharvester")
+        assert task.name == "theharvester"
+        assert task.cmd == "theHarvester"
+        assert task.category == "osint/recon"
+        assert Subdomain in task.output_types
+        assert UserAccount in task.output_types
+        assert "theHarvester" in task.install_cmd
+
+    def test_theharvester_parse_xml(self, tmp_path):
+        from ofx.tasks.output_types import UserAccount
+
+        xml_content = (
+            "<theHarvester>"
+            "<email>admin@example.com</email>"
+            "<email>info@example.com</email>"
+            "<host>www.example.com</host>"
+            "<host>api.example.com:93.184.216.34</host>"
+            "</theHarvester>"
+        )
+        outfile = tmp_path / "harvester.xml"
+        outfile.write_text(xml_content)
+        task = TaskRegistry.create("theharvester")
+        results = task.parse_output("", "", output_file=outfile)
+        emails = [r for r in results if isinstance(r, UserAccount)]
+        subs = [r for r in results if isinstance(r, Subdomain)]
+        assert len(emails) == 2
+        assert emails[0].username == "admin"
+        assert emails[0].domain == "example.com"
+        assert emails[0].source == "theharvester"
+        assert emails[1].username == "info"
+        assert len(subs) == 2
+        assert subs[0].host == "www.example.com"
+        assert subs[1].host == "api.example.com"
+
+    def test_theharvester_parse_stdout_fallback(self):
+        from ofx.tasks.output_types import UserAccount
+
+        stdout = (
+            "[*] Searching Google...\n"
+            "user1@example.com\n"
+            "user2@example.com\n"
+        )
+        task = TaskRegistry.create("theharvester")
+        results = task.parse_output(stdout, "")
+        emails = [r for r in results if isinstance(r, UserAccount)]
+        assert len(emails) == 2
+        assert emails[0].username == "user1"
+        assert emails[0].domain == "example.com"
+
+    def test_theharvester_parse_empty(self):
+        task = TaskRegistry.create("theharvester")
+        assert task.parse_output("", "") == []
+
+    def test_theharvester_build_command(self):
+        task = TaskRegistry.create("theharvester")
+        cmd, out_file = task.build_command("example.com", limit=500)
+        assert "theHarvester" in cmd
+        assert "-b all" in cmd
+        assert "-d example.com" in cmd
+        assert "-l 500" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_theharvester_build_command_custom_source(self):
+        task = TaskRegistry.create("theharvester")
+        cmd, out_file = task.build_command("example.com", source="google")
+        assert "-b google" in cmd
+        assert "-b all" not in cmd
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+
+# ── Holehe Parser ─────────────────────────────────────────────────────
+
+
+class TestHoleheParser:
+    def test_holehe_metadata(self):
+        from ofx.tasks.output_types import UserAccount
+
+        task = TaskRegistry.create("holehe")
+        assert task.name == "holehe"
+        assert task.cmd == "holehe"
+        assert task.category == "user/recon/email"
+        assert UserAccount in task.output_types
+        assert "holehe" in task.install_cmd
+
+    def test_holehe_parse_output(self):
+        from ofx.tasks.output_types import UserAccount
+
+        stdout = (
+            "[+] user@example.com is used on: Twitter\n"
+            "[+] user@example.com is used on: GitHub\n"
+            "[-] user@example.com is not used on: Facebook\n"
+        )
+        task = TaskRegistry.create("holehe")
+        results = task.parse_output(stdout, "")
+        accounts = [r for r in results if isinstance(r, UserAccount)]
+        assert len(accounts) == 2
+        assert accounts[0].username == "user@example.com"
+        assert accounts[0].source == "Twitter"
+        assert accounts[0].comment == "Account exists"
+        assert accounts[1].source == "GitHub"
+
+    def test_holehe_parse_empty(self):
+        task = TaskRegistry.create("holehe")
+        assert task.parse_output("", "") == []
+
+    def test_holehe_build_command(self):
+        task = TaskRegistry.create("holehe")
+        cmd, out_file = task.build_command("user@example.com", only_used=True, timeout=30)
+        assert "holehe" in cmd
+        assert "--no-color" in cmd
+        assert "--only-used" in cmd
+        assert "-t 30" in cmd
+        assert "user@example.com" in cmd
+        # holehe has no output_flag, so out_file should be None
+        assert out_file is None
+
+
+# ── Sslscan Parser ────────────────────────────────────────────────────
+
+
+class TestSslscanParser:
+    def _make_sslscan_xml(
+        self,
+        host: str = "example.com",
+        port: str = "443",
+        certs: list[dict] | None = None,
+        ciphers: list[dict] | None = None,
+        heartbleed: bool = False,
+    ) -> str:
+        root = ET.Element("document")
+        ssltest = ET.SubElement(root, "ssltest")
+        ssltest.set("host", host)
+        ssltest.set("port", port)
+
+        if certs:
+            for c in certs:
+                cert_el = ET.SubElement(ssltest, "certificate")
+                for tag_name, tag_val in c.items():
+                    child = ET.SubElement(cert_el, tag_name)
+                    child.text = str(tag_val)
+
+        if ciphers:
+            for ci in ciphers:
+                cipher_el = ET.SubElement(ssltest, "cipher")
+                for attr, val in ci.items():
+                    cipher_el.set(attr, str(val))
+
+        if heartbleed:
+            hb_el = ET.SubElement(ssltest, "heartbleed")
+            hb_el.set("vulnerable", "1")
+
+        return ET.tostring(root, encoding="unicode")
+
+    def test_sslscan_metadata(self):
+        from ofx.tasks.output_types import Certificate
+
+        task = TaskRegistry.create("sslscan")
+        assert task.name == "sslscan"
+        assert task.cmd == "sslscan"
+        assert task.category == "ssl/scan"
+        assert Certificate in task.output_types
+        assert Vulnerability in task.output_types
+        assert task.install_cmd == "apt install -y sslscan"
+
+    def test_sslscan_parse_output_certificate(self):
+        from ofx.tasks.output_types import Certificate
+
+        xml = self._make_sslscan_xml(
+            certs=[{
+                "subject": "/CN=example.com/O=Example Inc",
+                "issuer": "/CN=DigiCert/O=DigiCert Inc",
+                "not-valid-before": "Jan  1 00:00:00 2024 GMT",
+                "not-valid-after": "Dec 31 23:59:59 2025 GMT",
+                "self-signed": "false",
+                "fingerprint": "AA:BB:CC:DD",
+                "altnames": "example.com, www.example.com",
+            }],
+        )
+        task = TaskRegistry.create("sslscan")
+        results = task.parse_output(xml, "")
+        certs = [r for r in results if isinstance(r, Certificate)]
+        assert len(certs) == 1
+        assert certs[0].host == "example.com:443"
+        assert certs[0].subject_cn == "example.com"
+        assert certs[0].issuer_cn == "DigiCert"
+        assert certs[0].fingerprint_sha256 == "AA:BB:CC:DD"
+        assert certs[0].self_signed is False
+        assert "example.com" in certs[0].subject_an
+        assert "www.example.com" in certs[0].subject_an
+
+    def test_sslscan_parse_output_weak_cipher(self):
+        xml = self._make_sslscan_xml(
+            ciphers=[
+                {
+                    "status": "accepted",
+                    "sslversion": "SSLv3",
+                    "cipher": "DES-CBC3-SHA",
+                    "bits": "168",
+                },
+            ],
+        )
+        task = TaskRegistry.create("sslscan")
+        results = task.parse_output(xml, "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 1
+        assert "Weak cipher" in vulns[0].name
+        assert vulns[0].severity == Severity.HIGH
+        assert vulns[0].provider == "sslscan"
+        assert vulns[0].extra_data["sslversion"] == "SSLv3"
+
+    def test_sslscan_parse_output_heartbleed(self):
+        xml = self._make_sslscan_xml(heartbleed=True)
+        task = TaskRegistry.create("sslscan")
+        results = task.parse_output(xml, "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 1
+        assert vulns[0].name == "Heartbleed"
+        assert vulns[0].severity == Severity.CRITICAL
+        assert "CVE-2014-0160" in vulns[0].tags
+
+    def test_sslscan_parse_rejected_cipher_ignored(self):
+        xml = self._make_sslscan_xml(
+            ciphers=[
+                {
+                    "status": "rejected",
+                    "sslversion": "SSLv3",
+                    "cipher": "NULL-SHA",
+                    "bits": "0",
+                },
+            ],
+        )
+        task = TaskRegistry.create("sslscan")
+        results = task.parse_output(xml, "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 0
+
+    def test_sslscan_parse_empty(self):
+        task = TaskRegistry.create("sslscan")
+        assert task.parse_output("", "") == []
+
+    def test_sslscan_parse_invalid_xml(self):
+        task = TaskRegistry.create("sslscan")
+        assert task.parse_output("<invalid>", "") == []
+
+    def test_sslscan_build_command(self):
+        task = TaskRegistry.create("sslscan")
+        cmd, out_file = task.build_command(
+            "example.com:443", show_certificate=True, starttls="smtp"
+        )
+        assert "sslscan" in cmd
+        assert "--no-colour" in cmd
+        assert "--show-certificate" in cmd
+        assert "--starttls smtp" in cmd
+        assert "example.com:443" in cmd
+        assert "--xml=" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()

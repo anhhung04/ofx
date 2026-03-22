@@ -16,6 +16,19 @@ jobs:
   host-discovery:
     name: "Host & Port Discovery"
     steps:
+      - task: mapcidr
+        name: expand-cidr
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - task: fping
+        name: fping-discovery
+        with:
+          target: "{{ inputs.target }}"
+          generate: true
+        continue-on-error: true
+
       - task: nmap
         name: ping-sweep
         with:
@@ -29,16 +42,25 @@ jobs:
           top_ports: "1000"
           rate: 2000
 
+      - task: masscan
+        name: masscan-scan
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "100"
+          rate: 2000
+        continue-on-error: true
+
       - name: collect-hosts
         script: |
           import json
 
           hosts = set()
 
-          nmap_out = {{ steps[0].outputs.typed_outputs | tojson }}
-          naabu_out = {{ steps[1].outputs.typed_outputs | tojson }}
+          nmap_out = {{ steps[2].outputs.typed_outputs | tojson }}
+          naabu_out = {{ steps[3].outputs.typed_outputs | tojson }}
+          masscan_out = {{ steps[4].outputs.typed_outputs | tojson }}
 
-          for item in nmap_out + naabu_out:
+          for item in nmap_out + naabu_out + masscan_out:
               if item.get('_type') == 'port':
                   host = item.get('host') or item.get('ip', '')
                   if host:

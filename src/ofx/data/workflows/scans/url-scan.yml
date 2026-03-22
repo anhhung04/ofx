@@ -113,6 +113,40 @@ jobs:
           target: "{{ inputs.target }}"
           mode: "filesystem"
 
+      - task: cariddi
+        name: cariddi-crawl
+        with:
+          target: "{{ inputs.target }}"
+          secrets: true
+          errors: true
+          info: true
+          depth: 2
+        continue-on-error: true
+
+      - task: whatweb
+        name: whatweb-fingerprint
+        with:
+          target: "{{ inputs.target }}"
+          aggression: 3
+        continue-on-error: true
+
+      - task: nikto
+        name: nikto-scan
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - task: gobuster
+        name: gobuster-dirs
+        with:
+          target: "{{ inputs.target }}"
+          mode: "dir"
+          wordlist: "{{ inputs.wordlist }}"
+          threads: 50
+          follow_redirect: true
+          no_tls_validation: true
+        continue-on-error: true
+
       - name: final-summary
         script: |
           import json

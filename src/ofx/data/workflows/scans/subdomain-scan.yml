@@ -28,12 +28,24 @@ jobs:
           target: "{{ inputs.target }}"
           subs: true
 
+      - task: amass
+        name: amass-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - task: assetfinder
+        name: assetfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
       - name: collect-subdomains
         script: |
           import json
 
           subs = set()
-          for idx in [0, 1]:
+          for idx in [0, 1, 2, 3]:
               step_data = {{ steps | tojson }}
               typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
               for item in typed:
@@ -52,21 +64,28 @@ jobs:
       - task: dnsx
         name: verify-dns
         with:
-          target: "{{ steps[2].outputs.all_hosts if steps[2].outputs is defined else inputs.target }}"
+          target: "{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else inputs.target }}"
           a: true
           resp: true
 
       - task: httpx
         name: probe-subdomains
         with:
-          target: "{{ steps[2].outputs.all_hosts if steps[2].outputs is defined else inputs.target }}"
+          target: "{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else inputs.target }}"
           tech_detect: true
           status_code: true
           follow_redirects: true
 
+      - task: whatweb
+        name: whatweb-fingerprint
+        with:
+          target: "{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else inputs.target }}"
+          aggression: 3
+        continue-on-error: true
+
       - name: export-data
         run: |
-          echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo "live_urls={{ urls(steps[6].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
 
   host-recon:
     name: "Host Reconnaissance"

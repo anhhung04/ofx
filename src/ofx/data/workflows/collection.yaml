@@ -1,9 +1,9 @@
 name: ofx-secator
-version: 0.1.0
+version: 0.2.0
 description: >
-  Security reconnaissance and vulnerability scanning workflows inspired by secator.
-  Includes 14 workflows and 5 scan compositions covering domain, host, subdomain,
-  URL, and code security assessment.
+  Security reconnaissance and vulnerability scanning workflows.
+  Includes 27 workflows covering domain, host, subdomain, network, URL,
+  code, SSL/TLS, OSINT, and red team reconnaissance with 42 integrated tools.
 author: OFX
 license: MIT
 min_ofx_version: "0.4.0"
@@ -16,6 +16,7 @@ tags:
   - dns
   - ssl
   - network
+  - redteam
 
 workflows:
   - setup/cloud-setup.yml
@@ -23,17 +24,25 @@ workflows:
   - recon/host-recon.yml
   - recon/subdomain-recon.yml
   - recon/cidr-recon.yml
+  - recon/network-discovery.yml
   - web/url-crawl.yml
   - web/url-fuzz.yml
   - web/url-dirsearch.yml
   - web/url-vuln.yml
   - web/url-params-fuzz.yml
   - web/url-secrets-hunt.yml
+  - web/url-fingerprint.yml
+  - web/sqli-scan.yml
+  - web/nikto-scan.yml
   - web/wordpress.yml
   - code/code-scan.yml
   - osint/user-hunt.yml
+  - osint/email-osint.yml
   - scans/domain-scan.yml
   - scans/host-scan.yml
   - scans/network-scan.yml
   - scans/subdomain-scan.yml
   - scans/url-scan.yml
+  - scans/ssl-audit.yml
+  - scans/full-recon.yml
+  - redteam/external-recon.yml

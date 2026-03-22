@@ -28,6 +28,18 @@ jobs:
           target: "{{ inputs.target }}"
           subs: true
 
+      - task: amass
+        name: amass-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - task: assetfinder
+        name: assetfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
       - name: collect-subdomains
         script: |
           import json
@@ -45,6 +57,16 @@ jobs:
                   host = item.get('host', '')
                   if host and '{{ inputs.target }}' in host:
                       all_subs.add(host)
+
+          amass_outputs = {{ steps[2].outputs.typed_outputs | tojson }}
+          for item in amass_outputs:
+              if item.get('_type') == 'subdomain':
+                  all_subs.add(item['host'])
+
+          assetfinder_outputs = {{ steps[3].outputs.typed_outputs | tojson }}
+          for item in assetfinder_outputs:
+              if item.get('_type') == 'subdomain':
+                  all_subs.add(item['host'])
 
           with open('/tmp/subdomains.txt', 'w') as f:
               f.write('\n'.join(sorted(all_subs)))

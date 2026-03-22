@@ -23,6 +23,14 @@ jobs:
           top_ports: "1000"
           rate: 1000
 
+      - task: masscan
+        name: masscan-scan
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "100"
+          rate: 1000
+        continue-on-error: true
+
       - task: nmap
         name: service-detect
         with:
@@ -50,7 +58,24 @@ jobs:
 
       - name: export-data
         run: |
-          echo "live_urls={{ urls(steps[3].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+
+  web-analysis:
+    name: "Web Analysis"
+    needs: [host-recon]
+    steps:
+      - task: whatweb
+        name: whatweb-fingerprint
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          aggression: 3
+        continue-on-error: true
+
+      - task: nikto
+        name: nikto-scan
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+        continue-on-error: true
 
   url-crawl:
     name: "URL Crawling"
@@ -70,7 +95,7 @@ jobs:
 
   vuln-scan:
     name: "Vulnerability Scanning"
-    needs: [url-crawl]
+    needs: [url-crawl, web-analysis]
     steps:
       - task: nuclei
         name: nuclei-scan

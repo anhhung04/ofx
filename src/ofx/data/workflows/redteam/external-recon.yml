@@ -1,0 +1,425 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: external-recon
+description: >
+  External red team reconnaissance — performs comprehensive passive and active reconnaissance
+  against a target organization. Includes OSINT, subdomain enumeration, port scanning,
+  service fingerprinting, vulnerability identification, and credential hunting.
+tags: [redteam, recon, external, osint, vuln]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. target-corp.com)
+    email_domain:
+      type: string
+      default: ""
+      description: Email domain if different from target
+
+jobs:
+  domain-intel:
+    name: "Domain Intelligence"
+    steps:
+      - task: whois
+        name: whois-lookup
+        with:
+          target: "{{ inputs.target }}"
+
+      - name: dnsrecon-enum
+        run: |
+          dnsrecon -d {{ inputs.target }} --no_color 2>/dev/null | tee /tmp/dnsrecon-output.txt
+        continue-on-error: true
+
+      - task: testssl
+        name: tls-check
+        with:
+          target: "{{ inputs.target }}"
+          server_defaults: true
+
+      - name: export-intel
+        script: |
+          import json
+
+          whois_data = {{ steps[0].outputs.typed_outputs | tojson }}
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"domain_intel=complete\n")
+
+          print("Domain intelligence gathering complete")
+
+  subdomain-enum:
+    name: "Subdomain Enumeration"
+    steps:
+      - task: subfinder
+        name: subfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+
+      - name: amass-passive
+        run: |
+          amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
+        continue-on-error: true
+
+      - name: assetfinder-enum
+        run: |
+          assetfinder --subs-only {{ inputs.target }} 2>/dev/null | tee /tmp/assetfinder-subs.txt
+        continue-on-error: true
+
+      - name: findomain-enum
+        run: |
+          findomain -t {{ inputs.target }} -q 2>/dev/null | tee /tmp/findomain-subs.txt
+        continue-on-error: true
+
+      - name: collect-subdomains
+        script: |
+          import json
+
+          subs = set()
+          subs.add('{{ inputs.target }}')
+
+          # From subfinder
+          sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in sf_outputs:
+              if item.get('_type') == 'subdomain':
+                  subs.add(item['host'])
+
+          # From amass, assetfinder, findomain
+          for path in ['/tmp/amass-subs.txt', '/tmp/assetfinder-subs.txt', '/tmp/findomain-subs.txt']:
+              try:
+                  with open(path) as f:
+                      for line in f:
+                          sub = line.strip()
+                          if sub and '{{ inputs.target }}' in sub:
+                              subs.add(sub)
+              except FileNotFoundError:
+                  pass
+
+          sub_list = '\n'.join(sorted(subs))
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"all_subs={sub_list}\n")
+              f.write(f"sub_count={len(subs)}\n")
+
+          print(f"Collected {len(subs)} unique subdomains")
+
+  dns-verify:
+    name: "DNS Verification"
+    needs: [subdomain-enum]
+    steps:
+      - task: dnsx
+        name: verify-dns
+        with:
+          target: "{{ jobs['subdomain-enum'].outputs.all_subs }}"
+          a: true
+          cname: true
+          resp: true
+
+      - name: filter-alive
+        script: |
+          import json
+
+          alive = set()
+          dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in dnsx_out:
+              host = item.get('host', '')
+              if host:
+                  alive.add(host)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"alive_subs={chr(10).join(sorted(alive))}\n")
+              f.write(f"alive_count={len(alive)}\n")
+
+          print(f"Verified {len(alive)} alive subdomains")
+
+  port-scan:
+    name: "Port Scanning"
+    needs: [dns-verify]
+    steps:
+      - task: naabu
+        name: naabu-scan
+        with:
+          target: "{{ jobs['dns-verify'].outputs.alive_subs }}"
+          top_ports: "1000"
+          rate: 1000
+
+      - name: masscan-sweep
+        run: |
+          masscan {{ jobs['dns-verify'].outputs.alive_subs | default(inputs.target, true) }} --top-ports 100 --rate 1000 -oL /tmp/masscan-results.txt 2>/dev/null || true
+        continue-on-error: true
+
+      - name: collect-ports
+        script: |
+          import json
+
+          ports = set()
+          hosts = set()
+          naabu_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in naabu_out:
+              if item.get('_type') == 'port':
+                  host = item.get('host') or item.get('ip', '')
+                  port = item.get('port', '')
+                  if host and port:
+                      ports.add(f"{host}:{port}")
+                      hosts.add(host)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"open_ports={chr(10).join(sorted(ports))}\n")
+              f.write(f"port_count={len(ports)}\n")
+              f.write(f"port_hosts={chr(10).join(sorted(hosts))}\n")
+
+          print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
+
+  http-probe:
+    name: "HTTP Probing"
+    needs: [dns-verify]
+    steps:
+      - task: httpx
+        name: probe-subs
+        with:
+          target: "{{ jobs['dns-verify'].outputs.alive_subs }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+
+      - name: export-live
+        run: |
+          echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
+
+  web-fingerprint:
+    name: "Web Fingerprinting"
+    needs: [http-probe]
+    steps:
+      - name: whatweb-scan
+        run: |
+          echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | head -50 | while read url; do
+            whatweb -a 3 "$url" --color=never 2>/dev/null
+          done | tee /tmp/whatweb-output.txt
+        continue-on-error: true
+
+      - task: wafw00f
+        name: waf-detect
+        with:
+          target: "{{ inputs.target }}"
+
+      - name: export-fingerprint
+        script: |
+          import re
+
+          techs = set()
+          try:
+              with open('/tmp/whatweb-output.txt') as f:
+                  content = f.read()
+              matches = re.findall(r'\[([^\]]+)\]', content)
+              for m in matches:
+                  m = m.strip()
+                  if m and not m.startswith('http'):
+                      techs.add(m)
+          except FileNotFoundError:
+              pass
+
+          waf_data = {{ steps[1].outputs.typed_outputs | tojson }}
+          waf_names = []
+          for item in waf_data:
+              if item.get('waf') or item.get('name'):
+                  waf_names.append(item.get('waf') or item.get('name', 'unknown'))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"tech_count={len(techs)}\n")
+              f.write(f"waf_detected={chr(10).join(waf_names) if waf_names else 'none'}\n")
+
+          print(f"Technologies: {len(techs)}, WAFs: {len(waf_names)}")
+
+  web-crawl:
+    name: "Web Crawling"
+    needs: [http-probe]
+    steps:
+      - task: katana
+        name: katana-crawl
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+          depth: 3
+
+      - task: gospider
+        name: gospider-crawl
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+          depth: 2
+
+      - task: gau
+        name: gau-archive
+        with:
+          target: "{{ inputs.target }}"
+          subs: true
+
+      - name: collect-crawled
+        script: |
+          import json
+
+          urls = set()
+          for idx in [0, 1, 2]:
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url':
+                      urls.add(item['url'])
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"crawled_urls={chr(10).join(sorted(urls))}\n")
+              f.write(f"crawl_count={len(urls)}\n")
+
+          print(f"Crawled {len(urls)} unique URLs")
+
+  secret-hunt:
+    name: "Secret Hunting"
+    needs: [web-crawl]
+    steps:
+      - task: trufflehog
+        name: trufflehog-scan
+        with:
+          target: "{{ inputs.target }}"
+          mode: "filesystem"
+
+      - task: gitleaks
+        name: gitleaks-scan
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - name: export-secrets
+        script: |
+          import json
+
+          th_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          gl_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          total = len(th_vulns) + len(gl_vulns)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"secrets_count={total}\n")
+
+          print(f"Found {total} secrets/leaks")
+
+  vuln-scan:
+    name: "Vulnerability Scanning"
+    needs: [web-crawl, web-fingerprint, port-scan]
+    steps:
+      - task: nuclei
+        name: nuclei-scan
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+          severity: "critical,high,medium"
+
+      - name: nikto-scan
+        run: |
+          nikto -h {{ inputs.target }} -nointeractive -no404 2>/dev/null | tee /tmp/nikto-output.txt
+        continue-on-error: true
+
+      - name: export-vulns
+        script: |
+          import json
+
+          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
+          high = [v for v in nuclei_vulns if v.get('severity') == 'high']
+          medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']
+
+          # Count nikto findings
+          nikto_count = 0
+          try:
+              with open('/tmp/nikto-output.txt') as f:
+                  for line in f:
+                      if line.strip().startswith('+') and 'OSVDB' in line:
+                          nikto_count += 1
+          except FileNotFoundError:
+              pass
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"vuln_count={len(nuclei_vulns)}\n")
+              f.write(f"critical_count={len(critical)}\n")
+              f.write(f"high_count={len(high)}\n")
+              f.write(f"medium_count={len(medium)}\n")
+              f.write(f"nikto_count={nikto_count}\n")
+
+          print(f"Nuclei: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
+          print(f"Nikto: {nikto_count}")
+
+  osint:
+    name: "OSINT & Credential Hunting"
+    needs: [domain-intel]
+    steps:
+      - name: theharvester-search
+        run: |
+          theHarvester -d {{ inputs.email_domain if inputs.email_domain else inputs.target }} -b all -l 500 2>/dev/null | tee /tmp/harvester-output.txt
+        continue-on-error: true
+
+      - name: collect-emails
+        script: |
+          import re
+
+          emails = set()
+          try:
+              with open('/tmp/harvester-output.txt') as f:
+                  content = f.read()
+              found = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', content)
+              emails.update(found)
+          except FileNotFoundError:
+              pass
+
+          email_list = '\n'.join(sorted(emails))
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"email_list={email_list}\n")
+              f.write(f"email_count={len(emails)}\n")
+
+          print(f"Harvested {len(emails)} email addresses")
+
+      - task: h8mail
+        name: breach-search
+        with:
+          target: "{{ steps[1].outputs.email_list if steps[1].outputs is defined else inputs.target }}"
+        continue-on-error: true
+
+      - name: export-osint
+        script: |
+          import json
+
+          breach_results = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"breach_count={len(breach_results)}\n")
+
+          print(f"Breach results: {len(breach_results)}")
+
+  summary:
+    name: "External Recon Summary"
+    needs: [vuln-scan, secret-hunt, osint]
+    steps:
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " EXTERNAL RECON COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "--- Enumeration ---"
+          echo "Subdomains discovered: {{ jobs['subdomain-enum'].outputs.sub_count }}"
+          echo "DNS verified (alive): {{ jobs['dns-verify'].outputs.alive_count }}"
+          echo "Open ports: {{ jobs['port-scan'].outputs.port_count }}"
+          echo "Live HTTP services: {{ jobs['http-probe'].outputs.live_count }}"
+          echo ""
+          echo "--- Fingerprinting ---"
+          echo "Technologies detected: {{ jobs['web-fingerprint'].outputs.tech_count }}"
+          echo "WAF: {{ jobs['web-fingerprint'].outputs.waf_detected }}"
+          echo "URLs crawled: {{ jobs['web-crawl'].outputs.crawl_count }}"
+          echo ""
+          echo "--- Vulnerabilities ---"
+          echo "Nuclei findings: {{ jobs['vuln-scan'].outputs.vuln_count }}"
+          echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+          echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
+          echo "  Medium: {{ jobs['vuln-scan'].outputs.medium_count }}"
+          echo "Nikto findings: {{ jobs['vuln-scan'].outputs.nikto_count }}"
+          echo "Secrets/Leaks: {{ jobs['secret-hunt'].outputs.secrets_count }}"
+          echo ""
+          echo "--- OSINT ---"
+          echo "Emails harvested: {{ jobs.osint.outputs.email_count }}"
+          echo "Breach results: {{ jobs.osint.outputs.breach_count }}"

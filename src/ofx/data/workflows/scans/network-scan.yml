@@ -16,6 +16,13 @@ jobs:
   network-discovery:
     name: "Network Discovery"
     steps:
+      - task: fping
+        name: fping-discovery
+        with:
+          target: "{{ inputs.target }}"
+          generate: true
+        continue-on-error: true
+
       - task: nmap
         name: host-discovery
         with:
@@ -29,12 +36,20 @@ jobs:
           top_ports: "1000"
           rate: 2000
 
+      - task: masscan
+        name: masscan-scan
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "100"
+          rate: 2000
+        continue-on-error: true
+
       - name: collect-hosts
         script: |
           import json
 
           hosts = set()
-          for idx in [0, 1]:
+          for idx in [1, 2, 3]:
               step_data = {{ steps | tojson }}
               typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
               for item in typed:
@@ -70,9 +85,16 @@ jobs:
           status_code: true
           follow_redirects: true
 
+      - task: whatweb
+        name: whatweb-fingerprint
+        with:
+          target: "{{ jobs['network-discovery'].outputs.live_hosts }}"
+          aggression: 3
+        continue-on-error: true
+
       - name: export-urls
         run: |
-          echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo "live_urls={{ urls(steps[2].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
 
   url-crawl:
     name: "URL Crawling"
@@ -93,6 +115,19 @@ jobs:
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
           severity: "critical,high,medium"
+
+      - task: whatweb
+        name: whatweb-fingerprint
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          aggression: 3
+        continue-on-error: true
+
+      - task: nikto
+        name: nikto-scan
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+        continue-on-error: true
 
       - name: final-summary
         script: |

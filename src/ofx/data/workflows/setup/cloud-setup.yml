@@ -66,6 +66,11 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get install -y -qq nmap whois exploitdb
 
+      - name: Install masscan, fping, nikto, whatweb, sslscan
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y -qq masscan fping nikto whatweb sslscan
+
   install-go-tools:
     name: "Install Go-based tools"
     needs: [setup-runtime]
@@ -111,6 +116,21 @@ jobs:
           echo "[*] Installing trufflehog..."
           go install -v github.com/trufflesecurity/trufflehog/v3@latest
 
+          echo "[*] Installing gobuster..."
+          go install -v github.com/OJ/gobuster/v3@latest
+
+          echo "[*] Installing amass..."
+          go install -v github.com/owasp-amass/amass/v3/...@master
+
+          echo "[*] Installing assetfinder..."
+          go install -v github.com/tomnomnom/assetfinder@latest
+
+          echo "[*] Installing mapcidr..."
+          go install -v github.com/projectdiscovery/mapcidr/cmd/mapcidr@latest
+
+          echo "[*] Installing cariddi..."
+          go install -v github.com/edoardottt/cariddi/cmd/cariddi@latest
+
       - name: Update nuclei templates
         run: |
           export PATH="$HOME/Tools/bin:$PATH"
@@ -143,6 +163,18 @@ jobs:
           echo "[*] Installing h8mail..."
           uv tool install h8mail
 
+          echo "[*] Installing sqlmap..."
+          uv tool install sqlmap
+
+          echo "[*] Installing dnsrecon..."
+          uv tool install dnsrecon
+
+          echo "[*] Installing theHarvester..."
+          uv tool install theHarvester
+
+          echo "[*] Installing holehe..."
+          uv tool install holehe
+
   install-other-tools:
     name: "Install binary and gem tools"
     needs: [setup-runtime]
@@ -171,6 +203,24 @@ jobs:
           export PATH="$HOME/Tools/bin:$PATH"
           gem install wpscan
 
+      - name: Install findomain
+        run: |
+          mkdir -p ~/Tools/bin
+          curl -sL https://github.com/findomain/findomain/releases/latest/download/findomain-linux.zip -o /tmp/findomain.zip
+          unzip -o /tmp/findomain.zip -d ~/Tools/bin
+          chmod +x ~/Tools/bin/findomain
+          rm /tmp/findomain.zip
+
+      - name: Install x8
+        run: |
+          if ! command -v cargo &>/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          cargo install x8
+          mkdir -p ~/Tools/bin
+          cp ~/.cargo/bin/x8 ~/Tools/bin/
+
   verify:
     name: "Verify installation"
     needs: [install-apt-tools, install-go-tools, install-python-tools, install-other-tools]
@@ -183,7 +233,10 @@ jobs:
           for tool in nmap httpx nuclei subfinder naabu katana dnsx ffuf \
                       gospider gau dalfox gitleaks trufflehog wafw00f \
                       maigret ssh-audit dirsearch arjun h8mail feroxbuster \
-                      grype trivy wpscan whois searchsploit testssl.sh; do
+                      grype trivy wpscan whois searchsploit testssl.sh \
+                      gobuster amass assetfinder mapcidr cariddi masscan \
+                      fping nikto whatweb sslscan findomain x8 sqlmap \
+                      dnsrecon theHarvester holehe; do
             if command -v "$tool" &>/dev/null; then
               echo "  [✓] $tool"
               PASS=$((PASS + 1))

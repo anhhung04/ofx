@@ -51,14 +51,31 @@ jobs:
           target: "{{ inputs.target }}"
           server_defaults: true
 
+      - task: sslscan
+        name: sslscan-check
+        with:
+          target: "{{ inputs.target }}"
+          show_certificate: true
+
       - task: wafw00f
         name: waf-detect
         with:
           target: "{{ inputs.target }}"
 
+  dns-enum:
+    name: "DNS Enumeration"
+    needs: [domain-info]
+    steps:
+      - task: dnsrecon
+        name: dnsrecon-scan
+        with:
+          target: "{{ inputs.target }}"
+          type: "std,brt,srv"
+        continue-on-error: true
+
   summary:
     name: "Results Summary"
-    needs: [domain-info, http-analysis]
+    needs: [domain-info, http-analysis, dns-enum]
     steps:
       - name: report
         run: |

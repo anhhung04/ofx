@@ -79,6 +79,16 @@ jobs:
           target: "{{ inputs.target }}"
           mode: "filesystem"
 
+      - task: cariddi
+        name: cariddi-crawl
+        with:
+          target: "{{ inputs.target }}"
+          secrets: true
+          errors: true
+          info: true
+          depth: 2
+        continue-on-error: true
+
       - name: summary
         run: |
           echo "================================="

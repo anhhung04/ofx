@@ -1,0 +1,262 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: full-recon
+description: >
+  Full reconnaissance pipeline — comprehensive target assessment combining subdomain discovery,
+  DNS enumeration, port scanning, service detection, web crawling, vulnerability scanning, and OSINT.
+tags: [scan, recon, comprehensive, full]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+
+jobs:
+  subdomain-enum:
+    name: "Subdomain Enumeration"
+    steps:
+      - task: subfinder
+        name: subfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+
+      - name: amass-passive
+        run: |
+          amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
+        continue-on-error: true
+
+      - name: assetfinder-enum
+        run: |
+          assetfinder --subs-only {{ inputs.target }} 2>/dev/null | tee /tmp/assetfinder-subs.txt
+        continue-on-error: true
+
+      - name: collect-subdomains
+        script: |
+          import json
+
+          subs = set()
+          subs.add('{{ inputs.target }}')
+
+          # From subfinder
+          sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in sf_outputs:
+              if item.get('_type') == 'subdomain':
+                  subs.add(item['host'])
+
+          # From amass
+          try:
+              with open('/tmp/amass-subs.txt') as f:
+                  for line in f:
+                      sub = line.strip()
+                      if sub and '{{ inputs.target }}' in sub:
+                          subs.add(sub)
+          except FileNotFoundError:
+              pass
+
+          # From assetfinder
+          try:
+              with open('/tmp/assetfinder-subs.txt') as f:
+                  for line in f:
+                      sub = line.strip()
+                      if sub and '{{ inputs.target }}' in sub:
+                          subs.add(sub)
+          except FileNotFoundError:
+              pass
+
+          sub_list = '\n'.join(sorted(subs))
+          with open('/tmp/subs.txt', 'w') as f:
+              f.write(sub_list)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"all_subs={sub_list}\n")
+              f.write(f"sub_count={len(subs)}\n")
+
+          print(f"Collected {len(subs)} unique subdomains")
+
+  dns-resolve:
+    name: "DNS Resolution"
+    needs: [subdomain-enum]
+    steps:
+      - task: dnsx
+        name: dns-verify
+        with:
+          target: "{{ jobs['subdomain-enum'].outputs.all_subs }}"
+          a: true
+          cname: true
+          resp: true
+
+      - name: dnsrecon-enum
+        run: |
+          dnsrecon -d {{ inputs.target }} --no_color 2>/dev/null | tee /tmp/dnsrecon-output.txt
+        continue-on-error: true
+
+      - name: export-verified
+        script: |
+          import json
+
+          verified = set()
+          dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in dnsx_out:
+              host = item.get('host', '')
+              if host:
+                  verified.add(host)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"verified_subs={chr(10).join(sorted(verified))}\n")
+              f.write(f"verified_count={len(verified)}\n")
+
+          print(f"Verified {len(verified)} subdomains via DNS")
+
+  port-scan:
+    name: "Port Scanning"
+    needs: [dns-resolve]
+    steps:
+      - task: naabu
+        name: naabu-scan
+        with:
+          target: "{{ jobs['dns-resolve'].outputs.verified_subs | default(jobs['subdomain-enum'].outputs.all_subs, true) }}"
+          top_ports: "1000"
+          rate: 1000
+
+      - name: export-ports
+        script: |
+          import json
+
+          ports = set()
+          hosts = set()
+          naabu_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in naabu_out:
+              if item.get('_type') == 'port':
+                  host = item.get('host') or item.get('ip', '')
+                  port = item.get('port', '')
+                  if host and port:
+                      ports.add(f"{host}:{port}")
+                      hosts.add(host)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"open_ports={chr(10).join(sorted(ports))}\n")
+              f.write(f"port_count={len(ports)}\n")
+              f.write(f"port_hosts={chr(10).join(sorted(hosts))}\n")
+
+          print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
+
+  http-probe:
+    name: "HTTP Probing"
+    needs: [dns-resolve]
+    steps:
+      - task: httpx
+        name: probe-subs
+        with:
+          target: "{{ jobs['dns-resolve'].outputs.verified_subs | default(jobs['subdomain-enum'].outputs.all_subs, true) }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+
+      - name: export-live
+        run: |
+          echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
+
+  web-crawl:
+    name: "Web Crawling"
+    needs: [http-probe]
+    steps:
+      - task: katana
+        name: katana-crawl
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+          depth: 3
+
+      - task: gau
+        name: gau-archive
+        with:
+          target: "{{ inputs.target }}"
+          subs: true
+
+      - name: collect-urls
+        script: |
+          import json
+
+          urls = set()
+          for idx in [0, 1]:
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url':
+                      urls.add(item['url'])
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"crawled_urls={chr(10).join(sorted(urls))}\n")
+              f.write(f"crawl_count={len(urls)}\n")
+
+          print(f"Crawled {len(urls)} unique URLs")
+
+  fingerprint:
+    name: "Fingerprinting"
+    needs: [http-probe]
+    steps:
+      - name: whatweb-scan
+        run: |
+          echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | head -50 | while read url; do
+            whatweb -a 3 "$url" --color=never 2>/dev/null
+          done | tee /tmp/whatweb-output.txt
+        continue-on-error: true
+
+      - task: wafw00f
+        name: waf-detect
+        with:
+          target: "{{ inputs.target }}"
+
+  vuln-scan:
+    name: "Vulnerability Scanning"
+    needs: [web-crawl, fingerprint, port-scan]
+    steps:
+      - task: nuclei
+        name: nuclei-scan
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+          severity: "critical,high,medium"
+
+      - name: nikto-scan
+        run: |
+          nikto -h {{ inputs.target }} -nointeractive -no404 2>/dev/null | tee /tmp/nikto-output.txt
+        continue-on-error: true
+
+      - name: export-vulns
+        script: |
+          import json
+
+          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
+          high = [v for v in nuclei_vulns if v.get('severity') == 'high']
+          medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"vuln_count={len(nuclei_vulns)}\n")
+              f.write(f"critical_count={len(critical)}\n")
+              f.write(f"high_count={len(high)}\n")
+              f.write(f"medium_count={len(medium)}\n")
+
+          print(f"Vulnerabilities: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
+
+  summary:
+    name: "Full Recon Summary"
+    needs: [vuln-scan]
+    steps:
+      - name: report
+        run: |
+          echo "=================================================="
+          echo " FULL RECON COMPLETE: {{ inputs.target }}"
+          echo "=================================================="
+          echo "Subdomains discovered: {{ jobs['subdomain-enum'].outputs.sub_count }}"
+          echo "DNS verified: {{ jobs['dns-resolve'].outputs.verified_count }}"
+          echo "Open ports: {{ jobs['port-scan'].outputs.port_count }}"
+          echo "Live HTTP services: {{ jobs['http-probe'].outputs.live_count }}"
+          echo "URLs crawled: {{ jobs['web-crawl'].outputs.crawl_count }}"
+          echo "Vulnerabilities: {{ jobs['vuln-scan'].outputs.vuln_count }}"
+          echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+          echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
+          echo "  Medium: {{ jobs['vuln-scan'].outputs.medium_count }}"

@@ -23,6 +23,14 @@ jobs:
           top_ports: "1000"
           rate: 1000
 
+      - task: masscan
+        name: masscan-scan
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "100"
+          rate: 1000
+        continue-on-error: true
+
   service-detection:
     name: "Service Detection & Analysis"
     needs: [port-discovery]
@@ -64,6 +72,13 @@ jobs:
         with:
           target: "{{ inputs.target }}"
 
+      - task: whatweb
+        name: whatweb-fingerprint
+        with:
+          target: "{{ inputs.target }}"
+          aggression: 3
+        continue-on-error: true
+
   vuln-scan:
     name: "Vulnerability Scan"
     needs: [http-probe]
@@ -73,6 +88,12 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           severity: "critical,high,medium"
+
+      - task: nikto
+        name: nikto-scan
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
 
       - name: summary
         run: |

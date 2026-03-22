@@ -1,0 +1,133 @@
+"""whatweb — web fingerprinting and technology identification."""
+
+from __future__ import annotations
+
+import json
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from ofx.tasks.base import OptDef, Task
+from ofx.tasks.output_types import Tag
+from ofx.tasks.registry import TaskRegistry
+
+
+@TaskRegistry.register("whatweb")
+class WhatwebTask(Task):
+    name = "whatweb"
+    cmd = "whatweb"
+    description = "Web fingerprinting and technology identification"
+    category = "url/fingerprint"
+    install_cmd = "apt install -y whatweb"
+    output_types = [Tag]
+
+    opts = {
+        "aggression": OptDef(
+            flag="-a",
+            type=int,
+            help="1=stealthy, 3=aggressive, 4=heavy",
+        ),
+        "threads": OptDef(flag="-t", type=int, help="Number of threads"),
+        "user_agent": OptDef(flag="-U", type=str, help="Custom User-Agent"),
+        "proxy": OptDef(flag="--proxy", type=str, help="HTTP proxy"),
+        "follow_redirect": OptDef(
+            flag="--follow-redirect",
+            type=str,
+            help="always/never/same-site",
+        ),
+    }
+
+    input_flag = None  # positional
+    file_flag = "-i"
+    output_flag = "--log-json"
+    extra_flags = ["-q", "--color=never"]
+
+    def _output_suffix(self) -> str:
+        return ".json"
+
+    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
+        """Override to place positional target after flags and output file."""
+        parts: list[str] = [self.cmd, *self.extra_flags]
+
+        for key, value in kwargs.items():
+            if key.startswith("_"):
+                continue
+            opt = self.opts.get(key)
+            if opt is None:
+                continue
+            if opt.is_flag:
+                if value:
+                    parts.append(opt.flag)
+            elif value is not None:
+                parts.extend([opt.flag, str(value)])
+
+        output_file: Path | None = None
+        if self.output_flag:
+            output_file = Path(
+                tempfile.mkstemp(
+                    prefix=f".ofx_task_{self.name}_",
+                    suffix=self._output_suffix(),
+                )[1]
+            )
+            parts.extend([self.output_flag, str(output_file)])
+
+        parts.append(target)
+
+        return " ".join(parts), output_file
+
+    def parse_output(
+        self,
+        stdout: str,
+        stderr: str,
+        output_file: Path | None = None,
+    ) -> list[Tag]:
+        raw = ""
+        if output_file and output_file.exists():
+            raw = self._read_output_file(output_file)
+        elif stdout:
+            raw = stdout
+
+        raw = raw.strip()
+        if not raw:
+            return []
+
+        results: list[Tag] = []
+
+        # whatweb JSON log is one JSON object per line
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            if not isinstance(entry, dict):
+                continue
+
+            target_url = entry.get("target", "")
+            plugins = entry.get("plugins", {})
+
+            if not isinstance(plugins, dict):
+                continue
+
+            for plugin_name, plugin_data in plugins.items():
+                version = ""
+                if isinstance(plugin_data, dict):
+                    versions = plugin_data.get("version", [])
+                    if isinstance(versions, list) and versions:
+                        version = str(versions[0])
+                    elif isinstance(versions, str):
+                        version = versions
+
+                results.append(
+                    Tag(
+                        name=plugin_name,
+                        value=version,
+                        match=target_url,
+                        category="tech",
+                    )
+                )
+
+        return results
