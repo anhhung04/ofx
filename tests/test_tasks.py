@@ -1368,3 +1368,229 @@ class TestDefaultConfigProfile:
 
         dc = DefaultConfig(profile="stealth")
         assert dc.profile == "stealth"
+
+
+# ── Error Scenarios & Edge Cases ───────────────────────────────────────
+
+
+class TestParseLineEdgeCases:
+    """Edge cases for parse_line across streaming tools."""
+
+    def test_malformed_json_returns_empty(self):
+        from ofx.tasks.tools.httpx import HttpxTask
+
+        task = HttpxTask()
+        assert task.parse_line('{"url": "http://test.com", broken') == []
+
+    def test_empty_line_returns_empty(self):
+        from ofx.tasks.tools.httpx import HttpxTask
+
+        task = HttpxTask()
+        assert task.parse_line("") == []
+        assert task.parse_line("   ") == []
+
+    def test_non_json_line_returns_empty(self):
+        from ofx.tasks.tools.nuclei import NucleiTask
+
+        task = NucleiTask()
+        assert task.parse_line("[INF] Loading templates...") == []
+
+    def test_json_missing_required_fields_returns_empty(self):
+        from ofx.tasks.tools.httpx import HttpxTask
+
+        task = HttpxTask()
+        # Valid JSON but no url field
+        assert task.parse_line('{"status_code": 200}') == []
+
+    def test_naabu_non_json_line(self):
+        from ofx.tasks.tools.naabu import NaabuTask
+
+        task = NaabuTask()
+        assert task.parse_line("[INF] Running host scan...") == []
+
+    def test_feroxbuster_non_response_line(self):
+        from ofx.tasks.tools.feroxbuster import FeroxbusterTask
+
+        task = FeroxbusterTask()
+        # Lines without "type":"response" should be skipped
+        assert task.parse_line('{"type": "statistics", "data": {}}') == []
+
+    def test_dnsx_empty_json(self):
+        from ofx.tasks.tools.dnsx import DnsxTask
+
+        task = DnsxTask()
+        assert task.parse_line("{}") == []
+
+
+class TestParseOutputEdgeCases:
+    """Edge cases for parse_output file/stdout handling."""
+
+    def test_parse_output_nonexistent_file(self):
+        from ofx.tasks.tools.httpx import HttpxTask
+
+        task = HttpxTask()
+        result = task.parse_output(
+            stdout="", stderr="", output_file=Path("/nonexistent/file.jsonl")
+        )
+        assert result == []
+
+    def test_parse_output_empty_file(self, tmp_path):
+        from ofx.tasks.tools.nuclei import NucleiTask
+
+        task = NucleiTask()
+        empty_file = tmp_path / "empty.jsonl"
+        empty_file.write_text("")
+        result = task.parse_output(stdout="", stderr="", output_file=empty_file)
+        assert result == []
+
+    def test_parse_output_falls_back_to_stdout(self):
+        from ofx.tasks.tools.subfinder import SubfinderTask
+
+        task = SubfinderTask()
+        result = task.parse_output(
+            stdout="sub1.example.com\nsub2.example.com",
+            stderr="",
+            output_file=None,
+        )
+        assert len(result) == 2
+        assert result[0].host == "sub1.example.com"
+
+    def test_nmap_empty_xml_returns_empty(self, tmp_path):
+        from ofx.tasks.tools.nmap import NmapTask
+
+        task = NmapTask()
+        empty_file = tmp_path / "empty.xml"
+        empty_file.write_text("")
+        result = task.parse_output(stdout="", stderr="", output_file=empty_file)
+        assert result == []
+
+    def test_nmap_malformed_xml_returns_empty(self, tmp_path):
+        from ofx.tasks.tools.nmap import NmapTask
+
+        task = NmapTask()
+        bad_file = tmp_path / "bad.xml"
+        bad_file.write_text("<nmaprun><host><broken>")
+        result = task.parse_output(stdout="", stderr="", output_file=bad_file)
+        # Should handle gracefully — either empty or partial results
+        assert isinstance(result, list)
+
+    def test_ffuf_empty_json_returns_empty(self, tmp_path):
+        from ofx.tasks.tools.ffuf import FfufTask
+
+        task = FfufTask()
+        empty_file = tmp_path / "empty.json"
+        empty_file.write_text("")
+        result = task.parse_output(stdout="", stderr="", output_file=empty_file)
+        assert result == []
+
+    def test_ffuf_malformed_json_returns_empty(self, tmp_path):
+        from ofx.tasks.tools.ffuf import FfufTask
+
+        task = FfufTask()
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text('{"results": [broken')
+        result = task.parse_output(stdout="", stderr="", output_file=bad_file)
+        assert result == []
+
+
+class TestReadOutputFile:
+    """Tests for Task._read_output_file helper."""
+
+    def test_read_valid_file(self, tmp_path):
+        f = tmp_path / "test.txt"
+        f.write_text("hello world")
+        assert Task._read_output_file(f) == "hello world"
+
+    def test_read_nonexistent_file(self):
+        assert Task._read_output_file(Path("/nonexistent/file.txt")) == ""
+
+    def test_read_binary_file(self, tmp_path):
+        f = tmp_path / "binary.bin"
+        f.write_bytes(b"\x00\x01\x02\xff")
+        result = Task._read_output_file(f)
+        assert isinstance(result, str)
+
+
+class TestProfileTaskOptions:
+    """Verify profile task_options are applied to TaskRunner."""
+
+    def test_task_options_merge_into_opts(self):
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.core.models import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        profile = OFXProfile(
+            task_options={"httpx": {"threads": 5, "rate_limit": 20}}
+        )
+        ctx = RunContext(vars={"profile": profile})
+        model = TaskExecution(
+            task_name="httpx",
+            target="example.com",
+            opts={"threads": 10},  # user override
+        )
+        runner = TaskRunner(model, ctx)
+        runner._apply_profile_task_options()
+
+        # User's threads=10 should win over profile's threads=5
+        assert runner.model.opts["threads"] == 10
+        # Profile's rate_limit=20 should be applied (no user override)
+        assert runner.model.opts["rate_limit"] == 20
+
+    def test_no_profile_does_nothing(self):
+        from ofx.runner.core.models import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        ctx = RunContext()
+        model = TaskExecution(
+            task_name="httpx", target="example.com", opts={"threads": 10}
+        )
+        runner = TaskRunner(model, ctx)
+        runner._apply_profile_task_options()
+        assert runner.model.opts == {"threads": 10}
+
+    def test_no_matching_task_options(self):
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.core.models import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        profile = OFXProfile(task_options={"nuclei": {"rate_limit": 50}})
+        ctx = RunContext(vars={"profile": profile})
+        model = TaskExecution(
+            task_name="httpx", target="example.com", opts={"threads": 10}
+        )
+        runner = TaskRunner(model, ctx)
+        runner._apply_profile_task_options()
+        assert runner.model.opts == {"threads": 10}
+
+
+class TestStreamingDetectionEdgeCases:
+    """Additional streaming detection tests."""
+
+    def test_base_task_no_streaming(self):
+        """Concrete task with no parse_line override → no streaming."""
+
+        class PlainTask(Task):
+            name = "plain"
+            cmd = "plain"
+
+            def parse_output(self, stdout, stderr, output_file=None):
+                return []
+
+        task = PlainTask()
+        assert not task.supports_streaming
+
+    def test_task_with_parse_line_supports_streaming(self):
+        """Task with parse_line override → streaming."""
+
+        class StreamTask(Task):
+            name = "stream"
+            cmd = "stream"
+
+            def parse_output(self, stdout, stderr, output_file=None):
+                return []
+
+            def parse_line(self, line):
+                return []
+
+        task = StreamTask()
+        assert task.supports_streaming

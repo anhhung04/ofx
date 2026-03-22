@@ -165,6 +165,17 @@ class Task(ABC):
         return ".xml"
 
     @staticmethod
+    def _read_output_file(path: Path) -> str:
+        """Read an output file with error handling.
+
+        Returns empty string on any read failure (permission, encoding, etc.).
+        """
+        try:
+            return path.read_text(errors="replace")
+        except OSError:
+            return ""
+
+    @staticmethod
     def _safe_int(value: Any, default: int = 0) -> int:
         try:
             return int(value)

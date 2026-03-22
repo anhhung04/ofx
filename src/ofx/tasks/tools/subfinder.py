@@ -66,7 +66,7 @@ class SubfinderTask(Task):
         lines: list[str] = []
 
         if output_file and output_file.exists():
-            lines = output_file.read_text().strip().splitlines()
+            lines = self._read_output_file(output_file).strip().splitlines()
         elif stdout:
             lines = stdout.strip().splitlines()
 

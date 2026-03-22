@@ -53,7 +53,9 @@ class NmapTask(Task):
 
         xml_source = None
         if output_file and output_file.exists():
-            xml_source = output_file.read_text()
+            xml_source = self._read_output_file(output_file)
+            if not xml_source:
+                return []
         elif "<nmaprun" in stdout:
             xml_source = stdout
 

@@ -63,7 +63,9 @@ class FfufTask(Task):
         raw = None
 
         if output_file and output_file.exists():
-            raw = output_file.read_text()
+            raw = self._read_output_file(output_file)
+            if not raw:
+                return []
         elif stdout:
             raw = stdout
 

@@ -232,7 +232,7 @@ class UserAccount(OutputType):
         )
 
     @classmethod
-    def from_credential(cls, cred, host: str = "", source: str = "") -> "UserAccount":
+    def from_credential(cls, cred, host: str = "", source: str = "") -> UserAccount:
         """Create from an ``ofx.api.creds.exegol_history.Credential``."""
         return cls(
             username=cred.username,

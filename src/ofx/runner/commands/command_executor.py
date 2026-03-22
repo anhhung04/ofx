@@ -6,9 +6,10 @@ import asyncio
 import base64
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable
+from typing import Any
 
 from ofx.models.command import Command
 from ofx.runner.commands.shell_functions import get_shell_functions
@@ -184,11 +185,6 @@ class CommandExecutor:
             ) from None
         finally:
             self._close_process(proc)
-
-        stdout, stderr, outputs = self._decode_output(stdout_bytes, stderr_bytes)
-        return CommandExecutionResult(
-            exit_code=exit_code, stdout=stdout, stderr=stderr, outputs=outputs
-        )
 
         stdout, stderr, outputs = self._decode_output(stdout_bytes, stderr_bytes)
         return CommandExecutionResult(

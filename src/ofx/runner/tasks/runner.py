@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,8 @@ from ofx.runner.core import BaseRunner, RunContext, RunnerRegistryKeys
 from ofx.tasks.base import Task
 from ofx.tasks.output_types import OutputType
 from ofx.tasks.registry import TaskRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class TaskExecution(BaseModel):
@@ -82,6 +84,9 @@ class TaskRunner(BaseRunner[TaskExecution]):
             if install_hint:
                 msg += f" Install with: {install_hint}"
             self._log_warning(msg)
+
+        # Apply profile task_options overrides (low priority, user opts win)
+        self._apply_profile_task_options()
 
     async def _do_run(self) -> None:
         assert self._task is not None
@@ -158,6 +163,31 @@ class TaskRunner(BaseRunner[TaskExecution]):
     async def _post_run(self) -> None:
         pass
 
+    # ── Profile integration ────────────────────────────────────────
+
+    def _apply_profile_task_options(self) -> None:
+        """Merge profile task_options into the execution opts.
+
+        Profile options are applied as defaults — explicit user options
+        from the workflow ``with:`` block always take precedence.
+        """
+        profile = self.ctx.vars.get("profile")
+        if not profile:
+            return
+
+        task_options = getattr(profile, "task_options", None) or {}
+        overrides = task_options.get(self.model.task_name, {})
+        if not overrides:
+            return
+
+        merged = dict(overrides)
+        merged.update(self.model.opts)  # user opts win
+        self.model.opts = merged
+        self._log_debug(
+            f"Applied profile task_options for '{self.model.task_name}': "
+            f"{list(overrides.keys())}"
+        )
+
     # ── Live streaming ─────────────────────────────────────────────
 
     def _on_stdout_line(self, line: str) -> None:
@@ -174,8 +204,8 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 self._streamed_items.extend(new_items)
                 if new_items:
                     self._publish_items(new_items)
-        except Exception:
-            pass  # Non-parseable lines are normal (headers, progress, etc.)
+        except Exception as e:
+            logger.debug("Non-parseable line (task=%s): %s", self.model.task_name, e)
 
     def _publish_items(self, items: list[OutputType]) -> None:
         """Publish newly discovered items to the task channel."""
@@ -186,8 +216,8 @@ class TaskRunner(BaseRunner[TaskExecution]):
             channel = f"task:{self.model.task_name}:items"
             for item in items:
                 store.publish(channel, item.to_dict())
-        except Exception:
-            pass  # Channel publishing is best-effort
+        except Exception as e:
+            logger.debug("Channel publish failed (task=%s): %s", self.model.task_name, e)
 
     def _deduplicate_incremental(
         self, items: list[OutputType]
