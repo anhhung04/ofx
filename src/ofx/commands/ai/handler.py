@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from rich import box
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
@@ -64,22 +65,101 @@ def _require_deps(cfg: dict) -> None:
 
 
 def _stream_to_stdout(cfg: dict, messages: list[dict]) -> str:
-    """Stream LLM response to stdout and return the full text."""
+    """Stream LLM response to stdout with rich rendering.
+
+    * Shows a spinner while waiting for the first token.
+    * **Thinking** tokens stream live in a dim italic panel.
+    * **Content** tokens are rendered as live-updating Markdown via
+      Rich's ``Live`` display — syntax highlighting, headers, code
+      blocks, and lists render progressively as they arrive.
+
+    Only content text is returned (for history / downstream use).
+    """
+    from rich.columns import Columns
+    from rich.spinner import Spinner
+
     from ofx.ai.client import call_llm_stream
 
-    chunks: list[str] = []
-    for chunk in call_llm_stream(
+    console = get_console()
+    content_parts: list[str] = []
+    thinking_parts: list[str] = []
+
+    stream = call_llm_stream(
         messages=messages,
         model=cfg["model"],
         api_key=cfg["api_key"],
         temperature=cfg["temperature"],
         max_tokens=cfg["max_tokens"],
         base_url=cfg["base_url"],
-    ):
-        print(chunk, end="", flush=True)
-        chunks.append(chunk)
-    print()  # trailing newline
-    return "".join(chunks)
+    )
+
+    # --- Wait for first token with a spinner ----------------------------
+    first_chunk = None
+    try:
+        with Live(
+            Columns([Spinner("dots", style="cyan"), Text(" Thinking…", style="dim")]),
+            console=console,
+            refresh_per_second=12,
+            transient=True,
+        ):
+            try:
+                first_chunk = next(stream)
+            except StopIteration:
+                pass
+    except KeyboardInterrupt:
+        console.print("\n[dim]Interrupted.[/dim]")
+        return ""
+
+    if first_chunk is None:
+        return ""
+
+    # --- Stream thinking tokens live ------------------------------------
+    if first_chunk.kind == "thinking":
+        thinking_parts.append(first_chunk.text)
+        try:
+            with Live(
+                Text(f"💭 {''.join(thinking_parts)}", style="dim italic"),
+                console=console,
+                refresh_per_second=8,
+                vertical_overflow="visible",
+            ) as live:
+                for chunk in stream:
+                    if chunk.kind == "thinking":
+                        thinking_parts.append(chunk.text)
+                        live.update(
+                            Text(f"💭 {''.join(thinking_parts)}", style="dim italic")
+                        )
+                    else:
+                        first_chunk = chunk  # first content chunk
+                        break
+                else:
+                    # Stream exhausted during thinking only
+                    return ""
+        except KeyboardInterrupt:
+            console.print("\n[dim]Interrupted.[/dim]")
+            return ""
+        console.print()  # blank line between thinking and content
+
+    # --- Stream content with Live markdown ------------------------------
+    content_parts.append(first_chunk.text)
+
+    try:
+        with Live(
+            Markdown("".join(content_parts)),
+            console=console,
+            refresh_per_second=8,
+            vertical_overflow="visible",
+        ) as live:
+            for chunk in stream:
+                if chunk.kind == "content":
+                    content_parts.append(chunk.text)
+                    live.update(Markdown("".join(content_parts)))
+    except KeyboardInterrupt:
+        console.print("\n[dim]Interrupted.[/dim]")
+    except Exception as exc:
+        console.print(f"\n[bold red]Error:[/bold red] {exc}")
+
+    return "".join(content_parts)
 
 
 def _build_skill_prompt(skill: Optional[str]) -> str:
@@ -218,17 +298,9 @@ class AnalyzeHandler:
 
         analysis = _stream_to_stdout(cfg, messages)
 
-        # Re-render as markdown in a panel for better readability
-        self.console.print()
-        self.console.print(
-            Panel(
-                Markdown(analysis),
-                title="[bold green]Analysis Report[/bold green]",
-                border_style="green",
-                box=box.ROUNDED,
-                padding=(1, 2),
-            )
-        )
+        # Final rendered result is already shown via Live markdown above.
+        if not analysis:
+            print_warning("Empty Response", "The model returned no content.")
 
     def _collect_context(self) -> list[str]:
         parts: list[str] = []
@@ -324,7 +396,7 @@ class ChatHandler:
             )
 
             history.add_user(user_input)
-            self.console.print("\n[bold red]OFX AI:[/bold red] ", end="")
+            self.console.print("\n[bold red]OFX AI:[/bold red]")
 
             response = _stream_to_stdout(cfg, history.to_list())
             history.add_assistant(response)

@@ -694,7 +694,7 @@ def fleet_run(
 
     distributor = FleetDistributor()
     if target_list:
-        chunk_files = distributor.distribute_to_files(target_list, count, distribution)
+        chunk_files = distributor.distribute(target_list, count, distribution)
         effective_count = len(chunk_files)
     else:
         chunk_files = []

@@ -13,6 +13,15 @@ Configure via OFX settings or environment variables:
 from __future__ import annotations
 
 from collections.abc import Generator
+from dataclasses import dataclass
+
+
+@dataclass(slots=True)
+class StreamChunk:
+    """A single chunk from an LLM streaming response."""
+
+    text: str
+    kind: str = "content"  # "content" | "thinking"
 
 
 def check_ai_available() -> bool:
@@ -53,11 +62,13 @@ def call_llm_stream(
     temperature: float = 0.7,
     max_tokens: int = 8192,
     base_url: str | None = None,
-) -> Generator[str, None, None]:
-    """Stream LLM response text chunks via the OpenAI Chat Completions API.
+) -> Generator[StreamChunk, None, None]:
+    """Stream LLM response chunks via the OpenAI Chat Completions API.
 
-    System messages are included directly in `messages` as
-    {"role": "system", "content": "..."} — no special handling needed.
+    Yields :class:`StreamChunk` objects whose *kind* is either
+    ``"thinking"`` (reasoning/chain-of-thought tokens) or ``"content"``
+    (the final answer).  Models that do not emit reasoning tokens will
+    only yield ``"content"`` chunks.
     """
     require_ai()
 
@@ -70,9 +81,18 @@ def call_llm_stream(
         stream=True,
     )
     for chunk in stream:
-        content = chunk.choices[0].delta.content
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+
+        # Reasoning / thinking tokens (OpenAI o-series, Anthropic extended thinking)
+        thinking = getattr(delta, "reasoning_content", None)
+        if thinking:
+            yield StreamChunk(text=thinking, kind="thinking")
+
+        content = delta.content
         if content:
-            yield content
+            yield StreamChunk(text=content, kind="content")
 
 
 def call_llm(
@@ -83,9 +103,10 @@ def call_llm(
     max_tokens: int = 8192,
     base_url: str | None = None,
 ) -> str:
-    """Call LLM and return the full response string (non-streaming)."""
+    """Call LLM and return the full response string (non-streaming, content only)."""
     return "".join(
-        call_llm_stream(
+        c.text
+        for c in call_llm_stream(
             messages=messages,
             model=model,
             api_key=api_key,
@@ -93,4 +114,5 @@ def call_llm(
             max_tokens=max_tokens,
             base_url=base_url,
         )
+        if c.kind == "content"
     )
