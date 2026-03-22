@@ -75,7 +75,7 @@ Each sub-app (flow, project, cloud, session, secret, docs) exposes `app`, `NAME`
 Pydantic v2 models define the YAML schema:
 - `Workflow` — top-level; validates job IDs, dependency graph (cycle detection), populates `jid`/`step_index`/`name`
 - `Job` — `needs` (list of job IDs), `strategy` (matrix), `steps`, `cloud` (optional `CloudConfig | str`)
-- `Step` — exactly one run type must be present: `run` (shell command), `script` (inline Python), `script_file`, or `uses` (reusable workflow). Aliases used extensively (e.g. `if`, `continue-on-error`, `retry-delay`).
+- `Step` — exactly one run type must be present: `run` (shell command), `script` (inline Python), `script_file`, `uses` (reusable workflow), or `task` (pre-built security tool wrapper). Aliases used extensively (e.g. `if`, `continue-on-error`, `retry-delay`).
 - `CloudConfig` (`models/cloud.py`) — cloud VPS configuration. Can be a string (profile slug from `~/.ofx/cloud.yml`) or an inline object. Supports `provider` (static/digitalocean/aws), SSH/WinRM connection settings, opsec mode, auto-destroy lifecycle.
 - `CloudHostEntry` — single host entry for static fleet usage (host, ssh_user, ssh_port, ssh_key).
 - `MatrixStrategy` (`models/strategy.py`) — matrix variables, max_parallel, fail_fast, include/exclude, optional `fleet` for cloud distribution.
@@ -111,6 +111,7 @@ Pydantic v2 models define the YAML schema:
   - `run:` — shell commands sent directly
   - `script:` — inline Python bundled with `ofx.api` deps via `build_bundle()`, uploaded and executed with discovered `python3`
   - `script_file:` — same bundle mechanism for file-based Python scripts
+  - `task:` — command built locally via `Task.build_command()`, executed remotely; stdout parsed for typed outputs
   - Python discovery: probes `python3`, `python`, and common absolute paths on the remote host (cached per runner)
 - Output streaming: `CloudStepRunner._post_run()` logs stdout to the local console and saves `StepExecutionResult` to registry, matching local step runner behavior
 - State machine: fully compliant with `BaseRunner` lifecycle (IDLE → RUNNING → FINISHED → COMPLETED/FAILED) with durable checkpoints
@@ -187,6 +188,16 @@ ofx session clean --older-than 7d
 - `builder.py` — `build_bundle()` creates a self-extracting Python bootstrap (base64-encoded zip + script) that can run on remote hosts without `ofx` installed
 - Used by `CloudStepRunner` for `script:` and `script_file:` step types
 
+### Task system (`src/ofx/tasks/`)
+Pre-built security tool wrappers with structured output parsing, inspired by secator.
+- `base.py` — abstract `Task` class; declares CLI option mapping (`opts`), `extra_flags`, `build_command()`, `parse_output()`, install/health-check logic. Uses `__init_subclass__` to isolate mutable class attrs per-subclass.
+- `output_types.py` — 10 Pydantic models for structured results: `Port`, `Url`, `Vulnerability`, `Subdomain`, `Ip`, `Tag`, `Record`, `Domain`, `Certificate`, `Exploit`. Each has `_type` discriminator, `_uuid` dedup hash, `to_dict()` serialization.
+- `registry.py` — `TaskRegistry` with `@register()` decorator; auto-discovers modules under `ofx.tasks.tools/` on first access (thread-safe double-checked locking).
+- `tools/` — 10 tool wrappers: nmap, naabu, httpx, ffuf, feroxbuster, katana, subfinder, dnsx, nuclei, wafw00f.
+- `TaskRunner` (`src/ofx/runner/tasks/runner.py`) — `BaseRunner[TaskExecution]` that builds the command, executes via `CommandExecutor`, parses output into typed objects, deduplicates via `_uuid`, and stores `typed_outputs` alongside regular outputs in the registry.
+- Template helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `of_type()` for filtering typed outputs in Jinja2 templates.
+- CLI: `ofx flow tasks list [-c category/]` and `ofx flow tasks info <name>`.
+
 ## Key conventions
 
 - **Workflow YAML files** start with `# yaml-language-server: $schema=<path>` for IDE support. Generate the schema with `ofx flow schema schema` (writes to `~/.ofx/workflow_schema.json`). Create a new workflow scaffold with `ofx flow init <name>`.
@@ -196,6 +207,7 @@ ofx session clean --older-than 7d
 - **Cloud config**: can be a string (profile slug) or an inline `CloudConfig` dict. The `parse_cloud_field()` normalizer handles both. Profiles are managed via `ofx cloud profile add/list/show/remove/default`.
 - **Cloud fleet**: `FleetStrategy` in `MatrixStrategy.fleet` defines target distribution. `expand_fleet_to_matrix()` converts fleet config to matrix combinations. `CloudMatrixJobRunner` handles cloud+fleet expansion.
 - **Cloud + matrix/fleet**: When a job has both `cloud:` and `strategy.matrix` or `strategy.fleet`, `WorkflowExecutionManager` dispatches to `CloudMatrixJobRunner`. This meta-runner expands combinations (matrix × fleet Cartesian product) and spawns a separate `CloudJobRunner` per combination, each provisioning its own VPS. Fleet chunk files are uploaded to each VPS and exposed as `$FLEET_INPUT_FILE`. Parallelism is controlled by `strategy.max_parallel`.
+- **Task steps**: Use `task: <name>` + `with:` to invoke a registered tool wrapper. The `with:` dict must include `target` (or `targets`) plus tool-specific options. Output is parsed into typed objects stored in `outputs.typed_outputs`. Template helpers (`ports()`, `urls()`, `vulns()`, etc.) filter typed outputs by `_type`. New tools: subclass `Task`, set `opts`/`extra_flags`/`output_types`, implement `parse_output()`, register with `@TaskRegistry.register("name")`.
 
 ## Known gaps / future work
 
