@@ -300,6 +300,12 @@ class StepRunner(BaseRunner[Step]):
             task_opts = dict(self.model.run_with)
             target = str(task_opts.pop("target", task_opts.pop("targets", "")))
 
+            if not target:
+                self._log_warning(
+                    f"Task '{self.model.task}' has no 'target' in 'with:' — "
+                    f"the tool may fail or scan nothing."
+                )
+
             task_model = TaskExecution(
                 task_name=self.model.task,
                 target=target,

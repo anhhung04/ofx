@@ -1,6 +1,6 @@
 # Steps
 
-Steps are the smallest unit of execution in an OFX workflow. Each step runs a command, script, or reusable workflow and can have its own environment and error handling.
+Steps are the smallest unit of execution in an OFX workflow. Each step runs a command, script, reusable workflow, or **task** (pre-built security tool wrapper) and can have its own environment and error handling.
 
 ---
 
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Run Script
         run: ./myscript.sh
- env:
+        env:
           VAR: value
         timeout: 10
         continue_on_error: true
@@ -23,8 +23,8 @@ jobs:
 
 ## Step Fields
 - `name`: (optional) Description of the step
-- `run` / `script` / `script_file` / `uses`: **Exactly one** action per step
-- `envs`: (optional) Environment variables
+- `run` / `script` / `script_file` / `uses` / `task`: **Exactly one** action per step
+- `env`: (optional) Environment variables
 - `timeout`: (optional) Max time in minutes (default: 1440)
 - `retry`: (optional) Retry attempts on failure
 - `retry_delay`: (optional) Seconds between retries (alias: `retry-delay`)
@@ -34,7 +34,7 @@ jobs:
 - `working_directory`: (optional) Execution directory (alias: `working-directory`)
 - `log_stdout`: (optional) Save stdout to output logs (alias: `log-stdout`)
 - `interactive`: (optional) Interactive mode (ignored for `uses`)
-- `with`: (optional) Inputs for `uses` (model field: `run_with`)
+- `with`: (optional) Inputs for `uses` or options/target for `task` (model field: `run_with`)
 - `secrets`: (optional) Secrets for `uses` (`inherit` to pass parent secrets)
 
 ---
@@ -43,6 +43,7 @@ jobs:
 - Use `script:` to run inline Python code
 - Use `script_file:` to execute an existing Python file (resolved relative to the workflow directory)
 - Use `uses:` to call a reusable workflow
+- Use `task:` to run a pre-built security tool wrapper (see [Tasks](../tasks.md))
 - Use `run_if:` for conditional logic
 
 ---

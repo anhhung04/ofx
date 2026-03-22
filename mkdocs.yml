@@ -112,6 +112,8 @@ nav:
                 - Matrix Strategy: guide/jobs-steps/matrix-strategy.md
                 - Outputs: guide/jobs-steps/outputs.md
                 - Script files: guide/jobs-steps/script-file.md
+          - Tasks:
+                - Overview: guide/tasks.md
           - Templates:
                 - Overview: guide/templates.md
                 - Jinja Templates: guide/templates/jinja.md
