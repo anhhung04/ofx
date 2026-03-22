@@ -8,7 +8,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator, Callable
 
 from ofx.models.command import Command
 from ofx.runner.commands.shell_functions import get_shell_functions
@@ -46,6 +46,83 @@ class CommandExecutor:
                 tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")[1]
             )
             self._envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
+
+    async def execute_streaming(
+        self,
+        on_line: Callable[[str], None] | None = None,
+    ) -> CommandExecutionResult:
+        """Execute command while streaming stdout line-by-line.
+
+        Each line is passed to *on_line* as it arrives.  The full stdout
+        is still collected and returned in the result.
+        """
+        shell_funcs = get_shell_functions(self._command.shell)
+        full_cmd = f"{shell_funcs}\n{self._command.cmd}"
+
+        proc = await asyncio.create_subprocess_shell(
+            full_cmd,
+            executable=self._command.shell,
+            cwd=self._command.working_directory,
+            env=self._envs,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        stdout_lines: list[str] = []
+        stderr_bytes = b""
+
+        async def _read_stdout():
+            assert proc.stdout is not None
+            async for raw_line in proc.stdout:
+                try:
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
+                except Exception:
+                    line = raw_line.hex()
+                stdout_lines.append(line)
+                if on_line:
+                    try:
+                        on_line(line)
+                    except Exception:
+                        pass
+
+        async def _read_stderr():
+            nonlocal stderr_bytes
+            assert proc.stderr is not None
+            stderr_bytes = await proc.stderr.read()
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(_read_stdout(), _read_stderr(), proc.wait()),
+                self._command.timeout_minutes * 60,
+            )
+        except TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise RuntimeError(
+                f"Command timed out after {self._command.timeout_minutes} minutes"
+            ) from None
+        finally:
+            self._close_process(proc)
+
+        stdout_str = "\n".join(stdout_lines)
+        max_size = settings.max_output_size
+        outputs: dict[str, Any] = {}
+
+        if len(stdout_str.encode("utf-8", errors="ignore")) > max_size:
+            stdout_str = stdout_str[:max_size] + "\n... [OUTPUT TRUNCATED]"
+            outputs["output_truncated"] = True
+
+        try:
+            stderr_str = stderr_bytes.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            stderr_str = base64.b64encode(stderr_bytes).decode("utf-8")
+
+        return CommandExecutionResult(
+            exit_code=proc.returncode,
+            stdout=stdout_str,
+            stderr=stderr_str,
+            outputs=outputs,
+        )
 
     async def _run_interactive(self) -> CommandExecutionResult:
         # Prepend shell helper functions to the command
@@ -107,6 +184,11 @@ class CommandExecutor:
             ) from None
         finally:
             self._close_process(proc)
+
+        stdout, stderr, outputs = self._decode_output(stdout_bytes, stderr_bytes)
+        return CommandExecutionResult(
+            exit_code=exit_code, stdout=stdout, stderr=stderr, outputs=outputs
+        )
 
         stdout, stderr, outputs = self._decode_output(stdout_bytes, stderr_bytes)
         return CommandExecutionResult(

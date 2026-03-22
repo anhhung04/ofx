@@ -64,6 +64,54 @@ class NucleiTask(Task):
     def _output_suffix(self) -> str:
         return ".jsonl"
 
+    def parse_line(self, line: str) -> list[Vulnerability | Tag]:
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return []
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+
+        info = data.get("info", {})
+        template_id = data.get("template-id", data.get("template_id", ""))
+        matched_at = data.get("matched-at", data.get("host", ""))
+        severity_str = info.get("severity", "unknown").lower()
+
+        tags_raw = info.get("tags", [])
+        if isinstance(tags_raw, str):
+            tags_raw = [t.strip() for t in tags_raw.split(",")]
+
+        references = info.get("reference", [])
+        if isinstance(references, str):
+            references = [references]
+
+        results: list[Vulnerability | Tag] = [
+            Vulnerability(
+                name=info.get("name", template_id),
+                id=template_id,
+                matched_at=matched_at,
+                severity=_SEVERITY_MAP.get(severity_str, Severity.UNKNOWN),
+                confidence=Confidence.HIGH,
+                provider="nuclei",
+                description=info.get("description", ""),
+                tags=tags_raw,
+                references=references,
+                extra_data={
+                    k: v
+                    for k, v in data.items()
+                    if k not in ("info", "template-id", "matched-at", "host")
+                },
+            )
+        ]
+
+        for tag in tags_raw:
+            results.append(
+                Tag(name=tag, value=tag, match=matched_at, category="nuclei")
+            )
+
+        return results
+
     def parse_output(
         self,
         stdout: str,
@@ -79,49 +127,6 @@ class NucleiTask(Task):
             lines = stdout.strip().splitlines()
 
         for line in lines:
-            line = line.strip()
-            if not line or not line.startswith("{"):
-                continue
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            info = data.get("info", {})
-            template_id = data.get("template-id", data.get("template_id", ""))
-            matched_at = data.get("matched-at", data.get("host", ""))
-            severity_str = info.get("severity", "unknown").lower()
-
-            tags_raw = info.get("tags", [])
-            if isinstance(tags_raw, str):
-                tags_raw = [t.strip() for t in tags_raw.split(",")]
-
-            references = info.get("reference", [])
-            if isinstance(references, str):
-                references = [references]
-
-            results.append(
-                Vulnerability(
-                    name=info.get("name", template_id),
-                    id=template_id,
-                    matched_at=matched_at,
-                    severity=_SEVERITY_MAP.get(severity_str, Severity.UNKNOWN),
-                    confidence=Confidence.HIGH,
-                    provider="nuclei",
-                    description=info.get("description", ""),
-                    tags=tags_raw,
-                    references=references,
-                    extra_data={
-                        k: v
-                        for k, v in data.items()
-                        if k not in ("info", "template-id", "matched-at", "host")
-                    },
-                )
-            )
-
-            for tag in tags_raw:
-                results.append(
-                    Tag(name=tag, value=tag, match=matched_at, category="nuclei")
-                )
+            results.extend(self.parse_line(line))
 
         return results

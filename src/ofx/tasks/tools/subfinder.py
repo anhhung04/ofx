@@ -47,6 +47,15 @@ class SubfinderTask(Task):
     def _output_suffix(self) -> str:
         return ".txt"
 
+    def parse_line(self, line: str) -> list[Subdomain]:
+        host = line.strip()
+        if not host or host.startswith("#"):
+            return []
+
+        domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
+
+        return [Subdomain(host=host, domain=domain)]
+
     def parse_output(
         self,
         stdout: str,
@@ -62,12 +71,6 @@ class SubfinderTask(Task):
             lines = stdout.strip().splitlines()
 
         for line in lines:
-            host = line.strip()
-            if not host or host.startswith("#"):
-                continue
-
-            domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
-
-            results.append(Subdomain(host=host, domain=domain))
+            results.extend(self.parse_line(line))
 
         return results

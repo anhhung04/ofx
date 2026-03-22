@@ -69,6 +69,36 @@ class FeroxbusterTask(Task):
     def _output_suffix(self) -> str:
         return ".jsonl"
 
+    def parse_line(self, line: str) -> list[Url]:
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return []
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+
+        # feroxbuster JSON has type field; we only want "response" entries
+        entry_type = data.get("type", "")
+        if entry_type and entry_type != "response":
+            return []
+
+        url = data.get("url", "")
+        if not url:
+            return []
+
+        return [
+            Url(
+                url=url,
+                host="",
+                status_code=self._safe_int(data.get("status", 0)),
+                content_length=self._safe_int(data.get("content_length", 0)),
+                words=self._safe_int(data.get("word_count", 0)),
+                lines=self._safe_int(data.get("line_count", 0)),
+                method=data.get("method", "GET"),
+            )
+        ]
+
     def parse_output(
         self,
         stdout: str,
@@ -84,33 +114,6 @@ class FeroxbusterTask(Task):
             lines = stdout.strip().splitlines()
 
         for line in lines:
-            line = line.strip()
-            if not line or not line.startswith("{"):
-                continue
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            # feroxbuster JSON has type field; we only want "response" entries
-            entry_type = data.get("type", "")
-            if entry_type and entry_type != "response":
-                continue
-
-            url = data.get("url", "")
-            if not url:
-                continue
-
-            results.append(
-                Url(
-                    url=url,
-                    host="",
-                    status_code=self._safe_int(data.get("status", 0)),
-                    content_length=self._safe_int(data.get("content_length", 0)),
-                    words=self._safe_int(data.get("word_count", 0)),
-                    lines=self._safe_int(data.get("line_count", 0)),
-                    method=data.get("method", "GET"),
-                )
-            )
+            results.extend(self.parse_line(line))
 
         return results

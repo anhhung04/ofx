@@ -114,12 +114,79 @@ Tasks produce **typed outputs** — Pydantic models that normalize tool output i
 | `Domain` | domain, registrar, alive | A domain with registration info |
 | `Certificate` | host, subject, issuer, not_before, not_after | A TLS certificate |
 | `Exploit` | name, id, url, platform, type | A known exploit |
+| `UserAccount` | username, password, hash, domain, host, account_type, privilege_level | A discovered credential/account |
 
 All output types include:
 
 - `extra_data` — Dict for tool-specific fields that don't fit the schema
 - `_type` — String discriminator (e.g. `"port"`, `"url"`)
 - `_uuid` — Deterministic hash for deduplication
+
+### UserAccount & Credential Integration
+
+The `UserAccount` output type bridges to the `ofx.api.creds.exegol_history.Credential` dataclass, enabling seamless credential management:
+
+```python
+# In a script step — convert discovered account to credential store
+from ofx.tasks.output_types import UserAccount
+
+account = UserAccount(
+    username="admin",
+    password="P@ssw0rd!",
+    domain="CORP",
+    host="10.0.0.1",
+    account_type="domain",
+    privilege_level="admin",
+    source="secretsdump",
+)
+
+# Convert to exegol-history Credential for KeePass storage
+cred = account.to_credential()
+
+# Or create from existing Credential
+account = UserAccount.from_credential(cred, host="DC01", source="mimikatz")
+```
+
+---
+
+## Live Streaming
+
+Tasks that output JSONL or line-delimited results support **live streaming** — items are parsed and published to channels as each line arrives, rather than waiting for the entire command to finish.
+
+### How It Works
+
+1. **Line-by-line reading** — `CommandExecutor.execute_streaming()` reads stdout one line at a time via async subprocess pipes
+2. **Incremental parsing** — Each line is passed to the task's `parse_line()` method, producing typed output items immediately
+3. **Channel publishing** — New items are published to `task:<name>:items` channel for real-time consumption by other steps
+4. **Deduplication** — Items are deduplicated incrementally as they arrive
+
+### Streaming-Capable Tools
+
+| Tool | Format | Streaming |
+|------|--------|-----------|
+| httpx | JSONL | ✅ |
+| nuclei | JSONL | ✅ |
+| naabu | JSONL | ✅ |
+| katana | JSONL | ✅ |
+| dnsx | JSONL | ✅ |
+| feroxbuster | JSONL | ✅ |
+| subfinder | line | ✅ |
+| nmap | XML | ❌ (file-based) |
+| ffuf | JSON | ❌ (single blob) |
+| wafw00f | stdout | ❌ (multi-line) |
+
+### Subscribing to Streamed Items
+
+In a `script:` step running concurrently, you can subscribe to live items:
+
+```python
+# In a script: step
+items = subscribe("task:nmap:items")
+for item in items:
+    if item["_type"] == "port" and item["port"] == 445:
+        publish("smb_found", True)
+        break
+```
 
 ---
 
@@ -140,6 +207,7 @@ Task outputs are stored in the registry and accessible via templates. Use the bu
 | `tags(items)` | Shortcut for `of_type(items, "tag")` |
 | `records(items)` | Shortcut for `of_type(items, "record")` |
 | `domains(items)` | Shortcut for `of_type(items, "domain")` |
+| `users(items)` | Shortcut for `of_type(items, "user_account")` |
 
 ### Example: Chaining Nmap → Httpx
 

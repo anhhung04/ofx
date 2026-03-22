@@ -9,7 +9,6 @@ import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
-
 @app.command("list")
 def list_tasks(
     category: Annotated[

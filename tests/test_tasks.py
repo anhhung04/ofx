@@ -78,7 +78,7 @@ class TestOutputTypes:
         assert OUTPUT_TYPE_MAP["port"] is Port
         assert OUTPUT_TYPE_MAP["url"] is Url
         assert OUTPUT_TYPE_MAP["vulnerability"] is Vulnerability
-        assert len(OUTPUT_TYPE_MAP) == 10
+        assert len(OUTPUT_TYPE_MAP) == 11
 
     def test_all_output_types_have_type_field(self):
         for name, cls in OUTPUT_TYPE_MAP.items():
@@ -103,6 +103,8 @@ class TestOutputTypes:
                 obj = cls(ip="1.2.3.4")
             elif name == "subdomain":
                 obj = cls(host="a.x.com")
+            elif name == "user_account":
+                obj = cls(username="admin")
             else:
                 continue
             assert obj._type == name
@@ -955,3 +957,414 @@ class TestPreflightCheck:
 
         t = BareTask()
         assert t.get_install_command() is None
+
+
+# ── UserAccount Output Type ────────────────────────────────────────────
+
+
+class TestUserAccount:
+    def test_basic_fields(self):
+        from ofx.tasks.output_types import UserAccount
+
+        u = UserAccount(
+            username="admin",
+            password="P@ss",
+            domain="CORP",
+            host="10.0.0.1",
+            account_type="domain",
+            privilege_level="admin",
+        )
+        assert u._type == "user_account"
+        assert u.username == "admin"
+        assert u.privilege_level == "admin"
+
+    def test_to_dict(self):
+        from ofx.tasks.output_types import UserAccount
+
+        u = UserAccount(username="root", host="srv1")
+        d = u.to_dict()
+        assert d["_type"] == "user_account"
+        assert d["username"] == "root"
+        assert "_uuid" in d
+
+    def test_uuid_deterministic(self):
+        from ofx.tasks.output_types import UserAccount
+
+        u1 = UserAccount(username="admin", domain="CORP")
+        u2 = UserAccount(username="admin", domain="CORP")
+        assert u1._uuid == u2._uuid
+
+    def test_uuid_different(self):
+        from ofx.tasks.output_types import UserAccount
+
+        u1 = UserAccount(username="admin")
+        u2 = UserAccount(username="guest")
+        assert u1._uuid != u2._uuid
+
+    def test_to_credential(self):
+        from ofx.tasks.output_types import UserAccount
+
+        u = UserAccount(
+            username="admin",
+            password="secret",
+            hash="aad3b435b51404ee",
+            domain="CORP",
+            host="DC01",
+            account_type="domain",
+            source="secretsdump",
+        )
+        cred = u.to_credential()
+        assert cred.username == "admin"
+        assert cred.password == "secret"
+        assert cred.hash == "aad3b435b51404ee"
+        assert cred.domain == "CORP"
+        assert "host=DC01" in cred.comment
+        assert "source=secretsdump" in cred.comment
+
+    def test_from_credential(self):
+        from dataclasses import dataclass
+
+        from ofx.tasks.output_types import UserAccount
+
+        @dataclass
+        class FakeCred:
+            username: str = "user1"
+            password: str = "pass1"
+            hash: str = ""
+            domain: str = "LOCAL"
+            comment: str = "test"
+
+        cred = FakeCred()
+        u = UserAccount.from_credential(cred, host="10.0.0.5", source="mimikatz")
+        assert u.username == "user1"
+        assert u.password == "pass1"
+        assert u.domain == "LOCAL"
+        assert u.host == "10.0.0.5"
+        assert u.source == "mimikatz"
+
+    def test_in_output_type_map(self):
+        from ofx.tasks.output_types import OUTPUT_TYPE_MAP, UserAccount
+
+        assert OUTPUT_TYPE_MAP["user_account"] is UserAccount
+
+
+# ── Live Streaming (parse_line) ────────────────────────────────────────
+
+
+class TestParseLine:
+    def test_httpx_parse_line(self):
+        task = TaskRegistry.create("httpx")
+        result = task.parse_line('{"url":"https://example.com","status_code":200}')
+        assert len(result) >= 1
+        assert result[0]._type == "url"
+
+    def test_httpx_parse_line_empty(self):
+        task = TaskRegistry.create("httpx")
+        assert task.parse_line("") == []
+        assert task.parse_line("not json") == []
+
+    def test_naabu_parse_line(self):
+        task = TaskRegistry.create("naabu")
+        result = task.parse_line('{"ip":"10.0.0.1","port":22}')
+        assert len(result) == 1
+        assert result[0]._type == "port"
+        assert result[0].port == 22
+
+    def test_nuclei_parse_line(self):
+        task = TaskRegistry.create("nuclei")
+        line = json.dumps({
+            "template-id": "test-vuln",
+            "info": {"name": "Test Vuln", "severity": "high", "tags": ["cve"]},
+            "matched-at": "https://target.com",
+        })
+        result = task.parse_line(line)
+        assert any(r._type == "vulnerability" for r in result)
+
+    def test_subfinder_parse_line(self):
+        task = TaskRegistry.create("subfinder")
+        result = task.parse_line("api.example.com")
+        assert len(result) == 1
+        assert result[0]._type == "subdomain"
+        assert result[0].host == "api.example.com"
+
+    def test_katana_parse_line_json(self):
+        task = TaskRegistry.create("katana")
+        result = task.parse_line('{"request":{"endpoint":"https://x.com/path"}}')
+        assert len(result) >= 1
+
+    def test_katana_parse_line_plain_url(self):
+        task = TaskRegistry.create("katana")
+        result = task.parse_line("https://example.com/page")
+        assert len(result) == 1
+        assert result[0].url == "https://example.com/page"
+
+    def test_dnsx_parse_line(self):
+        task = TaskRegistry.create("dnsx")
+        line = json.dumps({"host": "example.com", "a": ["1.2.3.4"]})
+        result = task.parse_line(line)
+        assert any(r._type == "subdomain" for r in result)
+
+    def test_feroxbuster_parse_line(self):
+        task = TaskRegistry.create("feroxbuster")
+        line = json.dumps({"type": "response", "url": "https://x.com/admin", "status": 200})
+        result = task.parse_line(line)
+        assert len(result) == 1
+        assert result[0].url == "https://x.com/admin"
+
+    def test_feroxbuster_skip_non_response(self):
+        task = TaskRegistry.create("feroxbuster")
+        line = json.dumps({"type": "log", "message": "blah"})
+        assert task.parse_line(line) == []
+
+    def test_nmap_no_streaming(self):
+        task = TaskRegistry.create("nmap")
+        assert not task.supports_streaming
+
+    def test_httpx_supports_streaming(self):
+        task = TaskRegistry.create("httpx")
+        assert task.supports_streaming
+
+    def test_naabu_supports_streaming(self):
+        task = TaskRegistry.create("naabu")
+        assert task.supports_streaming
+
+
+# ── Template Helper: users() ───────────────────────────────────────────
+
+
+class TestUsersTemplateHelper:
+    def test_users_filter(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        users_fn = funcs["users"]
+
+        items = [
+            {"_type": "user_account", "username": "admin"},
+            {"_type": "port", "port": 80},
+            {"_type": "user_account", "username": "guest"},
+        ]
+        result = users_fn(items)
+        assert len(result) == 2
+        assert result[0]["username"] == "admin"
+        assert result[1]["username"] == "guest"
+
+
+# ── Profile System ─────────────────────────────────────────────────────
+
+
+class TestProfiles:
+    def test_profile_model_defaults(self):
+        from ofx.profiles.models import OFXProfile
+
+        p = OFXProfile()
+        assert p.rate_limit == 0
+        assert p.threads == 10
+        assert p.time_window.enabled is False
+
+    def test_profile_model_custom(self):
+        from ofx.profiles.models import OFXProfile
+
+        p = OFXProfile(
+            name="stealth",
+            rate_limit=30,
+            delay=2.0,
+            jitter=1.0,
+            threads=2,
+            proxy="socks5://127.0.0.1:9050",
+        )
+        assert p.rate_limit == 30
+        assert p.delay == 2.0
+        assert p.proxy == "socks5://127.0.0.1:9050"
+
+    def test_time_window_model(self):
+        from ofx.profiles.models import TimeWindow
+
+        tw = TimeWindow(
+            enabled=True,
+            start="09:00",
+            end="17:00",
+            days=["monday", "tuesday", "wednesday", "thursday", "friday"],
+            timezone="US/Eastern",
+        )
+        assert tw.start_time().hour == 9
+        assert tw.end_time().hour == 17
+        assert "saturday" not in tw.days
+
+    def test_profile_manager_crud(self, tmp_path):
+        from ofx.profiles.manager import ProfileManager
+
+        mgr = ProfileManager(config_path=tmp_path / "profiles.yml")
+        assert mgr.list_profiles() == []
+
+        mgr.add("test", {"rate_limit": 100, "description": "test profile"})
+        assert mgr.exists("test")
+        assert "test" in mgr.list_profiles()
+
+        profile = mgr.resolve("test")
+        assert profile.rate_limit == 100
+
+        mgr.remove("test")
+        assert not mgr.exists("test")
+
+    def test_profile_manager_default(self, tmp_path):
+        from ofx.profiles.manager import ProfileManager
+
+        mgr = ProfileManager(config_path=tmp_path / "profiles.yml")
+        mgr.add("p1", {"rate_limit": 10})
+        mgr.add("p2", {"rate_limit": 20})
+        mgr.set_default("p1")
+        assert mgr.default_profile_name == "p1"
+
+        result = mgr.resolve_or_default(None)
+        assert result is not None
+        assert result.rate_limit == 10
+
+    def test_profile_manager_not_found(self, tmp_path):
+        from ofx.profiles.manager import ProfileManager
+
+        mgr = ProfileManager(config_path=tmp_path / "profiles.yml")
+        with pytest.raises(KeyError):
+            mgr.resolve("nonexistent")
+
+    def test_profile_task_options(self):
+        from ofx.profiles.models import OFXProfile
+
+        p = OFXProfile(
+            task_options={"nmap": {"timing": "T2", "ports": "80,443"}}
+        )
+        assert p.task_options["nmap"]["timing"] == "T2"
+
+
+# ── Time Window Enforcement ────────────────────────────────────────────
+
+
+class TestTimeWindow:
+    def test_disabled_window_always_allowed(self):
+        from ofx.profiles.models import TimeWindow
+        from ofx.profiles.time_window import check_time_window
+
+        tw = TimeWindow(enabled=False)
+        result = check_time_window(tw)
+        assert result["allowed"] is True
+
+    def test_check_within_window(self):
+        from datetime import datetime
+
+        from ofx.profiles.models import TimeWindow
+        from ofx.profiles.time_window import check_time_window
+
+        # Create a window that covers the current time
+        now = datetime.now()
+        start = f"{max(0, now.hour - 1):02d}:00"
+        end = f"{min(23, now.hour + 1):02d}:59"
+        day = now.strftime("%A").lower()
+
+        tw = TimeWindow(enabled=True, start=start, end=end, days=[day])
+        result = check_time_window(tw)
+        assert result["allowed"] is True
+
+    def test_check_outside_window_day(self):
+        from ofx.profiles.models import TimeWindow
+        from ofx.profiles.time_window import check_time_window
+
+        # No valid days
+        tw = TimeWindow(enabled=True, start="00:00", end="23:59", days=[])
+        result = check_time_window(tw)
+        assert result["allowed"] is False
+        assert "outside the allowed days" in result["message"]
+
+    def test_check_outside_window_time(self):
+        from datetime import datetime
+
+        from ofx.profiles.models import TimeWindow
+        from ofx.profiles.time_window import check_time_window
+
+        now = datetime.now()
+        # Set window to an hour that's definitely not now
+        if now.hour < 12:
+            start, end = "18:00", "19:00"
+        else:
+            start, end = "03:00", "04:00"
+
+        tw = TimeWindow(
+            enabled=True,
+            start=start,
+            end=end,
+            days=[now.strftime("%A").lower()],
+        )
+        result = check_time_window(tw)
+        assert result["allowed"] is False
+
+    def test_time_in_range_normal(self):
+        from datetime import time
+
+        from ofx.profiles.time_window import _time_in_range
+
+        assert _time_in_range(time(9, 0), time(17, 0), time(12, 0)) is True
+        assert _time_in_range(time(9, 0), time(17, 0), time(18, 0)) is False
+
+    def test_time_in_range_overnight(self):
+        from datetime import time
+
+        from ofx.profiles.time_window import _time_in_range
+
+        # Overnight window: 22:00 → 06:00
+        assert _time_in_range(time(22, 0), time(6, 0), time(23, 0)) is True
+        assert _time_in_range(time(22, 0), time(6, 0), time(3, 0)) is True
+        assert _time_in_range(time(22, 0), time(6, 0), time(12, 0)) is False
+
+    def test_time_window_guard_not_started_when_disabled(self):
+        import asyncio
+
+        from ofx.profiles.models import TimeWindow
+        from ofx.profiles.time_window import TimeWindowGuard
+
+        tw = TimeWindow(enabled=False)
+        guard = TimeWindowGuard(tw)
+        guard.start()
+        assert guard._task is None
+
+    def test_warn_message_near_end(self):
+        from datetime import datetime
+
+        from ofx.profiles.models import TimeWindow
+        from ofx.profiles.time_window import check_time_window
+
+        now = datetime.now()
+        day = now.strftime("%A").lower()
+        # Window that ends in 5 minutes
+        end_min = (now.minute + 5) % 60
+        end_hour = now.hour + ((now.minute + 5) // 60)
+        if end_hour > 23:
+            end_hour = 23
+            end_min = 59
+
+        tw = TimeWindow(
+            enabled=True,
+            start=f"{max(0, now.hour - 1):02d}:00",
+            end=f"{end_hour:02d}:{end_min:02d}",
+            days=[day],
+            warn_before_minutes=10,
+        )
+        result = check_time_window(tw)
+        if result["allowed"] and 0 < result["remaining_minutes"] <= 10:
+            assert "remaining" in result["message"]
+
+
+# ── DefaultConfig Profile Field ────────────────────────────────────────
+
+
+class TestDefaultConfigProfile:
+    def test_default_config_has_profile_field(self):
+        from ofx.models.config import DefaultConfig
+
+        dc = DefaultConfig()
+        assert dc.profile == ""
+
+    def test_default_config_with_profile(self):
+        from ofx.models.config import DefaultConfig
+
+        dc = DefaultConfig(profile="stealth")
+        assert dc.profile == "stealth"

@@ -32,6 +32,7 @@ from ofx.tasks.output_types import (
     Subdomain,
     Tag,
     Url,
+    UserAccount,
     Vulnerability,
 )
 from ofx.tasks.registry import TaskRegistry
@@ -54,6 +55,7 @@ __all__ = [
     "Domain",
     "Certificate",
     "Exploit",
+    "UserAccount",
     # Enums
     "Severity",
     "Confidence",

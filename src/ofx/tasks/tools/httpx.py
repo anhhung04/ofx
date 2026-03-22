@@ -53,6 +53,48 @@ class HttpxTask(Task):
     def _output_suffix(self) -> str:
         return ".jsonl"
 
+    def parse_line(self, line: str) -> list[Url | Tag]:
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return []
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+
+        url = data.get("url", data.get("input", ""))
+        if not url:
+            return []
+
+        tech = data.get("tech", [])
+        if isinstance(tech, str):
+            tech = [tech]
+
+        results: list[Url | Tag] = [
+            Url(
+                url=url,
+                host=data.get("host", ""),
+                status_code=self._safe_int(
+                    data.get("status_code", data.get("status-code", 0))
+                ),
+                title=data.get("title", ""),
+                content_type=data.get("content_type", data.get("content-type", "")),
+                content_length=self._safe_int(
+                    data.get("content_length", data.get("content-length", 0))
+                ),
+                tech=tech,
+                webserver=data.get("webserver", ""),
+                method=data.get("method", ""),
+                words=self._safe_int(data.get("words", 0)),
+                lines=self._safe_int(data.get("lines", 0)),
+            )
+        ]
+
+        for t in tech:
+            results.append(Tag(name=t, value=t, match=url, category="technology"))
+
+        return results
+
     def parse_output(
         self,
         stdout: str,
@@ -68,43 +110,6 @@ class HttpxTask(Task):
             lines = stdout.strip().splitlines()
 
         for line in lines:
-            line = line.strip()
-            if not line or not line.startswith("{"):
-                continue
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            url = data.get("url", data.get("input", ""))
-            if not url:
-                continue
-
-            tech = data.get("tech", [])
-            if isinstance(tech, str):
-                tech = [tech]
-
-            results.append(
-                Url(
-                    url=url,
-                    host=data.get("host", ""),
-                    status_code=self._safe_int(
-                        data.get("status_code", data.get("status-code", 0))
-                    ),
-                    title=data.get("title", ""),
-                    content_type=data.get("content_type", data.get("content-type", "")),
-                    content_length=self._safe_int(
-                        data.get("content_length", data.get("content-length", 0))
-                    ),
-                    tech=tech,
-                    webserver=data.get("webserver", ""),
-                    method=data.get("method", ""),
-                    words=self._safe_int(data.get("words", 0)),
-                    lines=self._safe_int(data.get("lines", 0)),
-                )
-            )
-
-            for t in tech:
-                results.append(Tag(name=t, value=t, match=url, category="technology"))
+            results.extend(self.parse_line(line))
 
         return results

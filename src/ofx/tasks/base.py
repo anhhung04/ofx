@@ -140,6 +140,26 @@ class Task(ABC):
 
     # ── Helpers ────────────────────────────────────────────────────
 
+    @property
+    def supports_streaming(self) -> bool:
+        """Whether the task supports line-by-line live streaming.
+
+        Tasks that output JSONL or one-result-per-line can override this
+        to return ``True``.  The default is ``True`` for tasks that define
+        :meth:`parse_line`.
+        """
+        return type(self).parse_line is not Task.parse_line
+
+    def parse_line(self, line: str) -> list[OutputType]:
+        """Parse a single stdout line into output items (for live streaming).
+
+        Override in subclasses whose tool emits JSONL or line-delimited
+        output.  Return an empty list for non-parseable lines.
+
+        The default implementation returns ``[]`` (no streaming support).
+        """
+        return []
+
     def _output_suffix(self) -> str:
         """File suffix for the structured output file."""
         return ".xml"

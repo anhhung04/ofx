@@ -58,6 +58,48 @@ class DnsxTask(Task):
     def _output_suffix(self) -> str:
         return ".jsonl"
 
+    def parse_line(self, line: str) -> list[Subdomain | Ip | Record]:
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return []
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+
+        host = data.get("host", "")
+        if not host:
+            return []
+
+        domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
+        results: list[Subdomain | Ip | Record] = [Subdomain(host=host, domain=domain)]
+
+        # A records → IP
+        for a_record in data.get("a", []):
+            results.append(Ip(ip=a_record, host=host))
+
+        # AAAA records → IP
+        for aaaa_record in data.get("aaaa", []):
+            results.append(Ip(ip=aaaa_record, host=host))
+
+        # CNAME records
+        for cname in data.get("cname", []):
+            results.append(Record(name=cname, type="CNAME", host=host))
+
+        # MX records
+        for mx in data.get("mx", []):
+            results.append(Record(name=mx, type="MX", host=host))
+
+        # NS records
+        for ns in data.get("ns", []):
+            results.append(Record(name=ns, type="NS", host=host))
+
+        # TXT records
+        for txt in data.get("txt", []):
+            results.append(Record(name=txt, type="TXT", host=host))
+
+        return results
+
     def parse_output(
         self,
         stdout: str,
@@ -73,43 +115,6 @@ class DnsxTask(Task):
             lines = stdout.strip().splitlines()
 
         for line in lines:
-            line = line.strip()
-            if not line or not line.startswith("{"):
-                continue
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            host = data.get("host", "")
-            if not host:
-                continue
-
-            domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
-            results.append(Subdomain(host=host, domain=domain))
-
-            # A records → IP
-            for a_record in data.get("a", []):
-                results.append(Ip(ip=a_record, host=host))
-
-            # AAAA records → IP
-            for aaaa_record in data.get("aaaa", []):
-                results.append(Ip(ip=aaaa_record, host=host))
-
-            # CNAME records
-            for cname in data.get("cname", []):
-                results.append(Record(name=cname, type="CNAME", host=host))
-
-            # MX records
-            for mx in data.get("mx", []):
-                results.append(Record(name=mx, type="MX", host=host))
-
-            # NS records
-            for ns in data.get("ns", []):
-                results.append(Record(name=ns, type="NS", host=host))
-
-            # TXT records
-            for txt in data.get("txt", []):
-                results.append(Record(name=txt, type="TXT", host=host))
+            results.extend(self.parse_line(line))
 
         return results

@@ -257,6 +257,9 @@ class TemplateResolver:
         def _domains(items: list) -> list:
             return _of_type(items, "domain")
 
+        def _users(items: list) -> list:
+            return _of_type(items, "user_account")
+
         if self._support_funcs_cache is None:
             shell_exports = get_shell_exports()
 
@@ -322,6 +325,7 @@ class TemplateResolver:
                 "tags": _tags,
                 "records": _records,
                 "domains": _domains,
+                "users": _users,
             }
 
         support_funcs = self._support_funcs_cache.copy()

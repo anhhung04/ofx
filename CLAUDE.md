@@ -43,6 +43,7 @@ uv run ofx flow run path/to/workflow.yml
 ## Environment / Profiles
 
 - Cloud profiles are stored in `~/.ofx/cloud.yml`.
+- Execution profiles (rate limits, stealth, time windows) are stored in `~/.ofx/profiles.yml`.
 - Useful env var: `OFX_DEBUG=1` enables full tracebacks.
 - Set `OFX_DEBUG=1` when debugging.
 
@@ -191,11 +192,12 @@ ofx session clean --older-than 7d
 ### Task system (`src/ofx/tasks/`)
 Pre-built security tool wrappers with structured output parsing, inspired by secator.
 - `base.py` — abstract `Task` class; declares CLI option mapping (`opts`), `extra_flags`, `build_command()`, `parse_output()`, install/health-check logic. Uses `__init_subclass__` to isolate mutable class attrs per-subclass.
-- `output_types.py` — 10 Pydantic models for structured results: `Port`, `Url`, `Vulnerability`, `Subdomain`, `Ip`, `Tag`, `Record`, `Domain`, `Certificate`, `Exploit`. Each has `_type` discriminator, `_uuid` dedup hash, `to_dict()` serialization.
+- `output_types.py` — 11 Pydantic models for structured results: `Port`, `Url`, `Vulnerability`, `Subdomain`, `Ip`, `Tag`, `Record`, `Domain`, `Certificate`, `Exploit`, `UserAccount`. Each has `_type` discriminator, `_uuid` dedup hash, `to_dict()` serialization. `UserAccount` bridges to `ofx.api.creds.exegol_history.Credential` via `to_credential()`/`from_credential()`.
 - `registry.py` — `TaskRegistry` with `@register()` decorator; auto-discovers modules under `ofx.tasks.tools/` on first access (thread-safe double-checked locking).
-- `tools/` — 10 tool wrappers: nmap, naabu, httpx, ffuf, feroxbuster, katana, subfinder, dnsx, nuclei, wafw00f.
-- `TaskRunner` (`src/ofx/runner/tasks/runner.py`) — `BaseRunner[TaskExecution]` that builds the command, executes via `CommandExecutor`, parses output into typed objects, deduplicates via `_uuid`, and stores `typed_outputs` alongside regular outputs in the registry.
-- Template helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `of_type()` for filtering typed outputs in Jinja2 templates.
+- `tools/` — 10 tool wrappers: nmap, naabu, httpx, ffuf, feroxbuster, katana, subfinder, dnsx, nuclei, wafw00f. The 7 JSONL tools support live streaming via `parse_line()`.
+- `TaskRunner` (`src/ofx/runner/tasks/runner.py`) — `BaseRunner[TaskExecution]` that builds the command, executes via `CommandExecutor`, parses output into typed objects, deduplicates via `_uuid`, and stores `typed_outputs` alongside regular outputs in the registry. Supports **live streaming** — when `task.supports_streaming` is True, uses `execute_streaming()` to parse output line-by-line and publishes items to channels in real-time.
+- **Live streaming**: `CommandExecutor.execute_streaming(on_line)` reads stdout line-by-line via async subprocess pipes. `TaskRunner._on_stdout_line()` passes each line to `task.parse_line()`, deduplicates, and publishes to `task:<name>:items` channel. Auto-detected via `supports_streaming` property (checks `parse_line` override).
+- Template helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `of_type()` for filtering typed outputs in Jinja2 templates.
 - CLI: `ofx flow tasks list [-c category/]` and `ofx flow tasks info <name>`.
 
 ## Key conventions
@@ -207,7 +209,10 @@ Pre-built security tool wrappers with structured output parsing, inspired by sec
 - **Cloud config**: can be a string (profile slug) or an inline `CloudConfig` dict. The `parse_cloud_field()` normalizer handles both. Profiles are managed via `ofx cloud profile add/list/show/remove/default`.
 - **Cloud fleet**: `FleetStrategy` in `MatrixStrategy.fleet` defines target distribution. `expand_fleet_to_matrix()` converts fleet config to matrix combinations. `CloudMatrixJobRunner` handles cloud+fleet expansion.
 - **Cloud + matrix/fleet**: When a job has both `cloud:` and `strategy.matrix` or `strategy.fleet`, `WorkflowExecutionManager` dispatches to `CloudMatrixJobRunner`. This meta-runner expands combinations (matrix × fleet Cartesian product) and spawns a separate `CloudJobRunner` per combination, each provisioning its own VPS. Fleet chunk files are uploaded to each VPS and exposed as `$FLEET_INPUT_FILE`. Parallelism is controlled by `strategy.max_parallel`.
-- **Task steps**: Use `task: <name>` + `with:` to invoke a registered tool wrapper. The `with:` dict must include `target` (or `targets`) plus tool-specific options. Output is parsed into typed objects stored in `outputs.typed_outputs`. Template helpers (`ports()`, `urls()`, `vulns()`, etc.) filter typed outputs by `_type`. New tools: subclass `Task`, set `opts`/`extra_flags`/`output_types`, implement `parse_output()`, register with `@TaskRegistry.register("name")`.
+- **Task steps**: Use `task: <name>` + `with:` to invoke a registered tool wrapper. The `with:` dict must include `target` (or `targets`) plus tool-specific options. Output is parsed into typed objects stored in `outputs.typed_outputs`. Template helpers (`ports()`, `urls()`, `vulns()`, `users()`, etc.) filter typed outputs by `_type`. New tools: subclass `Task`, set `opts`/`extra_flags`/`output_types`, implement `parse_output()`, register with `@TaskRegistry.register("name")`.
+- **Profiles**: `~/.ofx/profiles.yml` stores execution profiles (rate limits, stealth, time windows, per-tool overrides). `ProfileManager` provides CRUD. Set `defaults.profile: <name>` in workflow YAML. `WorkflowRunner._apply_profile()` resolves the profile and injects settings into context. CLI: `ofx flow profile list/show/add/remove/default`.
+- **Time window enforcement**: When a profile has `time_window.enabled: true`, `WorkflowRunner` checks window before starting (aborts if outside) and runs `TimeWindowGuard` as an async background monitor. `WorkflowExecutionManager` checks `time_guard.should_abort` between stages to stop mid-run when the window expires.
+- **Live streaming**: 7 JSONL tools (httpx, nuclei, naabu, katana, dnsx, feroxbuster, subfinder) support line-by-line streaming. Items are parsed and published to channels as each stdout line arrives, enabling real-time consumption by concurrent steps via `subscribe("task:<name>:items")`.
 
 ## Known gaps / future work
 

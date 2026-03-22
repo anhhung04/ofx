@@ -55,6 +55,31 @@ class NaabuTask(Task):
     def _output_suffix(self) -> str:
         return ".jsonl"
 
+    def parse_line(self, line: str) -> list[Port]:
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return []
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+
+        ip = data.get("ip", data.get("host", ""))
+        port = self._safe_int(data.get("port", 0))
+        if not port:
+            return []
+
+        return [
+            Port(
+                port=port,
+                ip=ip,
+                host=data.get("host", ip),
+                state="open",
+                protocol=data.get("protocol", "tcp"),
+                service_name="",
+            )
+        ]
+
     def parse_output(
         self,
         stdout: str,
@@ -70,28 +95,6 @@ class NaabuTask(Task):
             lines = stdout.strip().splitlines()
 
         for line in lines:
-            line = line.strip()
-            if not line or not line.startswith("{"):
-                continue
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            ip = data.get("ip", data.get("host", ""))
-            port = self._safe_int(data.get("port", 0))
-            if not port:
-                continue
-
-            results.append(
-                Port(
-                    port=port,
-                    ip=ip,
-                    host=data.get("host", ip),
-                    state="open",
-                    protocol=data.get("protocol", "tcp"),
-                    service_name="",
-                )
-            )
+            results.extend(self.parse_line(line))
 
         return results

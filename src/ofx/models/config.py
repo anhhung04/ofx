@@ -61,3 +61,10 @@ class DefaultConfig(OFXBaseModel):
         default_factory=DurableRunConfig,
         description="Durable execution configuration",
     )
+    profile: str = Field(
+        default="",
+        description=(
+            "Name of a profile from ~/.ofx/profiles.yml to apply. "
+            "Provides rate limits, time windows, and tool option overrides."
+        ),
+    )

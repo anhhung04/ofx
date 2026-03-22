@@ -72,6 +72,37 @@ class KatanaTask(Task):
     def _output_suffix(self) -> str:
         return ".jsonl"
 
+    def parse_line(self, line: str) -> list[Url]:
+        line = line.strip()
+        if not line:
+            return []
+
+        # Try JSON first (katana -jsonl output)
+        if line.startswith("{"):
+            try:
+                data = json.loads(line)
+                url = data.get("request", {}).get("endpoint", data.get("url", ""))
+                if not url:
+                    return []
+                return [
+                    Url(
+                        url=url,
+                        host=data.get("request", {}).get("host", ""),
+                        status_code=self._safe_int(
+                            data.get("response", {}).get("status_code", 0)
+                        ),
+                        method=data.get("request", {}).get("method", "GET"),
+                    )
+                ]
+            except json.JSONDecodeError:
+                return []
+        else:
+            # Plain URL line
+            if line.startswith("http://") or line.startswith("https://"):
+                return [Url(url=line)]
+
+        return []
+
     def parse_output(
         self,
         stdout: str,
@@ -87,32 +118,6 @@ class KatanaTask(Task):
             lines = stdout.strip().splitlines()
 
         for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-
-            # Try JSON first (katana -jsonl output)
-            if line.startswith("{"):
-                try:
-                    data = json.loads(line)
-                    url = data.get("request", {}).get("endpoint", data.get("url", ""))
-                    if not url:
-                        continue
-                    results.append(
-                        Url(
-                            url=url,
-                            host=data.get("request", {}).get("host", ""),
-                            status_code=self._safe_int(
-                                data.get("response", {}).get("status_code", 0)
-                            ),
-                            method=data.get("request", {}).get("method", "GET"),
-                        )
-                    )
-                except json.JSONDecodeError:
-                    pass
-            else:
-                # Plain URL line
-                if line.startswith("http://") or line.startswith("https://"):
-                    results.append(Url(url=line))
+            results.extend(self.parse_line(line))
 
         return results

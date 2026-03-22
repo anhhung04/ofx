@@ -187,6 +187,64 @@ class Exploit(OutputType):
     tags: list[str] = Field(default_factory=list)
 
 
+class UserAccount(OutputType):
+    """A user account / credential discovered during enumeration or exploitation.
+
+    Bridges to ``ofx.api.creds.exegol_history.Credential`` for storage in
+    KeePass-backed credential databases.
+    """
+
+    _type: str = "user_account"
+    username: str
+    password: str = ""
+    hash: str = ""
+    domain: str = ""
+    host: str = ""
+    account_type: str = ""  # local, domain, service, machine, ...
+    privilege_level: str = ""  # user, admin, system, root, ...
+    enabled: bool = True
+    groups: list[str] = Field(default_factory=list)
+    source: str = ""
+    comment: str = ""
+
+    def to_credential(self):
+        """Convert to ``ofx.api.creds.exegol_history.Credential`` dataclass."""
+        from ofx.api.creds.exegol_history import Credential
+
+        parts = []
+        if self.account_type:
+            parts.append(f"type={self.account_type}")
+        if self.privilege_level:
+            parts.append(f"priv={self.privilege_level}")
+        if self.host:
+            parts.append(f"host={self.host}")
+        if self.source:
+            parts.append(f"source={self.source}")
+        if self.comment:
+            parts.append(self.comment)
+
+        return Credential(
+            username=self.username,
+            password=self.password,
+            hash=self.hash,
+            domain=self.domain,
+            comment="; ".join(parts) if parts else "",
+        )
+
+    @classmethod
+    def from_credential(cls, cred, host: str = "", source: str = "") -> "UserAccount":
+        """Create from an ``ofx.api.creds.exegol_history.Credential``."""
+        return cls(
+            username=cred.username,
+            password=cred.password,
+            hash=cred.hash,
+            domain=cred.domain,
+            host=host,
+            source=source,
+            comment=cred.comment,
+        )
+
+
 # Lookup for resolving type names to classes
 OUTPUT_TYPE_MAP: dict[str, type[OutputType]] = {
     "ip": Ip,
@@ -199,4 +257,5 @@ OUTPUT_TYPE_MAP: dict[str, type[OutputType]] = {
     "domain": Domain,
     "certificate": Certificate,
     "exploit": Exploit,
+    "user_account": UserAccount,
 }

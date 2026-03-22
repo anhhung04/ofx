@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,11 @@ class TaskRunner(BaseRunner[TaskExecution]):
       1. ``_pre_run``  — resolve task from registry, validate it exists
       2. ``_do_run``   — build command, execute, parse output, store typed results
       3. ``_post_run`` — no-op (results already stored)
+
+    Live Streaming:
+      When ``stream=True`` (default), uses line-by-line stdout reading and
+      parses items as they arrive, publishing each to the ``task:<name>:items``
+      channel for real-time consumption.
     """
 
     def __init__(
@@ -53,6 +58,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         super().__init__(model, ctx, parent, None, logger=logger)
         self._task: Task | None = None
         self._output_file: Path | None = None
+        self._streamed_items: list[OutputType] = []
 
     def _produce_log(self, message: str) -> str:
         return f"[Task:{self.model.task_name}] {message}"
@@ -101,7 +107,13 @@ class TaskRunner(BaseRunner[TaskExecution]):
         result: CommandExecutionResult | None = None
 
         try:
-            result = await executor.execute()
+            # Use streaming execution for real-time item parsing
+            if self._task.supports_streaming:
+                result = await executor.execute_streaming(
+                    on_line=self._on_stdout_line,
+                )
+            else:
+                result = await executor.execute()
             executor.raise_for_status(result.exit_code, result.stderr)
         except TimeoutError:
             raise RuntimeError(
@@ -118,7 +130,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
                     exit_code=None, stdout="", stderr="", outputs={}
                 )
 
-            # Parse structured output
+            # Parse structured output (combines streamed + file-based)
             typed_outputs = self._parse_outputs(result)
 
             # Store regular outputs
@@ -146,10 +158,58 @@ class TaskRunner(BaseRunner[TaskExecution]):
     async def _post_run(self) -> None:
         pass
 
+    # ── Live streaming ─────────────────────────────────────────────
+
+    def _on_stdout_line(self, line: str) -> None:
+        """Called for each stdout line during streaming execution.
+
+        Attempts to parse the line into typed output items and publishes
+        them to the channel store for real-time consumption.
+        """
+        assert self._task is not None
+        try:
+            items = self._task.parse_line(line)
+            if items:
+                new_items = self._deduplicate_incremental(items)
+                self._streamed_items.extend(new_items)
+                if new_items:
+                    self._publish_items(new_items)
+        except Exception:
+            pass  # Non-parseable lines are normal (headers, progress, etc.)
+
+    def _publish_items(self, items: list[OutputType]) -> None:
+        """Publish newly discovered items to the task channel."""
+        try:
+            from ofx.runner.channels import get_channel_store
+
+            store = get_channel_store()
+            channel = f"task:{self.model.task_name}:items"
+            for item in items:
+                store.publish(channel, item.to_dict())
+        except Exception:
+            pass  # Channel publishing is best-effort
+
+    def _deduplicate_incremental(
+        self, items: list[OutputType]
+    ) -> list[OutputType]:
+        """Deduplicate against already-streamed items."""
+        seen = {item._uuid for item in self._streamed_items}
+        new: list[OutputType] = []
+        for item in items:
+            uid = item._uuid
+            if uid not in seen:
+                seen.add(uid)
+                new.append(item)
+        return new
+
     # ── Helpers ────────────────────────────────────────────────────
 
     def _parse_outputs(self, result: CommandExecutionResult) -> list[OutputType]:
-        """Delegate to the task's parse_output method with deduplication."""
+        """Delegate to the task's parse_output method with deduplication.
+
+        If streaming was active, merges streamed items with any additional
+        items discovered from the output file.
+        """
         assert self._task is not None
         try:
             raw = self._task.parse_output(
@@ -157,10 +217,11 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 stderr=result.stderr,
                 output_file=self._output_file,
             )
-            return self._deduplicate(raw)
+            all_items = list(self._streamed_items) + raw
+            return self._deduplicate(all_items)
         except Exception as e:
             self._log_warning(f"Output parsing failed: {e}")
-            return []
+            return list(self._streamed_items) if self._streamed_items else []
 
     @staticmethod
     def _deduplicate(items: list[OutputType]) -> list[OutputType]:

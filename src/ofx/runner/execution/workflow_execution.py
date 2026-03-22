@@ -25,6 +25,19 @@ class WorkflowExecutionManager:
     async def run(self, schedule: list[list[str]], staged_jobs: dict):
         result = ExecutionResult()
         for stage_index, stage in enumerate(schedule):
+            # Check time window guard between stages
+            time_guard = getattr(self._parent, "_time_guard", None)
+            if time_guard and time_guard.should_abort:
+                remaining_ids = [
+                    jid for s in schedule[stage_index:] for jid in s
+                ]
+                result.failed_job_ids.extend(remaining_ids)
+                result.failed_stage_indices.append(stage_index)
+                self._parent._log_error(
+                    "🛑 Time window expired — aborting remaining stages"
+                )
+                break
+
             stage_runners = self._build_stage_runners(stage, staged_jobs)
             failed_jobs = await self._run_stage(stage_index, stage_runners)
             if failed_jobs:

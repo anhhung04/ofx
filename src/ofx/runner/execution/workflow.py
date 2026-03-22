@@ -30,6 +30,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
         self._is_reused = self.parent is not None
         if not self._is_reused:
             self.name = f"[RUN-{self.run_id}]:{self.name}"
+        self._profile = None
+        self._time_guard = None
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(
@@ -77,6 +79,9 @@ class WorkflowRunner(BaseRunner[Workflow]):
 
         self.ctx = RunnerContextBuilder(self.ctx).with_env(self.model.env)
 
+        # ── Profile resolution ─────────────────────────────────────
+        await self._apply_profile()
+
         await self.reg_set(
             RunnerRegistryKeys.MODEL, self.model.model_dump(exclude={"jobs", "env"})
         )
@@ -88,6 +93,10 @@ class WorkflowRunner(BaseRunner[Workflow]):
         await self._run_workflow()
 
     async def _post_run(self) -> None:
+        # Stop time-window guard
+        if self._time_guard:
+            self._time_guard.stop()
+
         if self._is_reused:
             job_runners = self._runners.values()
             if any(runner.is_failed for runner in job_runners):
@@ -166,6 +175,60 @@ class WorkflowRunner(BaseRunner[Workflow]):
             show_console=False,
         )
         await installer.run()
+
+    # ── Profile & Time Window ──────────────────────────────────────
+
+    async def _apply_profile(self) -> None:
+        """Load the named profile and apply its settings."""
+        profile_name = self.model.defaults.profile
+        if not profile_name:
+            return
+
+        from ofx.profiles.manager import get_profile_manager
+
+        mgr = get_profile_manager()
+        profile = mgr.resolve_or_default(profile_name)
+        if profile is None:
+            return
+
+        self._profile = profile
+        self._log_info(f"Applying profile: {profile_name}")
+
+        # Inject profile env vars into context
+        if profile.env:
+            self.ctx = RunnerContextBuilder(self.ctx).with_env(profile.env)
+
+        # Store profile data so steps/tasks can access it via templates
+        self.ctx.vars["profile"] = profile.model_dump()
+
+        # ── Time window enforcement ────────────────────────────────
+        if profile.time_window.enabled:
+            from ofx.profiles.time_window import TimeWindowGuard, check_time_window
+
+            result = check_time_window(profile.time_window)
+            if not result["allowed"]:
+                raise RuntimeError(
+                    f"Workflow aborted: {result['message']}. "
+                    f"Profile '{profile_name}' restricts execution to "
+                    f"{profile.time_window.start}–{profile.time_window.end} "
+                    f"on {', '.join(d.title() for d in profile.time_window.days)} "
+                    f"({profile.time_window.timezone})."
+                )
+
+            if result["message"]:
+                self._log_warning(result["message"])
+
+            # Start background monitor
+            self._time_guard = TimeWindowGuard(
+                window=profile.time_window,
+                on_warn=lambda msg: self._log_warning(msg),
+                on_abort=lambda msg: self._log_error(
+                    f"🛑 {msg} — workflow will be aborted"
+                ),
+            )
+            self._time_guard.start()
+
+    # ── Input processing ───────────────────────────────────────────
 
     async def _process_inputs(
         self, req_inputs: dict, input_blueprint: dict
