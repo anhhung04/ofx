@@ -56,6 +56,7 @@ class SessionManager:
         name: str = "",
         env: dict[str, str] | None = None,
         tags: dict[str, str] | None = None,
+        project: str = "",
     ) -> Session:
         """Submit a workflow as a detached session.
 
@@ -68,6 +69,7 @@ class SessionManager:
             name: Human-friendly session name.
             env: Extra environment variables.
             tags: Arbitrary tags.
+            project: Project name to associate with this session.
 
         Returns:
             The created Session (status = RUNNING after this returns).
@@ -91,6 +93,7 @@ class SessionManager:
             cloud_profile=cloud_profile,
             inputs=inputs or {},
             tags=tags or {},
+            project=project,
         )
 
         # Save initial state
@@ -607,7 +610,7 @@ class SessionManager:
                 "Wait for completion or cancel first."
             )
 
-        results = output_dir or self.store.results_dir(session_id)
+        results = output_dir or self._resolve_results_dir(session)
 
         if session.target == SessionTarget.LOCAL:
             self._fetch_local_results(session, results)
@@ -857,6 +860,26 @@ class SessionManager:
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
+
+    def _resolve_results_dir(self, session: Session) -> Path:
+        """Resolve where to store fetched results.
+
+        If the session is associated with a project, results go into
+        ``<project_path>/evidence/sessions/<session_id>/``.
+        Otherwise falls back to ``~/.ofx/sessions/<id>/results/``.
+        """
+        if session.project:
+            try:
+                from ofx.commands.project.project_manager import ProjectManager
+
+                project_path = Path(ProjectManager.resolve_path(session.project))
+                if project_path.exists():
+                    dest = project_path / "evidence" / "sessions" / session.id
+                    dest.mkdir(parents=True, exist_ok=True)
+                    return dest
+            except Exception:
+                pass  # fall back to default
+        return self.store.results_dir(session.id)
 
     def _resolve_job(self, workflow: Any, job_id: str) -> Any:
         """Pick a job from the workflow."""

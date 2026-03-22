@@ -60,11 +60,20 @@ def session_submit(
     """
     console = get_console()
     from ofx.cloud.sessions import SessionManager, SessionTarget
-    from ofx.commands import get_cli_env_vars
+    from ofx.commands import get_cli_env_vars, get_cli_project
     from ofx.utils.args import parse_key_value_pairs
 
     parsed_inputs: dict = parse_key_value_pairs(inputs or [])
     parsed_env: dict = get_cli_env_vars()
+
+    # Resolve project: global -p > active project
+    session_project = get_cli_project()
+    if not session_project:
+        from ofx.commands.project.project_manager import ProjectManager
+
+        active_path = ProjectManager.get_active_path()
+        if active_path:
+            session_project = active_path.name
 
     # Determine target
     if cloud and local:
@@ -91,6 +100,7 @@ def session_submit(
                 inputs=parsed_inputs,
                 name=name,
                 env=parsed_env,
+                project=session_project,
             )
         )
     except Exception as exc:
@@ -101,17 +111,20 @@ def session_submit(
         )
         raise typer.Exit(code=1) from exc
 
+    details = {
+        "Session ID": session.id,
+        "Name": session.name,
+        "Target": session.target.value,
+        "Status": session.status.value,
+        "Workflow": session.workflow_file,
+        "Job": session.job_id,
+    }
+    if session.project:
+        details["Project"] = session.project
     print_success(
         "Session submitted",
         "Session submitted successfully.",
-        details={
-            "Session ID": session.id,
-            "Name": session.name,
-            "Target": session.target.value,
-            "Status": session.status.value,
-            "Workflow": session.workflow_file,
-            "Job": session.job_id,
-        },
+        details=details,
     )
 
     table = Table(show_header=False, box=None, padding=(0, 2))
@@ -119,6 +132,8 @@ def session_submit(
     table.add_column("Value", style="cyan")
     table.add_row("Session ID", session.id)
     table.add_row("Name", session.name)
+    if session.project:
+        table.add_row("Project", session.project)
     table.add_row("Target", session.target.value)
     table.add_row("Status", session.status.value)
     table.add_row("Workflow", session.workflow_file)
@@ -152,6 +167,9 @@ def session_list(
     target: Annotated[
         str, typer.Option("--target", "-t", help="Filter: local or cloud")
     ] = "",
+    project: Annotated[
+        str, typer.Option("--project", help="Filter by project name")
+    ] = "",
 ):
     """List all sessions."""
     console = get_console()
@@ -170,7 +188,7 @@ def session_list(
             console.print(f"[dim]Valid: {valid}[/dim]")
             raise typer.Exit(code=1) from exc
 
-    sessions = store.list_sessions(status=_status, target=target or None)
+    sessions = store.list_sessions(status=_status, target=target or None, project=project or None)
 
     if not sessions:
         print_info("Sessions", "No sessions found.")
@@ -179,6 +197,7 @@ def session_list(
     table = Table(title="Sessions")
     table.add_column("ID", style="cyan", no_wrap=True)
     table.add_column("Name")
+    table.add_column("Project")
     table.add_column("Target")
     table.add_column("Status")
     table.add_column("Workflow")
@@ -191,6 +210,7 @@ def session_list(
         table.add_row(
             s.id,
             s.name or "-",
+            s.project or "-",
             s.target.value,
             f"[{status_style}]{s.status.value}[/{status_style}]",
             s.workflow_file,
@@ -233,6 +253,8 @@ def session_status(
     table.add_column("Value")
     table.add_row("Session ID", f"[cyan]{session.id}[/cyan]")
     table.add_row("Name", session.name)
+    if session.project:
+        table.add_row("Project", session.project)
     table.add_row("Target", session.target.value)
     table.add_row("Status", f"[{status_style}]{session.status.value}[/{status_style}]")
     table.add_row("Workflow", session.workflow_file)

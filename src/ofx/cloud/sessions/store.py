@@ -86,8 +86,9 @@ class SessionStore:
         self,
         status: SessionStatus | None = None,
         target: str | None = None,
+        project: str | None = None,
     ) -> list[Session]:
-        """List all sessions, optionally filtered by status or target."""
+        """List all sessions, optionally filtered by status, target, or project."""
         sessions: list[Session] = []
         if not self._base_dir.exists():
             return sessions
@@ -100,6 +101,8 @@ class SessionStore:
                     if status and s.status != status:
                         continue
                     if target and s.target.value != target:
+                        continue
+                    if project and s.project != project:
                         continue
                     sessions.append(s)
                 except Exception as exc:
