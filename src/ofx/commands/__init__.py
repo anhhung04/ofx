@@ -38,13 +38,19 @@ def add_aliases():
             )
 
 
-# Global callback to inject environment variables before any command runs
+# Global callback to inject environment variables and project override
 _cli_env_vars: dict[str, str] = {}
+_cli_project: str = ""
 
 
 def get_cli_env_vars() -> dict[str, str]:
     """Return environment variables injected via the global -e/--env flag."""
     return _cli_env_vars
+
+
+def get_cli_project() -> str:
+    """Return project name/path set via the global -p/--project flag."""
+    return _cli_project
 
 
 def inject_env_vars(
@@ -56,12 +62,19 @@ def inject_env_vars(
         help="Inject environment variable (KEY=VAL)",
         show_default=False,
     ),
+    p: str = typer.Option(
+        "",
+        "-p",
+        "--project",
+        help="Override active project for this invocation",
+        show_default=False,
+    ),
 ):
     import os
 
     from ofx.utils.args import parse_key_value_pairs
 
-    global _cli_env_vars
+    global _cli_env_vars, _cli_project
     try:
         _cli_env_vars = parse_key_value_pairs(e, keep_string=True)
     except ValueError as exc:
@@ -73,6 +86,8 @@ def inject_env_vars(
 
     for key, value in _cli_env_vars.items():
         os.environ[key] = str(value)
+
+    _cli_project = p
 
     print_banner()
 

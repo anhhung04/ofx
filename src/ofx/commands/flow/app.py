@@ -113,10 +113,12 @@ def run(
         ),
     ] = "",
 ):
-    from ofx.commands import get_cli_env_vars
+    from ofx.commands import get_cli_env_vars, get_cli_project
     from ofx.commands.flow.run import FlowRunHandler
 
-    # If no explicit project is supplied, use the active project (if any)
+    # Priority: command --project > global -p > active project
+    if not project:
+        project = get_cli_project()
     if not project:
         active_path = ProjectManager.get_active_path()
         if active_path:
