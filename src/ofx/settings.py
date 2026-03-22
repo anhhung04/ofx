@@ -113,7 +113,6 @@ def ensure_dir(path: Path) -> Path:
 
 
 ensure_dir(BASE_DATA_DIR)
-ensure_dir(TEMP_DIR)
 ensure_dir(SECRETS_DIR)
 
 
@@ -355,65 +354,65 @@ class Settings(BaseSettings):
 # Default config.yml generation
 # ------------------------------------------------------------------
 
-_DEFAULT_CONFIG_YAML = """\
+# Fields excluded from config.yml — internal / runtime-only values that
+# should not be persisted or edited by the user.
+_CONFIG_EXCLUDE_FIELDS = frozenset({
+    "app_name",
+    "app_branding",
+    "active_project",
+    "script_communication_registry_path",
+    "channels_dir",
+})
+
+_CONFIG_YAML_HEADER = """\
 # OFX Configuration — ~/.ofx/config.yml
 # Environment variables (OFX_ prefix) override values set here.
-# Sensitive values (github_token, ai.api_key, redis password) are
-# loaded as SecretStr — they won't be leaked in logs or repr().
-
-# debug: false
-# timeout: 86400          # 24 hours in seconds
-# max_output_size: 10485760  # 10 MB
-
-# default_remote_registry: https://github.com
-
-# GitHub token for private collections / index
-# github_token: ""
-
-# Collection index override (leave empty for default)
-# collection_index_url: ""
-
-# AI assistant (OpenAI-compatible providers)
-# ai:
-#   api_key: ""
-#   model: gpt-4o
-#   base_url: ""           # e.g. http://localhost:11434/v1 for Ollama
-#   temperature: 0.7
-#   max_tokens: 8192
-#   max_history_tokens: 30000
-
-# Job registry backend: memory | file | redis | memcached | etcd
-# registry_backend: memory
-
-# registry_redis:
-#   host: localhost
-#   port: 6379
-#   db: 0
-#   password: ""
-#   prefix: "ofx:run:"
-
-# registry_memcached:
-#   host: localhost
-#   port: 11211
-#   prefix: "ofx:run:"
-
-# registry_etcd:
-#   host: localhost
-#   port: 2379
-#   prefix: "/ofx/run/"
-
-# registry_cache_enabled: true
-# registry_cache_ttl: 0.25
-# registry_cache_max_entries: 1024
-# registry_failover_enabled: true
+# SecretStr values (github_token, ai.api_key, registry passwords)
+# won't be leaked in logs or repr().
 """
 
 
+def _dump_default_config() -> str:
+    """Build a YAML string with all user-facing settings and their defaults."""
+    import yaml
+
+    defaults = Settings()
+    data: dict = {}
+
+    for name, field_info in Settings.model_fields.items():
+        if name in _CONFIG_EXCLUDE_FIELDS:
+            continue
+        value = getattr(defaults, name)
+
+        # Unwrap SecretStr to plain string for YAML serialization
+        if isinstance(value, SecretStr):
+            value = value.get_secret_value()
+        # Serialize nested BaseModel to dict, unwrapping SecretStr inside
+        elif isinstance(value, BaseModel):
+            raw = value.model_dump()
+            for k, v in raw.items():
+                if isinstance(v, SecretStr):
+                    raw[k] = v.get_secret_value()
+                # Also handle the field on the actual model instance
+                actual = getattr(value, k, v)
+                if isinstance(actual, SecretStr):
+                    raw[k] = actual.get_secret_value()
+            value = raw
+        # Convert Path-like objects to strings
+        elif isinstance(value, Path):
+            value = str(value)
+
+        data[name] = value
+
+    body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    return _CONFIG_YAML_HEADER + body
+
+
 def _ensure_default_config() -> None:
-    """Create ``~/.ofx/config.yml`` with commented defaults if it doesn't exist."""
+    """Create ``~/.ofx/config.yml`` with all defaults on first run."""
     if not CONFIG_YAML.exists():
         try:
-            CONFIG_YAML.write_text(_DEFAULT_CONFIG_YAML)
+            CONFIG_YAML.write_text(_dump_default_config())
         except OSError:
             pass
 

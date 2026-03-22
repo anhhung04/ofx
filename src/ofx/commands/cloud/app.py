@@ -635,10 +635,10 @@ def fleet_run(
     name: Annotated[str, typer.Option("--name", help="Fleet run name")] = "",
     inputs: Annotated[
         list[str], typer.Option("--input", "-i", help="Input key=value pairs")
-    ] = None,
+    ] = [],
     env_vars: Annotated[
         list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")
-    ] = None,
+    ] = [],
     target_var: Annotated[
         str,
         typer.Option(

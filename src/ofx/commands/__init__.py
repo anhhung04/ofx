@@ -61,11 +61,11 @@ def inject_env_vars(
             key, value = env.split("=", 1)
             os.environ[key] = value
             _cli_env_vars[key] = value
-        except ValueError as e:
+        except ValueError as exc:
             print_error(
                 "Invalid environment variable format", f"Expected KEY=VAL, got: {env}"
             )
-            raise typer.Exit(code=1) from e
+            raise typer.Exit(code=1) from exc
     print_banner()
 
 
@@ -81,6 +81,14 @@ def _register_commands():
     add_app(secret)
     add_app(ai)
     add_aliases()
+    
+def _clean_up():
+    import os
+    import shutil
+    from ofx.settings import TEMP_DIR
+    if os.path.exists(TEMP_DIR):
+        shutil.rmtree(TEMP_DIR, ignore_errors=True)
+    
 
 
 def main():
@@ -88,6 +96,7 @@ def main():
     try:
         _register_commands()
         app()
+        _clean_up()
         return typer.Exit(code=0)
     except Exception as e:
         import os
