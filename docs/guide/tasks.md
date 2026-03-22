@@ -125,6 +125,20 @@ ofx flow tasks list -c vuln/
 | `theHarvester` | osint/recon | Email, subdomain, and name harvester from public sources | Subdomain, UserAccount |
 | `holehe` | user/recon/email | Check if an email is registered on various websites | UserAccount |
 | `sslscan` | ssl/scan | SSL/TLS cipher suite and certificate scanner | Certificate, Vulnerability |
+| `netexec` | ad/enum | Network service pentesting (CrackMapExec successor) | UserAccount, Tag |
+| `kerbrute` | ad/brute | Kerberos user enum and password spraying | UserAccount |
+| `hydra` | brute/login | Network login brute forcer | UserAccount |
+| `enum4linux` | ad/enum | SMB/AD enumeration | UserAccount, Tag |
+| `paramspider` | url/recon/params | URL parameter mining from web archives | Url |
+| `hakrawler` | url/crawl | Fast web crawler | Url |
+| `subzy` | vuln/takeover | Subdomain takeover checker | Vulnerability |
+| `crlfuzz` | vuln/injection | CRLF injection scanner | Vulnerability |
+| `commix` | vuln/injection | Command injection scanner | Vulnerability |
+| `rustscan` | port/scan | Ultra-fast port scanner | Port |
+| `gowitness` | url/screenshot | Web screenshotting | Url, Tag |
+| `jwt_tool` | vuln/jwt | JWT vulnerability testing | Vulnerability, Tag |
+| `name-that-hash` | crypto/identify | Hash identification | Tag |
+| `hashid` | crypto/identify | Hash identifier | Tag |
 
 ---
 
@@ -238,6 +252,20 @@ Tasks that output JSONL or line-delimited results support **live streaming** —
 | theHarvester | JSON blob | ❌ |
 | holehe | JSONL | ✅ |
 | sslscan | XML | ❌ (file-based) |
+| paramspider | line | ✅ |
+| hakrawler | line | ✅ |
+| subzy | JSONL | ✅ |
+| crlfuzz | line | ✅ |
+| rustscan | line | ✅ |
+| netexec | text | ❌ (multi-line) |
+| kerbrute | text | ❌ (multi-line) |
+| hydra | text | ❌ (multi-line) |
+| enum4linux | text | ❌ (multi-line) |
+| commix | text | ❌ (multi-line) |
+| gowitness | JSON blob | ❌ |
+| jwt_tool | text | ❌ (multi-line) |
+| name-that-hash | JSON blob | ❌ |
+| hashid | text | ❌ (multi-line) |
 
 ### Subscribing to Streamed Items
 

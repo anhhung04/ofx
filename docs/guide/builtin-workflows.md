@@ -1,6 +1,6 @@
 # Built-in Workflows
 
-OFX ships with **27 built-in workflows** inspired by [secator](https://github.com/freelabz/secator)'s scan and workflow system. These leverage OFX's [task system](tasks.md) with structured output types and data chaining between steps.
+OFX ships with **35 built-in workflows** inspired by [secator](https://github.com/freelabz/secator)'s scan and workflow system. These leverage OFX's [task system](tasks.md) with structured output types and data chaining between steps.
 
 ---
 
@@ -10,7 +10,7 @@ OFX ships with **27 built-in workflows** inspired by [secator](https://github.co
 
 | Workflow | Description |
 |----------|-------------|
-| `cloud-setup` | Provision cloud VPS with Go, Ruby, uv, and all 42 security tools |
+| `cloud-setup` | Provision cloud VPS with Go, Ruby, uv, and all 56 security tools |
 
 ### Reconnaissance
 
@@ -36,6 +36,8 @@ OFX ships with **27 built-in workflows** inspired by [secator](https://github.co
 | `sqli-scan` | SQL injection scanning and exploitation | sqlmap |
 | `nikto-scan` | Web server scanning and vulnerability detection | nikto, nuclei |
 | `wordpress` | WordPress vulnerability assessment | wpscan, nuclei, httpx |
+| `command-injection` | Command injection testing | commix, nuclei |
+| `jwt-audit` | JWT security audit | jwt_tool |
 
 ### Code Security & OSINT
 
@@ -50,12 +52,18 @@ OFX ships with **27 built-in workflows** inspired by [secator](https://github.co
 | Workflow | Description | Tools |
 |----------|-------------|-------|
 | `ssl-audit` | SSL/TLS certificate and cipher audit | sslscan, testssl |
+| `bug-bounty-recon` | 10-job bug bounty recon pipeline | subfinder, amass, dnsx, naabu, httpx, katana, paramspider, hakrawler, nuclei, dalfox, subzy |
+| `takeover-scan` | Subdomain takeover scanning | subzy, nuclei |
+| `pentest-external` | 12-job external pentest methodology | subfinder, dnsx, naabu, rustscan, nmap, httpx, gowitness, ffuf, nuclei, dalfox, crlfuzz, commix, sslscan, testssl |
 
 ### Red Team
 
 | Workflow | Description | Tools |
 |----------|-------------|-------|
-| `external-recon` | Comprehensive external recon pipeline (11 jobs) covering subdomain enum, DNS, port scanning, web probing, crawling, fuzzing, parameter discovery, vulnerability scanning, SSL audit, and OSINT | subfinder, amass, assetfinder, findomain, dnsx, dnsrecon, naabu, masscan, nmap, httpx, whatweb, wafw00f, katana, gospider, cariddi, gau, ffuf, gobuster, arjun, x8, nuclei, dalfox, sslscan, testssl, theHarvester, h8mail |
+| `external-recon` | Comprehensive external recon pipeline (11 jobs) covering subdomain enum, DNS, port scanning, web probing, crawling, fuzzing, parameter discovery, vulnerability scanning, SSL audit, and OSINT | subfinder, amass, assetfinder, findomain, dnsx, dnsrecon, naabu, masscan, rustscan, nmap, httpx, whatweb, wafw00f, katana, gospider, hakrawler, cariddi, gau, paramspider, ffuf, gobuster, arjun, x8, nuclei, dalfox, subzy, crlfuzz, sslscan, testssl, gowitness, theHarvester, h8mail |
+| `ad-enum` | AD enumeration via SMB/Kerberos/LDAP | netexec, enum4linux, kerbrute |
+| `password-spray` | Password spraying with Kerberos and SMB | netexec, kerbrute |
+| `internal-recon` | Internal network recon pipeline | fping, rustscan, nmap, netexec, gowitness |
 
 ### Comprehensive Scans
 
@@ -68,7 +76,7 @@ Multi-phase assessments with data chaining between jobs:
 | `network-scan` | Host discovery → Service detection → URL crawling → Vuln scan |
 | `subdomain-scan` | Subdomain enum → Host recon → URL crawling → Vuln scan |
 | `url-scan` | URL crawling → Dir fuzzing → Param discovery → Vuln scan |
-| `full-recon` | Full recon pipeline (8 jobs) — subdomain enum, DNS resolution, port scanning, web probing, crawling, directory fuzzing, vulnerability scanning, reporting |
+| `full-recon` | Full recon pipeline (8 jobs) — subdomain enum, DNS resolution, port scanning, web probing, crawling, directory fuzzing, vulnerability scanning, reporting | subfinder, amass, dnsx, naabu, rustscan, nmap, httpx, gowitness, katana, gospider, hakrawler, ffuf, gobuster, nuclei, dalfox, subzy |
 
 ---
 
@@ -119,7 +127,7 @@ uv run ofx flow run subdomain-recon --input target=example.com --profile stealth
 
 ## Cloud Setup
 
-The `cloud-setup` workflow installs all 42 tools on a fresh VPS with parallel installation:
+The `cloud-setup` workflow installs all 56 tools on a fresh VPS with parallel installation:
 
 ```
 setup-runtime ──┬── install-apt-tools    (nmap, whois, exploitdb, nikto, whatweb, sslscan, fping, masscan)
@@ -128,7 +136,7 @@ setup-runtime ──┬── install-apt-tools    (nmap, whois, exploitdb, nikt
                 ├── install-rust-tools   (x8, feroxbuster)
                 └── install-other-tools  (grype, trivy, testssl, wpscan, findomain)
                          │
-                     verify  (checks all 42 tools)
+                     verify  (checks all 56 tools)
 ```
 
 ```bash
@@ -167,6 +175,14 @@ uv run ofx flow run cloud-setup --cloud do-nyc --input skip_apt=true
 | — | `ofx flow run ssl-audit` |
 | — | `ofx flow run full-recon` |
 | — | `ofx flow run external-recon` |
+| — | `ofx flow run ad-enum` |
+| — | `ofx flow run password-spray` |
+| — | `ofx flow run internal-recon` |
+| — | `ofx flow run command-injection` |
+| — | `ofx flow run jwt-audit` |
+| — | `ofx flow run bug-bounty-recon` |
+| — | `ofx flow run takeover-scan` |
+| — | `ofx flow run pentest-external` |
 
 ### Key Advantages over Secator
 
