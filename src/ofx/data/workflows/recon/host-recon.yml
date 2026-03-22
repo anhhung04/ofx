@@ -1,0 +1,82 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: host-recon
+description: >
+  Host reconnaissance — discovers open ports and services, detects versions,
+  searches for known vulnerabilities, audits SSH, and probes HTTP services.
+tags: [recon, network, http, vuln]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target host, IP, or CIDR range
+
+jobs:
+  port-discovery:
+    name: "Port Discovery"
+    steps:
+      - task: naabu
+        name: fast-port-scan
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "1000"
+          rate: 1000
+
+  service-detection:
+    name: "Service Detection & Analysis"
+    needs: [port-discovery]
+    steps:
+      - task: nmap
+        name: service-scan
+        with:
+          target: "{{ inputs.target }}"
+          version_detection: true
+
+      - name: extract-targets
+        run: |
+          echo "http_targets={{ ports(steps[0].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}" >> $OFX_OUTPUTS
+
+  ssh-audit:
+    name: "SSH Audit"
+    needs: [service-detection]
+    steps:
+      - task: ssh-audit
+        name: audit-ssh
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+  http-probe:
+    name: "HTTP Probe & Exploit Search"
+    needs: [service-detection]
+    steps:
+      - task: httpx
+        name: probe-http
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+          title: true
+
+      - task: searchsploit
+        name: search-exploits
+        with:
+          target: "{{ inputs.target }}"
+
+  vuln-scan:
+    name: "Vulnerability Scan"
+    needs: [http-probe]
+    steps:
+      - task: nuclei
+        name: nuclei-scan
+        with:
+          target: "{{ inputs.target }}"
+          severity: "critical,high,medium"
+
+      - name: summary
+        run: |
+          echo "=============================="
+          echo " Host Recon: {{ inputs.target }}"
+          echo "=============================="
+          echo "Vulnerabilities: {{ vulns(steps[0].outputs.typed_outputs) | length }}"

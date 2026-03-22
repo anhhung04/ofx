@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: cidr-recon
+description: >
+  CIDR/network reconnaissance — discovers live hosts within a CIDR range,
+  scans for open ports and services, and searches for vulnerabilities.
+tags: [recon, cidr, network, vuln, internal]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: CIDR range or IP (e.g. 192.168.1.0/24)
+
+jobs:
+  host-discovery:
+    name: "Host & Port Discovery"
+    steps:
+      - task: nmap
+        name: ping-sweep
+        with:
+          target: "{{ inputs.target }}"
+          timing: 4
+
+      - task: naabu
+        name: port-scan
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "1000"
+          rate: 2000
+
+      - name: collect-hosts
+        script: |
+          import json
+
+          hosts = set()
+
+          nmap_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          naabu_out = {{ steps[1].outputs.typed_outputs | tojson }}
+
+          for item in nmap_out + naabu_out:
+              if item.get('_type') == 'port':
+                  host = item.get('host') or item.get('ip', '')
+                  if host:
+                      hosts.add(host)
+              elif item.get('_type') == 'ip':
+                  ip = item.get('ip', '')
+                  if ip:
+                      hosts.add(ip)
+
+          host_list = '\n'.join(sorted(hosts))
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"live_hosts={host_list}\n")
+              f.write(f"host_count={len(hosts)}\n")
+
+          print(f"Discovered {len(hosts)} live hosts")
+
+  service-scan:
+    name: "Service Detection"
+    needs: [host-discovery]
+    steps:
+      - task: nmap
+        name: service-detect
+        with:
+          target: "{{ jobs['host-discovery'].outputs.live_hosts }}"
+          version_detection: true
+
+      - task: httpx
+        name: http-probe
+        with:
+          target: "{{ jobs['host-discovery'].outputs.live_hosts }}"
+          tech_detect: true
+          status_code: true
+
+  vuln-search:
+    name: "Vulnerability Search"
+    needs: [service-scan]
+    steps:
+      - task: searchsploit
+        name: exploit-search
+        with:
+          target: "{{ inputs.target }}"
+
+      - name: summary
+        run: |
+          echo "=============================="
+          echo " CIDR Recon: {{ inputs.target }}"
+          echo "=============================="
+          echo "Live hosts: {{ jobs['host-discovery'].outputs.host_count }}"

@@ -1,0 +1,88 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: url-crawl
+description: >
+  URL crawl — discovers URLs from a target using active crawlers (katana, gospider)
+  and passive sources (gau). Probes discovered URLs and optionally hunts for secrets.
+tags: [http, crawl, secrets]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL (e.g. https://example.com)
+
+jobs:
+  crawl:
+    name: "URL Crawling"
+    steps:
+      - task: katana
+        name: katana-crawl
+        with:
+          target: "{{ inputs.target }}"
+          depth: 3
+
+      - task: gospider
+        name: gospider-crawl
+        with:
+          target: "{{ inputs.target }}"
+          depth: 2
+
+      - task: gau
+        name: gau-passive
+        with:
+          target: "{{ inputs.target }}"
+
+      - name: collect-urls
+        script: |
+          import json
+          from urllib.parse import urlparse
+
+          urls = set()
+          for step_idx in [0, 1, 2]:
+              step_data = {{ steps | tojson }}
+              typed = step_data[step_idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url':
+                      urls.add(item['url'])
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"crawled_urls={chr(10).join(sorted(urls))}\n")
+              f.write(f"url_count={len(urls)}\n")
+
+          print(f"Crawled {len(urls)} unique URLs")
+
+  probe:
+    name: "HTTP Probe"
+    needs: [crawl]
+    steps:
+      - task: httpx
+        name: probe-urls
+        with:
+          target: "{{ jobs.crawl.outputs.crawled_urls }}"
+          tech_detect: true
+          status_code: true
+          title: true
+
+      - name: export-live
+        run: |
+          echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
+
+  secrets:
+    name: "Secret Hunting"
+    needs: [probe]
+    steps:
+      - task: trufflehog
+        name: hunt-secrets
+        with:
+          target: "{{ inputs.target }}"
+          mode: "filesystem"
+
+      - name: summary
+        run: |
+          echo "================================="
+          echo " URL Crawl: {{ inputs.target }}"
+          echo "================================="
+          echo "URLs crawled: {{ jobs.crawl.outputs.url_count }}"
+          echo "Live URLs: {{ jobs.probe.outputs.live_count }}"

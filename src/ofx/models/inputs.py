@@ -19,6 +19,10 @@ class WorkflowInput(OFXBaseModel):
         default="string",
         description="Type of the input parameter (e.g., 'string', 'number')",
     )
+    description: str = Field(
+        default="",
+        description="Human-readable description of the input parameter",
+    )
     alias: str | list[str] | None = Field(
         default=None,
         description="Alias for the input parameter, used for mapping in workflow calls",

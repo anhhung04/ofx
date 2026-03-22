@@ -32,6 +32,7 @@ DEFAULT_PROJECTS_PATH = BASE_DATA_DIR / "projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
 DATA_DIR = Path(__file__).parent / "data"
+BUILTIN_WORKFLOWS_DIR = DATA_DIR / "workflows"
 USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
 USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
@@ -51,6 +52,14 @@ def get_workflow_search_dirs() -> list[Path]:
     installed after process start are still found.
     """
     dirs = list(DEFAULT_WORKFLOWS_DIRS)
+    # Include built-in workflows shipped with the package
+    if BUILTIN_WORKFLOWS_DIR.is_dir():
+        for child in sorted(BUILTIN_WORKFLOWS_DIR.iterdir()):
+            if child.is_dir() and child.name != "__pycache__":
+                abs_child = child.absolute()
+                if abs_child not in dirs:
+                    dirs.append(abs_child)
+    # Include installed collections
     collections_dir = COLLECTIONS_DIR
     if collections_dir.is_dir():
         for child in sorted(collections_dir.iterdir()):

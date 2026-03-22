@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: domain-recon
+description: >
+  Domain reconnaissance — collects WHOIS data, probes HTTP services, detects
+  technologies, analyzes SSL/TLS security, resolves DNS records, and identifies WAFs.
+tags: [recon, dns, ssl, http]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+
+jobs:
+  domain-info:
+    name: "Domain Information"
+    steps:
+      - task: whois
+        name: whois-lookup
+        with:
+          target: "{{ inputs.target }}"
+
+      - task: dnsx
+        name: dns-resolve
+        with:
+          target: "{{ inputs.target }}"
+          a: true
+          aaaa: true
+          cname: true
+          mx: true
+          ns: true
+          txt: true
+          soa: true
+
+  http-analysis:
+    name: "HTTP & Security Analysis"
+    steps:
+      - task: httpx
+        name: http-probe
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+
+      - task: testssl
+        name: tls-analysis
+        with:
+          target: "{{ inputs.target }}"
+          server_defaults: true
+
+      - task: wafw00f
+        name: waf-detect
+        with:
+          target: "{{ inputs.target }}"
+
+  summary:
+    name: "Results Summary"
+    needs: [domain-info, http-analysis]
+    steps:
+      - name: report
+        run: |
+          echo "=============================="
+          echo " Domain Recon: {{ inputs.target }}"
+          echo "=============================="
+          echo "WHOIS and DNS resolution complete."
+          echo "HTTP probe, TLS analysis, and WAF detection complete."

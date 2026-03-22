@@ -427,15 +427,16 @@ class TestWorkflowSearchIntegration:
         assert "installed.json" not in dir_names
 
     def test_empty_collections_dir(self, tmp_path: Path, monkeypatch):
-        """When no collections are installed, only default dirs are returned."""
+        """When no collections are installed, only default dirs + built-in workflow dirs are returned."""
         import ofx.settings as s
 
         monkeypatch.setattr(s, "COLLECTIONS_DIR", tmp_path / "empty")
         monkeypatch.setattr(s, "DEFAULT_WORKFLOWS_DIRS", [tmp_path / "wf"])
 
         dirs = s.get_workflow_search_dirs()
-        assert len(dirs) == 1
+        # Should include default dir + built-in workflow subdirs
         assert dirs[0] == tmp_path / "wf"
+        assert len(dirs) >= 1
 
 
 # ---------------------------------------------------------------------------

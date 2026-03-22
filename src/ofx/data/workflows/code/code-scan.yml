@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: code-scan
+description: >
+  Code vulnerability scan and secret hunt — analyzes source code for security
+  vulnerabilities in dependencies (grype, trivy) and hardcoded secrets (gitleaks, trufflehog).
+tags: [vuln, secret, code]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Path to codebase, Git repo URL, or container image
+
+jobs:
+  vuln-scan:
+    name: "Vulnerability Scanning"
+    steps:
+      - task: grype
+        name: dependency-vulns
+        with:
+          target: "{{ inputs.target }}"
+
+      - task: trivy
+        name: code-vulns
+        with:
+          target: "{{ inputs.target }}"
+          severity: "CRITICAL,HIGH,MEDIUM"
+
+      - name: export-vulns
+        script: |
+          import json
+
+          grype_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          trivy_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+
+          seen = set()
+          unique = []
+          for v in grype_vulns + trivy_vulns:
+              vid = v.get('id', v.get('name', ''))
+              if vid not in seen:
+                  seen.add(vid)
+                  unique.append(v)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"vuln_count={len(unique)}\n")
+              f.write(f"critical_count={len([v for v in unique if v.get('severity') == 'critical'])}\n")
+
+          print(f"Found {len(unique)} unique vulnerabilities")
+
+  secrets-scan:
+    name: "Secret & Leak Scanning"
+    steps:
+      - task: gitleaks
+        name: gitleaks-scan
+        with:
+          target: "{{ inputs.target }}"
+
+      - task: trufflehog
+        name: trufflehog-scan
+        with:
+          target: "{{ inputs.target }}"
+          mode: "filesystem"
+
+      - name: export-secrets
+        script: |
+          import json
+
+          gl_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          th_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          total = len(gl_vulns) + len(th_vulns)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"secrets_count={total}\n")
+
+          print(f"Found {total} secrets/leaks")
+
+  summary:
+    name: "Code Scan Summary"
+    needs: [vuln-scan, secrets-scan]
+    steps:
+      - name: report
+        run: |
+          echo "================================="
+          echo " Code Scan: {{ inputs.target }}"
+          echo "================================="
+          echo "Vulnerabilities: {{ jobs['vuln-scan'].outputs.vuln_count }}"
+          echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+          echo "Secrets/Leaks: {{ jobs['secrets-scan'].outputs.secrets_count }}"

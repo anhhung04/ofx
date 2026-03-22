@@ -1,0 +1,66 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: wordpress
+description: >
+  WordPress vulnerability scan — identifies WordPress version, plugins, themes,
+  known vulnerabilities, and misconfigurations using wpscan and nuclei.
+tags: [http, wordpress, vuln]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target WordPress URL (e.g. https://example.com)
+    api_token:
+      type: string
+      default: ""
+      description: WPScan API token for vulnerability database (optional)
+
+jobs:
+  probe:
+    name: "URL Probe"
+    steps:
+      - task: httpx
+        name: http-probe
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+          follow_redirects: true
+
+  wordpress-scan:
+    name: "WordPress Security Scan"
+    needs: [probe]
+    steps:
+      - task: wpscan
+        name: wpscan-full
+        with:
+          target: "{{ inputs.target }}"
+          enumerate: "vp,vt,u1-20"
+          api_token: "{{ inputs.api_token }}"
+
+      - task: nuclei
+        name: nuclei-wordpress
+        with:
+          target: "{{ inputs.target }}"
+          tags: "wordpress"
+
+      - name: summary
+        script: |
+          import json
+
+          wpscan_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+
+          all_vulns = wpscan_vulns + nuclei_vulns
+          critical = [v for v in all_vulns if v.get('severity') == 'critical']
+          high = [v for v in all_vulns if v.get('severity') == 'high']
+
+          print("=" * 45)
+          print(f" WordPress Scan: {{ inputs.target }}")
+          print("=" * 45)
+          print(f"Total vulnerabilities: {len(all_vulns)}")
+          print(f"  Critical: {len(critical)}")
+          print(f"  High: {len(high)}")
+          for v in critical + high:
+              print(f"  - [{v.get('severity', 'unknown').upper()}] {v.get('name', 'Unknown')}")

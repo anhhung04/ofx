@@ -1,0 +1,197 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: cloud-setup
+description: >
+  Provision a cloud VPS with Go, Ruby, uv, and all OFX security tools.
+  Run this as a setup step before security scanning workflows.
+tags: [setup, cloud, tools]
+
+dispatch:
+  inputs:
+    skip_apt:
+      type: boolean
+      default: false
+      description: Skip apt-based tool installation (nmap, whois, exploitdb)
+
+jobs:
+  setup-runtime:
+    name: "Install Go, Ruby, uv"
+    steps:
+      - name: System update
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq git curl wget unzip jq libpcap-dev build-essential
+
+      - name: Install Go
+        run: |
+          if ! command -v go &>/dev/null; then
+            GO_VERSION=$(curl -sL 'https://go.dev/VERSION?m=text' | head -1)
+            curl -sL "https://go.dev/dl/${GO_VERSION}.linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local -xzf -
+            echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+            export PATH=$PATH:/usr/local/go/bin
+          fi
+          go version
+
+      - name: Install Ruby
+        run: |
+          if ! command -v ruby &>/dev/null; then
+            apt-get install -y -qq ruby ruby-dev
+          fi
+          ruby --version
+
+      - name: Install uv
+        run: |
+          if ! command -v uv &>/dev/null; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            export PATH="$HOME/.local/bin:$PATH"
+          fi
+          uv --version
+
+      - name: Setup tool directories
+        run: |
+          mkdir -p ~/Tools/bin
+          echo 'export PATH="$HOME/Tools/bin:$HOME/.local/bin:/usr/local/go/bin:$PATH"' >> ~/.bashrc
+          echo 'export GOBIN="$HOME/Tools/bin"' >> ~/.bashrc
+          echo 'export UV_TOOL_BIN_DIR="$HOME/Tools/bin"' >> ~/.bashrc
+          echo 'export GEM_HOME="$HOME/Tools"' >> ~/.bashrc
+          echo 'export PATH="$HOME/Tools/bin:$PATH"' >> ~/.profile
+
+  install-apt-tools:
+    name: "Install apt-based tools"
+    needs: [setup-runtime]
+    if: "{{ not inputs.skip_apt }}"
+    steps:
+      - name: Install nmap, whois, exploitdb
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y -qq nmap whois exploitdb
+
+  install-go-tools:
+    name: "Install Go-based tools"
+    needs: [setup-runtime]
+    steps:
+      - name: Install Go tools
+        run: |
+          export PATH="$HOME/Tools/bin:/usr/local/go/bin:$PATH"
+          export GOBIN="$HOME/Tools/bin"
+
+          echo "[*] Installing httpx..."
+          go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+
+          echo "[*] Installing nuclei..."
+          go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+
+          echo "[*] Installing subfinder..."
+          go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+
+          echo "[*] Installing naabu..."
+          go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest
+
+          echo "[*] Installing katana..."
+          go install -v github.com/projectdiscovery/katana/cmd/katana@latest
+
+          echo "[*] Installing dnsx..."
+          go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest
+
+          echo "[*] Installing ffuf..."
+          go install -v github.com/ffuf/ffuf/v2@latest
+
+          echo "[*] Installing gospider..."
+          go install -v github.com/jaeles-project/gospider@latest
+
+          echo "[*] Installing gau..."
+          go install -v github.com/lc/gau/v2/cmd/gau@latest
+
+          echo "[*] Installing dalfox..."
+          go install -v github.com/hahwul/dalfox/v2@latest
+
+          echo "[*] Installing gitleaks..."
+          go install -v github.com/gitleaks/gitleaks/v8@latest
+
+          echo "[*] Installing trufflehog..."
+          go install -v github.com/trufflesecurity/trufflehog/v3@latest
+
+      - name: Update nuclei templates
+        run: |
+          export PATH="$HOME/Tools/bin:$PATH"
+          nuclei -update-templates -silent || true
+
+  install-python-tools:
+    name: "Install Python-based tools"
+    needs: [setup-runtime]
+    steps:
+      - name: Install Python tools via uv
+        run: |
+          export PATH="$HOME/.local/bin:$HOME/Tools/bin:$PATH"
+          export UV_TOOL_BIN_DIR="$HOME/Tools/bin"
+
+          echo "[*] Installing wafw00f..."
+          uv tool install wafw00f
+
+          echo "[*] Installing maigret..."
+          uv tool install maigret
+
+          echo "[*] Installing ssh-audit..."
+          uv tool install ssh-audit
+
+          echo "[*] Installing dirsearch..."
+          uv tool install dirsearch
+
+          echo "[*] Installing arjun..."
+          uv tool install arjun
+
+          echo "[*] Installing h8mail..."
+          uv tool install h8mail
+
+  install-other-tools:
+    name: "Install binary and gem tools"
+    needs: [setup-runtime]
+    steps:
+      - name: Install feroxbuster
+        run: |
+          mkdir -p ~/Tools/bin && cd ~/Tools/bin
+          curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash
+
+      - name: Install grype
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b ~/Tools/bin
+
+      - name: Install trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/Tools/bin
+
+      - name: Install testssl
+        run: |
+          git clone --depth 1 https://github.com/drwetter/testssl.sh.git ~/Tools/testssl
+          ln -sf ~/Tools/testssl/testssl.sh ~/Tools/bin/testssl.sh
+
+      - name: Install wpscan
+        run: |
+          export GEM_HOME="$HOME/Tools"
+          export PATH="$HOME/Tools/bin:$PATH"
+          gem install wpscan
+
+  verify:
+    name: "Verify installation"
+    needs: [install-apt-tools, install-go-tools, install-python-tools, install-other-tools]
+    steps:
+      - name: Verify all tools
+        run: |
+          export PATH="$HOME/Tools/bin:$HOME/.local/bin:/usr/local/go/bin:$PATH"
+          echo "=== Tool Verification ==="
+          PASS=0; FAIL=0
+          for tool in nmap httpx nuclei subfinder naabu katana dnsx ffuf \
+                      gospider gau dalfox gitleaks trufflehog wafw00f \
+                      maigret ssh-audit dirsearch arjun h8mail feroxbuster \
+                      grype trivy wpscan whois searchsploit testssl.sh; do
+            if command -v "$tool" &>/dev/null; then
+              echo "  [✓] $tool"
+              PASS=$((PASS + 1))
+            else
+              echo "  [✗] $tool"
+              FAIL=$((FAIL + 1))
+            fi
+          done
+          echo ""
+          echo "Passed: $PASS / $((PASS + FAIL))"
+          [ "$FAIL" -eq 0 ] && echo "All tools installed!" || echo "Warning: $FAIL tools missing"

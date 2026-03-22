@@ -1,0 +1,100 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: host-scan
+description: >
+  In-depth host security assessment — combines host reconnaissance with URL
+  crawling and vulnerability scanning.
+tags: [recon, dns, network, http, crawl, ssl, vuln, secrets]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target host or IP address
+
+jobs:
+  host-recon:
+    name: "Host Reconnaissance"
+    steps:
+      - task: naabu
+        name: port-discovery
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "1000"
+          rate: 1000
+
+      - task: nmap
+        name: service-detect
+        with:
+          target: "{{ inputs.target }}"
+          version_detection: true
+
+      - task: ssh-audit
+        name: ssh-audit
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - task: httpx
+        name: http-probe
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+          follow_redirects: true
+
+      - task: searchsploit
+        name: exploit-search
+        with:
+          target: "{{ inputs.target }}"
+
+      - name: export-data
+        run: |
+          echo "live_urls={{ urls(steps[3].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+
+  url-crawl:
+    name: "URL Crawling"
+    needs: [host-recon]
+    steps:
+      - task: katana
+        name: crawl
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          depth: 3
+
+      - task: gospider
+        name: spider
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          depth: 2
+
+  vuln-scan:
+    name: "Vulnerability Scanning"
+    needs: [url-crawl]
+    steps:
+      - task: nuclei
+        name: nuclei-scan
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          severity: "critical,high,medium"
+
+      - task: dalfox
+        name: xss-scan
+        with:
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+
+      - name: final-summary
+        script: |
+          import json
+
+          all_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \
+                      {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          critical = [v for v in all_vulns if v.get('severity') == 'critical']
+          high = [v for v in all_vulns if v.get('severity') == 'high']
+
+          print("=" * 50)
+          print(f" HOST SCAN COMPLETE: {{ inputs.target }}")
+          print("=" * 50)
+          print(f"Total vulnerabilities: {len(all_vulns)}")
+          print(f"  Critical: {len(critical)}")
+          print(f"  High: {len(high)}")

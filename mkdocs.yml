@@ -114,6 +114,8 @@ nav:
                 - Script files: guide/jobs-steps/script-file.md
           - Tasks:
                 - Overview: guide/tasks.md
+          - Built-in Workflows:
+                - Overview: guide/builtin-workflows.md
           - Profiles:
                 - Overview: guide/profiles.md
           - Templates:

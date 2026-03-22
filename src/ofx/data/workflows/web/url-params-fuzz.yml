@@ -1,0 +1,74 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: url-params-fuzz
+description: >
+  URL parameter fuzzing — discovers hidden URL parameters using arjun,
+  then fuzzes parameter values with ffuf.
+tags: [http, fuzz, params, secrets]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL (e.g. https://example.com/page)
+    wordlist:
+      type: string
+      default: ""
+      description: Custom parameter wordlist (optional)
+
+jobs:
+  probe:
+    name: "Initial Probe"
+    steps:
+      - task: httpx
+        name: probe-url
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+
+  param-discovery:
+    name: "Parameter Discovery"
+    needs: [probe]
+    steps:
+      - task: arjun
+        name: find-params
+        with:
+          target: "{{ inputs.target }}"
+
+      - name: export-params
+        script: |
+          import json
+
+          params = set()
+          step_data = {{ steps | tojson }}
+          typed = step_data[0].get('outputs', {}).get('typed_outputs', [])
+          for item in typed:
+              if item.get('_type') == 'tag':
+                  params.add(item.get('value', ''))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"found_params={','.join(sorted(params))}\n")
+              f.write(f"param_count={len(params)}\n")
+
+          print(f"Discovered {len(params)} parameters")
+
+  param-fuzz:
+    name: "Parameter Value Fuzzing"
+    needs: [param-discovery]
+    steps:
+      - task: ffuf
+        name: fuzz-params
+        with:
+          target: "{{ inputs.target }}?FUZZ=test"
+          wordlist: "/usr/share/wordlists/dirb/common.txt"
+          auto_calibration: true
+          follow_redirect: true
+
+      - name: summary
+        run: |
+          echo "======================================="
+          echo " Param Fuzz: {{ inputs.target }}"
+          echo "======================================="
+          echo "Parameters found: {{ jobs['param-discovery'].outputs.param_count }}"
+          echo "Fuzz results: {{ urls(steps[0].outputs.typed_outputs) | length }}"
