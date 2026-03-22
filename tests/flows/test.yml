@@ -13,7 +13,6 @@ jobs:
       - name: Test Command
         log_stdout: true
         run: |
-          sleep 1
           echo "This is command test output"
   test2:
     name: Run Flow Tests in Subworkflow
