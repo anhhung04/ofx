@@ -15,13 +15,11 @@ from ofx.runner import run_workflow
 from ofx.settings import (
     TEMP_DIR,
     ensure_dir,
-    get_console,
     get_workflow_search_dirs,
     settings,
 )
 
 logger = logging.getLogger(f"{settings.app_branding}.console")
-console = get_console()
 
 
 class JsonFormatter(logging.Formatter):

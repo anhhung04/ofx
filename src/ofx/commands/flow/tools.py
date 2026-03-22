@@ -16,9 +16,6 @@ class ToolsInstallHandler:
         workflow_name: str = "",
         all_workflows: bool = False,
     ):
-        from ofx.settings import get_console
-
-        self.console = get_console()
         self.workflow_name = workflow_name
         self.all_workflows = all_workflows
 
@@ -115,7 +112,10 @@ class ToolsInstallHandler:
                     )
             except Exception as e:
                 logger.error(f"Error loading workflow {workflow_path}: {e}")
-                self.console.print(
+                from ofx.settings import get_console
+
+                console = get_console()
+                console.print(
                     f"[yellow]Warning: Could not load {workflow_path.name}: {e}[/yellow]"
                 )
 
@@ -124,6 +124,10 @@ class ToolsInstallHandler:
     def _display_tools_table(self, tools: dict[str, str]):
         """Display tools in a formatted table"""
         from rich.table import Table
+
+        from ofx.settings import get_console
+
+        console = get_console()
 
         table = Table(
             title="Tools to Install", show_header=True, header_style="bold cyan"
@@ -149,7 +153,7 @@ class ToolsInstallHandler:
                 f"[{status_style}]{status}[/{status_style}]",
             )
 
-        self.console.print(table)
+        console.print(table)
 
     async def _install_tools(self, installer: ToolInstallerRunner):
         """Install the collected tools using ToolInstallerRunner"""

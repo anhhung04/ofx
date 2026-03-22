@@ -4,15 +4,18 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-from rich.panel import Panel
 
-from ofx.commands.ui_helpers import print_error, print_success, print_warning
+from ofx.commands.ui_helpers import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 from ofx.settings import SECRETS_DIR, get_console, settings
 from ofx.utils import secrets as secrets_store
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 logger = logging.getLogger(settings.app_branding)
-console = get_console()
 
 
 def _resolve_secret_input(name: str, value: str | None, file: Path | None) -> str:
@@ -159,30 +162,18 @@ def get_secret(
         raise typer.Exit(code=1)
 
     if show:
+        console = get_console()
         if isinstance(value, (dict, list)):
             console.print(
-                Panel(
-                    json.dumps(value, indent=2),
-                    title=f"[*] Secret: {name}",
-                    border_style="cyan",
-                )
+                f"[bold cyan]Secret: {name}[/bold cyan]\n{json.dumps(value, indent=2)}"
             )
         else:
-            console.print(
-                Panel(
-                    f"[cyan]{value}[/cyan]",
-                    title=f"[*] Secret: {name}",
-                    border_style="cyan",
-                )
-            )
+            console.print(f"[bold cyan]Secret: {name}[/bold cyan]\n[cyan]{value}[/cyan]")
     else:
-        console.print(
-            Panel(
-                f"[green]Secret '{name}' exists in encrypted store[/green]\n"
-                "[dim]Use --show to display the value[/dim]",
-                title="[OK] Secret Found",
-                border_style="green",
-            )
+        print_info(
+            "Secret Found",
+            f"Secret '{name}' exists in encrypted store",
+            details={"Hint": "Use --show to display the value"},
         )
 
 
@@ -220,6 +211,7 @@ def list_secrets(
     """
     from rich.table import Table
 
+    console = get_console()
     secrets = secrets_store.list_secrets()
 
     if not secrets:
@@ -299,6 +291,7 @@ def search_secrets(
 
     from rich.table import Table
 
+    console = get_console()
     secrets = secrets_store.list_secrets()
 
     if not secrets:
@@ -596,27 +589,18 @@ def clear_secrets(
     _maybe_backup_store(backup_to, None, backup_overwrite)
 
     if not force:
-        console.print(
-            Panel(
-                f"[bold red]This will permanently delete ALL {len(secrets)} secrets![/bold red]\n"
-                "[yellow]This action cannot be undone.[/yellow]",
-                title="[!] Warning",
-                border_style="red",
-            )
+        print_warning(
+            "Warning",
+            f"This will permanently delete ALL {len(secrets)} secrets!",
+            "This action cannot be undone.",
         )
         confirm = typer.confirm("Are you sure?")
         if not confirm:
-            console.print("[yellow]Operation cancelled[/yellow]")
+            get_console().print("[yellow]Operation cancelled[/yellow]")
             raise typer.Exit()
 
     secrets_store.clear_secrets()
-    console.print(
-        Panel(
-            f"[bold green]All {len(secrets)} secrets cleared successfully[/bold green]",
-            title="[OK] Cleared",
-            border_style="green",
-        )
-    )
+    print_success("Cleared", f"All {len(secrets)} secrets cleared successfully")
 
 
 @app.command("store")
@@ -693,13 +677,7 @@ def backup_secrets(
     secrets = secrets_store.list_secrets(passphrase=resolved_passphrase)
 
     if not secrets:
-        console.print(
-            Panel(
-                "[yellow]No secrets to backup[/yellow]",
-                title="[*] Backup",
-                border_style="yellow",
-            )
-        )
+        print_warning("Backup", "No secrets to backup")
         return
 
     if not output_file:
@@ -710,13 +688,10 @@ def backup_secrets(
 
     output_path = Path(output_file)
     if output_path.exists() and not force:
-        console.print(
-            Panel(
-                f"[bold red]Backup file already exists:[/bold red] [cyan]{output_path}[/cyan]\n"
-                "[yellow]Use --force to overwrite[/yellow]",
-                title="[X] File Exists",
-                border_style="red",
-            )
+        print_error(
+            "File Exists",
+            f"Backup file already exists: {output_path}",
+            "Use --force to overwrite",
         )
         raise typer.Exit(1)
 
@@ -804,6 +779,7 @@ def restore_secrets(
     from rich.table import Table
 
     resolved_passphrase = _resolve_passphrase(passphrase, ask_passphrase)
+    console = get_console()
     if not backup_file.exists():
         print_error(
             "File Not Found",
@@ -926,6 +902,7 @@ def show_backup_history(
     """
     from rich.table import Table
 
+    console = get_console()
     if not directory:
         directory = Path.cwd().as_posix()
 
@@ -1015,7 +992,7 @@ def migrate_from_files(
         )
         confirm = typer.confirm("Migrate to encrypted store?")
         if not confirm:
-            console.print("[yellow]Migration cancelled[/yellow]")
+            get_console().print("[yellow]Migration cancelled[/yellow]")
             raise typer.Exit()
 
     migrated = secrets_store.migrate_from_directory(SECRETS_DIR)

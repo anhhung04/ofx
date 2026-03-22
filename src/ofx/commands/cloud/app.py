@@ -19,8 +19,6 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "cloud"
 HELP = "Manage cloud profiles, instances, and images"
 
-console = get_console()
-
 
 # ---------------------------------------------------------------------------
 # Profile management
@@ -35,6 +33,7 @@ app.add_typer(profile_app, name="profile")
 @profile_app.command("list")
 def profile_list():
     """List all configured cloud profiles."""
+    console = get_console()
     from ofx.cloud.config import get_cloud_profile_manager
 
     mgr = get_cloud_profile_manager()
@@ -95,6 +94,7 @@ def profile_add(
     ] = False,
 ):
     """Add or update a cloud profile."""
+    console = get_console()
     from ofx.cloud.config import get_cloud_profile_manager
 
     mgr = get_cloud_profile_manager()
@@ -131,6 +131,7 @@ def profile_remove(
     name: Annotated[str, typer.Argument(help="Profile name to remove")],
 ):
     """Remove a cloud profile."""
+    console = get_console()
     from ofx.cloud.config import get_cloud_profile_manager
 
     mgr = get_cloud_profile_manager()
@@ -147,6 +148,7 @@ def profile_default(
     name: Annotated[str, typer.Argument(help="Profile name to set as default")],
 ):
     """Set the default cloud profile."""
+    console = get_console()
     from ofx.cloud.config import get_cloud_profile_manager
 
     mgr = get_cloud_profile_manager()
@@ -163,6 +165,7 @@ def profile_show(
     name: Annotated[str, typer.Argument(help="Profile name")] = "",
 ):
     """Show details of a cloud profile."""
+    console = get_console()
     from ofx.cloud.config import get_cloud_profile_manager
 
     mgr = get_cloud_profile_manager()
@@ -207,6 +210,7 @@ def instance_list(
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
 ):
     """List cloud instances."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -281,6 +285,7 @@ def instance_destroy(
     ] = False,
 ):
     """Destroy a cloud instance."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -327,6 +332,7 @@ def instance_create(
     ] = True,
 ):
     """Create a cloud instance manually."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -395,6 +401,7 @@ def image_list(
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
 ):
     """List available images/snapshots."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -450,6 +457,7 @@ def image_create(
     profile: Annotated[str, typer.Option("--profile", help="Use a cloud profile")] = "",
 ):
     """Create a snapshot/image from an instance."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -492,6 +500,7 @@ def image_delete(
     ] = False,
 ):
     """Delete a snapshot/image."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -546,6 +555,7 @@ def fleet_create(
     image: Annotated[str, typer.Option("--image", "-i", help="OS image")] = "",
 ):
     """Create a fleet of cloud instances."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -655,6 +665,7 @@ def fleet_run(
         ofx cloud fleet run scan.yml --targets targets.txt --count 5 --profile do-nyc
         ofx cloud fleet run scan.yml --targets 10.0.0.0/24 --count 10 --distribution round-robin
     """
+    console = get_console()
     import secrets as _secrets
 
     from ofx.cloud.fleet_distributor import FleetDistributor
@@ -781,6 +792,7 @@ def fleet_status(
     ] = False,
 ):
     """Show status of all sessions in a fleet group."""
+    console = get_console()
     from ofx.cloud.sessions import SessionManager, SessionStore
 
     store = SessionStore()
@@ -867,6 +879,7 @@ def fleet_results(
     Downloads results from each completed session into a subdirectory
     named by fleet index. Optionally encrypts the aggregate.
     """
+    console = get_console()
     from ofx.cloud.sessions import SessionManager, SessionStore
 
     store = SessionStore()
@@ -962,6 +975,7 @@ def fleet_cancel(
     ] = False,
 ):
     """Cancel all running sessions in a fleet group."""
+    console = get_console()
     from ofx.cloud.sessions import SessionManager, SessionStore
 
     store = SessionStore()
@@ -1017,6 +1031,7 @@ def fleet_destroy(
     ] = False,
 ):
     """Destroy fleet instances by tag or name prefix."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
@@ -1091,6 +1106,7 @@ def cloud_test(
     ] = 30,
 ):
     """Test connectivity to a remote host."""
+    console = get_console()
     from ofx.cloud.ssh import wait_for_connectivity
 
     with console.status(f"Testing {connection} to {host}:{port}..."):
@@ -1120,6 +1136,7 @@ def cloud_test(
 @app.command("providers")
 def list_providers():
     """List available cloud providers."""
+    console = get_console()
     from ofx.cloud import CloudProviderRegistry
 
     providers = CloudProviderRegistry.list_providers()

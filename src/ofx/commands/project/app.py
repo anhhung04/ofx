@@ -1,18 +1,16 @@
 """Project management CLI commands."""
 
+import os
 from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.panel import Panel
 from rich.table import Table
 
 from ofx.commands.ui_helpers import print_error, print_success, print_warning
 from ofx.settings import get_console
-import os
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
-console = get_console()
 
 NAME = "project"
 HELP = "Manage Red Team projects."
@@ -27,6 +25,7 @@ def init(
     ] = False,
 ):
     """Init new OFX project"""
+    console = get_console()
     from .handlers.init import InitHandler
     from .project_manager import ProjectManager
 
@@ -69,6 +68,7 @@ def sync(
     ] = "",
 ):
     """Sync local project with remote storage (git by default)"""
+    console = get_console()
     from .handlers.sync import SyncHandler
     from .project_manager import ProjectManager
 
@@ -105,6 +105,7 @@ def import_project(
     ] = "",
 ):
     """Import project by cloning from remote git repository"""
+    console = get_console()
     from .handlers.import_ import ImportHandler
 
     if not name:
@@ -126,6 +127,7 @@ def import_project(
 @app.command(name="ls", hidden=True)
 def list_projects():
     """List all projects in default project path"""
+    console = get_console()
     from .project_manager import ProjectManager
 
     projects = ProjectManager.list_projects()
@@ -175,18 +177,14 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
         )
         return
 
-    console.print(
-        Panel(
-            f"[bold red]Project:[/bold red] {name}\n"
-            f"[bold]Path:[/bold] [dim]{project_path}[/dim]\n\n"
-            "[yellow]This action cannot be undone![/yellow]",
-            title="[!] Delete Project",
-            border_style="red",
-        )
+    print_warning(
+        "Delete Project",
+        f"Project: {name}",
+        hint=f"Path: {project_path}\nThis action cannot be undone!",
     )
 
     if not typer.confirm("Are you sure you want to delete this project?"):
-        console.print("[yellow]Deletion cancelled[/yellow]")
+        get_console().print("[yellow]Deletion cancelled[/yellow]")
         return
 
     if ProjectManager.delete_project(name):
@@ -208,7 +206,8 @@ def use(
     clear: Annotated[bool, typer.Option("--clear", "-c", help="Clear the active project setting")] = False,
 ):
     """Set or clear the active/working project."""
-    from .project_manager import _load_config, _save_config, ProjectManager
+    console = get_console()
+    from .project_manager import ProjectManager, _load_config, _save_config
     if clear:
         cfg = _load_config()
         cfg.pop("active_project", None)

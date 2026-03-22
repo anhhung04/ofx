@@ -329,3 +329,59 @@ def _format_step_durations(
         parts.append("…")
     text = ", ".join(parts)
     return _truncate_text(text, limit=max_chars)
+
+
+# ---------------------------------------------------------------------------
+# Reusable header / status panels
+# ---------------------------------------------------------------------------
+
+
+def header_panel(title: str, subtitle: str, **fields: str) -> Panel:
+    """Compact cyan info panel used by command handlers.
+
+    ``fields`` are rendered as ``[dim]key:[/dim] value`` lines below the subtitle.
+
+    Example::
+
+        header_panel("OFX AI · Chat", "Model: gpt-4o", hint="Type 'exit' to end.")
+    """
+    lines: list[str] = []
+    for key, value in fields.items():
+        lines.append(f"[dim]{key}:[/dim] {value}")
+    body = "\n".join(lines) if lines else subtitle
+    return Panel(
+        Text.from_markup(body),
+        title=f"[bold cyan]{title}[/bold cyan]",
+        border_style="cyan",
+        box=box.ROUNDED,
+        padding=(0, 2),
+    )
+
+
+def status_table(
+    *columns: tuple[str, str],
+    rows: Iterable[tuple[str, ...]],
+    header_style: str = "table.header",
+) -> Table:
+    """Build a styled table with named columns.
+
+    Each ``columns`` entry is ``(name, style)``.  ``rows`` yields tuples
+    whose length matches the number of columns.
+
+    Example::
+
+        status_table(
+            ("Variable", "bold cyan"), ("Value", "white"),
+            rows=[("OFX_AI__MODEL", "gpt-4o")],
+        )
+    """
+    table = Table(
+        show_header=True,
+        header_style=header_style,
+        box=box.SIMPLE,
+    )
+    for name, style in columns:
+        table.add_column(name, style=style)
+    for row in rows:
+        table.add_row(*row)
+    return table

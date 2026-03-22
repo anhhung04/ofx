@@ -30,7 +30,6 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "session"
 HELP = "Manage detached job sessions (local & cloud)"
 
-console = get_console()
 
 
 # ======================================================================
@@ -62,6 +61,7 @@ def session_submit(
 
     By default runs locally. Use --cloud <profile> for VPS execution.
     """
+    console = get_console()
     from ofx.cloud.sessions import SessionManager, SessionTarget
     from ofx.utils.args import parse_key_value_pairs
 
@@ -167,6 +167,7 @@ def session_list(
     ] = "",
 ):
     """List all sessions."""
+    console = get_console()
     from ofx.cloud.sessions import SessionStore
 
     store = SessionStore()
@@ -224,6 +225,7 @@ def session_status(
     session_id: Annotated[str, typer.Argument(help="Session ID")],
 ):
     """Check the status of a session (probes PID if running)."""
+    console = get_console()
     from ofx.cloud.sessions import SessionManager
 
     mgr = SessionManager()
@@ -279,6 +281,7 @@ def session_logs(
     tail: Annotated[int, typer.Option("--tail", "-n", help="Number of lines")] = 50,
 ):
     """View session output log (tail last N lines)."""
+    console = get_console()
     from ofx.cloud.sessions import SessionManager
 
     mgr = SessionManager()
@@ -486,6 +489,7 @@ def session_clean(
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation")] = False,
 ):
     """Remove old session data from disk."""
+    console = get_console()
     from ofx.cloud.sessions import SessionStore
     from ofx.cloud.sessions.models import SessionStatus
 

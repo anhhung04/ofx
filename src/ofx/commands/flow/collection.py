@@ -5,14 +5,13 @@ from __future__ import annotations
 from typing import Annotated
 
 import typer
-from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
+from ofx.commands.ui_helpers import print_success, print_warning
 from ofx.settings import get_console
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
-console = get_console()
 
 
 def _mgr():
@@ -49,21 +48,20 @@ def add(
 ):
     """Install a workflow collection."""
     mgr = _mgr()
+    console = get_console()
     try:
         entry = mgr.add(name_or_url, alias=name, ref=ref, install_deps=not no_deps)
     except (ValueError, RuntimeError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    console.print(
-        Panel(
-            f"[bold]Name:[/bold] [green]{entry.name}[/green]\n"
-            f"[bold]Version:[/bold] {entry.version}\n"
-            f"[bold]Source:[/bold] [cyan]{entry.source}[/cyan]\n"
-            f"[bold]Path:[/bold] [dim]{entry.path}[/dim]",
-            title="[bold green][OK] Collection Installed[/bold green]",
-            border_style="green",
-        )
+    print_success(
+        "Collection Installed",
+        f"{entry.name} v{entry.version}",
+        details={
+            "Source": entry.source,
+            "Path": str(entry.path),
+        },
     )
 
 
@@ -77,19 +75,14 @@ def remove(
     name: Annotated[str, typer.Argument(help="Collection name to remove.")],
 ):
     """Remove an installed collection."""
+    console = get_console()
     if not typer.confirm(f"Remove collection '{name}'? This deletes its files."):
         console.print("[yellow]Cancelled.[/yellow]")
         return
 
     mgr = _mgr()
     if mgr.remove(name):
-        console.print(
-            Panel(
-                f"[green]Collection '{name}' removed.[/green]",
-                title="[OK] Removed",
-                border_style="green",
-            )
-        )
+        print_success("Removed", f"Collection '{name}' removed.")
     else:
         console.print(f"[yellow]Collection '{name}' not found.[/yellow]")
 
@@ -108,6 +101,7 @@ def update(
 ):
     """Pull latest changes for installed collections."""
     mgr = _mgr()
+    console = get_console()
     updated = mgr.update(name)
     if updated:
         for n in updated:
@@ -130,16 +124,14 @@ def list_collections(
 ):
     """List installed collections."""
     mgr = _mgr()
+    console = get_console()
     installed = mgr.list_installed()
 
     if not installed:
-        console.print(
-            Panel(
-                "[yellow]No collections installed.[/yellow]\n"
-                "[dim]Use 'ofx flow collection add <name>' to install one.[/dim]",
-                title="Collections",
-                border_style="yellow",
-            )
+        print_warning(
+            "Collections",
+            "No collections installed.",
+            "Use 'ofx flow collection add <name>' to install one.",
         )
         return
 
@@ -175,6 +167,7 @@ def info(
 ):
     """Show detailed info for an installed collection."""
     mgr = _mgr()
+    console = get_console()
     manifest = mgr.info(name)
     entry = mgr.get(name)
 

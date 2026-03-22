@@ -12,7 +12,6 @@ NAME = "dump"
 HELP = "Dump the workflow configuration and outputs."
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
-console = get_console()
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -208,6 +207,7 @@ def dump_workflow():
 
     This command prints a detailed tree of all workflow properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX workflow definitions.
     """
+    console = get_console()
     from ofx.models.workflow import Workflow
 
     schema = Workflow.model_json_schema()
@@ -223,6 +223,7 @@ def dump_job():
 
     This command prints a detailed tree of all job properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX job definitions.
     """
+    console = get_console()
     from ofx.models.job import Job
 
     schema = Job.model_json_schema()
@@ -238,6 +239,7 @@ def dump_step():
 
     This command prints a detailed tree of all step properties, including nested fields, types, required status, default values, and descriptions. Useful for exploring the structure and requirements of OFX step definitions.
     """
+    console = get_console()
     from ofx.models.step import Step
 
     schema = Step.model_json_schema()
