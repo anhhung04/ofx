@@ -326,7 +326,7 @@ class Settings(BaseSettings):
         env_nested_delimiter="__",
         case_sensitive=False,
         nested_model_default_partial_update=True,
-        secrets_dir=[SECRETS_DIR.absolute()],
+        secrets_dir=SECRETS_DIR.absolute(),
     )
     
     @classmethod
@@ -342,7 +342,7 @@ class Settings(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
-            NestedSecretsSettingsSource(file_secret_settings, secrets_nested_subdir=True),
+            NestedSecretsSettingsSource(file_secret_settings, secrets_nested_subdir=True, secrets_dir=SECRETS_DIR.absolute()),
         )
 
 
