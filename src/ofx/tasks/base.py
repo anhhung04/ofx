@@ -30,6 +30,10 @@ class OptDef:
     default: Any = None
     short: str = ""
 
+    def __post_init__(self) -> None:
+        if not self.flag or not self.flag.strip():
+            raise ValueError("OptDef.flag must be a non-empty string")
+
 
 class Task(ABC):
     """Abstract base class for all security tool wrappers.

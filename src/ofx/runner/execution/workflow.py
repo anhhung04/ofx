@@ -198,6 +198,25 @@ class WorkflowRunner(BaseRunner[Workflow]):
         if profile.env:
             self.ctx = RunnerContextBuilder(self.ctx).with_env(profile.env)
 
+        # Inject key profile fields as OFX_* env vars for tool consumption
+        profile_envs: dict[str, str] = {}
+        if profile.rate_limit:
+            profile_envs["OFX_RATE_LIMIT"] = str(profile.rate_limit)
+        if profile.threads != 10:
+            profile_envs["OFX_THREADS"] = str(profile.threads)
+        if profile.timeout_minutes != 60:
+            profile_envs["OFX_TIMEOUT"] = str(profile.timeout_minutes)
+        if profile.delay:
+            profile_envs["OFX_DELAY"] = str(profile.delay)
+        if profile.jitter:
+            profile_envs["OFX_JITTER"] = str(profile.jitter)
+        if profile.proxy:
+            profile_envs["OFX_PROXY"] = profile.proxy
+        if profile.user_agent:
+            profile_envs["OFX_USER_AGENT"] = profile.user_agent
+        if profile_envs:
+            self.ctx = RunnerContextBuilder(self.ctx).with_env(profile_envs)
+
         # Store profile data so steps/tasks can access it via templates
         self.ctx.vars["profile"] = profile.model_dump()
 

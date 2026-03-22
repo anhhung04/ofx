@@ -441,6 +441,126 @@ The tool must be installed on the remote host. Use the `tools` block or pre-bake
 
 ---
 
+## Creating Custom Tasks
+
+You can add your own tool wrappers by subclassing `Task`, implementing `parse_output()`, and registering with `@TaskRegistry.register()`.
+
+### Minimal Example
+
+```python
+# src/ofx/tasks/tools/mytool.py
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from ofx.tasks.base import OptDef, Task
+from ofx.tasks.output_types import Url
+from ofx.tasks.registry import TaskRegistry
+
+
+@TaskRegistry.register("mytool")
+class MyToolTask(Task):
+    name = "mytool"
+    cmd = "mytool"
+    description = "My custom HTTP scanner"
+    category = "url/scan"
+    install_cmd = "go install github.com/example/mytool@latest"
+    output_types = [Url]
+
+    opts = {
+        "threads": OptDef(flag="-t", type=int, help="Number of threads"),
+        "timeout": OptDef(flag="--timeout", type=int, help="Timeout per request"),
+        "verbose": OptDef(flag="-v", is_flag=True, help="Verbose output"),
+    }
+
+    input_flag = "-u"        # how target is passed
+    file_flag = "-l"         # flag for target list file
+    output_flag = "-o"       # flag for output file
+    extra_flags = ["-json"]  # always appended
+
+    def _output_suffix(self) -> str:
+        return ".jsonl"
+
+    def parse_output(
+        self, stdout: str, stderr: str, output_file: Path | None = None
+    ) -> list[Url]:
+        results: list[Url] = []
+        lines = []
+
+        if output_file and output_file.exists():
+            lines = self._read_output_file(output_file).strip().splitlines()
+        elif stdout:
+            lines = stdout.strip().splitlines()
+
+        for line in lines:
+            results.extend(self.parse_line(line))
+        return results
+
+    def parse_line(self, line: str) -> list[Url]:
+        """Parse a single JSONL line (enables live streaming)."""
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return []
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+
+        url = data.get("url", "")
+        if not url:
+            return []
+
+        return [Url(
+            url=url,
+            host=data.get("host", ""),
+            status_code=self._safe_int(data.get("status_code", 0)),
+            title=data.get("title", ""),
+        )]
+```
+
+### Key Points
+
+| Attribute | Purpose |
+|-----------|---------|
+| `name` | Registry key and display name |
+| `cmd` | Binary name (checked with `shutil.which`) |
+| `category` | Grouping for `ofx flow tasks list -c` |
+| `opts` | Maps Python kwargs to CLI flags via `OptDef` |
+| `input_flag` | How the target is passed (`None` = positional) |
+| `file_flag` | Flag for target list files (`-l`, `-iL`, etc.) |
+| `output_flag` | Flag for structured output file |
+| `extra_flags` | Always appended (e.g. `-json`, `-silent`) |
+| `output_types` | List of output type classes this tool produces |
+| `install_cmd` | Shown when binary is missing |
+
+### Adding Streaming Support
+
+To enable live streaming, implement `parse_line()` — the base class auto-detects it:
+
+```python
+def parse_line(self, line: str) -> list[OutputType]:
+    """Parse one stdout line into items. Return [] for unparseable lines."""
+    ...
+```
+
+Tools that output JSONL or one-result-per-line are ideal candidates. XML/multi-line tools should only implement `parse_output()`.
+
+### Using in Workflows
+
+```yaml
+steps:
+  - task: mytool
+    with:
+      target: "{{ inputs.target }}"
+      threads: 20
+      verbose: true
+```
+
+The task is automatically discovered if placed in `src/ofx/tasks/tools/`.
+
+---
+
 ## See Also
 
 - [Steps](jobs-steps/steps.md)

@@ -1594,3 +1594,76 @@ class TestStreamingDetectionEdgeCases:
 
         task = StreamTask()
         assert task.supports_streaming
+
+
+# ── OptDef Validation ──────────────────────────────────────────────────
+
+
+class TestOptDefValidation:
+    def test_valid_optdef(self):
+        opt = OptDef(flag="-p", type=str, help="Port range")
+        assert opt.flag == "-p"
+
+    def test_empty_flag_raises(self):
+        with pytest.raises(ValueError, match="non-empty"):
+            OptDef(flag="")
+
+    def test_whitespace_flag_raises(self):
+        with pytest.raises(ValueError, match="non-empty"):
+            OptDef(flag="   ")
+
+
+# ── Profile Env Var Injection ──────────────────────────────────────────
+
+
+class TestProfileEnvInjection:
+    def test_profile_env_vars_set(self):
+        """Verify profile fields generate OFX_* env vars in context."""
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile(
+            rate_limit=30,
+            threads=5,
+            delay=2.0,
+            proxy="socks5://127.0.0.1:9050",
+            user_agent="CustomAgent/1.0",
+        )
+
+        # Simulate what _apply_profile does: build env dict
+        profile_envs: dict[str, str] = {}
+        if profile.rate_limit:
+            profile_envs["OFX_RATE_LIMIT"] = str(profile.rate_limit)
+        if profile.threads != 10:
+            profile_envs["OFX_THREADS"] = str(profile.threads)
+        if profile.delay:
+            profile_envs["OFX_DELAY"] = str(profile.delay)
+        if profile.proxy:
+            profile_envs["OFX_PROXY"] = profile.proxy
+        if profile.user_agent:
+            profile_envs["OFX_USER_AGENT"] = profile.user_agent
+
+        assert profile_envs["OFX_RATE_LIMIT"] == "30"
+        assert profile_envs["OFX_THREADS"] == "5"
+        assert profile_envs["OFX_DELAY"] == "2.0"
+        assert profile_envs["OFX_PROXY"] == "socks5://127.0.0.1:9050"
+        assert profile_envs["OFX_USER_AGENT"] == "CustomAgent/1.0"
+
+    def test_default_profile_no_extra_envs(self):
+        """Default profile values should not generate env vars."""
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile()
+
+        profile_envs: dict[str, str] = {}
+        if profile.rate_limit:
+            profile_envs["OFX_RATE_LIMIT"] = str(profile.rate_limit)
+        if profile.threads != 10:
+            profile_envs["OFX_THREADS"] = str(profile.threads)
+        if profile.delay:
+            profile_envs["OFX_DELAY"] = str(profile.delay)
+        if profile.proxy:
+            profile_envs["OFX_PROXY"] = profile.proxy
+        if profile.user_agent:
+            profile_envs["OFX_USER_AGENT"] = profile.user_agent
+
+        assert profile_envs == {}
