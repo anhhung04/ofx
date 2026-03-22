@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, NestedSecretsSettingsSource
 from typing import Optional
 from rich.console import Console
 from rich.theme import Theme
@@ -321,13 +321,29 @@ class Settings(BaseSettings):
     )
 
     model_config = SettingsConfigDict(
-        secrets_dir=SECRETS_DIR.absolute(),
         env_prefix=f"{app_branding.upper()}_",
         env_file=Path(".env").absolute(),
         env_nested_delimiter="__",
         case_sensitive=False,
         nested_model_default_partial_update=True,
+        secrets_dir=[SECRETS_DIR.absolute()],
     )
+    
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            NestedSecretsSettingsSource(file_secret_settings, secrets_nested_subdir=True),
+        )
 
 
 settings = Settings()
