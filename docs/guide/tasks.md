@@ -109,6 +109,22 @@ ofx flow tasks list -c vuln/
 | `h8mail` | user/recon/email | Email/password breach lookup | UserAccount |
 | `whois` | domain/info | Domain WHOIS lookup | Domain |
 | `wafw00f` | waf/detect | Web Application Firewall detection tool | Tag |
+| `gobuster` | url/fuzz | Directory/file, DNS, and vhost brute-forcer written in Go | Url |
+| `amass` | dns/recon | In-depth attack surface mapping and asset discovery | Subdomain |
+| `masscan` | port/scan | Massively parallel TCP port scanner | Port, Ip |
+| `assetfinder` | dns/recon | Find domains and subdomains related to a given domain | Subdomain |
+| `findomain` | dns/recon | Fast subdomain enumeration using certificate transparency | Subdomain |
+| `mapcidr` | ip/util | CIDR/IP manipulation and range expansion utility | Ip |
+| `fping` | ip/recon | Fast ping sweep for host discovery | Ip |
+| `cariddi` | url/crawl | Crawler focused on endpoint and secret discovery | Url, Tag |
+| `nikto` | vuln/scan/web | Web server scanner for dangerous files and outdated software | Vulnerability |
+| `whatweb` | url/fingerprint | Web technology fingerprinting tool | Tag |
+| `sqlmap` | vuln/scan/sqli | Automatic SQL injection detection and exploitation tool | Vulnerability |
+| `x8` | url/fuzz/params | Hidden parameter discovery tool written in Rust | Tag |
+| `dnsrecon` | dns/recon | DNS enumeration and zone transfer tool | Record, Subdomain |
+| `theHarvester` | osint/recon | Email, subdomain, and name harvester from public sources | Subdomain, UserAccount |
+| `holehe` | user/recon/email | Check if an email is registered on various websites | UserAccount |
+| `sslscan` | ssl/scan | SSL/TLS cipher suite and certificate scanner | Certificate, Vulnerability |
 
 ---
 
@@ -206,6 +222,22 @@ Tasks that output JSONL or line-delimited results support **live streaming** —
 | searchsploit | JSON blob | ❌ |
 | h8mail | JSON file | ❌ |
 | whois | text | ❌ |
+| gobuster | line | ✅ |
+| amass | JSONL | ✅ |
+| masscan | JSONL | ✅ |
+| assetfinder | line | ✅ |
+| findomain | line | ✅ |
+| mapcidr | line | ✅ |
+| fping | line | ✅ |
+| cariddi | JSONL | ✅ |
+| nikto | CSV | ❌ (multi-line) |
+| whatweb | JSON blob | ❌ |
+| sqlmap | text | ❌ (multi-line) |
+| x8 | JSONL | ✅ |
+| dnsrecon | JSON blob | ❌ |
+| theHarvester | JSON blob | ❌ |
+| holehe | JSONL | ✅ |
+| sslscan | XML | ❌ (file-based) |
 
 ### Subscribing to Streamed Items
 
