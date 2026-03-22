@@ -668,7 +668,7 @@ def fleet_run(
     from ofx.cloud.fleet_distributor import FleetDistributor
     from ofx.cloud.fleet_input import FleetInputParser
     from ofx.cloud.sessions import SessionManager, SessionTarget
-    from ofx.commands import get_cli_env_vars
+    from ofx.commands import get_cli_env_vars, get_cli_project
     from ofx.utils.args import parse_key_value_pairs
 
     if inputs is None:
@@ -676,6 +676,15 @@ def fleet_run(
 
     parsed_inputs: dict = parse_key_value_pairs(inputs)
     parsed_env: dict = get_cli_env_vars()
+
+    # Resolve project: global -p > active project
+    fleet_project = get_cli_project()
+    if not fleet_project:
+        from ofx.commands.project.project_manager import ProjectManager
+
+        active_path = ProjectManager.get_active_path()
+        if active_path:
+            fleet_project = active_path.name
 
     if not profile:
         console.print("[red]Fleet run requires --profile for cloud execution[/red]")
@@ -734,6 +743,7 @@ def fleet_run(
                         "fleet_group": fleet_group_id,
                         "fleet_index": str(i),
                     },
+                    project=fleet_project,
                 )
                 # Update with fleet metadata
                 session = session.model_copy(
@@ -922,9 +932,23 @@ def fleet_results(
     if output:
         agg_dir = Path(output)
     else:
-        from ofx.settings import TEMP_DIR, ensure_dir
+        # Check if fleet sessions have a project — route results there
+        fleet_proj = next((s.project for s in fetchable if s.project), "")
+        if fleet_proj:
+            try:
+                from ofx.commands.project.project_manager import ProjectManager
 
-        agg_dir = ensure_dir(TEMP_DIR) / f"fleet-{fleet_group_id}"
+                proj_path = Path(ProjectManager.resolve_path(fleet_proj))
+                if proj_path.exists():
+                    agg_dir = proj_path / "evidence" / "sessions" / f"fleet-{fleet_group_id}"
+                else:
+                    fleet_proj = ""
+            except Exception:
+                fleet_proj = ""
+        if not fleet_proj:
+            from ofx.settings import TEMP_DIR, ensure_dir
+
+            agg_dir = ensure_dir(TEMP_DIR) / f"fleet-{fleet_group_id}"
     agg_dir.mkdir(parents=True, exist_ok=True)
 
     async def _fetch_all():
