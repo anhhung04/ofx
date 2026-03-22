@@ -93,34 +93,4 @@ class InstalledCollection(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
-class CollectionIndexEntry(BaseModel):
-    """A single entry in the remote community index."""
 
-    name: str
-    description: str = ""
-    source: str = ""
-    latest: str = ""
-    tags: list[str] = Field(default_factory=list)
-    author: str = ""
-    private: bool = Field(
-        default=False, description="Whether this collection is in a private repo"
-    )
-
-
-class CollectionIndex(BaseModel):
-    """The full remote index of available community collections."""
-
-    collections: dict[str, CollectionIndexEntry] = Field(default_factory=dict)
-
-    def search(self, query: str) -> list[CollectionIndexEntry]:
-        """Search collections by name or tag (case-insensitive substring)."""
-        q = query.lower()
-        results: list[CollectionIndexEntry] = []
-        for entry in self.collections.values():
-            if (
-                q in entry.name.lower()
-                or q in entry.description.lower()
-                or any(q in t.lower() for t in entry.tags)
-            ):
-                results.append(entry)
-        return results

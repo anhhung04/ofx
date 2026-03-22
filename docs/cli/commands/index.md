@@ -68,14 +68,11 @@ ofx flow visualize workflow-name
 ### Managing Collections
 
 ```bash
-# Install a collection from the community
-ofx flow collection add recon-tools
+# Install a collection from Git
+ofx flow collection add https://github.com/myorg/recon-tools.git
 
 # List installed collections
 ofx flow collection list
-
-# Search for collections
-ofx flow collection search scanning
 ```
 
 ### Managing Secrets

@@ -1,6 +1,6 @@
 # Workflow Collections
 
-Collections are installable packages of reusable workflows, tools, and resources. They provide a standardised way to share, discover, and manage workflow libraries across teams and the community.
+Collections are installable packages of reusable workflows, tools, and resources. They provide a standardised way to share and manage workflow libraries across teams.
 
 ---
 
@@ -10,39 +10,35 @@ A **collection** is a Git repository (or local directory) containing one or more
 
 Key features:
 
-- **One-command install** — `ofx flow collection add recon-tools`
+- **One-command install** — `ofx flow collection add <git-url>`
 - **Automatic workflow discovery** — installed collections are added to the workflow search path
 - **Dependency resolution** — collections can declare dependencies on other collections
-- **Community index** — browse and search shared collections hosted on GitHub
 - **Semver version constraints** — pin or constrain dependency versions
-- **Migration path** — move from the legacy `ofx asset` system seamlessly
 
 ---
 
 ## Installing Collections
 
-### From the ofx-workflows organisation (bare name)
+### From a Git URL
 
 ```bash
-ofx flow collection add recon-tools
-```
-
-Bare names resolve to `https://github.com/ofx-workflows/recon-tools`.
-
-### From a GitHub repository
-
-```bash
-# org/repo shorthand
-ofx flow collection add myorg/my-workflows
-
 # Full URL
 ofx flow collection add https://github.com/myorg/my-workflows.git
+
+# SSH URL
+ofx flow collection add git@github.com:myorg/my-workflows.git
+```
+
+### From a local directory
+
+```bash
+ofx flow collection add ./my-local-collection
 ```
 
 ### Pin a Git ref
 
 ```bash
-ofx flow collection add recon-tools --ref v1.2.0
+ofx flow collection add https://github.com/myorg/recon-tools.git --ref v1.2.0
 ```
 
 ### Override the local name
@@ -53,7 +49,8 @@ ofx flow collection add https://github.com/myorg/my-workflows.git --name custom-
 
 ### Skip dependency installation
 
-ofx flow collection add recon-tools --no-deps
+```bash
+ofx flow collection add https://github.com/myorg/recon-tools.git --no-deps
 ```
 
 ---
@@ -112,25 +109,6 @@ ofx flow collection update
 
 ```bash
 ofx flow collection remove recon-tools
-```
-
----
-
-## Searching the Community Index
-
-The community index is a curated list of collections hosted at `https://github.com/ofx-workflows/index`.
-
-```bash
-# Search by keyword, tag, or description
-ofx flow collection search recon
-# Force-refresh the cached index
-ofx flow collection search recon --refresh
-```
-
-Install any result directly:
-
-```bash
-ofx flow collection add <name>
 ```
 
 ---
@@ -202,7 +180,8 @@ git push -u origin main
 Others can now install it:
 
 ```bash
-ofx flow collection add myorg/my-collection
+ofx flow collection add https://github.com/myorg/my-collection.git
+```
 
 ---
 
@@ -240,17 +219,6 @@ min_ofx_version: "0.4.0"
 ```
 
 If the installed OFX version is below this threshold, a warning is printed during installation.
-
----
-
-## Migrating from Legacy Assets
-
-If you used the old `ofx asset` system, you can migrate to collections in one step:
-
-```bash
-ofx flow collection migrate
-```
-
 
 ---
 

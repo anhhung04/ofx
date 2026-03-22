@@ -17,9 +17,7 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
-DEFAULT_COLLECTION_ORG = "https://github.com/ofx-workflows"
 MANIFEST_FILENAME = "collection.yaml"
-
 
 # ------------------------------------------------------------------
 # Lightweight semver helpers (no external dependency)
@@ -138,23 +136,6 @@ class CollectionManager:
         data = {k: v.model_dump() for k, v in self._installed.items()}
         self.installed_file.write_text(json.dumps(data, indent=2))
 
-    # ------------------------------------------------------------------
-    # Resolve source URL
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def resolve_source(name_or_url: str) -> str:
-        """Resolve a collection name or URL to a full git URL.
-
-        - Full URL  → pass through
-        - org/repo  → https://github.com/org/repo
-        - bare name → https://github.com/ofx-workflows/<name>
-        """
-        if name_or_url.startswith(("https://", "http://", "git@", "ssh://")):
-            return name_or_url
-        if "/" in name_or_url:
-            return f"https://github.com/{name_or_url}"
-        return f"{DEFAULT_COLLECTION_ORG}/{name_or_url}"
 
     # ------------------------------------------------------------------
     # Add / Install
@@ -168,11 +149,10 @@ class CollectionManager:
         ref: str = "",
         install_deps: bool = True,
     ) -> InstalledCollection:
-        """Install a collection from a git URL or shorthand name.
+        """Install a collection from a git URL or local path
 
         Args:
-            name_or_url: Full git URL, ``org/repo``, or bare collection name
-                (resolved to ``ofx-workflows`` org).
+            name_or_url: Full git URL, ``local_path``.
             alias: Override the directory/display name.
             ref: Git tag or branch to pin (default: repo default branch).
             install_deps: Recursively install declared dependencies.
@@ -184,7 +164,7 @@ class CollectionManager:
             ValueError: If the collection is already installed.
             RuntimeError: If cloning fails.
         """
-        source = self.resolve_source(name_or_url)
+        source = name_or_url.strip()
         inferred_name = alias or Path(source).stem.removesuffix(".git")
 
         if inferred_name in self._installed:

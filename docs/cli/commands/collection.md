@@ -1,6 +1,6 @@
 # flow collection
 
-Manage installable workflow collections — install, update, remove, search, and inspect packages of reusable workflows.
+Manage installable workflow collections — install, update, remove, and inspect packages of reusable workflows.
 
 ## Usage
 
@@ -14,16 +14,15 @@ ofx flow collection <subcommand> [options]
 
 ### add
 
-Install a workflow collection from Git.
+Install a workflow collection from a Git URL or local directory.
 
 ```bash
-ofx flow collection add <name_or_url> [options]
+ofx flow collection add <source> [options]
 ```
 
 **Arguments:**
 
-- `name_or_url` (required) — Collection name, `org/repo`, or full Git URL.
-  Bare names resolve to `https://github.com/ofx-workflows/<name>`.
+- `source` (required) — Git URL (HTTPS or SSH) or path to a local directory.
 
 **Options:**
 
@@ -36,17 +35,17 @@ ofx flow collection add <name_or_url> [options]
 **Examples:**
 
 ```bash
-# Install from the ofx-workflows GitHub org
-ofx flow collection add recon-tools
+# Install from a Git URL
+ofx flow collection add https://github.com/myorg/my-workflows.git
 
-# Install from a custom repository
-ofx flow collection add myorg/my-workflows
+# Install from a local directory
+ofx flow collection add ./my-local-collection
 
 # Pin to a specific tag
-ofx flow collection add recon-tools --ref v1.2.0
+ofx flow collection add https://github.com/myorg/recon-tools.git --ref v1.2.0
 
 # Install without dependencies
-ofx flow collection add recon-tools --no-deps
+ofx flow collection add https://github.com/myorg/recon-tools.git --no-deps
 ```
 
 ---
@@ -122,47 +121,6 @@ ofx flow collection info <name>
 - `name` (required) — Collection name.
 
 Displays version, description, author, license, tags, workflows, tools, dependencies, source, pinned ref, and installation date.
-
----
-
-### search
-
-Search the community collection index.
-
-```bash
-ofx flow collection search <query> [options]
-```
-
-**Arguments:**
-
-- `query` (required) — Search term matched against name, description, and tags.
-
-**Options:**
-
-| Option | Description |
-|--------|-------------|
-| `--refresh` | Force-refresh the cached index from remote |
-
-The index is fetched from `https://github.com/ofx-workflows/index` and cached locally for one hour.
-
-**Examples:**
-
-```bash
-ofx flow collection search recon
-ofx flow collection search scanning --refresh
-```
-
----
-
-### migrate
-
-Migrate legacy asset collections to the new collection system.
-
-```bash
-ofx flow collection migrate
-```
-
-Reads the legacy `assets.json` registry from `~/.ofx/` and re-installs each entry as a modern collection.
 
 ---
 

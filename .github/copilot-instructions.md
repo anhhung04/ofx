@@ -122,8 +122,6 @@ The collections module ([src/ofx/collections/](../src/ofx/collections/)) manages
   - `min_ofx_version` gate warns when OFX version is below requirement
   - Storage: `~/.ofx/collections/installed.json` registry + `~/.ofx/collections/<name>/` directories
 - **Index Client** ([src/ofx/collections/index.py](../src/ofx/collections/index.py)):
-  - `IndexClient`: Fetches/caches index from `https://raw.githubusercontent.com/ofx-workflows/index/refs/heads/master/index.json` with 1-hour TTL
-  - `search()`, `get_entry()` for community collection discovery
 - **CLI** ([src/ofx/commands/flow/collection.py](../src/ofx/commands/flow/collection.py)):
   - `ofx flow collection add|remove|update|list|info|search|migrate` subcommands
   - `add --no-deps` to skip dependency resolution

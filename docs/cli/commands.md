@@ -510,22 +510,6 @@ Show detailed info for an installed collection.
 ofx flow collection info <name>
 ```
 
-### flow collection search
-
-Search the community collection index.
-
-```bash
-ofx flow collection search <query> [--refresh]
-```
-
-### flow collection migrate
-
-Migrate legacy asset collections to the new system.
-
-```bash
-ofx flow collection migrate
-```
-
 ---
 
 ## doctor

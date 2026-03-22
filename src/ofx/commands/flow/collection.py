@@ -20,13 +20,6 @@ def _mgr():
 
     return CollectionManager()
 
-
-def _index():
-    from ofx.collections.index import IndexClient
-
-    return IndexClient()
-
-
 # ------------------------------------------------------------------
 # add
 # ------------------------------------------------------------------
@@ -126,8 +119,6 @@ def update(
 # ------------------------------------------------------------------
 # list
 # ------------------------------------------------------------------
-
-
 @app.command("list")
 def list_collections(
     outdated: Annotated[
@@ -225,72 +216,3 @@ def info(
             dep_node.add(label)
 
     console.print(tree)
-
-
-# ------------------------------------------------------------------
-# search (community index)
-# ------------------------------------------------------------------
-
-
-@app.command()
-def search(
-    query: Annotated[str, typer.Argument(help="Search term (name, tag, description).")],
-    refresh: Annotated[
-        bool,
-        typer.Option("--refresh", help="Force-refresh index from remote."),
-    ] = False,
-):
-    """Search the community collection index."""
-    idx = _index()
-    results = idx.search(query, force_refresh=refresh)
-
-    if not results:
-        console.print(f"[dim]No collections matching '{query}'.[/dim]")
-        return
-
-    table = Table(
-        title=f"Search Results for '{query}' ({len(results)})",
-        border_style="cyan",
-        header_style="bold cyan",
-    )
-    table.add_column("Name", style="cyan bold", no_wrap=True)
-    table.add_column("Latest", style="green")
-    table.add_column("Description")
-    table.add_column("Tags", style="magenta")
-
-    for entry in results:
-        table.add_row(
-            entry.name,
-            entry.latest,
-            entry.description,
-            ", ".join(entry.tags) if entry.tags else "",
-        )
-
-    console.print(table)
-    console.print("\n[dim]Install with:[/dim] ofx flow collection add <name>")
-
-
-# ------------------------------------------------------------------
-# migrate (from legacy assets)
-# ------------------------------------------------------------------
-
-
-@app.command()
-def migrate():
-    """Migrate legacy asset collections to the new collection system."""
-    from ofx.settings import DEFAULT_WORKFLOWS_DIR
-
-    assets_file = DEFAULT_WORKFLOWS_DIR.parent / "assets.json"
-    mgr = _mgr()
-    count = mgr.migrate_from_assets(assets_file)
-
-    if count:
-        console.print(
-            Panel(
-                f"[green]Migrated {count} collection(s) from legacy assets.[/green]",
-                title="[OK] Migration Complete",
-                border_style="green",
-            )
-        )
-    else:
-        console.print("[dim]No legacy assets to migrate (or already migrated).[/dim]")
