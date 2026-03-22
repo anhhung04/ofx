@@ -129,6 +129,7 @@ async def run_workflow(
     workflow: str | Path,
     inputs: dict[str, Any] | None = None,
     secrets: dict[str, str] | None = None,
+    env: dict[str, str] | None = None,
     output_path: str | Path | None = None,
     workflow_search_paths: list[str | Path] | None = None,
     quiet: bool = False,
@@ -142,10 +143,13 @@ async def run_workflow(
         workflow: Name of the workflow (to be searched) or path to the workflow file.
         inputs: Dictionary of input values.
         secrets: Dictionary of secrets (overrides default secrets loading).
+        env: Dictionary of extra environment variables to inject into the run context.
+            These are merged on top of the inherited os.environ.
         output_path: Directory for outputs. Defaults to a unique temp dir.
         workflow_search_paths: List of directories to search for workflows.
             Defaults to standard OFX workflow directories if not provided.
         quiet: If True, suppresses console output (sets log level to ERROR).
+        durable_overrides: Override durable execution configuration.
         vars: Dictionary of additional variables to inject into the run context
             (e.g. project metadata).
 
@@ -212,6 +216,10 @@ async def run_workflow(
         durable=durable_config,
         vars=vars or {},
     )
+
+    # Merge explicit env vars on top of inherited os.environ
+    if env:
+        ctx.envs.update(env)
 
     runner = WorkflowRunner(resolved_workflow, ctx=ctx)
 

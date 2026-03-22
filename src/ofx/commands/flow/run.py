@@ -54,6 +54,7 @@ class FlowRunHandler:
         self,
         workflow_name: str,
         input: list[str] | None = None,
+        env: dict[str, str] | None = None,
         output: str = "",
         profile: bool = False,
         durable: bool | None = None,
@@ -68,6 +69,7 @@ class FlowRunHandler:
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
+        self.env = env or {}
         self.profile = profile
         self.durable = durable
         self.resume = resume
@@ -143,6 +145,7 @@ class FlowRunHandler:
             result = await run_workflow(
                 workflow=self.workflow_name,
                 inputs=self.input,
+                env=self.env,
                 output_path=self.output,
                 workflow_search_paths=get_workflow_search_dirs(),  # type: ignore
                 quiet=self.quiet,
@@ -190,10 +193,7 @@ class FlowRunHandler:
     def _process_inputs(self):
         from ofx.utils.args import parse_key_value_pairs
 
-        try:
-            self.input = parse_key_value_pairs(self.preprocess_input)
-        except ValueError as e:
-            raise e
+        self.input = parse_key_value_pairs(self.preprocess_input)
 
     def _durable_overrides(self) -> DurableRunConfig | None:
         if (

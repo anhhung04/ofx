@@ -671,23 +671,17 @@ def fleet_run(
     from ofx.cloud.fleet_distributor import FleetDistributor
     from ofx.cloud.fleet_input import FleetInputParser
     from ofx.cloud.sessions import SessionManager, SessionTarget
+    from ofx.commands import get_cli_env_vars
     from ofx.utils.args import parse_key_value_pairs
 
     if env_vars is None:
         env_vars = []
     if inputs is None:
         inputs = []
-    if inputs is None:
-        inputs = []
-    if env_vars is None:
-        env_vars = []
 
     parsed_inputs: dict = parse_key_value_pairs(inputs)
-    parsed_env: dict = {}
-    for ev in env_vars:
-        if "=" in ev:
-            k, v = ev.split("=", 1)
-            parsed_env[k] = v
+    # Merge global CLI env vars with command-specific env vars (command overrides global)
+    parsed_env: dict = {**get_cli_env_vars(), **parse_key_value_pairs(env_vars, keep_string=True)}
 
     if not profile:
         console.print("[red]Fleet run requires --profile for cloud execution[/red]")

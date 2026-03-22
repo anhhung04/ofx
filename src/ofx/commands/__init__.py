@@ -39,8 +39,12 @@ def add_aliases():
 
 
 # Global callback to inject environment variables before any command runs
-# Store envs parsed from -e
-_cli_env_vars = {}
+_cli_env_vars: dict[str, str] = {}
+
+
+def get_cli_env_vars() -> dict[str, str]:
+    """Return environment variables injected via the global -e/--env flag."""
+    return _cli_env_vars
 
 
 def inject_env_vars(
@@ -55,17 +59,21 @@ def inject_env_vars(
 ):
     import os
 
+    from ofx.utils.args import parse_key_value_pairs
+
     global _cli_env_vars
-    for env in e:
-        try:
-            key, value = env.split("=", 1)
-            os.environ[key] = value
-            _cli_env_vars[key] = value
-        except ValueError as exc:
-            print_error(
-                "Invalid environment variable format", f"Expected KEY=VAL, got: {env}"
-            )
-            raise typer.Exit(code=1) from exc
+    try:
+        _cli_env_vars = parse_key_value_pairs(e, keep_string=True)
+    except ValueError as exc:
+        print_error(
+            "Invalid environment variable format",
+            "Expected KEY=VAL for each -e flag",
+        )
+        raise typer.Exit(code=1) from exc
+
+    for key, value in _cli_env_vars.items():
+        os.environ[key] = str(value)
+
     print_banner()
 
 
@@ -81,14 +89,15 @@ def _register_commands():
     add_app(secret)
     add_app(ai)
     add_aliases()
-    
+
 def _clean_up():
     import os
     import shutil
+
     from ofx.settings import TEMP_DIR
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR, ignore_errors=True)
-    
+
 
 
 def main():

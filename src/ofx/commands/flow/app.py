@@ -113,6 +113,7 @@ def run(
         ),
     ] = "",
 ):
+    from ofx.commands import get_cli_env_vars
     from ofx.commands.flow.run import FlowRunHandler
 
     # If no explicit project is supplied, use the active project (if any)
@@ -121,14 +122,11 @@ def run(
         if active_path:
             project = active_path.name
 
-    if input is None:
-        input = []
-    if input is None:
-        input = []
     asyncio.run(
         FlowRunHandler(
             workflow_name=workflow_name,
-            input=input,
+            input=input or [],
+            env=get_cli_env_vars(),
             output=output,
             profile=profile,
             durable=durable,

@@ -63,17 +63,14 @@ def session_submit(
     """
     console = get_console()
     from ofx.cloud.sessions import SessionManager, SessionTarget
+    from ofx.commands import get_cli_env_vars
     from ofx.utils.args import parse_key_value_pairs
 
     # Parse inputs
-    if env_vars is None:
-        env_vars = []
-    if inputs is None:
-        inputs = []
-    parsed_inputs: dict = parse_key_value_pairs(inputs)
+    parsed_inputs: dict = parse_key_value_pairs(inputs or [])
 
-    # Parse env
-    parsed_env: dict = parse_key_value_pairs(env_vars, keep_string=True)
+    # Merge global CLI env vars with command-specific env vars (command overrides global)
+    parsed_env: dict = {**get_cli_env_vars(), **parse_key_value_pairs(env_vars or [], keep_string=True)}
 
     # Determine target
     if cloud and local:
