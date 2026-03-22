@@ -97,7 +97,7 @@ def add_profile(
             "-s",
             help="Set profile values in key=value format (dot notation for nested, e.g. time_window.enabled=true)",
         ),
-    ] = None,
+    ] = [],
     default: Annotated[
         bool,
         typer.Option("--default", help="Set as the default profile"),

@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ...core.base import BaseRunner, Result
+from ...core.base import BaseRunner
 from ..registry import RunnerRegistry
 
 __all__ = ["PostWinRM"]

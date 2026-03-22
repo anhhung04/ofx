@@ -32,7 +32,7 @@ def run(
             "--input",
             help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
         ),
-    ] = None,
+    ] = [],
     output: Annotated[
         str,
         typer.Option(
