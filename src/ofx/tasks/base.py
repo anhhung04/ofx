@@ -56,6 +56,24 @@ class Task(ABC):
     # Flags prepended right after the command binary (e.g. ``["-json", "-silent"]``).
     extra_flags: list[str] = []
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Ensure mutable class attributes are copied per-subclass.
+
+        Without this, a subclass that doesn't explicitly set ``opts``,
+        ``extra_flags``, or ``output_types`` would share the parent's
+        mutable object, risking cross-class mutation.
+        """
+        super().__init_subclass__(**kwargs)
+        for attr in ("opts", "extra_flags", "output_types"):
+            value = cls.__dict__.get(attr)
+            if value is None:
+                # Subclass didn't define it — copy from parent
+                inherited = getattr(cls, attr)
+                if isinstance(inherited, dict):
+                    setattr(cls, attr, dict(inherited))
+                elif isinstance(inherited, list):
+                    setattr(cls, attr, list(inherited))
+
     # ── Public API ─────────────────────────────────────────────────
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:

@@ -16,9 +16,7 @@ class KatanaTask(Task):
     cmd = "katana"
     description = "Next-generation crawling and spidering framework"
     category = "url/crawl"
-    install_cmd = (
-        "go install github.com/projectdiscovery/katana/cmd/katana@latest"
-    )
+    install_cmd = "go install github.com/projectdiscovery/katana/cmd/katana@latest"
     output_types = [Url]
 
     opts = {
@@ -26,15 +24,15 @@ class KatanaTask(Task):
         "js_crawl": OptDef(
             flag="-js-crawl", is_flag=True, help="Enable JS file crawling"
         ),
-        "headless": OptDef(
-            flag="-headless", is_flag=True, help="Use headless browser"
-        ),
+        "headless": OptDef(flag="-headless", is_flag=True, help="Use headless browser"),
         "scope": OptDef(flag="-crawl-scope", type=str, help="Regex for crawl scope"),
         "out_scope": OptDef(
             flag="-crawl-out-scope", type=str, help="Regex for out of scope"
         ),
         "known_files": OptDef(
-            flag="-known-files", type=str, help="Enable crawling of known files (all, robotstxt, sitemapxml)"
+            flag="-known-files",
+            type=str,
+            help="Enable crawling of known files (all, robotstxt, sitemapxml)",
         ),
         "automatic_form_fill": OptDef(
             flag="-automatic-form-fill", is_flag=True, help="Fill forms automatically"
@@ -51,7 +49,9 @@ class KatanaTask(Task):
         "timeout": OptDef(flag="-timeout", type=int, help="Request timeout in seconds"),
         "delay": OptDef(flag="-delay", type=int, help="Delay between requests"),
         "strategy": OptDef(
-            flag="-strategy", type=str, help="Crawling strategy (depth-first, breadth-first)"
+            flag="-strategy",
+            type=str,
+            help="Crawling strategy (depth-first, breadth-first)",
         ),
         "extensions": OptDef(
             flag="-extension-filter", type=str, help="Extension filter (e.g. png,jpg)"

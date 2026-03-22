@@ -16,9 +16,7 @@ class DnsxTask(Task):
     cmd = "dnsx"
     description = "Fast and multi-purpose DNS toolkit"
     category = "dns/resolve"
-    install_cmd = (
-        "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
-    )
+    install_cmd = "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
     output_types = [Subdomain, Ip, Record]
 
     opts = {
@@ -49,9 +47,7 @@ class DnsxTask(Task):
             flag="-wildcard", is_flag=True, help="Enable wildcard filtering"
         ),
         "trace": OptDef(flag="-trace", is_flag=True, help="Perform DNS trace"),
-        "wordlist": OptDef(
-            flag="-w", type=str, help="Wordlist for DNS bruteforcing"
-        ),
+        "wordlist": OptDef(flag="-w", type=str, help="Wordlist for DNS bruteforcing"),
     }
 
     input_flag = "-d"
@@ -102,26 +98,18 @@ class DnsxTask(Task):
 
             # CNAME records
             for cname in data.get("cname", []):
-                results.append(
-                    Record(name=cname, type="CNAME", host=host)
-                )
+                results.append(Record(name=cname, type="CNAME", host=host))
 
             # MX records
             for mx in data.get("mx", []):
-                results.append(
-                    Record(name=mx, type="MX", host=host)
-                )
+                results.append(Record(name=mx, type="MX", host=host))
 
             # NS records
             for ns in data.get("ns", []):
-                results.append(
-                    Record(name=ns, type="NS", host=host)
-                )
+                results.append(Record(name=ns, type="NS", host=host))
 
             # TXT records
             for txt in data.get("txt", []):
-                results.append(
-                    Record(name=txt, type="TXT", host=host)
-                )
+                results.append(Record(name=txt, type="TXT", host=host))
 
         return results

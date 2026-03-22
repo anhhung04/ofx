@@ -342,9 +342,11 @@ class CloudStepRunner(BaseRunner):
 
         # Build command — disable output_flag so no temp file is created
         saved_output_flag = task.output_flag
-        task.output_flag = None
-        cmd_str, _ = task.build_command(target, **task_opts)
-        task.output_flag = saved_output_flag
+        try:
+            task.output_flag = None
+            cmd_str, _ = task.build_command(target, **task_opts)
+        finally:
+            task.output_flag = saved_output_flag
 
         return await self._run_remote_command(cmd_str, timeout=timeout)
 

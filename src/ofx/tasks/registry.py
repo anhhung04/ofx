@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import threading
 from collections.abc import Callable
 from typing import Any
 
@@ -18,6 +19,7 @@ class TaskRegistry:
     """Central registry of available task wrappers."""
 
     _tasks: dict[str, type[Task]] = {}
+    _lock = threading.Lock()
 
     # ── Registration ───────────────────────────────────────────────
 
@@ -81,17 +83,24 @@ class TaskRegistry:
 
     @classmethod
     def _ensure_loaded(cls) -> None:
-        """Auto-import all modules under ``ofx.tasks.tools`` once."""
+        """Auto-import all modules under ``ofx.tasks.tools`` once.
+
+        Uses double-checked locking to avoid duplicate imports under
+        concurrent access.
+        """
         if cls._loaded:
             return
-        cls._loaded = True
-        try:
-            import ofx.tasks.tools as _pkg
+        with cls._lock:
+            if cls._loaded:
+                return
+            cls._loaded = True
+            try:
+                import ofx.tasks.tools as _pkg
 
-            for info in pkgutil.iter_modules(_pkg.__path__):
-                importlib.import_module(f"ofx.tasks.tools.{info.name}")
-        except ImportError:
-            pass
+                for info in pkgutil.iter_modules(_pkg.__path__):
+                    importlib.import_module(f"ofx.tasks.tools.{info.name}")
+            except ImportError:
+                pass
 
     @classmethod
     def unregister(cls, name: str) -> None:

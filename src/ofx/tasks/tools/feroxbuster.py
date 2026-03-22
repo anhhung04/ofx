@@ -27,9 +27,7 @@ class FeroxbusterTask(Task):
         "status_codes": OptDef(
             flag="-s", type=str, help="Status codes to include (e.g. 200,301,302)"
         ),
-        "filter_status": OptDef(
-            flag="-C", type=str, help="Status codes to exclude"
-        ),
+        "filter_status": OptDef(flag="-C", type=str, help="Status codes to exclude"),
         "filter_size": OptDef(flag="-S", type=str, help="Response sizes to exclude"),
         "filter_words": OptDef(flag="-W", type=str, help="Word counts to exclude"),
         "filter_lines": OptDef(flag="-N", type=str, help="Line counts to exclude"),
@@ -47,12 +45,8 @@ class FeroxbusterTask(Task):
             flag="--rate-limit", type=int, help="Max requests per second"
         ),
         "insecure": OptDef(flag="-k", is_flag=True, help="Disable TLS verification"),
-        "no_recursion": OptDef(
-            flag="-n", is_flag=True, help="Do not recurse"
-        ),
-        "redirects": OptDef(
-            flag="-r", is_flag=True, help="Follow redirects"
-        ),
+        "no_recursion": OptDef(flag="-n", is_flag=True, help="Do not recurse"),
+        "redirects": OptDef(flag="-r", is_flag=True, help="Follow redirects"),
         "extract_links": OptDef(
             flag="-e", is_flag=True, help="Extract links from response body"
         ),

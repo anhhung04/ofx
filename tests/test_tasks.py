@@ -797,3 +797,53 @@ class TestNewToolsRegistered:
 
         url_tasks = TaskRegistry.get_by_category("url/")
         assert len(url_tasks) >= 3  # httpx + ffuf + katana + feroxbuster
+
+
+# ── Mutable Default Isolation ─────────────────────────────────────────────
+
+
+class TestMutableDefaults:
+    """Verify __init_subclass__ prevents cross-class mutation."""
+
+    def test_extra_flags_isolated_between_subclasses(self):
+        """Mutating one task's extra_flags must not affect another."""
+        httpx_cls = TaskRegistry.get("httpx")
+        nmap_cls = TaskRegistry.get("nmap")
+        assert httpx_cls is not None and nmap_cls is not None
+
+        httpx = httpx_cls()
+        nmap = nmap_cls()
+
+        original_httpx_flags = list(httpx.extra_flags)
+        original_nmap_flags = list(nmap.extra_flags)
+
+        # Mutate httpx's extra_flags (on the class)
+        httpx_cls.extra_flags.append("--SHOULD-NOT-LEAK")
+
+        # nmap's extra_flags must be unaffected
+        assert "--SHOULD-NOT-LEAK" not in nmap_cls.extra_flags
+        assert nmap_cls.extra_flags == original_nmap_flags
+
+        # Restore
+        httpx_cls.extra_flags[:] = original_httpx_flags
+
+    def test_opts_isolated_between_subclasses(self):
+        """Mutating one task's opts must not affect another."""
+        nmap_cls = TaskRegistry.get("nmap")
+        subfinder_cls = TaskRegistry.get("subfinder")
+        assert nmap_cls is not None and subfinder_cls is not None
+
+        original_nmap_opts = set(nmap_cls.opts.keys())
+
+        nmap_cls.opts["_test_key"] = OptDef(flag="--test")
+        assert "_test_key" not in subfinder_cls.opts
+
+        # Restore
+        del nmap_cls.opts["_test_key"]
+        assert set(nmap_cls.opts.keys()) == original_nmap_opts
+
+    def test_base_task_defaults_unaffected(self):
+        """Subclass mutations must not leak back to the Task base."""
+        assert Task.extra_flags == []
+        assert Task.opts == {}
+        assert Task.output_types == []
