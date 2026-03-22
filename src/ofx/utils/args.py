@@ -9,7 +9,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-def parse_key_value_pairs(inputs: list[str] | None) -> dict[str, Any]:
+def parse_key_value_pairs(inputs: list[str] | None, keep_string = False) -> dict[str, Any]:
     """Parse key=value string inputs into a dictionary.
 
     Supports multiple values for the same key (creates list) and JSON value parsing.
@@ -29,12 +29,12 @@ def parse_key_value_pairs(inputs: list[str] | None) -> dict[str, Any]:
             raise ValueError(
                 f"Invalid input format: {inp}. Expected key=value."
             ) from None
-
-        # Try JSON parsing for value
-        try:
-            value = json.loads(value)
-        except json.JSONDecodeError:
-            pass
+        if not keep_string:
+            # Try JSON parsing for value
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                pass
 
         if key not in processed_inputs:
             processed_inputs[key] = [value]

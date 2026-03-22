@@ -17,7 +17,6 @@ from ..encryption import (
 )
 
 logger = logging.getLogger(settings.app_branding)
-console = get_console()
 
 ENGAGEMENT_FILE_STRUCTURE = [
     ("evidence", ["creds", "data", "screenshots"]),
@@ -64,6 +63,7 @@ class InitHandler:
     @classmethod
     def run_interactive(cls, base_path: Path, is_multiphase: bool = False) -> None:
         """Run initialization with interactive prompts."""
+        console = get_console()
         remote_type = "git"
         remote_config: dict[str, Any] = {"url": "", "branch": "main"}
         encrypt = False
@@ -119,6 +119,7 @@ class InitHandler:
 
     def run(self) -> None:
         """Execute project initialization."""
+        console = get_console()
         cfg = self._config
 
         if cfg.is_multiphase:
@@ -143,6 +144,7 @@ class InitHandler:
         """Initialize local git repository."""
         import git
 
+        console = get_console()
         try:
             try:
                 repo = git.Repo(self._config.base_path)
@@ -170,6 +172,7 @@ class InitHandler:
         """Setup git remote for existing repository."""
         import git
 
+        console = get_console()
         cfg = self._config
         git_url = cfg.remote_config.get("url")
         branch = cfg.remote_config.get("branch", "main")

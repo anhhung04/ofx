@@ -73,11 +73,7 @@ def session_submit(
     parsed_inputs: dict = parse_key_value_pairs(inputs)
 
     # Parse env
-    parsed_env: dict = {}
-    for ev in env_vars:
-        if "=" in ev:
-            k, v = ev.split("=", 1)
-            parsed_env[k] = v
+    parsed_env: dict = parse_key_value_pairs(env_vars, keep_string=True)
 
     # Determine target
     if cloud and local:
