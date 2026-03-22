@@ -245,6 +245,18 @@ class TemplateResolver:
         def _subdomains(items: list) -> list:
             return _of_type(items, "subdomain")
 
+        def _ips(items: list) -> list:
+            return _of_type(items, "ip")
+
+        def _tags(items: list) -> list:
+            return _of_type(items, "tag")
+
+        def _records(items: list) -> list:
+            return _of_type(items, "record")
+
+        def _domains(items: list) -> list:
+            return _of_type(items, "domain")
+
         if self._support_funcs_cache is None:
             shell_exports = get_shell_exports()
 
@@ -306,6 +318,10 @@ class TemplateResolver:
                 "urls": _urls,
                 "vulns": _vulns,
                 "subdomains": _subdomains,
+                "ips": _ips,
+                "tags": _tags,
+                "records": _records,
+                "domains": _domains,
             }
 
         support_funcs = self._support_funcs_cache.copy()

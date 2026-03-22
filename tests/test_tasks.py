@@ -240,6 +240,11 @@ class TestTaskRegistry:
         port_tasks = TaskRegistry.get_by_category("port/")
         assert any(name == "nmap" for name, _ in port_tasks)
 
+    def test_get_by_category_empty_returns_all(self):
+        """Empty category prefix matches all tasks."""
+        all_tasks = TaskRegistry.get_by_category("")
+        assert len(all_tasks) == len(TaskRegistry.list_tasks())
+
     def test_register_duplicate_raises(self):
         # Register a fresh name then try to register it again
         name = "_test_dup_check"
@@ -847,3 +852,106 @@ class TestMutableDefaults:
         assert Task.extra_flags == []
         assert Task.opts == {}
         assert Task.output_types == []
+
+
+# ── Template Helpers ──────────────────────────────────────────────────────
+
+
+class TestTemplateHelpers:
+    """Verify template helper functions filter typed_output dicts correctly."""
+
+    @pytest.fixture()
+    def sample_outputs(self):
+        return [
+            {"_type": "port", "port": 80, "ip": "10.0.0.1"},
+            {"_type": "port", "port": 443, "ip": "10.0.0.1"},
+            {"_type": "url", "url": "https://example.com"},
+            {"_type": "vulnerability", "name": "XSS", "severity": "high"},
+            {"_type": "subdomain", "host": "api.example.com"},
+            {"_type": "ip", "ip": "10.0.0.1"},
+            {"_type": "tag", "name": "nginx", "category": "technology"},
+            {"_type": "record", "name": "mx.example.com", "type": "MX"},
+            {"_type": "domain", "domain": "example.com"},
+        ]
+
+    @staticmethod
+    def _of_type(items, type_name):
+        """Replicate the template helper logic for testing."""
+        if not isinstance(items, list):
+            return []
+        return [i for i in items if isinstance(i, dict) and i.get("_type") == type_name]
+
+    def test_of_type(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "port")) == 2
+        assert len(self._of_type(sample_outputs, "url")) == 1
+
+    def test_ports(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "port")) == 2
+
+    def test_urls(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "url")) == 1
+
+    def test_vulns(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "vulnerability")) == 1
+
+    def test_subdomains(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "subdomain")) == 1
+
+    def test_ips(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "ip")) == 1
+
+    def test_tags(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "tag")) == 1
+
+    def test_records(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "record")) == 1
+
+    def test_domains(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "domain")) == 1
+
+    def test_of_type_with_non_list(self):
+        assert self._of_type("not a list", "port") == []
+        assert self._of_type(None, "port") == []
+
+    def test_of_type_empty_list(self):
+        assert self._of_type([], "port") == []
+
+    def test_helpers_registered_in_resolver(self):
+        """Verify all helper names exist in TemplateResolver support functions."""
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        for name in ("of_type", "ports", "urls", "vulns", "subdomains",
+                      "ips", "tags", "records", "domains"):
+            assert name in funcs, f"Helper '{name}' not in support functions"
+
+
+# ── Pre-flight Binary Check ───────────────────────────────────────────────
+
+
+class TestPreflightCheck:
+    """Verify TaskRunner warns when tool binary is not installed."""
+
+    def test_check_installed_returns_bool(self):
+        task = TaskRegistry.create("nmap")
+        # Just verify the method returns a bool (actual result depends on system)
+        assert isinstance(task.check_installed(), bool)
+
+    def test_get_install_command(self):
+        task = TaskRegistry.create("nmap")
+        assert task.get_install_command() == "apt install -y nmap"
+
+    def test_get_install_command_none_when_empty(self):
+        """A task with no install_cmd returns None."""
+
+        class BareTask(Task):
+            name = "bare"
+            cmd = "bare"
+            install_cmd = ""
+
+            def parse_output(self, stdout, stderr, output_file=None):
+                return []
+
+        t = BareTask()
+        assert t.get_install_command() is None

@@ -69,6 +69,14 @@ class TaskRunner(BaseRunner[TaskExecution]):
             )
         self._task = task_cls()
 
+        # Pre-flight binary check with actionable install hint
+        if not self._task.check_installed():
+            install_hint = self._task.get_install_command()
+            msg = f"Task '{self.model.task_name}' requires '{self._task.cmd}' but it is not installed."
+            if install_hint:
+                msg += f" Install with: {install_hint}"
+            self._log_warning(msg)
+
     async def _do_run(self) -> None:
         assert self._task is not None
 
