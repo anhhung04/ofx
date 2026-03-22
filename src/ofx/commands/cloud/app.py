@@ -646,9 +646,6 @@ def fleet_run(
     inputs: Annotated[
         list[str], typer.Option("--input", "-i", help="Input key=value pairs")
     ] = [],
-    env_vars: Annotated[
-        list[str], typer.Option("-e", "--env", help="Environment KEY=VAL")
-    ] = [],
     target_var: Annotated[
         str,
         typer.Option(
@@ -674,14 +671,11 @@ def fleet_run(
     from ofx.commands import get_cli_env_vars
     from ofx.utils.args import parse_key_value_pairs
 
-    if env_vars is None:
-        env_vars = []
     if inputs is None:
         inputs = []
 
     parsed_inputs: dict = parse_key_value_pairs(inputs)
-    # Merge global CLI env vars with command-specific env vars (command overrides global)
-    parsed_env: dict = {**get_cli_env_vars(), **parse_key_value_pairs(env_vars, keep_string=True)}
+    parsed_env: dict = get_cli_env_vars()
 
     if not profile:
         console.print("[red]Fleet run requires --profile for cloud execution[/red]")

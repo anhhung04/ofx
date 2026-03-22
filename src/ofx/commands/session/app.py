@@ -53,9 +53,6 @@ def session_submit(
     inputs: Annotated[
         list[str] | None, typer.Option("--input", "-i", help="Input key=value pairs")
     ] = None,
-    env_vars: Annotated[
-        list[str] | None, typer.Option("-e", "--env", help="Environment KEY=VAL")
-    ] = None,
 ):
     """Submit a workflow as a detached session.
 
@@ -66,11 +63,8 @@ def session_submit(
     from ofx.commands import get_cli_env_vars
     from ofx.utils.args import parse_key_value_pairs
 
-    # Parse inputs
     parsed_inputs: dict = parse_key_value_pairs(inputs or [])
-
-    # Merge global CLI env vars with command-specific env vars (command overrides global)
-    parsed_env: dict = {**get_cli_env_vars(), **parse_key_value_pairs(env_vars or [], keep_string=True)}
+    parsed_env: dict = get_cli_env_vars()
 
     # Determine target
     if cloud and local:
