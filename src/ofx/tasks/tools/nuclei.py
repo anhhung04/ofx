@@ -25,7 +25,7 @@ class NucleiTask(Task):
     description = "Fast and customisable vulnerability scanner based on YAML templates"
     category = "vuln/scan"
     install_cmd = (
-        "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
+        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest"
     )
     output_types = [Vulnerability, Tag]
 

@@ -604,3 +604,762 @@ class TestStreamingDetectionEdgeCases:
 
         task = StreamTask()
         assert task.supports_streaming
+
+
+# ── Gospider Parser ────────────────────────────────────────────────────
+
+
+class TestGospiderParser:
+    def test_parse_output(self):
+        lines = [
+            json.dumps({"output": "https://example.com/page", "source": "sitemap", "type": "url"}),
+            json.dumps({"output": "https://example.com/robots.txt", "source": "robots", "type": "url"}),
+        ]
+        task = TaskRegistry.create("gospider")
+        results = task.parse_output("\n".join(lines), "")
+        urls = [r for r in results if isinstance(r, Url)]
+        assert len(urls) == 2
+        assert urls[0].url == "https://example.com/page"
+        assert urls[0].host == "example.com"
+        assert urls[1].url == "https://example.com/robots.txt"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("gospider")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("gospider")
+        cmd, _ = task.build_command("https://example.com", depth=3, threads=10)
+        assert "gospider" in cmd
+        assert "--json" in cmd
+        assert "-q" in cmd
+        assert "-s https://example.com" in cmd
+        assert "-d 3" in cmd
+        assert "-t 10" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("gospider")
+        assert task.name == "gospider"
+
+
+# ── Gau Parser ─────────────────────────────────────────────────────────
+
+
+class TestGauParser:
+    def test_parse_output(self):
+        lines = [
+            json.dumps({"url": "https://example.com/login", "status": 200}),
+            json.dumps({"url": "https://example.com/api", "status": 301}),
+        ]
+        task = TaskRegistry.create("gau")
+        results = task.parse_output("\n".join(lines), "")
+        urls = [r for r in results if isinstance(r, Url)]
+        subs = [r for r in results if isinstance(r, Subdomain)]
+        assert len(urls) == 2
+        assert urls[0].url == "https://example.com/login"
+        assert urls[0].status_code == 200
+        assert len(subs) == 2
+        assert subs[0].host == "example.com"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("gau")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("gau")
+        cmd, _ = task.build_command("example.com", threads=5)
+        assert "gau" in cmd
+        assert "--json" in cmd
+        assert "-t 5" in cmd
+        assert "example.com" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("gau")
+        assert task.name == "gau"
+
+
+# ── Dalfox Parser ──────────────────────────────────────────────────────
+
+
+class TestDalfoxParser:
+    def test_parse_output(self):
+        lines = [
+            json.dumps({
+                "type": "vuln",
+                "data": "[POC] reflected XSS found",
+                "proof": "<script>alert(1)</script>",
+                "param": "q",
+                "payload": "<script>alert(1)</script>",
+                "method": "GET",
+                "url": "https://example.com/search?q=test",
+            }),
+        ]
+        task = TaskRegistry.create("dalfox")
+        results = task.parse_output("\n".join(lines), "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 1
+        assert vulns[0].name == "[POC] reflected XSS found"
+        assert vulns[0].provider == "dalfox"
+        assert "xss" in vulns[0].tags
+
+    def test_parse_output_non_vuln(self):
+        lines = [
+            json.dumps({"type": "info", "url": "https://example.com/search"}),
+        ]
+        task = TaskRegistry.create("dalfox")
+        results = task.parse_output("\n".join(lines), "")
+        urls = [r for r in results if isinstance(r, Url)]
+        assert len(urls) == 1
+        assert urls[0].url == "https://example.com/search"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("dalfox")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("dalfox")
+        cmd, _ = task.build_command("https://example.com/search?q=test", workers=10)
+        assert "dalfox" in cmd
+        assert "url" in cmd
+        assert "--format" in cmd
+        assert "jsonl" in cmd
+        assert "-w 10" in cmd
+        assert "https://example.com/search?q=test" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("dalfox")
+        assert task.name == "dalfox"
+
+
+# ── Maigret Parser ─────────────────────────────────────────────────────
+
+
+class TestMaigretParser:
+    def test_parse_output(self):
+        lines = [
+            json.dumps({
+                "siteName": "GitHub",
+                "url_user": "https://github.com/testuser",
+                "status": "Claimed",
+                "username": "testuser",
+            }),
+        ]
+        task = TaskRegistry.create("maigret")
+        results = task.parse_output("\n".join(lines), "")
+        from ofx.tasks.output_types import UserAccount
+        accounts = [r for r in results if isinstance(r, UserAccount)]
+        assert len(accounts) == 1
+        assert accounts[0].username == "testuser"
+        assert accounts[0].source == "GitHub"
+        assert accounts[0].extra_data["url"] == "https://github.com/testuser"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("maigret")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("maigret")
+        cmd, _ = task.build_command("testuser", timeout=30)
+        assert "maigret" in cmd
+        assert "--json" in cmd
+        assert "--timeout 30" in cmd
+        assert "testuser" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("maigret")
+        assert task.name == "maigret"
+
+
+# ── Searchsploit Parser ───────────────────────────────────────────────
+
+
+class TestSearchsploitParser:
+    def test_parse_output(self):
+        data = {
+            "RESULTS_EXPLOIT": [
+                {
+                    "Title": "Apache 2.4.49 - Path Traversal",
+                    "EDB-ID": "50383",
+                    "Platform": "linux",
+                    "Type": "webapps",
+                },
+            ]
+        }
+        task = TaskRegistry.create("searchsploit")
+        results = task.parse_output(json.dumps(data), "")
+        from ofx.tasks.output_types import Exploit
+        exploits = [r for r in results if isinstance(r, Exploit)]
+        assert len(exploits) == 1
+        assert exploits[0].name == "Apache 2.4.49 - Path Traversal"
+        assert exploits[0].id == "50383"
+        assert exploits[0].provider == "exploit-db"
+        assert "linux" in exploits[0].tags
+        assert "webapps" in exploits[0].tags
+        assert "50383" in exploits[0].reference
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("searchsploit")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("searchsploit")
+        cmd, _ = task.build_command("apache 2.4", exact=True)
+        assert "searchsploit" in cmd
+        assert "--json" in cmd
+        assert "--exact" in cmd
+        assert "apache 2.4" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("searchsploit")
+        assert task.name == "searchsploit"
+
+
+# ── Gitleaks Parser ────────────────────────────────────────────────────
+
+
+class TestGitleaksParser:
+    def test_parse_output(self, tmp_path):
+        findings = [
+            {
+                "RuleID": "generic-api-key",
+                "File": "config.py",
+                "StartLine": 15,
+                "Commit": "abc123",
+                "Author": "dev@test.com",
+                "Secret": "AKIAIOSFODNN7EXAMPLE",
+            },
+        ]
+        outfile = tmp_path / "gitleaks.json"
+        outfile.write_text(json.dumps(findings))
+        task = TaskRegistry.create("gitleaks")
+        results = task.parse_output("", "", output_file=outfile)
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 1
+        assert tags[0].name == "secret"
+        assert tags[0].value == "generic-api-key"
+        assert tags[0].match == "config.py"
+        assert tags[0].category == "secret"
+        assert tags[0].extra_data["commit"] == "abc123"
+        assert tags[0].extra_data["author"] == "dev@test.com"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("gitleaks")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("gitleaks")
+        cmd, _ = task.build_command("/path/to/repo", verbose=True)
+        assert "gitleaks" in cmd
+        assert "detect" in cmd
+        assert "-f json" in cmd
+        assert "--source /path/to/repo" in cmd
+        assert "-v" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("gitleaks")
+        assert task.name == "gitleaks"
+
+
+# ── Trufflehog Parser ─────────────────────────────────────────────────
+
+
+class TestTrufflehogParser:
+    def test_parse_output(self):
+        lines = [
+            json.dumps({
+                "DetectorName": "AWS",
+                "Verified": True,
+                "Raw": "AKIAIOSFODNN7EXAMPLE",
+                "SourceMetadata": {
+                    "Data": {"Filesystem": {"file": "secrets.txt"}},
+                },
+            }),
+        ]
+        task = TaskRegistry.create("trufflehog")
+        results = task.parse_output("\n".join(lines), "")
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 1
+        assert tags[0].name == "secret"
+        assert tags[0].value == "AWS"
+        assert tags[0].match == "secrets.txt"
+        assert tags[0].extra_data["verified"] is True
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("trufflehog")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("trufflehog")
+        cmd, _ = task.build_command("https://github.com/org/repo", verified_only=True)
+        assert "trufflehog" in cmd
+        assert "git" in cmd.split()
+        assert "--json" in cmd
+        assert "--only-verified" in cmd
+        assert "https://github.com/org/repo" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("trufflehog")
+        assert task.name == "trufflehog"
+
+
+# ── Grype Parser ───────────────────────────────────────────────────────
+
+
+class TestGrypeParser:
+    def test_parse_output(self):
+        data = {
+            "matches": [
+                {
+                    "vulnerability": {
+                        "id": "CVE-2021-44228",
+                        "severity": "Critical",
+                        "fix": {"versions": ["2.17.0"]},
+                    },
+                    "artifact": {"name": "log4j-core", "version": "2.14.1"},
+                },
+            ]
+        }
+        task = TaskRegistry.create("grype")
+        results = task.parse_output(json.dumps(data), "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 1
+        assert vulns[0].name == "CVE-2021-44228"
+        assert vulns[0].id == "CVE-2021-44228"
+        assert vulns[0].severity == Severity.CRITICAL
+        assert vulns[0].provider == "grype"
+        assert vulns[0].extra_data["package"] == "log4j-core"
+        assert vulns[0].extra_data["version"] == "2.14.1"
+        assert "2.17.0" in vulns[0].extra_data["fix_versions"]
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("grype")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("grype")
+        cmd, _ = task.build_command("alpine:3.16", only_fixed=True)
+        assert "grype" in cmd
+        assert "-o json" in cmd
+        assert "--only-fixed" in cmd
+        assert "alpine:3.16" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("grype")
+        assert task.name == "grype"
+
+
+# ── Trivy Parser ───────────────────────────────────────────────────────
+
+
+class TestTrivyParser:
+    def test_parse_output(self):
+        data = {
+            "Results": [
+                {
+                    "Target": "app",
+                    "Class": "os-pkgs",
+                    "Type": "debian",
+                    "Vulnerabilities": [
+                        {
+                            "VulnerabilityID": "CVE-2023-1234",
+                            "Severity": "HIGH",
+                            "PkgName": "openssl",
+                            "InstalledVersion": "1.1.1",
+                            "FixedVersion": "1.1.2",
+                        },
+                    ],
+                }
+            ]
+        }
+        task = TaskRegistry.create("trivy")
+        results = task.parse_output(json.dumps(data), "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(vulns) == 1
+        assert vulns[0].name == "CVE-2023-1234"
+        assert vulns[0].severity == Severity.HIGH
+        assert vulns[0].matched_at == "openssl"
+        assert vulns[0].provider == "trivy"
+        assert vulns[0].extra_data["installed"] == "1.1.1"
+        assert vulns[0].extra_data["fixed"] == "1.1.2"
+        assert len(tags) == 1
+        assert tags[0].name == "os-pkgs"
+        assert tags[0].value == "debian"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("trivy")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("trivy")
+        cmd, _ = task.build_command("alpine:3.16", severity="HIGH,CRITICAL")
+        assert "trivy" in cmd
+        assert "image" in cmd.split()
+        assert "-f json" in cmd
+        assert "--severity HIGH,CRITICAL" in cmd
+        assert "alpine:3.16" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("trivy")
+        assert task.name == "trivy"
+
+
+# ── WPScan Parser ─────────────────────────────────────────────────────
+
+
+class TestWpscanParser:
+    def test_parse_output(self):
+        data = {
+            "plugins": {
+                "contact-form-7": {
+                    "slug": "contact-form-7",
+                    "version": {"number": "5.1"},
+                    "vulnerabilities": [
+                        {
+                            "title": "CF7 < 5.3 - Unrestricted File Upload",
+                            "references": {
+                                "cve": ["2020-35489"],
+                                "wpvulndb": ["10034"],
+                            },
+                        },
+                    ],
+                }
+            },
+            "target_url": "https://example.com",
+        }
+        task = TaskRegistry.create("wpscan")
+        results = task.parse_output(json.dumps(data), "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(vulns) == 1
+        assert vulns[0].name == "CF7 < 5.3 - Unrestricted File Upload"
+        assert vulns[0].id == "2020-35489"
+        assert vulns[0].provider == "wpscan"
+        assert len(tags) == 1
+        assert tags[0].name == "contact-form-7"
+        assert tags[0].value == "5.1"
+        assert tags[0].category == "wordpress"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("wpscan")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("wpscan")
+        cmd, _ = task.build_command("https://example.com", enumerate="vp,vt", stealthy=True)
+        assert "wpscan" in cmd
+        assert "--format" in cmd
+        assert "json" in cmd
+        assert "--url https://example.com" in cmd
+        assert "-e vp,vt" in cmd
+        assert "--stealthy" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("wpscan")
+        assert task.name == "wpscan"
+
+
+# ── SSH-Audit Parser ──────────────────────────────────────────────────
+
+
+class TestSshAuditParser:
+    def test_parse_output(self):
+        data = {
+            "banner": {"raw": "SSH-2.0-OpenSSH_8.2p1"},
+            "cves": [{"name": "CVE-2021-41617", "cvssv2": 7.0}],
+            "enc": [
+                {"algorithm": "aes128-ctr", "notes": {"warn": ["using weak cipher"]}},
+            ],
+        }
+        task = TaskRegistry.create("ssh-audit")
+        results = task.parse_output(json.dumps(data), "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(vulns) == 1
+        assert vulns[0].name == "CVE-2021-41617"
+        assert vulns[0].severity == Severity.HIGH
+        assert vulns[0].provider == "ssh-audit"
+        assert vulns[0].cvss_score == 7.0
+        # One weak algo tag + one banner tag
+        weak_tags = [t for t in tags if t.value == "weak"]
+        banner_tags = [t for t in tags if t.category == "banner"]
+        assert len(weak_tags) == 1
+        assert weak_tags[0].name == "aes128-ctr"
+        assert len(banner_tags) == 1
+        assert banner_tags[0].value == "SSH-2.0-OpenSSH_8.2p1"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("ssh-audit")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("ssh-audit")
+        cmd, _ = task.build_command("192.168.1.1", port=2222)
+        assert "ssh-audit" in cmd
+        assert "-j" in cmd
+        assert "-p 2222" in cmd
+        assert "192.168.1.1" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("ssh-audit")
+        assert task.name == "ssh-audit"
+
+
+# ── Dirsearch Parser ──────────────────────────────────────────────────
+
+
+class TestDirsearchParser:
+    def test_parse_output(self, tmp_path):
+        data = {
+            "results": [
+                {
+                    "url": "https://example.com/admin",
+                    "status": 200,
+                    "content-length": 1234,
+                    "content-type": "text/html",
+                    "redirect": "",
+                },
+            ]
+        }
+        outfile = tmp_path / "dirsearch.json"
+        outfile.write_text(json.dumps(data))
+        task = TaskRegistry.create("dirsearch")
+        results = task.parse_output("", "", output_file=outfile)
+        urls = [r for r in results if isinstance(r, Url)]
+        assert len(urls) == 1
+        assert urls[0].url == "https://example.com/admin"
+        assert urls[0].status_code == 200
+        assert urls[0].content_length == 1234
+        assert urls[0].content_type == "text/html"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("dirsearch")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("dirsearch")
+        cmd, _ = task.build_command("https://example.com", extensions="php,html", threads=30)
+        assert "dirsearch" in cmd
+        assert "--format" in cmd
+        assert "json" in cmd
+        assert "-u https://example.com" in cmd
+        assert "-e php,html" in cmd
+        assert "-t 30" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("dirsearch")
+        assert task.name == "dirsearch"
+
+
+# ── Arjun Parser ───────────────────────────────────────────────────────
+
+
+class TestArjunParser:
+    def test_parse_output(self, tmp_path):
+        data = {
+            "https://example.com/api": {
+                "method": "GET",
+                "params": ["id", "page", "token"],
+            }
+        }
+        outfile = tmp_path / "arjun.json"
+        outfile.write_text(json.dumps(data))
+        task = TaskRegistry.create("arjun")
+        results = task.parse_output("", "", output_file=outfile)
+        urls = [r for r in results if isinstance(r, Url)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(urls) == 1
+        assert urls[0].url == "https://example.com/api"
+        assert urls[0].method == "GET"
+        assert len(tags) == 3
+        param_names = [t.name for t in tags]
+        assert "id" in param_names
+        assert "page" in param_names
+        assert "token" in param_names
+        assert all(t.category == "parameter" for t in tags)
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("arjun")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("arjun")
+        cmd, out_file = task.build_command("https://example.com/api", method="POST", threads=5)
+        assert "arjun" in cmd
+        assert "-u https://example.com/api" in cmd
+        assert "-m POST" in cmd
+        assert "-t 5" in cmd
+        # arjun has output_flag=-oJ, so output_file should be set
+        assert out_file is not None
+        # Clean up the temp file
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_registration(self):
+        task = TaskRegistry.create("arjun")
+        assert task.name == "arjun"
+
+
+# ── Testssl Parser ─────────────────────────────────────────────────────
+
+
+class TestTestsslParser:
+    def test_parse_output(self, tmp_path):
+        data = [
+            {
+                "id": "cert_notAfter",
+                "severity": "OK",
+                "finding": "2025-01-01",
+                "ip": "93.184.216.34",
+                "port": "443",
+            },
+            {
+                "id": "LUCKY13",
+                "severity": "LOW",
+                "finding": "LUCKY13 potentially vulnerable",
+                "ip": "93.184.216.34",
+                "port": "443",
+            },
+        ]
+        outfile = tmp_path / "testssl.json"
+        outfile.write_text(json.dumps(data))
+        task = TaskRegistry.create("testssl")
+        results = task.parse_output("", "", output_file=outfile)
+        from ofx.tasks.output_types import Certificate
+        certs = [r for r in results if isinstance(r, Certificate)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        # cert_notAfter starts with "cert_" → Certificate
+        assert len(certs) == 1
+        assert certs[0].subject_cn == "2025-01-01"
+        assert certs[0].host == "93.184.216.34:443"
+        # LUCKY13 severity LOW → Tag (not vuln, no "vuln" in id, severity not medium/high/critical)
+        assert len(tags) == 1
+        assert tags[0].name == "LUCKY13"
+        assert tags[0].value == "LUCKY13 potentially vulnerable"
+
+    def test_parse_output_with_vuln(self):
+        data = [
+            {
+                "id": "BEAST_vuln",
+                "severity": "HIGH",
+                "finding": "BEAST vulnerability found",
+                "ip": "10.0.0.1",
+                "port": "443",
+            },
+        ]
+        task = TaskRegistry.create("testssl")
+        results = task.parse_output(json.dumps(data), "")
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        assert len(vulns) == 1
+        assert vulns[0].name == "BEAST_vuln"
+        assert vulns[0].severity == Severity.HIGH
+        assert vulns[0].provider == "testssl"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("testssl")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("testssl")
+        cmd, out_file = task.build_command("example.com:443", protocols=True, vulnerabilities=True)
+        assert "testssl.sh" in cmd
+        assert "-p" in cmd
+        assert "-U" in cmd
+        assert "example.com:443" in cmd
+        # testssl has output_flag=--jsonfile
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_registration(self):
+        task = TaskRegistry.create("testssl")
+        assert task.name == "testssl"
+
+
+# ── H8mail Parser ─────────────────────────────────────────────────────
+
+
+class TestH8mailParser:
+    def test_parse_output(self, tmp_path):
+        data = {
+            "targets": [
+                {
+                    "target": "user@example.com",
+                    "data": [
+                        {"breach": "LinkedIn 2012", "password": "pass123"},
+                    ],
+                }
+            ]
+        }
+        outfile = tmp_path / "h8mail.json"
+        outfile.write_text(json.dumps(data))
+        task = TaskRegistry.create("h8mail")
+        results = task.parse_output("", "", output_file=outfile)
+        from ofx.tasks.output_types import UserAccount
+        accounts = [r for r in results if isinstance(r, UserAccount)]
+        assert len(accounts) == 1
+        assert accounts[0].username == "user@example.com"
+        assert accounts[0].password == "pass123"
+        assert accounts[0].source == "LinkedIn 2012"
+        assert accounts[0].extra_data["breach"] == "LinkedIn 2012"
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("h8mail")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("h8mail")
+        cmd, out_file = task.build_command("user@example.com", chase_limit=10)
+        assert "h8mail" in cmd
+        assert "-t user@example.com" in cmd
+        assert "--chase-limit 10" in cmd
+        # h8mail has output_flag=--json
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_registration(self):
+        task = TaskRegistry.create("h8mail")
+        assert task.name == "h8mail"
+
+
+# ── Whois Parser ───────────────────────────────────────────────────────
+
+
+class TestWhoisParser:
+    def test_parse_output(self):
+        stdout = (
+            "Domain Name: EXAMPLE.COM\n"
+            "Registrar: Example Registrar, Inc.\n"
+            "Creation Date: 1995-08-14T04:00:00Z\n"
+            "Registry Expiry Date: 2024-08-13T04:00:00Z\n"
+            "Name Server: NS1.EXAMPLE.COM\n"
+            "Name Server: NS2.EXAMPLE.COM\n"
+        )
+        task = TaskRegistry.create("whois")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Domain
+        domains = [r for r in results if isinstance(r, Domain)]
+        assert len(domains) == 1
+        assert domains[0].domain == "example.com"
+        assert domains[0].registrar == "Example Registrar, Inc."
+        assert domains[0].creation_date == "1995-08-14T04:00:00Z"
+        assert domains[0].expiration_date == "2024-08-13T04:00:00Z"
+        assert domains[0].alive is True
+        ns = domains[0].extra_data.get("name_servers", [])
+        assert "ns1.example.com" in ns
+        assert "ns2.example.com" in ns
+
+    def test_parse_output_empty(self):
+        task = TaskRegistry.create("whois")
+        assert task.parse_output("", "") == []
+
+    def test_command_building(self):
+        task = TaskRegistry.create("whois")
+        cmd, _ = task.build_command("example.com")
+        assert "whois" in cmd
+        assert "example.com" in cmd
+
+    def test_registration(self):
+        task = TaskRegistry.create("whois")
+        assert task.name == "whois"

@@ -16,7 +16,7 @@ class SubfinderTask(Task):
     description = "Fast passive subdomain enumeration tool"
     category = "dns/recon"
     install_cmd = (
-        "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
+        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
     )
     output_types = [Subdomain]
 

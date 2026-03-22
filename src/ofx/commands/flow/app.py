@@ -17,7 +17,7 @@ app.add_typer(profile_cmd_app, name="profile", help="Manage execution profiles (
 
 NAME = "flow"
 
-ALIAS = []
+ALIAS = ["x"]
 
 HELP = "Manage and run workflows in the OFX system"
 

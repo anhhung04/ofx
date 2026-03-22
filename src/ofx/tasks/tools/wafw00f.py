@@ -15,7 +15,7 @@ class Wafw00fTask(Task):
     cmd = "wafw00f"
     description = "Web Application Firewall detection tool"
     category = "waf/detect"
-    install_cmd = "pip install wafw00f"
+    install_cmd = "uv tool install wafw00f"
     output_types = [Tag]
 
     opts = {

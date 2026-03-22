@@ -88,10 +88,26 @@ ofx flow tasks list -c vuln/
 | `httpx` | url/probe | Fast and multi-purpose HTTP toolkit | Url, Tag |
 | `ffuf` | url/fuzz | Fast web fuzzer written in Go | Url |
 | `feroxbuster` | url/fuzz | Fast content discovery tool written in Rust | Url |
+| `dirsearch` | url/fuzz | Advanced web path brute-forcer | Url |
+| `arjun` | url/fuzz/params | HTTP parameter discovery suite | Url, Tag |
+| `dalfox` | url/fuzz | Powerful XSS scanning tool | Vulnerability, Url |
 | `katana` | url/crawl | Next-generation crawling and spidering framework | Url |
+| `gospider` | url/crawl | Fast web spider written in Go | Url |
+| `gau` | url/recon | Fetch known URLs from OTX, Wayback, Common Crawl | Url, Subdomain |
 | `subfinder` | dns/recon | Fast passive subdomain enumeration tool | Subdomain |
 | `dnsx` | dns/resolve | Fast and multi-purpose DNS toolkit | Subdomain, Ip, Record |
 | `nuclei` | vuln/scan | Fast template-based vulnerability scanner | Vulnerability, Tag |
+| `grype` | vuln/scan | Vulnerability scanner for container images | Vulnerability |
+| `trivy` | vuln/scan | Comprehensive security scanner | Vulnerability, Tag |
+| `wpscan` | vuln/scan/wordpress | WordPress security scanner | Vulnerability, Tag |
+| `testssl` | dns/recon/tls | SSL/TLS security scanner | Certificate, Vulnerability, Tag |
+| `ssh-audit` | ssh/audit | SSH server security auditing | Vulnerability, Tag |
+| `gitleaks` | secret/scan | Secret detection in git repositories | Tag |
+| `trufflehog` | secret/scan | Secret detection in repos and filesystems | Tag |
+| `searchsploit` | exploit/recon | ExploitDB search tool | Exploit |
+| `maigret` | user/recon | Username OSINT across social networks | UserAccount |
+| `h8mail` | user/recon/email | Email/password breach lookup | UserAccount |
+| `whois` | domain/info | Domain WHOIS lookup | Domain |
 | `wafw00f` | waf/detect | Web Application Firewall detection tool | Tag |
 
 ---
@@ -171,9 +187,25 @@ Tasks that output JSONL or line-delimited results support **live streaming** —
 | dnsx | JSONL | ✅ |
 | feroxbuster | JSONL | ✅ |
 | subfinder | line | ✅ |
+| gospider | JSONL | ✅ |
+| gau | JSONL | ✅ |
+| dalfox | JSONL | ✅ |
+| maigret | JSONL | ✅ |
+| trufflehog | JSONL | ✅ |
 | nmap | XML | ❌ (file-based) |
 | ffuf | JSON | ❌ (single blob) |
 | wafw00f | stdout | ❌ (multi-line) |
+| dirsearch | JSON file | ❌ |
+| arjun | JSON file | ❌ |
+| gitleaks | JSON file | ❌ |
+| grype | JSON blob | ❌ |
+| trivy | JSON blob | ❌ |
+| wpscan | JSON blob | ❌ |
+| ssh-audit | JSON blob | ❌ |
+| testssl | JSON file | ❌ |
+| searchsploit | JSON blob | ❌ |
+| h8mail | JSON file | ❌ |
+| whois | text | ❌ |
 
 ### Subscribing to Streamed Items
 

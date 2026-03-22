@@ -1,0 +1,84 @@
+"""gospider — fast web spider for link and endpoint discovery."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from urllib.parse import urlparse
+
+from ofx.tasks.base import OptDef, Task
+from ofx.tasks.output_types import Url
+from ofx.tasks.registry import TaskRegistry
+
+
+@TaskRegistry.register("gospider")
+class GospiderTask(Task):
+    name = "gospider"
+    cmd = "gospider"
+    description = "Fast web spider written in Go"
+    category = "url/crawl"
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/jaeles-project/gospider@latest"
+    output_types = [Url]
+
+    opts = {
+        "depth": OptDef(flag="-d", type=int, help="Maximum depth to crawl"),
+        "threads": OptDef(flag="-t", type=int, help="Number of threads"),
+        "concurrent": OptDef(flag="-c", type=int, help="Concurrent requests per site"),
+        "timeout": OptDef(flag="--timeout", type=int, help="Request timeout in seconds"),
+        "include_subs": OptDef(
+            flag="--include-subs", is_flag=True, help="Include subdomains"
+        ),
+        "include_other": OptDef(
+            flag="--include-other-source",
+            is_flag=True,
+            help="Include other sources (robots.txt, sitemap, etc.)",
+        ),
+    }
+
+    input_flag = "-s"
+    file_flag = "-S"
+    output_flag = None
+    extra_flags = ["--json", "-q"]
+
+    def _output_suffix(self) -> str:
+        return ".jsonl"
+
+    def parse_line(self, line: str) -> list[Url]:
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return []
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+
+        url = data.get("output", "")
+        if not url:
+            return []
+
+        host = ""
+        try:
+            host = urlparse(url).hostname or ""
+        except ValueError:
+            pass
+
+        return [Url(url=url, host=host)]
+
+    def parse_output(
+        self,
+        stdout: str,
+        stderr: str,
+        output_file: Path | None = None,
+    ) -> list[Url]:
+        results: list[Url] = []
+        lines: list[str] = []
+
+        if output_file and output_file.exists():
+            lines = self._read_output_file(output_file).strip().splitlines()
+        elif stdout:
+            lines = stdout.strip().splitlines()
+
+        for line in lines:
+            results.extend(self.parse_line(line))
+
+        return results
