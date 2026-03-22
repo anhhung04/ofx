@@ -98,6 +98,22 @@ profiles:
       HTTPS_PROXY: "socks5://127.0.0.1:9050"
 ```
 
+### Auto-Injected Environment Variables
+
+When a profile is active, OFX automatically injects `OFX_*` environment variables from non-default profile fields. These are available in all steps and can be read by external tools:
+
+| Variable | Source Field | Injected When |
+|----------|-------------|---------------|
+| `OFX_RATE_LIMIT` | `rate_limit` | `rate_limit > 0` |
+| `OFX_THREADS` | `threads` | `threads ≠ 10` (non-default) |
+| `OFX_TIMEOUT` | `timeout_minutes` | `timeout_minutes ≠ 60` (non-default) |
+| `OFX_DELAY` | `delay` | `delay > 0` |
+| `OFX_JITTER` | `jitter` | `jitter > 0` |
+| `OFX_PROXY` | `proxy` | `proxy` is set |
+| `OFX_USER_AGENT` | `user_agent` | `user_agent` is set |
+
+These are in addition to any custom `env:` vars defined in the profile.
+
 ---
 
 ## Time Window Enforcement

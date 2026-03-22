@@ -200,6 +200,14 @@ Pre-built security tool wrappers with structured output parsing, inspired by sec
 - Template helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `of_type()` for filtering typed outputs in Jinja2 templates.
 - CLI: `ofx flow tasks list [-c category/]` and `ofx flow tasks info <name>`.
 
+### Profiles (`src/ofx/profiles/`)
+Execution profiles for rate limits, stealth, time windows, and per-tool overrides.
+- `models.py` — `OFXProfile` (rate_limit, threads, delay, jitter, proxy, user_agent, time_window, env, task_options) and `TimeWindow` (enabled, start, end, days, timezone, warn_before_minutes, abort_on_expire) Pydantic models.
+- `manager.py` — `ProfileManager` with CRUD on `~/.ofx/profiles.yml`; `resolve()` merges by name, `resolve_or_default()` falls back to default profile. Follows `CloudProfileManager` pattern.
+- `time_window.py` — `check_time_window()` validates current time/day against window config. `TimeWindowGuard` runs as `asyncio.create_task` background monitor, sets abort event when window expires. `_time_in_range()` handles overnight windows.
+- CLI: `ofx flow profile list/show/add/remove/default` (`src/ofx/commands/flow/profile_commands.py`).
+- Integration: `WorkflowRunner._apply_profile()` resolves profile, injects `OFX_*` env vars, stores in `ctx.vars["profile"]`. `WorkflowExecutionManager` checks `time_guard.should_abort` between stages.
+
 ## Key conventions
 
 - **Workflow YAML files** start with `# yaml-language-server: $schema=<path>` for IDE support. Generate the schema with `ofx flow schema schema` (writes to `~/.ofx/workflow_schema.json`). Create a new workflow scaffold with `ofx flow init <name>`.
