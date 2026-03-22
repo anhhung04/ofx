@@ -66,6 +66,8 @@ class CloudStepRunner(BaseRunner):
             resolve_fields.extend(["script"])
         elif self._run_type == RunType.SCRIPT_FILE:
             resolve_fields.extend(["script_file"])
+        elif self._run_type == RunType.TASK:
+            resolve_fields.extend(["task", "run_with"])
 
         self.ctx.vars["remote_work_dir"] = self._resolve_remote_work_dir()
         await self._resolve_template_fields(resolve_fields)
@@ -105,12 +107,18 @@ class CloudStepRunner(BaseRunner):
                     raise RuntimeError(
                         "Reusable workflows ('uses') are not supported in cloud job mode"
                     )
+                elif run_type == RunType.TASK:
+                    output = await self._run_remote_task(timeout=timeout_secs)
                 else:
                     raise RuntimeError(f"Unknown run type: {run_type}")
 
                 # Store output
                 if output:
-                    await self.reg_set(RunnerRegistryKeys.OUTPUTS, {"stdout": output})
+                    outputs_dict: dict[str, Any] = {"stdout": output}
+                    # Parse typed outputs for task steps
+                    if run_type == RunType.TASK and self.model.task:
+                        outputs_dict["typed_outputs"] = self._parse_task_output(output)
+                    await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs_dict)
 
                 # Log output
                 if self.model.log_stdout and output and self.ctx.output_path:
@@ -308,6 +316,51 @@ class CloudStepRunner(BaseRunner):
                 await asyncio.to_thread(self._remote.run, f"rm -f {remote_path}", 10)
             except Exception:
                 pass
+
+    # ------------------------------------------------------------------
+    # Task execution (remote)
+    # ------------------------------------------------------------------
+
+    async def _run_remote_task(self, timeout: int | None = None) -> str:
+        """Build a task command locally and run it on the remote host.
+
+        The task's ``build_command`` generates the CLI invocation.  Since
+        the structured output file lives on the remote host we cannot
+        parse it locally, so we rely on stdout/stderr parsing only.
+        """
+        from ofx.tasks.registry import TaskRegistry
+
+        task_cls = TaskRegistry.get(self.model.task)
+        if task_cls is None:
+            raise RuntimeError(f"Task '{self.model.task}' is not registered")
+
+        task = task_cls()
+
+        # Extract target from run_with; remaining keys are task options
+        task_opts = dict(self.model.run_with)
+        target = str(task_opts.pop("target", task_opts.pop("targets", "")))
+
+        # Build command — disable output_flag so no temp file is created
+        saved_output_flag = task.output_flag
+        task.output_flag = None
+        cmd_str, _ = task.build_command(target, **task_opts)
+        task.output_flag = saved_output_flag
+
+        return await self._run_remote_command(cmd_str, timeout=timeout)
+
+    def _parse_task_output(self, stdout: str) -> list[dict]:
+        """Parse stdout through the registered task's parser."""
+        try:
+            from ofx.tasks.registry import TaskRegistry
+
+            task_cls = TaskRegistry.get(self.model.task)
+            if task_cls is None:
+                return []
+            task = task_cls()
+            results = task.parse_output(stdout=stdout, stderr="")
+            return [r.to_dict() for r in results]
+        except Exception:
+            return []
 
     # ------------------------------------------------------------------
     # Helpers

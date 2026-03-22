@@ -48,38 +48,10 @@ class FfufTask(Task):
     input_flag = "-u"
     file_flag = None
     output_flag = "-o"
+    extra_flags = ["-noninteractive", "-of", "json"]
 
     def _output_suffix(self) -> str:
         return ".json"
-
-    def build_command(self, target: str, **kwargs):
-        parts = [self.cmd, "-noninteractive", "-of", "json"]
-
-        for key, value in kwargs.items():
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
-
-        output_file = None
-        if self.output_flag:
-            import tempfile
-
-            output_file = Path(
-                tempfile.mkstemp(prefix=".ofx_task_ffuf_", suffix=".json")[1]
-            )
-            parts.extend([self.output_flag, str(output_file)])
-
-        if self.input_flag:
-            parts.extend([self.input_flag, target])
-        else:
-            parts.append(target)
-
-        return " ".join(parts), output_file
 
     def parse_output(
         self,

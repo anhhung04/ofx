@@ -1,0 +1,127 @@
+"""dnsx — fast DNS toolkit with retries and multiple resolvers."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from ofx.tasks.base import OptDef, Task
+from ofx.tasks.output_types import Ip, Record, Subdomain
+from ofx.tasks.registry import TaskRegistry
+
+
+@TaskRegistry.register("dnsx")
+class DnsxTask(Task):
+    name = "dnsx"
+    cmd = "dnsx"
+    description = "Fast and multi-purpose DNS toolkit"
+    category = "dns/resolve"
+    install_cmd = (
+        "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+    )
+    output_types = [Subdomain, Ip, Record]
+
+    opts = {
+        "a": OptDef(flag="-a", is_flag=True, help="Query A records"),
+        "aaaa": OptDef(flag="-aaaa", is_flag=True, help="Query AAAA records"),
+        "cname": OptDef(flag="-cname", is_flag=True, help="Query CNAME records"),
+        "mx": OptDef(flag="-mx", is_flag=True, help="Query MX records"),
+        "ns": OptDef(flag="-ns", is_flag=True, help="Query NS records"),
+        "txt": OptDef(flag="-txt", is_flag=True, help="Query TXT records"),
+        "soa": OptDef(flag="-soa", is_flag=True, help="Query SOA records"),
+        "ptr": OptDef(flag="-ptr", is_flag=True, help="Query PTR records"),
+        "any": OptDef(flag="-any", is_flag=True, help="Query ANY records"),
+        "resp": OptDef(flag="-resp", is_flag=True, help="Show DNS response"),
+        "resp_only": OptDef(
+            flag="-resp-only", is_flag=True, help="Show only response values"
+        ),
+        "resolver": OptDef(flag="-r", type=str, help="Resolver list (comma-separated)"),
+        "resolver_file": OptDef(flag="-rL", type=str, help="File containing resolvers"),
+        "threads": OptDef(flag="-t", type=int, help="Number of concurrent threads"),
+        "rate_limit": OptDef(
+            flag="-rate-limit", type=int, help="Max DNS queries per second"
+        ),
+        "retries": OptDef(flag="-retry", type=int, help="Number of retries"),
+        "wildcard_domain": OptDef(
+            flag="-wd", type=str, help="Domain for wildcard filtering"
+        ),
+        "wildcard": OptDef(
+            flag="-wildcard", is_flag=True, help="Enable wildcard filtering"
+        ),
+        "trace": OptDef(flag="-trace", is_flag=True, help="Perform DNS trace"),
+        "wordlist": OptDef(
+            flag="-w", type=str, help="Wordlist for DNS bruteforcing"
+        ),
+    }
+
+    input_flag = "-d"
+    file_flag = "-l"
+    output_flag = "-o"
+    extra_flags = ["-json", "-silent"]
+
+    def _output_suffix(self) -> str:
+        return ".jsonl"
+
+    def parse_output(
+        self,
+        stdout: str,
+        stderr: str,
+        output_file: Path | None = None,
+    ) -> list[Subdomain | Ip | Record]:
+        results: list[Subdomain | Ip | Record] = []
+        lines: list[str] = []
+
+        if output_file and output_file.exists():
+            lines = output_file.read_text().strip().splitlines()
+        elif stdout:
+            lines = stdout.strip().splitlines()
+
+        for line in lines:
+            line = line.strip()
+            if not line or not line.startswith("{"):
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            host = data.get("host", "")
+            if not host:
+                continue
+
+            domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
+            results.append(Subdomain(host=host, domain=domain))
+
+            # A records → IP
+            for a_record in data.get("a", []):
+                results.append(Ip(ip=a_record, host=host))
+
+            # AAAA records → IP
+            for aaaa_record in data.get("aaaa", []):
+                results.append(Ip(ip=aaaa_record, host=host))
+
+            # CNAME records
+            for cname in data.get("cname", []):
+                results.append(
+                    Record(name=cname, type="CNAME", host=host)
+                )
+
+            # MX records
+            for mx in data.get("mx", []):
+                results.append(
+                    Record(name=mx, type="MX", host=host)
+                )
+
+            # NS records
+            for ns in data.get("ns", []):
+                results.append(
+                    Record(name=ns, type="NS", host=host)
+                )
+
+            # TXT records
+            for txt in data.get("txt", []):
+                results.append(
+                    Record(name=txt, type="TXT", host=host)
+                )
+
+        return results

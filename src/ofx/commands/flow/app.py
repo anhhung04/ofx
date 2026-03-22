@@ -2,14 +2,16 @@ import asyncio
 from typing import Annotated
 
 import typer
-from ofx.commands.project.project_manager import ProjectManager
 
 from ofx.commands.dump import app as schema_app
 from ofx.commands.flow.collection import app as collection_app
+from ofx.commands.flow.task_commands import app as task_cmd_app
+from ofx.commands.project.project_manager import ProjectManager
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 app.add_typer(schema_app, name="schema", help="Inspect workflow/job/step model schemas")
 app.add_typer(collection_app, name="collection", help="Manage workflow collections")
+app.add_typer(task_cmd_app, name="tasks", help="List and inspect registered task wrappers")
 
 NAME = "flow"
 

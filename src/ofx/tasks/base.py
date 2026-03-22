@@ -52,18 +52,27 @@ class Task(ABC):
     file_flag: str | None = None
     output_flag: str | None = None
 
+    # ── Extra flags (override in subclasses) ─────────────────────
+    # Flags prepended right after the command binary (e.g. ``["-json", "-silent"]``).
+    extra_flags: list[str] = []
+
     # ── Public API ─────────────────────────────────────────────────
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Build the full CLI command string from *target* and keyword options.
 
         Returns ``(command_string, output_file_or_none)``.
+
+        Subclasses that only need to add extra fixed flags should set
+        :attr:`extra_flags` instead of overriding this method.
         """
-        parts: list[str] = [self.cmd]
+        parts: list[str] = [self.cmd, *self.extra_flags]
         output_file: Path | None = None
 
         # Map keyword arguments to CLI flags
         for key, value in kwargs.items():
+            if key.startswith("_"):
+                continue
             opt = self.opts.get(key)
             if opt is None:
                 continue

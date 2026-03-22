@@ -141,17 +141,30 @@ class TaskRunner(BaseRunner[TaskExecution]):
     # ── Helpers ────────────────────────────────────────────────────
 
     def _parse_outputs(self, result: CommandExecutionResult) -> list[OutputType]:
-        """Delegate to the task's parse_output method with error handling."""
+        """Delegate to the task's parse_output method with deduplication."""
         assert self._task is not None
         try:
-            return self._task.parse_output(
+            raw = self._task.parse_output(
                 stdout=result.stdout,
                 stderr=result.stderr,
                 output_file=self._output_file,
             )
+            return self._deduplicate(raw)
         except Exception as e:
             self._log_warning(f"Output parsing failed: {e}")
             return []
+
+    @staticmethod
+    def _deduplicate(items: list[OutputType]) -> list[OutputType]:
+        """Remove duplicates using each item's ``_uuid`` hash."""
+        seen: set[str] = set()
+        unique: list[OutputType] = []
+        for item in items:
+            uid = item._uuid
+            if uid not in seen:
+                seen.add(uid)
+                unique.append(item)
+        return unique
 
     def _cleanup_output_file(self) -> None:
         if self._output_file and self._output_file.exists():

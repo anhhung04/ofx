@@ -48,42 +48,10 @@ class HttpxTask(Task):
     input_flag = "-u"
     file_flag = "-l"
     output_flag = "-o"
+    extra_flags = ["-json", "-silent"]
 
     def _output_suffix(self) -> str:
-        return ".json"
-
-    def build_command(self, target: str, **kwargs):
-        """Override to always include -json flag."""
-        kwargs.setdefault("_json", True)
-        parts = [self.cmd, "-json", "-silent"]
-
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
-
-        output_file = None
-        if self.output_flag:
-            import tempfile
-
-            output_file = Path(
-                tempfile.mkstemp(prefix=".ofx_task_httpx_", suffix=".jsonl")[1]
-            )
-            parts.extend([self.output_flag, str(output_file)])
-
-        if self.input_flag:
-            parts.extend([self.input_flag, target])
-        else:
-            parts.append(target)
-
-        return " ".join(parts), output_file
+        return ".jsonl"
 
     def parse_output(
         self,

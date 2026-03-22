@@ -565,3 +565,235 @@ class TestCommandBuilding:
         assert out is not None
         assert out.exists()
         out.unlink()  # cleanup
+
+
+# ── New Tools ──────────────────────────────────────────────────────────────
+
+
+class TestNaabuParser:
+    def test_parse_jsonl(self):
+        lines = [
+            json.dumps({"ip": "10.0.0.1", "port": 80, "protocol": "tcp"}),
+            json.dumps({"ip": "10.0.0.1", "port": 443, "protocol": "tcp"}),
+            json.dumps({"host": "10.0.0.2", "port": 22}),
+        ]
+        task = TaskRegistry.create("naabu")
+        results = task.parse_output("\n".join(lines), "")
+        assert len(results) == 3
+        assert all(isinstance(r, Port) for r in results)
+        assert results[0].port == 80
+        assert results[1].port == 443
+        assert results[2].ip == "10.0.0.2"
+
+    def test_command_building(self):
+        task = TaskRegistry.create("naabu")
+        cmd, _ = task.build_command("10.0.0.0/24", ports="80,443", rate=1000)
+        assert "naabu" in cmd
+        assert "-json" in cmd
+        assert "-silent" in cmd
+        assert "-p 80,443" in cmd
+        assert "-rate 1000" in cmd
+
+
+class TestKatanaParser:
+    def test_parse_jsonl(self):
+        lines = [
+            json.dumps({
+                "request": {"endpoint": "https://example.com/page", "host": "example.com", "method": "GET"},
+                "response": {"status_code": 200},
+            }),
+        ]
+        task = TaskRegistry.create("katana")
+        results = task.parse_output("\n".join(lines), "")
+        assert len(results) == 1
+        assert isinstance(results[0], Url)
+        assert results[0].url == "https://example.com/page"
+
+    def test_parse_plain_urls(self):
+        stdout = "https://example.com/page1\nhttps://example.com/page2\n"
+        task = TaskRegistry.create("katana")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 2
+
+    def test_command_building(self):
+        task = TaskRegistry.create("katana")
+        cmd, _ = task.build_command("https://example.com", depth=3, js_crawl=True)
+        assert "katana" in cmd
+        assert "-jsonl" in cmd
+        assert "-depth 3" in cmd
+        assert "-js-crawl" in cmd
+
+
+class TestDnsxParser:
+    def test_parse_jsonl(self):
+        lines = [
+            json.dumps({
+                "host": "example.com",
+                "a": ["93.184.216.34"],
+                "cname": ["cdn.example.com"],
+                "mx": ["mail.example.com"],
+            }),
+        ]
+        from ofx.tasks.output_types import Record
+        task = TaskRegistry.create("dnsx")
+        results = task.parse_output("\n".join(lines), "")
+        subdomains = [r for r in results if isinstance(r, Subdomain)]
+        ips = [r for r in results if isinstance(r, Ip)]
+        records = [r for r in results if isinstance(r, Record)]
+        assert len(subdomains) == 1
+        assert len(ips) == 1
+        assert ips[0].ip == "93.184.216.34"
+        assert len(records) == 2  # CNAME + MX
+
+    def test_command_building(self):
+        task = TaskRegistry.create("dnsx")
+        cmd, _ = task.build_command("example.com", a=True, cname=True, threads=50)
+        assert "dnsx" in cmd
+        assert "-json" in cmd
+        assert "-a" in cmd
+        assert "-cname" in cmd
+        assert "-t 50" in cmd
+
+
+class TestWafw00fParser:
+    def test_parse_output(self):
+        stdout = (
+            "[*] Checking https://example.com\n"
+            "[+] The site https://example.com is behind Cloudflare (Cloudflare Inc.)\n"
+            "[*] Number of requests: 6\n"
+        )
+        task = TaskRegistry.create("wafw00f")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 1
+        assert isinstance(results[0], Tag)
+        assert "Cloudflare" in results[0].name
+        assert results[0].category == "waf"
+
+    def test_parse_no_waf(self):
+        stdout = "[*] No WAF detected by the generic detection\n"
+        task = TaskRegistry.create("wafw00f")
+        results = task.parse_output(stdout, "")
+        assert results == []
+
+
+class TestFeroxbusterParser:
+    def test_parse_jsonl(self):
+        lines = [
+            json.dumps({
+                "type": "response",
+                "url": "https://example.com/admin",
+                "status": 200,
+                "content_length": 5432,
+                "word_count": 120,
+                "line_count": 45,
+                "method": "GET",
+            }),
+            json.dumps({"type": "statistics", "elapsed": 10}),  # not a response
+        ]
+        task = TaskRegistry.create("feroxbuster")
+        results = task.parse_output("\n".join(lines), "")
+        assert len(results) == 1
+        assert isinstance(results[0], Url)
+        assert results[0].status_code == 200
+        assert results[0].content_length == 5432
+
+    def test_command_building(self):
+        task = TaskRegistry.create("feroxbuster")
+        cmd, _ = task.build_command(
+            "https://example.com", wordlist="/usr/share/seclists/common.txt", threads=50
+        )
+        assert "feroxbuster" in cmd
+        assert "--json" in cmd
+        assert "-w /usr/share/seclists/common.txt" in cmd
+        assert "-t 50" in cmd
+
+
+# ── Deduplication ──────────────────────────────────────────────────────────
+
+
+class TestDeduplication:
+    def test_dedup_removes_duplicates(self):
+        from ofx.runner.tasks.runner import TaskRunner
+
+        items = [
+            Port(port=80, ip="10.0.0.1"),
+            Port(port=80, ip="10.0.0.1"),  # duplicate
+            Port(port=443, ip="10.0.0.1"),
+        ]
+        result = TaskRunner._deduplicate(items)
+        assert len(result) == 2
+        assert result[0].port == 80
+        assert result[1].port == 443
+
+    def test_dedup_preserves_unique(self):
+        from ofx.runner.tasks.runner import TaskRunner
+
+        items = [
+            Url(url="https://a.com"),
+            Url(url="https://b.com"),
+            Url(url="https://c.com"),
+        ]
+        result = TaskRunner._deduplicate(items)
+        assert len(result) == 3
+
+    def test_dedup_empty(self):
+        from ofx.runner.tasks.runner import TaskRunner
+        assert TaskRunner._deduplicate([]) == []
+
+
+# ── Extra Flags Refactor ──────────────────────────────────────────────────
+
+
+class TestExtraFlags:
+    """Verify the DRY refactor: extra_flags are included in build_command."""
+
+    def test_httpx_extra_flags(self):
+        task = TaskRegistry.create("httpx")
+        cmd, _ = task.build_command("https://example.com")
+        assert "-json -silent" in cmd
+
+    def test_subfinder_extra_flags(self):
+        task = TaskRegistry.create("subfinder")
+        cmd, _ = task.build_command("example.com")
+        assert "-silent" in cmd
+
+    def test_nuclei_extra_flags(self):
+        task = TaskRegistry.create("nuclei")
+        cmd, _ = task.build_command("https://target.com")
+        assert "-jsonl -silent" in cmd
+
+    def test_ffuf_extra_flags(self):
+        task = TaskRegistry.create("ffuf")
+        cmd, _ = task.build_command("https://target.com/FUZZ")
+        assert "-noninteractive" in cmd
+        assert "-of json" in cmd
+
+    def test_nmap_no_extra_flags(self):
+        """Nmap doesn't need extra_flags — it uses the base build_command."""
+        task = TaskRegistry.create("nmap")
+        cmd, _ = task.build_command("10.0.0.1")
+        # Should start with just "nmap" — no extra flags
+        assert cmd.startswith("nmap ")
+
+
+# ── Registry — New Tools ──────────────────────────────────────────────────
+
+
+class TestNewToolsRegistered:
+    def test_all_tools_registered(self):
+        expected = [
+            "nmap", "httpx", "subfinder", "nuclei", "ffuf",
+            "naabu", "katana", "dnsx", "wafw00f", "feroxbuster",
+        ]
+        for name in expected:
+            assert TaskRegistry.get(name) is not None, f"Task '{name}' not registered"
+
+    def test_categories(self):
+        port_tasks = TaskRegistry.get_by_category("port/")
+        assert len(port_tasks) >= 2  # nmap + naabu
+
+        dns_tasks = TaskRegistry.get_by_category("dns/")
+        assert len(dns_tasks) >= 2  # subfinder + dnsx
+
+        url_tasks = TaskRegistry.get_by_category("url/")
+        assert len(url_tasks) >= 3  # httpx + ffuf + katana + feroxbuster
