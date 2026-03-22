@@ -29,7 +29,7 @@ def _ai_config(model_override: Optional[str] = None) -> dict:
     from ofx.settings import settings
 
     ai = settings.ai
-    api_key = ai.api_key or os.getenv("OPENAI_API_KEY", "")
+    api_key = ai.api_key.get_secret_value() or os.getenv("OPENAI_API_KEY", "")
     return {
         "api_key": api_key,
         "model": model_override or ai.model,
@@ -398,7 +398,7 @@ class SetupHandler:
 
         import os
 
-        api_key_val = ai.api_key or os.getenv("OPENAI_API_KEY", "")
+        api_key_val = ai.api_key.get_secret_value() or os.getenv("OPENAI_API_KEY", "")
         table.add_row(
             "OFX_AI__API_KEY",
             "[green]set[/green]" if api_key_val else "[red]not set[/red]",

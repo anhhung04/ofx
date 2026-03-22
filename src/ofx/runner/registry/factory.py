@@ -137,6 +137,11 @@ class RegistryFactory:
             params = cls._extract_config(config, defaults)
             params.update(kwargs)
 
+            # Unwrap SecretStr password to plain string for the Redis client
+            pw = params.get("password")
+            if pw is not None and hasattr(pw, "get_secret_value"):
+                params["password"] = pw.get_secret_value() or None
+
             # Remove None password
             if params.get("password") is None:
                 params.pop("password", None)

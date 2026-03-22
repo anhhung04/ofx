@@ -6,7 +6,7 @@ import tempfile
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict, NestedSecretsSettingsSource
 from typing import Optional
 from rich.console import Console
@@ -24,6 +24,7 @@ TEMP_DIR = Path(
     tempfile.TemporaryDirectory(prefix=".tmp_r_", dir=str(tempfile.gettempdir())).name
 ).absolute()
 CONFIG_FILE = BASE_DATA_DIR / "config.ini"
+CONFIG_YAML = BASE_DATA_DIR / "config.yml"
 SECRETS_STORE = Path(os.getenv("OFX_SECRETS_STORE", BASE_DATA_DIR / "secrets.enc"))
 SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
@@ -152,7 +153,7 @@ def get_github_token() -> str:
 
     Returns an empty string when no token is available.
     """
-    return settings.github_token or _gh_cli_token()
+    return settings.github_token.get_secret_value() or _gh_cli_token()
 
 
 _console = None
@@ -183,7 +184,7 @@ class AiSettings(BaseModel):
       OFX_AI__MAX_HISTORY_TOKENS — chat history compaction threshold (default: 30000)
     """
 
-    api_key: str = Field(default="", description="Provider API key")
+    api_key: SecretStr = Field(default=SecretStr(""), description="Provider API key")
     model: str = Field(default="gpt-4o", description="LLM model name")
     base_url: str = Field(
         default="",
@@ -202,7 +203,7 @@ class RedisRegistrySettings(BaseModel):
     host: str = Field(default="localhost", description="Redis server host")
     port: int = Field(default=6379, description="Redis server port")
     db: int = Field(default=0, description="Redis database number")
-    password: str | None = Field(default=None, description="Redis password")
+    password: SecretStr | None = Field(default=None, description="Redis password")
     prefix: str = Field(
         default="ofx:run:", description="Key prefix for registry entries"
     )
@@ -258,8 +259,8 @@ class Settings(BaseSettings):
     )
 
     # Collection / Index Settings
-    github_token: str = Field(
-        default="",
+    github_token: SecretStr = Field(
+        default=SecretStr(""),
         description=(
             "GitHub personal access token for private collection repos and index. "
             "Set via OFX_GITHUB_TOKEN env var."
@@ -327,6 +328,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         nested_model_default_partial_update=True,
         secrets_dir=SECRETS_DIR.absolute(),
+        yaml_file=CONFIG_YAML,
     )
     
     @classmethod
@@ -338,13 +340,85 @@ class Settings(BaseSettings):
         dotenv_settings,
         file_secret_settings,
     ):
+        from pydantic_settings import YamlConfigSettingsSource
+
         return (
             init_settings,
             env_settings,
             dotenv_settings,
+            YamlConfigSettingsSource(settings_cls, yaml_file=CONFIG_YAML),
             NestedSecretsSettingsSource(file_secret_settings, secrets_nested_subdir=True, secrets_dir=SECRETS_DIR.absolute()),
         )
 
+
+# ------------------------------------------------------------------
+# Default config.yml generation
+# ------------------------------------------------------------------
+
+_DEFAULT_CONFIG_YAML = """\
+# OFX Configuration — ~/.ofx/config.yml
+# Environment variables (OFX_ prefix) override values set here.
+# Sensitive values (github_token, ai.api_key, redis password) are
+# loaded as SecretStr — they won't be leaked in logs or repr().
+
+# debug: false
+# timeout: 86400          # 24 hours in seconds
+# max_output_size: 10485760  # 10 MB
+
+# default_remote_registry: https://github.com
+
+# GitHub token for private collections / index
+# github_token: ""
+
+# Collection index override (leave empty for default)
+# collection_index_url: ""
+
+# AI assistant (OpenAI-compatible providers)
+# ai:
+#   api_key: ""
+#   model: gpt-4o
+#   base_url: ""           # e.g. http://localhost:11434/v1 for Ollama
+#   temperature: 0.7
+#   max_tokens: 8192
+#   max_history_tokens: 30000
+
+# Job registry backend: memory | file | redis | memcached | etcd
+# registry_backend: memory
+
+# registry_redis:
+#   host: localhost
+#   port: 6379
+#   db: 0
+#   password: ""
+#   prefix: "ofx:run:"
+
+# registry_memcached:
+#   host: localhost
+#   port: 11211
+#   prefix: "ofx:run:"
+
+# registry_etcd:
+#   host: localhost
+#   port: 2379
+#   prefix: "/ofx/run/"
+
+# registry_cache_enabled: true
+# registry_cache_ttl: 0.25
+# registry_cache_max_entries: 1024
+# registry_failover_enabled: true
+"""
+
+
+def _ensure_default_config() -> None:
+    """Create ``~/.ofx/config.yml`` with commented defaults if it doesn't exist."""
+    if not CONFIG_YAML.exists():
+        try:
+            CONFIG_YAML.write_text(_DEFAULT_CONFIG_YAML)
+        except OSError:
+            pass
+
+
+_ensure_default_config()
 
 settings = Settings()
 reload_logging_config(settings)
