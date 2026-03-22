@@ -406,10 +406,10 @@ class TestSessionManagerLocal:
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
         )
 
-        # Wait for the process to finish (longer timeout for encryption step)
+        # Wait for the process to finish
         import time
-        for _ in range(60):
-            time.sleep(0.5)
+        for _ in range(50):
+            time.sleep(0.1)
             try:
                 os.kill(session.remote_pid, 0)
             except ProcessLookupError:
@@ -435,10 +435,9 @@ class TestSessionManagerLocal:
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
         )
 
-        # Wait for completion (longer timeout for encryption step)
         import time
-        for _ in range(60):
-            time.sleep(0.5)
+        for _ in range(50):
+            time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
@@ -454,10 +453,9 @@ class TestSessionManagerLocal:
             mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
         )
 
-        # Wait for completion (longer timeout for encryption step)
         import time
-        for _ in range(60):
-            time.sleep(0.5)
+        for _ in range(50):
+            time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
@@ -476,8 +474,8 @@ class TestSessionManagerLocal:
         )
 
         import time
-        for _ in range(60):
-            time.sleep(0.5)
+        for _ in range(50):
+            time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
@@ -506,8 +504,8 @@ class TestSessionManagerLocal:
         )
 
         import time
-        for _ in range(60):
-            time.sleep(0.5)
+        for _ in range(50):
+            time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
             if session.is_done():
                 break
@@ -529,7 +527,7 @@ class TestSessionManagerLocal:
               wait-job:
                 steps:
                   - name: wait
-                    run: sleep 300
+                    run: sleep 30
         """))
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
@@ -541,12 +539,12 @@ class TestSessionManagerLocal:
 
         # Cancel
         import time
-        time.sleep(0.5)  # Let it start
+        time.sleep(0.2)  # Let it start
         session = asyncio.run(mgr.cancel(session.id))
         assert session.status == SessionStatus.CANCELED
 
         # PID should be dead
-        time.sleep(0.5)
+        time.sleep(0.2)
         try:
             os.kill(session.remote_pid, 0)
             # Process still alive — that's ok, SIGTERM may take a moment
@@ -561,7 +559,7 @@ class TestSessionManagerLocal:
               wait-job:
                 steps:
                   - name: wait
-                    run: sleep 300
+                    run: sleep 30
         """))
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
