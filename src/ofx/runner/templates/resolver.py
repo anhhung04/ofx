@@ -226,6 +226,25 @@ class TemplateResolver:
         def _glob(pattern: str, directory: str = ".") -> list[str]:
             return [str(p) for p in Path(directory).glob(pattern)]
 
+        # ── Task typed-output helpers ──────────────────────────────
+        def _of_type(items: list, type_name: str) -> list:
+            """Filter a list of typed_output dicts to those matching *type_name*."""
+            if not isinstance(items, list):
+                return []
+            return [i for i in items if isinstance(i, dict) and i.get("_type") == type_name]
+
+        def _ports(items: list) -> list:
+            return _of_type(items, "port")
+
+        def _urls(items: list) -> list:
+            return _of_type(items, "url")
+
+        def _vulns(items: list) -> list:
+            return _of_type(items, "vulnerability")
+
+        def _subdomains(items: list) -> list:
+            return _of_type(items, "subdomain")
+
         if self._support_funcs_cache is None:
             shell_exports = get_shell_exports()
 
@@ -281,6 +300,12 @@ class TemplateResolver:
                 "regex_search": lambda pattern, s: bool(re.search(pattern, s)),
                 "regex_findall": lambda pattern, s: re.findall(pattern, s),
                 "regex_sub": lambda pattern, repl, s: re.sub(pattern, repl, s),
+                # Task output helpers
+                "of_type": _of_type,
+                "ports": _ports,
+                "urls": _urls,
+                "vulns": _vulns,
+                "subdomains": _subdomains,
             }
 
         support_funcs = self._support_funcs_cache.copy()

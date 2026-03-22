@@ -1,0 +1,30 @@
+name: Task Integration Test
+description: Tests task step type in a workflow
+
+jobs:
+  recon:
+    steps:
+      - task: nmap
+        name: port-scan
+        with:
+          target: "192.168.1.1"
+          ports: "22,80,443"
+          version_detection: true
+
+      - task: httpx
+        name: http-probe
+        with:
+          target: "192.168.1.1"
+          tech_detect: true
+
+      - run: echo "Recon complete"
+        name: summary
+
+  vuln-scan:
+    needs: [recon]
+    steps:
+      - task: nuclei
+        name: vuln-check
+        with:
+          target: "https://192.168.1.1"
+          severity: "critical,high"

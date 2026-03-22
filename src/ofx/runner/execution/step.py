@@ -52,6 +52,8 @@ class StepRunner(BaseRunner[Step]):
                 resolve_fields.extend(["run"])
             case RunType.SCRIPT_FILE:
                 resolve_fields.extend(["script_file"])
+            case RunType.TASK:
+                resolve_fields.extend(["task", "run_with"])
         await self._resolve_template_fields(resolve_fields)
 
         if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
@@ -171,6 +173,8 @@ class StepRunner(BaseRunner[Step]):
             header.append(
                 f">> script (base64): {base64.b64encode(self.model.script.encode()).decode()}"
             )
+        elif self.model.task:
+            header.append(f">> task: {self.model.task}")
         else:
             header.append(">> unknown step type")
         if outputs.get("binary_output"):
@@ -281,6 +285,31 @@ class StepRunner(BaseRunner[Step]):
 
             return ScriptRunner(
                 script_model,
+                self._child_context(),
+                parent=self,
+            )
+
+        elif self._run_type is RunType.TASK:
+            from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+            assert self.model.task is not None, (
+                "task cannot be None for TASK run type"
+            )
+
+            # Extract target from run_with; remaining keys are task options
+            task_opts = dict(self.model.run_with)
+            target = str(task_opts.pop("target", task_opts.pop("targets", "")))
+
+            task_model = TaskExecution(
+                task_name=self.model.task,
+                target=target,
+                opts=task_opts,
+                shell=self.model.shell,
+                working_directory=self._resolve_working_dir(),
+                timeout_minutes=self.model.timeout,
+            )
+            return TaskRunner(
+                task_model,
                 self._child_context(),
                 parent=self,
             )

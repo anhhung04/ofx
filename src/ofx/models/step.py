@@ -17,6 +17,7 @@ class RunType(Enum):
     COMMAND = "command"
     WORKFLOW = "workflow"
     SCRIPT_FILE = "script_file"
+    TASK = "task"
 
 
 class Step(OFXBaseModel):
@@ -74,6 +75,10 @@ class Step(OFXBaseModel):
     script_file: str | None = Field(
         default=None, description="Path to a Python script file to execute"
     )
+    task: str | None = Field(
+        default=None,
+        description="Name of a registered task (pre-built tool wrapper) to execute",
+    )
     run_with: dict[str, Any] = Field(
         default_factory=dict,
         description="Define inputs for the step if it uses a reusable workflow",
@@ -93,15 +98,15 @@ class Step(OFXBaseModel):
 
     @model_validator(mode="after")
     def check_run_type(self):
-        """Ensure that exactly one of 'run', 'script', or 'uses' is defined."""
+        """Ensure that exactly one of 'run', 'script', 'uses', 'script_file', or 'task' is defined."""
         defined_fields = sum(
             1
-            for field in ["run", "script", "uses", "script_file"]
+            for field in ["run", "script", "uses", "script_file", "task"]
             if getattr(self, field) is not None
         )
         if defined_fields != 1:
             raise ValueError(
-                f"Step '{self.name}' must have exactly one of 'run', 'script', 'script_file', or 'uses' defined."
+                f"Step '{self.name}' must have exactly one of 'run', 'script', 'script_file', 'uses', or 'task' defined."
             )
         return self
 
@@ -112,10 +117,12 @@ class Step(OFXBaseModel):
             return RunType.SCRIPT
         elif self.script_file:
             return RunType.SCRIPT_FILE
+        elif self.task:
+            return RunType.TASK
         elif self.run:
             return RunType.COMMAND
         raise ValueError(
-            f"Step '{self.name}' must have one of 'run', 'script', 'script_file', or 'uses' defined."
+            f"Step '{self.name}' must have one of 'run', 'script', 'script_file', 'uses', or 'task' defined."
         )
 
     def __str__(self):
