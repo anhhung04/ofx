@@ -1,0 +1,154 @@
+"""netexec — network service pentesting (CrackMapExec successor)."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any
+
+from ofx.tasks.base import OptDef, Task
+from ofx.tasks.output_types import Tag, UserAccount
+from ofx.tasks.registry import TaskRegistry
+
+
+@TaskRegistry.register("netexec")
+class NetexecTask(Task):
+    name = "netexec"
+    cmd = "nxc"
+    description = "Network service pentesting (CrackMapExec successor)"
+    category = "ad/enum"
+    install_cmd = "uv tool install netexec"
+    output_types = [UserAccount, Tag]
+
+    opts = {
+        "protocol": OptDef(flag="--protocol", type=str, help="Protocol (smb/ldap/winrm/ssh/mssql/rdp/ftp)"),
+        "username": OptDef(flag="-u", type=str, help="Username"),
+        "password": OptDef(flag="-p", type=str, help="Password"),
+        "hash": OptDef(flag="-H", type=str, help="NTLM hash"),
+        "domain": OptDef(flag="-d", type=str, help="Domain name"),
+        "shares": OptDef(flag="--shares", is_flag=True, help="Enumerate shares"),
+        "users": OptDef(flag="--users", is_flag=True, help="Enumerate users"),
+        "groups": OptDef(flag="--groups", is_flag=True, help="Enumerate groups"),
+        "sessions": OptDef(flag="--sessions", is_flag=True, help="Enumerate sessions"),
+        "loggedon_users": OptDef(flag="--loggedon-users", is_flag=True, help="Enumerate logged-on users"),
+        "pass_pol": OptDef(flag="--pass-pol", is_flag=True, help="Dump password policy"),
+        "rid_brute": OptDef(flag="--rid-brute", is_flag=True, help="RID brute force"),
+        "local_auth": OptDef(flag="--local-auth", is_flag=True, help="Use local authentication"),
+        "sam": OptDef(flag="--sam", is_flag=True, help="Dump SAM hashes"),
+        "lsa": OptDef(flag="--lsa", is_flag=True, help="Dump LSA secrets"),
+        "ntds": OptDef(flag="--ntds", is_flag=True, help="Dump NTDS.dit"),
+        "exec_method": OptDef(flag="--exec-method", type=str, help="Execution method"),
+        "threads": OptDef(flag="-t", type=int, help="Number of threads"),
+    }
+
+    input_flag = None
+    file_flag = None
+    output_flag = None
+    extra_flags: list[str] = []
+
+    def _output_suffix(self) -> str:
+        return ".txt"
+
+    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
+        """Build: ``nxc {protocol} {target} [options]``."""
+        protocol = kwargs.pop("protocol", "smb")
+        parts: list[str] = [self.cmd, protocol, target]
+
+        for key, value in kwargs.items():
+            if key.startswith("_"):
+                continue
+            opt = self.opts.get(key)
+            if opt is None or key == "protocol":
+                continue
+            if opt.is_flag:
+                if value:
+                    parts.append(opt.flag)
+            elif value is not None:
+                parts.extend([opt.flag, str(value)])
+
+        return " ".join(parts), None
+
+    # SMB 10.0.0.1 445 DC01 [+] domain\user:password
+    _SUCCESS_RE = re.compile(
+        r"\[\+\]\s+(?:(\S+)\\)?(\S+?)(?::(\S+))?\s*(\(Pwn3d!\))?\s*$"
+    )
+    # user RID:1001
+    _USER_RE = re.compile(r"^\S+\s+\d+\s+\S+\s+(.+?)\s+rid:\s*(\d+)", re.IGNORECASE)
+    _SHARE_RE = re.compile(r"^\S+\s+\d+\s+\S+\s+(\S+)\s+(READ|WRITE|NO ACCESS)", re.IGNORECASE)
+
+    def parse_output(
+        self,
+        stdout: str,
+        stderr: str,
+        output_file: Path | None = None,
+    ) -> list[UserAccount | Tag]:
+        raw = ""
+        if output_file and output_file.exists():
+            raw = self._read_output_file(output_file)
+        elif stdout:
+            raw = stdout
+
+        raw = raw.strip()
+        if not raw:
+            return []
+
+        results: list[UserAccount | Tag] = []
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            # Skip failure lines
+            if "[-]" in line and "STATUS_LOGON_FAILURE" in line:
+                continue
+
+            # Successful authentication
+            m = self._SUCCESS_RE.search(line)
+            if m and "[+]" in line:
+                domain = m.group(1) or ""
+                user = m.group(2)
+                secret = m.group(3) or ""
+                pwned = bool(m.group(4))
+                results.append(
+                    UserAccount(
+                        username=user,
+                        password=secret if ":" not in secret else "",
+                        hash=secret if ":" in secret else "",
+                        domain=domain,
+                        privilege_level="admin" if pwned else "",
+                        source="netexec",
+                    )
+                )
+                continue
+
+            # User enumeration
+            m_user = self._USER_RE.match(line)
+            if m_user:
+                results.append(
+                    UserAccount(
+                        username=m_user.group(1).strip(),
+                        source="netexec",
+                        comment=f"RID:{m_user.group(2)}",
+                    )
+                )
+                continue
+
+            # Share enumeration
+            m_share = self._SHARE_RE.match(line)
+            if m_share:
+                results.append(
+                    Tag(
+                        name="share",
+                        value=m_share.group(1),
+                        category="ad",
+                    )
+                )
+                continue
+
+            # Info lines
+            if "[*]" in line:
+                info = line.split("[*]", 1)[-1].strip()
+                if info:
+                    results.append(Tag(name="info", value=info, category="ad"))
+
+        return results

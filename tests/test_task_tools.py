@@ -2416,3 +2416,759 @@ class TestSslscanParser:
         assert out_file is not None
         if out_file and out_file.exists():
             out_file.unlink()
+
+
+# ── Netexec Parser ─────────────────────────────────────────────────────────
+
+
+class TestNetexecParser:
+    def test_netexec_metadata(self):
+        task = TaskRegistry.create("netexec")
+        assert task.name == "netexec"
+        assert task.cmd == "nxc"
+        assert task.category == "ad/enum"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_netexec_parse_output(self):
+        stdout = "\n".join([
+            "SMB  10.0.0.1  445  DC01  [+] CORP\\admin:P@ssw0rd (Pwn3d!)",
+            "SMB  10.0.0.1  445  DC01  [+] CORP\\user1:password123",
+            "SMB  10.0.0.1  445  DC01  [-] CORP\\baduser:wrong STATUS_LOGON_FAILURE",
+            "SMB  10.0.0.1  445  DC01  [*] Windows 10.0 Build 17763 x64",
+        ])
+        task = TaskRegistry.create("netexec")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Tag, UserAccount
+
+        users = [r for r in results if isinstance(r, UserAccount)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(users) == 2
+        assert users[0].username == "admin"
+        assert users[0].domain == "CORP"
+        assert users[0].password == "P@ssw0rd"
+        assert users[0].privilege_level == "admin"
+        assert users[1].username == "user1"
+        assert users[1].privilege_level == ""
+        assert len(tags) == 1
+        assert tags[0].name == "info"
+
+    def test_netexec_parse_hash_login(self):
+        stdout = "SMB  10.0.0.1  445  DC01  [+] CORP\\admin:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
+        task = TaskRegistry.create("netexec")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import UserAccount
+
+        users = [r for r in results if isinstance(r, UserAccount)]
+        assert len(users) == 1
+        assert users[0].hash == "aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
+        assert users[0].password == ""
+
+    def test_netexec_parse_user_enum(self):
+        stdout = "SMB 445 DC01 jsmith rid: 1105"
+        task = TaskRegistry.create("netexec")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import UserAccount
+
+        users = [r for r in results if isinstance(r, UserAccount)]
+        assert len(users) == 1
+        assert users[0].username == "jsmith"
+        assert "RID:1105" in users[0].comment
+
+    def test_netexec_parse_share_enum(self):
+        stdout = "SMB 445 DC01 ADMIN$ READ"
+        task = TaskRegistry.create("netexec")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Tag
+
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 1
+        assert tags[0].name == "share"
+        assert tags[0].value == "ADMIN$"
+
+    def test_netexec_parse_empty(self):
+        task = TaskRegistry.create("netexec")
+        assert task.parse_output("", "") == []
+
+    def test_netexec_build_command(self):
+        task = TaskRegistry.create("netexec")
+        cmd, _ = task.build_command(
+            "10.0.0.1",
+            protocol="smb",
+            username="admin",
+            password="pass",
+            shares=True,
+        )
+        assert "nxc smb 10.0.0.1" in cmd
+        assert "-u admin" in cmd
+        assert "-p pass" in cmd
+        assert "--shares" in cmd
+
+
+# ── Kerbrute Parser ────────────────────────────────────────────────────────
+
+
+class TestKerbruteParser:
+    def test_kerbrute_metadata(self):
+        task = TaskRegistry.create("kerbrute")
+        assert task.name == "kerbrute"
+        assert task.cmd == "kerbrute"
+        assert task.category == "ad/brute"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_kerbrute_parse_output(self):
+        stdout = "\n".join([
+            "2024/01/15 10:00:00 >  [+] VALID USERNAME:	 admin@corp.local",
+            "2024/01/15 10:00:01 >  [+] VALID USERNAME:	 jsmith@corp.local",
+            "2024/01/15 10:00:02 >  [+] VALID LOGIN:	 admin@corp.local:Password1",
+            "2024/01/15 10:00:03 >  [-] INVALID USERNAME:  fakeuser@corp.local",
+        ])
+        task = TaskRegistry.create("kerbrute")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import UserAccount
+
+        users = [r for r in results if isinstance(r, UserAccount)]
+        assert len(users) == 3
+        # Lines processed in order: userenum admin, userenum jsmith, login admin
+        assert users[0].username == "admin"
+        assert users[0].domain == "corp.local"
+        assert users[0].password == ""
+        assert users[1].username == "jsmith"
+        assert users[1].domain == "corp.local"
+        assert users[1].password == ""
+        assert users[2].username == "admin"
+        assert users[2].password == "Password1"
+
+    def test_kerbrute_parse_empty(self):
+        task = TaskRegistry.create("kerbrute")
+        assert task.parse_output("", "") == []
+
+    def test_kerbrute_build_command(self):
+        task = TaskRegistry.create("kerbrute")
+        cmd, _ = task.build_command(
+            "/tmp/users.txt",
+            mode="userenum",
+            dc="10.0.0.1",
+            domain="corp.local",
+            threads=20,
+        )
+        assert "kerbrute userenum" in cmd
+        assert "--dc 10.0.0.1" in cmd
+        assert "-d corp.local" in cmd
+        assert "-t 20" in cmd
+        assert "/tmp/users.txt" in cmd
+
+
+# ── Hydra Parser ───────────────────────────────────────────────────────────
+
+
+class TestHydraParser:
+    def test_hydra_metadata(self):
+        task = TaskRegistry.create("hydra")
+        assert task.name == "hydra"
+        assert task.cmd == "hydra"
+        assert task.category == "brute/login"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_hydra_parse_output(self):
+        stdout = "\n".join([
+            "Hydra v9.5 starting...",
+            "[DATA] max 16 tasks per 1 server",
+            "[22][ssh] host: 10.0.0.1   login: root   password: toor",
+            "[22][ssh] host: 10.0.0.1   login: admin   password: admin123",
+            "[STATUS] attack finished for 10.0.0.1",
+        ])
+        task = TaskRegistry.create("hydra")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import UserAccount
+
+        users = [r for r in results if isinstance(r, UserAccount)]
+        assert len(users) == 2
+        assert users[0].username == "root"
+        assert users[0].password == "toor"
+        assert users[0].host == "10.0.0.1"
+        assert "port=22" in users[0].comment
+        assert "service=ssh" in users[0].comment
+        assert users[1].username == "admin"
+        assert users[1].password == "admin123"
+
+    def test_hydra_parse_empty(self):
+        task = TaskRegistry.create("hydra")
+        assert task.parse_output("", "") == []
+
+    def test_hydra_build_command(self):
+        task = TaskRegistry.create("hydra")
+        cmd, _ = task.build_command(
+            "10.0.0.1",
+            service="ssh",
+            login="admin",
+            password_file="/tmp/passwords.txt",
+            threads=16,
+            force=True,
+        )
+        assert "hydra" in cmd
+        assert "-l admin" in cmd
+        assert "-P /tmp/passwords.txt" in cmd
+        assert "-t 16" in cmd
+        assert "-f" in cmd
+        assert "10.0.0.1" in cmd
+        assert cmd.endswith("ssh")
+
+
+# ── Enum4linux Parser ──────────────────────────────────────────────────────
+
+
+class TestEnum4linuxParser:
+    def test_enum4linux_metadata(self):
+        task = TaskRegistry.create("enum4linux")
+        assert task.name == "enum4linux"
+        assert task.cmd == "enum4linux-ng"
+        assert task.category == "ad/enum"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_enum4linux_parse_output(self):
+        data = {
+            "users": {
+                "500": {"username": "Administrator", "domain": "CORP"},
+                "1001": {"username": "jsmith", "domain": "CORP"},
+            },
+            "shares": [
+                {"name": "ADMIN$"},
+                {"name": "IPC$"},
+            ],
+            "groups": [
+                {"groupname": "Domain Admins"},
+                {"groupname": "Domain Users"},
+            ],
+            "os_info": {"OS": "Windows 10.0 Build 17763"},
+        }
+        task = TaskRegistry.create("enum4linux")
+        results = task.parse_output(json.dumps(data), "")
+        from ofx.tasks.output_types import Tag, UserAccount
+
+        users = [r for r in results if isinstance(r, UserAccount)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(users) == 2
+        assert users[0].username == "Administrator"
+        assert users[0].domain == "CORP"
+        shares = [t for t in tags if t.name == "share"]
+        groups = [t for t in tags if t.name == "group"]
+        os_tags = [t for t in tags if t.name == "os"]
+        assert len(shares) == 2
+        assert len(groups) == 2
+        assert len(os_tags) == 1
+        assert os_tags[0].value == "Windows 10.0 Build 17763"
+
+    def test_enum4linux_parse_empty(self):
+        task = TaskRegistry.create("enum4linux")
+        assert task.parse_output("", "") == []
+
+    def test_enum4linux_parse_invalid_json(self):
+        task = TaskRegistry.create("enum4linux")
+        assert task.parse_output("not json", "") == []
+
+    def test_enum4linux_build_command(self):
+        task = TaskRegistry.create("enum4linux")
+        cmd, out_file = task.build_command(
+            "10.0.0.1", username="admin", password="pass"
+        )
+        assert "enum4linux-ng" in cmd
+        assert "-A" in cmd
+        assert "-u admin" in cmd
+        assert "-p pass" in cmd
+        assert "-oJ" in cmd
+        assert "10.0.0.1" in cmd
+        assert out_file is not None
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+    def test_enum4linux_build_command_no_default_A(self):
+        task = TaskRegistry.create("enum4linux")
+        cmd, out_file = task.build_command("10.0.0.1", users=True)
+        assert "-A" not in cmd
+        assert "-U" in cmd
+        if out_file and out_file.exists():
+            out_file.unlink()
+
+
+# ── Paramspider Parser ────────────────────────────────────────────────────
+
+
+class TestParamspiderParser:
+    def test_paramspider_metadata(self):
+        task = TaskRegistry.create("paramspider")
+        assert task.name == "paramspider"
+        assert task.cmd == "paramspider"
+        assert task.category == "url/recon/params"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_paramspider_parse_output(self):
+        stdout = "\n".join([
+            "[INFO] Fetching URLs...",
+            "https://example.com/page?id=FUZZ",
+            "https://example.com/search?q=FUZZ&lang=en",
+            "/api/v1/data?token=FUZZ",
+        ])
+        task = TaskRegistry.create("paramspider")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Url) for r in results)
+        assert results[0].url == "https://example.com/page?id=FUZZ"
+        assert results[2].url == "/api/v1/data?token=FUZZ"
+
+    def test_paramspider_parse_empty(self):
+        task = TaskRegistry.create("paramspider")
+        assert task.parse_output("", "") == []
+
+    def test_paramspider_parse_line(self):
+        task = TaskRegistry.create("paramspider")
+        assert len(task.parse_line("https://example.com/x?a=1")) == 1
+        assert len(task.parse_line("/path?q=test")) == 1
+        assert task.parse_line("[INFO] something") == []
+        assert task.parse_line("") == []
+        assert task.parse_line("plaintext") == []
+
+
+# ── Hakrawler Parser ──────────────────────────────────────────────────────
+
+
+class TestHakrawlerParser:
+    def test_hakrawler_metadata(self):
+        task = TaskRegistry.create("hakrawler")
+        assert task.name == "hakrawler"
+        assert task.cmd == "hakrawler"
+        assert task.category == "url/crawl"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_hakrawler_parse_output(self):
+        stdout = "\n".join([
+            "https://example.com/",
+            "https://example.com/about",
+            "https://example.com/contact?ref=home",
+        ])
+        task = TaskRegistry.create("hakrawler")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Url) for r in results)
+        assert results[0].url == "https://example.com/"
+        assert results[2].url == "https://example.com/contact?ref=home"
+
+    def test_hakrawler_parse_empty(self):
+        task = TaskRegistry.create("hakrawler")
+        assert task.parse_output("", "") == []
+
+    def test_hakrawler_parse_line(self):
+        task = TaskRegistry.create("hakrawler")
+        assert len(task.parse_line("https://example.com/page")) == 1
+        assert task.parse_line("[info] crawling") == []
+        assert task.parse_line("") == []
+        assert task.parse_line("no-protocol-text") == []
+
+    def test_hakrawler_build_command(self):
+        task = TaskRegistry.create("hakrawler")
+        cmd, _ = task.build_command(
+            "https://example.com", depth=3, subs=True, insecure=True
+        )
+        assert "hakrawler" in cmd
+        assert "echo" in cmd
+        assert "-d 3" in cmd
+        assert "-subs" in cmd
+        assert "-insecure" in cmd
+
+
+# ── Subzy Parser ──────────────────────────────────────────────────────────
+
+
+class TestSubzyParser:
+    def test_subzy_metadata(self):
+        task = TaskRegistry.create("subzy")
+        assert task.name == "subzy"
+        assert task.cmd == "subzy"
+        assert task.category == "vuln/takeover"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_subzy_parse_output(self):
+        stdout = "\n".join([
+            "[NOT VULNERABLE] safe.example.com",
+            "[VULNERABLE] dangling.example.com - Service: GitHub Pages - CNAME pointing to unregistered github.io",
+            "[VULNERABLE] old.example.com - Heroku",
+        ])
+        task = TaskRegistry.create("subzy")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 2
+        assert all(isinstance(r, Vulnerability) for r in results)
+        assert results[0].matched_at == "dangling.example.com"
+        assert results[0].severity == Severity.HIGH
+        assert "GitHub Pages" in results[0].description
+        assert results[1].matched_at == "old.example.com"
+
+    def test_subzy_parse_empty(self):
+        task = TaskRegistry.create("subzy")
+        assert task.parse_output("", "") == []
+
+    def test_subzy_parse_line(self):
+        task = TaskRegistry.create("subzy")
+        result = task.parse_line("[VULNERABLE] sub.example.com - Service: S3 Bucket")
+        assert len(result) == 1
+        assert result[0].name == "Subdomain Takeover"
+        assert result[0].matched_at == "sub.example.com"
+        assert task.parse_line("[NOT VULNERABLE] safe.example.com") == []
+        assert task.parse_line("") == []
+
+
+# ── CRLFuzz Parser ────────────────────────────────────────────────────────
+
+
+class TestCrlfuzzParser:
+    def test_crlfuzz_metadata(self):
+        task = TaskRegistry.create("crlfuzz")
+        assert task.name == "crlfuzz"
+        assert task.cmd == "crlfuzz"
+        assert task.category == "vuln/injection"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_crlfuzz_parse_output(self):
+        stdout = "\n".join([
+            "https://example.com/path%0d%0aInjected-Header:true",
+            "https://example.com/other%0d%0aSet-Cookie:evil",
+        ])
+        task = TaskRegistry.create("crlfuzz")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 2
+        assert all(isinstance(r, Vulnerability) for r in results)
+        assert results[0].name == "CRLF Injection"
+        assert results[0].severity == Severity.MEDIUM
+        assert "example.com" in results[0].matched_at
+
+    def test_crlfuzz_parse_empty(self):
+        task = TaskRegistry.create("crlfuzz")
+        assert task.parse_output("", "") == []
+
+    def test_crlfuzz_parse_line(self):
+        task = TaskRegistry.create("crlfuzz")
+        result = task.parse_line("https://example.com/vuln%0d%0aHeader:val")
+        assert len(result) == 1
+        assert result[0].name == "CRLF Injection"
+        assert task.parse_line("[info] scanning") == []
+        assert task.parse_line("") == []
+        assert task.parse_line("no-url-text") == []
+
+
+# ── Commix Parser ─────────────────────────────────────────────────────────
+
+
+class TestCommixParser:
+    def test_commix_metadata(self):
+        task = TaskRegistry.create("commix")
+        assert task.name == "commix"
+        assert task.cmd == "commix"
+        assert task.category == "vuln/injection"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_commix_parse_output(self):
+        stdout = "\n".join([
+            "[*] Testing connection to the target URL...",
+            "[*] Checking if the target is protected by some kind of WAF/IPS...",
+            "The ('classic') technique appears to be injectable.",
+            "The ('eval-based') technique appears to be injectable.",
+            "The parameter 'id' is vulnerable.",
+            "The ('time-based') technique appears to be injectable.",
+            "The parameter 'name' is vulnerable.",
+        ])
+        task = TaskRegistry.create("commix")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 2
+        assert all(isinstance(r, Vulnerability) for r in results)
+        assert results[0].name == "Command Injection"
+        assert results[0].matched_at == "id"
+        assert results[0].severity == Severity.CRITICAL
+        assert "classic" in results[0].description
+        assert "eval-based" in results[0].description
+        # Second vuln resets techniques
+        assert results[1].matched_at == "name"
+        assert "time-based" in results[1].description
+
+    def test_commix_parse_empty(self):
+        task = TaskRegistry.create("commix")
+        assert task.parse_output("", "") == []
+
+    def test_commix_parse_no_vuln(self):
+        stdout = "\n".join([
+            "[*] Testing connection to the target URL...",
+            "[*] Target does not appear to be injectable.",
+        ])
+        task = TaskRegistry.create("commix")
+        assert task.parse_output(stdout, "") == []
+
+
+# ── Rustscan Parser ───────────────────────────────────────────────────────
+
+
+class TestRustscanParser:
+    def test_rustscan_metadata(self):
+        task = TaskRegistry.create("rustscan")
+        assert task.name == "rustscan"
+        assert task.cmd == "rustscan"
+        assert task.category == "port/scan"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_rustscan_parse_output_open_format(self):
+        stdout = "\n".join([
+            "Open 10.0.0.1:22",
+            "Open 10.0.0.1:80",
+            "Open 10.0.0.1:443",
+        ])
+        task = TaskRegistry.create("rustscan")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Port) for r in results)
+        assert results[0].port == 22
+        assert results[0].ip == "10.0.0.1"
+        assert results[1].port == 80
+        assert results[2].port == 443
+
+    def test_rustscan_parse_output_greppable(self):
+        stdout = "Host: 10.0.0.1 () Ports: 22/open/tcp//ssh///, 80/open/tcp//http///, 443/open/tcp//https///"
+        task = TaskRegistry.create("rustscan")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert results[0].port == 22
+        assert results[0].ip == "10.0.0.1"
+        assert results[0].service_name == "ssh"
+        assert results[1].port == 80
+        assert results[1].service_name == "http"
+
+    def test_rustscan_parse_empty(self):
+        task = TaskRegistry.create("rustscan")
+        assert task.parse_output("", "") == []
+
+    def test_rustscan_parse_line(self):
+        task = TaskRegistry.create("rustscan")
+        result = task.parse_line("Open 192.168.1.1:8080")
+        assert len(result) == 1
+        assert result[0].port == 8080
+        assert result[0].ip == "192.168.1.1"
+        assert task.parse_line("") == []
+        assert task.parse_line("some random text") == []
+
+
+# ── Gowitness Parser ──────────────────────────────────────────────────────
+
+
+class TestGowitnessParser:
+    def test_gowitness_metadata(self):
+        task = TaskRegistry.create("gowitness")
+        assert task.name == "gowitness"
+        assert task.cmd == "gowitness"
+        assert task.category == "url/screenshot"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_gowitness_parse_output(self):
+        stdout = "\n".join([
+            "[200] https://example.com - Example Domain",
+            "[301] https://www.example.com - Redirect",
+            "[404] https://example.com/missing - Not Found",
+        ])
+        task = TaskRegistry.create("gowitness")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 3
+        assert all(isinstance(r, Url) for r in results)
+        assert results[0].url == "https://example.com"
+        assert results[0].status_code == 200
+        assert results[0].title == "Example Domain"
+        assert results[1].status_code == 301
+        assert results[2].status_code == 404
+
+    def test_gowitness_parse_no_title(self):
+        stdout = "[200] https://example.com"
+        task = TaskRegistry.create("gowitness")
+        results = task.parse_output(stdout, "")
+        assert len(results) == 1
+        assert results[0].url == "https://example.com"
+        assert results[0].title == ""
+
+    def test_gowitness_parse_empty(self):
+        task = TaskRegistry.create("gowitness")
+        assert task.parse_output("", "") == []
+
+    def test_gowitness_build_command(self):
+        task = TaskRegistry.create("gowitness")
+        cmd, _ = task.build_command(
+            "https://example.com", threads=5, fullpage=True
+        )
+        assert "gowitness scan single" in cmd
+        assert "--url https://example.com" in cmd
+        assert "--threads 5" in cmd
+        assert "--fullpage" in cmd
+
+    def test_gowitness_build_command_file(self):
+        task = TaskRegistry.create("gowitness")
+        cmd, _ = task.build_command("", _file="/tmp/urls.txt")
+        assert "gowitness scan file" in cmd
+        assert "-f /tmp/urls.txt" in cmd
+
+
+# ── JWT Tool Parser ───────────────────────────────────────────────────────
+
+
+class TestJwtToolParser:
+    def test_jwt_tool_metadata(self):
+        task = TaskRegistry.create("jwt_tool")
+        assert task.name == "jwt_tool"
+        assert task.cmd == "jwt_tool"
+        assert task.category == "vuln/jwt"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_jwt_tool_parse_output(self):
+        stdout = "\n".join([
+            "[*] sub = \"admin\"",
+            "[*] iat = 1700000000",
+            "[+] VULNERABILITY: Algorithm confusion allows forging tokens",
+            "[*] Decoded token info line",
+            "[+] WEAK key used for signing",
+        ])
+        task = TaskRegistry.create("jwt_tool")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Tag
+
+        vulns = [r for r in results if isinstance(r, Vulnerability)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(vulns) == 2
+        assert vulns[0].severity == Severity.HIGH
+        assert "Algorithm confusion" in vulns[0].name
+        # Claims — both sub and iat match _CLAIM_RE (\w+ = value)
+        claims = [t for t in tags if t.name == "jwt_claim"]
+        assert len(claims) == 2
+        assert claims[0].value == "sub=admin"
+        assert claims[1].value == "iat=1700000000"
+        # Info line for "Decoded token info line"
+        info_tags = [t for t in tags if t.name == "jwt_info"]
+        assert len(info_tags) == 1
+
+    def test_jwt_tool_parse_empty(self):
+        task = TaskRegistry.create("jwt_tool")
+        assert task.parse_output("", "") == []
+
+    def test_jwt_tool_build_command(self):
+        task = TaskRegistry.create("jwt_tool")
+        token = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.sig"
+        cmd, _ = task.build_command(
+            token, mode="at", target_url="https://example.com/api"
+        )
+        assert "jwt_tool" in cmd
+        assert token in cmd
+        assert "-M at" in cmd
+        assert "-t https://example.com/api" in cmd
+
+
+# ── Name-That-Hash Parser ────────────────────────────────────────────────
+
+
+class TestNameThatHashParser:
+    def test_name_that_hash_metadata(self):
+        task = TaskRegistry.create("name-that-hash")
+        assert task.name == "name-that-hash"
+        assert task.cmd == "nth"
+        assert task.category == "crypto/identify"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_name_that_hash_parse_greppable(self):
+        stdout = "5d41402abc4b2a76b9719d911017c592:::Most Likely - MD5 - HC:0 - JtR:raw-md5:::Least Likely - MD4 - HC:900"
+        task = TaskRegistry.create("name-that-hash")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Tag
+
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) >= 1
+        assert tags[0].name == "hash_type"
+        assert tags[0].match == "5d41402abc4b2a76b9719d911017c592"
+        assert tags[0].category == "crypto"
+
+    def test_name_that_hash_parse_default_mode(self):
+        stdout = "\n".join([
+            "5d41402abc4b2a76b9719d911017c592",
+            "  MD5  HC: 0  JtR: raw-md5",
+            "  MD4  HC: 900  JtR: raw-md4",
+        ])
+        task = TaskRegistry.create("name-that-hash")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Tag
+
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 2
+        assert tags[0].name == "hash_type"
+        assert tags[0].value == "MD5"
+        assert tags[0].match == "5d41402abc4b2a76b9719d911017c592"
+        assert tags[1].value == "MD4"
+
+    def test_name_that_hash_parse_empty(self):
+        task = TaskRegistry.create("name-that-hash")
+        assert task.parse_output("", "") == []
+
+
+# ── Hashid Parser ─────────────────────────────────────────────────────────
+
+
+class TestHashidParser:
+    def test_hashid_metadata(self):
+        task = TaskRegistry.create("hashid")
+        assert task.name == "hashid"
+        assert task.cmd == "hashid"
+        assert task.category == "crypto/identify"
+        assert task.install_cmd
+        assert len(task.output_types) > 0
+
+    def test_hashid_parse_output(self):
+        stdout = "\n".join([
+            "Analyzing '5d41402abc4b2a76b9719d911017c592'",
+            "[+] MD5 [Hashcat Mode: 0] [JtR Format: raw-md5]",
+            "[+] MD4 [Hashcat Mode: 900] [JtR Format: raw-md4]",
+            "[+] Domain Cached Credentials [Hashcat Mode: 1100]",
+        ])
+        task = TaskRegistry.create("hashid")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Tag
+
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 3
+        assert tags[0].name == "hash_type"
+        assert tags[0].match == "5d41402abc4b2a76b9719d911017c592"
+        assert tags[0].category == "crypto"
+        # The lazy (.+?) in _TYPE_RE captures minimal chars due to optional groups
+        assert tags[0].value  # non-empty
+        assert tags[1].value
+        assert tags[2].value
+
+    def test_hashid_parse_multiple_hashes(self):
+        stdout = "\n".join([
+            "Analyzing 'abc123'",
+            "[+] MD5",
+            "Analyzing 'def456'",
+            "[+] SHA-1",
+        ])
+        task = TaskRegistry.create("hashid")
+        results = task.parse_output(stdout, "")
+        from ofx.tasks.output_types import Tag
+
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(tags) == 2
+        assert tags[0].match == "abc123"
+        assert tags[0].value  # non-empty hash type
+        assert tags[1].match == "def456"
+        assert tags[1].value  # non-empty hash type
+
+    def test_hashid_parse_empty(self):
+        task = TaskRegistry.create("hashid")
+        assert task.parse_output("", "") == []

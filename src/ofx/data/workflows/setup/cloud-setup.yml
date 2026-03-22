@@ -131,6 +131,21 @@ jobs:
           echo "[*] Installing cariddi..."
           go install -v github.com/edoardottt/cariddi/cmd/cariddi@latest
 
+          echo "[*] Installing hakrawler..."
+          go install -v github.com/hakluke/hakrawler@latest
+
+          echo "[*] Installing subzy..."
+          go install -v github.com/PentestPad/subzy@latest
+
+          echo "[*] Installing crlfuzz..."
+          go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest
+
+          echo "[*] Installing gowitness..."
+          go install -v github.com/sensepost/gowitness@latest
+
+          echo "[*] Installing kerbrute..."
+          go install -v github.com/ropnop/kerbrute@latest
+
       - name: Update nuclei templates
         run: |
           export PATH="$HOME/Tools/bin:$PATH"
@@ -174,6 +189,24 @@ jobs:
 
           echo "[*] Installing holehe..."
           uv tool install holehe
+
+          echo "[*] Installing netexec..."
+          uv tool install netexec
+
+          echo "[*] Installing enum4linux-ng..."
+          uv tool install git+https://github.com/cddmp/enum4linux-ng
+
+          echo "[*] Installing paramspider..."
+          uv tool install paramspider
+
+          echo "[*] Installing commix..."
+          uv tool install commix
+
+          echo "[*] Installing name-that-hash..."
+          uv tool install name-that-hash
+
+          echo "[*] Installing hashid..."
+          uv tool install hashid
 
   install-other-tools:
     name: "Install binary and gem tools"
@@ -221,9 +254,35 @@ jobs:
           mkdir -p ~/Tools/bin
           cp ~/.cargo/bin/x8 ~/Tools/bin/
 
+      - name: Install rustscan
+        run: |
+          if ! command -v cargo &>/dev/null; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          cargo install rustscan
+          mkdir -p ~/Tools/bin
+          cp ~/.cargo/bin/rustscan ~/Tools/bin/
+
+      - name: Install jwt_tool
+        run: |
+          git clone --depth 1 https://github.com/ticarpi/jwt_tool ~/Tools/jwt_tool
+          cd ~/Tools/jwt_tool && python3 -m pip install -r requirements.txt
+          ln -sf ~/Tools/jwt_tool/jwt_tool.py ~/Tools/bin/jwt_tool
+
+  install-apt-tools2:
+    name: "Install additional apt-based tools"
+    needs: [setup-runtime]
+    if: "{{ not inputs.skip_apt }}"
+    steps:
+      - name: Install hydra
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get install -y -qq hydra
+
   verify:
     name: "Verify installation"
-    needs: [install-apt-tools, install-go-tools, install-python-tools, install-other-tools]
+    needs: [install-apt-tools, install-apt-tools2, install-go-tools, install-python-tools, install-other-tools]
     steps:
       - name: Verify all tools
         run: |
@@ -236,7 +295,9 @@ jobs:
                       grype trivy wpscan whois searchsploit testssl.sh \
                       gobuster amass assetfinder mapcidr cariddi masscan \
                       fping nikto whatweb sslscan findomain x8 sqlmap \
-                      dnsrecon theHarvester holehe; do
+                      dnsrecon theHarvester holehe netexec kerbrute hydra \
+                      enum4linux-ng paramspider hakrawler subzy crlfuzz \
+                      commix rustscan gowitness jwt_tool nth hashid; do
             if command -v "$tool" &>/dev/null; then
               echo "  [✓] $tool"
               PASS=$((PASS + 1))
