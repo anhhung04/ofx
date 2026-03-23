@@ -110,7 +110,7 @@ jobs:
       name: dnsrecon-scan
       with:
         target: '{{ inputs.target }}'
-        type: std,brt,srv
+        type: std,srv
       continue-on-error: true
       log-stdout: true
     - task: httpx

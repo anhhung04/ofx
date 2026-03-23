@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Record, Subdomain
@@ -46,6 +47,16 @@ class DnsreconTask(Task):
     file_flag = None
     output_flag = "-j"
     extra_flags = []
+
+    def build_command(
+        self, target: str, **kwargs: Any
+    ) -> tuple[str, Path | None]:
+        # Strip 'brt' from type if no wordlist is provided (it requires -D)
+        enum_type = kwargs.get("type", "")
+        if enum_type and "brt" in enum_type and not kwargs.get("wordlist"):
+            types = [t.strip() for t in enum_type.split(",") if t.strip() != "brt"]
+            kwargs["type"] = ",".join(types) if types else "std"
+        return super().build_command(target, **kwargs)
 
     def _output_suffix(self) -> str:
         return ".json"
