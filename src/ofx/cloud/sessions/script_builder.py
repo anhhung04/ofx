@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 
+from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.models.step import RunType, Step
 
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
@@ -99,7 +100,7 @@ def _build_bash(
         step_name = step.name or f"step_{idx}"
         lines.append(f'_log ">>> Step {idx}: {step_name}"')
 
-        cmd = _step_command_bash(step, work_dir)
+        cmd = _step_command_bash(step, idx, work_dir)
         if step.continue_on_error:
             lines.append(
                 f'({cmd}) >> "$LOG_FILE" 2>&1 || _log "Step {idx} failed (continue_on_error)"'
@@ -144,7 +145,7 @@ def _build_bash(
     return "\n".join(lines) + "\n"
 
 
-def _step_command_bash(step: Step, work_dir: str) -> str:  # noqa: ARG001
+def _step_command_bash(step: Step, step_index: int, work_dir: str) -> str:  # noqa: ARG001
     """Extract the shell command(s) from a step for bash.
 
     Uses ``$WORK_DIR`` rather than hard-coding *work_dir* so that paths with
@@ -157,12 +158,27 @@ def _step_command_bash(step: Step, work_dir: str) -> str:  # noqa: ARG001
         return f'cd "$WORK_DIR" 2>/dev/null; {step.run}'
 
     if run_type == RunType.SCRIPT:
-        # Inline script — run via heredoc to avoid all quoting edge-cases
-        script_escaped = step.script.replace("'", "'\\''")
-        return f"cd \"$WORK_DIR\" 2>/dev/null; bash -c '{script_escaped}'"
+        script_name = _python_step_filename(step_index)
+        escaped_name = _bash_escape(script_name)
+        return (
+            'cd "$WORK_DIR" 2>/dev/null; '
+            "__OFX_PY_BIN=$(command -v python3 || command -v python); "
+            'if [ -z "$__OFX_PY_BIN" ]; then echo "Python interpreter not found" >&2; exit 127; fi; '
+            f'"$__OFX_PY_BIN" "{escaped_name}"'
+        )
 
     if run_type == RunType.SCRIPT_FILE:
-        return f'cd "$WORK_DIR" 2>/dev/null; bash {step.script_file}'
+        script_name = _python_step_filename(step_index)
+        escaped_name = _bash_escape(script_name)
+        return (
+            'cd "$WORK_DIR" 2>/dev/null; '
+            "__OFX_PY_BIN=$(command -v python3 || command -v python); "
+            'if [ -z "$__OFX_PY_BIN" ]; then echo "Python interpreter not found" >&2; exit 127; fi; '
+            f'"$__OFX_PY_BIN" "{escaped_name}"'
+        )
+
+    if run_type == RunType.TASK:
+        return f'cd "$WORK_DIR" 2>/dev/null; {build_task_command_from_step(step)}'
 
     return f'echo "Unsupported run type: {run_type}"'
 
@@ -170,6 +186,11 @@ def _step_command_bash(step: Step, work_dir: str) -> str:  # noqa: ARG001
 def _bash_escape(s: str) -> str:
     """Escape double-quotes and backslashes for bash."""
     return s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$")
+
+
+def _python_step_filename(step_index: int) -> str:
+    """Return deterministic filename for staged inline step scripts."""
+    return f".ofx_step_{step_index}.py"
 
 
 def _bash_encrypt_epilogue() -> list[str]:
@@ -257,7 +278,7 @@ def _build_powershell(
         lines.append(f'Write-Log ">>> Step {idx}: {step_name}"')
         lines.append("try {")
 
-        cmd = _step_command_ps(step, work_dir)
+        cmd = _step_command_ps(step, idx, work_dir)
         lines.append(f"  {cmd} *>> $LOG_FILE")
 
         if step.continue_on_error:
@@ -354,7 +375,7 @@ def _ps_escape(s: str) -> str:
     )
 
 
-def _step_command_ps(step: Step, work_dir: str) -> str:
+def _step_command_ps(step: Step, step_index: int, work_dir: str) -> str:
     """Extract PowerShell command from a step.
 
     For inline scripts the content is written to a here-string variable
@@ -368,18 +389,31 @@ def _step_command_ps(step: Step, work_dir: str) -> str:
         return f'Set-Location "{escaped_cwd}"; {step.run}'
 
     if run_type == RunType.SCRIPT:
-        # Use a here-string to avoid escaping issues inside the outer script
-        # Indented so the generated PowerShell is readable
+        script_name = _python_step_filename(step_index)
         return (
             f'Set-Location "{escaped_cwd}"; '
-            f"$_script = @'\n{step.script}\n'@; "
-            f"Invoke-Expression $_script"
+            f'$__ofx_py = Join-Path $WORK_DIR "{_ps_escape(script_name)}"; '
+            "if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 $__ofx_py } "
+            "elseif (Get-Command python -ErrorAction SilentlyContinue) { & python $__ofx_py } "
+            "elseif (Get-Command python3 -ErrorAction SilentlyContinue) { & python3 $__ofx_py } "
+            'else { throw "Python interpreter not found" }; '
+            "$__ofx_rc = $LASTEXITCODE; if ($__ofx_rc -ne 0) { exit $__ofx_rc }"
         )
 
     if run_type == RunType.SCRIPT_FILE:
+        script_name = _python_step_filename(step_index)
         return (
             f'Set-Location "{escaped_cwd}"; '
-            f'& "{_ps_escape(str(step.script_file))}"'
+            f'$__ofx_py = Join-Path $WORK_DIR "{_ps_escape(script_name)}"; '
+            "if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 $__ofx_py } "
+            "elseif (Get-Command python -ErrorAction SilentlyContinue) { & python $__ofx_py } "
+            "elseif (Get-Command python3 -ErrorAction SilentlyContinue) { & python3 $__ofx_py } "
+            'else { throw "Python interpreter not found" }; '
+            "$__ofx_rc = $LASTEXITCODE; "
+            "if ($__ofx_rc -ne 0) { exit $__ofx_rc }"
         )
+
+    if run_type == RunType.TASK:
+        return f'Set-Location "{escaped_cwd}"; {build_task_command_from_step(step)}'
 
     return f'Write-Output "Unsupported run type: {run_type}"'

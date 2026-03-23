@@ -74,6 +74,14 @@ class Session(OFXBaseModel):
     remote_log_file: str = Field(
         default="", description="Path to the output log on remote/local target"
     )
+    remote_tmux_session: str = Field(
+        default="",
+        description="tmux session name when launched via tmux backend (linux cloud)",
+    )
+    remote_launcher: str = Field(
+        default="",
+        description="Detached launcher backend (e.g., nohup, tmux, start-process)",
+    )
 
     # Timestamps
     started_at: datetime = Field(

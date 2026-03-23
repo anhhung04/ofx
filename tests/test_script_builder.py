@@ -116,7 +116,7 @@ class TestBashStepUsesWorkDirVar:
     def test_script_step_uses_work_dir_var(self):
         step = _make_step(script="print('hello')")
         script = build_session_script([step], session_id="s1", work_dir="/some/path")
-        lines = [line for line in script.split("\n") if "print" in line]
+        lines = [line for line in script.split("\n") if '".ofx_step_0.py"' in line]
         assert lines
         assert "/some/path" not in lines[0]
 
@@ -128,17 +128,53 @@ class TestBashInlineScriptEscape:
     def test_single_quote_in_script(self):
         step = _make_step(script="x = 'hello world'")
         script = build_session_script([step], session_id="s1", work_dir="/tmp/s")
-        # Single-quote in user script must be escaped for bash -c '...'
-        assert "hello world" in script
-        # The surrounding single-quotes around the script should still be valid bash
-        # (no unescaped ' that would prematurely close the quoting)
-        lines = [line for line in script.split("\n") if "bash -c" in line]
-        assert lines, "Expected bash -c line"
-        cmd_line = lines[0]
-        # Count unescaped single quotes: the bash -c 'SCRIPT' pattern
-        # Escaped single-quotes use '\'' pattern, so raw "'" should appear
-        # only at the very start and end of the -c argument
-        assert "'\\''" in cmd_line or "x = 'hello world'" not in cmd_line  # escaped or heredoc
+        assert "__OFX_PY_BIN=$(command -v python3 || command -v python)" in script
+        assert '"$__OFX_PY_BIN" ".ofx_step_0.py"' in script
+
+    def test_long_script_is_not_embedded_in_exec_command(self):
+        long_script = "print('x')\n" * 2000
+        step = _make_step(script=long_script)
+        script = build_session_script([step], session_id="s1", work_dir="/tmp/s")
+        exec_lines = [line for line in script.splitlines() if '"$__OFX_PY_BIN"' in line]
+        assert exec_lines
+        assert long_script[:40] not in exec_lines[0]
+        assert '".ofx_step_0.py"' in exec_lines[0]
+
+
+class TestTaskStepCommands:
+    def test_bash_task_step_builds_task_command(self):
+        step = Step.model_validate(
+            {
+                "name": "t",
+                "task": "nmap",
+                "with": {"target": "127.0.0.1"},
+            }
+        )
+        script = build_session_script([step], session_id="s1", work_dir="/tmp/s")
+        assert 'cd "$WORK_DIR" 2>/dev/null; nmap' in script
+
+    def test_powershell_task_step_builds_task_command(self):
+        step = Step.model_validate(
+            {
+                "name": "t",
+                "task": "nmap",
+                "with": {"target": "127.0.0.1"},
+            }
+        )
+        script = build_session_script(
+            [step], session_id="s1", work_dir="C:\\work", os_type="windows"
+        )
+        assert 'Set-Location "C:\\work"; nmap' in script
+
+
+class TestScriptOpsecPayload:
+    def test_inline_bundle_payload_is_obfuscated(self):
+        from ofx.cloud.sessions.manager import _build_step_bundle_source
+
+        step = _make_step(script='print("SECRET_TOKEN_123")')
+        payload = _build_step_bundle_source(step)
+        assert "SECRET_TOKEN_123" not in payload
+        assert "marshal.loads" in payload or "exec(" in payload
 
 
 # ---------------------------------------------------------------------------
@@ -182,22 +218,20 @@ class TestBuildPowerShellEnvEscaping:
 # build_session_script (powershell) — inline script uses here-string
 # ---------------------------------------------------------------------------
 class TestPowerShellInlineScriptHereString:
-    def test_here_string_used_for_inline_script(self):
+    def test_inline_script_uses_python_temp_file(self):
         step = _make_step(script='print("$var")')
         script = build_session_script(
             [step], session_id="s1", work_dir="C:\\work", os_type="windows"
         )
-        # Should use PS here-string (@'...'@) rather than double-quoted Invoke-Expression
-        assert "@'" in script
-        assert "'@" in script
+        assert '$__ofx_py = Join-Path $WORK_DIR ".ofx_step_0.py"' in script
+        assert "& py -3 $__ofx_py" in script
 
-    def test_dollar_not_escaped_in_here_string(self):
-        """Here-string (@'...'@) is single-quoted so $ is literal — no escaping needed."""
+    def test_inline_script_keeps_content_literal(self):
         step = _make_step(script="x = '$HOME'")
         script = build_session_script(
             [step], session_id="s1", work_dir="C:\\work", os_type="windows"
         )
-        assert "$HOME" in script
+        assert '$__ofx_py = Join-Path $WORK_DIR ".ofx_step_0.py"' in script
 
     def test_script_file_escapes_ps_path(self):
         data = {"name": "sf", "script_file": 'C:\\Temp\\x`"$env:T.ps1'}
@@ -206,4 +240,4 @@ class TestPowerShellInlineScriptHereString:
             [step], session_id="s1", work_dir='C:\\work`"$env:W', os_type="windows"
         )
         assert 'Set-Location "C:\\work```"`$env:W"' in script
-        assert '& "C:\\Temp\\x```"`$env:T.ps1"' in script
+        assert '$__ofx_py = Join-Path $WORK_DIR ".ofx_step_0.py"' in script

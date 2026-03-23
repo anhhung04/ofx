@@ -17,6 +17,7 @@ from ofx.cloud.sessions.encryption import decrypt_results, derive_key, encrypt_r
 from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
 from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.sessions.store import SessionStore
+from ofx.models.step import Step
 
 # ======================================================================
 # Session model tests
@@ -206,7 +207,7 @@ class TestScriptBuilder:
     def test_bash_inline_script(self):
         steps = [self._make_step(name="inline", script="echo hello\necho world")]
         script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
-        assert "echo hello" in script
+        assert '"$__OFX_PY_BIN" ".ofx_step_0.py"' in script
 
     def test_powershell_basic(self):
         steps = [self._make_step(name="wincheck", run="Get-Process")]
@@ -222,7 +223,7 @@ class TestScriptBuilder:
     def test_script_file_step(self):
         steps = [self._make_step(name="sf", script_file="/opt/scripts/scan.sh")]
         script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
-        assert "scan.sh" in script
+        assert '"$__OFX_PY_BIN" ".ofx_step_0.py"' in script
 
     def test_bash_encrypt_at_rest(self):
         steps = [self._make_step(name="scan", run="echo hi")]
@@ -428,6 +429,27 @@ class TestSessionManagerLocal:
         assert not (work / "output").exists(), "output/ dir should be removed after encryption"
         # Key file should have been shredded
         assert not (work / ".skey").exists(), "key file should be shredded"
+        # Bundled python step artifact should exist for script step in local workspace
+
+    def test_submit_local_stages_bundled_python_script(self, tmp_path):
+        wf = tmp_path / "test_script_session.yml"
+        wf.write_text(textwrap.dedent("""\
+            name: session-script-test
+            jobs:
+              py-job:
+                steps:
+                  - name: inline-python
+                    script: |
+                      print("INLINE_SCRIPT_OK")
+        """))
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+        session = asyncio.run(mgr.submit(str(wf), target=SessionTarget.LOCAL))
+        bundled = Path(session.remote_work_dir) / ".ofx_step_0.py"
+        assert bundled.exists()
+        bundled_text = bundled.read_text()
+        assert "INLINE_SCRIPT_OK" not in bundled_text
+        assert "_m.loads" in bundled_text or "base64.b64decode" in bundled_text
 
     def test_status_completed(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
@@ -774,6 +796,45 @@ class TestSessionInputInjection:
             )
 
 
+class TestCloudCancelTmux:
+    @pytest.mark.asyncio
+    async def test_cancel_cloud_tmux_uses_kill_session(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        session = Session(
+            id="tmuxkill",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.RUNNING,
+            instance_ip="10.0.0.10",
+            remote_pid=1234,
+            remote_log_file="/tmp/output.log",
+            os_type="linux",
+            remote_launcher="tmux",
+            remote_tmux_session="ofx-ses-tmuxkill",
+        )
+        store.save(session)
+        mgr = SessionManager(store=store)
+
+        seen: list[str] = []
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                seen.append(cmd)
+                return ""
+
+            def cleanup(self):
+                return None
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            out = await mgr.cancel("tmuxkill")
+
+        assert out.status == SessionStatus.CANCELED
+        assert any("tmux kill-session -t ofx-ses-tmuxkill" in c for c in seen)
+
+
 # ======================================================================
 # Helper
 # ======================================================================
@@ -928,3 +989,83 @@ class TestCheckCloudStatusNoPid:
             result = await mgr._check_cloud_status(session)
 
         assert result.status == SessionStatus.RUNNING
+
+    @pytest.mark.asyncio
+    async def test_no_pid_tmux_alive_keeps_running(self, tmp_path):
+        """When no PID but tmux launcher is alive, keep RUNNING."""
+        from ofx.cloud.sessions.models import SessionStatus
+
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session(pid=None).model_copy(
+            update={"remote_launcher": "tmux", "remote_tmux_session": "ofx-ses-abc12345"}
+        )
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                if "tail" in cmd:
+                    return ""
+                if "tmux has-session" in cmd:
+                    return "alive"
+                return ""
+
+            def cleanup(self):
+                pass
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.RUNNING
+
+
+class TestTmuxLaunchMetadata:
+    def test_session_model_tmux_fields_roundtrip(self):
+        s = Session(
+            id="tmux1234",
+            workflow_file="wf.yml",
+            remote_tmux_session="ofx-ses-tmux1234",
+            remote_launcher="tmux",
+        )
+        dumped = s.model_dump()
+        restored = Session.model_validate(dumped)
+        assert restored.remote_tmux_session == "ofx-ses-tmux1234"
+        assert restored.remote_launcher == "tmux"
+
+
+class TestSessionManagerScriptBundling:
+    def _make_step(self, **kwargs) -> Step:
+        return Step.model_validate(kwargs)
+
+    def test_stage_script_files_writes_bundle_for_inline_script(self, tmp_path):
+        from ofx.cloud.sessions.manager import SessionManager
+
+        mgr = SessionManager(store=SessionStore(base_dir=tmp_path / "sessions"))
+        work_dir = tmp_path / "work"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        steps = [self._make_step(name="s0", script='print("BUNDLE_INLINE_OK")')]
+
+        mgr._stage_script_files(steps, work_dir)
+
+        bundled = work_dir / ".ofx_step_0.py"
+        assert bundled.exists()
+        bundled_text = bundled.read_text()
+        assert "BUNDLE_INLINE_OK" not in bundled_text
+        assert "_m.loads" in bundled_text or "base64.b64decode" in bundled_text
+
+    def test_stage_script_files_writes_bundle_for_script_file(self, tmp_path):
+        from ofx.cloud.sessions.manager import SessionManager
+
+        src = tmp_path / "in.py"
+        src.write_text('print("BUNDLE_FILE_OK")\n')
+        mgr = SessionManager(store=SessionStore(base_dir=tmp_path / "sessions"))
+        work_dir = tmp_path / "work"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        steps = [self._make_step(name="s0", script_file=str(src))]
+
+        mgr._stage_script_files(steps, work_dir)
+
+        bundled = work_dir / ".ofx_step_0.py"
+        assert bundled.exists()
+        bundled_text = bundled.read_text()
+        assert "BUNDLE_FILE_OK" not in bundled_text
+        assert "_m.loads" in bundled_text or "base64.b64decode" in bundled_text

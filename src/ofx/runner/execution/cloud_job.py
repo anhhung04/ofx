@@ -245,33 +245,13 @@ class CloudJobRunner(BaseRunner[Job]):
 
     def _build_provider_kwargs(self, cfg: CloudConfig) -> dict[str, Any]:
         """Build kwargs for CloudProviderRegistry.create()."""
-        kwargs: dict[str, Any] = {}
-        provider = cfg.provider or "static"
+        from ofx.cloud.runtime import build_provider_kwargs
 
-        if provider == "static":
-            kwargs["host"] = cfg.host or self._cloud_config.host
-            kwargs["user"] = cfg.ssh_user
-            kwargs["port"] = cfg.ssh_port or 22
-            if cfg.ssh_key:
-                kwargs["identity_file"] = cfg.ssh_key
-            if cfg.ssh_password:
-                kwargs["password"] = cfg.ssh_password
-        elif provider == "digitalocean":
-            token = cfg.extra.get("token") if cfg.extra else None
-            if token:
-                kwargs["token"] = token
-        elif provider == "aws":
-            for key in ("aws_access_key_id", "aws_secret_access_key", "region_name"):
-                val = (cfg.extra or {}).get(key)
-                if val:
-                    kwargs[key] = val
-            kwargs["region"] = cfg.region or "us-east-1"
-
-        return kwargs
+        return build_provider_kwargs(cfg)
 
     def _create_remote_runner(self, cfg: CloudConfig):
         """Create PostSSH or PostWinRM instance for the provisioned instance."""
-        from ofx.api.post import RunnerRegistry
+        from ofx.cloud.runtime import create_remote_runner
 
         if not self._instance:
             raise RuntimeError("Cannot create remote runner without instance info")
@@ -291,30 +271,11 @@ class CloudJobRunner(BaseRunner[Job]):
             self._log_info(
                 f"Command logging enabled. Logs will be saved to: {log_path}"
             )
-        if is_windows:
-            return RunnerRegistry.create(
-                "winrm",
-                host=ip,
-                username=cfg.winrm_user or "Administrator",
-                password=cfg.winrm_password or cfg.ssh_password or "",
-                ssl=cfg.winrm_ssl or False,
-                port=cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985),
-                opsec_mode=cfg.opsec_mode or False,
-                log_commands=cfg.log_commands or False,
-                log_path=str(log_path) if log_path else None,
-            )
-
-        return RunnerRegistry.create(
-            "ssh",
-            host=ip,
-            user=cfg.ssh_user or "root",
-            port=cfg.ssh_port or 22,
-            identity_file=cfg.ssh_key,
-            password=cfg.ssh_password,
-            opsec_mode=cfg.opsec_mode or False,
-            log_commands=cfg.log_commands or False,
-            max_retries=3,
+        return create_remote_runner(
+            cfg,
+            ip,
             log_path=str(log_path) if log_path else None,
+            max_retries=3,
         )
 
     # ------------------------------------------------------------------

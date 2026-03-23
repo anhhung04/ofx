@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import secrets as _secrets
+import shlex
 import shutil
 import signal
 import subprocess
@@ -111,7 +112,7 @@ def _cleanup_remote(remote: Any) -> None:
 def _build_tail_cmd(os_type: str, remote_log_file: str, lines: int) -> str:
     if os_type == "windows":
         return f'powershell "Get-Content -Tail {lines} {remote_log_file}"'
-    return f"tail -{lines} {remote_log_file} 2>/dev/null"
+    return f"tail -{lines} {_shq(remote_log_file)} 2>/dev/null"
 
 
 def _remote_join(os_type: str, base: str, *parts: str) -> str:
@@ -120,6 +121,141 @@ def _remote_join(os_type: str, base: str, *parts: str) -> str:
     for part in parts:
         path = f"{path}{sep}{part.strip('\\/')}"
     return path
+
+
+def _shq(value: str) -> str:
+    """POSIX-shell quote helper for remote Linux commands."""
+    return shlex.quote(str(value))
+
+
+def _launch_remote_detached(
+    remote: Any,
+    *,
+    is_windows: bool,
+    session_id: str,
+    remote_work_dir: str,
+) -> tuple[int | None, str, str]:
+    """Launch remote session script in detached mode and return pid/launcher/tmux."""
+    if is_windows:
+        start_cmd = (
+            f'Start-Process powershell -ArgumentList "-File {remote_work_dir}\\run.ps1" '
+            f"-WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"
+        )
+        pid_output = remote.run(f'powershell "{start_cmd}"').strip()
+        return _parse_pid(pid_output), "start-process", ""
+
+    tmux_name = f"ofx-ses-{session_id}"
+    has_tmux = (
+        remote.run("command -v tmux >/dev/null 2>&1 && echo yes || echo no")
+        .strip()
+        .lower()
+        == "yes"
+    )
+    if has_tmux:
+        remote_run_script = f"{remote_work_dir}/run.sh"
+        remote_out_log = f"{remote_work_dir}/output.log"
+        tmux_cmd = (
+            f"bash {_shq(remote_run_script)} >> {_shq(remote_out_log)} 2>&1"
+        )
+        remote.run(
+            f"tmux new-session -d -s {_shq(tmux_name)} {_shq(tmux_cmd)}"
+        )
+        pid_output = remote.run(
+            f"tmux list-panes -t {_shq(tmux_name)} "
+            "-F '#{pane_pid}' 2>/dev/null | head -n1"
+        ).strip()
+        return _parse_pid(pid_output), "tmux", tmux_name
+
+    remote_run_script = f"{remote_work_dir}/run.sh"
+    remote_out_log = f"{remote_work_dir}/output.log"
+    pid_output = remote.run(
+        f"nohup bash {_shq(remote_run_script)} "
+        f"> {_shq(remote_out_log)} 2>&1 & echo $!"
+    ).strip()
+    return _parse_pid(pid_output), "nohup", ""
+
+
+def _parse_pid(pid_output: str) -> int | None:
+    """Parse detached launcher PID output into an int."""
+    try:
+        return int(pid_output.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return None
+
+
+def _remote_is_alive(remote: Any, session: Session) -> bool:
+    """Check if remote detached session is still alive."""
+    if session.os_type == "windows":
+        check_cmd = (
+            f'powershell "(Get-Process -Id {session.remote_pid} '
+            f'-ErrorAction SilentlyContinue) -ne $null"'
+        )
+    elif session.remote_launcher == "tmux" and session.remote_tmux_session:
+        check_cmd = (
+            f"tmux has-session -t {_shq(session.remote_tmux_session)} 2>/dev/null "
+            "&& echo alive || echo dead"
+        )
+    else:
+        check_cmd = f"kill -0 {session.remote_pid} 2>/dev/null && echo alive || echo dead"
+    output = remote.run(check_cmd, timeout=15).strip().lower()
+    return "alive" in output or "true" in output
+
+
+def _cancel_remote_execution(remote: Any, session: Session) -> None:
+    """Cancel remote detached execution according to selected launcher."""
+    if session.os_type == "windows":
+        remote.run(
+            f'powershell "Stop-Process -Id {session.remote_pid} -Force -ErrorAction SilentlyContinue"',
+            timeout=15,
+        )
+        return
+
+    if session.remote_launcher == "tmux" and session.remote_tmux_session:
+        remote.run(
+            f"tmux kill-session -t {_shq(session.remote_tmux_session)} 2>/dev/null || true",
+            timeout=15,
+        )
+        return
+
+    if session.remote_pid:
+        remote.run(
+            f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null",
+            timeout=15,
+        )
+
+
+def _session_to_cloud_config(session: Session) -> Any:
+    """Build a CloudConfig-like object from persisted session connection fields."""
+    from ofx.models.cloud import CloudConfig
+
+    connection_type = "winrm" if session.os_type == "windows" else "ssh"
+    return CloudConfig(
+        provider=session.cloud_provider or "static",
+        os=session.os_type or "linux",
+        connection_type=connection_type,
+        ssh_user=session.ssh_user or "root",
+        ssh_port=session.ssh_port or 22,
+        ssh_key=session.ssh_key or "",
+        ssh_password=session.ssh_password or "",
+        winrm_user=session.winrm_user or session.ssh_user or "Administrator",
+        winrm_password=session.ssh_password or "",
+        winrm_ssl=session.winrm_ssl or False,
+        winrm_port=session.winrm_port or (5986 if session.winrm_ssl else 5985),
+        winrm_transport=session.winrm_transport or "ntlm",
+    )
+
+
+def _step_bundle_filename(step_index: int) -> str:
+    """Deterministic bundle filename for Python-backed session steps."""
+    return f".ofx_step_{step_index}.py"
+
+
+def _build_step_bundle_source(step: Any) -> str:
+    """Build bundled Python bootstrap source for `script`/`script_file` steps."""
+    from ofx.cloud.script_runtime import build_python_payload, resolve_python_step_source
+
+    source = resolve_python_step_source(step)
+    return build_python_payload(source, opsec_mode=True, obfuscate_sources=True)
 
 
 class SessionManager:
@@ -321,7 +457,9 @@ class SessionManager:
 
         # Provision
         provider_name = resolved.provider or "static"
-        provider_kwargs = _build_provider_kwargs(resolved)
+        from ofx.cloud.runtime import build_provider_kwargs, create_remote_runner
+
+        provider_kwargs = build_provider_kwargs(resolved)
         provider = CloudProviderRegistry.create(provider_name, **provider_kwargs)
 
         instance = await provider.create_instance(resolved)
@@ -378,7 +516,7 @@ class SessionManager:
         )
         session = session.model_copy(update={"at_rest_key": at_rest_key, "at_rest_encrypted": True})
 
-        remote = _create_remote_runner(resolved, instance.ip)
+        remote = create_remote_runner(resolved, instance.ip, max_retries=3)
         try:
             # Upload
             session = self._save_session(session, {"status": SessionStatus.UPLOADING})
@@ -417,23 +555,12 @@ class SessionManager:
             self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=is_windows)
 
             # Start detached
-            if is_windows:
-                start_cmd = (
-                    f'Start-Process powershell -ArgumentList "-File {remote_work_dir}\\run.ps1" '
-                    f"-WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"
-                )
-                pid_output = remote.run(f'powershell "{start_cmd}"').strip()
-            else:
-                pid_output = remote.run(
-                    f"nohup bash {remote_work_dir}/run.sh "
-                    f"> {remote_work_dir}/output.log 2>&1 & echo $!"
-                ).strip()
-
-            # Parse PID
-            try:
-                pid = int(pid_output.strip().splitlines()[-1])
-            except (ValueError, IndexError):
-                pid = None
+            pid, launcher, tmux_name = _launch_remote_detached(
+                remote,
+                is_windows=is_windows,
+                session_id=session.id,
+                remote_work_dir=remote_work_dir,
+            )
 
             remote_log = f"{remote_work_dir}{sep}output.log"
             session = self._save_session(session, {
@@ -441,6 +568,8 @@ class SessionManager:
                 "remote_pid": pid,
                 "remote_work_dir": remote_work_dir,
                 "remote_log_file": remote_log,
+                "remote_tmux_session": tmux_name,
+                "remote_launcher": launcher,
                 "output_path": str(self.store.session_dir(session.id)),
             })
             logger.info("Cloud session %s started on %s (PID %s)", session.id, instance.ip, pid)
@@ -529,13 +658,36 @@ class SessionManager:
                 try:
                     tail_cmd = _build_tail_cmd(session.os_type, session.remote_log_file, 5)
                     log_tail = remote.run(tail_cmd, timeout=15).strip()
+                    marker = _parse_marker(log_tail)
+                    if marker == _DONE_MARKER:
+                        return session.model_copy(
+                            update={
+                                "status": SessionStatus.COMPLETED,
+                                "finished_at": datetime.now(UTC),
+                            }
+                        )
+                    if marker == _FAIL_MARKER:
+                        return session.model_copy(
+                            update={
+                                "status": SessionStatus.FAILED,
+                                "finished_at": datetime.now(UTC),
+                            }
+                        )
+
+                    if (
+                        session.os_type != "windows"
+                        and session.remote_launcher == "tmux"
+                        and session.remote_tmux_session
+                    ):
+                        tmux_alive = remote.run(
+                            f"tmux has-session -t {_shq(session.remote_tmux_session)} "
+                            "2>/dev/null && echo alive || echo dead",
+                            timeout=15,
+                        ).strip().lower()
+                        if "alive" in tmux_alive:
+                            return session
                 finally:
                     _cleanup_remote(remote)
-                marker = _parse_marker(log_tail)
-                if marker == _DONE_MARKER:
-                    return session.model_copy(update={"status": SessionStatus.COMPLETED, "finished_at": datetime.now(UTC)})
-                if marker == _FAIL_MARKER:
-                    return session.model_copy(update={"status": SessionStatus.FAILED, "finished_at": datetime.now(UTC)})
             except Exception as exc:
                 logger.debug("Status check (no-pid) failed for %s: %s", session.id, exc)
             return session
@@ -547,16 +699,7 @@ class SessionManager:
             return session  # Can't determine — leave as-is
 
         try:
-            if session.os_type == "windows":
-                check_cmd = (
-                    f'powershell "(Get-Process -Id {session.remote_pid} '
-                    f'-ErrorAction SilentlyContinue) -ne $null"'
-                )
-            else:
-                check_cmd = f"kill -0 {session.remote_pid} 2>/dev/null && echo alive || echo dead"
-
-            output = remote.run(check_cmd, timeout=15).strip()
-            alive = "alive" in output.lower() or "true" in output.lower()
+            alive = _remote_is_alive(remote, session)
 
             # Check log marker
             tail_cmd = _build_tail_cmd(session.os_type, session.remote_log_file, 5)
@@ -818,16 +961,7 @@ class SessionManager:
             try:
                 remote = self._reconnect(session)
                 try:
-                    if session.os_type == "windows":
-                        remote.run(
-                            f'powershell "Stop-Process -Id {session.remote_pid} -Force -ErrorAction SilentlyContinue"',
-                            timeout=15,
-                        )
-                    else:
-                        remote.run(
-                            f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null",
-                            timeout=15,
-                        )
+                    _cancel_remote_execution(remote, session)
                 finally:
                     _cleanup_remote(remote)
             except Exception as exc:
@@ -869,7 +1003,9 @@ class SessionManager:
                 )
                 mgr = get_cloud_profile_manager()
                 resolved = mgr.resolve(cfg)
-                provider_kwargs = _build_provider_kwargs(resolved)
+                from ofx.cloud.runtime import build_provider_kwargs
+
+                provider_kwargs = build_provider_kwargs(resolved)
                 provider = CloudProviderRegistry.create(
                     session.cloud_provider or resolved.provider or "static",
                     **provider_kwargs,
@@ -1000,56 +1136,46 @@ class SessionManager:
 
     def _reconnect(self, session: Session) -> Any:
         """Create a PostSSH or PostWinRM to reconnect to a session's host."""
-        from ofx.api.post import RunnerRegistry
+        from ofx.cloud.runtime import create_remote_runner
 
-        if session.os_type == "windows":
-            return RunnerRegistry.create(
-                "winrm",
-                host=session.instance_ip,
-                username=session.winrm_user or session.ssh_user or "Administrator",
-                password=session.ssh_password,
-                ssl=session.winrm_ssl,
-                transport=session.winrm_transport or "ntlm",
-                port=session.winrm_port or (5986 if session.winrm_ssl else 5985),
-            )
-
-        kwargs: dict[str, Any] = {
-            "host": session.instance_ip,
-            "user": session.ssh_user,
-            "port": session.ssh_port or 22,
-            "max_retries": 2,
-        }
-        if session.ssh_key:
-            kwargs["identity_file"] = session.ssh_key
-        if session.ssh_password:
-            kwargs["password"] = session.ssh_password
-        return RunnerRegistry.create("ssh", **kwargs)
+        cfg = _session_to_cloud_config(session)
+        return create_remote_runner(cfg, session.instance_ip, max_retries=2)
 
     def _stage_script_files(self, steps: list, work_dir: Path) -> None:
-        """Copy any script_file references into the local workspace."""
+        """Stage bundled Python step artifacts into the local workspace."""
         from ofx.models.step import RunType
 
-        for step in steps:
-            if step.get_run_type() == RunType.SCRIPT_FILE:
-                src = Path(step.script_file).expanduser().resolve()
-                if src.exists():
-                    dest = work_dir / src.name
-                    shutil.copy2(str(src), str(dest))
+        for idx, step in enumerate(steps):
+            if step.get_run_type() not in (RunType.SCRIPT, RunType.SCRIPT_FILE):
+                continue
+            dest = work_dir / _step_bundle_filename(idx)
+            dest.write_text(_build_step_bundle_source(step))
+            dest.chmod(0o600)
 
     def _upload_script_files(
         self, steps: list, remote: Any, remote_work_dir: str, *, is_windows: bool
     ) -> None:
-        """Upload any script_file references to the remote host."""
+        """Upload bundled Python step artifacts to the remote host."""
         from ofx.models.step import RunType
 
-        for step in steps:
-            if step.get_run_type() == RunType.SCRIPT_FILE:
-                src = Path(step.script_file).expanduser().resolve()
-                if src.exists():
-                    if is_windows:
-                        remote.upload(str(src), f"{remote_work_dir}\\{src.name}")
-                    else:
-                        remote.upload(str(src), f"{remote_work_dir}/{src.name}")
+        for idx, step in enumerate(steps):
+            if step.get_run_type() not in (RunType.SCRIPT, RunType.SCRIPT_FILE):
+                continue
+            bundle_source = _build_step_bundle_source(step)
+            filename = _step_bundle_filename(idx)
+            remote_path = (
+                f"{remote_work_dir}\\{filename}"
+                if is_windows
+                else f"{remote_work_dir}/{filename}"
+            )
+            fd, local_path = tempfile.mkstemp(prefix=".ofx_step_", suffix=".py")
+            os.close(fd)
+            Path(local_path).write_text(bundle_source)
+            os.chmod(local_path, 0o600)
+            try:
+                remote.upload(local_path, remote_path)
+            finally:
+                Path(local_path).unlink(missing_ok=True)
 
 
 # ======================================================================
@@ -1182,62 +1308,3 @@ def _tail_file(path: Path, n: int = 50) -> str:
         return "\n".join(lines[-n:])
     except Exception:
         return "(cannot read log)"
-
-
-def _build_provider_kwargs(cfg: Any) -> dict[str, Any]:
-    """Build kwargs for CloudProviderRegistry.create() from a CloudConfig."""
-    kwargs: dict[str, Any] = {}
-    provider = cfg.provider or "static"
-
-    if provider == "static":
-        kwargs["host"] = getattr(cfg, "host", "") or ""
-        kwargs["user"] = cfg.ssh_user or "root"
-        kwargs["port"] = cfg.ssh_port or 22
-        if cfg.ssh_key:
-            kwargs["identity_file"] = cfg.ssh_key
-        if cfg.ssh_password:
-            kwargs["password"] = cfg.ssh_password
-    elif provider == "digitalocean":
-        token = (cfg.extra or {}).get("token") if hasattr(cfg, "extra") else None
-        if not token and hasattr(cfg, "__pydantic_extra__"):
-            token = (cfg.__pydantic_extra__ or {}).get("token")
-        if token:
-            kwargs["token"] = token
-    elif provider == "aws":
-        extras = {}
-        if hasattr(cfg, "extra"):
-            extras = cfg.extra or {}
-        elif hasattr(cfg, "__pydantic_extra__"):
-            extras = cfg.__pydantic_extra__ or {}
-        for key in ("aws_access_key_id", "aws_secret_access_key", "region_name"):
-            val = extras.get(key)
-            if val:
-                kwargs[key] = val
-        kwargs["region"] = cfg.region or "us-east-1"
-
-    return kwargs
-
-
-def _create_remote_runner(cfg: Any, ip: str) -> Any:
-    """Create PostSSH or PostWinRM for the given config + IP."""
-    from ofx.api.post import RunnerRegistry
-
-    os_type = getattr(cfg, "os", "linux") or "linux"
-    if os_type == "windows":
-        return RunnerRegistry.create(
-            "winrm",
-            host=ip,
-            username=cfg.winrm_user or "Administrator",
-            password=cfg.winrm_password or cfg.ssh_password or "",
-            ssl=cfg.winrm_ssl or False,
-            port=cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985),
-        )
-    return RunnerRegistry.create(
-        "ssh",
-        host=ip,
-        user=cfg.ssh_user or "root",
-        port=cfg.ssh_port or 22,
-        identity_file=cfg.ssh_key or None,
-        password=cfg.ssh_password or None,
-        max_retries=3,
-    )

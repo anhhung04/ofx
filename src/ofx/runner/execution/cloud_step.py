@@ -6,13 +6,16 @@ Extracted from ``cloud_job.py`` to follow the File-Per-Struct rule.
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ofx.api.bundle.builder import build_bundle
+from ofx.cloud.script_runtime import (
+    build_python_payload,
+    resolve_python_step_source,
+)
+from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.runner.core import (
     BaseRunner,
     RunContext,
@@ -277,8 +280,14 @@ class CloudStepRunner(BaseRunner):
         """
         import secrets as _secrets
 
-        # Build bundle to inject ofx.api dependencies
-        bundle = build_bundle(script)
+        opsec_mode = False
+        if self.parent and getattr(self.parent, "_cloud_config", None):
+            opsec_mode = bool(getattr(self.parent._cloud_config, "opsec_mode", False))
+        payload = build_python_payload(
+            script,
+            opsec_mode=opsec_mode,
+            obfuscate_sources=opsec_mode,
+        )
 
         # Discover python on the remote host
         python_bin = await self._discover_python()
@@ -289,7 +298,7 @@ class CloudStepRunner(BaseRunner):
         fd, local_tmp = tempfile.mkstemp(prefix=".tmp_s_", suffix=".py")
         os.close(fd)
         try:
-            Path(local_tmp).write_text(bundle.bootstrap)
+            Path(local_tmp).write_text(payload)
             await asyncio.to_thread(self._remote.upload, local_tmp, remote_script)
         finally:
             Path(local_tmp).unlink(missing_ok=True)
@@ -326,19 +335,19 @@ class CloudStepRunner(BaseRunner):
         uploaded to the remote host and executed with the discovered python
         interpreter. The stdout of the remote execution is returned.
         """
-        # Resolve the absolute path of the script file.
-        local_path = Path(script_file).expanduser().with_suffix(".py")
-
-        if not local_path.is_absolute():
-            base_dir = getattr(self.ctx, "workflow_dir", Path.cwd())
-            local_path = (base_dir / local_path).resolve()
-
-        if not local_path.is_file():
-            raise FileNotFoundError(f"Script file not found: {local_path}")
-
-        script_content = local_path.read_text()
-        # Build a bundle that includes any OFX API imports used by the script.
-        bundle = build_bundle(script_content)
+        workflow_dir = getattr(self.ctx, "workflow_dir", Path.cwd())
+        source = resolve_python_step_source(
+            self.model,
+            workflow_dir=workflow_dir,
+        )
+        opsec_mode = False
+        if self.parent and getattr(self.parent, "_cloud_config", None):
+            opsec_mode = bool(getattr(self.parent._cloud_config, "opsec_mode", False))
+        payload = build_python_payload(
+            source,
+            opsec_mode=opsec_mode,
+            obfuscate_sources=opsec_mode,
+        )
 
         # Discover python on the remote host.
         python_bin = await self._discover_python()
@@ -348,7 +357,7 @@ class CloudStepRunner(BaseRunner):
         os.close(fd)
         remote_path = "/tmp/__UNKNOWN__"
         try:
-            Path(local_tmp).write_text(bundle.bootstrap)
+            Path(local_tmp).write_text(payload)
             remote_path = f"{self._work_dir}/{Path(local_tmp).name}"
             # Upload the bootstrap to the remote host.
             await asyncio.to_thread(self._remote.upload, local_tmp, remote_path)
@@ -387,26 +396,7 @@ class CloudStepRunner(BaseRunner):
         the structured output file lives on the remote host we cannot
         parse it locally, so we rely on stdout/stderr parsing only.
         """
-        from ofx.tasks.registry import TaskRegistry
-
-        task_cls = TaskRegistry.get(self.model.task)
-        if task_cls is None:
-            raise RuntimeError(f"Task '{self.model.task}' is not registered")
-
-        task = task_cls()
-
-        # Extract target from run_with; remaining keys are task options
-        task_opts = dict(self.model.run_with)
-        target = str(task_opts.pop("target", task_opts.pop("targets", "")))
-
-        # Build command — disable output_flag so no temp file is created
-        saved_output_flag = task.output_flag
-        try:
-            task.output_flag = None
-            cmd_str, _ = task.build_command(target, **task_opts)
-        finally:
-            task.output_flag = saved_output_flag
-
+        cmd_str = build_task_command_from_step(self.model)
         return await self._run_remote_command(cmd_str, timeout=timeout)
 
     def _parse_task_output(self, stdout: str) -> list[dict]:
