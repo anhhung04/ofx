@@ -1,117 +1,183 @@
-# LLM Agent Guide for OFX
+# OFX Prompt Guide
 
-This guide is intended for Large Language Models (LLMs) and AI code assistants to help them correctly write, structure, and debug OFX (Offensive Flow Executor) workflows. Use these instructions to avoid common schema mistakes when generating OFX `.yml` files.
+Use this guide to write better prompts for LLMs when generating, fixing, or reviewing OFX workflows.
+
+The goal is simple: produce valid workflows quickly, with fewer back-and-forth corrections.
 
 ---
 
-## 1. Core Workflow Schema Rules
+## What to Include in Every Prompt
 
-When generating an OFX workflow, adhere strictly to the following YAML schema structure:
+Give the model enough context to produce a runnable workflow on the first try.
 
-- **Root Properties:** 
-  - `name`: String, required.
-  - `description`: String, optional.
-  - `tags`: List of strings, optional.
-- **Inputs:** Must be nested under `dispatch.inputs`. DO NOT put `inputs` at the root of the workflow.
-  ```yaml
-  dispatch:
-    inputs:
-      target:
-        type: string
-        required: true
-        description: "Target domain"
-  ```
-- **Secrets:** Must be nested under `call.secrets`. DO NOT put `secrets` at the root.
-  ```yaml
-  call:
-    secrets:
-      API_KEY:
-        type: string
-        required: true
-  ```
-- **Environment Variables:** Use `env:` (dictionary), not `envs:`.
+- Objective: what the workflow should accomplish.
+- Inputs: required user/runtime inputs.
+- Secrets: required secret names.
+- Execution model: local, cloud, matrix, or fleet.
+- Constraints: tooling, OPSEC limits, timeout expectations.
+- Output expectations: files and summary location.
 
-## 2. Jobs and Steps
+If you skip these, most failures come from schema mismatch or ambiguous behavior.
 
-- **Dependencies:** Use `needs: [job_name]` to define job dependencies. By default, jobs run in parallel unless `needs` are specified.
-- **Strategy Matrix:**
-  Use `strategy.matrix` to run variations of a job. Additional strategy options include `max_parallel` (int), `fail_fast` (bool), `include` (add combinations), and `exclude` (remove combinations).
-- **Steps:** 
-  - Each step must have **exactly one** action: 
-    - `run:` (shell command)
-    - `script:` (inline Python)
-    - `script_file:` (path to a `.py` file)
-    - `uses:` (URL to a reusable workflow)
-  - You can use `continue_on_error: true` to prevent step failures from halting the workflow.
-  - Environment variables inside steps are `env:`, not `envs:`.
+---
 
-## 3. Context & Templating (Jinja2)
+## OFX Schema Rules (Must-Follow)
 
-OFX uses Jinja2 for templating. All template expressions are evaluated at runtime.
+### Root and config keys
 
-- **Variables:**
-  - `{{ inputs.my_input }}`: Access a dispatched input.
-  - `{{ secrets.my_secret }}`: Access a masked secret.
-  - `{{ ctx.output_path }}`: The assigned output directory for the run. Do not hardcode `/tmp` or local paths; always write artifacts to `{{ ctx.output_path }}`.
-  - `{{ ctx.run_id }}`: Unique string for the current execution run.
-
-## 4. Python Scripts & Inter-Job Communication
-
-OFX allows execution of Python directly via `script:` or `script_file:`.
-
-- **Context Injections:** Scripts automatically receive `__ctx__`, `__workflow__`, `__job__`, and `__step__` globals.
-- **Built-in APIs:** Scripts can import anything from `ofx.api.*` (e.g., `ofx.api.search`, `ofx.api.network`, `ofx.api.file`, `ofx.api.http`).
-- **Channel Operations:** Used for asynchronous data passing between jobs.
-  - `publish('channel_name', data_dict)`
-  - `wait_for('channel_name', lambda d: condition)`
-  - `subscribe('channel_name')` (generator)
-
-## 5. Typical Perfect Workflow Example
+- Use `name` at root.
+- Put user parameters under `dispatch.inputs`.
+- Put secret definitions under `call.secrets`.
+- Use `env` (not `envs`).
 
 ```yaml
-name: Example LLM Workflow
-description: Demonstrates proper OFX schema for LLMs
-tags: [example, demo]
-
 dispatch:
   inputs:
     target:
       type: string
       required: true
-      description: Target host
 
 call:
   secrets:
-    FOFA_KEY:
-      required: false
-
-env:
-  GLOBAL_DEBUG: "true"
-
-jobs:
-  recon:
-    name: Perform Recon
-    strategy:
-      matrix:
-        ports: ["80", "443"]
-      max_parallel: 2
-    steps:
-      - name: Scan Target
-        run: nmap -p {{ matrix.ports }} {{ inputs.target }} > {{ ctx.output_path }}/nmap_{{ matrix.ports }}.txt
-      
-      - name: Signal Completion
-        script: |
-          publish('recon_status', {'port': '{{ matrix.ports }}', 'status': 'done'})
-
-  analyze:
-    name: Analyze Results
-    needs: [recon]
-    steps:
-      - name: Process Output
-        script_file: scripts/analyze.py
-
-      - name: Summary
-        run: echo "Analysis complete for {{ inputs.target }}"
+    API_KEY:
+      required: true
 ```
 
-By strictly following these schema parameters—especially wrapping inputs/secrets correctly and using `env:`, not `envs:`—you will successfully generate valid OFX workflows.
+### Jobs and dependencies
+
+- Jobs live under `jobs`.
+- Dependencies use `needs: [job_id]`.
+- Independent jobs run in parallel by default.
+
+### Steps
+
+Each step must define **exactly one** execution type:
+
+- `run`
+- `script`
+- `script_file`
+- `uses`
+- `task`
+
+### Matrix and fleet
+
+- Use `strategy.matrix` for combinational variations.
+- Use `strategy.fleet` for target distribution across instances.
+- Optional controls: `max_parallel`, `fail_fast`, `include`, `exclude`.
+
+### Templates and context
+
+Use Jinja expressions for runtime values:
+
+- `{{ inputs.<name> }}`
+- `{{ secrets.<name> }}`
+- `{{ matrix.<key> }}`
+- `{{ ctx.output_path }}`
+
+Always write artifacts under `{{ ctx.output_path }}`.
+
+---
+
+## Prompt Template You Can Reuse
+
+Copy this and fill in the placeholders.
+
+```text
+Generate a valid OFX workflow YAML.
+
+Goal:
+- <what should happen end-to-end>
+
+Inputs:
+- <name>: <type>, required=<true/false>, description=<...>
+
+Secrets:
+- <SECRET_NAME>: required=<true/false>
+
+Execution:
+- Run mode: <local|cloud>
+- If cloud: provider/profile=<...>
+- If matrix: keys=<...>, max_parallel=<...>
+- If fleet: input=<...>, distribution=<chunk|round-robin|subnet|line>
+
+Constraints:
+- Use only: <tools/APIs>
+- OPSEC requirements: <...>
+- Retry/timeout behavior: <...>
+
+Output:
+- Save all artifacts under {{ ctx.output_path }}
+- Include a final summary step
+
+Return:
+- YAML only
+- Include brief comments only where needed
+```
+
+---
+
+## Good Prompt Examples
+
+### 1) Generate a new workflow
+
+```text
+Create an OFX workflow for web recon on a single target.
+Inputs: target (string, required), ports (string, optional default "80,443").
+Secrets: FOFA_KEY optional.
+Use two jobs: recon and summarize. summarize depends on recon.
+In recon, run nmap and httpx, store outputs in {{ ctx.output_path }}.
+In summarize, generate a short report file.
+Use env (not envs). Return YAML only.
+```
+
+### 2) Refactor an invalid workflow
+
+```text
+Fix this OFX workflow to conform to schema:
+- move root inputs to dispatch.inputs
+- move root secrets to call.secrets
+- convert envs to env
+- ensure each step has exactly one of run/script/script_file/uses/task
+Preserve behavior and return corrected YAML only.
+```
+
+### 3) Add matrix/fleet behavior
+
+```text
+Update this workflow to use strategy.matrix for ports [80,443,8080]
+and fleet distribution with chunk mode across 3 instances.
+Keep existing job dependencies unchanged and preserve outputs.
+Return only updated YAML.
+```
+
+---
+
+## Common Prompting Mistakes
+
+- Asking for OFX YAML without providing inputs/secrets schema.
+- Requesting outputs in hardcoded paths instead of `{{ ctx.output_path }}`.
+- Mixing multiple step run types in one step.
+- Asking for cloud behavior without provider/profile details.
+- Asking for "best effort" output while also requiring strict validation.
+
+---
+
+## Fast Validation Loop
+
+After generation:
+
+1. Run `ofx flow validate <workflow.yml>`.
+2. If invalid, ask model to fix only schema issues.
+3. Then ask model to improve behavior (performance/readability) in a second pass.
+
+This two-pass approach reduces noisy rewrites.
+
+---
+
+## Recommended Prompting Workflow
+
+1. Ask for a minimal valid workflow first.
+2. Add matrix/cloud/fleet in a second request.
+3. Add polish (comments, naming, summaries) last.
+
+Small, incremental prompts are more reliable than one giant request.

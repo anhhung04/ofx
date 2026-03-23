@@ -216,7 +216,7 @@ nav:
                       - Doctor: cli/commands/doctor.md
           - Visualization & UX: cli/visualization.md
     - Advanced:
-          - LLM Agent Guide: advanced/llm-agent-guide.md
+          - Prompt Guide: advanced/llm-agent-guide.md
           - Job Registry:
                 - Overview: advanced/job-registry.md
                 - Architecture: advanced/job-registry-architecture.md
