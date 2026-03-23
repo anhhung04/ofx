@@ -200,6 +200,7 @@ nav:
                 - API CLI Reference: cli/commands/api.md
                 - Flow Commands:
                       - Init Workflow: cli/commands/flow-init.md
+                      - List Workflows: cli/commands/list.md
                       - Run: cli/commands/run.md
                       - Validate: cli/commands/validate.md
                       - Visualize: cli/commands/visualize.md

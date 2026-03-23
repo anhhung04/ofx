@@ -6,6 +6,7 @@ Complete reference for all OFX command-line interface commands.
 
 - **[flow init](flow-init.md)** - Scaffold a new workflow file with IDE schema support
 - **[flow run](run.md)** - Execute workflows
+- **[flow list](list.md)** - List available workflows from user, built-in, and collections
 - **[flow validate](validate.md)** - Validate workflow syntax
 - **[flow visualize](visualize.md)** - Visualize workflow dependencies
 - **[flow tools](tools.md)** - Manage workflow tools
@@ -91,6 +92,7 @@ ofx secret list
 |---------|-------------|
 | `ofx flow init <name>` | Scaffold a workflow file with IDE schema comment |
 | `ofx flow run` | Execute a workflow |
+| `ofx flow list` | List available workflows from all sources |
 | `ofx flow validate` | Validate workflow syntax |
 | `ofx flow visualize` | Visualize workflow dependency graph |
 | `ofx flow tools` | Install and manage workflow tools |

@@ -22,6 +22,85 @@ ALIAS = ["x"]
 HELP = "Manage and run workflows in the OFX system"
 
 
+@app.command("list")
+def list_workflows():
+    """List available workflows from user dirs, built-ins, and installed collections."""
+    from pathlib import Path
+
+    from ofx.collections import CollectionManager
+    from ofx.collections.manifest import CollectionManifest
+    from ofx.commands.ui_helpers import print_warning, status_table
+    from ofx.settings import (
+        ALLOWED_WORKFLOW_FILE_EXTENSIONS,
+        BUILTIN_WORKFLOWS_DIR,
+        DEFAULT_WORKFLOWS_DIRS,
+        get_console,
+    )
+
+    def _scan_yaml_files(root: Path) -> list[Path]:
+        files: list[Path] = []
+        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            files.extend(root.rglob(f"*{ext}"))
+        return sorted(set(files))
+
+    rows: list[tuple[str, str, str]] = []
+    seen_paths: set[str] = set()
+
+    def _add(path: Path, source: str) -> None:
+        resolved = str(path.resolve())
+        if resolved in seen_paths:
+            return
+        seen_paths.add(resolved)
+        rows.append((path.stem, source, str(path)))
+
+    # User workflow dirs (cwd + ~/.ofx/workflows)
+    for directory in DEFAULT_WORKFLOWS_DIRS:
+        if not directory.is_dir():
+            continue
+        for file in _scan_yaml_files(directory):
+            _add(file, "user")
+
+    # Built-in workflows packaged with OFX
+    if BUILTIN_WORKFLOWS_DIR.is_dir():
+        for subdir in sorted(BUILTIN_WORKFLOWS_DIR.iterdir()):
+            if not subdir.is_dir():
+                continue
+            for file in _scan_yaml_files(subdir):
+                _add(file, "builtin")
+
+    # Workflows from installed collections
+    manager = CollectionManager()
+    for coll_name, entry in manager.list_installed().items():
+        coll_path = Path(entry.path)
+        if not coll_path.is_dir():
+            continue
+        manifest = CollectionManifest.from_directory(coll_path)
+        if manifest.workflows:
+            for workflow in manifest.workflows:
+                wf_path = coll_path / workflow
+                if wf_path.exists():
+                    _add(wf_path, f"collection:{coll_name}")
+                else:
+                    rows.append((Path(workflow).stem, f"collection:{coll_name}", str(wf_path)))
+        else:
+            for file in _scan_yaml_files(coll_path):
+                _add(file, f"collection:{coll_name}")
+
+    if not rows:
+        print_warning("No Workflows Found", "No workflows were discovered in search paths.")
+        return
+
+    rows.sort(key=lambda r: (r[1], r[0]))
+    table = status_table(
+        ("Workflow", "bold cyan"),
+        ("Source", "magenta"),
+        ("Path", "dim"),
+        rows=rows,
+    )
+    table.title = "Available Workflows"
+    get_console().print(table)
+
+
 @app.command()
 def run(
     workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to run")],
