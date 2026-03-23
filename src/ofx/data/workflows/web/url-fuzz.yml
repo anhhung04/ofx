@@ -1,10 +1,13 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-fuzz
-description: >
-  URL fuzzing — discovers hidden content and directories using feroxbuster and ffuf
-  with intelligent calibration. Probes and optionally hunts for secrets.
-tags: [http, fuzz, secrets]
+description: 'URL fuzzing — discovers hidden content and directories using feroxbuster
+  and ffuf with intelligent calibration. Probes and optionally hunts for secrets.
 
+  '
+tags:
+- http
+- fuzz
+- secrets
 dispatch:
   inputs:
     target:
@@ -15,71 +18,67 @@ dispatch:
       type: string
       default: /usr/share/wordlists/dirb/common.txt
       description: Wordlist for directory fuzzing
-
 jobs:
   fuzz:
-    name: "Directory Fuzzing"
+    name: Directory Fuzzing
     steps:
-      - task: ffuf
-        name: ffuf-fuzz
-        with:
-          target: "{{ inputs.target }}/FUZZ"
-          wordlist: "{{ inputs.wordlist }}"
-          threads: 50
-          follow_redirect: true
-          auto_calibration: true
-
-      - task: feroxbuster
-        name: feroxbuster-fuzz
-        with:
-          target: "{{ inputs.target }}"
-          wordlist: "{{ inputs.wordlist }}"
-          depth: 2
-          threads: 50
-
-      - name: collect-urls
-        script: |
-          import json
-
-          urls = set()
-          for step_idx in [0, 1]:
-              step_data = {{ steps | tojson }}
-              typed = step_data[step_idx].get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'url':
-                      urls.add(item['url'])
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"fuzzed_urls={chr(10).join(sorted(urls))}\n")
-              f.write(f"fuzz_count={len(urls)}\n")
-
-          print(f"Found {len(urls)} unique URLs via fuzzing")
-
+    - task: ffuf
+      name: ffuf-fuzz
+      with:
+        target: '{{ inputs.target }}/FUZZ'
+        wordlist: '{{ inputs.wordlist }}'
+        threads: 50
+        follow_redirect: true
+        auto_calibration: true
+      log-stdout: true
+    - task: feroxbuster
+      name: feroxbuster-fuzz
+      with:
+        target: '{{ inputs.target }}'
+        wordlist: '{{ inputs.wordlist }}'
+        depth: 2
+        threads: 50
+      log-stdout: true
+    - name: collect-urls
+      script: "import json\n\nurls = set()\nfor step_idx in [0, 1]:\n    step_data\
+        \ = {{ steps | tojson }}\n    typed = step_data[step_idx].get('outputs', {}).get('typed_outputs',\
+        \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
+        \          urls.add(item['url'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"fuzzed_urls={chr(10).join(sorted(urls))}\\n\")\n \
+        \   f.write(f\"fuzz_count={len(urls)}\\n\")\n\nprint(f\"Found {len(urls)}\
+        \ unique URLs via fuzzing\")\n"
   probe:
-    name: "Probe Fuzzed URLs"
-    needs: [fuzz]
+    name: Probe Fuzzed URLs
+    needs:
+    - fuzz
     steps:
-      - task: httpx
-        name: probe-fuzzed
-        with:
-          target: "{{ jobs.fuzz.outputs.fuzzed_urls }}"
-          tech_detect: true
-          status_code: true
-          title: true
-
+    - task: httpx
+      name: probe-fuzzed
+      with:
+        target: '{{ jobs.fuzz.outputs.fuzzed_urls }}'
+        tech_detect: true
+        status_code: true
+        title: true
+      log-stdout: true
   secrets:
-    name: "Secret Hunting"
-    needs: [probe]
+    name: Secret Hunting
+    needs:
+    - probe
     steps:
-      - task: trufflehog
-        name: hunt-secrets
-        with:
-          target: "{{ inputs.target }}"
-          mode: "filesystem"
+    - task: trufflehog
+      name: hunt-secrets
+      with:
+        target: '{{ inputs.target }}'
+        mode: filesystem
+      log-stdout: true
+    - name: summary
+      run: 'echo "================================="
 
-      - name: summary
-        run: |
-          echo "================================="
-          echo " URL Fuzz: {{ inputs.target }}"
-          echo "================================="
-          echo "Fuzzed URLs: {{ jobs.fuzz.outputs.fuzz_count }}"
+        echo " URL Fuzz: {{ inputs.target }}"
+
+        echo "================================="
+
+        echo "Fuzzed URLs: {{ jobs.fuzz.outputs.fuzz_count }}"
+
+        '
+      log-stdout: true

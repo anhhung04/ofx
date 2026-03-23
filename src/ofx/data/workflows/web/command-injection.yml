@@ -1,96 +1,91 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: command-injection
-description: >
-  Command injection testing — scans target URLs for OS command injection vulnerabilities
-  using multiple techniques.
-tags: [web, vuln, injection, rce]
+description: 'Command injection testing — scans target URLs for OS command injection
+  vulnerabilities using multiple techniques.
 
+  '
+tags:
+- web
+- vuln
+- injection
+- rce
 dispatch:
   inputs:
     target:
       required: true
       type: string
-      description: "Target URL with parameter (e.g. https://example.com/ping?ip=127.0.0.1)"
+      description: Target URL with parameter (e.g. https://example.com/ping?ip=127.0.0.1)
     level:
       type: string
-      default: "2"
-      description: "Injection test level (1-3)"
-
+      default: '2'
+      description: Injection test level (1-3)
 jobs:
   cmdi-scan:
-    name: "Command Injection Scan (commix)"
+    name: Command Injection Scan (commix)
     steps:
-      - name: commix-scan
-        run: |
-          commix --url='{{ inputs.target }}' --batch --level={{ inputs.level }} --output-dir=/tmp/commix-results 2>/dev/null | tee /tmp/commix-output.txt
-        continue-on-error: true
+    - name: commix-scan
+      run: 'commix --url=''{{ inputs.target }}'' --batch --level={{ inputs.level }}
+        --output-dir=/tmp/commix-results 2>/dev/null | tee /tmp/commix-output.txt
 
-      - name: collect-commix
-        script: |
-          import re
-
-          vulns = []
-          try:
-              with open('/tmp/commix-output.txt') as f:
-                  content = f.read()
-              # Detect vulnerable parameters
-              params = re.findall(r'The (?:GET|POST) parameter \'(\S+)\' (?:appears to be|is) injectable', content)
-              techniques = re.findall(r'via (\S+) technique', content)
-              for param in params:
-                  vulns.append({
-                      'parameter': param,
-                      'techniques': techniques,
-                  })
-          except FileNotFoundError:
-              pass
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"commix_vuln_count={len(vulns)}\n")
-              for v in vulns:
-                  f.write(f"commix_vuln_param={v['parameter']}\n")
-
-          print(f"Commix: {len(vulns)} injectable parameters found")
-          for v in vulns:
-              print(f"  [!] Parameter: {v['parameter']}")
-
+        '
+      continue-on-error: true
+    - name: collect-commix
+      script: "import re\n\nvulns = []\ntry:\n    with open('/tmp/commix-output.txt')\
+        \ as f:\n        content = f.read()\n    # Detect vulnerable parameters\n\
+        \    params = re.findall(r'The (?:GET|POST) parameter \\'(\\S+)\\' (?:appears\
+        \ to be|is) injectable', content)\n    techniques = re.findall(r'via (\\S+)\
+        \ technique', content)\n    for param in params:\n        vulns.append({\n\
+        \            'parameter': param,\n            'techniques': techniques,\n\
+        \        })\nexcept FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS\
+        \ }}', 'a') as f:\n    f.write(f\"commix_vuln_count={len(vulns)}\\n\")\n \
+        \   for v in vulns:\n        f.write(f\"commix_vuln_param={v['parameter']}\\\
+        n\")\n\nprint(f\"Commix: {len(vulns)} injectable parameters found\")\nfor\
+        \ v in vulns:\n    print(f\"  [!] Parameter: {v['parameter']}\")\n"
   nuclei-rce:
-    name: "Nuclei RCE/Injection Scan"
+    name: Nuclei RCE/Injection Scan
     steps:
-      - task: nuclei
-        name: nuclei-cmdi
-        with:
-          target: "{{ inputs.target }}"
-          tags: "rce,command-injection,cmdi,os-command-injection"
-
-      - name: collect-nuclei
-        script: |
-          import json
-
-          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"nuclei_vuln_count={len(nuclei_vulns)}\n")
-
-          print(f"Nuclei RCE findings: {len(nuclei_vulns)}")
-          for v in nuclei_vulns:
-              name = v.get('name', v.get('template_id', 'unknown'))
-              severity = v.get('severity', 'unknown')
-              print(f"  [{severity.upper()}] {name}")
-
+    - task: nuclei
+      name: nuclei-cmdi
+      with:
+        target: '{{ inputs.target }}'
+        tags: rce,command-injection,cmdi,os-command-injection
+      log-stdout: true
+    - name: collect-nuclei
+      script: "import json\n\nnuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
+        \ | tojson }}\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        nuclei_vuln_count={len(nuclei_vulns)}\\n\")\n\nprint(f\"Nuclei RCE findings:\
+        \ {len(nuclei_vulns)}\")\nfor v in nuclei_vulns:\n    name = v.get('name',\
+        \ v.get('template_id', 'unknown'))\n    severity = v.get('severity', 'unknown')\n\
+        \    print(f\"  [{severity.upper()}] {name}\")\n"
   summary:
-    name: "Command Injection Summary"
-    needs: [cmdi-scan, nuclei-rce]
+    name: Command Injection Summary
+    needs:
+    - cmdi-scan
+    - nuclei-rce
     steps:
-      - name: report
-        run: |
-          echo "======================================================"
-          echo " COMMAND INJECTION TEST COMPLETE"
-          echo " Target: {{ inputs.target }}"
-          echo " Level: {{ inputs.level }}"
-          echo "======================================================"
-          echo ""
-          echo "--- Commix Results ---"
-          echo "Injectable parameters: {{ jobs['cmdi-scan'].outputs.commix_vuln_count }}"
-          echo ""
-          echo "--- Nuclei RCE Results ---"
-          echo "Findings: {{ jobs['nuclei-rce'].outputs.nuclei_vuln_count }}"
+    - name: report
+      run: 'echo "======================================================"
+
+        echo " COMMAND INJECTION TEST COMPLETE"
+
+        echo " Target: {{ inputs.target }}"
+
+        echo " Level: {{ inputs.level }}"
+
+        echo "======================================================"
+
+        echo ""
+
+        echo "--- Commix Results ---"
+
+        echo "Injectable parameters: {{ jobs[''cmdi-scan''].outputs.commix_vuln_count
+        }}"
+
+        echo ""
+
+        echo "--- Nuclei RCE Results ---"
+
+        echo "Findings: {{ jobs[''nuclei-rce''].outputs.nuclei_vuln_count }}"
+
+        '
+      log-stdout: true

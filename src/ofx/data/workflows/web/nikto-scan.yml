@@ -1,76 +1,87 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: nikto-scan
-description: >
-  Web server vulnerability scanning — identifies dangerous files, outdated
+description: 'Web server vulnerability scanning — identifies dangerous files, outdated
   software, and server misconfigurations.
-tags: [web, vuln, scan, server]
 
+  '
+tags:
+- web
+- vuln
+- scan
+- server
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Target host or URL
-
 jobs:
   scan:
-    name: "Nikto Web Scan"
+    name: Nikto Web Scan
     steps:
-      - name: nikto-scan
-        run: |
-          nikto -h {{ inputs.target }} -nointeractive -no404 -C all 2>/dev/null | tee /tmp/nikto-output.txt
-        continue-on-error: true
+    - name: nikto-scan
+      run: 'nikto -h {{ inputs.target }} -nointeractive -no404 -C all 2>/dev/null
+        | tee /tmp/nikto-output.txt
 
-      - name: collect-nikto
-        script: |
-          findings = []
-          try:
-              with open('/tmp/nikto-output.txt') as f:
-                  for line in f:
-                      line = line.strip()
-                      if line.startswith('+') and 'OSVDB' in line:
-                          findings.append(line)
-                      elif line.startswith('+') and (':' in line) and 'Target' not in line and 'Start' not in line and 'End' not in line:
-                          findings.append(line)
-          except FileNotFoundError:
-              pass
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"nikto_findings={chr(10).join(findings)}\n")
-              f.write(f"nikto_count={len(findings)}\n")
-
-          print(f"Nikto found {len(findings)} items")
-
+        '
+      continue-on-error: true
+    - name: collect-nikto
+      script: "findings = []\ntry:\n    with open('/tmp/nikto-output.txt') as f:\n\
+        \        for line in f:\n            line = line.strip()\n            if line.startswith('+')\
+        \ and 'OSVDB' in line:\n                findings.append(line)\n          \
+        \  elif line.startswith('+') and (':' in line) and 'Target' not in line and\
+        \ 'Start' not in line and 'End' not in line:\n                findings.append(line)\n\
+        except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}',\
+        \ 'a') as f:\n    f.write(f\"nikto_findings={chr(10).join(findings)}\\n\"\
+        )\n    f.write(f\"nikto_count={len(findings)}\\n\")\n\nprint(f\"Nikto found\
+        \ {len(findings)} items\")\n"
   nuclei-web:
-    name: "Nuclei Web Scan"
+    name: Nuclei Web Scan
     steps:
-      - task: nuclei
-        name: nuclei-web-scan
-        with:
-          target: "{{ inputs.target }}"
-          severity: "critical,high,medium"
-          exclude_tags: "network,ssl,file,dns,osint,token-spray,headers"
+    - task: nuclei
+      name: nuclei-web-scan
+      with:
+        target: '{{ inputs.target }}'
+        severity: critical,high,medium
+        exclude_tags: network,ssl,file,dns,osint,token-spray,headers
+      log-stdout: true
+    - name: export-nuclei
+      run: 'echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}"
+        >> $OFX_OUTPUTS
 
-      - name: export-nuclei
-        run: |
-          echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
-
+        '
+      log-stdout: true
   summary:
-    name: "Vulnerability Summary"
-    needs: [scan, nuclei-web]
+    name: Vulnerability Summary
+    needs:
+    - scan
+    - nuclei-web
     steps:
-      - name: report
-        script: |
-          import json
+    - name: report
+      script: 'import json
 
-          nuclei_vulns = {{ vulns(jobs['nuclei-web'].steps[0].outputs.typed_outputs) | default([], true) | tojson }}
-          critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
-          high = [v for v in nuclei_vulns if v.get('severity') == 'high']
 
-          print("=" * 50)
-          print(f" Web Vuln Scan: {{ inputs.target }}")
-          print("=" * 50)
-          print(f"Nikto findings: {{ jobs.scan.outputs.nikto_count }}")
-          print(f"Nuclei findings: {{ jobs['nuclei-web'].outputs.nuclei_count }}")
-          print(f"  Critical: {len(critical)}")
-          print(f"  High: {len(high)}")
+        nuclei_vulns = {{ vulns(jobs[''nuclei-web''].steps[0].outputs.typed_outputs)
+        | default([], true) | tojson }}
+
+        critical = [v for v in nuclei_vulns if v.get(''severity'') == ''critical'']
+
+        high = [v for v in nuclei_vulns if v.get(''severity'') == ''high'']
+
+
+        print("=" * 50)
+
+        print(f" Web Vuln Scan: {{ inputs.target }}")
+
+        print("=" * 50)
+
+        print(f"Nikto findings: {{ jobs.scan.outputs.nikto_count }}")
+
+        print(f"Nuclei findings: {{ jobs[''nuclei-web''].outputs.nuclei_count }}")
+
+        print(f"  Critical: {len(critical)}")
+
+        print(f"  High: {len(high)}")
+
+        '
+      log-stdout: true

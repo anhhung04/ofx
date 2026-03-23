@@ -1,161 +1,161 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: subdomain-scan
-description: >
-  Complete subdomain assessment — discovers subdomains, performs host recon,
-  crawls web applications, and scans for vulnerabilities.
-tags: [recon, dns, network, http, crawl, ssl, takeovers, vuln, secrets]
+description: 'Complete subdomain assessment — discovers subdomains, performs host
+  recon, crawls web applications, and scans for vulnerabilities.
 
+  '
+tags:
+- recon
+- dns
+- network
+- http
+- crawl
+- ssl
+- takeovers
+- vuln
+- secrets
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Target domain (e.g. example.com)
-
 jobs:
   subdomain-recon:
-    name: "Subdomain Enumeration"
+    name: Subdomain Enumeration
     steps:
-      - task: subfinder
-        name: subfinder-enum
-        with:
-          target: "{{ inputs.target }}"
-          all: true
+    - task: subfinder
+      name: subfinder-enum
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      log-stdout: true
+    - task: gau
+      name: gau-passive
+      with:
+        target: '{{ inputs.target }}'
+        subs: true
+    - task: amass
+      name: amass-enum
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+      log-stdout: true
+    - task: assetfinder
+      name: assetfinder-enum
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - name: collect-subdomains
+      script: "import json\n\nsubs = set()\nfor idx in [0, 1, 2, 3]:\n    step_data\
+        \ = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
+        \ [])\n    for item in typed:\n        if item.get('_type') == 'subdomain':\n\
+        \            subs.add(item['host'])\n        elif item.get('_type') == 'url':\n\
+        \            host = item.get('host', '')\n            if host and '{{ inputs.target\
+        \ }}' in host:\n                subs.add(host)\n\nsubs.add('{{ inputs.target\
+        \ }}')\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"all_hosts={chr(10).join(sorted(subs))}\\\
+        n\")\n    f.write(f\"subdomain_count={len(subs)}\\n\")\n"
+    - task: dnsx
+      name: verify-dns
+      with:
+        target: '{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else
+          inputs.target }}'
+        a: true
+        resp: true
+      log-stdout: true
+    - task: httpx
+      name: probe-subdomains
+      with:
+        target: '{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else
+          inputs.target }}'
+        tech_detect: true
+        status_code: true
+        follow_redirects: true
+      log-stdout: true
+    - task: whatweb
+      name: whatweb-fingerprint
+      with:
+        target: '{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else
+          inputs.target }}'
+        aggression: 3
+      continue-on-error: true
+      log-stdout: true
+    - name: export-data
+      run: 'echo "live_urls={{ urls(steps[6].outputs.typed_outputs) | selectattr(''status_code'',
+        ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
 
-      - task: gau
-        name: gau-passive
-        with:
-          target: "{{ inputs.target }}"
-          subs: true
-
-      - task: amass
-        name: amass-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-
-      - task: assetfinder
-        name: assetfinder-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-
-      - name: collect-subdomains
-        script: |
-          import json
-
-          subs = set()
-          for idx in [0, 1, 2, 3]:
-              step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'subdomain':
-                      subs.add(item['host'])
-                  elif item.get('_type') == 'url':
-                      host = item.get('host', '')
-                      if host and '{{ inputs.target }}' in host:
-                          subs.add(host)
-
-          subs.add('{{ inputs.target }}')
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"all_hosts={chr(10).join(sorted(subs))}\n")
-              f.write(f"subdomain_count={len(subs)}\n")
-
-      - task: dnsx
-        name: verify-dns
-        with:
-          target: "{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else inputs.target }}"
-          a: true
-          resp: true
-
-      - task: httpx
-        name: probe-subdomains
-        with:
-          target: "{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else inputs.target }}"
-          tech_detect: true
-          status_code: true
-          follow_redirects: true
-
-      - task: whatweb
-        name: whatweb-fingerprint
-        with:
-          target: "{{ steps[4].outputs.all_hosts if steps[4].outputs is defined else inputs.target }}"
-          aggression: 3
-        continue-on-error: true
-
-      - name: export-data
-        run: |
-          echo "live_urls={{ urls(steps[6].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-
+        '
+      log-stdout: true
   host-recon:
-    name: "Host Reconnaissance"
-    needs: [subdomain-recon]
+    name: Host Reconnaissance
+    needs:
+    - subdomain-recon
     steps:
-      - task: naabu
-        name: port-scan
-        with:
-          target: "{{ jobs['subdomain-recon'].outputs.all_hosts }}"
-          top_ports: "1000"
-          rate: 1000
-
-      - task: nmap
-        name: service-detect
-        with:
-          target: "{{ jobs['subdomain-recon'].outputs.all_hosts }}"
-          version_detection: true
-
+    - task: naabu
+      name: port-scan
+      with:
+        target: '{{ jobs[''subdomain-recon''].outputs.all_hosts }}'
+        top_ports: '1000'
+        rate: 1000
+      log-stdout: true
+    - task: nmap
+      name: service-detect
+      with:
+        target: '{{ jobs[''subdomain-recon''].outputs.all_hosts }}'
+        version_detection: true
+      log-stdout: true
   url-crawl:
-    name: "URL Crawling"
-    needs: [subdomain-recon]
+    name: URL Crawling
+    needs:
+    - subdomain-recon
     steps:
-      - task: katana
-        name: crawl
-        with:
-          target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-          depth: 3
-
-      - task: gospider
-        name: spider
-        with:
-          target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-          depth: 2
-
+    - task: katana
+      name: crawl
+      with:
+        target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+        depth: 3
+      log-stdout: true
+    - task: gospider
+      name: spider
+      with:
+        target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+        depth: 2
+      log-stdout: true
   vuln-scan:
-    name: "Vulnerability Scanning"
-    needs: [host-recon, url-crawl]
+    name: Vulnerability Scanning
+    needs:
+    - host-recon
+    - url-crawl
     steps:
-      - task: nuclei
-        name: nuclei-scan
-        with:
-          target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-          severity: "critical,high,medium"
-
-      - task: dalfox
-        name: xss-scan
-        with:
-          target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-
-      - task: nuclei
-        name: takeover-check
-        with:
-          target: "{{ jobs['subdomain-recon'].outputs.all_hosts }}"
-          tags: "takeover"
-
-      - name: final-summary
-        script: |
-          import json
-
-          all_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \
-                      {{ vulns(steps[1].outputs.typed_outputs) | tojson }} + \
-                      {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
-
-          critical = [v for v in all_vulns if v.get('severity') == 'critical']
-          high = [v for v in all_vulns if v.get('severity') == 'high']
-
-          print("=" * 50)
-          print(f" SUBDOMAIN SCAN COMPLETE: {{ inputs.target }}")
-          print("=" * 50)
-          print(f"Subdomains: {{ jobs['subdomain-recon'].outputs.subdomain_count }}")
-          print(f"Total vulnerabilities: {len(all_vulns)}")
-          print(f"  Critical: {len(critical)}")
-          print(f"  High: {len(high)}")
+    - task: nuclei
+      name: nuclei-scan
+      with:
+        target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+        severity: critical,high,medium
+      log-stdout: true
+    - task: dalfox
+      name: xss-scan
+      with:
+        target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+      log-stdout: true
+    - task: nuclei
+      name: takeover-check
+      with:
+        target: '{{ jobs[''subdomain-recon''].outputs.all_hosts }}'
+        tags: takeover
+      log-stdout: true
+    - name: final-summary
+      script: "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
+        \ | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs) |\
+        \ tojson }} + \\\n            {{ vulns(steps[2].outputs.typed_outputs) | tojson\
+        \ }}\n\ncritical = [v for v in all_vulns if v.get('severity') == 'critical']\n\
+        high = [v for v in all_vulns if v.get('severity') == 'high']\n\nprint(\"=\"\
+        \ * 50)\nprint(f\" SUBDOMAIN SCAN COMPLETE: {{ inputs.target }}\")\nprint(\"\
+        =\" * 50)\nprint(f\"Subdomains: {{ jobs['subdomain-recon'].outputs.subdomain_count\
+        \ }}\")\nprint(f\"Total vulnerabilities: {len(all_vulns)}\")\nprint(f\"  Critical:\
+        \ {len(critical)}\")\nprint(f\"  High: {len(high)}\")\n"
+      log-stdout: true

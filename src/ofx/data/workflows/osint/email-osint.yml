@@ -1,110 +1,93 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: email-osint
-description: >
-  Email OSINT — discovers email addresses, checks for breached credentials,
+description: 'Email OSINT — discovers email addresses, checks for breached credentials,
   and identifies accounts across platforms.
-tags: [osint, email, credentials, breach]
 
+  '
+tags:
+- osint
+- email
+- credentials
+- breach
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Target domain or email address
-
 jobs:
   email-harvest:
-    name: "Email Harvesting"
+    name: Email Harvesting
     steps:
-      - name: theharvester-search
-        run: |
-          theHarvester -d {{ inputs.target }} -b all -l 500 2>/dev/null | tee /tmp/harvester-output.txt
-        continue-on-error: true
+    - name: theharvester-search
+      run: 'theHarvester -d {{ inputs.target }} -b all -l 500 2>/dev/null | tee /tmp/harvester-output.txt
 
-      - name: collect-emails
-        script: |
-          import re
-
-          emails = set()
-          target = '{{ inputs.target }}'
-
-          # If input is an email address, add it directly
-          if '@' in target:
-              emails.add(target)
-
-          # Parse theHarvester output
-          try:
-              with open('/tmp/harvester-output.txt') as f:
-                  content = f.read()
-              found = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', content)
-              emails.update(found)
-          except FileNotFoundError:
-              pass
-
-          email_list = '\n'.join(sorted(emails))
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"email_list={email_list}\n")
-              f.write(f"email_count={len(emails)}\n")
-
-          print(f"Harvested {len(emails)} email addresses")
-
+        '
+      continue-on-error: true
+    - name: collect-emails
+      script: "import re\n\nemails = set()\ntarget = '{{ inputs.target }}'\n\n# If\
+        \ input is an email address, add it directly\nif '@' in target:\n    emails.add(target)\n\
+        \n# Parse theHarvester output\ntry:\n    with open('/tmp/harvester-output.txt')\
+        \ as f:\n        content = f.read()\n    found = re.findall(r'[\\w.+-]+@[\\\
+        w-]+\\.[\\w.-]+', content)\n    emails.update(found)\nexcept FileNotFoundError:\n\
+        \    pass\n\nemail_list = '\\n'.join(sorted(emails))\nwith open('{{ env.OFX_OUTPUTS\
+        \ }}', 'a') as f:\n    f.write(f\"email_list={email_list}\\n\")\n    f.write(f\"\
+        email_count={len(emails)}\\n\")\n\nprint(f\"Harvested {len(emails)} email\
+        \ addresses\")\n"
   breach-search:
-    name: "Breach Search"
-    needs: [email-harvest]
+    name: Breach Search
+    needs:
+    - email-harvest
     steps:
-      - task: h8mail
-        name: h8mail-search
-        with:
-          target: "{{ jobs['email-harvest'].outputs.email_list | default(inputs.target, true) }}"
-        continue-on-error: true
-
-      - name: export-breaches
-        script: |
-          import json
-
-          users_found = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"breach_count={len(users_found)}\n")
-
-          print(f"Found {len(users_found)} breach results")
-
+    - task: h8mail
+      name: h8mail-search
+      with:
+        target: '{{ jobs[''email-harvest''].outputs.email_list | default(inputs.target,
+          true) }}'
+      continue-on-error: true
+      log-stdout: true
+    - name: export-breaches
+      script: "import json\n\nusers_found = {{ users(steps[0].outputs.typed_outputs)\
+        \ | tojson }}\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        breach_count={len(users_found)}\\n\")\n\nprint(f\"Found {len(users_found)}\
+        \ breach results\")\n"
+      log-stdout: true
   account-check:
-    name: "Account Discovery"
-    needs: [email-harvest]
+    name: Account Discovery
+    needs:
+    - email-harvest
     steps:
-      - name: holehe-check
-        run: |
-          holehe {{ jobs['email-harvest'].outputs.email_list | default(inputs.target, true) }} --no-color 2>/dev/null | tee /tmp/holehe-output.txt
-        continue-on-error: true
+    - name: holehe-check
+      run: 'holehe {{ jobs[''email-harvest''].outputs.email_list | default(inputs.target,
+        true) }} --no-color 2>/dev/null | tee /tmp/holehe-output.txt
 
-      - name: collect-accounts
-        script: |
-          accounts = []
-          try:
-              with open('/tmp/holehe-output.txt') as f:
-                  for line in f:
-                      line = line.strip()
-                      if '[+]' in line:
-                          accounts.append(line)
-          except FileNotFoundError:
-              pass
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"account_count={len(accounts)}\n")
-              f.write(f"account_list={chr(10).join(accounts)}\n")
-
-          print(f"Found {len(accounts)} registered accounts")
-
+        '
+      continue-on-error: true
+    - name: collect-accounts
+      script: "accounts = []\ntry:\n    with open('/tmp/holehe-output.txt') as f:\n\
+        \        for line in f:\n            line = line.strip()\n            if '[+]'\
+        \ in line:\n                accounts.append(line)\nexcept FileNotFoundError:\n\
+        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        account_count={len(accounts)}\\n\")\n    f.write(f\"account_list={chr(10).join(accounts)}\\\
+        n\")\n\nprint(f\"Found {len(accounts)} registered accounts\")\n"
   summary:
-    name: "Email OSINT Summary"
-    needs: [breach-search, account-check]
+    name: Email OSINT Summary
+    needs:
+    - breach-search
+    - account-check
     steps:
-      - name: report
-        run: |
-          echo "================================="
-          echo " Email OSINT: {{ inputs.target }}"
-          echo "================================="
-          echo "Emails harvested: {{ jobs['email-harvest'].outputs.email_count }}"
-          echo "Breach results: {{ jobs['breach-search'].outputs.breach_count }}"
-          echo "Accounts found: {{ jobs['account-check'].outputs.account_count }}"
+    - name: report
+      run: 'echo "================================="
+
+        echo " Email OSINT: {{ inputs.target }}"
+
+        echo "================================="
+
+        echo "Emails harvested: {{ jobs[''email-harvest''].outputs.email_count }}"
+
+        echo "Breach results: {{ jobs[''breach-search''].outputs.breach_count }}"
+
+        echo "Accounts found: {{ jobs[''account-check''].outputs.account_count }}"
+
+        '
+      log-stdout: true

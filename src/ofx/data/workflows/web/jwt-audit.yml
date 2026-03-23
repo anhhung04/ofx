@@ -1,10 +1,15 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: jwt-audit
-description: >
-  JWT security audit — analyzes JWT tokens for vulnerabilities including algorithm confusion,
-  weak secrets, signature bypass, and claim manipulation.
-tags: [web, vuln, jwt, auth, token]
+description: 'JWT security audit — analyzes JWT tokens for vulnerabilities including
+  algorithm confusion, weak secrets, signature bypass, and claim manipulation.
 
+  '
+tags:
+- web
+- vuln
+- jwt
+- auth
+- token
 dispatch:
   inputs:
     token:
@@ -13,105 +18,78 @@ dispatch:
       description: JWT token to analyze
     target_url:
       type: string
-      default: ""
+      default: ''
       description: URL to test forged tokens against
-
 jobs:
   token-analysis:
-    name: "JWT Token Analysis"
+    name: JWT Token Analysis
     steps:
-      - name: jwt-decode
-        run: |
-          jwt_tool '{{ inputs.token }}' 2>/dev/null | tee /tmp/jwt-decode.txt
-        continue-on-error: true
+    - name: jwt-decode
+      run: 'jwt_tool ''{{ inputs.token }}'' 2>/dev/null | tee /tmp/jwt-decode.txt
 
-      - name: collect-token-info
-        script: |
-          import re
-          import json
-          import base64
-
-          token = '{{ inputs.token }}'
-          parts = token.split('.')
-
-          header = {}
-          payload = {}
-
-          try:
-              # Decode header
-              header_b64 = parts[0] + '=' * (4 - len(parts[0]) % 4)
-              header = json.loads(base64.urlsafe_b64decode(header_b64))
-          except Exception:
-              pass
-
-          try:
-              # Decode payload
-              payload_b64 = parts[1] + '=' * (4 - len(parts[1]) % 4)
-              payload = json.loads(base64.urlsafe_b64decode(payload_b64))
-          except Exception:
-              pass
-
-          alg = header.get('alg', 'unknown')
-          claims = list(payload.keys())
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"jwt_algorithm={alg}\n")
-              f.write(f"jwt_claims={','.join(claims)}\n")
-              f.write(f"jwt_claim_count={len(claims)}\n")
-              if payload.get('sub'):
-                  f.write(f"jwt_subject={payload['sub']}\n")
-              if payload.get('iss'):
-                  f.write(f"jwt_issuer={payload['iss']}\n")
-              if payload.get('exp'):
-                  f.write(f"jwt_expiry={payload['exp']}\n")
-
-          print(f"Algorithm: {alg}")
-          print(f"Claims: {', '.join(claims)}")
-          print(f"Header: {json.dumps(header, indent=2)}")
-
+        '
+      continue-on-error: true
+    - name: collect-token-info
+      script: "import re\nimport json\nimport base64\n\ntoken = '{{ inputs.token }}'\n\
+        parts = token.split('.')\n\nheader = {}\npayload = {}\n\ntry:\n    # Decode\
+        \ header\n    header_b64 = parts[0] + '=' * (4 - len(parts[0]) % 4)\n    header\
+        \ = json.loads(base64.urlsafe_b64decode(header_b64))\nexcept Exception:\n\
+        \    pass\n\ntry:\n    # Decode payload\n    payload_b64 = parts[1] + '='\
+        \ * (4 - len(parts[1]) % 4)\n    payload = json.loads(base64.urlsafe_b64decode(payload_b64))\n\
+        except Exception:\n    pass\n\nalg = header.get('alg', 'unknown')\nclaims\
+        \ = list(payload.keys())\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n\
+        \    f.write(f\"jwt_algorithm={alg}\\n\")\n    f.write(f\"jwt_claims={','.join(claims)}\\\
+        n\")\n    f.write(f\"jwt_claim_count={len(claims)}\\n\")\n    if payload.get('sub'):\n\
+        \        f.write(f\"jwt_subject={payload['sub']}\\n\")\n    if payload.get('iss'):\n\
+        \        f.write(f\"jwt_issuer={payload['iss']}\\n\")\n    if payload.get('exp'):\n\
+        \        f.write(f\"jwt_expiry={payload['exp']}\\n\")\n\nprint(f\"Algorithm:\
+        \ {alg}\")\nprint(f\"Claims: {', '.join(claims)}\")\nprint(f\"Header: {json.dumps(header,\
+        \ indent=2)}\")\n"
   vuln-scan:
-    name: "JWT Vulnerability Scan"
+    name: JWT Vulnerability Scan
     steps:
-      - name: jwt-all-tests
-        run: |
-          jwt_tool '{{ inputs.token }}' -M at {{ '-t ' + inputs.target_url if inputs.target_url else '' }} 2>/dev/null | tee /tmp/jwt-vulns.txt
-        continue-on-error: true
+    - name: jwt-all-tests
+      run: 'jwt_tool ''{{ inputs.token }}'' -M at {{ ''-t '' + inputs.target_url if
+        inputs.target_url else '''' }} 2>/dev/null | tee /tmp/jwt-vulns.txt
 
-      - name: collect-vulns
-        script: |
-          import re
-
-          vulns = []
-          try:
-              with open('/tmp/jwt-vulns.txt') as f:
-                  for line in f:
-                      if '[+]' in line or 'VULNERABLE' in line.upper():
-                          vulns.append(line.strip())
-          except FileNotFoundError:
-              pass
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"jwt_vuln_count={len(vulns)}\n")
-              f.write(f"jwt_vulns={chr(10).join(vulns)}\n")
-
-          print(f"JWT vulnerabilities found: {len(vulns)}")
-          for v in vulns:
-              print(f"  [!] {v}")
-
+        '
+      continue-on-error: true
+    - name: collect-vulns
+      script: "import re\n\nvulns = []\ntry:\n    with open('/tmp/jwt-vulns.txt')\
+        \ as f:\n        for line in f:\n            if '[+]' in line or 'VULNERABLE'\
+        \ in line.upper():\n                vulns.append(line.strip())\nexcept FileNotFoundError:\n\
+        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        jwt_vuln_count={len(vulns)}\\n\")\n    f.write(f\"jwt_vulns={chr(10).join(vulns)}\\\
+        n\")\n\nprint(f\"JWT vulnerabilities found: {len(vulns)}\")\nfor v in vulns:\n\
+        \    print(f\"  [!] {v}\")\n"
   summary:
-    name: "JWT Audit Summary"
-    needs: [token-analysis, vuln-scan]
+    name: JWT Audit Summary
+    needs:
+    - token-analysis
+    - vuln-scan
     steps:
-      - name: report
-        run: |
-          echo "======================================================"
-          echo " JWT SECURITY AUDIT COMPLETE"
-          echo "======================================================"
-          echo ""
-          echo "--- Token Info ---"
-          echo "Algorithm: {{ jobs['token-analysis'].outputs.jwt_algorithm }}"
-          echo "Claims: {{ jobs['token-analysis'].outputs.jwt_claims }}"
-          echo "Claim count: {{ jobs['token-analysis'].outputs.jwt_claim_count }}"
-          echo ""
-          echo "--- Vulnerabilities ---"
-          echo "Findings: {{ jobs['vuln-scan'].outputs.jwt_vuln_count }}"
+    - name: report
+      run: 'echo "======================================================"
+
+        echo " JWT SECURITY AUDIT COMPLETE"
+
+        echo "======================================================"
+
+        echo ""
+
+        echo "--- Token Info ---"
+
+        echo "Algorithm: {{ jobs[''token-analysis''].outputs.jwt_algorithm }}"
+
+        echo "Claims: {{ jobs[''token-analysis''].outputs.jwt_claims }}"
+
+        echo "Claim count: {{ jobs[''token-analysis''].outputs.jwt_claim_count }}"
+
+        echo ""
+
+        echo "--- Vulnerabilities ---"
+
+        echo "Findings: {{ jobs[''vuln-scan''].outputs.jwt_vuln_count }}"
+
+        '
+      log-stdout: true

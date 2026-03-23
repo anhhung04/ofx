@@ -1,124 +1,119 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: subdomain-recon
-description: >
-  Subdomain reconnaissance — discovers subdomains using passive and active techniques,
-  verifies with DNS probes, checks for takeover vulnerabilities, and hunts for secrets.
-tags: [recon, dns, http, ssl, secrets, takeovers]
+description: 'Subdomain reconnaissance — discovers subdomains using passive and active
+  techniques, verifies with DNS probes, checks for takeover vulnerabilities, and hunts
+  for secrets.
 
+  '
+tags:
+- recon
+- dns
+- http
+- ssl
+- secrets
+- takeovers
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Target domain (e.g. example.com)
-
 jobs:
   passive-enum:
-    name: "Passive Subdomain Enumeration"
+    name: Passive Subdomain Enumeration
     steps:
-      - task: subfinder
-        name: subfinder-enum
-        with:
-          target: "{{ inputs.target }}"
-          all: true
-
-      - task: gau
-        name: gau-urls
-        with:
-          target: "{{ inputs.target }}"
-          subs: true
-
-      - task: amass
-        name: amass-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-
-      - task: assetfinder
-        name: assetfinder-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-
-      - name: collect-subdomains
-        script: |
-          import json
-
-          all_subs = set()
-
-          sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
-          for item in sf_outputs:
-              if item.get('_type') == 'subdomain':
-                  all_subs.add(item['host'])
-
-          gau_outputs = {{ steps[1].outputs.typed_outputs | tojson }}
-          for item in gau_outputs:
-              if item.get('_type') == 'url':
-                  host = item.get('host', '')
-                  if host and '{{ inputs.target }}' in host:
-                      all_subs.add(host)
-
-          amass_outputs = {{ steps[2].outputs.typed_outputs | tojson }}
-          for item in amass_outputs:
-              if item.get('_type') == 'subdomain':
-                  all_subs.add(item['host'])
-
-          assetfinder_outputs = {{ steps[3].outputs.typed_outputs | tojson }}
-          for item in assetfinder_outputs:
-              if item.get('_type') == 'subdomain':
-                  all_subs.add(item['host'])
-
-          with open('/tmp/subdomains.txt', 'w') as f:
-              f.write('\n'.join(sorted(all_subs)))
-
-          print(f"Found {len(all_subs)} unique subdomains")
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"subdomain_list={chr(10).join(sorted(all_subs))}\n")
-              f.write(f"subdomain_count={len(all_subs)}\n")
-
+    - task: subfinder
+      name: subfinder-enum
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      log-stdout: true
+    - task: gau
+      name: gau-urls
+      with:
+        target: '{{ inputs.target }}'
+        subs: true
+    - task: amass
+      name: amass-enum
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+      log-stdout: true
+    - task: assetfinder
+      name: assetfinder-enum
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - name: collect-subdomains
+      script: "import json\n\nall_subs = set()\n\nsf_outputs = {{ steps[0].outputs.typed_outputs\
+        \ | tojson }}\nfor item in sf_outputs:\n    if item.get('_type') == 'subdomain':\n\
+        \        all_subs.add(item['host'])\n\ngau_outputs = {{ steps[1].outputs.typed_outputs\
+        \ | tojson }}\nfor item in gau_outputs:\n    if item.get('_type') == 'url':\n\
+        \        host = item.get('host', '')\n        if host and '{{ inputs.target\
+        \ }}' in host:\n            all_subs.add(host)\n\namass_outputs = {{ steps[2].outputs.typed_outputs\
+        \ | tojson }}\nfor item in amass_outputs:\n    if item.get('_type') == 'subdomain':\n\
+        \        all_subs.add(item['host'])\n\nassetfinder_outputs = {{ steps[3].outputs.typed_outputs\
+        \ | tojson }}\nfor item in assetfinder_outputs:\n    if item.get('_type')\
+        \ == 'subdomain':\n        all_subs.add(item['host'])\n\nwith open('/tmp/subdomains.txt',\
+        \ 'w') as f:\n    f.write('\\n'.join(sorted(all_subs)))\n\nprint(f\"Found\
+        \ {len(all_subs)} unique subdomains\")\nwith open('{{ env.OFX_OUTPUTS }}',\
+        \ 'a') as f:\n    f.write(f\"subdomain_list={chr(10).join(sorted(all_subs))}\\\
+        n\")\n    f.write(f\"subdomain_count={len(all_subs)}\\n\")\n"
   dns-verification:
-    name: "DNS Verification"
-    needs: [passive-enum]
+    name: DNS Verification
+    needs:
+    - passive-enum
     steps:
-      - task: dnsx
-        name: verify-dns
-        with:
-          target: "{{ jobs['passive-enum'].outputs.subdomain_list }}"
-          a: true
-          cname: true
-          resp: true
-
+    - task: dnsx
+      name: verify-dns
+      with:
+        target: '{{ jobs[''passive-enum''].outputs.subdomain_list }}'
+        a: true
+        cname: true
+        resp: true
+      log-stdout: true
   http-probe:
-    name: "HTTP Probing"
-    needs: [dns-verification]
+    name: HTTP Probing
+    needs:
+    - dns-verification
     steps:
-      - task: httpx
-        name: probe-subdomains
-        with:
-          target: "{{ jobs['passive-enum'].outputs.subdomain_list }}"
-          tech_detect: true
-          status_code: true
-          title: true
-          follow_redirects: true
+    - task: httpx
+      name: probe-subdomains
+      with:
+        target: '{{ jobs[''passive-enum''].outputs.subdomain_list }}'
+        tech_detect: true
+        status_code: true
+        title: true
+        follow_redirects: true
+      log-stdout: true
+    - name: export-urls
+      run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
+        ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
 
-      - name: export-urls
-        run: |
-          echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-
+        '
+      log-stdout: true
   takeover-check:
-    name: "Subdomain Takeover & Vulnerability Check"
-    needs: [http-probe]
+    name: Subdomain Takeover & Vulnerability Check
+    needs:
+    - http-probe
     steps:
-      - task: nuclei
-        name: takeover-scan
-        with:
-          target: "{{ jobs['passive-enum'].outputs.subdomain_list }}"
-          tags: "takeover"
+    - task: nuclei
+      name: takeover-scan
+      with:
+        target: '{{ jobs[''passive-enum''].outputs.subdomain_list }}'
+        tags: takeover
+      log-stdout: true
+    - name: summary
+      run: 'echo "======================================="
 
-      - name: summary
-        run: |
-          echo "======================================="
-          echo " Subdomain Recon: {{ inputs.target }}"
-          echo "======================================="
-          echo "Subdomains found: {{ jobs['passive-enum'].outputs.subdomain_count }}"
-          echo "Takeover vulns: {{ vulns(steps[0].outputs.typed_outputs) | length }}"
+        echo " Subdomain Recon: {{ inputs.target }}"
+
+        echo "======================================="
+
+        echo "Subdomains found: {{ jobs[''passive-enum''].outputs.subdomain_count
+        }}"
+
+        echo "Takeover vulns: {{ vulns(steps[0].outputs.typed_outputs) | length }}"
+
+        '
+      log-stdout: true

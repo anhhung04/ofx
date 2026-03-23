@@ -1,10 +1,13 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-dirsearch
-description: >
-  URL directory search — discovers hidden directories and files using dirsearch and ffuf.
-  Probes URLs and crawls discovered directory content.
-tags: [http, dir, secrets]
+description: 'URL directory search — discovers hidden directories and files using
+  dirsearch and ffuf. Probes URLs and crawls discovered directory content.
 
+  '
+tags:
+- http
+- dir
+- secrets
 dispatch:
   inputs:
     target:
@@ -15,70 +18,67 @@ dispatch:
       type: string
       default: /usr/share/wordlists/dirb/common.txt
       description: Wordlist for directory search
-
 jobs:
   probe:
-    name: "Initial HTTP Probe"
+    name: Initial HTTP Probe
     steps:
-      - task: httpx
-        name: http-probe
-        with:
-          target: "{{ inputs.target }}"
-          tech_detect: true
-          status_code: true
-          follow_redirects: true
-
+    - task: httpx
+      name: http-probe
+      with:
+        target: '{{ inputs.target }}'
+        tech_detect: true
+        status_code: true
+        follow_redirects: true
+      log-stdout: true
   dir-search:
-    name: "Directory Discovery"
-    needs: [probe]
+    name: Directory Discovery
+    needs:
+    - probe
     steps:
-      - task: dirsearch
-        name: dirsearch-scan
-        with:
-          target: "{{ inputs.target }}"
-          wordlist: "{{ inputs.wordlist }}"
-          threads: 30
-          extensions: "php,asp,aspx,jsp,html,js,txt,bak,old,conf"
-
-      - task: ffuf
-        name: ffuf-dirs
-        with:
-          target: "{{ inputs.target }}/FUZZ"
-          wordlist: "{{ inputs.wordlist }}"
-          auto_calibration: true
-          follow_redirect: true
-
-      - name: collect-dirs
-        script: |
-          import json
-
-          urls = set()
-          for step_idx in [0, 1]:
-              step_data = {{ steps | tojson }}
-              typed = step_data[step_idx].get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'url':
-                      urls.add(item['url'])
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"found_urls={chr(10).join(sorted(urls))}\n")
-              f.write(f"url_count={len(urls)}\n")
-
-          print(f"Found {len(urls)} URLs")
-
+    - task: dirsearch
+      name: dirsearch-scan
+      with:
+        target: '{{ inputs.target }}'
+        wordlist: '{{ inputs.wordlist }}'
+        threads: 30
+        extensions: php,asp,aspx,jsp,html,js,txt,bak,old,conf
+      log-stdout: true
+    - task: ffuf
+      name: ffuf-dirs
+      with:
+        target: '{{ inputs.target }}/FUZZ'
+        wordlist: '{{ inputs.wordlist }}'
+        auto_calibration: true
+        follow_redirect: true
+      log-stdout: true
+    - name: collect-dirs
+      script: "import json\n\nurls = set()\nfor step_idx in [0, 1]:\n    step_data\
+        \ = {{ steps | tojson }}\n    typed = step_data[step_idx].get('outputs', {}).get('typed_outputs',\
+        \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
+        \          urls.add(item['url'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"found_urls={chr(10).join(sorted(urls))}\\n\")\n  \
+        \  f.write(f\"url_count={len(urls)}\\n\")\n\nprint(f\"Found {len(urls)} URLs\"\
+        )\n"
   crawl-dirs:
-    name: "Crawl Discovered Directories"
-    needs: [dir-search]
+    name: Crawl Discovered Directories
+    needs:
+    - dir-search
     steps:
-      - task: katana
-        name: crawl-content
-        with:
-          target: "{{ jobs['dir-search'].outputs.found_urls | default(inputs.target, true) }}"
-          depth: 2
+    - task: katana
+      name: crawl-content
+      with:
+        target: '{{ jobs[''dir-search''].outputs.found_urls | default(inputs.target,
+          true) }}'
+        depth: 2
+      log-stdout: true
+    - name: summary
+      run: 'echo "=================================="
 
-      - name: summary
-        run: |
-          echo "=================================="
-          echo " Dir Search: {{ inputs.target }}"
-          echo "=================================="
-          echo "URLs found: {{ jobs['dir-search'].outputs.url_count }}"
+        echo " Dir Search: {{ inputs.target }}"
+
+        echo "=================================="
+
+        echo "URLs found: {{ jobs[''dir-search''].outputs.url_count }}"
+
+        '
+      log-stdout: true

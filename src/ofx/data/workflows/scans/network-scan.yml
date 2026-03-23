@@ -1,146 +1,161 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: network-scan
-description: >
-  Internal network scan — discovers live hosts in a CIDR range, scans services,
-  and performs web application testing on discovered hosts.
-tags: [recon, cidr, dns, network, internal, http, crawl, ssl, vuln]
+description: 'Internal network scan — discovers live hosts in a CIDR range, scans
+  services, and performs web application testing on discovered hosts.
 
+  '
+tags:
+- recon
+- cidr
+- dns
+- network
+- internal
+- http
+- crawl
+- ssl
+- vuln
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: CIDR range (e.g. 192.168.1.0/24)
-
 jobs:
   network-discovery:
-    name: "Network Discovery"
+    name: Network Discovery
     steps:
-      - task: fping
-        name: fping-discovery
-        with:
-          target: "{{ inputs.target }}"
-          generate: true
-        continue-on-error: true
-
-      - task: nmap
-        name: host-discovery
-        with:
-          target: "{{ inputs.target }}"
-          timing: 4
-
-      - task: naabu
-        name: port-scan
-        with:
-          target: "{{ inputs.target }}"
-          top_ports: "1000"
-          rate: 2000
-
-      - task: masscan
-        name: masscan-scan
-        with:
-          target: "{{ inputs.target }}"
-          top_ports: "100"
-          rate: 2000
-        continue-on-error: true
-
-      - name: collect-hosts
-        script: |
-          import json
-
-          hosts = set()
-          for idx in [1, 2, 3]:
-              step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'port':
-                      host = item.get('host') or item.get('ip', '')
-                      if host:
-                          hosts.add(host)
-                  elif item.get('_type') == 'ip':
-                      if item.get('alive', False):
-                          hosts.add(item['ip'])
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"live_hosts={chr(10).join(sorted(hosts))}\n")
-              f.write(f"host_count={len(hosts)}\n")
-
-          print(f"Discovered {len(hosts)} live hosts")
-
+    - task: fping
+      name: fping-discovery
+      with:
+        target: '{{ inputs.target }}'
+        generate: true
+      continue-on-error: true
+    - task: nmap
+      name: host-discovery
+      with:
+        target: '{{ inputs.target }}'
+        timing: 4
+      log-stdout: true
+    - task: naabu
+      name: port-scan
+      with:
+        target: '{{ inputs.target }}'
+        top_ports: '1000'
+        rate: 2000
+      log-stdout: true
+    - task: masscan
+      name: masscan-scan
+      with:
+        target: '{{ inputs.target }}'
+        top_ports: '100'
+        rate: 2000
+      continue-on-error: true
+      log-stdout: true
+    - name: collect-hosts
+      script: "import json\n\nhosts = set()\nfor idx in [1, 2, 3]:\n    step_data\
+        \ = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
+        \ [])\n    for item in typed:\n        if item.get('_type') == 'port':\n \
+        \           host = item.get('host') or item.get('ip', '')\n            if\
+        \ host:\n                hosts.add(host)\n        elif item.get('_type') ==\
+        \ 'ip':\n            if item.get('alive', False):\n                hosts.add(item['ip'])\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"live_hosts={chr(10).join(sorted(hosts))}\\\
+        n\")\n    f.write(f\"host_count={len(hosts)}\\n\")\n\nprint(f\"Discovered\
+        \ {len(hosts)} live hosts\")\n"
   host-recon:
-    name: "Host Reconnaissance"
-    needs: [network-discovery]
+    name: Host Reconnaissance
+    needs:
+    - network-discovery
     steps:
-      - task: nmap
-        name: service-detect
-        with:
-          target: "{{ jobs['network-discovery'].outputs.live_hosts }}"
-          version_detection: true
+    - task: nmap
+      name: service-detect
+      with:
+        target: '{{ jobs[''network-discovery''].outputs.live_hosts }}'
+        version_detection: true
+      log-stdout: true
+    - task: httpx
+      name: http-probe
+      with:
+        target: '{{ jobs[''network-discovery''].outputs.live_hosts }}'
+        tech_detect: true
+        status_code: true
+        follow_redirects: true
+      log-stdout: true
+    - task: whatweb
+      name: whatweb-fingerprint
+      with:
+        target: '{{ jobs[''network-discovery''].outputs.live_hosts }}'
+        aggression: 3
+      continue-on-error: true
+      log-stdout: true
+    - name: export-urls
+      run: 'echo "live_urls={{ urls(steps[2].outputs.typed_outputs) | selectattr(''status_code'',
+        ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
 
-      - task: httpx
-        name: http-probe
-        with:
-          target: "{{ jobs['network-discovery'].outputs.live_hosts }}"
-          tech_detect: true
-          status_code: true
-          follow_redirects: true
-
-      - task: whatweb
-        name: whatweb-fingerprint
-        with:
-          target: "{{ jobs['network-discovery'].outputs.live_hosts }}"
-          aggression: 3
-        continue-on-error: true
-
-      - name: export-urls
-        run: |
-          echo "live_urls={{ urls(steps[2].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-
+        '
+      log-stdout: true
   url-crawl:
-    name: "URL Crawling"
-    needs: [host-recon]
+    name: URL Crawling
+    needs:
+    - host-recon
     steps:
-      - task: katana
-        name: crawl-urls
-        with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-          depth: 2
-
+    - task: katana
+      name: crawl-urls
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+        depth: 2
+      log-stdout: true
   vuln-scan:
-    name: "Vulnerability Scanning"
-    needs: [url-crawl]
+    name: Vulnerability Scanning
+    needs:
+    - url-crawl
     steps:
-      - task: nuclei
-        name: nuclei-scan
-        with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-          severity: "critical,high,medium"
+    - task: nuclei
+      name: nuclei-scan
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+        severity: critical,high,medium
+      log-stdout: true
+    - task: whatweb
+      name: whatweb-fingerprint
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+        aggression: 3
+      continue-on-error: true
+      log-stdout: true
+    - task: nikto
+      name: nikto-scan
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target,
+          true) }}'
+      continue-on-error: true
+      log-stdout: true
+    - name: final-summary
+      script: 'import json
 
-      - task: whatweb
-        name: whatweb-fingerprint
-        with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-          aggression: 3
-        continue-on-error: true
 
-      - task: nikto
-        name: nikto-scan
-        with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        continue-on-error: true
+        vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
 
-      - name: final-summary
-        script: |
-          import json
+        critical = [v for v in vulns if v.get(''severity'') == ''critical'']
 
-          vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          critical = [v for v in vulns if v.get('severity') == 'critical']
-          high = [v for v in vulns if v.get('severity') == 'high']
+        high = [v for v in vulns if v.get(''severity'') == ''high'']
 
-          print("=" * 50)
-          print(f" NETWORK SCAN COMPLETE: {{ inputs.target }}")
-          print("=" * 50)
-          print(f"Live hosts: {{ jobs['network-discovery'].outputs.host_count }}")
-          print(f"Total vulnerabilities: {len(vulns)}")
-          print(f"  Critical: {len(critical)}")
-          print(f"  High: {len(high)}")
+
+        print("=" * 50)
+
+        print(f" NETWORK SCAN COMPLETE: {{ inputs.target }}")
+
+        print("=" * 50)
+
+        print(f"Live hosts: {{ jobs[''network-discovery''].outputs.host_count }}")
+
+        print(f"Total vulnerabilities: {len(vulns)}")
+
+        print(f"  Critical: {len(critical)}")
+
+        print(f"  High: {len(high)}")
+
+        '
+      log-stdout: true

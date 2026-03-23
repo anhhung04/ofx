@@ -1,90 +1,103 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: domain-recon
-description: >
-  Domain reconnaissance — collects WHOIS data, probes HTTP services, detects
+description: 'Domain reconnaissance — collects WHOIS data, probes HTTP services, detects
   technologies, analyzes SSL/TLS security, resolves DNS records, and identifies WAFs.
-tags: [recon, dns, ssl, http]
 
+  '
+tags:
+- recon
+- dns
+- ssl
+- http
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Target domain (e.g. example.com)
-
 jobs:
   domain-info:
-    name: "Domain Information"
+    name: Domain Information
     steps:
-      - task: whois
-        name: whois-lookup
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-
-      - task: dnsx
-        name: dns-resolve
-        with:
-          target: "{{ inputs.target }}"
-          a: true
-          aaaa: true
-          cname: true
-          mx: true
-          ns: true
-          txt: true
-          soa: true
-
+    - task: whois
+      name: whois-lookup
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+      log-stdout: true
+    - task: dnsx
+      name: dns-resolve
+      with:
+        target: '{{ inputs.target }}'
+        a: true
+        aaaa: true
+        cname: true
+        mx: true
+        ns: true
+        txt: true
+        soa: true
+      log-stdout: true
   http-analysis:
-    name: "HTTP & Security Analysis"
+    name: HTTP & Security Analysis
     steps:
-      - task: httpx
-        name: http-probe
-        with:
-          target: "{{ inputs.target }}"
-          tech_detect: true
-          status_code: true
-          title: true
-          follow_redirects: true
-
-      - task: testssl
-        name: tls-analysis
-        with:
-          target: "{{ inputs.target }}"
-          server_defaults: true
-        continue-on-error: true
-
-      - task: sslscan
-        name: sslscan-check
-        with:
-          target: "{{ inputs.target }}"
-          show_certificate: true
-        continue-on-error: true
-
-      - task: wafw00f
-        name: waf-detect
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-
+    - task: httpx
+      name: http-probe
+      with:
+        target: '{{ inputs.target }}'
+        tech_detect: true
+        status_code: true
+        title: true
+        follow_redirects: true
+      log-stdout: true
+    - task: testssl
+      name: tls-analysis
+      with:
+        target: '{{ inputs.target }}'
+        server_defaults: true
+      continue-on-error: true
+      log-stdout: true
+    - task: sslscan
+      name: sslscan-check
+      with:
+        target: '{{ inputs.target }}'
+        show_certificate: true
+      continue-on-error: true
+      log-stdout: true
+    - task: wafw00f
+      name: waf-detect
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+      log-stdout: true
   dns-enum:
-    name: "DNS Enumeration"
-    needs: [domain-info]
+    name: DNS Enumeration
+    needs:
+    - domain-info
     steps:
-      - task: dnsrecon
-        name: dnsrecon-scan
-        with:
-          target: "{{ inputs.target }}"
-          type: "std,brt,srv"
-        continue-on-error: true
-
+    - task: dnsrecon
+      name: dnsrecon-scan
+      with:
+        target: '{{ inputs.target }}'
+        type: std,brt,srv
+      continue-on-error: true
+      log-stdout: true
   summary:
-    name: "Results Summary"
-    needs: [domain-info, http-analysis, dns-enum]
+    name: Results Summary
+    needs:
+    - domain-info
+    - http-analysis
+    - dns-enum
     steps:
-      - name: report
-        run: |
-          echo "=============================="
-          echo " Domain Recon: {{ inputs.target }}"
-          echo "=============================="
-          echo "WHOIS and DNS resolution complete."
-          echo "HTTP probe, TLS analysis, and WAF detection complete."
+    - name: report
+      run: 'echo "=============================="
+
+        echo " Domain Recon: {{ inputs.target }}"
+
+        echo "=============================="
+
+        echo "WHOIS and DNS resolution complete."
+
+        echo "HTTP probe, TLS analysis, and WAF detection complete."
+
+        '
+      log-stdout: true

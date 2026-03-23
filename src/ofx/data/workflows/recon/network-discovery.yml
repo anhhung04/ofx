@@ -1,118 +1,120 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: network-discovery
-description: >
-  Network host discovery — uses ICMP ping sweep and port scanning to identify
+description: 'Network host discovery — uses ICMP ping sweep and port scanning to identify
   live hosts and open services on a network.
-tags: [recon, network, discovery, ports]
 
+  '
+tags:
+- recon
+- network
+- discovery
+- ports
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Target CIDR or IP range (e.g. 10.0.0.0/24)
-
 jobs:
   host-discovery:
-    name: "Host Discovery"
+    name: Host Discovery
     steps:
-      - name: ping-sweep
-        run: |
-          fping -a -g {{ inputs.target }} 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tee /tmp/alive-hosts.txt
-          echo "alive_hosts=$(cat /tmp/alive-hosts.txt | tr '\n' '\n')" >> $OFX_OUTPUTS
-          echo "alive_count=$(wc -l < /tmp/alive-hosts.txt | tr -d ' ')" >> $OFX_OUTPUTS
-        continue-on-error: true
+    - name: ping-sweep
+      run: 'fping -a -g {{ inputs.target }} 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n
+        -k4,4n | tee /tmp/alive-hosts.txt
 
-      - name: collect-alive
-        script: |
-          import os
+        echo "alive_hosts=$(cat /tmp/alive-hosts.txt | tr ''\n'' ''\n'')" >> $OFX_OUTPUTS
 
-          hosts = set()
-          if os.path.exists('/tmp/alive-hosts.txt'):
-              with open('/tmp/alive-hosts.txt') as f:
-                  for line in f:
-                      ip = line.strip()
-                      if ip:
-                          hosts.add(ip)
+        echo "alive_count=$(wc -l < /tmp/alive-hosts.txt | tr -d '' '')" >> $OFX_OUTPUTS
 
-          host_list = '\n'.join(sorted(hosts))
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"alive_hosts={host_list}\n")
-              f.write(f"alive_count={len(hosts)}\n")
-
-          print(f"Found {len(hosts)} alive hosts")
-
+        '
+      continue-on-error: true
+    - name: collect-alive
+      script: "import os\n\nhosts = set()\nif os.path.exists('/tmp/alive-hosts.txt'):\n\
+        \    with open('/tmp/alive-hosts.txt') as f:\n        for line in f:\n   \
+        \         ip = line.strip()\n            if ip:\n                hosts.add(ip)\n\
+        \nhost_list = '\\n'.join(sorted(hosts))\nwith open('{{ env.OFX_OUTPUTS }}',\
+        \ 'a') as f:\n    f.write(f\"alive_hosts={host_list}\\n\")\n    f.write(f\"\
+        alive_count={len(hosts)}\\n\")\n\nprint(f\"Found {len(hosts)} alive hosts\"\
+        )\n"
   port-scan:
-    name: "Port Scanning"
-    needs: [host-discovery]
+    name: Port Scanning
+    needs:
+    - host-discovery
     steps:
-      - name: masscan-sweep
-        run: |
-          masscan {{ jobs['host-discovery'].outputs.alive_hosts | default(inputs.target, true) }} --top-ports 100 --rate 1000 -oL /tmp/masscan-results.txt 2>/dev/null || true
-        continue-on-error: true
+    - name: masscan-sweep
+      run: 'masscan {{ jobs[''host-discovery''].outputs.alive_hosts | default(inputs.target,
+        true) }} --top-ports 100 --rate 1000 -oL /tmp/masscan-results.txt 2>/dev/null
+        || true
 
-      - task: naabu
-        name: naabu-scan
-        with:
-          target: "{{ jobs['host-discovery'].outputs.alive_hosts | default(inputs.target, true) }}"
-          top_ports: "1000"
-          rate: 1000
-
-      - name: collect-ports
-        script: |
-          import json
-
-          ports_found = set()
-          hosts_with_ports = set()
-
-          naabu_out = {{ steps[1].outputs.typed_outputs | tojson }}
-          for item in naabu_out:
-              if item.get('_type') == 'port':
-                  host = item.get('host') or item.get('ip', '')
-                  port = item.get('port', '')
-                  if host and port:
-                      ports_found.add(f"{host}:{port}")
-                      hosts_with_ports.add(host)
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"open_ports={chr(10).join(sorted(ports_found))}\n")
-              f.write(f"port_count={len(ports_found)}\n")
-              f.write(f"hosts_with_ports={chr(10).join(sorted(hosts_with_ports))}\n")
-
-          print(f"Found {len(ports_found)} open ports across {len(hosts_with_ports)} hosts")
-
+        '
+      continue-on-error: true
+    - task: naabu
+      name: naabu-scan
+      with:
+        target: '{{ jobs[''host-discovery''].outputs.alive_hosts | default(inputs.target,
+          true) }}'
+        top_ports: '1000'
+        rate: 1000
+      log-stdout: true
+    - name: collect-ports
+      script: "import json\n\nports_found = set()\nhosts_with_ports = set()\n\nnaabu_out\
+        \ = {{ steps[1].outputs.typed_outputs | tojson }}\nfor item in naabu_out:\n\
+        \    if item.get('_type') == 'port':\n        host = item.get('host') or item.get('ip',\
+        \ '')\n        port = item.get('port', '')\n        if host and port:\n  \
+        \          ports_found.add(f\"{host}:{port}\")\n            hosts_with_ports.add(host)\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports_found))}\\\
+        n\")\n    f.write(f\"port_count={len(ports_found)}\\n\")\n    f.write(f\"\
+        hosts_with_ports={chr(10).join(sorted(hosts_with_ports))}\\n\")\n\nprint(f\"\
+        Found {len(ports_found)} open ports across {len(hosts_with_ports)} hosts\"\
+        )\n"
   service-detection:
-    name: "Service Detection"
-    needs: [port-scan]
+    name: Service Detection
+    needs:
+    - port-scan
     steps:
-      - task: nmap
-        name: version-detect
-        with:
-          target: "{{ jobs['port-scan'].outputs.hosts_with_ports | default(inputs.target, true) }}"
-          version_detection: true
+    - task: nmap
+      name: version-detect
+      with:
+        target: '{{ jobs[''port-scan''].outputs.hosts_with_ports | default(inputs.target,
+          true) }}'
+        version_detection: true
+      log-stdout: true
+    - task: httpx
+      name: http-probe
+      with:
+        target: '{{ jobs[''port-scan''].outputs.hosts_with_ports | default(inputs.target,
+          true) }}'
+        tech_detect: true
+        status_code: true
+        title: true
+      log-stdout: true
+    - name: export-http
+      run: 'echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr(''status_code'',
+        ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
 
-      - task: httpx
-        name: http-probe
-        with:
-          target: "{{ jobs['port-scan'].outputs.hosts_with_ports | default(inputs.target, true) }}"
-          tech_detect: true
-          status_code: true
-          title: true
+        echo "live_count={{ urls(steps[1].outputs.typed_outputs) | selectattr(''status_code'',
+        ''gt'', 0) | list | length }}" >> $OFX_OUTPUTS
 
-      - name: export-http
-        run: |
-          echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-          echo "live_count={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
-
+        '
+      log-stdout: true
   summary:
-    name: "Discovery Summary"
-    needs: [service-detection]
+    name: Discovery Summary
+    needs:
+    - service-detection
     steps:
-      - name: report
-        run: |
-          echo "======================================="
-          echo " Network Discovery: {{ inputs.target }}"
-          echo "======================================="
-          echo "Alive hosts: {{ jobs['host-discovery'].outputs.alive_count }}"
-          echo "Open ports: {{ jobs['port-scan'].outputs.port_count }}"
-          echo "HTTP services: {{ jobs['service-detection'].outputs.live_count }}"
+    - name: report
+      run: 'echo "======================================="
+
+        echo " Network Discovery: {{ inputs.target }}"
+
+        echo "======================================="
+
+        echo "Alive hosts: {{ jobs[''host-discovery''].outputs.alive_count }}"
+
+        echo "Open ports: {{ jobs[''port-scan''].outputs.port_count }}"
+
+        echo "HTTP services: {{ jobs[''service-detection''].outputs.live_count }}"
+
+        '
+      log-stdout: true

@@ -1,52 +1,65 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-vuln
-description: >
-  URL vulnerability scan — scans URLs for XSS, injection, and other web
+description: 'URL vulnerability scan — scans URLs for XSS, injection, and other web
   vulnerabilities using dalfox and nuclei.
-tags: [http, vuln]
 
+  '
+tags:
+- http
+- vuln
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Target URL(s), newline-separated for multiple
-
 jobs:
   xss-scan:
-    name: "XSS Vulnerability Scan"
+    name: XSS Vulnerability Scan
     steps:
-      - task: dalfox
-        name: dalfox-xss
-        with:
-          target: "{{ inputs.target }}"
+    - task: dalfox
+      name: dalfox-xss
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+    - name: export-xss
+      run: 'echo "xss_count={{ vulns(steps[0].outputs.typed_outputs) | length }}"
+        >> $OFX_OUTPUTS
 
-      - name: export-xss
-        run: |
-          echo "xss_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
-
+        '
+      log-stdout: true
   nuclei-scan:
-    name: "Nuclei Vulnerability Scan"
+    name: Nuclei Vulnerability Scan
     steps:
-      - task: nuclei
-        name: nuclei-http
-        with:
-          target: "{{ inputs.target }}"
-          severity: "critical,high,medium"
-          exclude_tags: "network,ssl,file,dns,osint,token-spray,headers"
+    - task: nuclei
+      name: nuclei-http
+      with:
+        target: '{{ inputs.target }}'
+        severity: critical,high,medium
+        exclude_tags: network,ssl,file,dns,osint,token-spray,headers
+      log-stdout: true
+    - name: export-vulns
+      run: 'echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}"
+        >> $OFX_OUTPUTS
 
-      - name: export-vulns
-        run: |
-          echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
-
+        '
+      log-stdout: true
   summary:
-    name: "Vulnerability Summary"
-    needs: [xss-scan, nuclei-scan]
+    name: Vulnerability Summary
+    needs:
+    - xss-scan
+    - nuclei-scan
     steps:
-      - name: report
-        run: |
-          echo "================================="
-          echo " URL Vuln Scan: {{ inputs.target }}"
-          echo "================================="
-          echo "XSS findings: {{ jobs['xss-scan'].outputs.xss_count }}"
-          echo "Nuclei findings: {{ jobs['nuclei-scan'].outputs.nuclei_count }}"
+    - name: report
+      run: 'echo "================================="
+
+        echo " URL Vuln Scan: {{ inputs.target }}"
+
+        echo "================================="
+
+        echo "XSS findings: {{ jobs[''xss-scan''].outputs.xss_count }}"
+
+        echo "Nuclei findings: {{ jobs[''nuclei-scan''].outputs.nuclei_count }}"
+
+        '
+      log-stdout: true

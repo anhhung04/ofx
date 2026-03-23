@@ -1,10 +1,15 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-scan
-description: >
-  Comprehensive URL security assessment — combines crawling, fuzzing, parameter
-  discovery, and vulnerability scanning for thorough web application testing.
-tags: [http, crawl, fuzz, vuln, secrets]
+description: 'Comprehensive URL security assessment — combines crawling, fuzzing,
+  parameter discovery, and vulnerability scanning for thorough web application testing.
 
+  '
+tags:
+- http
+- crawl
+- fuzz
+- vuln
+- secrets
 dispatch:
   inputs:
     target:
@@ -15,153 +20,138 @@ dispatch:
       type: string
       default: /usr/share/wordlists/dirb/common.txt
       description: Wordlist for fuzzing
-
 jobs:
   url-crawl:
-    name: "URL Crawling"
+    name: URL Crawling
     steps:
-      - task: katana
-        name: katana-crawl
-        with:
-          target: "{{ inputs.target }}"
-          depth: 3
-
-      - task: gospider
-        name: gospider-crawl
-        with:
-          target: "{{ inputs.target }}"
-          depth: 2
-
-      - task: gau
-        name: gau-passive
-        with:
-          target: "{{ inputs.target }}"
-
-      - task: httpx
-        name: probe-crawled
-        with:
-          target: "{{ inputs.target }}"
-          tech_detect: true
-          status_code: true
-          follow_redirects: true
-
-      - name: collect-urls
-        script: |
-          import json
-
-          urls = set()
-          for idx in [0, 1, 2, 3]:
-              step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'url':
-                      urls.add(item['url'])
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"all_urls={chr(10).join(sorted(urls))}\n")
-              f.write(f"url_count={len(urls)}\n")
-
+    - task: katana
+      name: katana-crawl
+      with:
+        target: '{{ inputs.target }}'
+        depth: 3
+      log-stdout: true
+    - task: gospider
+      name: gospider-crawl
+      with:
+        target: '{{ inputs.target }}'
+        depth: 2
+      log-stdout: true
+    - task: gau
+      name: gau-passive
+      with:
+        target: '{{ inputs.target }}'
+    - task: httpx
+      name: probe-crawled
+      with:
+        target: '{{ inputs.target }}'
+        tech_detect: true
+        status_code: true
+        follow_redirects: true
+      log-stdout: true
+    - name: collect-urls
+      script: "import json\n\nurls = set()\nfor idx in [0, 1, 2, 3]:\n    step_data\
+        \ = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
+        \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
+        \          urls.add(item['url'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"all_urls={chr(10).join(sorted(urls))}\\n\")\n    f.write(f\"\
+        url_count={len(urls)}\\n\")\n"
   url-fuzz:
-    name: "URL Fuzzing"
-    needs: [url-crawl]
+    name: URL Fuzzing
+    needs:
+    - url-crawl
     steps:
-      - task: ffuf
-        name: ffuf-fuzz
-        with:
-          target: "{{ inputs.target }}/FUZZ"
-          wordlist: "{{ inputs.wordlist }}"
-          threads: 50
-          auto_calibration: true
-          follow_redirect: true
-
-      - task: feroxbuster
-        name: feroxbuster-fuzz
-        with:
-          target: "{{ inputs.target }}"
-          wordlist: "{{ inputs.wordlist }}"
-          depth: 2
-          threads: 50
-
+    - task: ffuf
+      name: ffuf-fuzz
+      with:
+        target: '{{ inputs.target }}/FUZZ'
+        wordlist: '{{ inputs.wordlist }}'
+        threads: 50
+        auto_calibration: true
+        follow_redirect: true
+      log-stdout: true
+    - task: feroxbuster
+      name: feroxbuster-fuzz
+      with:
+        target: '{{ inputs.target }}'
+        wordlist: '{{ inputs.wordlist }}'
+        depth: 2
+        threads: 50
+      log-stdout: true
   param-fuzz:
-    name: "Parameter Discovery"
-    needs: [url-crawl]
+    name: Parameter Discovery
+    needs:
+    - url-crawl
     steps:
-      - task: arjun
-        name: param-discovery
-        with:
-          target: "{{ inputs.target }}"
-
+    - task: arjun
+      name: param-discovery
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
   vuln-scan:
-    name: "Vulnerability Scanning"
-    needs: [url-fuzz, param-fuzz]
+    name: Vulnerability Scanning
+    needs:
+    - url-fuzz
+    - param-fuzz
     steps:
-      - task: nuclei
-        name: nuclei-scan
-        with:
-          target: "{{ inputs.target }}"
-          severity: "critical,high,medium"
-          exclude_tags: "network,ssl,file,dns,osint,token-spray,headers"
-
-      - task: dalfox
-        name: xss-scan
-        with:
-          target: "{{ inputs.target }}"
-
-      - task: trufflehog
-        name: secret-scan
-        with:
-          target: "{{ inputs.target }}"
-          mode: "filesystem"
-
-      - task: cariddi
-        name: cariddi-crawl
-        with:
-          target: "{{ inputs.target }}"
-          secrets: true
-          errors: true
-          info: true
-          depth: 2
-        continue-on-error: true
-
-      - task: whatweb
-        name: whatweb-fingerprint
-        with:
-          target: "{{ inputs.target }}"
-          aggression: 3
-        continue-on-error: true
-
-      - task: nikto
-        name: nikto-scan
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-
-      - task: gobuster
-        name: gobuster-dirs
-        with:
-          target: "{{ inputs.target }}"
-          mode: "dir"
-          wordlist: "{{ inputs.wordlist }}"
-          threads: 50
-          follow_redirect: true
-          no_tls_validation: true
-        continue-on-error: true
-
-      - name: final-summary
-        script: |
-          import json
-
-          all_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \
-                      {{ vulns(steps[1].outputs.typed_outputs) | tojson }} + \
-                      {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
-
-          critical = [v for v in all_vulns if v.get('severity') == 'critical']
-          high = [v for v in all_vulns if v.get('severity') == 'high']
-
-          print("=" * 50)
-          print(f" URL SCAN COMPLETE: {{ inputs.target }}")
-          print("=" * 50)
-          print(f"URLs discovered: {{ jobs['url-crawl'].outputs.url_count }}")
-          print(f"Total vulnerabilities: {len(all_vulns)}")
-          print(f"  Critical: {len(critical)}")
-          print(f"  High: {len(high)}")
+    - task: nuclei
+      name: nuclei-scan
+      with:
+        target: '{{ inputs.target }}'
+        severity: critical,high,medium
+        exclude_tags: network,ssl,file,dns,osint,token-spray,headers
+      log-stdout: true
+    - task: dalfox
+      name: xss-scan
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+    - task: trufflehog
+      name: secret-scan
+      with:
+        target: '{{ inputs.target }}'
+        mode: filesystem
+      log-stdout: true
+    - task: cariddi
+      name: cariddi-crawl
+      with:
+        target: '{{ inputs.target }}'
+        secrets: true
+        errors: true
+        info: true
+        depth: 2
+      continue-on-error: true
+    - task: whatweb
+      name: whatweb-fingerprint
+      with:
+        target: '{{ inputs.target }}'
+        aggression: 3
+      continue-on-error: true
+      log-stdout: true
+    - task: nikto
+      name: nikto-scan
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+      log-stdout: true
+    - task: gobuster
+      name: gobuster-dirs
+      with:
+        target: '{{ inputs.target }}'
+        mode: dir
+        wordlist: '{{ inputs.wordlist }}'
+        threads: 50
+        follow_redirect: true
+        no_tls_validation: true
+      continue-on-error: true
+      log-stdout: true
+    - name: final-summary
+      script: "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
+        \ | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs) |\
+        \ tojson }} + \\\n            {{ vulns(steps[2].outputs.typed_outputs) | tojson\
+        \ }}\n\ncritical = [v for v in all_vulns if v.get('severity') == 'critical']\n\
+        high = [v for v in all_vulns if v.get('severity') == 'high']\n\nprint(\"=\"\
+        \ * 50)\nprint(f\" URL SCAN COMPLETE: {{ inputs.target }}\")\nprint(\"=\"\
+        \ * 50)\nprint(f\"URLs discovered: {{ jobs['url-crawl'].outputs.url_count\
+        \ }}\")\nprint(f\"Total vulnerabilities: {len(all_vulns)}\")\nprint(f\"  Critical:\
+        \ {len(critical)}\")\nprint(f\"  High: {len(high)}\")\n"
+      log-stdout: true

@@ -1,67 +1,67 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: user-hunt
-description: >
-  User account search — searches for user accounts across online platforms
+description: 'User account search — searches for user accounts across online platforms
   using maigret (username hunting) and h8mail (email breach search).
-tags: [osint, user_account, leak]
 
+  '
+tags:
+- osint
+- user_account
+- leak
 dispatch:
   inputs:
     target:
       required: true
       type: string
       description: Username or email address to search
-
 jobs:
   username-hunt:
-    name: "Username Hunting"
+    name: Username Hunting
     steps:
-      - task: maigret
-        name: maigret-search
-        with:
-          target: "{{ inputs.target }}"
-
-      - name: export-accounts
-        script: |
-          import json
-
-          accounts = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-          urls = {{ urls(steps[0].outputs.typed_outputs) | tojson }}
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"accounts_found={len(accounts)}\n")
-              f.write(f"profile_urls={len(urls)}\n")
-
-          print(f"Found {len(accounts)} accounts, {len(urls)} profile URLs")
-
+    - task: maigret
+      name: maigret-search
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+    - name: export-accounts
+      script: "import json\n\naccounts = {{ users(steps[0].outputs.typed_outputs)\
+        \ | tojson }}\nurls = {{ urls(steps[0].outputs.typed_outputs) | tojson }}\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"accounts_found={len(accounts)}\\\
+        n\")\n    f.write(f\"profile_urls={len(urls)}\\n\")\n\nprint(f\"Found {len(accounts)}\
+        \ accounts, {len(urls)} profile URLs\")\n"
+      log-stdout: true
   email-breach:
-    name: "Email Breach Search"
+    name: Email Breach Search
     steps:
-      - task: h8mail
-        name: breach-search
-        with:
-          target: "{{ inputs.target }}"
-
-      - name: export-breaches
-        script: |
-          import json
-
-          users_found = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"breaches_found={len(users_found)}\n")
-
-          print(f"Found {len(users_found)} breach results")
-
+    - task: h8mail
+      name: breach-search
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+    - name: export-breaches
+      script: "import json\n\nusers_found = {{ users(steps[0].outputs.typed_outputs)\
+        \ | tojson }}\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        breaches_found={len(users_found)}\\n\")\n\nprint(f\"Found {len(users_found)}\
+        \ breach results\")\n"
+      log-stdout: true
   summary:
-    name: "User Hunt Summary"
-    needs: [username-hunt, email-breach]
+    name: User Hunt Summary
+    needs:
+    - username-hunt
+    - email-breach
     steps:
-      - name: report
-        run: |
-          echo "================================="
-          echo " User Hunt: {{ inputs.target }}"
-          echo "================================="
-          echo "Accounts found: {{ jobs['username-hunt'].outputs.accounts_found }}"
-          echo "Profile URLs: {{ jobs['username-hunt'].outputs.profile_urls }}"
-          echo "Breach results: {{ jobs['email-breach'].outputs.breaches_found }}"
+    - name: report
+      run: 'echo "================================="
+
+        echo " User Hunt: {{ inputs.target }}"
+
+        echo "================================="
+
+        echo "Accounts found: {{ jobs[''username-hunt''].outputs.accounts_found }}"
+
+        echo "Profile URLs: {{ jobs[''username-hunt''].outputs.profile_urls }}"
+
+        echo "Breach results: {{ jobs[''email-breach''].outputs.breaches_found }}"
+
+        '
+      log-stdout: true
