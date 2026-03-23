@@ -1,0 +1,315 @@
+name: recursive-domain-scan
+description: |
+  Recursive domain scanner — discovers all subdomains for a root domain,
+  performs bulk reconnaissance across them, then fans out per-subdomain
+  deep scans (domain-scan) concurrently. Results are aggregated into
+  the project directory.
+tags:
+- recon
+- dns
+- recursive
+- subdomain
+- vuln
+- network
+- http
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Root domain to scan recursively (e.g. example.com)
+    max_parallel:
+      type: string
+      default: '5'
+      description: Max concurrent per-subdomain scans
+    skip_deep:
+      type: string
+      default: 'false'
+      description: 'Set to true to skip per-subdomain deep scans'
+
+jobs:
+  subdomain-discovery:
+    name: Subdomain Discovery
+    steps:
+    - task: subfinder
+      name: subfinder-enum
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      log-stdout: true
+      continue-on-error: true
+    - task: gau
+      name: gau-passive
+      with:
+        target: '{{ inputs.target }}'
+        subs: true
+      continue-on-error: true
+    - task: amass
+      name: amass-enum
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+      log-stdout: true
+    - task: assetfinder
+      name: assetfinder-enum
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - name: collect-subdomains
+      script: |
+        import json
+
+        subs = set()
+        for idx in range(4):
+            step_data = {{ steps | tojson }}
+            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+            for item in typed:
+                if item.get('_type') == 'subdomain':
+                    subs.add(item['host'])
+                elif item.get('_type') == 'url':
+                    host = item.get('host', '')
+                    if host and '{{ inputs.target }}' in host:
+                        subs.add(host)
+
+        # always include root domain
+        subs.add('{{ inputs.target }}')
+
+        with open('/tmp/ofx_rds_subdomains.txt', 'w') as f:
+            f.write('\n'.join(sorted(subs)))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"subs_file=/tmp/ofx_rds_subdomains.txt\n")
+            f.write(f"subdomain_count={len(subs)}\n")
+
+        print(f"Discovered {len(subs)} unique subdomains for {{ inputs.target }}")
+      log-stdout: true
+
+  bulk-recon:
+    name: Bulk Reconnaissance
+    needs: [subdomain-discovery]
+    steps:
+    - task: dnsx
+      name: dns-verify
+      with:
+        target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
+        a: true
+        cname: true
+        resp: true
+      log-stdout: true
+      continue-on-error: true
+    - task: httpx
+      name: http-probe
+      with:
+        target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
+        tech_detect: true
+        status_code: true
+        title: true
+        follow_redirects: true
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-alive
+      script: |
+        import json
+
+        alive = set()
+        live_urls = set()
+
+        step_data = {{ steps | tojson }}
+        # from httpx results
+        typed = step_data[1].get('outputs', {}).get('typed_outputs', [])
+        for item in typed:
+            if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
+                host = item.get('host', '')
+                if host:
+                    alive.add(host)
+                url = item.get('url', '')
+                if url:
+                    live_urls.add(url)
+
+        with open('/tmp/ofx_rds_alive.txt', 'w') as f:
+            f.write('\n'.join(sorted(alive)))
+
+        with open('/tmp/ofx_rds_live_urls.txt', 'w') as f:
+            f.write('\n'.join(sorted(live_urls)))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"alive_file=/tmp/ofx_rds_alive.txt\n")
+            f.write(f"live_urls_file=/tmp/ofx_rds_live_urls.txt\n")
+            f.write(f"alive_count={len(alive)}\n")
+
+        print(f"Alive subdomains: {len(alive)}, Live URLs: {len(live_urls)}")
+      log-stdout: true
+    - task: naabu
+      name: port-scan
+      with:
+        target: '{{ steps[2].outputs.alive_file if steps[2].outputs is defined else
+          jobs[''subdomain-discovery''].outputs.subs_file }}'
+        top_ports: '1000'
+        rate: 1000
+      log-stdout: true
+      continue-on-error: true
+    - task: nuclei
+      name: quick-vuln-scan
+      with:
+        target: '{{ steps[2].outputs.live_urls_file if steps[2].outputs is defined
+          else jobs[''subdomain-discovery''].outputs.subs_file }}'
+        severity: critical,high
+      log-stdout: true
+      continue-on-error: true
+    - task: nuclei
+      name: takeover-check
+      with:
+        target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
+        tags: takeover
+      log-stdout: true
+      continue-on-error: true
+    - name: bulk-summary
+      script: |
+        import json
+
+        step_data = {{ steps | tojson }}
+
+        ports = step_data[3].get('outputs', {}).get('typed_outputs', [])
+        vulns = step_data[4].get('outputs', {}).get('typed_outputs', [])
+        takeovers = step_data[5].get('outputs', {}).get('typed_outputs', [])
+
+        port_count = len([p for p in ports if p.get('_type') == 'port'])
+        vuln_count = len([v for v in vulns if v.get('_type') == 'vulnerability'])
+        takeover_count = len([t for t in takeovers if t.get('_type') == 'vulnerability'])
+
+        print("=" * 50)
+        print(" BULK RECON SUMMARY")
+        print("=" * 50)
+        print(f"  Open ports found: {port_count}")
+        print(f"  Critical/High vulns: {vuln_count}")
+        print(f"  Potential takeovers: {takeover_count}")
+      log-stdout: true
+
+  per-subdomain-scan:
+    name: Per-Subdomain Deep Scan
+    needs: [bulk-recon]
+    run_if: '{{ inputs.skip_deep != ''true'' }}'
+    steps:
+    - name: fan-out-domain-scan
+      timeout: 120
+      script: |
+        import asyncio
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        subs_file = '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
+        max_parallel = int('{{ inputs.max_parallel | default(''5'', true) }}')
+        project_flag = '{{ vars.project_path | default('''', true) }}'
+
+        subs = [s.strip() for s in Path(subs_file).read_text().strip().splitlines() if s.strip()]
+        print(f"Launching domain-scan for {len(subs)} subdomains (max_parallel={max_parallel})")
+        print("=" * 60)
+
+        sem = asyncio.Semaphore(max_parallel)
+        results = {'ok': [], 'fail': []}
+
+        async def scan_subdomain(sub):
+            async with sem:
+                cmd = [sys.executable, '-m', 'ofx', 'flow', 'run', 'scans/domain-scan', '--input', f'target={sub}']
+                if project_flag:
+                    cmd.extend(['--project', project_flag])
+                print(f"  [>] Starting: {sub}")
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                )
+                stdout, _ = await proc.communicate()
+                output = stdout.decode(errors='replace')
+                if proc.returncode == 0:
+                    results['ok'].append(sub)
+                    print(f"  [✓] Completed: {sub}")
+                else:
+                    results['fail'].append(sub)
+                    # print last few lines for context
+                    lines = output.strip().splitlines()
+                    tail = '\n'.join(lines[-5:]) if len(lines) > 5 else output.strip()
+                    print(f"  [✗] Failed: {sub} (exit {proc.returncode})")
+                    print(f"      {tail}")
+                return sub, proc.returncode
+
+        async def main():
+            tasks = [scan_subdomain(s) for s in subs]
+            await asyncio.gather(*tasks)
+
+            print()
+            print("=" * 60)
+            print(f" RECURSIVE SCAN COMPLETE: {{ inputs.target }}")
+            print("=" * 60)
+            print(f"  Subdomains scanned: {len(subs)}")
+            print(f"  Successful: {len(results['ok'])}")
+            print(f"  Failed: {len(results['fail'])}")
+            if results['fail']:
+                print(f"  Failed targets: {', '.join(results['fail'])}")
+
+            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+                f.write(f"scanned_count={len(subs)}\n")
+                f.write(f"success_count={len(results['ok'])}\n")
+                f.write(f"fail_count={len(results['fail'])}\n")
+
+        asyncio.run(main())
+      log-stdout: true
+
+  summary:
+    name: Final Summary & Export
+    needs: [per-subdomain-scan, bulk-recon]
+    steps:
+    - name: aggregate-results
+      script: |
+        import json
+        from pathlib import Path
+
+        print("=" * 60)
+        print(f" RECURSIVE DOMAIN SCAN: {{ inputs.target }}")
+        print("=" * 60)
+        print(f"  Subdomains discovered: {{ jobs['subdomain-discovery'].outputs.subdomain_count | default('?', true) }}")
+        print(f"  Alive hosts: {{ jobs['bulk-recon'].outputs.alive_count | default('?', true) }}")
+
+        deep_done = '{{ inputs.skip_deep }}' != 'true'
+        if deep_done:
+            print(f"  Deep scans completed: {{ jobs['per-subdomain-scan'].outputs.scanned_count | default('?', true) }}")
+            print(f"    Successful: {{ jobs['per-subdomain-scan'].outputs.success_count | default('?', true) }}")
+            print(f"    Failed: {{ jobs['per-subdomain-scan'].outputs.fail_count | default('?', true) }}")
+        else:
+            print("  Deep scan: skipped (--input skip_deep=true)")
+      log-stdout: true
+    - name: export-to-project
+      script: |
+        import shutil
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping file export')
+        else:
+            p = Path(project)
+
+            d = p / 'scans'
+            d.mkdir(parents=True, exist_ok=True)
+
+            src = '{{ jobs[''subdomain-discovery''].outputs.subs_file | default('''', true) }}'
+            if src and Path(src).is_file():
+                shutil.copy2(src, d / 'subdomains.txt')
+                count = len(Path(src).read_text().strip().splitlines())
+                print(f'  [+] scans/subdomains.txt ({count} entries)')
+
+            src = '{{ jobs[''bulk-recon''].outputs.alive_file | default('''', true) }}'
+            if src and Path(src).is_file():
+                shutil.copy2(src, d / 'alive-hosts.txt')
+                count = len(Path(src).read_text().strip().splitlines())
+                print(f'  [+] scans/alive-hosts.txt ({count} entries)')
+
+            src = '{{ jobs[''bulk-recon''].outputs.live_urls_file | default('''', true) }}'
+            if src and Path(src).is_file():
+                shutil.copy2(src, d / 'live-urls.txt')
+                count = len(Path(src).read_text().strip().splitlines())
+                print(f'  [+] scans/live-urls.txt ({count} entries)')
+
+            print(f'Project export complete: {project}')
+      continue-on-error: true
