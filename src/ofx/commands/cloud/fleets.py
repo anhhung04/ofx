@@ -7,7 +7,8 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from ofx.commands.cloud.helpers import resolve_provider
+from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
+from ofx.commands.ui_helpers import session_status_style
 from ofx.settings import get_console
 
 fleet_app = typer.Typer(
@@ -327,7 +328,7 @@ def fleet_status(
 
     for s in sessions:
         idx = str(s.fleet_index) if s.fleet_index >= 0 else "-"
-        status_style = _fleet_status_style(s.status.value)
+        status_style = session_status_style(s.status.value)
         table.add_row(
             idx,
             s.id,
@@ -515,17 +516,8 @@ def fleet_destroy(
 ):
     """Destroy fleet instances by tag or name prefix."""
     console = get_console()
-    provider = resolve_provider(profile, provider)
-
-    from ofx.cloud import CloudProviderRegistry
-
-    cloud = CloudProviderRegistry.create(provider)
-
-    try:
-        all_instances = asyncio.run(cloud.list_instances())
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+    _, cloud = create_cloud_provider(profile, provider)
+    all_instances = run_cloud_sync("list instances", lambda: asyncio.run(cloud.list_instances()))
 
     # Filter by tag or prefix
     targets = []
@@ -561,19 +553,3 @@ def fleet_destroy(
     destroyed = asyncio.run(_destroy_all())
 
     console.print(f"[green]Destroyed {destroyed}/{len(targets)} instances.[/green]")
-
-
-def _fleet_status_style(status: str) -> str:
-    """Rich markup style for a session status in fleet tables."""
-    styles = {
-        "provisioning": "yellow",
-        "uploading": "yellow",
-        "running": "bold cyan",
-        "completed": "green",
-        "failed": "red",
-        "canceled": "dim yellow",
-        "fetched": "bold green",
-        "encrypted": "bold magenta",
-        "destroyed": "dim red",
-    }
-    return styles.get(status, "white")

@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from ofx.commands.cloud.helpers import resolve_provider
+from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
 from ofx.settings import get_console
 
 image_app = typer.Typer(no_args_is_help=True, help="Manage cloud images/snapshots")
@@ -22,16 +22,8 @@ def image_list(
 ):
     """List available images/snapshots."""
     console = get_console()
-    provider = resolve_provider(profile, provider)
-
-    from ofx.cloud import CloudProviderRegistry
-
-    try:
-        cloud = CloudProviderRegistry.create(provider)
-        snapshots = asyncio.run(cloud.list_snapshots())
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+    provider, cloud = create_cloud_provider(profile, provider)
+    snapshots = run_cloud_sync("list snapshots", lambda: asyncio.run(cloud.list_snapshots()))
 
     if not snapshots:
         console.print("[dim]No snapshots found.[/dim]")
@@ -67,19 +59,15 @@ def image_create(
 ):
     """Create a snapshot/image from an instance."""
     console = get_console()
-    provider = resolve_provider(profile, provider)
+    provider, cloud = create_cloud_provider(profile, provider)
 
     snapshot_name = name or f"ofx-snapshot-{instance_id[:8]}"
 
-    from ofx.cloud import CloudProviderRegistry
-
     with console.status(f"Creating snapshot '{snapshot_name}'..."):
-        try:
-            cloud = CloudProviderRegistry.create(provider)
-            snapshot = asyncio.run(cloud.create_snapshot(instance_id, snapshot_name))
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+        snapshot = run_cloud_sync(
+            "create snapshot",
+            lambda: asyncio.run(cloud.create_snapshot(instance_id, snapshot_name)),
+        )
 
     console.print("[green]Snapshot created:[/green]")
     console.print(f"  ID:   {snapshot.snapshot_id}")
@@ -99,19 +87,12 @@ def image_delete(
 ):
     """Delete a snapshot/image."""
     console = get_console()
-    provider = resolve_provider(profile, provider)
+    _, cloud = create_cloud_provider(profile, provider)
 
     if not force:
         confirm = typer.confirm(f"Delete snapshot {snapshot_id}?")
         if not confirm:
             raise typer.Abort()
 
-    from ofx.cloud import CloudProviderRegistry
-
-    try:
-        cloud = CloudProviderRegistry.create(provider)
-        asyncio.run(cloud.delete_snapshot(snapshot_id))
-        console.print(f"[green]Snapshot {snapshot_id} deleted.[/green]")
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+    run_cloud_sync("delete snapshot", lambda: asyncio.run(cloud.delete_snapshot(snapshot_id)))
+    console.print(f"[green]Snapshot {snapshot_id} deleted.[/green]")

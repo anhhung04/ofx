@@ -22,7 +22,12 @@ from typing import Annotated, Any
 import typer
 from rich.table import Table
 
-from ofx.commands.ui_helpers import print_error, print_info, print_success
+from ofx.commands.ui_helpers import (
+    print_error,
+    print_info,
+    print_success,
+    session_status_style,
+)
 from ofx.settings import get_console
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
@@ -72,7 +77,8 @@ def _session_detail_table(session) -> Table:
     if session.project:
         rows.append(("Project", session.project))
     rows.append(("Target", session.target.value))
-    rows.append(("Status", f"[{_status_style(session.status.value)}]{session.status.value}[/{_status_style(session.status.value)}]"))
+    style = session_status_style(session.status.value)
+    rows.append(("Status", f"[{style}]{session.status.value}[/{style}]"))
     rows.append(("Workflow", session.workflow_file))
     rows.append(("Job", session.job_id))
     if session.remote_pid:
@@ -97,15 +103,6 @@ def _session_detail_table(session) -> Table:
     for key, val in rows:
         table.add_row(key, val)
     return table
-
-
-def _status_style(status: str) -> str:
-    """Rich markup style for a session status."""
-    return {
-        "provisioning": "yellow", "uploading": "yellow", "running": "bold cyan",
-        "completed": "green", "failed": "red", "canceled": "dim yellow",
-        "fetched": "bold green", "encrypted": "bold magenta", "destroyed": "dim red",
-    }.get(status, "white")
 
 
 def _parse_duration(s: str) -> int | None:
@@ -225,7 +222,7 @@ def session_list(
         table.add_column(col, **opts)
 
     for s in sessions:
-        ss = _status_style(s.status.value)
+        ss = session_status_style(s.status.value)
         table.add_row(
             s.id, s.name or "-", s.project or "-", s.target.value,
             f"[{ss}]{s.status.value}[/{ss}]", s.workflow_file,

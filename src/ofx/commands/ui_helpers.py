@@ -28,6 +28,18 @@ BANNER_ART = r"""
 BANNER_TITLE = "Offensive Flow Executor"
 BANNER_TAGLINE = "Handing over to the next generation of red teamers"
 
+SESSION_STATUS_STYLES: dict[str, str] = {
+    "provisioning": "yellow",
+    "uploading": "yellow",
+    "running": "bold cyan",
+    "completed": "green",
+    "failed": "red",
+    "canceled": "dim yellow",
+    "fetched": "bold green",
+    "encrypted": "bold magenta",
+    "destroyed": "dim red",
+}
+
 
 def _format_details(details: dict[str, Any] | None) -> Text:
     if not details:
@@ -285,6 +297,11 @@ def _status_color(status: str) -> str:
         "pending": "dim",
     }
     return status_map.get(status, "white")
+
+
+def session_status_style(status: str) -> str:
+    """Rich style for session/fleet status labels."""
+    return SESSION_STATUS_STYLES.get(status, "white")
 
 
 def _truncate_text(value: str, limit: int = 120) -> str:

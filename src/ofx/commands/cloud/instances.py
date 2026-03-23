@@ -6,7 +6,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from ofx.commands.cloud.helpers import resolve_provider
+from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
 from ofx.commands.ui_helpers import print_error, print_warning
 from ofx.settings import get_console
 
@@ -22,20 +22,8 @@ def instance_list(
 ):
     """List cloud instances."""
     console = get_console()
-    provider = resolve_provider(profile, provider)
-
-    from ofx.cloud import CloudProviderRegistry
-
-    try:
-        cloud = CloudProviderRegistry.create(provider)
-        instances = asyncio.run(cloud.list_instances())
-    except Exception as e:
-        print_error(
-            "List instances failed",
-            "Error while listing cloud instances.",
-            details=str(e),
-        )
-        raise typer.Exit(code=1) from e
+    provider, cloud = create_cloud_provider(profile, provider)
+    instances = run_cloud_sync("list instances", lambda: asyncio.run(cloud.list_instances()))
 
     if not instances:
         print_warning(
@@ -79,22 +67,15 @@ def instance_destroy(
 ):
     """Destroy a cloud instance."""
     console = get_console()
-    provider = resolve_provider(profile, provider)
+    _, cloud = create_cloud_provider(profile, provider)
 
     if not force:
         confirm = typer.confirm(f"Destroy instance {instance_id}?")
         if not confirm:
             raise typer.Abort()
 
-    from ofx.cloud import CloudProviderRegistry
-
-    try:
-        cloud = CloudProviderRegistry.create(provider)
-        asyncio.run(cloud.destroy_instance(instance_id))
-        console.print(f"[green]Instance {instance_id} destroyed.[/green]")
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        raise typer.Exit(code=1) from e
+    run_cloud_sync("destroy instance", lambda: asyncio.run(cloud.destroy_instance(instance_id)))
+    console.print(f"[green]Instance {instance_id} destroyed.[/green]")
 
 
 @instance_app.command("create")
@@ -115,7 +96,6 @@ def instance_create(
 ):
     """Create a cloud instance manually."""
     console = get_console()
-    from ofx.cloud import CloudProviderRegistry
     from ofx.cloud.config import get_cloud_profile_manager
 
     if profile:
@@ -130,9 +110,10 @@ def instance_create(
         image = image or cfg.image or ""
 
     if not provider:
-        console.print("[red]Specify --provider or --profile[/red]")
+        print_error("Missing cloud provider", "Specify --provider or --profile.")
         raise typer.Exit(code=1)
 
+    from ofx.cloud import CloudProviderRegistry
     from ofx.models.cloud import CloudConfig
 
     cfg = CloudConfig(
@@ -154,11 +135,7 @@ def instance_create(
         return inst
 
     with console.status("Creating instance..."):
-        try:
-            instance = asyncio.run(_create())
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise typer.Exit(code=1) from e
+        instance = run_cloud_sync("create instance", lambda: asyncio.run(_create()))
 
     console.print("[green]Instance created:[/green]")
     console.print(f"  ID:     {instance.instance_id}")
