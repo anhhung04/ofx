@@ -13,7 +13,7 @@ All table outputs now intelligently adapt to your terminal width for optimal rea
 - **`ofx secret search`** - Full-width search results
 - **`ofx flow collection list`** - Full-width collection tables
 - **`ofx docs api`** - Full-width API documentation tables
-- **`ofx doctor check`** - Full-width system health tables
+- **`ofx doctor fleet`** - Full-width reliability scorecard tables
 
 ### Progress Indicators
 
@@ -148,27 +148,21 @@ Installed Collections (1)
 └─────────────┴─────────┴──────────────────────────────────┴──────────┘
 ```
 
-### System Health Check
+### Fleet Reliability Check
 
 ```bash
-$ ofx doctor check
+$ ofx doctor fleet
 
-Essential Tools
-┌──────────┬────────┬─────────────┐
-│ Tool     │ Status │ Details     │
-├──────────┼────────┼─────────────┤
-│ docker   │ ✅     │ 24.0.7      │
-│ git      │ ✅     │ 2.40.1      │
-│ python   │ ✅     │ 3.14.0      │
-└──────────┴────────┴─────────────┘
+Fleet Reliability Scorecard
+┌──────────────────────────┬────────┬─────────────────────────────┐
+│ Check                    │ Status │ Details                     │
+├──────────────────────────┼────────┼─────────────────────────────┤
+│ provider_registered      │ ✅     │ Provider available          │
+│ provider_auth            │ ✅     │ Credentials configured      │
+│ connection_auth          │ ⚠️     │ SSH key not set (password)  │
+└──────────────────────────┴────────┴─────────────────────────────┘
 
-System Health
-┌──────────────┬────────┬────────────┐
-│ Check        │ Status │ Details    │
-├──────────────┼────────┼────────────┤
-│ Disk Space   │ ✅     │ 450GB free │
-│ Memory       │ ✅     │ 16GB       │
-└──────────────┴────────┴────────────┘
+Reliability Score: 83/100
 ```
 
 ## Terminal Compatibility

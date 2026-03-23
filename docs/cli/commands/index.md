@@ -25,7 +25,7 @@ Complete reference for all OFX command-line interface commands.
 ## Utility Commands
 
 - **[docs](docs-serve.md)** - Display API documentation and data directories
-- **[doctor](doctor.md)** - Diagnose system dependencies
+- **[doctor](doctor.md)** - Run reliability scorecards and readiness diagnostics
 
 ## Quick Start
 
@@ -102,4 +102,4 @@ ofx secret list
 | `ofx docs` | Display API documentation and data directories |
 | `ofx docs --list` | List all available API modules |
 | `ofx docs --module <name>` | View specific module documentation |
-| `ofx doctor` | Check system dependencies |
+| `ofx doctor fleet` | Score fleet/cloud reliability readiness |

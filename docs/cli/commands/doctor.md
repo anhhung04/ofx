@@ -1,119 +1,56 @@
-# doctor
+# Doctor Command
 
-Diagnose and check system dependencies.
+`ofx doctor` provides reliability diagnostics for operational readiness.
 
 ## Usage
 
 ```bash
-ofx doctor [subcommand] [options]
+ofx doctor fleet [OPTIONS]
 ```
 
-## Subcommands
+## `doctor fleet`
 
-### check
+Run a fleet reliability scorecard against a cloud profile.
 
-Run comprehensive system health check.
+### What it checks
+
+- Cloud provider registration
+- Provider-specific auth/config requirements
+  - DigitalOcean token presence
+  - AWS credentials (explicit or ambient/IAM warning)
+  - Static host/hosts presence
+- Connection auth readiness
+  - SSH key/password checks for Linux
+  - WinRM credential checks for Windows
+- Optional live probes:
+  - Network connectivity
+  - Authenticated login
+
+### Options
+
+| Option | Description |
+|---|---|
+| `--profile, -p` | Cloud profile name to score (uses default profile if omitted) |
+| `--host` | Optional host override for live probe |
+| `--check-connectivity` | Enable live connectivity + login probes |
+| `--timeout, -t` | Probe timeout in seconds (default: `60`) |
+
+### Examples
 
 ```bash
-ofx doctor check [--verbose]
+# Score default cloud profile
+ofx doctor fleet
+
+# Score an explicit profile
+ofx doctor fleet --profile do-small
+
+# Include live connectivity/login checks
+ofx doctor fleet --profile static-lab --check-connectivity --host 10.10.10.5
 ```
 
-### install-help
+### Exit codes
 
-Show installation instructions for tools.
+- `0`: No failing checks
+- `1`: One or more failing checks
 
-```bash
-ofx doctor install-help [tool]
-```
-
-## Description
-
-The `doctor` command diagnoses your system environment and checks for:
-
-- Essential tools (git, python3)
-- Recommended tools (uv, docker, go, node)
-- Network connectivity
-- System resources (disk, memory)
-- OFX directories and permissions
-
-## Options
-
-- `--verbose, -v` - Show detailed information including optional tools
-
-## Examples
-
-### Basic health check
-
-```bash
-ofx doctor check
-```
-
-### Detailed check with recommendations
-
-```bash
-ofx doctor check --verbose
-```
-
-### Get installation help
-
-```bash
-ofx doctor install-help docker
-```
-
-### Get all installation commands
-
-```bash
-ofx doctor install-help
-```
-
-## Health Checks
-
-### Essential Tools
-
-| Tool | Purpose | Install Command |
-|------|---------|-----------------|
-| `git` | Version control | `sudo apt install git` |
-| `python3` | Runtime environment (≥3.14) | `sudo apt install python3` |
-
-### Recommended Tools
-
-| Tool | Purpose | Install Command |
-|------|---------|-----------------|
-| `uv` | Fast Python package installer | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| `docker` | Container runtime | `curl https://get.docker.com \| sh` |
-| `go` | Go language tools | `sudo apt install golang-go` |
-| `node` | Node.js runtime | `sudo apt install nodejs npm` |
-
-### System Health
-
-- **Network**: Connectivity to GitHub, Google DNS
-- **DNS**: Domain resolution check
-- **Disk**: Free space (>2GB required)
-- **Memory**: Memory usage (<90% recommended)
-- **OFX Directories**: Existence and permissions
-
-## Output
-
-The doctor command provides color-coded output:
-
-- ✅ Green: Check passed
-- ❌ Red: Critical failure
-- ⚠️ Yellow: Warning/recommendation
-
-## Exit Codes
-
-- `0` - All critical checks passed
-- `1` - One or more critical checks failed
-
-## Installing Missing Tools
-
-The doctor will detect your Linux distribution and provide appropriate installation commands:
-
-- **Debian/Ubuntu**: `apt` commands
-- **RedHat/Fedora**: `dnf` commands  
-- **Arch**: `pacman` commands
-- **OpenSUSE**: `zypper` commands
-
-## See Also
-
-- [Getting Started](../../getting-started/quickstart.md)
+Warnings are informational and do not fail the command.

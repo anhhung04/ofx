@@ -13,7 +13,7 @@ This page provides a high-level command map. Detailed flags and examples are doc
 | `secret` | Manage encrypted secrets |
 | `api` | Inspect OFX API modules/functions |
 | `docs` | Documentation helpers |
-| `doctor` | Environment checks and diagnostics |
+| `doctor` | Reliability scorecards and diagnostics |
 | `ai` | AI-assisted workflow and analysis operations |
 
 ## Common usage
@@ -67,4 +67,4 @@ ofx secret set API_KEY
 ## Troubleshooting
 
 - If a command fails unexpectedly, run with `OFX_DEBUG=1`.
-- Use `ofx doctor check` to validate local tooling.
+- Use `ofx doctor fleet` to validate fleet/cloud run readiness.

@@ -46,6 +46,35 @@ jobs:
 | `max_retries` | `3` | Default retry count for failing steps |
 | `timeout_minutes` | `60` | Default step timeout in minutes |
 | `threads` | `10` | Default concurrency for tools |
+| `retry_policy` | `standard` | Named retry policy for step defaults (`standard`, `aggressive`, `stealth`) |
+
+### Retry Policy Profiles
+
+Profiles now support reusable retry policy presets:
+
+```yaml
+profiles:
+  stealth:
+    retry_policy: stealth
+    retry_profiles:
+      standard:
+        retry: 0
+        retry_delay: 5
+        timeout: 1440
+      aggressive:
+        retry: 2
+        retry_delay: 2
+        timeout: 60
+      stealth:
+        retry: 3
+        retry_delay: 15
+        timeout: 180
+```
+
+Behavior:
+
+- The selected `retry_policy` provides default values for step `retry`, `retry-delay`, and `timeout`.
+- Explicit values on a step always win and are not overridden by the profile.
 
 ### Stealth / OPSEC
 

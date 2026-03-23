@@ -165,6 +165,36 @@ Duration formats: `7d` (days), `24h` (hours), `30m` (minutes), `3600s` (seconds)
 
 Default statuses cleaned: `completed`, `fetched`, `encrypted`, `destroyed`, `canceled`.
 
+### `session guard`
+
+Run non-interactive cleanup for unattended environments (cron/systemd).
+
+```bash
+# Default guard behavior (older than 7d, common terminal statuses)
+ofx session guard
+
+# Custom window/status set
+ofx session guard --older-than 24h --status completed,failed,canceled
+```
+
+`session guard` is equivalent to a safe auto-clean policy and does not prompt.
+
+### `session bundle`
+
+Create a run artifacts bundle (`.tar.gz`) for handoff or archival.
+
+```bash
+ofx session bundle <session-id>
+ofx session bundle <session-id> --output /tmp/run-bundle.tar.gz
+```
+
+Bundle contents include:
+
+- `manifest.json` (session summary metadata)
+- `session.json` (full persisted session model)
+- `results/` (fetched artifacts)
+- best-effort `project_logs/` when project context exists
+
 ## Encryption
 
 OFX sessions provide **two layers** of encryption that work together:
@@ -233,15 +263,15 @@ Local sessions run as detached background processes (`start_new_session=True`). 
 
 - Logs all output to `~/.ofx/sessions/<id>/workspace/output.log`
 - Creates an `output/` directory for step results
-- **Encrypts output at rest** using AES-256-CBC before writing `__OFX_DONE__`
+- **Encrypts output at rest** using AES-256-CBC before writing `__TASK_OK__`
 - Shreds the key file and script after encryption
-- Writes `__OFX_DONE__` or `__OFX_FAIL__` markers to the log on completion
+- Writes `__TASK_OK__` or `__TASK_ERR__` markers to the log on completion
 - Runs independently of the submitting terminal
 
 ### How status detection works
 
 1. Check if the PID is alive (via `os.kill(pid, 0)` and `/proc/{pid}/status` to exclude zombies)
-2. Parse the log file for `__OFX_DONE__` / `__OFX_FAIL__` markers
+2. Parse the log file for `__TASK_OK__` / `__TASK_ERR__` markers
 3. Update the session status accordingly
 
 ## Cloud Sessions

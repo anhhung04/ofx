@@ -26,6 +26,7 @@ ofx task run <workflow_name> [OPTIONS]   # Another alias
 | `--lock <path>` | Lock file path to prevent overlapping runs (cron-safe) |
 | `--wait-lock <seconds>` | Seconds to wait for lock acquisition before failing (default: 0) |
 | `--log-format <format>` | Log format: `rich` (default), `json`, or `text` |
+| `--events/--no-events` | Emit structured lifecycle events to `<output>/events.ndjson` |
 | `--durable/--no-durable` | Enable or disable durable execution checkpoints |
 | `--resume/--no-resume` | Resume from last completed step when checkpoints exist |
 | `--durable-backend <file\|redis>` | Durable backend to use |
@@ -93,6 +94,19 @@ ofx flow run scan \
   --durable-backend redis \
   --durable-redis-prefix ofx:durable:
 ```
+
+### Structured Event Stream (NDJSON)
+```bash
+ofx flow run scan --events --output results/
+```
+
+This writes newline-delimited JSON events to:
+
+```text
+results/events.ndjson
+```
+
+Each line contains runner lifecycle metadata (`event_type`, `runner_type`, `run_id`, status, timestamps, job/step context).
 
 ---
 

@@ -74,7 +74,7 @@ call:
 ```bash
 ofx flow visualize hello.yml --format mermaid
 ofx flow run hello.yml --output ./runs/hello
-ofx doctor check
+ofx doctor fleet
 ```
 
 ## What to read next
