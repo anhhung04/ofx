@@ -168,7 +168,7 @@ class StepRunner(BaseRunner[Step]):
         """Log a stdout/stderr stream to the console."""
         if not content or not isinstance(content, str):
             return
-        self._log_info(f"\n==={stream}===\n{content}===========")
+        self._log_info(f"\n==={stream}===\n{content}\n===========")
 
     def _save_output_file(self, stdout: str, outputs: dict) -> None:
         """Persist full stdout to a log file under output_path/logs/."""

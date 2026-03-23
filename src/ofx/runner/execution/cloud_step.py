@@ -196,7 +196,7 @@ class CloudStepRunner(BaseRunner):
         """Log a stdout/stderr stream to the console."""
         if not content or not isinstance(content, str):
             return
-        self._log_info(f"\n==={stream}===\n{content}===========")
+        self._log_info(f"\n==={stream}===\n{content}\n===========")
 
     # ------------------------------------------------------------------
     # Remote execution methods
