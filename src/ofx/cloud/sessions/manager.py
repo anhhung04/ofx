@@ -38,6 +38,14 @@ def _build_tail_cmd(os_type: str, remote_log_file: str, lines: int) -> str:
     return f"tail -{lines} {remote_log_file} 2>/dev/null"
 
 
+def _remote_join(os_type: str, base: str, *parts: str) -> str:
+    sep = "\\" if os_type == "windows" else "/"
+    path = base.rstrip("\\/")
+    for part in parts:
+        path = f"{path}{sep}{part.strip('\\/')}"
+    return path
+
+
 class SessionManager:
     """High-level API for detached session lifecycle.
 
@@ -564,10 +572,9 @@ class SessionManager:
 
             if session.at_rest_encrypted:
                 # Download the encrypted archive
-                if session.os_type == "windows":
-                    enc_remote = f"{session.remote_work_dir}\\output.enc"
-                else:
-                    enc_remote = f"{session.remote_work_dir}/output.enc"
+                enc_remote = _remote_join(
+                    session.os_type, session.remote_work_dir, "output.enc"
+                )
 
                 local_enc = results.parent / f"output_{session.id}.enc"
                 try:
@@ -606,10 +613,7 @@ class SessionManager:
             files = [f.strip() for f in output.strip().split("\n") if f.strip()]
 
             for fname in files:
-                if session.os_type == "windows":
-                    rpath = f"{session.remote_work_dir}\\output\\{fname}"
-                else:
-                    rpath = f"{session.remote_work_dir}/output/{fname}"
+                rpath = _remote_join(session.os_type, session.remote_work_dir, "output", fname)
                 try:
                     remote.download(rpath, str(results / fname))
                 except Exception as exc:

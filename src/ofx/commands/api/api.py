@@ -162,6 +162,59 @@ def _normalize_doc_and_example(doc: str) -> tuple[str, str | None]:
     return description, example
 
 
+def _print_data_directories(console: Any, base_data_dir: str, data_dir: str) -> None:
+    from rich.panel import Panel
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold cyan]User Data:[/bold cyan] [dim]{base_data_dir}[/dim]\n"
+            f"  workflows/    - Custom workflow definitions\n"
+            f"  secrets/      - Secure credential storage\n"
+            f"  secrets.enc   - Encrypted secrets store\n\n"
+            f"[bold cyan]Built-in Data:[/bold cyan] [dim]{data_dir}[/dim]\n"
+            f"  shellcode/    - Shellcode templates\n"
+            f"  webshells/    - Webshell templates\n"
+            f"  exploits/     - Exploit modules\n\n"
+            f"[dim]Extend OFX by adding custom workflows and data files to these directories.[/dim]",
+            title="[bold]📁 Data Directories[/bold]",
+            border_style="cyan",
+        )
+    )
+    console.print()
+
+
+def _print_list_usage(console: Any) -> None:
+    console.print("\n⚠️ No module specified.")
+    console.print("\nUse one of the following options:")
+    console.print("  • [cyan]--list[/cyan] or [cyan]-l[/cyan] to list all available modules")
+    console.print(
+        "  • [cyan]--module MODULE[/cyan] or [cyan]-m MODULE[/cyan] to view specific module documentation"
+    )
+    console.print("\nExample:")
+    console.print("  [dim]$ ofx docs --list[/dim]")
+    console.print("  [dim]$ ofx docs --module webshell[/dim]")
+
+
+def _print_module_list(console: Any, modules: dict[str, str], descriptions: dict[str, str]) -> None:
+    from rich.table import Table
+
+    console.print("\n[bold blue]Available API Modules:[/bold blue]")
+    table = Table(
+        show_header=True,
+        header_style="bold magenta",
+        expand=True,
+        border_style="cyan",
+    )
+    table.add_column("Module", style="cyan", no_wrap=True)
+    table.add_column("Description", style="green")
+    for mod_name in sorted(modules.keys()):
+        table.add_row(mod_name, descriptions.get(mod_name, ""))
+    console.print(table)
+    console.print(f"\n[dim]Total: {len(modules)} modules[/dim]")
+    console.print("\nUse [cyan]--module MODULE[/cyan] to view detailed documentation")
+
+
 def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
     """Get detailed information about a specific class method."""
     try:
@@ -441,68 +494,24 @@ def show_api(
     for all available Red Team APIs.
     """
     from rich.panel import Panel
-    from rich.table import Table
 
     from ofx.settings import BASE_DATA_DIR, DATA_DIR, get_console
 
     console = get_console()
 
     if not module and not list_modules:
-        console.print()
-        console.print(
-            Panel(
-                f"[bold cyan]User Data:[/bold cyan] [dim]{BASE_DATA_DIR}[/dim]\n"
-                f"  workflows/    - Custom workflow definitions\n"
-                f"  secrets/      - Secure credential storage\n"
-                f"  secrets.enc   - Encrypted secrets store\n\n"
-                f"[bold cyan]Built-in Data:[/bold cyan] [dim]{DATA_DIR}[/dim]\n"
-                f"  shellcode/    - Shellcode templates\n"
-                f"  webshells/    - Webshell templates\n"
-                f"  exploits/     - Exploit modules\n\n"
-                f"[dim]Extend OFX by adding custom workflows and data files to these directories.[/dim]",
-                title="[bold]📁 Data Directories[/bold]",
-                border_style="cyan",
-            )
-        )
-        console.print()
+        _print_data_directories(console, str(BASE_DATA_DIR), str(DATA_DIR))
 
     discovered = discover_api_modules()
     modules = {name: info["path"] for name, info in discovered.items()}
     descriptions = {name: info["description"] for name, info in discovered.items()}
 
     if list_modules:
-        console.print("\n[bold blue]Available API Modules:[/bold blue]")
-        table = Table(
-            show_header=True,
-            header_style="bold magenta",
-            expand=True,
-            border_style="cyan",
-        )
-        table.add_column("Module", style="cyan", no_wrap=True)
-        table.add_column("Description", style="green")
-
-        for mod_name in sorted(modules.keys()):
-            table.add_row(mod_name, descriptions.get(mod_name, ""))
-
-        console.print(table)
-        console.print(f"\n[dim]Total: {len(modules)} modules[/dim]")
-        console.print(
-            "\nUse [cyan]--module MODULE[/cyan] to view detailed documentation"
-        )
+        _print_module_list(console, modules, descriptions)
         return
 
     if not module:
-        console.print("\n⚠️ No module specified.")
-        console.print("\nUse one of the following options:")
-        console.print(
-            "  • [cyan]--list[/cyan] or [cyan]-l[/cyan] to list all available modules"
-        )
-        console.print(
-            "  • [cyan]--module MODULE[/cyan] or [cyan]-m MODULE[/cyan] to view specific module documentation"
-        )
-        console.print("\nExample:")
-        console.print("  [dim]$ ofx docs --list[/dim]")
-        console.print("  [dim]$ ofx docs --module webshell[/dim]")
+        _print_list_usage(console)
         return
 
     imported_modules = {}
