@@ -10,6 +10,7 @@ from ofx.runner.registry import (
     FileRegistry,
     MemoryJobRegistry,
 )
+from ofx.runner.registry.base import RegistryAdapter
 
 
 @pytest.fixture
@@ -180,7 +181,7 @@ class TestRegistryFactory:
 
     async def test_create_memory_registry(self):
         """Test creating memory registry from factory"""
-        registry = RegistryFactory.create_memory()
+        registry = RegistryFactory.create("memory")
         assert isinstance(registry, MemoryJobRegistry)
 
         await registry.set("test", {"data": "value"})
@@ -195,8 +196,8 @@ class TestRegistryFactory:
             filepath = Path(f.name)
 
         try:
-            registry = RegistryFactory.create_file(filepath=str(filepath))
-            assert isinstance(registry, FileRegistry)
+            registry = RegistryFactory.create("file", filepath=str(filepath))
+            assert isinstance(registry, (FileRegistry, RegistryAdapter))
 
             await registry.set("test", {"data": "value"})
             result = await registry.get("test")

@@ -106,6 +106,12 @@ class SessionManager:
 
         return session
 
+    def _save_session(self, session: Session, update: dict) -> Session:
+        """Update session fields and persist to store."""
+        session = session.model_copy(update=update)
+        self.store.save(session)
+        return session
+
     # ------------------------------------------------------------------
     # Local submission
     # ------------------------------------------------------------------
@@ -123,20 +129,14 @@ class SessionManager:
         output_dir = work_dir / "output"
         output_dir.mkdir(exist_ok=True)
 
-        # Generate at-rest encryption key and write key file
-        at_rest_key = _secrets.token_hex(32)  # 64-char hex → 256-bit
+        at_rest_key = _secrets.token_hex(32)
         key_file = work_dir / ".skey"
         key_file.write_text(at_rest_key)
         key_file.chmod(0o600)
 
-        # Build the all-in-one script (with at-rest encryption epilogue)
         script_content = build_session_script(
-            job.steps,
-            session_id=session.id,
-            work_dir=str(work_dir),
-            env=env,
-            os_type="linux",
-            encrypt_at_rest=True,
+            job.steps, session_id=session.id, work_dir=str(work_dir),
+            env=env, os_type="linux", encrypt_at_rest=True,
         )
 
         script_path = work_dir / "run.sh"
@@ -144,42 +144,27 @@ class SessionManager:
         script_path.chmod(0o700)
 
         log_file_path = work_dir / "output.log"
-
-        # Upload any script_file references
         self._stage_script_files(job.steps, work_dir)
-
-        # Restrictive permissions on workspace
         work_dir.chmod(0o700)
 
-        # Update session state
-        session = session.model_copy(
-            update={
-                "status": SessionStatus.RUNNING,
-                "remote_work_dir": str(work_dir),
-                "remote_log_file": str(log_file_path),
-                "output_path": str(session_dir),
-                "os_type": "linux",
-                "at_rest_key": at_rest_key,
-                "at_rest_encrypted": True,
-            }
-        )
+        session = session.model_copy(update={
+            "status": SessionStatus.RUNNING,
+            "remote_work_dir": str(work_dir),
+            "remote_log_file": str(log_file_path),
+            "output_path": str(session_dir),
+            "os_type": "linux",
+            "at_rest_key": at_rest_key,
+            "at_rest_encrypted": True,
+        })
 
-        # Launch detached — script handles its own logging to output.log
         proc = subprocess.Popen(
             ["bash", str(script_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-            cwd=str(work_dir),
-            env={
-                **os.environ,
-                "SESSION_ID": session.id,
-                **env,
-            },
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True, cwd=str(work_dir),
+            env={**os.environ, "SESSION_ID": session.id, **env},
         )
 
-        session = session.model_copy(update={"remote_pid": proc.pid})
-        self.store.save(session)
+        session = self._save_session(session, {"remote_pid": proc.pid})
         logger.info("Local session %s started (PID %d)", session.id, proc.pid)
         return session
 
@@ -208,17 +193,14 @@ class SessionManager:
         os_type = getattr(resolved, "os", "linux") or "linux"
         is_windows = os_type == "windows"
 
-        session = session.model_copy(
-            update={
-                "cloud_provider": resolved.provider or "static",
-                "os_type": os_type,
-                "ssh_user": resolved.ssh_user or "root",
-                "ssh_port": resolved.ssh_port or 22,
-                "ssh_key": resolved.ssh_key or "",
-                "ssh_password": resolved.ssh_password or "",
-            }
-        )
-        self.store.save(session)
+        session = self._save_session(session, {
+            "cloud_provider": resolved.provider or "static",
+            "os_type": os_type,
+            "ssh_user": resolved.ssh_user or "root",
+            "ssh_port": resolved.ssh_port or 22,
+            "ssh_key": resolved.ssh_key or "",
+            "ssh_password": resolved.ssh_password or "",
+        })
 
         # Provision
         provider_name = resolved.provider or "static"
@@ -239,29 +221,15 @@ class SessionManager:
             if not instance or not instance.ip:
                 raise RuntimeError("Instance has no IP address")
         except Exception:
-            # Destroy orphaned instance on provisioning failure
             if provider_name != "static" and instance and instance.instance_id:
                 try:
                     await provider.destroy_instance(instance.instance_id)
                 except Exception as destroy_err:
-                    logger.warning(
-                        "Failed to destroy orphaned instance %s: %s",
-                        instance.instance_id,
-                        destroy_err,
-                    )
-            session = session.model_copy(
-                update={"status": SessionStatus.FAILED, "error": str(instance)}
-            )
-            self.store.save(session)
+                    logger.warning("Failed to destroy orphaned instance %s: %s", instance.instance_id, destroy_err)
+            session = self._save_session(session, {"status": SessionStatus.FAILED, "error": str(instance)})
             raise
 
-        session = session.model_copy(
-            update={
-                "instance_id": instance.instance_id,
-                "instance_ip": instance.ip,
-            }
-        )
-        self.store.save(session)
+        session = self._save_session(session, {"instance_id": instance.instance_id, "instance_ip": instance.ip})
 
         await wait_for_connectivity(
             host=instance.ip,
@@ -272,105 +240,50 @@ class SessionManager:
         )
 
         # Build script
-        remote_work_dir = (
-            f"C:\\Windows\\Temp\\.ses-{session.id}"
-            if is_windows
-            else f"/tmp/.ses-{session.id}"
-        )
+        sep = "\\" if is_windows else "/"
+        remote_work_dir = f"C:\\Windows\\Temp\\.ses-{session.id}" if is_windows else f"/tmp/.ses-{session.id}"
 
-        # Generate at-rest encryption key
-        at_rest_key = _secrets.token_hex(32)  # 64-char hex → 256-bit
-
+        at_rest_key = _secrets.token_hex(32)
         script_content = build_session_script(
-            job.steps,
-            session_id=session.id,
-            work_dir=remote_work_dir,
-            env=env,
-            os_type=os_type,
-            encrypt_at_rest=True,
+            job.steps, session_id=session.id, work_dir=remote_work_dir,
+            env=env, os_type=os_type, encrypt_at_rest=True,
         )
+        session = session.model_copy(update={"at_rest_key": at_rest_key, "at_rest_encrypted": True})
 
-        session = session.model_copy(
-            update={"at_rest_key": at_rest_key, "at_rest_encrypted": True}
-        )
-
-        # Create remote runner
         remote = _create_remote_runner(resolved, instance.ip)
 
         # Upload
-        session = session.model_copy(update={"status": SessionStatus.UPLOADING})
-        self.store.save(session)
+        session = self._save_session(session, {"status": SessionStatus.UPLOADING})
 
         if is_windows:
             remote.run(f'mkdir "{remote_work_dir}" 2>nul')
+        else:
+            remote.run(f"mkdir -p {remote_work_dir} && chmod 700 {remote_work_dir}")
 
-            # Upload key file
-            fd, local_key = tempfile.mkstemp(suffix=".key")
-            os.close(fd)
-            Path(local_key).write_text(at_rest_key)
-            os.chmod(local_key, 0o600)
-            try:
-                remote.upload(local_key, f"{remote_work_dir}\\.skey")
-            finally:
-                Path(local_key).unlink(missing_ok=True)
+        # Upload key and script via temp files
+        _upload_temp_content(remote, at_rest_key, f"{remote_work_dir}{sep}.skey", suffix=".key")
+        ext = ".ps1" if is_windows else ".sh"
+        _upload_temp_content(remote, script_content, f"{remote_work_dir}{sep}run{ext}", suffix=ext)
 
-            # Upload script
-            fd, local_script = tempfile.mkstemp(suffix=".ps1")
-            os.close(fd)
-            Path(local_script).write_text(script_content)
-            try:
-                remote.upload(local_script, f"{remote_work_dir}\\run.ps1")
-            finally:
-                Path(local_script).unlink(missing_ok=True)
-
-            # Restrictive permissions on remote dir
+        if is_windows:
             remote.run(
                 f"powershell \"icacls '{remote_work_dir}' /inheritance:r "
                 f"/grant:r '$env:USERNAME:(OI)(CI)F' /T 2>$null\"",
             )
+        else:
+            remote.run(f"chmod 600 {remote_work_dir}/.skey")
+            remote.run(f"chmod 700 {remote_work_dir}/run.sh")
 
-            # Stage script_file references
-            self._upload_script_files(
-                job.steps, remote, remote_work_dir, is_windows=True
-            )
+        self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=is_windows)
 
-            # Start detached via PowerShell
+        # Start detached
+        if is_windows:
             start_cmd = (
                 f'Start-Process powershell -ArgumentList "-File {remote_work_dir}\\run.ps1" '
                 f"-WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"
             )
             pid_output = remote.run(f'powershell "{start_cmd}"').strip()
         else:
-            remote.run(f"mkdir -p {remote_work_dir} && chmod 700 {remote_work_dir}")
-
-            # Upload key file
-            fd, local_key = tempfile.mkstemp(suffix=".key")
-            os.close(fd)
-            Path(local_key).write_text(at_rest_key)
-            os.chmod(local_key, 0o600)
-            try:
-                remote.upload(local_key, f"{remote_work_dir}/.skey")
-            finally:
-                Path(local_key).unlink(missing_ok=True)
-            remote.run(f"chmod 600 {remote_work_dir}/.skey")
-
-            # Upload script
-            fd, local_script = tempfile.mkstemp(suffix=".sh")
-            os.close(fd)
-            Path(local_script).write_text(script_content)
-            try:
-                remote.upload(local_script, f"{remote_work_dir}/run.sh")
-            finally:
-                Path(local_script).unlink(missing_ok=True)
-
-            remote.run(f"chmod 700 {remote_work_dir}/run.sh")
-
-            # Stage script_file references
-            self._upload_script_files(
-                job.steps, remote, remote_work_dir, is_windows=False
-            )
-
-            # Start detached via nohup
             pid_output = remote.run(
                 f"nohup bash {remote_work_dir}/run.sh "
                 f"> {remote_work_dir}/output.log 2>&1 & echo $!"
@@ -382,33 +295,18 @@ class SessionManager:
         except (ValueError, IndexError):
             pid = None
 
-        remote_log = (
-            f"{remote_work_dir}\\output.log"
-            if is_windows
-            else f"{remote_work_dir}/output.log"
-        )
+        remote_log = f"{remote_work_dir}{sep}output.log"
+        session = self._save_session(session, {
+            "status": SessionStatus.RUNNING,
+            "remote_pid": pid,
+            "remote_work_dir": remote_work_dir,
+            "remote_log_file": remote_log,
+            "output_path": str(self.store.session_dir(session.id)),
+        })
+        logger.info("Cloud session %s started on %s (PID %s)", session.id, instance.ip, pid)
 
-        session = session.model_copy(
-            update={
-                "status": SessionStatus.RUNNING,
-                "remote_pid": pid,
-                "remote_work_dir": remote_work_dir,
-                "remote_log_file": remote_log,
-                "output_path": str(self.store.session_dir(session.id)),
-            }
-        )
-        self.store.save(session)
-        logger.info(
-            "Cloud session %s started on %s (PID %s)",
-            session.id,
-            instance.ip,
-            pid,
-        )
-
-        # Cleanup remote runner (close ControlMaster etc.)
         if hasattr(remote, "cleanup"):
             remote.cleanup()
-
         return session
 
     # ------------------------------------------------------------------
@@ -621,23 +519,15 @@ class SessionManager:
         # Re-encrypt with user passphrase if requested
         if passphrase:
             enc_path = encrypt_results(results, passphrase)
-            session = session.model_copy(
-                update={
-                    "status": SessionStatus.ENCRYPTED,
-                    "encrypted": True,
-                    "encrypted_file": str(enc_path),
-                    "results_path": str(results),
-                }
-            )
+            session = self._save_session(session, {
+                "status": SessionStatus.ENCRYPTED, "encrypted": True,
+                "encrypted_file": str(enc_path), "results_path": str(results),
+            })
         else:
-            session = session.model_copy(
-                update={
-                    "status": SessionStatus.FETCHED,
-                    "results_path": str(results),
-                }
-            )
+            session = self._save_session(session, {
+                "status": SessionStatus.FETCHED, "results_path": str(results),
+            })
 
-        self.store.save(session)
         return results if not passphrase else Path(session.encrypted_file)
 
     def _fetch_local_results(self, session: Session, results: Path) -> None:
@@ -796,14 +686,9 @@ class SessionManager:
             except Exception as exc:
                 logger.debug("Cancel failed for %s: %s", session_id, exc)
 
-        session = session.model_copy(
-            update={
-                "status": SessionStatus.CANCELED,
-                "finished_at": datetime.now(UTC),
-            }
-        )
-        self.store.save(session)
-        return session
+        return self._save_session(session, {
+            "status": SessionStatus.CANCELED, "finished_at": datetime.now(UTC),
+        })
 
     # ------------------------------------------------------------------
     # Destroy (tear down VPS)
@@ -848,14 +733,10 @@ class SessionManager:
                     "Failed to destroy instance %s: %s", session.instance_id, exc
                 )
 
-        session = session.model_copy(
-            update={
-                "status": SessionStatus.DESTROYED,
-                "finished_at": session.finished_at or datetime.now(UTC),
-            }
-        )
-        self.store.save(session)
-        return session
+        return self._save_session(session, {
+            "status": SessionStatus.DESTROYED,
+            "finished_at": session.finished_at or datetime.now(UTC),
+        })
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -960,6 +841,18 @@ class SessionManager:
 # ======================================================================
 # Module-level helpers
 # ======================================================================
+
+
+def _upload_temp_content(remote: Any, content: str, remote_path: str, *, suffix: str = "") -> None:
+    """Write content to a temp file, upload it, then clean up."""
+    fd, local_path = tempfile.mkstemp(suffix=suffix)
+    os.close(fd)
+    Path(local_path).write_text(content)
+    os.chmod(local_path, 0o600)
+    try:
+        remote.upload(local_path, remote_path)
+    finally:
+        Path(local_path).unlink(missing_ok=True)
 
 
 def _decrypt_at_rest_openssl(

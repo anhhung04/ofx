@@ -111,7 +111,7 @@ class BaseRunner[TModel: BaseModel]:
         if registry is None:
             from ofx.runner.registry.factory import RegistryFactory
 
-            self._registry = RegistryFactory.create_memory()
+            self._registry = RegistryFactory.create("memory")
         else:
             self._registry = registry
         # Logger injection – default to app branding logger if not provided
@@ -434,7 +434,7 @@ class BaseRunner[TModel: BaseModel]:
         if not hasattr(self, "__lazy_registry"):
             from ofx.runner.registry.factory import RegistryFactory
 
-            self.__lazy_registry = RegistryFactory.create_memory()
+            self.__lazy_registry = RegistryFactory.create("memory")
         return self.__lazy_registry
 
     async def get_result(self) -> RunResult:

@@ -180,78 +180,59 @@ class SecretStore:
         self._save_data(existing)
 
 
-def set_secret(
-    name: str, value: Any, store_path: Path | None = None, passphrase: str | None = None
-) -> None:
-    store = SecretStore.get_instance(store_path, passphrase)
-    store.set(name, value)
-
-
-def get_secret(
-    name: str, store_path: Path | None = None, passphrase: str | None = None
-) -> Any:
-    store = SecretStore.get_instance(store_path, passphrase)
-    return store.get(name)
-
-
-def delete_secret(
-    name: str, store_path: Path | None = None, passphrase: str | None = None
-) -> bool:
-    store = SecretStore.get_instance(store_path, passphrase)
-    return store.delete(name)
-
-
-def list_secrets(
+def _with_store(
     store_path: Path | None = None, passphrase: str | None = None
-) -> dict[str, Any]:
-    store = SecretStore.get_instance(store_path, passphrase)
-    return store.list()
+) -> SecretStore:
+    """Get a SecretStore instance (shorthand for the common pattern)."""
+    return SecretStore.get_instance(store_path, passphrase)
 
 
-def secret_exists(
-    name: str, store_path: Path | None = None, passphrase: str | None = None
-) -> bool:
-    store = SecretStore.get_instance(store_path, passphrase)
-    return store.exists(name)
+def set_secret(name: str, value: Any, store_path: Path | None = None, passphrase: str | None = None) -> None:
+    _with_store(store_path, passphrase).set(name, value)
 
 
-def clear_secrets(
-    store_path: Path | None = None, passphrase: str | None = None
-) -> None:
-    store = SecretStore.get_instance(store_path, passphrase)
-    store.clear()
+def get_secret(name: str, store_path: Path | None = None, passphrase: str | None = None) -> Any:
+    return _with_store(store_path, passphrase).get(name)
 
 
-def export_secrets(
-    output_path: Path, store_path: Path | None = None, passphrase: str | None = None
-) -> int:
-    store = SecretStore.get_instance(store_path, passphrase)
-    secrets = store.export_unencrypted()
+def delete_secret(name: str, store_path: Path | None = None, passphrase: str | None = None) -> bool:
+    return _with_store(store_path, passphrase).delete(name)
+
+
+def list_secrets(store_path: Path | None = None, passphrase: str | None = None) -> dict[str, Any]:
+    return _with_store(store_path, passphrase).list()
+
+
+def secret_exists(name: str, store_path: Path | None = None, passphrase: str | None = None) -> bool:
+    return _with_store(store_path, passphrase).exists(name)
+
+
+def clear_secrets(store_path: Path | None = None, passphrase: str | None = None) -> None:
+    _with_store(store_path, passphrase).clear()
+
+
+def export_secrets(output_path: Path, store_path: Path | None = None, passphrase: str | None = None) -> int:
+    secrets = _with_store(store_path, passphrase).export_unencrypted()
     if secrets:
         output_path.write_text(json.dumps(secrets, indent=2))
     return len(secrets)
 
 
 def import_secrets_from_file(
-    input_path: Path,
-    overwrite: bool = False,
-    store_path: Path | None = None,
-    passphrase: str | None = None,
+    input_path: Path, overwrite: bool = False,
+    store_path: Path | None = None, passphrase: str | None = None,
 ) -> int:
     if not input_path.exists():
         raise FileNotFoundError(f"File not found: {input_path}")
-
     try:
         data = json.loads(input_path.read_text())
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {e}") from e
 
-    store = SecretStore.get_instance(store_path, passphrase)
+    store = _with_store(store_path, passphrase)
     existing_count = len(store.list())
     store.import_unencrypted(data, overwrite)
-    new_count = len(store.list())
-
-    return new_count - existing_count if not overwrite else len(data)
+    return len(data) if overwrite else len(store.list()) - existing_count
 
 
 def migrate_from_directory(
@@ -259,7 +240,6 @@ def migrate_from_directory(
 ) -> int:
     if not directory.exists() or not list(directory.glob("*")):
         return 0
-
     secrets = {}
     for secret_file in directory.glob("*"):
         if secret_file.is_file():
@@ -269,9 +249,7 @@ def migrate_from_directory(
             except json.JSONDecodeError:
                 pass
             secrets[secret_file.name] = content
-
-    store = SecretStore.get_instance(store_path, passphrase)
-    store.import_unencrypted(secrets, overwrite=False)
+    _with_store(store_path, passphrase).import_unencrypted(secrets, overwrite=False)
     return len(secrets)
 
 
@@ -279,109 +257,88 @@ def get_store_path(store_path: Path | None = None) -> Path:
     if store_path:
         return store_path
     from ofx.settings import SECRETS_STORE
-
     return SECRETS_STORE
 
 
-def get_store_info(
-    store_path: Path | None = None, passphrase: str | None = None
-) -> dict[str, Any]:
+def get_store_info(store_path: Path | None = None, passphrase: str | None = None) -> dict[str, Any]:
     path = get_store_path(store_path)
-    info = {
+    return {
         "path": str(path),
         "exists": path.exists(),
         "size": path.stat().st_size if path.exists() else 0,
         "count": len(list_secrets(store_path, passphrase)),
     }
-    return info
+
+
+def _load_backup_data(backup_path: Path, store: SecretStore) -> dict:
+    """Decrypt and parse a backup file, returning the full backup dict."""
+    if not backup_path.exists():
+        raise FileNotFoundError(f"Backup file not found: {backup_path}")
+    encrypted_data = backup_path.read_bytes()
+    decrypted_data = store._get_cipher().decrypt(encrypted_data)
+    backup_data = json.loads(decrypted_data.decode())
+    if not isinstance(backup_data, dict):
+        raise ValueError("Invalid backup file format")
+    return backup_data
 
 
 def backup_secrets(
     output_path: Path, store_path: Path | None = None, passphrase: str | None = None
 ) -> int:
-    """Create an encrypted backup of all secrets with metadata"""
-    store = SecretStore.get_instance(store_path, passphrase)
+    """Create an encrypted backup of all secrets with metadata."""
+    store = _with_store(store_path, passphrase)
     secrets = store.export_unencrypted()
-
     if not secrets:
         return 0
 
     from datetime import datetime
-
     backup_data = {
         "metadata": {
-            "version": "1.0",
-            "created": datetime.now().isoformat(),
-            "count": len(secrets),
-            "type": "ofx-secret-backup",
+            "version": "1.0", "created": datetime.now().isoformat(),
+            "count": len(secrets), "type": "ofx-secret-backup",
         },
         "secrets": secrets,
     }
-
     json_data = json.dumps(backup_data, indent=2).encode()
     encrypted_data = store._get_cipher().encrypt(json_data)
     output_path.write_bytes(encrypted_data)
     output_path.chmod(0o600)
-
     return len(secrets)
 
 
 def restore_secrets(
-    backup_path: Path,
-    overwrite: bool = False,
-    store_path: Path | None = None,
-    passphrase: str | None = None,
+    backup_path: Path, overwrite: bool = False,
+    store_path: Path | None = None, passphrase: str | None = None,
 ) -> int:
-    """Restore secrets from an encrypted backup"""
-    if not backup_path.exists():
-        raise FileNotFoundError(f"Backup file not found: {backup_path}")
+    """Restore secrets from an encrypted backup."""
+    store = _with_store(store_path, passphrase)
+    backup_data = _load_backup_data(backup_path, store)
+    if "secrets" not in backup_data:
+        raise ValueError("Invalid backup file format")
 
-    store = SecretStore.get_instance(store_path, passphrase)
-
-    encrypted_data = backup_path.read_bytes()
-    decrypted_data = store._get_cipher().decrypt(encrypted_data)
-    backup_data = json.loads(decrypted_data.decode())
-
-    if not isinstance(backup_data, dict) or "secrets" not in backup_data:
-        raise ValueError("Invalid backup file format") from None
-
-    secrets = backup_data["secrets"]
     existing = store.list()
-
     imported = 0
-    for name, value in secrets.items():
+    for name, value in backup_data["secrets"].items():
         if name not in existing or overwrite:
             store.set(name, value)
             imported += 1
-
     return imported
 
 
 def get_backup_info(
     backup_path: Path, store_path: Path | None = None, passphrase: str | None = None
 ) -> dict[str, Any]:
-    """Get information about a backup file without restoring it"""
-    if not backup_path.exists():
-        raise FileNotFoundError(f"Backup file not found: {backup_path}")
-
-    store = SecretStore.get_instance(store_path, passphrase)
-
-    encrypted_data = backup_path.read_bytes()
-    decrypted_data = store._get_cipher().decrypt(encrypted_data)
-    backup_data = json.loads(decrypted_data.decode())
-
-    if not isinstance(backup_data, dict) or "metadata" not in backup_data:
-        raise ValueError("Invalid backup file format") from None
-
-    metadata = backup_data["metadata"]
-    secrets = backup_data.get("secrets", {})
+    """Get information about a backup file without restoring it."""
+    store = _with_store(store_path, passphrase)
+    backup_data = _load_backup_data(backup_path, store)
+    if "metadata" not in backup_data:
+        raise ValueError("Invalid backup file format")
 
     from datetime import datetime
-
-    created = datetime.fromisoformat(metadata["created"])
-
+    metadata = backup_data["metadata"]
+    secrets = backup_data.get("secrets", {})
     return {
-        "created": created,
+        "created": datetime.fromisoformat(metadata["created"]),
         "count": metadata.get("count", len(secrets)),
         "size": backup_path.stat().st_size,
         "version": metadata.get("version", "unknown"),
@@ -389,48 +346,41 @@ def get_backup_info(
     }
 
 
+def _load_dir_secrets(secrets_dir: Path, keys: set[str] | None = None) -> dict[str, Any]:
+    """Load secrets from a legacy directory, optionally filtered by keys."""
+    result: dict[str, Any] = {}
+    if not secrets_dir or not secrets_dir.exists():
+        return result
+    for secret_file in secrets_dir.glob("*"):
+        if not secret_file.is_file():
+            continue
+        if keys and secret_file.name not in keys:
+            continue
+        content = secret_file.read_text()
+        try:
+            content = json.loads(content)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        result[secret_file.name] = content
+    return result
+
+
 def load_secrets(secrets_dir: Path | None = None) -> dict[str, str]:
-    """Load secrets from directory or encrypted store."""
+    """Load secrets from encrypted store, falling back to directory."""
     secrets = list_secrets()
-
-    if not secrets and secrets_dir and secrets_dir.exists():
-        for secret_file in secrets_dir.glob("*"):
-            content = secret_file.read_text()
-            try:
-                content = json.loads(content)
-            except (json.JSONDecodeError, ValueError):
-                pass
-            secrets[secret_file.name] = content
-
+    if not secrets and secrets_dir:
+        secrets = _load_dir_secrets(secrets_dir)
     return secrets
 
 
 def load_secrets_by_keys(
-    keys: set[str],
-    secrets_dir: Path | None = None,
-    passphrase: str | None = None,
+    keys: set[str], secrets_dir: Path | None = None, passphrase: str | None = None,
 ) -> dict[str, str]:
-    """Load only the specified secrets from the store.
-
-    Falls back to legacy directory-based secrets for any keys not found
-    in the encrypted store.
-    """
+    """Load only the specified secrets, falling back to directory for missing keys."""
     if not keys:
         return {}
-
-    store = SecretStore.get_instance(passphrase=passphrase)
-    result = store.get_many(keys)
-
-    # Fall back to directory files for missing keys
+    result = _with_store(passphrase=passphrase).get_many(keys)
     missing = keys - result.keys()
-    if missing and secrets_dir and secrets_dir.exists():
-        for secret_file in secrets_dir.glob("*"):
-            if secret_file.name in missing and secret_file.is_file():
-                content = secret_file.read_text()
-                try:
-                    content = json.loads(content)
-                except (json.JSONDecodeError, ValueError):
-                    pass
-                result[secret_file.name] = content
-
+    if missing and secrets_dir:
+        result.update(_load_dir_secrets(secrets_dir, missing))
     return result

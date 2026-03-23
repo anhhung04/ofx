@@ -15,8 +15,6 @@ from rich.text import Text
 
 from ofx.settings import RICH_THEME, get_console
 
-console = get_console()
-
 BANNER_ART = r"""
       .--.
      |o_o |
@@ -121,19 +119,19 @@ def info_panel(
 def print_success(
     title: str, message: str, details: dict[str, Any] | None = None
 ) -> None:
-    console.print(success_panel(title, message, details))
+    get_console().print(success_panel(title, message, details))
 
 
 def print_error(title: str, message: str, details: str | None = None) -> None:
-    console.print(error_panel(title, message, details))
+    get_console().print(error_panel(title, message, details))
 
 
 def print_warning(title: str, message: str, hint: str | None = None) -> None:
-    console.print(warning_panel(title, message, hint))
+    get_console().print(warning_panel(title, message, hint))
 
 
 def print_info(title: str, message: str, details: dict[str, Any] | None = None) -> None:
-    console.print(info_panel(title, message, details))
+    get_console().print(info_panel(title, message, details))
 
 
 def key_value_table(

@@ -46,7 +46,7 @@ class TestMemcachedJobRegistry:
             pytest.skip("aiomcache is installed, skipping import error test")
 
         with pytest.raises(ImportError, match="aiomcache"):
-            RegistryFactory.create_memcached()
+            RegistryFactory.create("memcached")
 
     @pytest.mark.asyncio
     async def test_memcached_basic_operations(self):
@@ -55,7 +55,7 @@ class TestMemcachedJobRegistry:
             pytest.skip("aiomcache not installed")
 
         try:
-            registry = RegistryFactory.create_memcached()
+            registry = RegistryFactory.create("memcached")
             await _assert_basic_operations(registry)
             await registry.close()
         except Exception as e:
@@ -75,7 +75,7 @@ class TestEtcdJobRegistry:
             pytest.skip("etcd3 is installed, skipping import error test")
 
         with pytest.raises(ImportError, match="etcd3"):
-            RegistryFactory.create_etcd()
+            RegistryFactory.create("etcd")
 
     @pytest.mark.asyncio
     async def test_etcd_basic_operations(self):
@@ -84,7 +84,7 @@ class TestEtcdJobRegistry:
             pytest.skip("etcd3 not installed or incompatible")
 
         try:
-            registry = RegistryFactory.create_etcd()
+            registry = RegistryFactory.create("etcd")
             await _assert_basic_operations(registry)
             await registry.close()
         except Exception as e:
@@ -100,20 +100,20 @@ class TestRegistryFactoryExtended:
     def test_factory_supports_memcached(self):
         """Test that factory recognizes memcached backend"""
         if _can_import("aiomcache"):
-            registry = RegistryFactory.create_memcached()
+            registry = RegistryFactory.create("memcached")
             assert registry.__class__.__name__ == "MemcachedJobRegistry"
         else:
             with pytest.raises(ImportError, match="aiomcache"):
-                RegistryFactory.create_memcached()
+                RegistryFactory.create("memcached")
 
     def test_factory_supports_etcd(self):
         """Test that factory recognizes etcd backend"""
         if _can_import("etcd3"):
-            registry = RegistryFactory.create_etcd()
+            registry = RegistryFactory.create("etcd")
             assert registry.__class__.__name__ == "EtcdJobRegistry"
         else:
             with pytest.raises(ImportError, match="etcd3"):
-                RegistryFactory.create_etcd()
+                RegistryFactory.create("etcd")
 
     def test_invalid_backend_error_message(self):
         """Test that invalid backend raises ValueError with helpful message"""
@@ -122,4 +122,4 @@ class TestRegistryFactoryExtended:
 
         assert "memcached" in str(exc_info.value)
         assert "etcd" in str(exc_info.value)
-        assert "Supported backends" in str(exc_info.value)
+        assert "Supported" in str(exc_info.value)

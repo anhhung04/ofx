@@ -39,7 +39,8 @@ def _get_registry(output_path: Path, config: DurableRunConfig) -> RegistryAdapte
         return _registry_cache[key]
 
     if config.backend == "redis":
-        registry = RegistryFactory.create_redis(
+        registry = RegistryFactory.create(
+            "redis",
             config=settings.registry_redis,
             prefix=_resolve_redis_prefix(output_path, config),
         )

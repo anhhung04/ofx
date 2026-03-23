@@ -1,4 +1,4 @@
-"""API documentation command for OFX"""
+"""API documentation command for OFX."""
 
 import importlib
 import inspect
@@ -25,49 +25,37 @@ def discover_api_modules() -> dict[str, dict[str, str]]:
             return {}
 
         api_path = Path(api_file).parent
-
         modules: dict[str, dict[str, str]] = {}
+
         for file in api_path.glob("*.py"):
             if file.name == "__init__.py":
                 continue
-
-            module_name = file.stem
-            module_path = f"ofx.api.{module_name}"
-
-            try:
-                mod = importlib.import_module(module_path)
-                if hasattr(mod, "__all__") or any(
-                    not name.startswith("_") and callable(getattr(mod, name))
-                    for name in dir(mod)
-                ):
-                    doc = inspect.getdoc(mod) or f"{module_name.title()} utilities"
-                    modules[module_name] = {
-                        "path": module_path,
-                        "description": doc.split("\n")[0],
-                    }
-            except Exception:
-                continue
+            _try_register_module(f"ofx.api.{file.stem}", file.stem, modules)
 
         for subdir in api_path.iterdir():
-            if subdir.is_dir() and not subdir.name.startswith("_"):
-                init_file = subdir / "__init__.py"
-                if init_file.exists():
-                    module_name = subdir.name
-                    module_path = f"ofx.api.{module_name}"
-                    try:
-                        mod = importlib.import_module(module_path)
-                        if hasattr(mod, "__all__"):
-                            doc = inspect.getdoc(mod) or f"{module_name.title()} module"
-                            modules[module_name] = {
-                                "path": module_path,
-                                "description": doc.split("\n")[0],
-                            }
-                    except Exception:
-                        continue
+            if subdir.is_dir() and not subdir.name.startswith("_") and (subdir / "__init__.py").exists():
+                _try_register_module(f"ofx.api.{subdir.name}", subdir.name, modules, require_all=True)
 
         return modules
     except Exception:
         return {}
+
+
+def _try_register_module(
+    module_path: str, name: str, registry: dict, *, require_all: bool = False
+) -> None:
+    """Try to import and register an API module."""
+    try:
+        mod = importlib.import_module(module_path)
+        if require_all and not hasattr(mod, "__all__"):
+            return
+        if hasattr(mod, "__all__") or any(
+            not n.startswith("_") and callable(getattr(mod, n)) for n in dir(mod)
+        ):
+            doc = inspect.getdoc(mod) or f"{name.title()} utilities"
+            registry[name] = {"path": module_path, "description": doc.split("\n")[0]}
+    except Exception:
+        pass
 
 
 def format_type(type_hint: Any, model_registry: dict[str, Any]) -> str:
@@ -130,6 +118,39 @@ def get_model_schema(
     return schema
 
 
+def _extract_params(sig: inspect.Signature, type_hints: dict, model_schemas: dict, *, skip: set[str] | None = None) -> list[dict[str, Any]]:
+    """Extract parameter info from a function/method signature."""
+    skip = skip or set()
+    parameters = []
+    for param_name, param in sig.parameters.items():
+        if param_name in skip or param_name == "return":
+            continue
+        param_hint = type_hints.get(param_name, Any)
+        param_type = format_type(param_hint, model_schemas)
+
+        if param.kind == param.VAR_KEYWORD:
+            parameters.append({"name": f"**{param_name}", "type": "Any", "default": "", "required": False})
+        elif param.kind == param.VAR_POSITIONAL:
+            parameters.append({"name": f"*{param_name}", "type": "Any", "default": "", "required": False})
+        else:
+            default = "" if param.default is param.empty else str(param.default)
+            parameters.append({
+                "name": param_name,
+                "type": param_type,
+                "default": default,
+                "required": param.default is param.empty and param.kind != param.VAR_POSITIONAL,
+            })
+    return parameters
+
+
+def _resolve_type_hints(func: Any) -> dict:
+    """Safely resolve type hints for a callable."""
+    try:
+        return get_type_hints(func)
+    except Exception:
+        return getattr(func, "__annotations__", {})
+
+
 def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
     """Get detailed information about a specific class method."""
     try:
@@ -137,61 +158,17 @@ def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
         if not callable(method):
             return None
 
-        doc = inspect.getdoc(method) or ""
         sig = inspect.signature(method)
-
-        try:
-            type_hints = get_type_hints(method)
-        except Exception:
-            type_hints = getattr(method, "__annotations__", {})
-
-        parameters = []
-        model_schemas = {}
-        for param_name, param in sig.parameters.items():
-            if param_name in ("self", "cls", "return"):
-                continue
-
-            param_hint = type_hints.get(param_name, Any)
-            param_type = format_type(param_hint, model_schemas)
-
-            if param.kind == param.VAR_KEYWORD:
-                parameters.append(
-                    {
-                        "name": f"**{param_name}",
-                        "type": "Any",
-                        "default": "",
-                        "required": False,
-                    }
-                )
-            elif param.kind == param.VAR_POSITIONAL:
-                parameters.append(
-                    {
-                        "name": f"*{param_name}",
-                        "type": "Any",
-                        "default": "",
-                        "required": False,
-                    }
-                )
-            else:
-                default = "" if param.default is param.empty else str(param.default)
-                parameters.append(
-                    {
-                        "name": param_name,
-                        "type": param_type,
-                        "default": default,
-                        "required": param.default is param.empty,
-                    }
-                )
-
-        return_type_hint = type_hints.get("return", Any)
-        return_type = format_type(return_type_hint, model_schemas)
+        type_hints = _resolve_type_hints(method)
+        model_schemas: dict = {}
+        parameters = _extract_params(sig, type_hints, model_schemas, skip={"self", "cls"})
 
         return {
             "name": method_name,
             "type": "method",
-            "doc": doc,
+            "doc": inspect.getdoc(method) or "",
             "parameters": parameters,
-            "return_type": return_type,
+            "return_type": format_type(type_hints.get("return", Any), model_schemas),
             "models": model_schemas,
             "class_name": cls.__name__,
         }
@@ -212,178 +189,64 @@ def get_module_functions(module) -> list[dict[str, Any]]:
         for name in all_names:
             if name in func_lookup:
                 func = func_lookup[name]
-                doc = inspect.getdoc(func) or ""
                 sig = inspect.signature(func)
-                try:
-                    type_hints = get_type_hints(func)
-                except Exception:
-                    type_hints = getattr(func, "__annotations__", {})
+                type_hints = _resolve_type_hints(func)
+                model_schemas: dict = {}
+                parameters = _extract_params(sig, type_hints, model_schemas)
 
-                parameters = []
-                model_schemas = {}
-                for param_name, param in sig.parameters.items():
-                    if param_name == "return":
-                        continue
-
-                    param_hint = type_hints.get(param_name, Any)
-                    param_type = format_type(param_hint, model_schemas)
-
-                    if param.kind == param.VAR_KEYWORD:
-                        parameters.append(
-                            {
-                                "name": f"**{param_name}",
-                                "type": "Any",
-                                "default": "",
-                                "required": False,
-                            }
-                        )
-                    elif param.kind == param.VAR_POSITIONAL:
-                        parameters.append(
-                            {
-                                "name": f"*{param_name}",
-                                "type": "Any",
-                                "default": "",
-                                "required": False,
-                            }
-                        )
-                    else:
-                        default = (
-                            "" if param.default is param.empty else str(param.default)
-                        )
-                        parameters.append(
-                            {
-                                "name": param_name,
-                                "type": param_type,
-                                "default": default,
-                                "required": param.default is param.empty
-                                and param.kind != param.VAR_POSITIONAL,
-                            }
-                        )
-
-                return_type_hint = type_hints.get("return", Any)
-                return_type = format_type(return_type_hint, model_schemas)
-
-                functions.append(
-                    {
-                        "name": name,
-                        "type": "function",
-                        "doc": doc,
-                        "parameters": parameters,
-                        "return_type": return_type,
-                        "models": model_schemas,
-                    }
-                )
+                functions.append({
+                    "name": name,
+                    "type": "function",
+                    "doc": inspect.getdoc(func) or "",
+                    "parameters": parameters,
+                    "return_type": format_type(type_hints.get("return", Any), model_schemas),
+                    "models": model_schemas,
+                })
 
             elif name in class_lookup:
                 cls = class_lookup[name]
                 doc = inspect.getdoc(cls) or ""
 
-                methods = []
                 try:
                     if hasattr(cls, "__init__"):
                         init_func = cls.__init__
                         sig = inspect.signature(init_func)
-                        try:
-                            type_hints = get_type_hints(init_func)
-                        except Exception:
-                            type_hints = getattr(init_func, "__annotations__", {})
-
-                        parameters = []
+                        type_hints = _resolve_type_hints(init_func)
                         model_schemas = {}
-                        for param_name, param in sig.parameters.items():
-                            if param_name in ("self", "return"):
+                        parameters = _extract_params(sig, type_hints, model_schemas, skip={"self"})
+
+                        methods = []
+                        for method_name, method in inspect.getmembers(cls, inspect.isfunction):
+                            if method_name.startswith("_") and method_name not in ("__init__", "__call__"):
                                 continue
+                            if method_name == "__init__":
+                                continue
+                            method_doc = inspect.getdoc(method) or ""
+                            try:
+                                inspect.signature(method)
+                                method_type_hints = get_type_hints(method)
+                                method_return_type = format_type(method_type_hints.get("return", Any), {})
+                            except Exception:
+                                method_return_type = "Any"
+                            methods.append({
+                                "name": method_name,
+                                "doc": method_doc.split("\n")[0] if method_doc else "",
+                                "return_type": method_return_type,
+                            })
 
-                            param_hint = type_hints.get(param_name, Any)
-                            param_type = format_type(param_hint, model_schemas)
-
-                            if param.kind == param.VAR_KEYWORD:
-                                parameters.append(
-                                    {
-                                        "name": f"**{param_name}",
-                                        "type": "Any",
-                                        "default": "",
-                                        "required": False,
-                                    }
-                                )
-                            elif param.kind == param.VAR_POSITIONAL:
-                                parameters.append(
-                                    {
-                                        "name": f"*{param_name}",
-                                        "type": "Any",
-                                        "default": "",
-                                        "required": False,
-                                    }
-                                )
-                            else:
-                                default = (
-                                    ""
-                                    if param.default is param.empty
-                                    else str(param.default)
-                                )
-                                parameters.append(
-                                    {
-                                        "name": param_name,
-                                        "type": param_type,
-                                        "default": default,
-                                        "required": param.default is param.empty,
-                                    }
-                                )
-
-                        for method_name, method in inspect.getmembers(
-                            cls, inspect.isfunction
-                        ):
-                            if not method_name.startswith("_") or method_name in (
-                                "__init__",
-                                "__call__",
-                            ):
-                                if method_name == "__init__":
-                                    continue
-                                method_doc = inspect.getdoc(method) or ""
-
-                                try:
-                                    inspect.signature(method)
-                                    method_type_hints = get_type_hints(method)
-                                    return_type_hint = method_type_hints.get(
-                                        "return", Any
-                                    )
-                                    method_return_type = format_type(
-                                        return_type_hint, {}
-                                    )
-                                except Exception:
-                                    method_return_type = "Any"
-
-                                methods.append(
-                                    {
-                                        "name": method_name,
-                                        "doc": method_doc.split("\n")[0]
-                                        if method_doc
-                                        else "",
-                                        "return_type": method_return_type,
-                                    }
-                                )
-
-                        functions.append(
-                            {
-                                "name": name,
-                                "type": "class",
-                                "doc": doc,
-                                "parameters": parameters,
-                                "methods": methods,
-                                "models": model_schemas,
-                            }
-                        )
-                except Exception:
-                    functions.append(
-                        {
+                        functions.append({
                             "name": name,
                             "type": "class",
                             "doc": doc,
-                            "parameters": [],
-                            "methods": [],
-                            "models": {},
-                        }
-                    )
+                            "parameters": parameters,
+                            "methods": methods,
+                            "models": model_schemas,
+                        })
+                except Exception:
+                    functions.append({
+                        "name": name, "type": "class", "doc": doc,
+                        "parameters": [], "methods": [], "models": {},
+                    })
 
     return sorted(functions, key=lambda x: x["name"])
 
