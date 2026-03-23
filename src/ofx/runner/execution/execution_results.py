@@ -115,3 +115,25 @@ def build_run_if_context(dep_runners: list[Any]) -> dict[str, Any]:
         "canceled": lambda: any(r.status == RS.CANCELED for r in dep_runners),
         "always": lambda: True,
     }
+
+
+def build_step_execution_result(
+    *,
+    step_index: int,
+    name: str,
+    run_type: str,
+    status: str,
+    error: str | None,
+    outputs: dict[str, Any],
+    duration_ms: int | None,
+) -> StepExecutionResult:
+    """Build a StepExecutionResult consistently across step runners."""
+    return StepExecutionResult(
+        step_index=step_index,
+        name=name,
+        run_type=run_type,
+        status=status,
+        error=error,
+        outputs=outputs,
+        duration_ms=duration_ms,
+    )

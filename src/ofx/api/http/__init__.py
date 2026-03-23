@@ -103,6 +103,54 @@ def retry_with_backoff(
     return decorator
 
 
+def _apply_rate_limit(rate_limit: float | None) -> None:
+    if rate_limit:
+        get_rate_limiter(rate_limit).wait()
+
+
+def _raise_http_error(url: str, timeout: int, exc: Exception) -> APIError | OFXTimeoutError:
+    if isinstance(exc, httpx.TimeoutException):
+        return OFXTimeoutError(f"Request to {url} timed out", timeout_seconds=timeout)
+    if isinstance(exc, httpx.HTTPStatusError):
+        return APIError(
+            f"HTTP {exc.response.status_code} error for {url}",
+            status_code=exc.response.status_code,
+            response=exc.response.text,
+        )
+    if isinstance(exc, httpx.RequestError):
+        return APIError(f"Request failed: {exc}")
+    return APIError(f"Request failed: {exc}")
+
+
+def _request(
+    method: str,
+    url: str,
+    *,
+    max_retries: int,
+    timeout: int,
+    rate_limit: float | None,
+    data: dict[str, Any] | str | None = None,
+    **kwargs: Any,
+) -> str:
+    client = get_http_client(timeout=timeout)
+    _apply_rate_limit(rate_limit)
+
+    @retry_with_backoff(max_retries=max_retries)
+    def _do_request() -> str:
+        try:
+            request_kwargs = dict(kwargs)
+            if method == "POST":
+                request_kwargs["json"] = data if isinstance(data, dict) else None
+                request_kwargs["data"] = data if isinstance(data, str) else None
+            response = client.request(method, url, **request_kwargs)
+            response.raise_for_status()
+            return response.text
+        except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError) as e:
+            raise _raise_http_error(url, timeout, e) from e
+
+    return _do_request()
+
+
 def fetch(
     url: str,
     max_retries: int = 3,
@@ -126,32 +174,14 @@ def fetch(
         APIError: If request fails after retries
         OFXTimeoutError: If request times out
     """
-    client = get_http_client(timeout=timeout)
-
-    if rate_limit:
-        limiter = get_rate_limiter(rate_limit)
-        limiter.wait()
-
-    @retry_with_backoff(max_retries=max_retries)
-    def _fetch() -> str:
-        try:
-            response = client.get(url, **kwargs)
-            response.raise_for_status()
-            return response.text
-        except httpx.TimeoutException as e:
-            raise OFXTimeoutError(
-                f"Request to {url} timed out", timeout_seconds=timeout
-            ) from e
-        except httpx.HTTPStatusError as e:
-            raise APIError(
-                f"HTTP {e.response.status_code} error for {url}",
-                status_code=e.response.status_code,
-                response=e.response.text,
-            ) from e
-        except httpx.RequestError as e:
-            raise APIError(f"Request failed: {str(e)}") from e
-
-    return _fetch()
+    return _request(
+        "GET",
+        url,
+        max_retries=max_retries,
+        timeout=timeout,
+        rate_limit=rate_limit,
+        **kwargs,
+    )
 
 
 def post(
@@ -163,37 +193,15 @@ def post(
     **kwargs: Any,
 ) -> str:
     """Send a POST request with retry logic and connection pooling."""
-    client = get_http_client(timeout=timeout)
-
-    if rate_limit:
-        limiter = get_rate_limiter(rate_limit)
-        limiter.wait()
-
-    @retry_with_backoff(max_retries=max_retries)
-    def _post() -> str:
-        try:
-            response = client.post(
-                url,
-                json=data if isinstance(data, dict) else None,
-                data=data if isinstance(data, str) else None,
-                **kwargs,
-            )
-            response.raise_for_status()
-            return response.text
-        except httpx.TimeoutException as e:
-            raise OFXTimeoutError(
-                f"Request to {url} timed out", timeout_seconds=timeout
-            ) from e
-        except httpx.HTTPStatusError as e:
-            raise APIError(
-                f"HTTP {e.response.status_code} error for {url}",
-                status_code=e.response.status_code,
-                response=e.response.text,
-            ) from e
-        except httpx.RequestError as e:
-            raise APIError(f"Request failed: {str(e)}") from e
-
-    return _post()
+    return _request(
+        "POST",
+        url,
+        data=data,
+        max_retries=max_retries,
+        timeout=timeout,
+        rate_limit=rate_limit,
+        **kwargs,
+    )
 
 
 requests = httpx

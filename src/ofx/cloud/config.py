@@ -31,10 +31,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from ofx.models.cloud import CloudConfig
 from ofx.settings import BASE_DATA_DIR
+from ofx.utils.config_store import load_yaml_dict, save_yaml_dict
 
 logger = logging.getLogger("ofx")
 
@@ -58,22 +57,13 @@ class CloudProfileManager:
 
     def _load(self) -> None:
         """Load cloud config from YAML file."""
-        if self._path.exists():
-            try:
-                text = self._path.read_text()
-                self._data = yaml.safe_load(text) or {}
-            except Exception as e:
-                logger.warning(f"Failed to load cloud config from {self._path}: {e}")
-                self._data = {}
-        else:
-            self._data = {}
+        self._data = load_yaml_dict(
+            self._path, warn_prefix="Failed to load cloud config"
+        )
 
     def _save(self) -> None:
         """Save cloud config to YAML file."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            yaml.dump(self._data, default_flow_style=False, sort_keys=False)
-        )
+        save_yaml_dict(self._path, self._data)
 
     @property
     def profiles(self) -> dict[str, dict[str, Any]]:

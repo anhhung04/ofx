@@ -17,7 +17,9 @@ from ofx.runner.execution.error_helpers import (
     step_retry_error,
     step_timeout_error,
 )
-from ofx.runner.execution.execution_results import StepExecutionResult
+from ofx.runner.execution.execution_results import (
+    build_step_execution_result,
+)
 from ofx.runner.logging import get_logger
 
 logger = get_logger()
@@ -128,7 +130,7 @@ class StepRunner(BaseRunner[Step]):
             if result.status == RunnerStatus.FINISHED
             else result.status.value
         )
-        execution = StepExecutionResult(
+        execution = build_step_execution_result(
             step_index=self.model.step_index,
             name=self.model.name,
             run_type=self._run_type.value,

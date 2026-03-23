@@ -9,10 +9,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from ofx.profiles.models import OFXProfile
 from ofx.settings import BASE_DATA_DIR
+from ofx.utils.config_store import load_yaml_dict, save_yaml_dict
 
 logger = logging.getLogger("ofx")
 
@@ -55,20 +54,10 @@ class ProfileManager:
     # ── I/O ────────────────────────────────────────────────────────
 
     def _load(self) -> None:
-        if self._path.exists():
-            try:
-                self._data = yaml.safe_load(self._path.read_text()) or {}
-            except Exception as e:
-                logger.warning("Failed to load profiles from %s: %s", self._path, e)
-                self._data = {}
-        else:
-            self._data = {}
+        self._data = load_yaml_dict(self._path, warn_prefix="Failed to load profiles")
 
     def _save(self) -> None:
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(
-            yaml.dump(self._data, default_flow_style=False, sort_keys=False)
-        )
+        save_yaml_dict(self._path, self._data)
 
     # ── Properties ─────────────────────────────────────────────────
 
