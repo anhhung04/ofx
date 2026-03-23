@@ -30,6 +30,7 @@ jobs:
         status_code: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
   wordpress-scan:
     name: WordPress Security Scan
     needs:
@@ -42,12 +43,14 @@ jobs:
         enumerate: vp,vt,u1-20
         api_token: '{{ inputs.api_token }}'
       log-stdout: true
+      continue-on-error: true
     - task: nuclei
       name: nuclei-wordpress
       with:
         target: '{{ inputs.target }}'
         tags: wordpress
       log-stdout: true
+      continue-on-error: true
     - name: summary
       script: "import json\n\nwpscan_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
         \ | tojson }}\nnuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson\

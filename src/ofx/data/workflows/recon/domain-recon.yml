@@ -37,6 +37,7 @@ jobs:
         txt: true
         soa: true
       log-stdout: true
+      continue-on-error: true
   http-analysis:
     name: HTTP & Security Analysis
     steps:
@@ -49,6 +50,7 @@ jobs:
         title: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - task: testssl
       name: tls-analysis
       with:

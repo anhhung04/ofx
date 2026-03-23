@@ -30,6 +30,7 @@ jobs:
         status_code: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
   dir-search:
     name: Directory Discovery
     needs:
@@ -43,6 +44,7 @@ jobs:
         threads: 30
         extensions: php,asp,aspx,jsp,html,js,txt,bak,old,conf
       log-stdout: true
+      continue-on-error: true
     - task: ffuf
       name: ffuf-dirs
       with:
@@ -51,6 +53,7 @@ jobs:
         auto_calibration: true
         follow_redirect: true
       log-stdout: true
+      continue-on-error: true
     - name: collect-dirs
       script: "import json\n\nurls = set()\nfor step_idx in [0, 1]:\n    step_data\
         \ = {{ steps | tojson }}\n    typed = step_data[step_idx].get('outputs', {}).get('typed_outputs',\
@@ -71,6 +74,7 @@ jobs:
           true) }}'
         depth: 2
       log-stdout: true
+      continue-on-error: true
     - name: summary
       run: 'echo "=================================="
 

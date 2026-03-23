@@ -58,6 +58,7 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       log-stdout: true
+      continue-on-error: true
     - name: amass-passive
       run: 'amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
 
@@ -99,6 +100,7 @@ jobs:
         cname: true
         resp: true
       log-stdout: true
+      continue-on-error: true
     - name: filter-alive
       script: "import json\n\nalive = set()\ndnsx_out = {{ steps[0].outputs.typed_outputs\
         \ | tojson }}\nfor item in dnsx_out:\n    host = item.get('host', '')\n  \
@@ -118,6 +120,7 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - name: masscan-sweep
       run: 'masscan {{ jobs[''dns-verify''].outputs.alive_subs | default(inputs.target,
         true) }} --top-ports 100 --rate 1000 -oL /tmp/masscan-results.txt 2>/dev/null
@@ -149,6 +152,7 @@ jobs:
         title: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - name: export-live
       run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
         ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
@@ -199,6 +203,7 @@ jobs:
           true) }}'
         depth: 3
       log-stdout: true
+      continue-on-error: true
     - task: gospider
       name: gospider-crawl
       with:
@@ -206,11 +211,13 @@ jobs:
           true) }}'
         depth: 2
       log-stdout: true
+      continue-on-error: true
     - task: gau
       name: gau-archive
       with:
         target: '{{ inputs.target }}'
         subs: true
+      continue-on-error: true
     - name: hakrawler-crawl
       run: 'echo "{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target,
         true) }}" | hakrawler -d 2 -subs 2>/dev/null | tee /tmp/hakrawler-urls.txt
@@ -267,6 +274,7 @@ jobs:
         target: '{{ inputs.target }}'
         mode: filesystem
       log-stdout: true
+      continue-on-error: true
     - task: gitleaks
       name: gitleaks-scan
       with:
@@ -294,6 +302,7 @@ jobs:
           true) }}'
         severity: critical,high,medium
       log-stdout: true
+      continue-on-error: true
     - name: nikto-scan
       run: 'nikto -h {{ inputs.target }} -nointeractive -no404 2>/dev/null | tee /tmp/nikto-output.txt
 

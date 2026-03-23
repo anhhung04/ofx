@@ -30,6 +30,7 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - task: masscan
       name: masscan-scan
       with:
@@ -44,6 +45,7 @@ jobs:
         target: '{{ inputs.target }}'
         version_detection: true
       log-stdout: true
+      continue-on-error: true
     - task: ssh-audit
       name: ssh-audit
       with:
@@ -58,11 +60,13 @@ jobs:
         status_code: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - task: searchsploit
       name: exploit-search
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - name: export-data
       run: 'echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr(''status_code'',
         ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
@@ -101,6 +105,7 @@ jobs:
           true) }}'
         depth: 3
       log-stdout: true
+      continue-on-error: true
     - task: gospider
       name: spider
       with:
@@ -108,6 +113,7 @@ jobs:
           true) }}'
         depth: 2
       log-stdout: true
+      continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
     needs:
@@ -121,12 +127,14 @@ jobs:
           true) }}'
         severity: critical,high,medium
       log-stdout: true
+      continue-on-error: true
     - task: dalfox
       name: xss-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target,
           true) }}'
       log-stdout: true
+      continue-on-error: true
     - name: final-summary
       script: "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
         \ | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs) |\

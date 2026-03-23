@@ -28,11 +28,13 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       log-stdout: true
+      continue-on-error: true
     - task: gau
       name: gau-urls
       with:
         target: '{{ inputs.target }}'
         subs: true
+      continue-on-error: true
     - task: amass
       name: amass-enum
       with:
@@ -72,6 +74,7 @@ jobs:
         cname: true
         resp: true
       log-stdout: true
+      continue-on-error: true
   http-probe:
     name: HTTP Probing
     needs:
@@ -86,6 +89,7 @@ jobs:
         title: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - name: export-urls
       run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
         ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
@@ -103,6 +107,7 @@ jobs:
         target: '{{ jobs[''passive-enum''].outputs.subdomain_list }}'
         tags: takeover
       log-stdout: true
+      continue-on-error: true
     - name: summary
       run: 'echo "======================================="
 

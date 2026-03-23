@@ -45,6 +45,7 @@ jobs:
         severity: critical,high,medium
         exclude_tags: network,ssl,file,dns,osint,token-spray,headers
       log-stdout: true
+      continue-on-error: true
     - name: export-nuclei
       run: 'echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}"
         >> $OFX_OUTPUTS

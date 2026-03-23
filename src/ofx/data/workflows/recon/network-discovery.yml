@@ -57,6 +57,7 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - name: collect-ports
       script: "import json\n\nports_found = set()\nhosts_with_ports = set()\n\nnaabu_out\
         \ = {{ steps[1].outputs.typed_outputs | tojson }}\nfor item in naabu_out:\n\
@@ -80,6 +81,7 @@ jobs:
           true) }}'
         version_detection: true
       log-stdout: true
+      continue-on-error: true
     - task: httpx
       name: http-probe
       with:
@@ -89,6 +91,7 @@ jobs:
         status_code: true
         title: true
       log-stdout: true
+      continue-on-error: true
     - name: export-http
       run: 'echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr(''status_code'',
         ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS

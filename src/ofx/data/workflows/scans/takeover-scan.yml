@@ -25,6 +25,7 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       log-stdout: true
+      continue-on-error: true
     - name: amass-passive
       run: 'amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
 
@@ -53,6 +54,7 @@ jobs:
         cname: true
         resp: true
       log-stdout: true
+      continue-on-error: true
     - name: collect-dns
       script: "alive = set()\ncname_records = {}\n\ndnsx_out = {{ steps[0].outputs.typed_outputs\
         \ | tojson }}\nfor item in dnsx_out:\n    host = item.get('host', '')\n  \

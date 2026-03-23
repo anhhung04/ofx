@@ -30,11 +30,13 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       log-stdout: true
+      continue-on-error: true
     - task: gau
       name: gau-passive
       with:
         target: '{{ inputs.target }}'
         subs: true
+      continue-on-error: true
     - task: amass
       name: amass-enum
       with:
@@ -63,6 +65,7 @@ jobs:
         a: true
         resp: true
       log-stdout: true
+      continue-on-error: true
     - task: httpx
       name: probe-subdomains
       with:
@@ -72,6 +75,7 @@ jobs:
         status_code: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - task: whatweb
       name: whatweb-fingerprint
       with:
@@ -98,12 +102,14 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - task: nmap
       name: service-detect
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.all_hosts }}'
         version_detection: true
       log-stdout: true
+      continue-on-error: true
   url-crawl:
     name: URL Crawling
     needs:
@@ -116,6 +122,7 @@ jobs:
           true) }}'
         depth: 3
       log-stdout: true
+      continue-on-error: true
     - task: gospider
       name: spider
       with:
@@ -123,6 +130,7 @@ jobs:
           true) }}'
         depth: 2
       log-stdout: true
+      continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
     needs:
@@ -136,18 +144,21 @@ jobs:
           true) }}'
         severity: critical,high,medium
       log-stdout: true
+      continue-on-error: true
     - task: dalfox
       name: xss-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target,
           true) }}'
       log-stdout: true
+      continue-on-error: true
     - task: nuclei
       name: takeover-check
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.all_hosts }}'
         tags: takeover
       log-stdout: true
+      continue-on-error: true
     - name: final-summary
       script: "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
         \ | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs) |\

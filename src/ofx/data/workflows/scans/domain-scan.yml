@@ -29,6 +29,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - task: dnsx
       name: dns-resolve
       with:
@@ -39,6 +40,7 @@ jobs:
         mx: true
         ns: true
       log-stdout: true
+      continue-on-error: true
     - task: httpx
       name: domain-probe
       with:
@@ -47,23 +49,27 @@ jobs:
         status_code: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - task: testssl
       name: tls-check
       with:
         target: '{{ inputs.target }}'
         server_defaults: true
       log-stdout: true
+      continue-on-error: true
     - task: sslscan
       name: sslscan-check
       with:
         target: '{{ inputs.target }}'
         show_certificate: true
       log-stdout: true
+      continue-on-error: true
     - task: wafw00f
       name: waf-detect
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
   subdomain-recon:
     name: Subdomain Discovery
     steps:
@@ -73,11 +79,13 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       log-stdout: true
+      continue-on-error: true
     - task: gau
       name: gau-passive
       with:
         target: '{{ inputs.target }}'
         subs: true
+      continue-on-error: true
     - task: amass
       name: amass-enum
       with:
@@ -106,6 +114,7 @@ jobs:
         a: true
         resp: true
       log-stdout: true
+      continue-on-error: true
     - task: dnsrecon
       name: dnsrecon-scan
       with:
@@ -122,6 +131,7 @@ jobs:
         status_code: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - name: export-urls
       run: 'echo "live_urls={{ urls(steps[7].outputs.typed_outputs) | selectattr(''status_code'',
         ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
@@ -140,17 +150,20 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - task: nmap
       name: service-detect
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.all_hosts }}'
         version_detection: true
       log-stdout: true
+      continue-on-error: true
     - task: searchsploit
       name: exploit-search
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
   url-crawl:
     name: URL Crawling
     needs:
@@ -163,6 +176,7 @@ jobs:
           true) }}'
         depth: 3
       log-stdout: true
+      continue-on-error: true
     - task: gospider
       name: spider-urls
       with:
@@ -170,6 +184,7 @@ jobs:
           true) }}'
         depth: 2
       log-stdout: true
+      continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
     needs:
@@ -183,18 +198,21 @@ jobs:
           true) }}'
         severity: critical,high,medium
       log-stdout: true
+      continue-on-error: true
     - task: dalfox
       name: xss-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target,
           true) }}'
       log-stdout: true
+      continue-on-error: true
     - task: nuclei
       name: takeover-check
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.all_hosts }}'
         tags: takeover
       log-stdout: true
+      continue-on-error: true
     - task: nikto
       name: nikto-scan
       with:

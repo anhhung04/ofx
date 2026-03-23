@@ -30,16 +30,19 @@ jobs:
         target: '{{ inputs.target }}'
         depth: 3
       log-stdout: true
+      continue-on-error: true
     - task: gospider
       name: gospider-crawl
       with:
         target: '{{ inputs.target }}'
         depth: 2
       log-stdout: true
+      continue-on-error: true
     - task: gau
       name: gau-passive
       with:
         target: '{{ inputs.target }}'
+      continue-on-error: true
     - task: httpx
       name: probe-crawled
       with:
@@ -48,6 +51,7 @@ jobs:
         status_code: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - name: collect-urls
       script: "import json\n\nurls = set()\nfor idx in [0, 1, 2, 3]:\n    step_data\
         \ = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
@@ -69,6 +73,7 @@ jobs:
         auto_calibration: true
         follow_redirect: true
       log-stdout: true
+      continue-on-error: true
     - task: feroxbuster
       name: feroxbuster-fuzz
       with:
@@ -77,6 +82,7 @@ jobs:
         depth: 2
         threads: 50
       log-stdout: true
+      continue-on-error: true
   param-fuzz:
     name: Parameter Discovery
     needs:
@@ -87,6 +93,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
     needs:
@@ -100,17 +107,20 @@ jobs:
         severity: critical,high,medium
         exclude_tags: network,ssl,file,dns,osint,token-spray,headers
       log-stdout: true
+      continue-on-error: true
     - task: dalfox
       name: xss-scan
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - task: trufflehog
       name: secret-scan
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
       log-stdout: true
+      continue-on-error: true
     - task: cariddi
       name: cariddi-crawl
       with:

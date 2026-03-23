@@ -31,6 +31,7 @@ jobs:
         follow_redirect: true
         auto_calibration: true
       log-stdout: true
+      continue-on-error: true
     - task: feroxbuster
       name: feroxbuster-fuzz
       with:
@@ -39,6 +40,7 @@ jobs:
         depth: 2
         threads: 50
       log-stdout: true
+      continue-on-error: true
     - name: collect-urls
       script: "import json\n\nurls = set()\nfor step_idx in [0, 1]:\n    step_data\
         \ = {{ steps | tojson }}\n    typed = step_data[step_idx].get('outputs', {}).get('typed_outputs',\
@@ -60,6 +62,7 @@ jobs:
         status_code: true
         title: true
       log-stdout: true
+      continue-on-error: true
   secrets:
     name: Secret Hunting
     needs:
@@ -71,6 +74,7 @@ jobs:
         target: '{{ inputs.target }}'
         mode: filesystem
       log-stdout: true
+      continue-on-error: true
     - name: summary
       run: 'echo "================================="
 

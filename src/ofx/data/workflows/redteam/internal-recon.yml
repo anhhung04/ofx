@@ -56,6 +56,7 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - name: collect-ports
       script: "import re\n\nports = set()\nhosts_with_ports = {}\n\n# Parse naabu\
         \ results\nnaabu_out = {{ steps[1].outputs.typed_outputs | tojson }}\nfor\
@@ -96,6 +97,7 @@ jobs:
         status_code: true
         title: true
       log-stdout: true
+      continue-on-error: true
     - name: collect-services
       script: "import re\n\nservices = []\nhttp_targets = set()\n\n# Parse nmap services\n\
         try:\n    with open('/tmp/nmap-services.txt') as f:\n        for line in f:\n\

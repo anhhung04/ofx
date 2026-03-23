@@ -30,6 +30,7 @@ jobs:
         tech_detect: true
         status_code: true
       log-stdout: true
+      continue-on-error: true
   param-discovery:
     name: Parameter Discovery
     needs:
@@ -40,6 +41,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - name: export-params
       script: "import json\n\nparams = set()\nstep_data = {{ steps | tojson }}\ntyped\
         \ = step_data[0].get('outputs', {}).get('typed_outputs', [])\nfor item in\
@@ -61,6 +63,7 @@ jobs:
         auto_calibration: true
         follow_redirect: true
       log-stdout: true
+      continue-on-error: true
     - name: summary
       run: 'echo "======================================="
 

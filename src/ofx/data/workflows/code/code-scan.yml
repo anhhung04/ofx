@@ -24,12 +24,14 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - task: trivy
       name: code-vulns
       with:
         target: '{{ inputs.target }}'
         severity: CRITICAL,HIGH,MEDIUM
       log-stdout: true
+      continue-on-error: true
     - name: export-vulns
       script: "import json\n\ngrype_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
         \ | tojson }}\ntrivy_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson\
@@ -48,12 +50,14 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - task: trufflehog
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
       log-stdout: true
+      continue-on-error: true
     - name: export-secrets
       script: "import json\n\ngl_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
         \ | tojson }}\nth_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson\

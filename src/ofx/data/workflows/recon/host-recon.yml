@@ -26,6 +26,7 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - task: masscan
       name: masscan-scan
       with:
@@ -45,6 +46,7 @@ jobs:
         target: '{{ inputs.target }}'
         version_detection: true
       log-stdout: true
+      continue-on-error: true
     - name: extract-targets
       run: 'echo "http_targets={{ ports(steps[0].outputs.typed_outputs) | map(attribute=''host_port'')
         | unique | join(''\n'') }}" >> $OFX_OUTPUTS
@@ -74,11 +76,13 @@ jobs:
         status_code: true
         title: true
       log-stdout: true
+      continue-on-error: true
     - task: searchsploit
       name: search-exploits
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - task: whatweb
       name: whatweb-fingerprint
       with:
@@ -97,6 +101,7 @@ jobs:
         target: '{{ inputs.target }}'
         severity: critical,high,medium
       log-stdout: true
+      continue-on-error: true
     - task: nikto
       name: nikto-scan
       with:

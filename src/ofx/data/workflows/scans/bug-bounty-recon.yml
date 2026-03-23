@@ -27,6 +27,7 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       log-stdout: true
+      continue-on-error: true
     - name: amass-passive
       run: 'amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
 
@@ -67,6 +68,7 @@ jobs:
         cname: true
         resp: true
       log-stdout: true
+      continue-on-error: true
     - name: filter-alive
       script: "alive = set()\ndnsx_out = {{ steps[0].outputs.typed_outputs | tojson\
         \ }}\nfor item in dnsx_out:\n    host = item.get('host', '')\n    if host:\n\
@@ -106,6 +108,7 @@ jobs:
         top_ports: '1000'
         rate: 1000
       log-stdout: true
+      continue-on-error: true
     - name: collect-ports
       script: "ports = set()\nhosts = set()\nnaabu_out = {{ steps[0].outputs.typed_outputs\
         \ | tojson }}\nfor item in naabu_out:\n    if item.get('_type') == 'port':\n\
@@ -129,6 +132,7 @@ jobs:
         title: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - name: export-live
       run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
         ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
@@ -150,6 +154,7 @@ jobs:
           true) }}'
         depth: 3
       log-stdout: true
+      continue-on-error: true
     - name: hakrawler-crawl
       run: 'echo "{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target,
         true) }}" | hakrawler -d 2 2>/dev/null | tee /tmp/hakrawler-urls.txt
@@ -161,6 +166,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         subs: true
+      continue-on-error: true
     - name: collect-crawled
       script: "urls = set()\n\n# From katana\nstep_data = {{ steps | tojson }}\nfor\
         \ idx in [0, 2]:\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
@@ -213,6 +219,7 @@ jobs:
           true) }}'
         severity: critical,high,medium
       log-stdout: true
+      continue-on-error: true
     - task: dalfox
       name: dalfox-xss
       with:
@@ -252,6 +259,7 @@ jobs:
         target: '{{ inputs.target }}'
         mode: filesystem
       log-stdout: true
+      continue-on-error: true
     - task: gitleaks
       name: gitleaks-scan
       with:

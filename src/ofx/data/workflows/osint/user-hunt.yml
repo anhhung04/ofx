@@ -23,6 +23,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - name: export-accounts
       script: "import json\n\naccounts = {{ users(steps[0].outputs.typed_outputs)\
         \ | tojson }}\nurls = {{ urls(steps[0].outputs.typed_outputs) | tojson }}\n\
@@ -38,6 +39,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      continue-on-error: true
     - name: export-breaches
       script: "import json\n\nusers_found = {{ users(steps[0].outputs.typed_outputs)\
         \ | tojson }}\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\

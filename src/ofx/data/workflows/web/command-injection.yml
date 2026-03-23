@@ -50,6 +50,7 @@ jobs:
         target: '{{ inputs.target }}'
         tags: rce,command-injection,cmdi,os-command-injection
       log-stdout: true
+      continue-on-error: true
     - name: collect-nuclei
       script: "import json\n\nnuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
         \ | tojson }}\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\

@@ -28,6 +28,7 @@ jobs:
         title: true
         follow_redirects: true
       log-stdout: true
+      continue-on-error: true
     - name: export-probe
       run: 'echo "status={{ urls(steps[0].outputs.typed_outputs) | map(attribute=''status_code'')
         | first | default(''unknown'', true) }}" >> $OFX_OUTPUTS
