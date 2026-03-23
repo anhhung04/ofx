@@ -554,6 +554,25 @@ class TestSessionManagerLocal:
         except ProcessLookupError:
             pass  # Expected
 
+    def test_bundle_artifacts_creates_tar(self, tmp_path):
+        wf_path = self._create_test_workflow(tmp_path)
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
+        import time
+
+        for _ in range(50):
+            time.sleep(0.1)
+            session = asyncio.run(mgr.status(session.id))
+            if session.is_done():
+                break
+
+        asyncio.run(mgr.fetch(session.id))
+        bundle = asyncio.run(mgr.bundle_artifacts(session.id))
+        assert bundle.exists()
+        assert bundle.suffixes[-2:] == [".tar", ".gz"]
+
     def test_fetch_while_running_raises(self, tmp_path):
         wf = tmp_path / "long_running.yml"
         wf.write_text(textwrap.dedent("""\

@@ -4,7 +4,16 @@ from ofx.commands.ui_helpers import print_banner, print_error
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
-from ofx.commands import ai, api, cloud, flow, project, secret, session  # noqa: E402
+from ofx.commands import (  # noqa: E402
+    ai,
+    api,
+    cloud,
+    doctor,
+    flow,
+    project,
+    secret,
+    session,
+)
 
 COMMAND_ALIASES = {
     flow: ["x"],
@@ -99,6 +108,7 @@ def _register_commands():
     add_app(flow)
     add_app(cloud)
     add_app(session)
+    add_app(doctor)
     add_app(project)
     add_app(api)
     add_app(secret)

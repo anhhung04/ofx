@@ -11,6 +11,7 @@ import secrets as _secrets
 import shutil
 import signal
 import subprocess
+import tarfile
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -883,6 +884,72 @@ class SessionManager:
             "status": SessionStatus.DESTROYED,
             "finished_at": session.finished_at or datetime.now(UTC),
         })
+
+    async def bundle_artifacts(
+        self,
+        session_id: str,
+        *,
+        output_file: Path | None = None,
+        include_project_context: bool = True,
+    ) -> Path:
+        """Create a tar.gz bundle with session metadata + fetched artifacts."""
+        session = self.store.load(session_id)
+        session_dir = self.store.session_dir(session_id)
+        results_dir = Path(session.results_path) if session.results_path else None
+        if results_dir is None or not results_dir.exists():
+            # Attempt fetch for completed sessions if results were not fetched yet.
+            if session.status in (SessionStatus.COMPLETED, SessionStatus.FETCHED, SessionStatus.ENCRYPTED):
+                await self.fetch(session_id)
+                session = self.store.load(session_id)
+                results_dir = Path(session.results_path) if session.results_path else None
+            if results_dir is None or not results_dir.exists():
+                raise RuntimeError(
+                    f"No fetched results available for session {session_id}. "
+                    "Run 'ofx session fetch <id>' first."
+                )
+
+        bundle_path = output_file or (session_dir / f"bundle_{session_id}.tar.gz")
+        bundle_path.parent.mkdir(parents=True, exist_ok=True)
+
+        manifest = {
+            "session_id": session.id,
+            "name": session.name,
+            "status": session.status.value,
+            "target": session.target.value,
+            "workflow_file": session.workflow_file,
+            "job_id": session.job_id,
+            "project": session.project,
+            "started_at": session.started_at.isoformat(),
+            "finished_at": session.finished_at.isoformat() if session.finished_at else None,
+            "instance_ip": session.instance_ip,
+            "instance_id": session.instance_id,
+            "cloud_profile": session.cloud_profile,
+            "fleet_group_id": session.fleet_group_id,
+            "fleet_index": session.fleet_index,
+            "fleet_total": session.fleet_total,
+        }
+
+        manifest_path = session_dir / f"bundle_manifest_{session_id}.json"
+        manifest_path.write_text(__import__("json").dumps(manifest, indent=2))
+        try:
+            with tarfile.open(bundle_path, "w:gz") as tf:
+                tf.add(manifest_path, arcname="manifest.json")
+                tf.add(session_dir / "session.json", arcname="session.json")
+                if results_dir.exists():
+                    tf.add(results_dir, arcname="results")
+                if include_project_context and session.project:
+                    try:
+                        from ofx.commands.project.project_manager import ProjectManager
+
+                        project_path = Path(ProjectManager.resolve_path(session.project))
+                        if project_path.exists():
+                            tf.add(project_path / "logs", arcname="project_logs")
+                    except Exception:
+                        pass
+        finally:
+            manifest_path.unlink(missing_ok=True)
+
+        return bundle_path
 
     # ------------------------------------------------------------------
     # Internal helpers

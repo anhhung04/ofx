@@ -2,7 +2,6 @@
 
 import pytest
 
-
 # ── Template Helpers ──────────────────────────────────────────────────────
 
 
@@ -183,6 +182,14 @@ class TestProfiles:
         )
         assert p.task_options["nmap"]["timing"] == "T2"
 
+    def test_profile_retry_policy_defaults(self):
+        from ofx.profiles.models import OFXProfile
+
+        p = OFXProfile()
+        assert p.retry_policy == "standard"
+        assert "standard" in p.retry_profiles
+        assert p.retry_profiles["standard"]["retry_delay"] == 5
+
 
 # ── Time Window Enforcement ────────────────────────────────────────────
 
@@ -263,7 +270,6 @@ class TestTimeWindow:
         assert _time_in_range(time(22, 0), time(6, 0), time(12, 0)) is False
 
     def test_time_window_guard_not_started_when_disabled(self):
-        import asyncio
 
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import TimeWindowGuard

@@ -10,6 +10,8 @@ Usage:
     ofx session cancel <id>
     ofx session destroy <id> [--force]
     ofx session clean [--older-than 7d] [--status completed,fetched]
+    ofx session guard [--older-than 7d]
+    ofx session bundle <id> [--output out.tar.gz]
 """
 
 from __future__ import annotations
@@ -400,3 +402,51 @@ def session_clean(
 
     removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
     print_success("Clean", f"Removed {removed} session(s).")
+
+
+@app.command("guard")
+def session_guard(
+    older_than: Annotated[str, typer.Option("--older-than", help="Age threshold (e.g., 7d, 24h, 30m)")] = "7d",
+    status: Annotated[str, typer.Option("--status", "-s", help="Comma-separated statuses to clean")] = "completed,fetched,encrypted,destroyed,canceled,failed",
+):
+    """Auto-cleanup guard for unattended environments (non-interactive)."""
+    from ofx.cloud.sessions import SessionStore
+    from ofx.cloud.sessions.models import SessionStatus
+
+    store = SessionStore()
+    age_seconds = _parse_duration(older_than)
+    if age_seconds is None:
+        print_error("Invalid duration", f"Invalid duration: {older_than}", details="Examples: 7d, 24h, 30m, 3600s")
+        raise typer.Exit(code=1)
+
+    statuses: list[SessionStatus] = []
+    for raw in status.split(","):
+        s = raw.strip()
+        if not s:
+            continue
+        try:
+            statuses.append(SessionStatus(s))
+        except ValueError as exc:
+            print_error("Invalid status", f"Unknown status: {s}")
+            raise typer.Exit(code=1) from exc
+
+    removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
+    print_success("Guard cleanup", "Auto-cleanup completed.", details={"Removed sessions": removed})
+
+
+@app.command("bundle")
+def session_bundle(
+    session_id: Annotated[str, typer.Argument(help="Session ID")],
+    output: Annotated[str, typer.Option("--output", "-o", help="Output tar.gz path")] = "",
+):
+    """Create a run artifacts bundle for a session (metadata + results)."""
+    from ofx.cloud.sessions import SessionManager
+
+    mgr = SessionManager()
+    out_file = Path(output) if output else None
+    try:
+        bundle = asyncio.run(mgr.bundle_artifacts(session_id, output_file=out_file))
+    except Exception as exc:
+        print_error("Bundle failed", "Could not create artifacts bundle.", details=str(exc))
+        raise typer.Exit(code=1) from exc
+    print_success("Bundle created", "Run artifacts bundle created.", details={"Path": str(bundle)})

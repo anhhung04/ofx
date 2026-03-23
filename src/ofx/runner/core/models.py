@@ -44,6 +44,10 @@ class RunContext(BaseModel):
         default=None,
         description="Durable execution configuration",
     )
+    event_sink_path: Path | None = Field(
+        default=None,
+        description="Optional NDJSON path for structured runner lifecycle events",
+    )
 
 
 class RunResult(BaseModel):

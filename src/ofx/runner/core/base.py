@@ -1,10 +1,12 @@
 """Base runner class for workflow, job, and step execution"""
 
 import asyncio
+import json
 import logging
 import time
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
@@ -135,7 +137,9 @@ class BaseRunner[TModel: BaseModel]:
     async def run(self) -> RunResult:
         """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
         self._mark_start()
+        self._emit_event("runner_start")
         if await self._restore_from_checkpoint():
+            self._emit_event("runner_resume")
             return await self.get_result()
         await self._write_checkpoint("running")
         try:
@@ -168,6 +172,7 @@ class BaseRunner[TModel: BaseModel]:
                 self._state_machine.transition(RunnerStatus.FAILED)
         finally:
             self._mark_finish()
+            self._emit_event("runner_finish", {"status": self.status.value, "error": self._error})
             initial_checkpoint_status = self._checkpoint_status()
             try:
                 await self._write_checkpoint(initial_checkpoint_status)
@@ -186,6 +191,37 @@ class BaseRunner[TModel: BaseModel]:
             except Exception as cleanup_err:
                 self._log_warning(f"registry cleanup failed: {cleanup_err}")
         return await self.get_result()
+
+    def _event_sink_path(self) -> Path | None:
+        path = getattr(self.ctx, "event_sink_path", None)
+        if path:
+            return path
+        return None
+
+    def _emit_event(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
+        """Emit structured runner lifecycle event as NDJSON (best effort)."""
+        sink = self._event_sink_path()
+        if sink is None:
+            return
+        try:
+            sink.parent.mkdir(parents=True, exist_ok=True)
+            entry = {
+                "ts": datetime.now(UTC).isoformat(),
+                "event_type": event_type,
+                "runner_type": self.__class__.__name__,
+                "run_id": self.run_id,
+                "status": self.status.value,
+                "name": getattr(self.model, "name", ""),
+                "job_id": getattr(self.model, "jid", None),
+                "step_index": getattr(self.model, "step_index", None),
+                "parent_run_id": self.parent.run_id if self.parent else None,
+            }
+            if payload:
+                entry.update(payload)
+            with open(sink, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, default=str) + "\n")
+        except Exception as exc:
+            self._log_warning(f"event emit failed: {exc}")
 
     async def _write_checkpoint(self, status: str) -> None:
         config = self._durable_config()

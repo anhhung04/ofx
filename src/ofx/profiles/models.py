@@ -87,6 +87,21 @@ class OFXProfile(BaseModel):
         default=10,
         description="Default thread/concurrency count for tools",
     )
+    retry_policy: str = Field(
+        default="standard",
+        description="Retry profile: standard, aggressive, or stealth",
+    )
+    retry_profiles: dict[str, dict[str, int]] = Field(
+        default_factory=lambda: {
+            "standard": {"retry": 0, "retry_delay": 5, "timeout": 1440},
+            "aggressive": {"retry": 2, "retry_delay": 2, "timeout": 60},
+            "stealth": {"retry": 3, "retry_delay": 15, "timeout": 180},
+        },
+        description=(
+            "Named retry defaults used when a step does not explicitly set "
+            "retry/retry-delay/timeout."
+        ),
+    )
 
     # ── Stealth / opsec ────────────────────────────────────────────
     delay: float = Field(

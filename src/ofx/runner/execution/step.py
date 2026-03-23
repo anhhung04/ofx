@@ -36,6 +36,7 @@ class StepRunner(BaseRunner[Step]):
 
     async def _pre_run(self) -> None:
         """Prepare the step for execution, resolve templates"""
+        self._apply_retry_profile_defaults()
         self._run_type = self.model.get_run_type()
         resolve_fields = [
             "name",
@@ -68,6 +69,28 @@ class StepRunner(BaseRunner[Step]):
             RunnerRegistryKeys.MODEL,
             self.model.model_dump(exclude={"env", "secrets", "run_with"}),
         )
+
+    def _apply_retry_profile_defaults(self) -> None:
+        """Apply retry policy defaults only when step fields are not explicit."""
+        profile = self.ctx.vars.get("profile_model")
+        if profile is None:
+            return
+
+        policy_name = getattr(profile, "retry_policy", "standard") or "standard"
+        profiles = getattr(profile, "retry_profiles", {}) or {}
+        policy = profiles.get(policy_name)
+        if not isinstance(policy, dict):
+            return
+
+        # Respect explicit user-provided step fields.
+        explicitly_set = set(getattr(self.model, "model_fields_set", set()))
+
+        if "retry" not in explicitly_set and "retry" in policy:
+            self.model.retry = int(policy["retry"])
+        if "retry_delay" not in explicitly_set and "retry_delay" in policy:
+            self.model.retry_delay = int(policy["retry_delay"])
+        if "timeout" not in explicitly_set and "timeout" in policy:
+            self.model.timeout = int(policy["timeout"])
 
     async def _do_run(self) -> None:
         """

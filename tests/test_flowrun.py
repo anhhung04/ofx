@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
@@ -29,3 +31,19 @@ class TestFlowRun:
                 import shutil
 
                 shutil.rmtree(tmpdir, ignore_errors=True)
+
+    @pytest.mark.asyncio
+    async def test_flow_structured_events(self, tmp_path):
+        from ofx.runner import run_workflow
+
+        test_workflow = Path(__file__).parent / "flows" / "test.yml"
+        event_file = tmp_path / "events.ndjson"
+        result = await run_workflow(
+            workflow=str(test_workflow),
+            output_path=tmp_path,
+            event_sink_path=event_file,
+        )
+        assert result.status == RunnerStatus.COMPLETED
+        assert event_file.exists()
+        lines = [ln for ln in event_file.read_text().splitlines() if ln.strip()]
+        assert lines, "expected structured events"

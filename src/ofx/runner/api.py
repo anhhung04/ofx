@@ -135,6 +135,7 @@ async def run_workflow(
     quiet: bool = False,
     durable_overrides: DurableRunConfig | None = None,
     vars: dict[str, Any] | None = None,
+    event_sink_path: Path | None = None,
 ) -> RunResult:
     """
     Run an OFX workflow programmatically.
@@ -152,6 +153,8 @@ async def run_workflow(
         durable_overrides: Override durable execution configuration.
         vars: Dictionary of additional variables to inject into the run context
             (e.g. project metadata).
+        event_sink_path: Optional path to write structured lifecycle events
+            as newline-delimited JSON.
 
     Returns:
         RunResult object containing the execution status and outputs.
@@ -215,6 +218,7 @@ async def run_workflow(
         ),
         durable=durable_config,
         vars=vars or {},
+        event_sink_path=event_sink_path,
     )
 
     # Merge explicit env vars on top of inherited os.environ

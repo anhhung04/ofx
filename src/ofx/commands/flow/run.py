@@ -66,6 +66,7 @@ class FlowRunHandler:
         log_format: str = "rich",
         wait_lock: int = 0,
         project: str = "",
+        events: bool = False,
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
@@ -80,6 +81,7 @@ class FlowRunHandler:
         self.log_format = log_format
         self.wait_lock = max(wait_lock, 0)
         self.project_vars: dict[str, str] = {}
+        self.events = events
 
         if project:
             self._resolve_project(project)
@@ -151,6 +153,7 @@ class FlowRunHandler:
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
                 vars=self.project_vars if self.project_vars else None,
+                event_sink_path=(self.output / "events.ndjson") if self.events else None,
             )
 
             if result.status.value == "completed":

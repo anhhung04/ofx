@@ -407,3 +407,37 @@ class TestRunContextEdgeCases:
         ctx = RunContext(envs=custom_envs)
         # PATH should be present (either custom or default)
         assert "PATH" in ctx.envs
+
+
+class TestStepRetryProfileDefaults:
+    def test_retry_profile_applies_when_step_not_explicit(self):
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step import StepRunner
+
+        step = Step.model_validate({"name": "s1", "run": "echo hi"})
+        parent = type("P", (), {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()})()
+        runner = StepRunner.__new__(StepRunner)
+        runner.model = step
+        runner.ctx = RunContext(vars={"profile_model": OFXProfile(retry_policy="aggressive")})
+        runner.parent = parent
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 2
+        assert runner.model.retry_delay == 2
+
+    def test_retry_profile_does_not_override_explicit(self):
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step import StepRunner
+
+        step = Step.model_validate({"name": "s1", "run": "echo hi", "retry": 9, "retry-delay": 11})
+        parent = type("P", (), {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()})()
+        runner = StepRunner.__new__(StepRunner)
+        runner.model = step
+        runner.ctx = RunContext(vars={"profile_model": OFXProfile(retry_policy="aggressive")})
+        runner.parent = parent
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 9
+        assert runner.model.retry_delay == 11

@@ -219,6 +219,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
 
         # Store profile data so steps/tasks can access it via templates
         self.ctx.vars["profile"] = profile.model_dump()
+        # Preserve profile model for runtime logic that needs typed access
+        self.ctx.vars["profile_model"] = profile
 
         # ── Time window enforcement ────────────────────────────────
         if profile.time_window.enabled:

@@ -32,7 +32,7 @@ def run(
             "--input",
             help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
         ),
-    ] = [],
+    ] = None,
     output: Annotated[
         str,
         typer.Option(
@@ -97,6 +97,13 @@ def run(
             help="Log format: rich (default), json, or text.",
         ),
     ] = "rich",
+    events: Annotated[
+        bool,
+        typer.Option(
+            "--events/--no-events",
+            help="Emit structured runner lifecycle events to output/events.ndjson.",
+        ),
+    ] = False,
     wait_lock: Annotated[
         int,
         typer.Option(
@@ -140,6 +147,7 @@ def run(
             log_format=log_format,
             wait_lock=wait_lock,
             project=project,
+            events=events,
         ).run()
     )
 
