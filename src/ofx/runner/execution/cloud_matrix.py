@@ -55,10 +55,10 @@ class CloudMatrixJobRunner(CloudJobRunner):
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        if "fleet" in self.ctx.vars:
-            msg = (
-                f"'{self.model.jid}' [{self.ctx.vars.get('fleet_name', 'cloud-fleet')}]"
-            )
+        fleet_vars = self.ctx.vars.get("fleet", {}) if hasattr(self, "ctx") else {}
+        if fleet_vars:
+            fleet_name = fleet_vars.get("fleet_name", "cloud-fleet")
+            msg = f"'{self.model.jid}' [{fleet_name}]"
         else:
             msg = f"'{self.model.jid}'"
         msg += f" [cloud-matrix] › {message_str}"
@@ -91,11 +91,22 @@ class CloudMatrixJobRunner(CloudJobRunner):
         max_parallel = getattr(strategy, "max_parallel", None) or len(
             self._matrix_combinations
         )
+        fail_fast = getattr(strategy, "fail_fast", True)
         semaphore = asyncio.Semaphore(max_parallel)
+        failed_event = asyncio.Event()
 
         async def run_combo(idx: int, combo: dict[str, Any]):
+            if fail_fast and failed_event.is_set():
+                return None
             async with semaphore:
-                return await self._run_steps(combo, suffix=f"_{idx}")
+                if fail_fast and failed_event.is_set():
+                    return None
+                try:
+                    result = await self._run_steps(combo, suffix=f"_{idx}")
+                    return result
+                except Exception as exc:
+                    failed_event.set()
+                    raise exc
 
         tasks = [
             asyncio.create_task(run_combo(idx, combo))
@@ -106,7 +117,7 @@ class CloudMatrixJobRunner(CloudJobRunner):
         errors = [
             f"Matrix {i}: {r}"
             for i, r in enumerate(results)
-            if isinstance(r, Exception)
+            if r is not None and isinstance(r, Exception)
         ]
         if errors:
             raise RuntimeError("; ".join(errors))

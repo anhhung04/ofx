@@ -70,7 +70,8 @@ class CloudJobRunner(BaseRunner[Job]):
         self._instance = None
         self._remote_runner = None  # PostSSH or PostWinRM
         self._work_dir: str | None = None
-        self._is_fleet_child: bool = False  # Set by CloudMatrixJobRunner
+        self._is_fleet_child: bool = False  # Set by CloudFleetRunner for fleet children
+        self._cached_python: str | None = None  # Cached across steps on same VPS
 
     async def run(self, *args, **kwargs):
         """Override to salvage outputs and prompt before VPS destruction on failure."""
@@ -534,12 +535,19 @@ class CloudJobRunner(BaseRunner[Job]):
         fleet_vars = self.ctx.vars.get("fleet", {})
         local_path = fleet_vars.get("fleet_input_file", "")
 
-        # Inject other fleet variables as remote env vars
+        # Inject other fleet variables as remote env vars.
+        # fleet_input is a Python list — export as newline-joined string so it
+        # is usable inside shell scripts without parsing Python repr.
         for k, v in fleet_vars.items():
-            if k != "fleet_input_file":
-                remote_key = f"REMOTE_{k.upper()}"
-                self.ctx.envs[remote_key] = str(v)
-                self.ctx.vars[f"remote_{k}"] = v
+            if k == "fleet_input_file":
+                continue
+            remote_key = f"REMOTE_{k.upper()}"
+            if isinstance(v, list):
+                str_val = "\n".join(str(x) for x in v)
+            else:
+                str_val = str(v)
+            self.ctx.envs[remote_key] = str_val
+            self.ctx.vars[f"remote_{k}"] = v
 
         if not local_path:
             return
@@ -566,7 +574,9 @@ class CloudJobRunner(BaseRunner[Job]):
             self.ctx.vars["remote_fleet_input_file"] = remote_path
             self._log_info(f"Uploaded fleet input → {remote_path}")
         except Exception as e:
-            self._log_warning(f"Failed to upload fleet input: {e}")
+            raise RuntimeError(
+                f"Failed to upload fleet input file '{local}' → '{remote_path}': {e}"
+            ) from e
 
     # ------------------------------------------------------------------
     # Helpers

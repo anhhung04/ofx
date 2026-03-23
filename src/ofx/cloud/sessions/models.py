@@ -135,6 +135,10 @@ class Session(OFXBaseModel):
     ssh_key: str = Field(default="", description="SSH key path")
     ssh_password: str = Field(default="", description="SSH password")
     os_type: str = Field(default="linux", description="linux or windows")
+    winrm_port: int = Field(default=5985, description="WinRM port for Windows targets")
+    winrm_ssl: bool = Field(default=False, description="Use HTTPS for WinRM")
+    winrm_transport: str = Field(default="ntlm", description="WinRM auth transport")
+    winrm_user: str = Field(default="Administrator", description="WinRM username")
 
     def is_running(self) -> bool:
         """Whether the session is still actively executing."""

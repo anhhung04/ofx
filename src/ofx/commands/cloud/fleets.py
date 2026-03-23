@@ -169,6 +169,7 @@ def fleet_run(
     """
     console = get_console()
     import secrets as _secrets
+    import tempfile
 
     from ofx.cloud.fleet_distributor import FleetDistributor
     from ofx.cloud.fleet_input import FleetInputParser
@@ -199,12 +200,22 @@ def fleet_run(
         else:
             count = 1
 
+    # Write per-instance chunk files so sessions receive valid file paths
     distributor = FleetDistributor()
+    chunk_paths: list[Path] = []
+    temp_dir: Path | None = None
     if target_list:
-        chunk_files = distributor.distribute(target_list, count, distribution)
-        effective_count = len(chunk_files)
+        chunks = distributor.distribute(target_list, count, distribution)
+        effective_count = len(chunks)
+        if effective_count == 0:
+            console.print("[red]Fleet: no targets after parsing/exclusion. Check --targets.[/red]")
+            raise typer.Exit(code=1)
+        temp_dir = Path(tempfile.mkdtemp(prefix="ofx_fleet_run_"))
+        for i, chunk in enumerate(chunks):
+            chunk_file = temp_dir / f"fleet_chunk_{i}.txt"
+            chunk_file.write_text("\n".join(chunk) + "\n")
+            chunk_paths.append(chunk_file)
     else:
-        chunk_files = []
         effective_count = count
 
     fleet_group_id = _secrets.token_hex(4)
@@ -225,8 +236,8 @@ def fleet_run(
         sessions = []
         for i in range(effective_count):
             instance_inputs = dict(parsed_inputs)
-            if chunk_files and i < len(chunk_files):
-                instance_inputs[target_var] = str(chunk_files[i])
+            if chunk_paths and i < len(chunk_paths):
+                instance_inputs[target_var] = str(chunk_paths[i])
 
             session_name = f"{fleet_name}-{i}"
             try:
@@ -263,7 +274,13 @@ def fleet_run(
         return sessions
 
     with console.status("Submitting fleet sessions..."):
-        sessions = asyncio.run(_submit_fleet())
+        try:
+            sessions = asyncio.run(_submit_fleet())
+        finally:
+            # Chunk files have been uploaded by the session manager — safe to remove
+            if temp_dir:
+                import shutil as _shutil
+                _shutil.rmtree(temp_dir, ignore_errors=True)
 
     console.print()
     if not sessions:

@@ -28,10 +28,10 @@ async def wait_for_ssh(
     Raises:
         TimeoutError: If SSH not reachable within timeout.
     """
-    deadline = asyncio.get_event_loop().time() + timeout
+    deadline = asyncio.get_running_loop().time() + timeout
     attempts = 0
 
-    while asyncio.get_event_loop().time() < deadline:
+    while asyncio.get_running_loop().time() < deadline:
         attempts += 1
         try:
             _, writer = await asyncio.wait_for(
@@ -65,10 +65,10 @@ async def wait_for_winrm(
     Raises:
         TimeoutError: If WinRM not reachable within timeout.
     """
-    deadline = asyncio.get_event_loop().time() + timeout
+    deadline = asyncio.get_running_loop().time() + timeout
     attempts = 0
 
-    while asyncio.get_event_loop().time() < deadline:
+    while asyncio.get_running_loop().time() < deadline:
         attempts += 1
         try:
             _, writer = await asyncio.wait_for(
@@ -115,9 +115,10 @@ async def wait_for_login(
     cfg: CloudConfig,
     timeout: int = 300,
 ) -> bool:
-    """
-    Verified login availability by attempting a real connection
-    using the provided credentials and transport settings.
+    """Verify login availability by attempting a real authenticated connection.
+
+    Raises:
+        TimeoutError: If the host does not accept login within ``timeout`` seconds.
     """
     from ofx.api.post.runners.ssh import PostSSH
     from ofx.api.post.runners.winrm import PostWinRM
@@ -154,12 +155,17 @@ async def wait_for_login(
         r.run("whoami")
 
     probe = _try_winrm if is_windows else _try_ssh
+    last_error: Exception | None = None
 
     while time.time() - start_time < timeout:
         try:
             await asyncio.to_thread(probe)
             return True
-        except Exception:
+        except Exception as exc:
+            last_error = exc
             await asyncio.sleep(5)
 
-    return False
+    raise TimeoutError(
+        f"Login to {host} not established after {timeout}s"
+        + (f": {last_error}" if last_error else "")
+    )

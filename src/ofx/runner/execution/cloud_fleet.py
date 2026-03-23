@@ -59,6 +59,13 @@ class CloudFleetRunner(BaseRunner[Job]):
         self._fleet_combos: list[dict[str, Any]] = []
         self._chunk_files: list[Path] = []
 
+    async def run(self) -> RunResult:
+        """Override to guarantee chunk-file cleanup regardless of outcome."""
+        try:
+            return await super().run()
+        finally:
+            self._cleanup_chunk_files()
+
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
         msg = f"'{self.model.jid}' [cloud-fleet] › {message_str}"
@@ -93,11 +100,12 @@ class CloudFleetRunner(BaseRunner[Job]):
                 "input": fleet.input,
                 "distribution": fleet.distribution,
                 "exclude": fleet.exclude,
+                "min_prefix": fleet.min_prefix,
                 "name": self.model.name or self.model.jid,
             },
             expand_cidrs=fleet.expand_cidrs,
         )
-        return combos or [{}]
+        return combos or []
 
     # ------------------------------------------------------------------
     # Do-run: spawn one runner per fleet chunk
@@ -105,15 +113,27 @@ class CloudFleetRunner(BaseRunner[Job]):
 
     async def _do_run(self) -> None:
         if not self._fleet_combos:
-            return
+            raise RuntimeError(
+                f"Fleet job '{self.model.jid}' has no targets to distribute. "
+                "Check the fleet input configuration."
+            )
 
         strategy = self.model.strategy
         max_parallel = strategy.max_parallel if strategy else len(self._fleet_combos)
+        fail_fast = strategy.fail_fast if strategy else True
         semaphore = asyncio.Semaphore(max_parallel)
+        failed_event = asyncio.Event()
 
         async def run_instance(idx: int, combo: dict[str, Any]):
+            if fail_fast and failed_event.is_set():
+                return None
             async with semaphore:
-                return await self._run_single_fleet_job(idx, combo)
+                if fail_fast and failed_event.is_set():
+                    return None
+                result = await self._run_single_fleet_job(idx, combo)
+                if isinstance(result, RunResult) and result.status != RunnerStatus.COMPLETED:
+                    failed_event.set()
+                return result
 
         tasks = [
             asyncio.create_task(run_instance(idx, combo))
@@ -123,6 +143,8 @@ class CloudFleetRunner(BaseRunner[Job]):
 
         errors = []
         for i, result in enumerate(results):
+            if result is None:
+                continue  # skipped due to fail_fast
             if isinstance(result, Exception):
                 errors.append(f"Fleet {i}: {result}")
             elif (
@@ -221,10 +243,11 @@ class CloudFleetRunner(BaseRunner[Job]):
 
         if should_destroy:
             for runner in surviving_runners:
+                inst_name = runner._instance.name if runner._instance else "unknown"
                 try:
                     await runner._destroy_instance()
                 except Exception as e:
-                    self._log_warning(f"Failed to destroy {runner._instance.name}: {e}")
+                    self._log_warning(f"Failed to destroy {inst_name}: {e}")
         else:
             self._log_warning(
                 "Fleet instances left running — destroy manually when done."

@@ -30,6 +30,22 @@ if TYPE_CHECKING:
 logger = get_logger()
 
 
+def _shell_escape(value: str) -> str:
+    """Escape a string for safe embedding inside bash double-quoted assignment.
+
+    Escapes backslashes, double-quotes, backticks, and ``$`` so that the
+    resulting value is interpreted literally by the shell rather than being
+    subject to command substitution or variable expansion.
+    """
+    return (
+        value
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("`", "\\`")
+        .replace("$", "\\$")
+    )
+
+
 class CloudStepRunner(BaseRunner):
     """Runs a step remotely via PostSSH or PostWinRM.
 
@@ -49,6 +65,15 @@ class CloudStepRunner(BaseRunner):
         self._remote = remote_runner
         self._work_dir = work_dir or "/tmp"
         self._run_type = None
+
+    @property
+    def _is_windows(self) -> bool:
+        """True when the remote host is Windows (WinRM connection)."""
+        from ofx.runner.execution.cloud_job import CloudJobRunner
+
+        if isinstance(self.parent, CloudJobRunner) and self.parent._cloud_config:
+            return self.parent._cloud_config.connection_type == "winrm"
+        return False
 
     async def _pre_run(self) -> None:
         from ofx.models.step import RunType
@@ -76,7 +101,7 @@ class CloudStepRunner(BaseRunner):
 
         # Check run_if
         if self.model.run_if is not None and self.model.run_if is not True:
-            if not self._evaluate_run_if(self.model.run_if, {}):
+            if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
                 self._state_machine.transition(RunnerStatus.CANCELED)
                 raise Exception(self._produce_log("Step condition not met"))
 
@@ -122,11 +147,7 @@ class CloudStepRunner(BaseRunner):
                         outputs_dict["typed_outputs"] = self._parse_task_output(output)
                     await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs_dict)
 
-                # Log output
-                if self.model.log_stdout and output and self.ctx.output_path:
-                    self._save_output(output)
-
-                return  # Success
+                return  # Success — output logging handled in _post_run
 
             except Exception as e:
                 last_error = e
@@ -180,21 +201,44 @@ class CloudStepRunner(BaseRunner):
     async def _run_remote_command(
         self, command: str, timeout: int | None = None
     ) -> str:
-        """Run a shell command on the remote host."""
+        """Run a shell command on the remote host.
+
+        Builds the full command string with env-var injection and working
+        directory change.  Uses platform-appropriate syntax: bash ``&&``
+        chains on Linux and CMD ``&&`` with ``SET`` on Windows.
+        """
         env_prefix = self._build_env_prefix()
         work_dir = self._resolve_remote_work_dir()
 
-        full_cmd = ""
-        if env_prefix:
-            full_cmd += env_prefix + " "
-        full_cmd += f"cd {work_dir} && {command}"
+        if self._is_windows:
+            parts = []
+            if env_prefix:
+                parts.append(env_prefix)
+            parts.append(f"cd /d {work_dir}")
+            parts.append(command)
+            full_cmd = " && ".join(parts)
+        else:
+            full_cmd = ""
+            if env_prefix:
+                full_cmd += env_prefix + " "
+            full_cmd += f"cd {work_dir} && {command}"
 
         return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
 
     async def _discover_python(self) -> str:
-        """Find a working python3/python executable on the remote host."""
-        if hasattr(self, "_cached_python"):
-            return self._cached_python
+        """Find a working python3/python executable on the remote host.
+
+        The result is cached on the parent ``CloudJobRunner`` so that all steps
+        in the same job share a single probe, avoiding repeated SSH round-trips.
+        """
+        # Check parent-level cache first (shared across steps on the same VPS)
+        from ofx.runner.execution.cloud_job import CloudJobRunner
+
+        parent_job: CloudJobRunner | None = (
+            self.parent if isinstance(self.parent, CloudJobRunner) else None
+        )
+        if parent_job is not None and parent_job._cached_python:
+            return parent_job._cached_python
 
         candidates = [
             "python3",
@@ -212,8 +256,9 @@ class CloudStepRunner(BaseRunner):
                     10,
                 )
                 if output.strip():
-                    self._cached_python = candidate
                     self._log_info(f"Discovered Python: {candidate}")
+                    if parent_job is not None:
+                        parent_job._cached_python = candidate
                     return candidate
             except Exception:
                 continue
@@ -253,15 +298,21 @@ class CloudStepRunner(BaseRunner):
         try:
             env_prefix = self._build_env_prefix()
             work_dir = self._resolve_remote_work_dir()
-            full_cmd = f"cd {work_dir} && "
-            if env_prefix:
-                full_cmd += env_prefix + " "
-            full_cmd += f"{python_bin} {remote_script}"
+            if self._is_windows:
+                parts = [p for p in [env_prefix, f"cd /d {work_dir}"] if p]
+                parts.append(f"{python_bin} {remote_script}")
+                full_cmd = " && ".join(parts)
+            else:
+                full_cmd = f"cd {work_dir} && "
+                if env_prefix:
+                    full_cmd += env_prefix + " "
+                full_cmd += f"{python_bin} {remote_script}"
             return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
         finally:
             # Cleanup remote script
             try:
-                await asyncio.to_thread(self._remote.run, f"rm -f {remote_script}", 10)
+                rm_cmd = f"del /f {remote_script}" if self._is_windows else f"rm -f {remote_script}"
+                await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception:
                 pass
 
@@ -305,17 +356,23 @@ class CloudStepRunner(BaseRunner):
             # Execute the bootstrap via discovered python on the remote host.
             work_dir = self._resolve_remote_work_dir()
             env_prefix = self._build_env_prefix()
-            exec_cmd = f"cd {work_dir} && "
-            if env_prefix:
-                exec_cmd += env_prefix + " "
-            exec_cmd += f"{python_bin} {remote_path}"
+            if self._is_windows:
+                parts = [p for p in [env_prefix, f"cd /d {work_dir}"] if p]
+                parts.append(f"{python_bin} {remote_path}")
+                exec_cmd = " && ".join(parts)
+            else:
+                exec_cmd = f"cd {work_dir} && "
+                if env_prefix:
+                    exec_cmd += env_prefix + " "
+                exec_cmd += f"{python_bin} {remote_path}"
             return await asyncio.to_thread(self._remote.run, exec_cmd, timeout)
         finally:
             # Clean up temporary local file.
             Path(local_tmp).unlink(missing_ok=True)
             # Clean up remote file.
             try:
-                await asyncio.to_thread(self._remote.run, f"rm -f {remote_path}", 10)
+                rm_cmd = f"del /f {remote_path}" if self._is_windows else f"rm -f {remote_path}"
+                await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception:
                 pass
 
@@ -401,16 +458,19 @@ class CloudStepRunner(BaseRunner):
         """Build environment variable export prefix for remote command.
 
         Exports env vars from:
-        1. Runner-injected context envs (e.g. REMOTE_FLEET_INPUT_FILE from fleet expansion)
+        1. Runner-injected context envs (fleet/remote vars set by CloudJobRunner)
         2. Workflow/job-level ``env:`` fields (propagated through parent model)
         3. Step-level ``env:`` field
 
         Later sources override earlier ones. Local OS environment is never leaked.
+        Values are shell-escaped to prevent command injection via embedded
+        ``$(...)`` or backtick sequences.
         """
         env_vars: dict[str, str] = {}
 
-        # Runner-injected env vars (fleet vars, etc.) — only export known prefixes
-        _RUNNER_ENV_PREFIXES = ("FLEET_",)
+        # Runner-injected env vars: fleet expansion sets both FLEET_* and REMOTE_*
+        # keys in ctx.envs.  Export all keys with known runner prefixes.
+        _RUNNER_ENV_PREFIXES = ("FLEET_", "REMOTE_")
         for k, v in self.ctx.envs.items():
             if any(k.startswith(p) for p in _RUNNER_ENV_PREFIXES):
                 env_vars[k] = str(v)
@@ -429,7 +489,16 @@ class CloudStepRunner(BaseRunner):
         if not env_vars:
             return ""
 
-        exports = " ".join(f'{k}="{v}"' for k, v in env_vars.items())
+        if self._is_windows:
+            # CMD syntax: SET FOO=bar (no quoting needed; && chaining handled by caller)
+            exports = " && ".join(
+                f"SET {k}={str(v)}" for k, v in env_vars.items()
+            )
+            return f"{exports} &&" if exports else ""
+
+        exports = " ".join(
+            f'{k}="{_shell_escape(str(v))}"' for k, v in env_vars.items()
+        )
         return f"export {exports} &&" if exports else ""
 
     def _save_output(self, output: str) -> None:
@@ -459,6 +528,33 @@ class CloudStepRunner(BaseRunner):
         log_lines.append(output)
         out_file.write_text("\n".join(log_lines))
         self._log_info(f"Saved output to {out_file}")
+
+    def _run_if_context(self) -> dict:
+        """Build run_if evaluation context matching StepRunner.
+
+        Provides ``success()``, ``failure()``, ``canceled()``, and ``always()``
+        helpers that inspect the previous step's status, enabling conditional
+        step execution such as ``run_if: failure()`` in cloud jobs.
+        """
+        prev_runner = None
+        if self.parent and self.model.step_index > 0:
+            prev_key = str(self.model.step_index - 1)
+            prev_runner = getattr(self.parent, "_runners", {}).get(prev_key)
+
+        if prev_runner is None:
+            return {
+                "success": lambda: True,
+                "failure": lambda: False,
+                "canceled": lambda: False,
+                "always": lambda: True,
+            }
+
+        return {
+            "success": lambda: prev_runner.is_success,
+            "failure": lambda: prev_runner.is_failed,
+            "canceled": lambda: prev_runner.status == RunnerStatus.CANCELED,
+            "always": lambda: True,
+        }
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)

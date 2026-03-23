@@ -87,10 +87,10 @@ class StaticProvider(CloudProvider):
         Polls with a simple connectivity check until timeout.
         """
         host = instance_id.removeprefix("static-")
-        deadline = asyncio.get_event_loop().time() + timeout
+        deadline = asyncio.get_running_loop().time() + timeout
         last_error = None
 
-        while asyncio.get_event_loop().time() < deadline:
+        while asyncio.get_running_loop().time() < deadline:
             try:
                 reachable = await self._check_ssh_reachable(host)
                 if reachable:
@@ -106,7 +106,8 @@ class StaticProvider(CloudProvider):
             await asyncio.sleep(5)
 
         raise TimeoutError(
-            f"Static host {host} not reachable after {timeout}s: {last_error}"
+            f"Static host {host} not reachable after {timeout}s"
+            + (f": {last_error}" if last_error else "")
         )
 
     async def _check_ssh_reachable(self, host: str, port: int = 22) -> bool:

@@ -229,7 +229,7 @@ class ScriptRunner(BaseRunner[Script]):
                 self.ctx.secrets,
                 channels_dir,
             )
-            result = await asyncio.get_event_loop().run_in_executor(None, future.result)
+            result = await asyncio.get_running_loop().run_in_executor(None, future.result)
             return result
 
     async def _pre_run(self) -> None:

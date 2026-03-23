@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import shutil
 import textwrap
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+import ofx.settings as _settings_mod
 from ofx.cloud.sessions.encryption import decrypt_results, derive_key, encrypt_results
 from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
 from ofx.cloud.sessions.script_builder import build_session_script
@@ -604,6 +607,155 @@ class TestSessionManagerDecrypt:
 
 
 # ======================================================================
+# Session input injection tests
+# ======================================================================
+
+
+class TestSessionInputInjection:
+    """Tests for session input → env var injection and local file staging."""
+
+    def test_inputs_to_env_scalar(self):
+        from ofx.cloud.sessions.manager import _inputs_to_env
+
+        env = _inputs_to_env({"targets_file": "/tmp/hosts.txt", "count": 5})
+        assert env["targets_file"] == "/tmp/hosts.txt"
+        assert env["INPUT_TARGETS_FILE"] == "/tmp/hosts.txt"
+        assert env["count"] == "5"
+        assert env["INPUT_COUNT"] == "5"
+
+    def test_inputs_to_env_empty(self):
+        from ofx.cloud.sessions.manager import _inputs_to_env
+
+        assert _inputs_to_env({}) == {}
+
+    def test_local_submit_injects_env(self, tmp_path):
+        """Local session script contains INPUT_ env vars for workflow inputs."""
+        import ofx.settings as settings_mod
+        original_dirs = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        wf_file = tmp_path / "scan.yml"
+        wf_file.write_text(
+            "name: scan\njobs:\n  scan:\n    steps:\n      - run: echo $INPUT_MODE\n"
+        )
+
+        try:
+            session = asyncio.run(
+                mgr.submit(
+                    str(wf_file),
+                    inputs={"mode": "fast"},
+                    name="test-inject",
+                )
+            )
+
+            script = (
+                Path(session.remote_work_dir) / "run.sh"
+            ).read_text()
+            assert 'export INPUT_MODE="fast"' in script
+            assert 'export mode="fast"' in script
+
+            asyncio.run(mgr.cancel(session.id))
+        finally:
+            settings_mod.DEFAULT_WORKFLOWS_DIRS = original_dirs
+
+    def test_local_submit_stages_file_input(self, tmp_path):
+        """Local session copies file-valued inputs into the session workspace."""
+        import ofx.settings as settings_mod
+        original_dirs = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        targets = tmp_path / "targets.txt"
+        targets.write_text("10.0.0.1\n10.0.0.2\n")
+
+        wf_file = tmp_path / "scan.yml"
+        wf_file.write_text(
+            "name: scan\njobs:\n  scan:\n    steps:\n      - run: cat $INPUT_TARGETS_FILE\n"
+        )
+
+        try:
+            session = asyncio.run(
+                mgr.submit(
+                    str(wf_file),
+                    inputs={"targets_file": str(targets)},
+                    name="test-file-stage",
+                )
+            )
+
+            work_dir = Path(session.remote_work_dir)
+            # File should be staged in workspace
+            staged = work_dir / targets.name
+            assert staged.exists()
+            # Env var should point to staged path
+            script = (work_dir / "run.sh").read_text()
+            assert str(staged) in script
+
+            asyncio.run(mgr.cancel(session.id))
+        finally:
+            settings_mod.DEFAULT_WORKFLOWS_DIRS = original_dirs
+
+    def test_local_submit_stage_file_failure_raises(self, tmp_path):
+        """Local submit should fail fast when staging a file input fails."""
+        import ofx.settings as settings_mod
+        original_dirs = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        targets = tmp_path / "targets.txt"
+        targets.write_text("10.0.0.1\n")
+
+        wf_file = tmp_path / "scan.yml"
+        wf_file.write_text(
+            "name: scan\njobs:\n  scan:\n    steps:\n      - run: cat $INPUT_TARGETS_FILE\n"
+        )
+
+        real_copy2 = shutil.copy2
+
+        def _copy2_fail(src, dst, *args, **kwargs):
+            if str(src) == str(targets):
+                raise OSError("copy failed")
+            return real_copy2(src, dst, *args, **kwargs)
+
+        try:
+            with pytest.MonkeyPatch.context() as mp:
+                mp.setattr(shutil, "copy2", _copy2_fail)
+                with pytest.raises(RuntimeError, match="Failed to stage session input file"):
+                    asyncio.run(
+                        mgr.submit(
+                            str(wf_file),
+                            inputs={"targets_file": str(targets)},
+                            name="test-file-stage-fail",
+                        )
+                    )
+        finally:
+            settings_mod.DEFAULT_WORKFLOWS_DIRS = original_dirs
+
+    def test_upload_local_file_inputs_failure_raises(self, tmp_path):
+        """Cloud file upload helper must fail fast on upload errors."""
+        from ofx.cloud.sessions.manager import _upload_local_file_inputs
+
+        src = tmp_path / "hosts.txt"
+        src.write_text("10.0.0.1\n")
+
+        class _FailingRemote:
+            def upload(self, local_path, remote_path):
+                raise RuntimeError("upload broke")
+
+        with pytest.raises(RuntimeError, match="Failed to upload session input file"):
+            _upload_local_file_inputs(
+                {"targets_file": str(src)},
+                _FailingRemote(),
+                "/tmp/.ses-1",
+                "/",
+                is_windows=False,
+            )
+
+
+# ======================================================================
 # Helper
 # ======================================================================
 
@@ -624,7 +776,136 @@ def _make_manager(store: SessionStore, search_dir: Path):
     return mgr
 
 
-# Captured once at import time so repeated calls never stack up.
-import ofx.settings as _settings_mod
-
 _ORIGINAL_WORKFLOW_DIRS: list[Path] = list(_settings_mod.DEFAULT_WORKFLOWS_DIRS)
+
+
+class TestSessionWinRMFields:
+    """Tests that Session model stores and rounds-trips WinRM connection fields."""
+
+    def test_session_defaults_to_linux_ssh(self):
+        from ofx.cloud.sessions.models import Session
+
+        s = Session(id="abc12345", workflow_file="wf.yml")
+        assert s.os_type == "linux"
+        assert s.winrm_port == 5985
+        assert s.winrm_ssl is False
+        assert s.winrm_transport == "ntlm"
+        assert s.winrm_user == "Administrator"
+
+    def test_session_stores_winrm_fields(self):
+        from ofx.cloud.sessions.models import Session
+
+        s = Session(
+            id="abc12345",
+            workflow_file="wf.yml",
+            os_type="windows",
+            winrm_port=5986,
+            winrm_ssl=True,
+            winrm_transport="credssp",
+            winrm_user="admin",
+            ssh_password="secret",
+        )
+        assert s.winrm_port == 5986
+        assert s.winrm_ssl is True
+        assert s.winrm_transport == "credssp"
+        assert s.winrm_user == "admin"
+
+    def test_session_roundtrips_through_json(self, tmp_path):
+        """WinRM fields survive a JSON serialize/deserialize cycle."""
+        from ofx.cloud.sessions.models import Session
+
+        s = Session(
+            id="abc12345",
+            workflow_file="wf.yml",
+            os_type="windows",
+            winrm_port=5986,
+            winrm_ssl=True,
+            winrm_user="svcacct",
+        )
+        data = json.loads(s.model_dump_json())
+        s2 = Session.model_validate(data)
+        assert s2.winrm_port == 5986
+        assert s2.winrm_ssl is True
+        assert s2.winrm_user == "svcacct"
+
+
+class TestCheckCloudStatusNoPid:
+    """Tests for _check_cloud_status when remote_pid is None."""
+
+    def _make_mgr(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from ofx.cloud.sessions.store import SessionStore
+
+        store = SessionStore(base_dir=tmp_path)
+        mgr = SessionManager.__new__(SessionManager)
+        mgr.store = store
+        return mgr
+
+    def _make_running_session(self, pid=None):
+        from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
+
+        return Session(
+            id="abc12345",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.RUNNING,
+            instance_ip="10.0.0.1",
+            remote_pid=pid,
+            remote_log_file="/tmp/output.log",
+            os_type="linux",
+        )
+
+    @pytest.mark.asyncio
+    async def test_no_pid_reads_log_marker_done(self, tmp_path):
+        """When remote_pid is None, status is inferred from log marker alone."""
+        from ofx.cloud.sessions.models import SessionStatus
+
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session(pid=None)
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                return "__TASK_OK__"
+            def cleanup(self): pass
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_no_pid_reads_log_marker_fail(self, tmp_path):
+        """When remote_pid is None and log shows __TASK_ERR__, session is failed."""
+        from ofx.cloud.sessions.models import SessionStatus
+
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session(pid=None)
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                return "__TASK_ERR__"
+            def cleanup(self): pass
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_no_pid_reconnect_failure_keeps_running(self, tmp_path):
+        """If reconnect fails with no PID, session stays RUNNING (unknown)."""
+        from ofx.cloud.sessions.models import SessionStatus
+
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session(pid=None)
+
+        def _failing_reconnect(s):
+            raise ConnectionRefusedError("refused")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", _failing_reconnect)
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.RUNNING

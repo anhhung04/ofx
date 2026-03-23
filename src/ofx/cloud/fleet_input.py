@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import math
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -297,8 +298,6 @@ def split_subnet(cidr: str, count: int, min_prefix: int = 32) -> list[str]:
         return [str(network)]
 
     # Calculate prefix for splitting
-    import math
-
     extra_bits = math.ceil(math.log2(count))
     new_prefix = network.prefixlen + extra_bits
 

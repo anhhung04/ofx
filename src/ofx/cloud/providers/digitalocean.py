@@ -128,10 +128,10 @@ class DigitalOceanProvider(CloudProvider):
 
         Polls the DO API every 10 seconds until the droplet is active.
         """
-        deadline = asyncio.get_event_loop().time() + timeout
+        deadline = asyncio.get_running_loop().time() + timeout
         last_info = None
 
-        while asyncio.get_event_loop().time() < deadline:
+        while asyncio.get_running_loop().time() < deadline:
             info = await self.get_instance(instance_id)
             last_info = info
 
@@ -254,8 +254,8 @@ class DigitalOceanProvider(CloudProvider):
 
     async def _wait_for_action(self, action_id: int, timeout: int = 600) -> None:
         """Wait for a DO action to complete."""
-        deadline = asyncio.get_event_loop().time() + timeout
-        while asyncio.get_event_loop().time() < deadline:
+        deadline = asyncio.get_running_loop().time() + timeout
+        while asyncio.get_running_loop().time() < deadline:
             resp = await asyncio.to_thread(
                 self._client.actions.get, action_id=action_id
             )

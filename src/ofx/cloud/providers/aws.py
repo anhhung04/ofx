@@ -168,8 +168,8 @@ class AWSProvider(CloudProvider):
                 "Check your VPC/subnet configuration."
             )
 
-        deadline = asyncio.get_event_loop().time() + min(timeout, 120)
-        while asyncio.get_event_loop().time() < deadline:
+        deadline = asyncio.get_running_loop().time() + min(timeout, 120)
+        while asyncio.get_running_loop().time() < deadline:
             if await self._check_connectivity(info.ip):
                 logger.info(f"EC2 instance {instance_id} ready at {info.ip}")
                 return info

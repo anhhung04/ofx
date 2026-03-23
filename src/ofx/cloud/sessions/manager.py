@@ -27,6 +27,81 @@ _DONE_MARKER = "__TASK_OK__"
 _FAIL_MARKER = "__TASK_ERR__"
 
 
+def _inputs_to_env(inputs: dict[str, Any]) -> dict[str, str]:
+    """Convert session inputs dict to environment variable entries.
+
+    Each key is uppercased and prefixed with ``INPUT_`` so it becomes
+    accessible inside session scripts as e.g. ``$INPUT_TARGETS_FILE``.
+    The original lowercased key is also exported for convenience.
+
+    File-valued inputs (strings pointing to existing local paths) are
+    exported as-is; the caller is responsible for uploading the file to
+    the remote host when needed.
+
+    Args:
+        inputs: Workflow input dict (key → scalar value).
+
+    Returns:
+        Flat env dict ready to be merged with the script builder's ``env``.
+    """
+    env: dict[str, str] = {}
+    for key, value in inputs.items():
+        str_val = str(value)
+        env[key] = str_val
+        upper_key = f"INPUT_{key.upper()}"
+        if upper_key != key:
+            env[upper_key] = str_val
+    return env
+
+
+def _upload_local_file_inputs(
+    inputs: dict[str, Any],
+    remote: Any,
+    remote_work_dir: str,
+    sep: str,
+    *,
+    is_windows: bool,
+) -> dict[str, str]:
+    """Upload local file-valued inputs to the remote work directory.
+
+    For each input whose value is a string pointing to an existing local
+    file, uploads that file to ``remote_work_dir`` and returns a mapping
+    of the same env var keys to the *remote* file path.  Non-file inputs
+    are passed through unchanged.
+
+    Upload failures are treated as fatal: leaving a local path in cloud
+    env vars is misleading and would fail later in less actionable ways.
+
+    Args:
+        inputs: Session inputs dict.
+        remote: PostSSH/PostWinRM runner instance.
+        remote_work_dir: Remote working directory path.
+        sep: Path separator for the remote OS (``/`` or ``\\``).
+        is_windows: Whether the remote is Windows.
+
+    Returns:
+        Dict of env var overrides with remote paths for file-valued keys.
+    """
+    overrides: dict[str, str] = {}
+    for key, value in inputs.items():
+        str_val = str(value)
+        local = Path(str_val)
+        if not local.is_file():
+            continue
+        remote_path = f"{remote_work_dir}{sep}{local.name}"
+        try:
+            remote.upload(str_val, remote_path)
+            overrides[key] = remote_path
+            overrides[f"INPUT_{key.upper()}"] = remote_path
+            logger.debug("Uploaded session input file %s → %s", str_val, remote_path)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to upload session input file '{str_val}' "
+                f"to '{remote_path}': {exc}"
+            ) from exc
+    return overrides
+
+
 def _cleanup_remote(remote: Any) -> None:
     if hasattr(remote, "cleanup"):
         remote.cleanup()
@@ -153,9 +228,27 @@ class SessionManager:
         key_file.write_text(at_rest_key)
         key_file.chmod(0o600)
 
+        # Inject session inputs as env vars; copy local files into workspace
+        input_env = _inputs_to_env(session.inputs)
+        for key, value in session.inputs.items():
+            local = Path(str(value))
+            if local.is_file():
+                dest = work_dir / local.name
+                try:
+                    shutil.copy2(str(local), str(dest))
+                    dest_str = str(dest)
+                    input_env[key] = dest_str
+                    input_env[f"INPUT_{key.upper()}"] = dest_str
+                    logger.debug("Staged session input file %s → %s", local, dest)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"Failed to stage session input file '{local}': {exc}"
+                    ) from exc
+        merged_env = {**input_env, **env}  # explicit env takes precedence
+
         script_content = build_session_script(
             job.steps, session_id=session.id, work_dir=str(work_dir),
-            env=env, os_type="linux", encrypt_at_rest=True,
+            env=merged_env, os_type="linux", encrypt_at_rest=True,
         )
 
         script_path = work_dir / "run.sh"
@@ -180,7 +273,7 @@ class SessionManager:
             ["bash", str(script_path)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True, cwd=str(work_dir),
-            env={**os.environ, "SESSION_ID": session.id, **env},
+            env={**os.environ, "SESSION_ID": session.id, **merged_env},
         )
 
         session = self._save_session(session, {"remote_pid": proc.pid})
@@ -219,6 +312,10 @@ class SessionManager:
             "ssh_port": resolved.ssh_port or 22,
             "ssh_key": resolved.ssh_key or "",
             "ssh_password": resolved.ssh_password or "",
+            "winrm_port": resolved.winrm_port or (5986 if resolved.winrm_ssl else 5985),
+            "winrm_ssl": resolved.winrm_ssl or False,
+            "winrm_transport": resolved.winrm_transport or "ntlm",
+            "winrm_user": resolved.winrm_user or "Administrator",
         })
 
         # Provision
@@ -250,6 +347,7 @@ class SessionManager:
 
         session = self._save_session(session, {"instance_id": instance.instance_id, "instance_ip": instance.ip})
 
+        from ofx.cloud.ssh import wait_for_login
         await wait_for_connectivity(
             host=instance.ip,
             os_type="windows" if is_windows else "linux",
@@ -257,74 +355,97 @@ class SessionManager:
             winrm_port=resolved.winrm_port or (5986 if resolved.winrm_ssl else 5985),
             timeout=180,
         )
+        await wait_for_login(
+            host=instance.ip,
+            cfg=resolved,
+            timeout=getattr(resolved, "login_timeout", 300) or 300,
+        )
 
-        # Build script
+        # Build script — inputs injected as env vars; file paths updated after upload
         sep = "\\" if is_windows else "/"
         remote_work_dir = f"C:\\Windows\\Temp\\.ses-{session.id}" if is_windows else f"/tmp/.ses-{session.id}"
 
         at_rest_key = _secrets.token_hex(32)
+
+        # Base input env (file paths still point to local files at this stage)
+        input_env = _inputs_to_env(session.inputs)
+        merged_env = {**input_env, **env}  # explicit env takes precedence
+
         script_content = build_session_script(
             job.steps, session_id=session.id, work_dir=remote_work_dir,
-            env=env, os_type=os_type, encrypt_at_rest=True,
+            env=merged_env, os_type=os_type, encrypt_at_rest=True,
         )
         session = session.model_copy(update={"at_rest_key": at_rest_key, "at_rest_encrypted": True})
 
         remote = _create_remote_runner(resolved, instance.ip)
-
-        # Upload
-        session = self._save_session(session, {"status": SessionStatus.UPLOADING})
-
-        if is_windows:
-            remote.run(f'mkdir "{remote_work_dir}" 2>nul')
-        else:
-            remote.run(f"mkdir -p {remote_work_dir} && chmod 700 {remote_work_dir}")
-
-        # Upload key and script via temp files
-        _upload_temp_content(remote, at_rest_key, f"{remote_work_dir}{sep}.skey", suffix=".key")
-        ext = ".ps1" if is_windows else ".sh"
-        _upload_temp_content(remote, script_content, f"{remote_work_dir}{sep}run{ext}", suffix=ext)
-
-        if is_windows:
-            remote.run(
-                f"powershell \"icacls '{remote_work_dir}' /inheritance:r "
-                f"/grant:r '$env:USERNAME:(OI)(CI)F' /T 2>$null\"",
-            )
-        else:
-            remote.run(f"chmod 600 {remote_work_dir}/.skey")
-            remote.run(f"chmod 700 {remote_work_dir}/run.sh")
-
-        self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=is_windows)
-
-        # Start detached
-        if is_windows:
-            start_cmd = (
-                f'Start-Process powershell -ArgumentList "-File {remote_work_dir}\\run.ps1" '
-                f"-WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"
-            )
-            pid_output = remote.run(f'powershell "{start_cmd}"').strip()
-        else:
-            pid_output = remote.run(
-                f"nohup bash {remote_work_dir}/run.sh "
-                f"> {remote_work_dir}/output.log 2>&1 & echo $!"
-            ).strip()
-
-        # Parse PID
         try:
-            pid = int(pid_output.strip().splitlines()[-1])
-        except (ValueError, IndexError):
-            pid = None
+            # Upload
+            session = self._save_session(session, {"status": SessionStatus.UPLOADING})
 
-        remote_log = f"{remote_work_dir}{sep}output.log"
-        session = self._save_session(session, {
-            "status": SessionStatus.RUNNING,
-            "remote_pid": pid,
-            "remote_work_dir": remote_work_dir,
-            "remote_log_file": remote_log,
-            "output_path": str(self.store.session_dir(session.id)),
-        })
-        logger.info("Cloud session %s started on %s (PID %s)", session.id, instance.ip, pid)
+            if is_windows:
+                remote.run(f'mkdir "{remote_work_dir}" 2>nul')
+            else:
+                remote.run(f"mkdir -p {remote_work_dir} && chmod 700 {remote_work_dir}")
 
-        _cleanup_remote(remote)
+            # Upload local file-valued inputs and get remote path overrides
+            file_overrides = _upload_local_file_inputs(
+                session.inputs, remote, remote_work_dir, sep, is_windows=is_windows
+            )
+            if file_overrides:
+                # Rebuild script with corrected remote paths
+                merged_env.update(file_overrides)
+                script_content = build_session_script(
+                    job.steps, session_id=session.id, work_dir=remote_work_dir,
+                    env=merged_env, os_type=os_type, encrypt_at_rest=True,
+                )
+
+            # Upload key and script via temp files
+            _upload_temp_content(remote, at_rest_key, f"{remote_work_dir}{sep}.skey", suffix=".key")
+            ext = ".ps1" if is_windows else ".sh"
+            _upload_temp_content(remote, script_content, f"{remote_work_dir}{sep}run{ext}", suffix=ext)
+
+            if is_windows:
+                remote.run(
+                    f"powershell \"icacls '{remote_work_dir}' /inheritance:r "
+                    f"/grant:r '$env:USERNAME:(OI)(CI)F' /T 2>$null\"",
+                )
+            else:
+                remote.run(f"chmod 600 {remote_work_dir}/.skey")
+                remote.run(f"chmod 700 {remote_work_dir}/run.sh")
+
+            self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=is_windows)
+
+            # Start detached
+            if is_windows:
+                start_cmd = (
+                    f'Start-Process powershell -ArgumentList "-File {remote_work_dir}\\run.ps1" '
+                    f"-WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"
+                )
+                pid_output = remote.run(f'powershell "{start_cmd}"').strip()
+            else:
+                pid_output = remote.run(
+                    f"nohup bash {remote_work_dir}/run.sh "
+                    f"> {remote_work_dir}/output.log 2>&1 & echo $!"
+                ).strip()
+
+            # Parse PID
+            try:
+                pid = int(pid_output.strip().splitlines()[-1])
+            except (ValueError, IndexError):
+                pid = None
+
+            remote_log = f"{remote_work_dir}{sep}output.log"
+            session = self._save_session(session, {
+                "status": SessionStatus.RUNNING,
+                "remote_pid": pid,
+                "remote_work_dir": remote_work_dir,
+                "remote_log_file": remote_log,
+                "output_path": str(self.store.session_dir(session.id)),
+            })
+            logger.info("Cloud session %s started on %s (PID %s)", session.id, instance.ip, pid)
+        finally:
+            _cleanup_remote(remote)
+
         return session
 
     # ------------------------------------------------------------------
@@ -400,6 +521,24 @@ class SessionManager:
 
     async def _check_cloud_status(self, session: Session) -> Session:
         """SSH in and check PID + log markers on a cloud VPS."""
+        if session.remote_pid is None:
+            # No PID recorded — check log only
+            try:
+                remote = self._reconnect(session)
+                try:
+                    tail_cmd = _build_tail_cmd(session.os_type, session.remote_log_file, 5)
+                    log_tail = remote.run(tail_cmd, timeout=15).strip()
+                finally:
+                    _cleanup_remote(remote)
+                marker = _parse_marker(log_tail)
+                if marker == _DONE_MARKER:
+                    return session.model_copy(update={"status": SessionStatus.COMPLETED, "finished_at": datetime.now(UTC)})
+                if marker == _FAIL_MARKER:
+                    return session.model_copy(update={"status": SessionStatus.FAILED, "finished_at": datetime.now(UTC)})
+            except Exception as exc:
+                logger.debug("Status check (no-pid) failed for %s: %s", session.id, exc)
+            return session
+
         try:
             remote = self._reconnect(session)
         except Exception as exc:
@@ -476,9 +615,11 @@ class SessionManager:
 
         try:
             remote = self._reconnect(session)
-            cmd = _build_tail_cmd(session.os_type, session.remote_log_file, tail)
-            output = remote.run(cmd, timeout=30)
-            _cleanup_remote(remote)
+            try:
+                cmd = _build_tail_cmd(session.os_type, session.remote_log_file, tail)
+                output = remote.run(cmd, timeout=30)
+            finally:
+                _cleanup_remote(remote)
             return output
         except Exception as exc:
             return f"(cannot retrieve logs: {exc})"
@@ -675,17 +816,19 @@ class SessionManager:
             # SSH in and kill
             try:
                 remote = self._reconnect(session)
-                if session.os_type == "windows":
-                    remote.run(
-                        f'powershell "Stop-Process -Id {session.remote_pid} -Force -ErrorAction SilentlyContinue"',
-                        timeout=15,
-                    )
-                else:
-                    remote.run(
-                        f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null",
-                        timeout=15,
-                    )
-                _cleanup_remote(remote)
+                try:
+                    if session.os_type == "windows":
+                        remote.run(
+                            f'powershell "Stop-Process -Id {session.remote_pid} -Force -ErrorAction SilentlyContinue"',
+                            timeout=15,
+                        )
+                    else:
+                        remote.run(
+                            f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null",
+                            timeout=15,
+                        )
+                finally:
+                    _cleanup_remote(remote)
             except Exception as exc:
                 logger.debug("Cancel failed for %s: %s", session_id, exc)
 
@@ -796,10 +939,11 @@ class SessionManager:
             return RunnerRegistry.create(
                 "winrm",
                 host=session.instance_ip,
-                username=session.ssh_user,
+                username=session.winrm_user or session.ssh_user or "Administrator",
                 password=session.ssh_password,
-                ssl=False,
-                port=5985,
+                ssl=session.winrm_ssl,
+                transport=session.winrm_transport or "ntlm",
+                port=session.winrm_port or (5986 if session.winrm_ssl else 5985),
             )
 
         kwargs: dict[str, Any] = {

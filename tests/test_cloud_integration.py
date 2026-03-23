@@ -259,6 +259,42 @@ class TestFleetDistributor:
         assert "fleet_input_file" in result[0]
         assert len(chunk_files) == 2
 
+    def test_subnet_distribution_with_min_prefix(self):
+        """Subnet mode groups IPs by configurable prefix length."""
+        from ofx.cloud.fleet_distributor import FleetDistributor
+
+        dist = FleetDistributor()
+        # /16 prefix — two groups: 10.0.x.x and 10.1.x.x
+        targets = [
+            "10.0.0.1", "10.0.0.2", "10.0.1.1",  # all 10.0.0.0/16
+            "10.1.0.1", "10.1.0.2",                # 10.1.0.0/16
+        ]
+        result = dist.distribute(targets, count=2, mode="subnet", min_prefix=16)
+        assert len(result) == 2
+        total = sum(len(c) for c in result)
+        assert total == 5
+
+    def test_expand_fleet_min_prefix_passed_through(self):
+        """min_prefix from fleet_config is used for subnet grouping."""
+        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+
+        combos, chunk_files = expand_fleet_to_matrix(
+            fleet_config={
+                "input": "10.0.0.1,10.0.0.2,10.1.0.1,10.1.0.2",
+                "count": 2,
+                "distribution": "subnet",
+                "min_prefix": 16,
+            },
+        )
+        assert len(combos) == 2
+        # Each chunk should have exactly 2 IPs (same /16 grouped together)
+        assert combos[0]["fleet_target_count"] == 2
+        assert combos[1]["fleet_target_count"] == 2
+        for f in chunk_files:
+            f.unlink(missing_ok=True)
+        if chunk_files:
+            chunk_files[0].parent.rmdir()
+
 
 # ---------------------------------------------------------------------------
 # Cloud provider registry tests
@@ -547,3 +583,123 @@ class TestJobCloudField:
 
         job = Job(jid="test", steps=[{"run": "echo hi"}])
         assert job.cloud is None
+
+
+class TestWaitForLogin:
+    """Tests for wait_for_login timeout behaviour."""
+
+    @pytest.mark.asyncio
+    async def test_raises_timeout_error_when_login_never_succeeds(self):
+        """wait_for_login should raise TimeoutError after timeout, not return False."""
+        from ofx.cloud.ssh import wait_for_login
+        from ofx.models.cloud import CloudConfig
+
+        cfg = CloudConfig(provider="static", host="10.0.0.99", ssh_key="/tmp/fake.pem")
+
+        import asyncio
+
+        async def _failing_probe(*_args, **_kwargs):
+            raise ConnectionRefusedError("refused")
+
+        call_count = 0
+
+        async def mock_to_thread(fn, *args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise ConnectionRefusedError("refused")
+
+        async def mock_sleep(_delay):
+            pass
+
+        with pytest.MonkeyPatch.context() as mp:
+            # Patch time so we immediately exceed the timeout
+            mp.setattr("ofx.cloud.ssh.time.time", lambda: float(call_count * 10))
+            mp.setattr("asyncio.to_thread", mock_to_thread)
+            mp.setattr("asyncio.sleep", mock_sleep)
+
+            with pytest.raises(TimeoutError):
+                await wait_for_login("10.0.0.99", cfg, timeout=5)
+
+    @pytest.mark.asyncio
+    async def test_returns_true_on_successful_login(self):
+        """wait_for_login returns True when the probe succeeds immediately."""
+        from ofx.cloud.ssh import wait_for_login
+        from ofx.models.cloud import CloudConfig
+
+        cfg = CloudConfig(provider="static", host="10.0.0.1", ssh_key="/tmp/fake.pem")
+
+        import time as _time
+
+        start = _time.time()
+
+        async def mock_to_thread(fn, *_args, **_kwargs):
+            return None  # probe succeeds
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("asyncio.to_thread", mock_to_thread)
+            result = await wait_for_login("10.0.0.1", cfg, timeout=30)
+
+        assert result is True
+
+
+class TestFleetDistributorEdgeCases:
+    """Tests for edge cases in FleetDistributor and expand_fleet_to_matrix."""
+
+    def test_distribute_zero_count_returns_empty(self):
+        from ofx.cloud.fleet_distributor import FleetDistributor
+
+        d = FleetDistributor()
+        assert d.distribute(["10.0.0.1", "10.0.0.2"], count=0) == []
+
+    def test_distribute_no_targets_returns_empty(self):
+        from ofx.cloud.fleet_distributor import FleetDistributor
+
+        d = FleetDistributor()
+        assert d.distribute([], count=3) == []
+
+    def test_distribute_never_returns_empty_chunks(self):
+        """After distribution, no chunk in the result should be empty."""
+        from ofx.cloud.fleet_distributor import FleetDistributor
+
+        d = FleetDistributor()
+        chunks = d.distribute(["a", "b"], count=5)
+        assert all(len(c) > 0 for c in chunks), f"Empty chunk found: {chunks}"
+        assert len(chunks) == 2  # capped to target count
+
+    def test_expand_fleet_to_matrix_no_input_returns_empty(self):
+        """expand_fleet_to_matrix with no input should return empty, not spawn VPSes."""
+        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+
+        combos, files = expand_fleet_to_matrix({"count": 3, "input": "", "distribution": "chunk"})
+        assert combos == []
+        assert files == []
+
+    def test_expand_fleet_to_matrix_no_matching_targets(self):
+        """All targets excluded → empty result, no chunk files created."""
+        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+
+        combos, files = expand_fleet_to_matrix(
+            {"count": 2, "input": "10.0.0.1", "distribution": "chunk", "exclude": ["10.0.0.1"]},
+        )
+        assert combos == []
+        assert files == []
+
+    def test_expand_fleet_chunk_files_have_content(self):
+        """Chunk files written by expand_fleet_to_matrix contain the targets."""
+        import shutil
+        from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
+
+        combos, files = expand_fleet_to_matrix(
+            {"count": 2, "input": "10.0.0.1,10.0.0.2,10.0.0.3", "distribution": "chunk"}
+        )
+        try:
+            assert len(combos) == 2
+            assert len(files) == 2
+            total_lines = sum(
+                len([l for l in f.read_text().splitlines() if l.strip()])
+                for f in files
+            )
+            assert total_lines == 3
+        finally:
+            if files:
+                shutil.rmtree(str(files[0].parent), ignore_errors=True)

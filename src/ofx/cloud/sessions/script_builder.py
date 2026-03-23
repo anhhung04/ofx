@@ -7,7 +7,20 @@ detect completion by tailing the log file.
 
 from __future__ import annotations
 
+import re
+
 from ofx.models.step import RunType, Step
+
+_ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_env_key(key: str) -> None:
+    """Validate environment variable names used in generated session scripts."""
+    if not _ENV_KEY_RE.fullmatch(key):
+        raise ValueError(
+            f"Invalid environment variable name: {key!r}. "
+            "Expected [A-Za-z_][A-Za-z0-9_]*."
+        )
 
 
 def build_session_script(
@@ -55,8 +68,8 @@ def _build_bash(
 ) -> str:
     lines: list[str] = [
         "#!/bin/bash",
-        f'export SESSION_ID="{session_id}"',
-        f'WORK_DIR="{work_dir}"',
+        f'export SESSION_ID="{_bash_escape(session_id)}"',
+        f'WORK_DIR="{_bash_escape(work_dir)}"',
         'LOG_FILE="$WORK_DIR/output.log"',
         'mkdir -p "$WORK_DIR/output"',
         'cd "$WORK_DIR"',
@@ -65,6 +78,7 @@ def _build_bash(
 
     # Environment variables
     for key, value in env.items():
+        _validate_env_key(key)
         if key in ("PATH", "HOME", "USER", "SHELL"):
             continue
         lines.append(f'export {key}="{_bash_escape(str(value))}"')
@@ -130,23 +144,25 @@ def _build_bash(
     return "\n".join(lines) + "\n"
 
 
-def _step_command_bash(step: Step, work_dir: str) -> str:
-    """Extract the shell command(s) from a step for bash."""
+def _step_command_bash(step: Step, work_dir: str) -> str:  # noqa: ARG001
+    """Extract the shell command(s) from a step for bash.
+
+    Uses ``$WORK_DIR`` rather than hard-coding *work_dir* so that paths with
+    spaces continue to work (the outer script always sets WORK_DIR as a
+    quoted double-quoted assignment).
+    """
     run_type = step.get_run_type()
-    # Always use session work_dir — step.working_directory defaults to CWD
-    # which is meaningless for detached session scripts.
-    cwd = work_dir
 
     if run_type == RunType.COMMAND:
-        return f"cd {cwd} 2>/dev/null; {step.run}"
+        return f'cd "$WORK_DIR" 2>/dev/null; {step.run}'
 
     if run_type == RunType.SCRIPT:
-        # Inline script — run via heredoc
-        escaped = step.script.replace("'", "'\\''")
-        return f"cd {cwd} 2>/dev/null; bash -c '{escaped}'"
+        # Inline script — run via heredoc to avoid all quoting edge-cases
+        script_escaped = step.script.replace("'", "'\\''")
+        return f"cd \"$WORK_DIR\" 2>/dev/null; bash -c '{script_escaped}'"
 
     if run_type == RunType.SCRIPT_FILE:
-        return f"cd {cwd} 2>/dev/null; bash {step.script_file}"
+        return f'cd "$WORK_DIR" 2>/dev/null; bash {step.script_file}'
 
     return f'echo "Unsupported run type: {run_type}"'
 
@@ -210,8 +226,8 @@ def _build_powershell(
 ) -> str:
     lines: list[str] = [
         "$ErrorActionPreference = 'Stop'",
-        f'$env:SESSION_ID = "{session_id}"',
-        f'$WORK_DIR = "{work_dir}"',
+        f'$env:SESSION_ID = "{_ps_escape(session_id)}"',
+        f'$WORK_DIR = "{_ps_escape(work_dir)}"',
         '$LOG_FILE = "$WORK_DIR\\output.log"',
         'New-Item -ItemType Directory -Force -Path "$WORK_DIR\\output" | Out-Null',
         "Set-Location $WORK_DIR",
@@ -220,9 +236,10 @@ def _build_powershell(
 
     # Environment variables
     for key, value in env.items():
+        _validate_env_key(key)
         if key in ("PATH", "HOME", "USER", "SHELL"):
             continue
-        lines.append(f'$env:{key} = "{value}"')
+        lines.append(f'$env:{key} = "{_ps_escape(str(value))}"')
     if env:
         lines.append("")
 
@@ -323,20 +340,46 @@ def _ps_encrypt_epilogue() -> list[str]:
     ]
 
 
+def _ps_escape(s: str) -> str:
+    """Escape a string for safe embedding inside PowerShell double-quoted strings.
+
+    Escapes backticks (PS escape char), double-quotes, and dollar signs so that
+    the value is treated literally rather than expanded or misinterpreted.
+    """
+    return (
+        s
+        .replace("`", "``")
+        .replace('"', '`"')
+        .replace("$", "`$")
+    )
+
+
 def _step_command_ps(step: Step, work_dir: str) -> str:
-    """Extract PowerShell command from a step."""
+    """Extract PowerShell command from a step.
+
+    For inline scripts the content is written to a here-string variable
+    and piped to a temp script file, avoiding double-quote and backtick
+    escaping issues inside ``Invoke-Expression``.
+    """
     run_type = step.get_run_type()
-    # Always use session work_dir — step.working_directory defaults to CWD
-    cwd = work_dir
+    escaped_cwd = _ps_escape(work_dir)
 
     if run_type == RunType.COMMAND:
-        return f'Set-Location "{cwd}"; {step.run}'
+        return f'Set-Location "{escaped_cwd}"; {step.run}'
 
     if run_type == RunType.SCRIPT:
-        escaped = step.script.replace('"', '`"')
-        return f'Set-Location "{cwd}"; Invoke-Expression "{escaped}"'
+        # Use a here-string to avoid escaping issues inside the outer script
+        # Indented so the generated PowerShell is readable
+        return (
+            f'Set-Location "{escaped_cwd}"; '
+            f"$_script = @'\n{step.script}\n'@; "
+            f"Invoke-Expression $_script"
+        )
 
     if run_type == RunType.SCRIPT_FILE:
-        return f'Set-Location "{cwd}"; & "{step.script_file}"'
+        return (
+            f'Set-Location "{escaped_cwd}"; '
+            f'& "{_ps_escape(str(step.script_file))}"'
+        )
 
     return f'Write-Output "Unsupported run type: {run_type}"'
