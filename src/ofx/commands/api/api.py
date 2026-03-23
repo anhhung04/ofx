@@ -12,6 +12,7 @@ from typing import (
 )
 
 import typer
+from pydantic import BaseModel
 
 app = typer.Typer()
 
@@ -60,8 +61,6 @@ def _try_register_module(
 
 def format_type(type_hint: Any, model_registry: dict[str, Any]) -> str:
     """Format a type hint into a string, recursively handling nested models."""
-    from pydantic import BaseModel
-
     if isinstance(type_hint, str):
         return type_hint
     if isinstance(type_hint, ForwardRef):
@@ -90,8 +89,6 @@ def get_model_schema(
     model: Any, model_registry: dict[str, Any]
 ) -> list[dict[str, Any]]:
     """Get the schema of a Pydantic model and update the model registry."""
-    from pydantic import BaseModel
-
     if (
         not inspect.isclass(model)
         or not issubclass(model, BaseModel)

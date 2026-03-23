@@ -24,6 +24,35 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 logger = logging.getLogger(settings.app_branding)
 
 
+def _build_secrets_table(
+    secrets: dict[str, Any],
+    *,
+    title: str,
+    show_values: bool,
+):
+    """Build a consistent secrets listing table."""
+    from rich.table import Table
+
+    table = Table(
+        title=title,
+        border_style="cyan",
+        header_style="bold cyan",
+    )
+    table.add_column("Name", style="cyan bold", no_wrap=True)
+    table.add_column("Type", style="magenta")
+    if show_values:
+        table.add_column("Value", style="red", max_width=50)
+
+    for name in sorted(secrets.keys()):
+        value = secrets[name]
+        value_type = _get_secret_type(value)
+        if show_values:
+            table.add_row(name, value_type, _format_secret_value(value))
+        else:
+            table.add_row(name, value_type)
+    return table
+
+
 @app.command("set")
 def set_secret(
     name: Annotated[str, typer.Argument(help="Secret name")],
@@ -150,8 +179,6 @@ def list_secrets(
     Supports filtering by secret type and searching within secret names.
     Use --show-values with caution as it displays sensitive data.
     """
-    from rich.table import Table
-
     console = get_console()
     secrets = secrets_store.list_secrets()
 
@@ -179,27 +206,13 @@ def list_secrets(
         )
         return
 
-    table = Table(
-        title=f"[*] Stored Secrets ({len(filtered_secrets)} found)",
-        border_style="cyan",
-        header_style="bold cyan",
+    console.print(
+        _build_secrets_table(
+            filtered_secrets,
+            title=f"[*] Stored Secrets ({len(filtered_secrets)} found)",
+            show_values=show_values,
+        )
     )
-    table.add_column("Name", style="cyan bold", no_wrap=True)
-    table.add_column("Type", style="magenta")
-    if show_values:
-        table.add_column("Value", style="red", max_width=50)
-
-    for name in sorted(filtered_secrets.keys()):
-        value = filtered_secrets[name]
-        value_type = _get_secret_type(value)
-
-        if show_values:
-            value_display = _format_secret_value(value)
-            table.add_row(name, value_type, value_display)
-        else:
-            table.add_row(name, value_type)
-
-    console.print(table)
 
     if show_values:
         typer.secho(
@@ -230,8 +243,6 @@ def search_secrets(
     """
     import fnmatch
 
-    from rich.table import Table
-
     console = get_console()
     secrets = secrets_store.list_secrets()
 
@@ -257,27 +268,13 @@ def search_secrets(
         )
         return
 
-    table = Table(
-        title=f"🔍 Search Results for '{pattern}' ({len(matches)} found)",
-        border_style="cyan",
-        header_style="bold cyan",
+    console.print(
+        _build_secrets_table(
+            matches,
+            title=f"🔍 Search Results for '{pattern}' ({len(matches)} found)",
+            show_values=show_values,
+        )
     )
-    table.add_column("Name", style="cyan bold", no_wrap=True)
-    table.add_column("Type", style="magenta")
-    if show_values:
-        table.add_column("Value", style="red", max_width=50)
-
-    for name in sorted(matches.keys()):
-        value = matches[name]
-        value_type = _get_secret_type(value)
-
-        if show_values:
-            value_display = _format_secret_value(value)
-            table.add_row(name, value_type, value_display)
-        else:
-            table.add_row(name, value_type)
-
-    console.print(table)
 
     if show_values:
         typer.secho(
@@ -515,5 +512,4 @@ def show_store_location():
     if info["exists"]:
         typer.secho(f"Store size: {info['size']} bytes", fg=typer.colors.CYAN)
         typer.secho(f"Secret count: {info['count']}", fg=typer.colors.CYAN)
-
 

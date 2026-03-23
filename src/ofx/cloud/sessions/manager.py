@@ -27,6 +27,17 @@ _DONE_MARKER = "__TASK_OK__"
 _FAIL_MARKER = "__TASK_ERR__"
 
 
+def _cleanup_remote(remote: Any) -> None:
+    if hasattr(remote, "cleanup"):
+        remote.cleanup()
+
+
+def _build_tail_cmd(os_type: str, remote_log_file: str, lines: int) -> str:
+    if os_type == "windows":
+        return f'powershell "Get-Content -Tail {lines} {remote_log_file}"'
+    return f"tail -{lines} {remote_log_file} 2>/dev/null"
+
+
 class SessionManager:
     """High-level API for detached session lifecycle.
 
@@ -305,8 +316,7 @@ class SessionManager:
         })
         logger.info("Cloud session %s started on %s (PID %s)", session.id, instance.ip, pid)
 
-        if hasattr(remote, "cleanup"):
-            remote.cleanup()
+        _cleanup_remote(remote)
         return session
 
     # ------------------------------------------------------------------
@@ -401,11 +411,7 @@ class SessionManager:
             alive = "alive" in output.lower() or "true" in output.lower()
 
             # Check log marker
-            if session.os_type == "windows":
-                tail_cmd = f'powershell "Get-Content -Tail 5 {session.remote_log_file}"'
-            else:
-                tail_cmd = f"tail -5 {session.remote_log_file} 2>/dev/null"
-
+            tail_cmd = _build_tail_cmd(session.os_type, session.remote_log_file, 5)
             log_tail = remote.run(tail_cmd, timeout=15).strip()
             marker = _parse_marker(log_tail)
 
@@ -432,8 +438,7 @@ class SessionManager:
             logger.debug("Status check failed for %s: %s", session.id, exc)
             return session
         finally:
-            if hasattr(remote, "cleanup"):
-                remote.cleanup()
+            _cleanup_remote(remote)
 
     # ------------------------------------------------------------------
     # Logs
@@ -463,13 +468,9 @@ class SessionManager:
 
         try:
             remote = self._reconnect(session)
-            if session.os_type == "windows":
-                cmd = f'powershell "Get-Content -Tail {tail} {session.remote_log_file}"'
-            else:
-                cmd = f"tail -{tail} {session.remote_log_file} 2>/dev/null"
+            cmd = _build_tail_cmd(session.os_type, session.remote_log_file, tail)
             output = remote.run(cmd, timeout=30)
-            if hasattr(remote, "cleanup"):
-                remote.cleanup()
+            _cleanup_remote(remote)
             return output
         except Exception as exc:
             return f"(cannot retrieve logs: {exc})"
@@ -620,8 +621,7 @@ class SessionManager:
             except Exception:
                 pass
         finally:
-            if hasattr(remote, "cleanup"):
-                remote.cleanup()
+            _cleanup_remote(remote)
 
     # ------------------------------------------------------------------
     # Decrypt
@@ -681,8 +681,7 @@ class SessionManager:
                         f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null",
                         timeout=15,
                     )
-                if hasattr(remote, "cleanup"):
-                    remote.cleanup()
+                _cleanup_remote(remote)
             except Exception as exc:
                 logger.debug("Cancel failed for %s: %s", session_id, exc)
 

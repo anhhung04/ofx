@@ -15,6 +15,17 @@ fleet_app = typer.Typer(
 )
 
 
+async def _refresh_sessions(mgr, sessions: list):
+    """Best-effort status refresh; keep original session on failure."""
+    refreshed = []
+    for s in sessions:
+        try:
+            refreshed.append(await mgr.status(s.id))
+        except Exception:
+            refreshed.append(s)
+    return refreshed
+
+
 @fleet_app.command("create")
 def fleet_create(
     count: Annotated[int, typer.Argument(help="Number of instances to create")],
@@ -280,17 +291,8 @@ def fleet_status(
     if refresh:
         mgr = SessionManager(store=store)
 
-        async def _refresh():
-            refreshed = []
-            for s in sessions:
-                try:
-                    refreshed.append(await mgr.status(s.id))
-                except Exception:
-                    refreshed.append(s)
-            return refreshed
-
         with console.status("Refreshing session statuses..."):
-            sessions = asyncio.run(_refresh())
+            sessions = asyncio.run(_refresh_sessions(mgr, sessions))
 
     # Summary counts
     status_counts: dict[str, int] = {}
@@ -367,17 +369,8 @@ def fleet_results(
     # Refresh statuses first
     mgr = SessionManager(store=store)
 
-    async def _refresh_and_fetch():
-        refreshed = []
-        for s in sessions:
-            try:
-                refreshed.append(await mgr.status(s.id))
-            except Exception:
-                refreshed.append(s)
-        return refreshed
-
     with console.status("Checking fleet session statuses..."):
-        sessions = asyncio.run(_refresh_and_fetch())
+        sessions = asyncio.run(_refresh_sessions(mgr, sessions))
 
     running = [s for s in sessions if s.is_running()]
     completed = [s for s in sessions if s.status.value == "completed"]
