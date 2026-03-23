@@ -25,6 +25,7 @@ jobs:
         name: whois-lookup
         with:
           target: "{{ inputs.target }}"
+        continue-on-error: true
 
       - name: dnsrecon-enum
         run: |
@@ -36,6 +37,7 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           server_defaults: true
+        continue-on-error: true
 
       - name: export-intel
         script: |
@@ -203,6 +205,7 @@ jobs:
         name: waf-detect
         with:
           target: "{{ inputs.target }}"
+        continue-on-error: true
 
       - name: export-fingerprint
         script: |

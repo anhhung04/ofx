@@ -20,6 +20,7 @@ jobs:
         name: whois-lookup
         with:
           target: "{{ inputs.target }}"
+        continue-on-error: true
 
       - task: dnsx
         name: dns-resolve
@@ -50,17 +51,20 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           server_defaults: true
+        continue-on-error: true
 
       - task: sslscan
         name: sslscan-check
         with:
           target: "{{ inputs.target }}"
           show_certificate: true
+        continue-on-error: true
 
       - task: wafw00f
         name: waf-detect
         with:
           target: "{{ inputs.target }}"
+        continue-on-error: true
 
   dns-enum:
     name: "DNS Enumeration"
