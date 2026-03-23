@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-params-fuzz
-description: 'URL parameter fuzzing — discovers hidden URL parameters using arjun,
-  then fuzzes parameter values with ffuf.
+description: 'URL parameter fuzzing — discovers hidden URL parameters using arjun, then fuzzes parameter values with ffuf.
 
   '
 tags:
@@ -43,12 +42,21 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-params
-      script: "import json\n\nparams = set()\nstep_data = {{ steps | tojson }}\ntyped\
-        \ = step_data[0].get('outputs', {}).get('typed_outputs', [])\nfor item in\
-        \ typed:\n    if item.get('_type') == 'tag':\n        params.add(item.get('value',\
-        \ ''))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"found_params={','.join(sorted(params))}\\\
-        n\")\n    f.write(f\"param_count={len(params)}\\n\")\n\nprint(f\"Discovered\
-        \ {len(params)} parameters\")\n"
+      script: |
+        import json
+
+        params = set()
+        step_data = {{ steps | tojson }}
+        typed = step_data[0].get('outputs', {}).get('typed_outputs', [])
+        for item in typed:
+            if item.get('_type') == 'tag':
+                params.add(item.get('value', ''))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"found_params={','.join(sorted(params))}\n")
+            f.write(f"param_count={len(params)}\n")
+
+        print(f"Discovered {len(params)} parameters")
       log-stdout: true
   param-fuzz:
     name: Parameter Value Fuzzing
@@ -65,15 +73,10 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: summary
-      run: 'echo "======================================="
-
-        echo " Param Fuzz: {{ inputs.target }}"
-
+      run: |
         echo "======================================="
-
-        echo "Parameters found: {{ jobs[''param-discovery''].outputs.param_count }}"
-
+        echo " Param Fuzz: {{ inputs.target }}"
+        echo "======================================="
+        echo "Parameters found: {{ jobs['param-discovery'].outputs.param_count }}"
         echo "Fuzz results: {{ urls(steps[0].outputs.typed_outputs) | length }}"
-
-        '
       log-stdout: true

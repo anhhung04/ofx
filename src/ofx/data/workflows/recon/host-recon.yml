@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: host-recon
-description: 'Host reconnaissance — discovers open ports and services, detects versions,
-  searches for known vulnerabilities, audits SSH, and probes HTTP services.
+description: 'Host reconnaissance — discovers open ports and services, detects versions, searches for known vulnerabilities, audits SSH, and probes HTTP services.
 
   '
 tags:
@@ -48,10 +47,8 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: extract-targets
-      run: 'echo "http_targets={{ ports(steps[0].outputs.typed_outputs) | map(attribute=''host_port'')
-        | unique | join(''\n'') }}" >> $OFX_OUTPUTS
-
-        '
+      run: |
+        echo "http_targets={{ ports(steps[0].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}" >> $OFX_OUTPUTS
   ssh-audit:
     name: SSH Audit
     needs:
@@ -109,13 +106,9 @@ jobs:
       continue-on-error: true
       log-stdout: true
     - name: summary
-      run: 'echo "=============================="
-
-        echo " Host Recon: {{ inputs.target }}"
-
+      run: |
         echo "=============================="
-
+        echo " Host Recon: {{ inputs.target }}"
+        echo "=============================="
         echo "Vulnerabilities: {{ vulns(steps[0].outputs.typed_outputs) | length }}"
-
-        '
       log-stdout: true

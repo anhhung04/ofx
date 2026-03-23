@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: wordpress
-description: 'WordPress vulnerability scan — identifies WordPress version, plugins,
-  themes, known vulnerabilities, and misconfigurations using wpscan and nuclei.
+description: 'WordPress vulnerability scan — identifies WordPress version, plugins, themes, known vulnerabilities, and misconfigurations using wpscan and nuclei.
 
   '
 tags:
@@ -52,13 +51,22 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: summary
-      script: "import json\n\nwpscan_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
-        \ | tojson }}\nnuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson\
-        \ }}\n\nall_vulns = wpscan_vulns + nuclei_vulns\ncritical = [v for v in all_vulns\
-        \ if v.get('severity') == 'critical']\nhigh = [v for v in all_vulns if v.get('severity')\
-        \ == 'high']\n\nprint(\"=\" * 45)\nprint(f\" WordPress Scan: {{ inputs.target\
-        \ }}\")\nprint(\"=\" * 45)\nprint(f\"Total vulnerabilities: {len(all_vulns)}\"\
-        )\nprint(f\"  Critical: {len(critical)}\")\nprint(f\"  High: {len(high)}\"\
-        )\nfor v in critical + high:\n    print(f\"  - [{v.get('severity', 'unknown').upper()}]\
-        \ {v.get('name', 'Unknown')}\")\n"
+      script: |
+        import json
+
+        wpscan_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+        nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+
+        all_vulns = wpscan_vulns + nuclei_vulns
+        critical = [v for v in all_vulns if v.get('severity') == 'critical']
+        high = [v for v in all_vulns if v.get('severity') == 'high']
+
+        print("=" * 45)
+        print(f" WordPress Scan: {{ inputs.target }}")
+        print("=" * 45)
+        print(f"Total vulnerabilities: {len(all_vulns)}")
+        print(f"  Critical: {len(critical)}")
+        print(f"  High: {len(high)}")
+        for v in critical + high:
+            print(f"  - [{v.get('severity', 'unknown').upper()}] {v.get('name', 'Unknown')}")
       log-stdout: true

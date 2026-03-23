@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: cidr-recon
-description: 'CIDR/network reconnaissance — discovers live hosts within a CIDR range,
-  scans for open ports and services, and searches for vulnerabilities.
+description: 'CIDR/network reconnaissance — discovers live hosts within a CIDR range, scans for open ports and services, and searches for vulnerabilities.
 
   '
 tags:
@@ -55,17 +54,31 @@ jobs:
       continue-on-error: true
       log-stdout: true
     - name: collect-hosts
-      script: "import json\n\nhosts = set()\n\nnmap_out = {{ steps[2].outputs.typed_outputs\
-        \ | tojson }}\nnaabu_out = {{ steps[3].outputs.typed_outputs | tojson }}\n\
-        masscan_out = {{ steps[4].outputs.typed_outputs | tojson }}\n\nfor item in\
-        \ nmap_out + naabu_out + masscan_out:\n    if item.get('_type') == 'port':\n\
-        \        host = item.get('host') or item.get('ip', '')\n        if host:\n\
-        \            hosts.add(host)\n    elif item.get('_type') == 'ip':\n      \
-        \  ip = item.get('ip', '')\n        if ip:\n            hosts.add(ip)\n\n\
-        host_list = '\\n'.join(sorted(hosts))\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"live_hosts={host_list}\\n\")\n    f.write(f\"\
-        host_count={len(hosts)}\\n\")\n\nprint(f\"Discovered {len(hosts)} live hosts\"\
-        )\n"
+      script: |
+        import json
+
+        hosts = set()
+
+        nmap_out = {{ steps[2].outputs.typed_outputs | tojson }}
+        naabu_out = {{ steps[3].outputs.typed_outputs | tojson }}
+        masscan_out = {{ steps[4].outputs.typed_outputs | tojson }}
+
+        for item in nmap_out + naabu_out + masscan_out:
+            if item.get('_type') == 'port':
+                host = item.get('host') or item.get('ip', '')
+                if host:
+                    hosts.add(host)
+            elif item.get('_type') == 'ip':
+                ip = item.get('ip', '')
+                if ip:
+                    hosts.add(ip)
+
+        host_list = '\n'.join(sorted(hosts))
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"live_hosts={host_list}\n")
+            f.write(f"host_count={len(hosts)}\n")
+
+        print(f"Discovered {len(hosts)} live hosts")
   service-scan:
     name: Service Detection
     needs:
@@ -98,13 +111,9 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: summary
-      run: 'echo "=============================="
-
-        echo " CIDR Recon: {{ inputs.target }}"
-
+      run: |
         echo "=============================="
-
-        echo "Live hosts: {{ jobs[''host-discovery''].outputs.host_count }}"
-
-        '
+        echo " CIDR Recon: {{ inputs.target }}"
+        echo "=============================="
+        echo "Live hosts: {{ jobs['host-discovery'].outputs.host_count }}"
       log-stdout: true

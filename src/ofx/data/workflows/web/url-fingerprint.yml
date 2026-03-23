@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-fingerprint
-description: 'Web technology fingerprinting — identifies web technologies, frameworks,
-  WAF, and server configurations.
+description: 'Web technology fingerprinting — identifies web technologies, frameworks, WAF, and server configurations.
 
   '
 tags:
@@ -30,33 +29,42 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-probe
-      run: 'echo "status={{ urls(steps[0].outputs.typed_outputs) | map(attribute=''status_code'')
-        | first | default(''unknown'', true) }}" >> $OFX_OUTPUTS
-
-        echo "title={{ urls(steps[0].outputs.typed_outputs) | map(attribute=''title'')
-        | first | default(''unknown'', true) }}" >> $OFX_OUTPUTS
-
-        echo "webserver={{ urls(steps[0].outputs.typed_outputs) | map(attribute=''webserver'')
-        | first | default(''unknown'', true) }}" >> $OFX_OUTPUTS
-
-        '
+      run: |
+        echo "status={{ urls(steps[0].outputs.typed_outputs) | map(attribute='status_code') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
+        echo "title={{ urls(steps[0].outputs.typed_outputs) | map(attribute='title') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
+        echo "webserver={{ urls(steps[0].outputs.typed_outputs) | map(attribute='webserver') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
       log-stdout: true
   fingerprint:
     name: Technology Fingerprinting
     steps:
     - name: whatweb-scan
-      run: 'whatweb -a 3 {{ inputs.target }} --color=never 2>/dev/null | tee /tmp/whatweb-output.txt
-
-        '
+      run: |
+        whatweb -a 3 {{ inputs.target }} --color=never 2>/dev/null | tee /tmp/whatweb-output.txt
       continue-on-error: true
     - name: collect-tech
-      script: "techs = set()\ntry:\n    with open('/tmp/whatweb-output.txt') as f:\n\
-        \        content = f.read()\n    # Extract technology identifiers from WhatWeb\
-        \ output\n    import re\n    matches = re.findall(r'\\[([^\\]]+)\\]', content)\n\
-        \    for m in matches:\n        m = m.strip()\n        if m and not m.startswith('http'):\n\
-        \            techs.add(m)\nexcept FileNotFoundError:\n    pass\n\nwith open('/tmp/ofx_urlfingerprint_techs.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(techs)))\n\nwith open('{{\
-        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"tech_list_file=/tmp/ofx_urlfingerprint_techs.txt\\n\")\n    f.write(f\"tech_count={len(techs)}\\n\")\n\nprint(f\"Detected {len(techs)}\
-        \ technologies\")\n"
+      script: |
+        techs = set()
+        try:
+            with open('/tmp/whatweb-output.txt') as f:
+                content = f.read()
+            # Extract technology identifiers from WhatWeb output
+            import re
+            matches = re.findall(r'\[([^\]]+)\]', content)
+            for m in matches:
+                m = m.strip()
+                if m and not m.startswith('http'):
+                    techs.add(m)
+        except FileNotFoundError:
+            pass
+
+        with open('/tmp/ofx_urlfingerprint_techs.txt', 'w') as tf:
+            tf.write('\n'.join(sorted(techs)))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"tech_list_file=/tmp/ofx_urlfingerprint_techs.txt\n")
+            f.write(f"tech_count={len(techs)}\n")
+
+        print(f"Detected {len(techs)} technologies")
   waf-detect:
     name: WAF Detection
     steps:
@@ -67,13 +75,23 @@ jobs:
       continue-on-error: true
       log-stdout: true
     - name: export-waf
-      script: "import json\n\nwaf_results = {{ steps[0].outputs.typed_outputs | tojson\
-        \ }}\nwaf_names = []\nfor item in waf_results:\n    if item.get('waf') or\
-        \ item.get('name'):\n        waf_names.append(item.get('waf') or item.get('name',\
-        \ 'unknown'))\n\nwith open('/tmp/ofx_urlfingerprint_waf.txt', 'w') as tf:\n    tf.write('\\n'.join(waf_names) if waf_names else 'none')\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        waf_detected_file=/tmp/ofx_urlfingerprint_waf.txt\\n\")\n  \
-        \  f.write(f\"waf_count={len(waf_names)}\\n\")\n\nprint(f\"WAF detected: {',\
-        \ '.join(waf_names) if waf_names else 'None'}\")\n"
+      script: |
+        import json
+
+        waf_results = {{ steps[0].outputs.typed_outputs | tojson }}
+        waf_names = []
+        for item in waf_results:
+            if item.get('waf') or item.get('name'):
+                waf_names.append(item.get('waf') or item.get('name', 'unknown'))
+
+        with open('/tmp/ofx_urlfingerprint_waf.txt', 'w') as tf:
+            tf.write('\n'.join(waf_names) if waf_names else 'none')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"waf_detected_file=/tmp/ofx_urlfingerprint_waf.txt\n")
+            f.write(f"waf_count={len(waf_names)}\n")
+
+        print(f"WAF detected: {', '.join(waf_names) if waf_names else 'None'}")
       log-stdout: true
   summary:
     name: Fingerprint Summary
@@ -83,21 +101,13 @@ jobs:
     - waf-detect
     steps:
     - name: report
-      run: 'echo "======================================="
-
-        echo " Fingerprint: {{ inputs.target }}"
-
+      run: |
         echo "======================================="
-
+        echo " Fingerprint: {{ inputs.target }}"
+        echo "======================================="
         echo "HTTP Status: {{ jobs.probe.outputs.status }}"
-
         echo "Page Title: {{ jobs.probe.outputs.title }}"
-
         echo "Web Server: {{ jobs.probe.outputs.webserver }}"
-
         echo "Technologies: {{ jobs.fingerprint.outputs.tech_count }}"
-
-        echo "WAF: {{ jobs[''waf-detect''].outputs.waf_detected_file }}"
-
-        '
+        echo "WAF: {{ jobs['waf-detect'].outputs.waf_detected_file }}"
       log-stdout: true

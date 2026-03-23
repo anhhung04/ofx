@@ -1,8 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-crawl
-description: 'URL crawl — discovers URLs from a target using active crawlers (katana,
-  gospider) and passive sources (gau). Probes discovered URLs and optionally hunts
-  for secrets.
+description: 'URL crawl — discovers URLs from a target using active crawlers (katana, gospider) and passive sources (gau). Probes discovered URLs and optionally hunts for secrets.
 
   '
 tags:
@@ -39,14 +37,26 @@ jobs:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - name: collect-urls
-      script: "import json\nfrom urllib.parse import urlparse\n\nurls = set()\nfor\
-        \ step_idx in [0, 1, 2]:\n    step_data = {{ steps | tojson }}\n    typed\
-        \ = step_data[step_idx].get('outputs', {}).get('typed_outputs', [])\n    for\
-        \ item in typed:\n        if item.get('_type') == 'url':\n            urls.add(item['url'])\n\
-        \nwith open('/tmp/ofx_urlcrawl_urls.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(urls)))\n\
-        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_file=/tmp/ofx_urlcrawl_urls.txt\\\
-        n\")\n    f.write(f\"url_count={len(urls)}\\n\")\n\nprint(f\"Crawled {len(urls)}\
-        \ unique URLs\")\n"
+      script: |
+        import json
+        from urllib.parse import urlparse
+
+        urls = set()
+        for step_idx in [0, 1, 2]:
+            step_data = {{ steps | tojson }}
+            typed = step_data[step_idx].get('outputs', {}).get('typed_outputs', [])
+            for item in typed:
+                if item.get('_type') == 'url':
+                    urls.add(item['url'])
+
+        with open('/tmp/ofx_urlcrawl_urls.txt', 'w') as tf:
+            tf.write('\n'.join(sorted(urls)))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"crawled_file=/tmp/ofx_urlcrawl_urls.txt\n")
+            f.write(f"url_count={len(urls)}\n")
+
+        print(f"Crawled {len(urls)} unique URLs")
   probe:
     name: HTTP Probe
     needs:
@@ -62,13 +72,9 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-live
-      run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
-        ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
-
-        echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
-        ''gt'', 0) | list | length }}" >> $OFX_OUTPUTS
-
-        '
+      run: |
+        echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
       log-stdout: true
   secrets:
     name: Secret Hunting
@@ -92,15 +98,10 @@ jobs:
         depth: 2
       continue-on-error: true
     - name: summary
-      run: 'echo "================================="
-
-        echo " URL Crawl: {{ inputs.target }}"
-
+      run: |
         echo "================================="
-
+        echo " URL Crawl: {{ inputs.target }}"
+        echo "================================="
         echo "URLs crawled: {{ jobs.crawl.outputs.url_count }}"
-
         echo "Live URLs: {{ jobs.probe.outputs.live_count }}"
-
-        '
       log-stdout: true

@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: nikto-scan
-description: 'Web server vulnerability scanning — identifies dangerous files, outdated
-  software, and server misconfigurations.
+description: 'Web server vulnerability scanning — identifies dangerous files, outdated software, and server misconfigurations.
 
   '
 tags:
@@ -20,20 +19,31 @@ jobs:
     name: Nikto Web Scan
     steps:
     - name: nikto-scan
-      run: 'nikto -h {{ inputs.target }} -nointeractive -no404 -C all 2>/dev/null
-        | tee /tmp/nikto-output.txt
-
-        '
+      run: |
+        nikto -h {{ inputs.target }} -nointeractive -no404 -C all 2>/dev/null | tee /tmp/nikto-output.txt
       continue-on-error: true
     - name: collect-nikto
-      script: "findings = []\ntry:\n    with open('/tmp/nikto-output.txt') as f:\n\
-        \        for line in f:\n            line = line.strip()\n            if line.startswith('+')\
-        \ and 'OSVDB' in line:\n                findings.append(line)\n          \
-        \  elif line.startswith('+') and (':' in line) and 'Target' not in line and\
-        \ 'Start' not in line and 'End' not in line:\n                findings.append(line)\n\
-        except FileNotFoundError:\n    pass\n\nwith open('/tmp/ofx_nikto_findings.txt', 'w') as tf:\n    tf.write('\\n'.join(findings))\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"nikto_findings_file=/tmp/ofx_nikto_findings.txt\\n\")\n    f.write(f\"nikto_count={len(findings)}\\n\")\n\nprint(f\"Nikto found\
-        \ {len(findings)} items\")\n"
+      script: |
+        findings = []
+        try:
+            with open('/tmp/nikto-output.txt') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('+') and 'OSVDB' in line:
+                        findings.append(line)
+                    elif line.startswith('+') and (':' in line) and 'Target' not in line and 'Start' not in line and 'End' not in line:
+                        findings.append(line)
+        except FileNotFoundError:
+            pass
+
+        with open('/tmp/ofx_nikto_findings.txt', 'w') as tf:
+            tf.write('\n'.join(findings))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"nikto_findings_file=/tmp/ofx_nikto_findings.txt\n")
+            f.write(f"nikto_count={len(findings)}\n")
+
+        print(f"Nikto found {len(findings)} items")
   nuclei-web:
     name: Nuclei Web Scan
     steps:
@@ -46,10 +56,8 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-nuclei
-      run: 'echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}"
-        >> $OFX_OUTPUTS
-
-        '
+      run: |
+        echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
       log-stdout: true
   summary:
     name: Vulnerability Summary
@@ -58,30 +66,18 @@ jobs:
     - nuclei-web
     steps:
     - name: report
-      script: 'import json
+      script: |
+        import json
 
-
-        nuclei_vulns = {{ vulns(jobs[''nuclei-web''].steps[0].outputs.typed_outputs)
-        | default([], true) | tojson }}
-
-        critical = [v for v in nuclei_vulns if v.get(''severity'') == ''critical'']
-
-        high = [v for v in nuclei_vulns if v.get(''severity'') == ''high'']
-
+        nuclei_vulns = {{ vulns(jobs['nuclei-web'].steps[0].outputs.typed_outputs) | default([], true) | tojson }}
+        critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
+        high = [v for v in nuclei_vulns if v.get('severity') == 'high']
 
         print("=" * 50)
-
         print(f" Web Vuln Scan: {{ inputs.target }}")
-
         print("=" * 50)
-
         print(f"Nikto findings: {{ jobs.scan.outputs.nikto_count }}")
-
-        print(f"Nuclei findings: {{ jobs[''nuclei-web''].outputs.nuclei_count }}")
-
+        print(f"Nuclei findings: {{ jobs['nuclei-web'].outputs.nuclei_count }}")
         print(f"  Critical: {len(critical)}")
-
         print(f"  High: {len(high)}")
-
-        '
       log-stdout: true

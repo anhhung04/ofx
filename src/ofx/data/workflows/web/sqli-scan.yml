@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: sqli-scan
-description: 'SQL injection scanning — tests target URL for SQL injection vulnerabilities
-  with multiple techniques.
+description: 'SQL injection scanning — tests target URL for SQL injection vulnerabilities with multiple techniques.
 
   '
 tags:
@@ -28,43 +27,55 @@ jobs:
     name: SQL Injection Scan
     steps:
     - name: sqlmap-scan
-      run: 'sqlmap -u "{{ inputs.target }}" --batch --level={{ inputs.level }} --risk={{
-        inputs.risk }} --threads=5 --output-dir=/tmp/sqlmap-output --no-color 2>&1
-        | tee /tmp/sqlmap-results.txt
-
-        '
+      run: |
+        sqlmap -u "{{ inputs.target }}" --batch --level={{ inputs.level }} --risk={{ inputs.risk }} --threads=5 --output-dir=/tmp/sqlmap-output --no-color 2>&1 | tee /tmp/sqlmap-results.txt
     - name: collect-findings
-      script: "import re\n\nfindings = []\nvulnerable = False\ntry:\n    with open('/tmp/sqlmap-results.txt')\
-        \ as f:\n        content = f.read()\n\n    if 'is vulnerable' in content or\
-        \ 'injectable' in content:\n        vulnerable = True\n\n    # Extract injection\
-        \ types found\n    types = re.findall(r'Type: (.+)', content)\n    findings.extend(types)\n\
-        \n    # Extract database info if found\n    dbs = re.findall(r'available databases\
-        \ \\[(\\d+)\\]', content)\n    db_count = dbs[0] if dbs else '0'\nexcept FileNotFoundError:\n\
-        \    db_count = '0'\n\nwith open('/tmp/ofx_sqli_types.txt', 'w') as tf:\n    tf.write('\\n'.join(findings))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n   \
-        \ f.write(f\"vulnerable={'true' if vulnerable else 'false'}\\n\")\n    f.write(f\"\
-        injection_types_file=/tmp/ofx_sqli_types.txt\\n\")\n    f.write(f\"finding_count={len(findings)}\\\
-        n\")\n    f.write(f\"db_count={db_count}\\n\")\n\nstatus = \"VULNERABLE\"\
-        \ if vulnerable else \"Not vulnerable\"\nprint(f\"Target is: {status}\")\n\
-        print(f\"Injection types found: {len(findings)}\")\n"
+      script: |
+        import re
+
+        findings = []
+        vulnerable = False
+        try:
+            with open('/tmp/sqlmap-results.txt') as f:
+                content = f.read()
+
+            if 'is vulnerable' in content or 'injectable' in content:
+                vulnerable = True
+
+            # Extract injection types found
+            types = re.findall(r'Type: (.+)', content)
+            findings.extend(types)
+
+            # Extract database info if found
+            dbs = re.findall(r'available databases \[(\d+)\]', content)
+            db_count = dbs[0] if dbs else '0'
+        except FileNotFoundError:
+            db_count = '0'
+
+        with open('/tmp/ofx_sqli_types.txt', 'w') as tf:
+            tf.write('\n'.join(findings))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"vulnerable={'true' if vulnerable else 'false'}\n")
+            f.write(f"injection_types_file=/tmp/ofx_sqli_types.txt\n")
+            f.write(f"finding_count={len(findings)}\n")
+            f.write(f"db_count={db_count}\n")
+
+        status = "VULNERABLE" if vulnerable else "Not vulnerable"
+        print(f"Target is: {status}")
+        print(f"Injection types found: {len(findings)}")
   summary:
     name: SQLi Summary
     needs:
     - sqli-scan
     steps:
     - name: report
-      run: 'echo "======================================="
-
-        echo " SQLi Scan: {{ inputs.target }}"
-
+      run: |
         echo "======================================="
-
+        echo " SQLi Scan: {{ inputs.target }}"
+        echo "======================================="
         echo "Level: {{ inputs.level }} | Risk: {{ inputs.risk }}"
-
-        echo "Vulnerable: {{ jobs[''sqli-scan''].outputs.vulnerable }}"
-
-        echo "Injection types: {{ jobs[''sqli-scan''].outputs.finding_count }}"
-
-        echo "Databases found: {{ jobs[''sqli-scan''].outputs.db_count }}"
-
-        '
+        echo "Vulnerable: {{ jobs['sqli-scan'].outputs.vulnerable }}"
+        echo "Injection types: {{ jobs['sqli-scan'].outputs.finding_count }}"
+        echo "Databases found: {{ jobs['sqli-scan'].outputs.db_count }}"
       log-stdout: true

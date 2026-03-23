@@ -1,6 +1,5 @@
 name: domain-recon
-description: 'Domain reconnaissance — collects WHOIS data, probes HTTP services, detects technologies, analyzes SSL/TLS security,
-  resolves DNS records, and identifies WAFs.
+description: 'Domain reconnaissance — collects WHOIS data, probes HTTP services, detects technologies, analyzes SSL/TLS security, resolves DNS records, and identifies WAFs.
 
   '
 tags:
@@ -90,22 +89,31 @@ jobs:
     - dns-enum
     steps:
     - name: report
-      run: 'echo "=============================="
-
-        echo " Domain Recon: {{ inputs.target }}"
-
+      run: |
         echo "=============================="
-
+        echo " Domain Recon: {{ inputs.target }}"
+        echo "=============================="
         echo "WHOIS and DNS resolution complete."
-
         echo "HTTP probe, TLS analysis, and WAF detection complete."
-
-        '
       log-stdout: true
     - name: export-to-project
-      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
-        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # subdomains\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['dns-enum'].outputs.subdomains\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'subdomains.txt').write_text(data)\n        print(f'\
-        \  [+] scans/subdomains.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+      script: |
+        import json, os
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping file export')
+        else:
+            p = Path(project)
+
+            # subdomains
+            d = p / 'scans'
+            d.mkdir(parents=True, exist_ok=True)
+            data = '''{{ jobs['dns-enum'].outputs.subdomains | default('', true) }}'''.strip()
+            if data:
+                (d / 'subdomains.txt').write_text(data)
+                print(f'  [+] scans/subdomains.txt ({len(data.splitlines())} lines)')
+
+            print(f'Project export complete: {project}')
       continue-on-error: true

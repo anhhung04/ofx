@@ -1,8 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: code-scan
-description: 'Code vulnerability scan and secret hunt — analyzes source code for security
-  vulnerabilities in dependencies (grype, trivy) and hardcoded secrets (gitleaks,
-  trufflehog).
+description: 'Code vulnerability scan and secret hunt — analyzes source code for security vulnerabilities in dependencies (grype, trivy) and hardcoded secrets (gitleaks, trufflehog).
 
   '
 tags:
@@ -33,14 +31,25 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-vulns
-      script: "import json\n\ngrype_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
-        \ | tojson }}\ntrivy_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson\
-        \ }}\n\nseen = set()\nunique = []\nfor v in grype_vulns + trivy_vulns:\n \
-        \   vid = v.get('id', v.get('name', ''))\n    if vid not in seen:\n      \
-        \  seen.add(vid)\n        unique.append(v)\n\nwith open('{{ env.OFX_OUTPUTS\
-        \ }}', 'a') as f:\n    f.write(f\"vuln_count={len(unique)}\\n\")\n    f.write(f\"\
-        critical_count={len([v for v in unique if v.get('severity') == 'critical'])}\\\
-        n\")\n\nprint(f\"Found {len(unique)} unique vulnerabilities\")\n"
+      script: |
+        import json
+
+        grype_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+        trivy_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+
+        seen = set()
+        unique = []
+        for v in grype_vulns + trivy_vulns:
+            vid = v.get('id', v.get('name', ''))
+            if vid not in seen:
+                seen.add(vid)
+                unique.append(v)
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"vuln_count={len(unique)}\n")
+            f.write(f"critical_count={len([v for v in unique if v.get('severity') == 'critical'])}\n")
+
+        print(f"Found {len(unique)} unique vulnerabilities")
       log-stdout: true
   secrets-scan:
     name: Secret & Leak Scanning
@@ -59,11 +68,17 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-secrets
-      script: "import json\n\ngl_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
-        \ | tojson }}\nth_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson\
-        \ }}\ntotal = len(gl_vulns) + len(th_vulns)\n\nwith open('{{ env.OFX_OUTPUTS\
-        \ }}', 'a') as f:\n    f.write(f\"secrets_count={total}\\n\")\n\nprint(f\"\
-        Found {total} secrets/leaks\")\n"
+      script: |
+        import json
+
+        gl_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+        th_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        total = len(gl_vulns) + len(th_vulns)
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"secrets_count={total}\n")
+
+        print(f"Found {total} secrets/leaks")
       log-stdout: true
   summary:
     name: Code Scan Summary
@@ -72,17 +87,11 @@ jobs:
     - secrets-scan
     steps:
     - name: report
-      run: 'echo "================================="
-
-        echo " Code Scan: {{ inputs.target }}"
-
+      run: |
         echo "================================="
-
-        echo "Vulnerabilities: {{ jobs[''vuln-scan''].outputs.vuln_count }}"
-
-        echo "  Critical: {{ jobs[''vuln-scan''].outputs.critical_count }}"
-
-        echo "Secrets/Leaks: {{ jobs[''secrets-scan''].outputs.secrets_count }}"
-
-        '
+        echo " Code Scan: {{ inputs.target }}"
+        echo "================================="
+        echo "Vulnerabilities: {{ jobs['vuln-scan'].outputs.vuln_count }}"
+        echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+        echo "Secrets/Leaks: {{ jobs['secrets-scan'].outputs.secrets_count }}"
       log-stdout: true

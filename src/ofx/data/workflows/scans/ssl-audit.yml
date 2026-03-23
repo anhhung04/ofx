@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: ssl-audit
-description: 'SSL/TLS security audit — comprehensive analysis of SSL/TLS configuration,
-  certificates, ciphers, and known vulnerabilities.
+description: 'SSL/TLS security audit — comprehensive analysis of SSL/TLS configuration, certificates, ciphers, and known vulnerabilities.
 
   '
 tags:
@@ -21,24 +20,46 @@ jobs:
     name: SSLScan Analysis
     steps:
     - name: sslscan-run
-      run: 'sslscan --no-colour {{ inputs.target }} 2>/dev/null | tee /tmp/sslscan-output.txt
-
-        '
+      run: |
+        sslscan --no-colour {{ inputs.target }} 2>/dev/null | tee /tmp/sslscan-output.txt
       continue-on-error: true
     - name: collect-sslscan
-      script: "import re\n\nweak_ciphers = []\nprotocols = []\ncert_info = []\n\n\
-        try:\n    with open('/tmp/sslscan-output.txt') as f:\n        content = f.read()\n\
-        \n    # Extract weak/deprecated protocols\n    for proto in ['SSLv2', 'SSLv3',\
-        \ 'TLSv1.0', 'TLSv1.1']:\n        if re.search(rf'{proto}\\s+enabled', content,\
-        \ re.IGNORECASE):\n            protocols.append(proto)\n\n    # Extract weak\
-        \ ciphers\n    for line in content.split('\\n'):\n        if 'NULL' in line\
-        \ or 'RC4' in line or 'DES' in line or 'EXPORT' in line:\n            cipher\
-        \ = line.strip()\n            if cipher:\n                weak_ciphers.append(cipher)\n\
-        \nexcept FileNotFoundError:\n    pass\n\nwith open('/tmp/ofx_sslaudit_protocols.txt', 'w') as tf:\n    tf.write('\\n'.join(protocols) if protocols else 'none')\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"weak_protocols_file=/tmp/ofx_sslaudit_protocols.txt\\n\")\n    f.write(f\"weak_protocol_count={len(protocols)}\\\
-        n\")\n    f.write(f\"weak_cipher_count={len(weak_ciphers)}\\n\")\n\nprint(f\"\
-        Weak protocols: {len(protocols)}\")\nprint(f\"Weak ciphers: {len(weak_ciphers)}\"\
-        )\n"
+      script: |
+        import re
+
+        weak_ciphers = []
+        protocols = []
+        cert_info = []
+
+        try:
+            with open('/tmp/sslscan-output.txt') as f:
+                content = f.read()
+
+            # Extract weak/deprecated protocols
+            for proto in ['SSLv2', 'SSLv3', 'TLSv1.0', 'TLSv1.1']:
+                if re.search(rf'{proto}\s+enabled', content, re.IGNORECASE):
+                    protocols.append(proto)
+
+            # Extract weak ciphers
+            for line in content.split('\n'):
+                if 'NULL' in line or 'RC4' in line or 'DES' in line or 'EXPORT' in line:
+                    cipher = line.strip()
+                    if cipher:
+                        weak_ciphers.append(cipher)
+
+        except FileNotFoundError:
+            pass
+
+        with open('/tmp/ofx_sslaudit_protocols.txt', 'w') as tf:
+            tf.write('\n'.join(protocols) if protocols else 'none')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"weak_protocols_file=/tmp/ofx_sslaudit_protocols.txt\n")
+            f.write(f"weak_protocol_count={len(protocols)}\n")
+            f.write(f"weak_cipher_count={len(weak_ciphers)}\n")
+
+        print(f"Weak protocols: {len(protocols)}")
+        print(f"Weak ciphers: {len(weak_ciphers)}")
   testssl-check:
     name: TestSSL Analysis
     steps:
@@ -50,14 +71,26 @@ jobs:
       continue-on-error: true
       log-stdout: true
     - name: export-testssl
-      script: "import json\n\nresults = {{ steps[0].outputs.typed_outputs | tojson\
-        \ }}\n\nvuln_count = 0\ncert_issues = 0\nfor item in results:\n    if item.get('_type')\
-        \ == 'vulnerability' or item.get('severity') in ['critical', 'high', 'medium']:\n\
-        \        vuln_count += 1\n    if item.get('_type') == 'certificate':\n   \
-        \     if item.get('issue'):\n            cert_issues += 1\n\nwith open('{{\
-        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"testssl_vulns={vuln_count}\\\
-        n\")\n    f.write(f\"cert_issues={cert_issues}\\n\")\n\nprint(f\"TestSSL vulnerabilities:\
-        \ {vuln_count}\")\nprint(f\"Certificate issues: {cert_issues}\")\n"
+      script: |
+        import json
+
+        results = {{ steps[0].outputs.typed_outputs | tojson }}
+
+        vuln_count = 0
+        cert_issues = 0
+        for item in results:
+            if item.get('_type') == 'vulnerability' or item.get('severity') in ['critical', 'high', 'medium']:
+                vuln_count += 1
+            if item.get('_type') == 'certificate':
+                if item.get('issue'):
+                    cert_issues += 1
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"testssl_vulns={vuln_count}\n")
+            f.write(f"cert_issues={cert_issues}\n")
+
+        print(f"TestSSL vulnerabilities: {vuln_count}")
+        print(f"Certificate issues: {cert_issues}")
       log-stdout: true
   summary:
     name: SSL Audit Summary
@@ -66,21 +99,12 @@ jobs:
     - testssl-check
     steps:
     - name: report
-      run: 'echo "======================================="
-
-        echo " SSL/TLS Audit: {{ inputs.target }}"
-
+      run: |
         echo "======================================="
-
-        echo "Weak protocols: {{ jobs[''sslscan-check''].outputs.weak_protocol_count
-        }}"
-
-        echo "Weak ciphers: {{ jobs[''sslscan-check''].outputs.weak_cipher_count }}"
-
-        echo "TLS vulnerabilities: {{ jobs[''testssl-check''].outputs.testssl_vulns
-        }}"
-
-        echo "Certificate issues: {{ jobs[''testssl-check''].outputs.cert_issues }}"
-
-        '
+        echo " SSL/TLS Audit: {{ inputs.target }}"
+        echo "======================================="
+        echo "Weak protocols: {{ jobs['sslscan-check'].outputs.weak_protocol_count }}"
+        echo "Weak ciphers: {{ jobs['sslscan-check'].outputs.weak_cipher_count }}"
+        echo "TLS vulnerabilities: {{ jobs['testssl-check'].outputs.testssl_vulns }}"
+        echo "Certificate issues: {{ jobs['testssl-check'].outputs.cert_issues }}"
       log-stdout: true

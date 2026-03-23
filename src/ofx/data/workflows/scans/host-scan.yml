@@ -73,10 +73,8 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-data
-      run: 'echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr(''status_code'', ''gt'', 0) | map(attribute=''url'')
-        | unique | join(''\n'') }}" >> $OFX_OUTPUTS
-
-        '
+      run: |
+        echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
       log-stdout: true
   web-analysis:
     name: Web Analysis
@@ -135,16 +133,39 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: final-summary
-      script: "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs)\
-        \ | tojson }}\ncritical = [v for v in all_vulns if v.get('severity') == 'critical']\nhigh = [v for v in all_vulns\
-        \ if v.get('severity') == 'high']\n\nprint(\"=\" * 50)\nprint(f\" HOST SCAN COMPLETE: {{ inputs.target }}\")\nprint(\"\
-        =\" * 50)\nprint(f\"Total vulnerabilities: {len(all_vulns)}\")\nprint(f\"  Critical: {len(critical)}\")\nprint(f\"\
-        \  High: {len(high)}\")\n"
+      script: |
+        import json
+
+        all_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \
+                    {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        critical = [v for v in all_vulns if v.get('severity') == 'critical']
+        high = [v for v in all_vulns if v.get('severity') == 'high']
+
+        print("=" * 50)
+        print(f" HOST SCAN COMPLETE: {{ inputs.target }}")
+        print("=" * 50)
+        print(f"Total vulnerabilities: {len(all_vulns)}")
+        print(f"  Critical: {len(critical)}")
+        print(f"  High: {len(high)}")
       log-stdout: true
     - name: export-to-project
-      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
-        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # live HTTP\
-        \ URLs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['host-recon'].outputs.live_urls\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'http-urls.txt').write_text(data)\n        print(f'\
-        \  [+] scans/http-urls.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+      script: |
+        import json, os
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping file export')
+        else:
+            p = Path(project)
+
+            # live HTTP URLs
+            d = p / 'scans'
+            d.mkdir(parents=True, exist_ok=True)
+            data = '''{{ jobs['host-recon'].outputs.live_urls | default('', true) }}'''.strip()
+            if data:
+                (d / 'http-urls.txt').write_text(data)
+                print(f'  [+] scans/http-urls.txt ({len(data.splitlines())} lines)')
+
+            print(f'Project export complete: {project}')
       continue-on-error: true

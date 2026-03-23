@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-scan
-description: 'Comprehensive URL security assessment — combines crawling, fuzzing,
-  parameter discovery, and vulnerability scanning for thorough web application testing.
+description: 'Comprehensive URL security assessment — combines crawling, fuzzing, parameter discovery, and vulnerability scanning for thorough web application testing.
 
   '
 tags:
@@ -53,12 +52,23 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: collect-urls
-      script: "import json\n\nurls = set()\nfor idx in [0, 1, 2, 3]:\n    step_data\
-        \ = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
-        \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
-        \          urls.add(item['url'])\n\nwith open('/tmp/ofx_urlscan_urls.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(urls)))\n\
-        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"urls_file=/tmp/ofx_urlscan_urls.txt\\\
-        n\")\n    f.write(f\"url_count={len(urls)}\\n\")\n"
+      script: |
+        import json
+
+        urls = set()
+        for idx in [0, 1, 2, 3]:
+            step_data = {{ steps | tojson }}
+            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+            for item in typed:
+                if item.get('_type') == 'url':
+                    urls.add(item['url'])
+
+        with open('/tmp/ofx_urlscan_urls.txt', 'w') as tf:
+            tf.write('\n'.join(sorted(urls)))
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"urls_file=/tmp/ofx_urlscan_urls.txt\n")
+            f.write(f"url_count={len(urls)}\n")
   url-fuzz:
     name: URL Fuzzing
     needs:
@@ -155,13 +165,21 @@ jobs:
       continue-on-error: true
       log-stdout: true
     - name: final-summary
-      script: "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
-        \ | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs) |\
-        \ tojson }} + \\\n            {{ vulns(steps[2].outputs.typed_outputs) | tojson\
-        \ }}\n\ncritical = [v for v in all_vulns if v.get('severity') == 'critical']\n\
-        high = [v for v in all_vulns if v.get('severity') == 'high']\n\nprint(\"=\"\
-        \ * 50)\nprint(f\" URL SCAN COMPLETE: {{ inputs.target }}\")\nprint(\"=\"\
-        \ * 50)\nprint(f\"URLs discovered: {{ jobs['url-crawl'].outputs.url_count\
-        \ }}\")\nprint(f\"Total vulnerabilities: {len(all_vulns)}\")\nprint(f\"  Critical:\
-        \ {len(critical)}\")\nprint(f\"  High: {len(high)}\")\n"
+      script: |
+        import json
+
+        all_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \
+                    {{ vulns(steps[1].outputs.typed_outputs) | tojson }} + \
+                    {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+
+        critical = [v for v in all_vulns if v.get('severity') == 'critical']
+        high = [v for v in all_vulns if v.get('severity') == 'high']
+
+        print("=" * 50)
+        print(f" URL SCAN COMPLETE: {{ inputs.target }}")
+        print("=" * 50)
+        print(f"URLs discovered: {{ jobs['url-crawl'].outputs.url_count }}")
+        print(f"Total vulnerabilities: {len(all_vulns)}")
+        print(f"  Critical: {len(critical)}")
+        print(f"  High: {len(high)}")
       log-stdout: true

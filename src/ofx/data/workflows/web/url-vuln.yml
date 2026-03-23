@@ -1,7 +1,6 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-vuln
-description: 'URL vulnerability scan — scans URLs for XSS, injection, and other web
-  vulnerabilities using dalfox and nuclei.
+description: 'URL vulnerability scan — scans URLs for XSS, injection, and other web vulnerabilities using dalfox and nuclei.
 
   '
 tags:
@@ -24,10 +23,8 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-xss
-      run: 'echo "xss_count={{ vulns(steps[0].outputs.typed_outputs) | length }}"
-        >> $OFX_OUTPUTS
-
-        '
+      run: |
+        echo "xss_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
       log-stdout: true
   nuclei-scan:
     name: Nuclei Vulnerability Scan
@@ -41,10 +38,8 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-vulns
-      run: 'echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}"
-        >> $OFX_OUTPUTS
-
-        '
+      run: |
+        echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
       log-stdout: true
   summary:
     name: Vulnerability Summary
@@ -53,15 +48,10 @@ jobs:
     - nuclei-scan
     steps:
     - name: report
-      run: 'echo "================================="
-
-        echo " URL Vuln Scan: {{ inputs.target }}"
-
+      run: |
         echo "================================="
-
-        echo "XSS findings: {{ jobs[''xss-scan''].outputs.xss_count }}"
-
-        echo "Nuclei findings: {{ jobs[''nuclei-scan''].outputs.nuclei_count }}"
-
-        '
+        echo " URL Vuln Scan: {{ inputs.target }}"
+        echo "================================="
+        echo "XSS findings: {{ jobs['xss-scan'].outputs.xss_count }}"
+        echo "Nuclei findings: {{ jobs['nuclei-scan'].outputs.nuclei_count }}"
       log-stdout: true
