@@ -40,7 +40,7 @@ class ArjunTask(Task):
     input_flag = "-u"
     file_flag = "-i"
     output_flag = "-oJ"
-    extra_flags = []
+    extra_flags = ["-q"]
 
     def _output_suffix(self) -> str:
         return ".json"

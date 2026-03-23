@@ -32,7 +32,7 @@ class RustscanTask(Task):
     input_flag = "-a"
     file_flag = None
     output_flag = None
-    extra_flags = ["--greppable"]
+    extra_flags = ["--greppable", "--accessible"]
 
     def _output_suffix(self) -> str:
         return ".txt"

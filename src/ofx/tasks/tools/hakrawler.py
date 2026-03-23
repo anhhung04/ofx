@@ -33,7 +33,7 @@ class HakrawlerTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags: list[str] = []
+    extra_flags: list[str] = ["-s"]
 
     def _output_suffix(self) -> str:
         return ".txt"

@@ -49,7 +49,7 @@ class GobusterTask(Task):
     input_flag = None
     file_flag = None
     output_flag = "-o"
-    extra_flags = ["--no-progress", "--no-color"]
+    extra_flags = ["--no-progress", "--no-color", "-q"]
 
     def _output_suffix(self) -> str:
         return ".txt"

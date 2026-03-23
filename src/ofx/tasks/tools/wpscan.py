@@ -51,7 +51,7 @@ class WpscanTask(Task):
     input_flag = "--url"
     file_flag = None
     output_flag = None
-    extra_flags = ["--format", "json", "--force", "--verbose"]
+    extra_flags = ["--format", "json", "--force", "--no-banner"]
 
     def parse_output(
         self,

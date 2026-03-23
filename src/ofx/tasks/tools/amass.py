@@ -39,7 +39,7 @@ class AmassTask(Task):
     input_flag = "-d"
     file_flag = "-df"
     output_flag = "-o"
-    extra_flags = ["-passive"]
+    extra_flags = ["-passive", "-silent"]
 
     def _output_suffix(self) -> str:
         return ".txt"
