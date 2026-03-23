@@ -53,8 +53,13 @@ def get_workflow_search_dirs() -> list[Path]:
     installed after process start are still found.
     """
     dirs = list(DEFAULT_WORKFLOWS_DIRS)
-    # Include built-in workflows shipped with the package
+    # Include built-in workflows shipped with the package.
+    # Add root first (allows "recon/domain-recon" style paths),
+    # then each subdirectory (allows bare "domain-recon").
     if BUILTIN_WORKFLOWS_DIR.is_dir():
+        abs_root = BUILTIN_WORKFLOWS_DIR.absolute()
+        if abs_root not in dirs:
+            dirs.append(abs_root)
         for child in sorted(BUILTIN_WORKFLOWS_DIR.iterdir()):
             if child.is_dir() and child.name != "__pycache__":
                 abs_child = child.absolute()
