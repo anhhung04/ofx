@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+from rich.console import Console
+
 from ofx.commands.ui_helpers import (
     header_panel,
     print_error,

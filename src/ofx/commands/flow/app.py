@@ -3,9 +3,9 @@ from typing import Annotated
 
 import typer
 
-from ofx.commands.dump import app as schema_app
 from ofx.commands.flow.collection import app as collection_app
 from ofx.commands.flow.profile_commands import app as profile_cmd_app
+from ofx.commands.flow.schema import app as schema_app
 from ofx.commands.flow.task_commands import app as task_cmd_app
 from ofx.commands.project.project_manager import ProjectManager
 
@@ -151,9 +151,25 @@ def validate(
     ] = "",
 ):
     """Validate a workflow configuration"""
-    from ofx.commands.flow.validate import ValidateHandler
+    from ofx.commands.ui_helpers import print_error, print_info, print_success
+    from ofx.settings import DEFAULT_WORKFLOWS_DIRS
+    from ofx.utils.workflow_utils import find_workflow
 
-    ValidateHandler().run(workflow_name=workflow_name)
+    print_info(
+        "Workflow Validation",
+        f"[bold]Validating:[/bold] [cyan]{workflow_name}[/cyan]",
+    )
+
+    try:
+        workflow = find_workflow(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+        print_success(
+            "Validation Successful",
+            f"Workflow '{workflow.name}' is valid!",
+            {"Details": "All schema validations passed", "Path": str(workflow.workflow_path)},
+        )
+    except Exception as e:
+        print_error("Validation Error", "Validation failed", str(e))
+        raise e
 
 
 @app.command()

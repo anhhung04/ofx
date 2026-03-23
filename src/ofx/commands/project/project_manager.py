@@ -1,11 +1,10 @@
-import shutil
 import json
 import os
+import shutil
 from os import getenv
 from pathlib import Path
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
-from typing import Optional
 
 # Configuration helpers for active project management
 CONFIG_PATH = Path.home() / ".ofx" / "config.json"
@@ -39,7 +38,7 @@ class ProjectManager:
         return Path(path)
 
     @classmethod
-    def resolve_path(cls, project_arg: Optional[str]) -> str:
+    def resolve_path(cls, project_arg: str | None) -> str:
         """Resolve project path from name, relative, or absolute path.
         Raises ValueError if project_arg is None.
         """
@@ -100,7 +99,7 @@ class ProjectManager:
         return False
 
     @classmethod
-    def get_active_path(cls) -> Optional[Path]:
+    def get_active_path(cls) -> Path | None:
         """Return the active project Path considering env var, Settings, or config."""
         # 1️⃣ Environment variable override
         env_name = os.getenv("OFX_ACTIVE_PROJECT")

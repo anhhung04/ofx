@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -16,11 +16,11 @@ HELP = "AI assistant: workflow generation, output analysis, and interactive chat
 def generate(
     prompt: Annotated[str, typer.Argument(help="Natural language workflow description")],
     output: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("-o", "--output", help="Save generated YAML to this file path"),
     ] = None,
     model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--model", "-m", help="Override LLM model (e.g. claude-opus-4-6)"),
     ] = None,
 ):
@@ -33,18 +33,18 @@ def generate(
 @app.command("analyze")
 def analyze(
     output_file: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--output-file", "-f",
             help="Workflow run output JSON file to analyze (or pipe via stdin)",
         ),
     ] = None,
     workflow_file: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--workflow-file", "-w", help="Workflow YAML for additional context"),
     ] = None,
     skill: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             "--skill", "-s",
             help=(
@@ -54,7 +54,7 @@ def analyze(
         ),
     ] = None,
     model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--model", "-m", help="Override LLM model"),
     ] = None,
 ):
@@ -80,11 +80,11 @@ def analyze(
 @app.command("chat")
 def chat(
     prompt: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("-p", "--prompt", help="Opening message (skips interactive input)"),
     ] = None,
     model: Annotated[
-        Optional[str],
+        str | None,
         typer.Option("--model", "-m", help="Override LLM model"),
     ] = None,
 ):
