@@ -30,8 +30,8 @@ jobs:
         \n# Parse theHarvester output\ntry:\n    with open('/tmp/harvester-output.txt')\
         \ as f:\n        content = f.read()\n    found = re.findall(r'[\\w.+-]+@[\\\
         w-]+\\.[\\w.-]+', content)\n    emails.update(found)\nexcept FileNotFoundError:\n\
-        \    pass\n\nemail_list = '\\n'.join(sorted(emails))\nwith open('{{ env.OFX_OUTPUTS\
-        \ }}', 'a') as f:\n    f.write(f\"email_list={email_list}\\n\")\n    f.write(f\"\
+        \    pass\n\nwith open('/tmp/ofx_emailosint_emails.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(emails)))\n\nwith open('{{ env.OFX_OUTPUTS\
+        \ }}', 'a') as f:\n    f.write(f\"email_file=/tmp/ofx_emailosint_emails.txt\\n\")\n    f.write(f\"\
         email_count={len(emails)}\\n\")\n\nprint(f\"Harvested {len(emails)} email\
         \ addresses\")\n"
   breach-search:
@@ -42,7 +42,7 @@ jobs:
     - task: h8mail
       name: h8mail-search
       with:
-        target: '{{ jobs[''email-harvest''].outputs.email_list | default(inputs.target,
+        target: '{{ jobs[''email-harvest''].outputs.email_file | default(inputs.target,
           true) }}'
       continue-on-error: true
       log-stdout: true
@@ -58,7 +58,7 @@ jobs:
     - email-harvest
     steps:
     - name: holehe-check
-      run: 'holehe {{ jobs[''email-harvest''].outputs.email_list | default(inputs.target,
+      run: 'holehe {{ jobs[''email-harvest''].outputs.email_file | default(inputs.target,
         true) }} --no-color 2>/dev/null | tee /tmp/holehe-output.txt
 
         '
@@ -67,9 +67,8 @@ jobs:
       script: "accounts = []\ntry:\n    with open('/tmp/holehe-output.txt') as f:\n\
         \        for line in f:\n            line = line.strip()\n            if '[+]'\
         \ in line:\n                accounts.append(line)\nexcept FileNotFoundError:\n\
-        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        account_count={len(accounts)}\\n\")\n    f.write(f\"account_list={chr(10).join(accounts)}\\\
-        n\")\n\nprint(f\"Found {len(accounts)} registered accounts\")\n"
+        \    pass\n\nwith open('/tmp/ofx_emailosint_accounts.txt', 'w') as tf:\n    tf.write('\\n'.join(accounts))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        account_count={len(accounts)}\\n\")\n    f.write(f\"account_file=/tmp/ofx_emailosint_accounts.txt\\n\")\n\nprint(f\"Found {len(accounts)} registered accounts\")\n"
   summary:
     name: Email OSINT Summary
     needs:

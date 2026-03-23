@@ -34,9 +34,8 @@ jobs:
         \ ciphers\n    for line in content.split('\\n'):\n        if 'NULL' in line\
         \ or 'RC4' in line or 'DES' in line or 'EXPORT' in line:\n            cipher\
         \ = line.strip()\n            if cipher:\n                weak_ciphers.append(cipher)\n\
-        \nexcept FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"weak_protocols={chr(10).join(protocols) if protocols\
-        \ else 'none'}\\n\")\n    f.write(f\"weak_protocol_count={len(protocols)}\\\
+        \nexcept FileNotFoundError:\n    pass\n\nwith open('/tmp/ofx_sslaudit_protocols.txt', 'w') as tf:\n    tf.write('\\n'.join(protocols) if protocols else 'none')\n\nwith open('{{ env.OFX_OUTPUTS }}',\
+        \ 'a') as f:\n    f.write(f\"weak_protocols_file=/tmp/ofx_sslaudit_protocols.txt\\n\")\n    f.write(f\"weak_protocol_count={len(protocols)}\\\
         n\")\n    f.write(f\"weak_cipher_count={len(weak_ciphers)}\\n\")\n\nprint(f\"\
         Weak protocols: {len(protocols)}\")\nprint(f\"Weak ciphers: {len(weak_ciphers)}\"\
         )\n"

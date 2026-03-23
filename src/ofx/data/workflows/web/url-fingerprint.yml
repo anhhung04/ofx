@@ -54,9 +54,8 @@ jobs:
         \        content = f.read()\n    # Extract technology identifiers from WhatWeb\
         \ output\n    import re\n    matches = re.findall(r'\\[([^\\]]+)\\]', content)\n\
         \    for m in matches:\n        m = m.strip()\n        if m and not m.startswith('http'):\n\
-        \            techs.add(m)\nexcept FileNotFoundError:\n    pass\n\nwith open('{{\
-        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"tech_list={chr(10).join(sorted(techs))}\\\
-        n\")\n    f.write(f\"tech_count={len(techs)}\\n\")\n\nprint(f\"Detected {len(techs)}\
+        \            techs.add(m)\nexcept FileNotFoundError:\n    pass\n\nwith open('/tmp/ofx_urlfingerprint_techs.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(techs)))\n\nwith open('{{\
+        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"tech_list_file=/tmp/ofx_urlfingerprint_techs.txt\\n\")\n    f.write(f\"tech_count={len(techs)}\\n\")\n\nprint(f\"Detected {len(techs)}\
         \ technologies\")\n"
   waf-detect:
     name: WAF Detection
@@ -71,8 +70,8 @@ jobs:
       script: "import json\n\nwaf_results = {{ steps[0].outputs.typed_outputs | tojson\
         \ }}\nwaf_names = []\nfor item in waf_results:\n    if item.get('waf') or\
         \ item.get('name'):\n        waf_names.append(item.get('waf') or item.get('name',\
-        \ 'unknown'))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        waf_detected={chr(10).join(waf_names) if waf_names else 'none'}\\n\")\n  \
+        \ 'unknown'))\n\nwith open('/tmp/ofx_urlfingerprint_waf.txt', 'w') as tf:\n    tf.write('\\n'.join(waf_names) if waf_names else 'none')\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        waf_detected_file=/tmp/ofx_urlfingerprint_waf.txt\\n\")\n  \
         \  f.write(f\"waf_count={len(waf_names)}\\n\")\n\nprint(f\"WAF detected: {',\
         \ '.join(waf_names) if waf_names else 'None'}\")\n"
       log-stdout: true
@@ -98,7 +97,7 @@ jobs:
 
         echo "Technologies: {{ jobs.fingerprint.outputs.tech_count }}"
 
-        echo "WAF: {{ jobs[''waf-detect''].outputs.waf_detected }}"
+        echo "WAF: {{ jobs[''waf-detect''].outputs.waf_detected_file }}"
 
         '
       log-stdout: true

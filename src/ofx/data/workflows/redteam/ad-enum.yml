@@ -107,7 +107,7 @@ jobs:
         \ [])\n    for item in typed:\n        if item.get('_type') == 'user_account' and item.get('username'):\n        \
         \    users.add(item['username'])\n\n# From enum4linux\ne4l_data = {{ users(steps[6].outputs.typed_outputs) | tojson\
         \ }}\nfor item in e4l_data:\n    if item.get('username'):\n        users.add(item['username'])\n\nwith open('{{ env.OFX_OUTPUTS\
-        \ }}', 'a') as f:\n    f.write(f\"smb_users={chr(10).join(sorted(users))}\\n\")\n    f.write(f\"smb_user_count={len(users)}\\\
+        \ }}', 'a') as f:\n    open('/tmp/ofx_adenum_smb_users.txt', 'w').write('\\n'.join(sorted(users)))\n    f.write(f\"smb_users_file=/tmp/ofx_adenum_smb_users.txt\\n\")\n    f.write(f\"smb_user_count={len(users)}\\\
         n\")\n\nprint(f\"SMB enum: {len(users)} users discovered\")\n"
       log-stdout: true
   kerberos-enum:
@@ -135,9 +135,7 @@ jobs:
         \ Parse AS-REP roastable users\ntry:\n    with open('/tmp/asrep-hashes.txt') as f:\n        for line in f:\n     \
         \       if line.startswith('$krb5asrep$'):\n                match = re.search(r'\\$krb5asrep\\$23?\\$(.+?)@', line)\n\
         \                if match:\n                    asrep_users.add(match.group(1))\nexcept FileNotFoundError:\n    pass\n\
-        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"kerb_users={chr(10).join(sorted(kerb_users))}\\n\"\
-        )\n    f.write(f\"kerb_user_count={len(kerb_users)}\\n\")\n    f.write(f\"asrep_users={chr(10).join(sorted(asrep_users))}\\\
-        n\")\n    f.write(f\"asrep_count={len(asrep_users)}\\n\")\n\nprint(f\"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)}\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    open('/tmp/ofx_adenum_kerb_users.txt', 'w').write('\\n'.join(sorted(kerb_users)))\n    f.write(f\"kerb_users_file=/tmp/ofx_adenum_kerb_users.txt\\n\")\n    f.write(f\"kerb_user_count={len(kerb_users)}\\n\")\n    open('/tmp/ofx_adenum_asrep_users.txt', 'w').write('\\n'.join(sorted(asrep_users)))\n    f.write(f\"asrep_users_file=/tmp/ofx_adenum_asrep_users.txt\\n\")\n    f.write(f\"asrep_count={len(asrep_users)}\\n\")\n\nprint(f\"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)}\
         \ AS-REP roastable\")\n"
       log-stdout: true
   ldap-enum:
@@ -170,7 +168,7 @@ jobs:
     - name: collect-ldap
       script: "ldap_users = set()\n\n# From netexec LDAP typed outputs\nnxc_out = {{ users(steps[0].outputs.typed_outputs)\
         \ | tojson }}\nfor item in nxc_out:\n    if item.get('username'):\n        ldap_users.add(item['username'])\n\nwith\
-        \ open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ldap_users={chr(10).join(sorted(ldap_users))}\\n\")\n \
+        \ open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    open('/tmp/ofx_adenum_ldap_users.txt', 'w').write('\\n'.join(sorted(ldap_users)))\n    f.write(f\"ldap_users_file=/tmp/ofx_adenum_ldap_users.txt\\n\")\n \
         \   f.write(f\"ldap_user_count={len(ldap_users)}\\n\")\n\nprint(f\"LDAP enum: {len(ldap_users)} users\")\n"
       log-stdout: true
   summary:
@@ -214,16 +212,7 @@ jobs:
     - name: export-to-project
       script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
         \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # SMB users\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['smb-enum'].outputs.smb_users\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'ad-users-smb.txt').write_text(data)\n        print(f'\
-        \  [+] scans/ad-users-smb.txt ({len(data.splitlines())} lines)')\n\n    # Kerberos users\n    d = p / 'scans'\n  \
-        \  d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['kerberos-enum'].outputs.kerb_users | default('', true)\
-        \ }}'''.strip()\n    if data:\n        (d / 'ad-users-kerb.txt').write_text(data)\n        print(f'  [+] scans/ad-users-kerb.txt\
-        \ ({len(data.splitlines())} lines)')\n\n    # LDAP users\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n\
-        \    data = '''{{ jobs['ldap-enum'].outputs.ldap_users | default('', true) }}'''.strip()\n    if data:\n        (d\
-        \ / 'ad-users-ldap.txt').write_text(data)\n        print(f'  [+] scans/ad-users-ldap.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    # AS-REP roastable\n    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n    data\
-        \ = '''{{ jobs['kerberos-enum'].outputs.asrep_users | default('', true) }}'''.strip()\n    if data:\n        (d /\
-        \ 'asrep-users.txt').write_text(data)\n        print(f'  [+] evidence/data/asrep-users.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    print(f'Project export complete: {project}')"
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    sf = '''{{ jobs['smb-enum'].outputs.smb_users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'ad-users-smb.txt')\n        print(f'  [+] scans/ad-users-smb.txt')\n\n    # Kerberos users\n    d = p / 'scans'\n  \
+        \  d.mkdir(parents=True, exist_ok=True)\n    sf = '''{{ jobs['kerberos-enum'].outputs.kerb_users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'ad-users-kerb.txt')\n        print(f'  [+] scans/ad-users-kerb.txt')\n\n    # LDAP users\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n\
+        \    sf = '''{{ jobs['ldap-enum'].outputs.ldap_users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'ad-users-ldap.txt')\n        print(f'  [+] scans/ad-users-ldap.txt')\n\n    # AS-REP roastable\n    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n    sf = '''{{ jobs['kerberos-enum'].outputs.asrep_users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'asrep-users.txt')\n        print(f'  [+] evidence/data/asrep-users.txt')\n\n    print(f'Project export complete: {project}')"
       continue-on-error: true

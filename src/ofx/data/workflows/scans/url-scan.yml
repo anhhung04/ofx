@@ -56,9 +56,9 @@ jobs:
       script: "import json\n\nurls = set()\nfor idx in [0, 1, 2, 3]:\n    step_data\
         \ = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
         \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
-        \          urls.add(item['url'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
-        \ as f:\n    f.write(f\"all_urls={chr(10).join(sorted(urls))}\\n\")\n    f.write(f\"\
-        url_count={len(urls)}\\n\")\n"
+        \          urls.add(item['url'])\n\nwith open('/tmp/ofx_urlscan_urls.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(urls)))\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"urls_file=/tmp/ofx_urlscan_urls.txt\\\
+        n\")\n    f.write(f\"url_count={len(urls)}\\n\")\n"
   url-fuzz:
     name: URL Fuzzing
     needs:

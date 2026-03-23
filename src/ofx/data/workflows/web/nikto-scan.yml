@@ -31,9 +31,8 @@ jobs:
         \ and 'OSVDB' in line:\n                findings.append(line)\n          \
         \  elif line.startswith('+') and (':' in line) and 'Target' not in line and\
         \ 'Start' not in line and 'End' not in line:\n                findings.append(line)\n\
-        except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"nikto_findings={chr(10).join(findings)}\\n\"\
-        )\n    f.write(f\"nikto_count={len(findings)}\\n\")\n\nprint(f\"Nikto found\
+        except FileNotFoundError:\n    pass\n\nwith open('/tmp/ofx_nikto_findings.txt', 'w') as tf:\n    tf.write('\\n'.join(findings))\n\nwith open('{{ env.OFX_OUTPUTS }}',\
+        \ 'a') as f:\n    f.write(f\"nikto_findings_file=/tmp/ofx_nikto_findings.txt\\n\")\n    f.write(f\"nikto_count={len(findings)}\\n\")\n\nprint(f\"Nikto found\
         \ {len(findings)} items\")\n"
   nuclei-web:
     name: Nuclei Web Scan

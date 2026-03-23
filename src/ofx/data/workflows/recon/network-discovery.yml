@@ -33,8 +33,9 @@ jobs:
       script: "import os\n\nhosts = set()\nif os.path.exists('/tmp/alive-hosts.txt'):\n\
         \    with open('/tmp/alive-hosts.txt') as f:\n        for line in f:\n   \
         \         ip = line.strip()\n            if ip:\n                hosts.add(ip)\n\
-        \nhost_list = '\\n'.join(sorted(hosts))\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"alive_hosts={host_list}\\n\")\n    f.write(f\"\
+        \nwith open('/tmp/ofx_nd_alive.txt', 'w') as f:\n    f.write('\\n'.join(sorted(hosts)))\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}',\
+        \ 'a') as f:\n    f.write(f\"alive_file=/tmp/ofx_nd_alive.txt\\n\")\n    f.write(f\"\
         alive_count={len(hosts)}\\n\")\n\nprint(f\"Found {len(hosts)} alive hosts\"\
         )\n"
   port-scan:
@@ -43,7 +44,7 @@ jobs:
     - host-discovery
     steps:
     - name: masscan-sweep
-      run: 'masscan {{ jobs[''host-discovery''].outputs.alive_hosts | default(inputs.target,
+      run: 'masscan -iL {{ jobs[''host-discovery''].outputs.alive_file | default(inputs.target,
         true) }} --top-ports 100 --rate 1000 -oL /tmp/masscan-results.txt 2>/dev/null
         || true
 
@@ -52,7 +53,7 @@ jobs:
     - task: naabu
       name: naabu-scan
       with:
-        target: '{{ jobs[''host-discovery''].outputs.alive_hosts | default(inputs.target,
+        target: '{{ jobs[''host-discovery''].outputs.alive_file | default(inputs.target,
           true) }}'
         top_ports: '1000'
         rate: 1000
@@ -64,9 +65,9 @@ jobs:
         \    if item.get('_type') == 'port':\n        host = item.get('host') or item.get('ip',\
         \ '')\n        port = item.get('port', '')\n        if host and port:\n  \
         \          ports_found.add(f\"{host}:{port}\")\n            hosts_with_ports.add(host)\n\
-        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports_found))}\\\
-        n\")\n    f.write(f\"port_count={len(ports_found)}\\n\")\n    f.write(f\"\
-        hosts_with_ports={chr(10).join(sorted(hosts_with_ports))}\\n\")\n\nprint(f\"\
+        \nwith open('/tmp/ofx_nd_hosts.txt', 'w') as f:\n    f.write('\\n'.join(sorted(hosts_with_ports)))\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"hosts_file=/tmp/ofx_nd_hosts.txt\\\
+        n\")\n    f.write(f\"port_count={len(ports_found)}\\n\")\n\nprint(f\"\
         Found {len(ports_found)} open ports across {len(hosts_with_ports)} hosts\"\
         )\n"
   service-detection:
@@ -77,7 +78,7 @@ jobs:
     - task: nmap
       name: version-detect
       with:
-        target: '{{ jobs[''port-scan''].outputs.hosts_with_ports | default(inputs.target,
+        target: '{{ jobs[''port-scan''].outputs.hosts_file | default(inputs.target,
           true) }}'
         version_detection: true
       log-stdout: true
@@ -85,7 +86,7 @@ jobs:
     - task: httpx
       name: http-probe
       with:
-        target: '{{ jobs[''port-scan''].outputs.hosts_with_ports | default(inputs.target,
+        target: '{{ jobs[''port-scan''].outputs.hosts_file | default(inputs.target,
           true) }}'
         tech_detect: true
         status_code: true

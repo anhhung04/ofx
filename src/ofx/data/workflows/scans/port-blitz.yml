@@ -56,7 +56,7 @@ jobs:
         \ | tojson }}:\n    host = item.get('host') or item.get('ip', '')\n    port = str(item.get('port', ''))\n    if host\
         \ and port:\n        ports_by_host.setdefault(host, set()).add(port)\n\nall_hosts = sorted(ports_by_host.keys())\n\
         all_ports = set()\nfor p_set in ports_by_host.values():\n    all_ports.update(p_set)\n\nport_csv = ','.join(sorted(all_ports,\
-        \ key=int))\nhost_list = '\\n'.join(all_hosts)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"merged_hosts={host_list}\\\
+        \ key=int))\n\nwith open('/tmp/ofx_portblitz_hosts.txt', 'w') as tf:\n    tf.write('\\n'.join(all_hosts))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"hosts_file=/tmp/ofx_portblitz_hosts.txt\\\
         n\")\n    f.write(f\"merged_ports={port_csv}\\n\")\n    f.write(f\"host_count={len(all_hosts)}\\n\")\n    f.write(f\"\
         port_count={len(all_ports)}\\n\")\n\nprint(f\"Merged {len(all_ports)} unique ports across {len(all_hosts)} hosts\"\
         )\n"
@@ -76,7 +76,7 @@ jobs:
     - task: httpx
       name: http-probe
       with:
-        target: '{{ jobs[''fast-scan''].outputs.merged_hosts | default(inputs.target, true) }}'
+        target: '{{ jobs[''fast-scan''].outputs.hosts_file | default(inputs.target, true) }}'
         tech_detect: true
         status_code: true
         title: true
@@ -99,8 +99,8 @@ jobs:
         \ | tojson }}\nhttp_urls = {{ urls(steps[1].outputs.typed_outputs) | tojson }}\nexploits = {{ steps[3].outputs.typed_outputs\
         \ | tojson }}\n\nservices = []\nfor p in nmap_ports:\n    svc = p.get('service_name', 'unknown')\n    port = p.get('port',\
         \ '?')\n    host = p.get('host') or p.get('ip', '?')\n    services.append(f\"{host}:{port}/{svc}\")\n\nlive_urls =\
-        \ [u['url'] for u in http_urls if u.get('url')]\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        service_count={len(services)}\\n\")\n    f.write(f\"live_urls={chr(10).join(live_urls)}\\n\")\n    f.write(f\"http_count={len(live_urls)}\\\
+        \ [u['url'] for u in http_urls if u.get('url')]\n\nwith open('/tmp/ofx_portblitz_urls.txt', 'w') as tf:\n    tf.write('\\n'.join(live_urls))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        service_count={len(services)}\\n\")\n    f.write(f\"live_urls_file=/tmp/ofx_portblitz_urls.txt\\n\")\n    f.write(f\"http_count={len(live_urls)}\\\
         n\")\n    f.write(f\"vuln_count={len(nmap_vulns)}\\n\")\n    f.write(f\"exploit_count={len(exploits)}\\n\")\n\nprint(f\"\
         Services: {len(services)}, HTTP: {len(live_urls)}, Vulns: {len(nmap_vulns)}, Exploits: {len(exploits)}\")\n"
       log-stdout: true
@@ -146,10 +146,9 @@ jobs:
         \ port list\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['fast-scan'].outputs.merged_ports\
         \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'ports.txt').write_text(data)\n        print(f'  [+]\
         \ scans/ports.txt ({len(data.splitlines())} lines)')\n\n    # target hosts\n    d = p / 'scans'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    data = '''{{ jobs['fast-scan'].outputs.merged_hosts | default('', true) }}'''.strip()\n    if\
-        \ data:\n        (d / 'hosts.txt').write_text(data)\n        print(f'  [+] scans/hosts.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    # HTTP services\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{\
-        \ jobs['service-detect'].outputs.live_urls | default('', true) }}'''.strip()\n    if data:\n        (d / 'http-urls.txt').write_text(data)\n\
-        \        print(f'  [+] scans/http-urls.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete:\
+        \ exist_ok=True)\n    src = '{{ jobs[''fast-scan''].outputs.hosts_file | default('', true) }}'\n    if src and Path(src).is_file():\n\
+        \        import shutil\n        shutil.copy2(src, d / 'hosts.txt')\n        print(f'  [+] scans/hosts.txt')\n\n    # HTTP services\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    src = '{{ jobs[''service-detect''].outputs.live_urls_file\
+        \ | default('', true) }}'\n    if src and Path(src).is_file():\n        import shutil\n        shutil.copy2(src, d / 'http-urls.txt')\n\
+        \        print(f'  [+] scans/http-urls.txt')\n\n    print(f'Project export complete:\
         \ {project}')"
       continue-on-error: true

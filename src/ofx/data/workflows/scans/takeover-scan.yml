@@ -1,9 +1,7 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: takeover-scan
-description: 'Subdomain takeover scanning — discovers subdomains and checks for dangling
-  DNS records that can be claimed by attackers.
-
-  '
+description: |
+  Subdomain takeover scanning — discovers subdomains and checks for dangling DNS records that can be claimed by attackers.
 tags:
 - scan
 - takeover
@@ -27,20 +25,37 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: amass-passive
-      run: 'amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
-
-        '
+      run: |
+        amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
       continue-on-error: true
     - name: merge-subdomains
-      script: "subs = set()\nsubs.add('{{ inputs.target }}')\n\n# From subfinder\n\
-        sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}\nfor item in sf_outputs:\n\
-        \    if item.get('_type') == 'subdomain':\n        subs.add(item['host'])\n\
-        \n# From amass\ntry:\n    with open('/tmp/amass-subs.txt') as f:\n       \
-        \ for line in f:\n            sub = line.strip()\n            if sub and '{{\
-        \ inputs.target }}' in sub:\n                subs.add(sub)\nexcept FileNotFoundError:\n\
-        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        all_subs={chr(10).join(sorted(subs))}\\n\")\n    f.write(f\"sub_count={len(subs)}\\\
-        n\")\n\nprint(f\"Collected {len(subs)} unique subdomains\")\n"
+      script: |
+        subs = set()
+        subs.add('{{ inputs.target }}')
+
+        # From subfinder
+        sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+        for item in sf_outputs:
+            if item.get('_type') == 'subdomain':
+                subs.add(item['host'])
+
+        # From amass
+        try:
+            with open('/tmp/amass-subs.txt') as f:
+                for line in f:
+                    sub = line.strip()
+                    if sub and '{{ inputs.target }}' in sub:
+                        subs.add(sub)
+        except FileNotFoundError:
+            pass
+
+        with open('/tmp/ofx_takeover_subs.txt', 'w') as f:
+            f.write('\n'.join(sorted(subs)))
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"subs_file=/tmp/ofx_takeover_subs.txt\n")
+            f.write(f"sub_count={len(subs)}\n")
+
+        print(f"Collected {len(subs)} unique subdomains")
   dns-verify:
     name: DNS Resolution & CNAME Check
     needs:
@@ -49,81 +64,98 @@ jobs:
     - task: dnsx
       name: resolve-dns
       with:
-        target: '{{ jobs[''subdomain-enum''].outputs.all_subs }}'
+        target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
         a: true
         cname: true
         resp: true
       log-stdout: true
       continue-on-error: true
     - name: collect-dns
-      script: "alive = set()\ncname_records = {}\n\ndnsx_out = {{ steps[0].outputs.typed_outputs\
-        \ | tojson }}\nfor item in dnsx_out:\n    host = item.get('host', '')\n  \
-        \  if host:\n        alive.add(host)\n    cname = item.get('cname', '')\n\
-        \    if host and cname:\n        cname_records[host] = cname\n\nwith open('{{\
-        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"alive_subs={chr(10).join(sorted(alive))}\\\
-        n\")\n    f.write(f\"alive_count={len(alive)}\\n\")\n    f.write(f\"cname_count={len(cname_records)}\\\
-        n\")\n\nprint(f\"Alive: {len(alive)}, CNAME records: {len(cname_records)}\"\
-        )\n"
+      script: |
+        alive = set()
+        cname_records = {}
+
+        dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+        for item in dnsx_out:
+            host = item.get('host', '')
+            if host:
+                alive.add(host)
+            cname = item.get('cname', '')
+            if host and cname:
+                cname_records[host] = cname
+
+        with open('/tmp/ofx_takeover_alive.txt', 'w') as f:
+            f.write('\n'.join(sorted(alive)))
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"alive_file=/tmp/ofx_takeover_alive.txt\n")
+            f.write(f"alive_count={len(alive)}\n")
+            f.write(f"cname_count={len(cname_records)}\n")
+
+        print(f"Alive: {len(alive)}, CNAME records: {len(cname_records)}")
   takeover-check:
     name: Takeover Detection
     needs:
     - dns-verify
     steps:
     - name: subzy-scan
-      run: 'echo "{{ jobs[''dns-verify''].outputs.alive_subs }}" > /tmp/takeover-targets.txt
-
+      run: |
+        cat {{ jobs['dns-verify'].outputs.alive_file }} > /tmp/takeover-targets.txt
         subzy run --targets /tmp/takeover-targets.txt 2>/dev/null | tee /tmp/subzy-output.txt
-
-        '
       continue-on-error: true
     - task: nuclei
       name: nuclei-takeover
       with:
-        target: '{{ jobs[''dns-verify''].outputs.alive_subs }}'
+        target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
         tags: takeover
       continue-on-error: true
       log-stdout: true
     - name: collect-takeovers
-      script: "import re\n\ntakeovers = []\n\n# Parse subzy results\ntry:\n    with\
-        \ open('/tmp/subzy-output.txt') as f:\n        for line in f:\n          \
-        \  if 'VULNERABLE' in line.upper() or '[+]' in line:\n                takeovers.append(line.strip())\n\
-        except FileNotFoundError:\n    pass\n\n# Parse nuclei takeover results\nnuclei_vulns\
-        \ = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}\nfor v in nuclei_vulns:\n\
-        \    name = v.get('name', v.get('template_id', 'unknown'))\n    host = v.get('host',\
-        \ v.get('matched_at', ''))\n    takeovers.append(f\"[nuclei] {name}: {host}\"\
-        )\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"takeover_count={len(takeovers)}\\\
-        n\")\n    f.write(f\"takeover_findings={chr(10).join(takeovers)}\\n\")\n\n\
-        print(f\"Takeover vulnerabilities: {len(takeovers)}\")\nfor t in takeovers:\n\
-        \    print(f\"  [!] {t}\")\n"
+      script: |
+        import re
+
+        takeovers = []
+
+        # Parse subzy results
+        try:
+            with open('/tmp/subzy-output.txt') as f:
+                for line in f:
+                    if 'VULNERABLE' in line.upper() or '[+]' in line:
+                        takeovers.append(line.strip())
+        except FileNotFoundError:
+            pass
+
+        # Parse nuclei takeover results
+        nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        for v in nuclei_vulns:
+            name = v.get('name', v.get('template_id', 'unknown'))
+            host = v.get('host', v.get('matched_at', ''))
+            takeovers.append(f"[nuclei] {name}: {host}")
+
+        with open('/tmp/ofx_takeover_findings.txt', 'w') as f:
+            f.write('\n'.join(takeovers))
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"takeover_count={len(takeovers)}\n")
+            f.write(f"takeover_findings_file=/tmp/ofx_takeover_findings.txt\n")
+
+        print(f"Takeover vulnerabilities: {len(takeovers)}")
+        for t in takeovers:
+            print(f"  [!] {t}")
   summary:
     name: Takeover Scan Summary
     needs:
     - takeover-check
     steps:
     - name: report
-      run: 'echo "======================================================"
-
-        echo " SUBDOMAIN TAKEOVER SCAN COMPLETE: {{ inputs.target }}"
-
+      run: |
         echo "======================================================"
-
+        echo " SUBDOMAIN TAKEOVER SCAN COMPLETE: {{ inputs.target }}"
+        echo "======================================================"
         echo ""
-
         echo "--- Enumeration ---"
-
-        echo "Subdomains discovered: {{ jobs[''subdomain-enum''].outputs.sub_count
-        }}"
-
-        echo "DNS verified (alive): {{ jobs[''dns-verify''].outputs.alive_count }}"
-
-        echo "CNAME records: {{ jobs[''dns-verify''].outputs.cname_count }}"
-
+        echo "Subdomains discovered: {{ jobs['subdomain-enum'].outputs.sub_count }}"
+        echo "DNS verified (alive): {{ jobs['dns-verify'].outputs.alive_count }}"
+        echo "CNAME records: {{ jobs['dns-verify'].outputs.cname_count }}"
         echo ""
-
         echo "--- Takeover Results ---"
-
-        echo "Vulnerable subdomains: {{ jobs[''takeover-check''].outputs.takeover_count
-        }}"
-
-        '
+        echo "Vulnerable subdomains: {{ jobs['takeover-check'].outputs.takeover_count }}"
       log-stdout: true

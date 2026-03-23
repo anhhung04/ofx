@@ -58,8 +58,8 @@ jobs:
       script: "import json\n\nurls = set()\nfor step_idx in [0, 1]:\n    step_data\
         \ = {{ steps | tojson }}\n    typed = step_data[step_idx].get('outputs', {}).get('typed_outputs',\
         \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
-        \          urls.add(item['url'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
-        \ as f:\n    f.write(f\"found_urls={chr(10).join(sorted(urls))}\\n\")\n  \
+        \          urls.add(item['url'])\n\nwith open('/tmp/ofx_dir_urls.txt', 'w') as f:\n    f.write('\\n'.join(sorted(urls)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"found_file=/tmp/ofx_dir_urls.txt\\n\")\n  \
         \  f.write(f\"url_count={len(urls)}\\n\")\n\nprint(f\"Found {len(urls)} URLs\"\
         )\n"
   crawl-dirs:
@@ -70,7 +70,7 @@ jobs:
     - task: katana
       name: crawl-content
       with:
-        target: '{{ jobs[''dir-search''].outputs.found_urls | default(inputs.target,
+        target: '{{ jobs[''dir-search''].outputs.found_file | default(inputs.target,
           true) }}'
         depth: 2
       log-stdout: true

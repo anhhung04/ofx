@@ -75,8 +75,7 @@ jobs:
         \ | tojson }}\nfor u in nxc_users:\n    if u.get('username'):\n        users.add(u['username'])\n\n# From enum4linux\n\
         e4l_users = {{ users(steps[2].outputs.typed_outputs) | tojson }}\nfor u in e4l_users:\n    if u.get('username'):\n\
         \        users.add(u['username'])\n\nuser_list = '\\n'.join(sorted(users))\nwith open('/tmp/ad-users.txt', 'w') as\
-        \ f:\n    f.write(user_list)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ad_users={user_list}\\\
-        n\")\n    f.write(f\"user_count={len(users)}\\n\")\n\nprint(f\"Enumerated {len(users)} AD users\")\n"
+        \ f:\n    f.write(user_list)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"users_file=/tmp/ad-users.txt\\n\")\n    f.write(f\"user_count={len(users)}\\n\")\n\nprint(f\"Enumerated {len(users)} AD users\")\n"
   kerberoast:
     name: Kerberoasting
     needs:
@@ -152,8 +151,7 @@ jobs:
       script: "kerb_hits = {{ users(steps[0].outputs.typed_outputs) | tojson }}\nsmb_hits = {{ users(steps[1].outputs.typed_outputs)\
         \ | tojson }}\nldap_hits = {{ users(steps[2].outputs.typed_outputs) | tojson }}\n\nall_valid = set()\nfor u in kerb_hits\
         \ + smb_hits + ldap_hits:\n    if u.get('username'):\n        all_valid.add(u['username'])\n\nwith open('{{ env.OFX_OUTPUTS\
-        \ }}', 'a') as f:\n    f.write(f\"spray_hits={len(all_valid)}\\n\")\n    f.write(f\"valid_users={chr(10).join(sorted(all_valid))}\\\
-        n\")\n\nprint(f\"Spray hits: {len(all_valid)} valid credentials\")\n"
+        \ }}', 'a') as f:\n    f.write(f\"spray_hits={len(all_valid)}\\n\")\n    open('/tmp/ofx_adattack_valid.txt', 'w').write('\\n'.join(sorted(all_valid)))\n    f.write(f\"valid_users_file=/tmp/ofx_adattack_valid.txt\\n\")\n\nprint(f\"Spray hits: {len(all_valid)} valid credentials\")\n"
       log-stdout: true
   credential-dump:
     name: Credential Dumping
@@ -282,12 +280,8 @@ jobs:
     - name: export-to-project
       script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
         \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # AD users\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs.enum.outputs.ad_users | default('',\
-        \ true) }}'''.strip()\n    if data:\n        (d / 'ad-users.txt').write_text(data)\n        print(f'  [+] scans/ad-users.txt\
-        \ ({len(data.splitlines())} lines)')\n\n    # spray hits\n    d = p / 'evidence/creds'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    data = '''{{ jobs['targeted-spray'].outputs.valid_users | default('', true) }}'''.strip()\n\
-        \    if data:\n        (d / 'spray-valid.txt').write_text(data)\n        print(f'  [+] evidence/creds/spray-valid.txt\
-        \ ({len(data.splitlines())} lines)')\n\n    # kerberoastable SPNs\n    d = p / 'evidence/creds'\n    d.mkdir(parents=True,\
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    sf = '''{{ jobs.enum.outputs.users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'ad-users.txt')\n        print(f'  [+] scans/ad-users.txt')\n\n    # spray hits\n    d = p / 'evidence/creds'\n    d.mkdir(parents=True,\
+        \ exist_ok=True)\n    sf = '''{{ jobs['targeted-spray'].outputs.valid_users_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'spray-valid.txt')\n        print(f'  [+] evidence/creds/spray-valid.txt')\n\n    # kerberoastable SPNs\n    d = p / 'evidence/creds'\n    d.mkdir(parents=True,\
         \ exist_ok=True)\n    data = '''{{ jobs.kerberoast.outputs.spn_count | default('', true) }}'''.strip()\n    if data:\n\
         \        (d / 'kerberoast-spns.txt').write_text(data)\n        print(f'  [+] evidence/creds/kerberoast-spns.txt ({len(data.splitlines())}\
         \ lines)')\n\n    # AS-REP roastable\n    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n    data\

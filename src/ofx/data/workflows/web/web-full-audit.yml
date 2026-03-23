@@ -96,7 +96,7 @@ jobs:
     - name: collect-dirs
       script: "urls = set()\nfor idx in [0, 1, 2]:\n    step_data = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs',\
         \ {}).get('typed_outputs', [])\n    for item in typed:\n        if item.get('_type') == 'url' and item.get('url'):\n\
-        \            urls.add(item['url'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"dir_urls={chr(10).join(sorted(urls))}\\\
+        \            urls.add(item['url'])\n\nwith open('/tmp/ofx_webaudit_dirs.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(urls)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"dir_urls_file=/tmp/ofx_webaudit_dirs.txt\\\
         n\")\n    f.write(f\"dir_count={len(urls)}\\n\")\n\nprint(f\"Discovered {len(urls)} unique URLs/directories\")\n"
       log-stdout: true
   crawl:
@@ -134,7 +134,7 @@ jobs:
     - name: collect-crawled
       script: "urls = set()\nfor idx in range(4):\n    step_data = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs',\
         \ {}).get('typed_outputs', [])\n    for item in typed:\n        url = item.get('url', '')\n        if url:\n     \
-        \       urls.add(url)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_urls={chr(10).join(sorted(urls))}\\\
+        \       urls.add(url)\n\nwith open('/tmp/ofx_webaudit_crawled.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(urls)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_file=/tmp/ofx_webaudit_crawled.txt\\\
         n\")\n    f.write(f\"crawl_count={len(urls)}\\n\")\n\nprint(f\"Crawled {len(urls)} unique URLs\")\n"
       log-stdout: true
   param-fuzz:
@@ -165,8 +165,9 @@ jobs:
     - name: collect-params
       script: "param_urls = set()\nfor idx in range(3):\n    step_data = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs',\
         \ {}).get('typed_outputs', [])\n    for item in typed:\n        url = item.get('url', '')\n        if url and ('='\
-        \ in url or '?' in url):\n            param_urls.add(url)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        param_urls={chr(10).join(sorted(param_urls))}\\n\")\n    f.write(f\"param_count={len(param_urls)}\\n\")\n\nprint(f\"\
+        \ in url or '?' in url):\n            param_urls.add(url)\n\nwith open('/tmp/ofx_param_urls.txt', 'w') as f:\n\
+        \    f.write('\\n'.join(sorted(param_urls)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        param_file=/tmp/ofx_param_urls.txt\\n\")\n    f.write(f\"param_count={len(param_urls)}\\n\")\n\nprint(f\"\
         Discovered {len(param_urls)} parameterized URLs\")\n"
       log-stdout: true
   vuln-scan:
@@ -184,13 +185,13 @@ jobs:
     - task: dalfox
       name: xss-scan
       with:
-        target: '{{ jobs[''param-fuzz''].outputs.param_urls | default(inputs.target, true) }}'
+        target: '{{ jobs[''param-fuzz''].outputs.param_file | default(inputs.target, true) }}'
       log-stdout: true
       continue-on-error: true
     - task: sqlmap
       name: sqli-scan
       with:
-        target: '{{ jobs[''param-fuzz''].outputs.param_urls | default(inputs.target, true) }}'
+        target: '{{ jobs[''param-fuzz''].outputs.param_file | default(inputs.target, true) }}'
         batch: true
         level: 3
         risk: 2
@@ -200,7 +201,7 @@ jobs:
     - task: commix
       name: cmdi-scan
       with:
-        target: '{{ jobs[''param-fuzz''].outputs.param_urls | default(inputs.target, true) }}'
+        target: '{{ jobs[''param-fuzz''].outputs.param_file | default(inputs.target, true) }}'
         batch: true
         level: 2
       log-stdout: true
@@ -293,12 +294,11 @@ jobs:
     - name: export-to-project
       script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
         \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # directories\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['dir-brute'].outputs.dir_urls\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'directories.txt').write_text(data)\n        print(f'\
-        \  [+] scans/directories.txt ({len(data.splitlines())} lines)')\n\n    # crawled URLs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    data = '''{{ jobs.crawl.outputs.crawled_urls | default('', true) }}'''.strip()\n    if data:\n\
-        \        (d / 'crawled-urls.txt').write_text(data)\n        print(f'  [+] scans/crawled-urls.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    # param URLs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['param-fuzz'].outputs.param_urls\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'param-urls.txt').write_text(data)\n        print(f'\
-        \  [+] scans/param-urls.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    src = '{{ jobs[''dir-brute''].outputs.dir_urls_file\
+        \ | default('', true) }}'\n    if src and Path(src).is_file():\n        import shutil\n        shutil.copy2(src, d / 'directories.txt')\n        print(f'\
+        \  [+] scans/directories.txt')\n\n    # crawled URLs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
+        \ exist_ok=True)\n    src = '{{ jobs.crawl.outputs.crawled_file | default('', true) }}'\n    if src and Path(src).is_file():\n        import shutil\n\
+        \        shutil.copy2(src, d / 'crawled-urls.txt')\n        print(f'  [+] scans/crawled-urls.txt')\n\n    # param URLs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    src = '{{ jobs[''param-fuzz''].outputs.param_file\
+        \ | default('', true) }}'\n    if src and Path(src).is_file():\n        import shutil\n        shutil.copy2(src, d / 'param-urls.txt')\n        print(f'\
+        \  [+] scans/param-urls.txt (copied from {src})')\n\n    print(f'Project export complete: {project}')"
       continue-on-error: true

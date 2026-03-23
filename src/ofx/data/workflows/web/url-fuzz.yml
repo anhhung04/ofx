@@ -45,9 +45,9 @@ jobs:
       script: "import json\n\nurls = set()\nfor step_idx in [0, 1]:\n    step_data\
         \ = {{ steps | tojson }}\n    typed = step_data[step_idx].get('outputs', {}).get('typed_outputs',\
         \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
-        \          urls.add(item['url'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
-        \ as f:\n    f.write(f\"fuzzed_urls={chr(10).join(sorted(urls))}\\n\")\n \
-        \   f.write(f\"fuzz_count={len(urls)}\\n\")\n\nprint(f\"Found {len(urls)}\
+        \          urls.add(item['url'])\n\nwith open('/tmp/ofx_urlfuzz_urls.txt', 'w') as tf:\n    tf.write('\\n'.join(sorted(urls)))\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"fuzzed_file=/tmp/ofx_urlfuzz_urls.txt\\\
+        n\")\n    f.write(f\"fuzz_count={len(urls)}\\n\")\n\nprint(f\"Found {len(urls)}\
         \ unique URLs via fuzzing\")\n"
   probe:
     name: Probe Fuzzed URLs
@@ -57,7 +57,7 @@ jobs:
     - task: httpx
       name: probe-fuzzed
       with:
-        target: '{{ jobs.fuzz.outputs.fuzzed_urls }}'
+        target: '{{ jobs.fuzz.outputs.fuzzed_file }}'
         tech_detect: true
         status_code: true
         title: true

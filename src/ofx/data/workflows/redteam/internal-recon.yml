@@ -30,8 +30,9 @@ jobs:
       continue-on-error: true
     - name: collect-alive
       script: "hosts = set()\ntry:\n    with open('/tmp/alive-hosts.txt') as f:\n        for line in f:\n            ip =\
-        \ line.strip()\n            if ip:\n                hosts.add(ip)\nexcept FileNotFoundError:\n    pass\n\nwith open('{{\
-        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"alive_hosts={chr(10).join(sorted(hosts))}\\n\")\n    f.write(f\"\
+        \ line.strip()\n            if ip:\n                hosts.add(ip)\nexcept FileNotFoundError:\n    pass\n\nwith open('/tmp/ofx_alive_hosts.txt', 'w') as f:\n\
+        \    f.write('\\n'.join(sorted(hosts)))\n\nwith open('{{\
+        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"alive_file=/tmp/ofx_alive_hosts.txt\\n\")\n    f.write(f\"\
         alive_count={len(hosts)}\\n\")\n\nprint(f\"Discovered {len(hosts)} alive hosts\")\n"
   port-scan:
     name: Port Scanning
@@ -39,7 +40,7 @@ jobs:
     - host-discovery
     steps:
     - name: rustscan-fast
-      run: 'echo "{{ jobs[''host-discovery''].outputs.alive_hosts }}" > /tmp/scan-targets.txt
+      run: 'cat {{ jobs[''host-discovery''].outputs.alive_file }} > /tmp/scan-targets.txt
 
         rustscan -a /tmp/scan-targets.txt --ulimit 5000 -b 1000 2>/dev/null | tee /tmp/rustscan-output.txt
 
@@ -48,7 +49,7 @@ jobs:
     - task: naabu
       name: naabu-precision
       with:
-        target: '{{ jobs[''host-discovery''].outputs.alive_hosts }}'
+        target: '{{ jobs[''host-discovery''].outputs.alive_file }}'
         top_ports: '1000'
         rate: 1000
       log-stdout: true
@@ -63,16 +64,14 @@ jobs:
         \              ports.add(f\"{host}:{port}\")\n                hosts_with_ports.setdefault(host, set()).add(port)\n\
         except FileNotFoundError:\n    pass\n\n# Build nmap-compatible target list\nnmap_targets = []\nfor host, host_ports\
         \ in hosts_with_ports.items():\n    port_str = ','.join(sorted(host_ports, key=int))\n    nmap_targets.append(f\"\
-        {host}:{port_str}\")\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports))}\\\
-        n\")\n    f.write(f\"port_count={len(ports)}\\n\")\n    f.write(f\"scan_targets={chr(10).join(nmap_targets)}\\n\"\
-        )\n\nprint(f\"Found {len(ports)} open ports across {len(hosts_with_ports)} hosts\")\n"
+        {host}:{port_str}\")\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    open('/tmp/ofx_intrecon_ports.txt', 'w').write('\\n'.join(sorted(ports)))\n    f.write(f\"ports_file=/tmp/ofx_intrecon_ports.txt\\n\")\n    f.write(f\"port_count={len(ports)}\\n\")\n    open('/tmp/ofx_intrecon_targets.txt', 'w').write('\\n'.join(nmap_targets))\n    f.write(f\"scan_targets_file=/tmp/ofx_intrecon_targets.txt\\n\")\n\nprint(f\"Found {len(ports)} open ports across {len(hosts_with_ports)} hosts\")\n"
   service-detect:
     name: Service Detection
     needs:
     - port-scan
     steps:
     - name: nmap-service
-      run: 'echo "{{ jobs[''host-discovery''].outputs.alive_hosts }}" > /tmp/nmap-hosts.txt
+      run: 'cat {{ jobs[''host-discovery''].outputs.alive_file }} > /tmp/nmap-hosts.txt
 
         nmap -sV -iL /tmp/nmap-hosts.txt -oN /tmp/nmap-services.txt 2>/dev/null | tee /tmp/nmap-output.txt
 
@@ -81,7 +80,7 @@ jobs:
     - task: httpx
       name: http-probe
       with:
-        target: '{{ jobs[''host-discovery''].outputs.alive_hosts }}'
+        target: '{{ jobs[''host-discovery''].outputs.alive_file }}'
         tech_detect: true
         status_code: true
         title: true
@@ -94,7 +93,7 @@ jobs:
         \ {svc} {version.strip()}\")\nexcept FileNotFoundError:\n    pass\n\n# Collect HTTP targets from httpx\nhttpx_out\
         \ = {{ steps[1].outputs.typed_outputs | tojson }}\nfor item in httpx_out:\n    url = item.get('url', '')\n    if url:\n\
         \        http_targets.add(url)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"service_count={len(services)}\\\
-        n\")\n    f.write(f\"http_urls={chr(10).join(sorted(http_targets))}\\n\")\n    f.write(f\"http_count={len(http_targets)}\\\
+        n\")\n    open('/tmp/ofx_intrecon_httpurls.txt', 'w').write('\\n'.join(sorted(http_targets)))\n    f.write(f\"http_urls_file=/tmp/ofx_intrecon_httpurls.txt\\n\")\n    f.write(f\"http_count={len(http_targets)}\\\
         n\")\n\nprint(f\"Services detected: {len(services)}, HTTP targets: {len(http_targets)}\")\n"
   web-enum:
     name: Web Enumeration
@@ -102,11 +101,11 @@ jobs:
     - service-detect
     steps:
     - name: whatweb-scan
-      run: "echo \"{{ jobs['service-detect'].outputs.http_urls | default(inputs.target, true) }}\" | head -50 | while read\
+      run: "cat {{ jobs['service-detect'].outputs.http_urls_file | default('', true) }} 2>/dev/null | head -50 | while read\
         \ url; do\n  whatweb -a 3 \"$url\" --color=never 2>/dev/null\ndone | tee /tmp/whatweb-output.txt\n"
       continue-on-error: true
     - name: gowitness-screenshots
-      run: 'echo "{{ jobs[''service-detect''].outputs.http_urls | default(inputs.target, true) }}" > /tmp/gowitness-targets.txt
+      run: 'cat {{ jobs[''service-detect''].outputs.http_urls_file | default('', true) }} > /tmp/gowitness-targets.txt 2>/dev/null
 
         gowitness scan file -f /tmp/gowitness-targets.txt --screenshot-path /tmp/gowitness-shots 2>/dev/null || true
 
@@ -124,7 +123,7 @@ jobs:
     - host-discovery
     steps:
     - name: nxc-smb-scan
-      run: 'echo "{{ jobs[''host-discovery''].outputs.alive_hosts }}" > /tmp/smb-targets.txt
+      run: 'cat {{ jobs[''host-discovery''].outputs.alive_file }} > /tmp/smb-targets.txt
 
         netexec smb /tmp/smb-targets.txt 2>/dev/null | tee /tmp/nxc-smb-scan.txt
 
@@ -136,8 +135,8 @@ jobs:
         s+\\S+\\s+.*?domain:(\\S+)', line, re.IGNORECASE)\n            if match:\n                ip = match.group(1)\n  \
         \              domain = match.group(2).rstrip(')')\n                domains.add(domain)\n                if 'DC' in\
         \ line.upper() or 'PDC' in line.upper():\n                    dcs.add(ip)\nexcept FileNotFoundError:\n    pass\n\n\
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ad_domains={chr(10).join(sorted(domains))}\\n\")\n \
-        \   f.write(f\"domain_controllers={chr(10).join(sorted(dcs))}\\n\")\n    f.write(f\"dc_count={len(dcs)}\\n\")\n\n\
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    open('/tmp/ofx_intrecon_domains.txt', 'w').write('\\n'.join(sorted(domains)))\n    f.write(f\"ad_domains_file=/tmp/ofx_intrecon_domains.txt\\n\")\n \
+        \   open('/tmp/ofx_intrecon_dcs.txt', 'w').write('\\n'.join(sorted(dcs)))\n    f.write(f\"dcs_file=/tmp/ofx_intrecon_dcs.txt\\n\")\n    f.write(f\"dc_count={len(dcs)}\\n\")\n\n\
         print(f\"AD domains: {', '.join(domains) if domains else 'none detected'}\")\nprint(f\"Domain controllers: {len(dcs)}\"\
         )\n"
   summary:
@@ -184,7 +183,7 @@ jobs:
 
         echo "--- Active Directory ---"
 
-        echo "Domains found: {{ jobs[''ad-detect''].outputs.ad_domains }}"
+        echo "Domains found: $(cat {{ jobs[''ad-detect''].outputs.ad_domains_file }} 2>/dev/null || echo ''none'')"
 
         echo "Domain controllers: {{ jobs[''ad-detect''].outputs.dc_count }}"
 
@@ -193,18 +192,9 @@ jobs:
     - name: export-to-project
       script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
         \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # alive hosts\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['host-discovery'].outputs.alive_hosts\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'alive-hosts.txt').write_text(data)\n        print(f'\
-        \  [+] scans/alive-hosts.txt ({len(data.splitlines())} lines)')\n\n    # open ports\n    d = p / 'scans'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    data = '''{{ jobs['port-scan'].outputs.open_ports | default('', true) }}'''.strip()\n    if\
-        \ data:\n        (d / 'open-ports.txt').write_text(data)\n        print(f'  [+] scans/open-ports.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    # HTTP URLs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['service-detect'].outputs.http_urls\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'http-urls.txt').write_text(data)\n        print(f'\
-        \  [+] scans/http-urls.txt ({len(data.splitlines())} lines)')\n\n    # AD domains\n    d = p / 'evidence/data'\n \
-        \   d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['ad-detect'].outputs.ad_domains | default('', true)\
-        \ }}'''.strip()\n    if data:\n        (d / 'ad-domains.txt').write_text(data)\n        print(f'  [+] evidence/data/ad-domains.txt\
-        \ ({len(data.splitlines())} lines)')\n\n    # DCs\n    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n\
-        \    data = '''{{ jobs['ad-detect'].outputs.domain_controllers | default('', true) }}'''.strip()\n    if data:\n \
-        \       (d / 'domain-controllers.txt').write_text(data)\n        print(f'  [+] evidence/data/domain-controllers.txt\
-        \ ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    af = '{{ jobs[\"host-discovery\"].outputs.alive_file | default(\"\", true) }}'\n\
+        \    if af:\n        import shutil\n        shutil.copy2(af, d / 'alive-hosts.txt')\n        print(f'  [+] scans/alive-hosts.txt')\n\n    # open ports\n    d = p / 'scans'\n    d.mkdir(parents=True,\
+        \ exist_ok=True)\n    sf = '''{{ jobs['port-scan'].outputs.ports_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'open-ports.txt')\n        print(f'  [+] scans/open-ports.txt')\n\n    # HTTP URLs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    sf = '''{{ jobs['service-detect'].outputs.http_urls_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'http-urls.txt')\n        print(f'  [+] scans/http-urls.txt')\n\n    # AD domains\n    d = p / 'evidence/data'\n \
+        \   d.mkdir(parents=True, exist_ok=True)\n    sf = '''{{ jobs['ad-detect'].outputs.ad_domains_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'ad-domains.txt')\n        print(f'  [+] evidence/data/ad-domains.txt')\n\n    # DCs\n    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n\
+        \    sf = '''{{ jobs['ad-detect'].outputs.dcs_file | default('', true) }}'''\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'domain-controllers.txt')\n        print(f'  [+] evidence/data/domain-controllers.txt')\n\n    print(f'Project export complete: {project}')"
       continue-on-error: true

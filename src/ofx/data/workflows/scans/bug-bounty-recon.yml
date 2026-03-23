@@ -47,8 +47,9 @@ jobs:
         \n# From amass, assetfinder, findomain\nfor path in ['/tmp/amass-subs.txt', '/tmp/assetfinder-subs.txt', '/tmp/findomain-subs.txt']:\n\
         \    try:\n        with open(path) as f:\n            for line in f:\n                sub = line.strip()\n       \
         \         if sub and '{{ inputs.target }}' in sub:\n                    subs.add(sub)\n    except FileNotFoundError:\n\
-        \        pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"all_subs={chr(10).join(sorted(subs))}\\\
-        n\")\n    f.write(f\"sub_count={len(subs)}\\n\")\n\nprint(f\"Collected {len(subs)} unique subdomains\")\n"
+        \        pass\n\nwith open('/tmp/ofx_bb_subs.txt', 'w') as f:\n    f.write('\\n'.join(sorted(subs)))\n\
+        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"subs_file=/tmp/ofx_bb_subs.txt\\n\")\n    f.write(f\"\
+        sub_count={len(subs)}\\n\")\n\nprint(f\"Collected {len(subs)} unique subdomains\")\n"
   dns-verify:
     name: DNS Verification
     needs:
@@ -57,7 +58,7 @@ jobs:
     - task: dnsx
       name: verify-dns
       with:
-        target: '{{ jobs[''subdomain-enum''].outputs.all_subs }}'
+        target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
         a: true
         cname: true
         resp: true
@@ -65,8 +66,9 @@ jobs:
       continue-on-error: true
     - name: filter-alive
       script: "alive = set()\ndnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}\nfor item in dnsx_out:\n    host =\
-        \ item.get('host', '')\n    if host:\n        alive.add(host)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n \
-        \   f.write(f\"alive_subs={chr(10).join(sorted(alive))}\\n\")\n    f.write(f\"alive_count={len(alive)}\\n\")\n\nprint(f\"\
+        \ item.get('host', '')\n    if host:\n        alive.add(host)\n\nwith open('/tmp/ofx_bb_alive.txt', 'w') as f:\n\
+        \    f.write('\\n'.join(sorted(alive)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n \
+        \   f.write(f\"alive_file=/tmp/ofx_bb_alive.txt\\n\")\n    f.write(f\"alive_count={len(alive)}\\n\")\n\nprint(f\"\
         Verified {len(alive)} alive subdomains\")\n"
   takeover-check:
     name: Subdomain Takeover Check
@@ -74,7 +76,7 @@ jobs:
     - dns-verify
     steps:
     - name: subzy-scan
-      run: 'echo "{{ jobs[''dns-verify''].outputs.alive_subs }}" > /tmp/takeover-targets.txt
+      run: 'cat {{ jobs[''dns-verify''].outputs.alive_file }} > /tmp/takeover-targets.txt
 
         subzy run --targets /tmp/takeover-targets.txt 2>/dev/null | tee /tmp/subzy-output.txt
 
@@ -84,7 +86,7 @@ jobs:
       script: "import re\n\nvulnerable = []\ntry:\n    with open('/tmp/subzy-output.txt') as f:\n        for line in f:\n\
         \            if 'VULNERABLE' in line.upper() or '[+]' in line:\n                vulnerable.append(line.strip())\n\
         except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"takeover_count={len(vulnerable)}\\\
-        n\")\n    f.write(f\"takeover_findings={chr(10).join(vulnerable)}\\n\")\n\nprint(f\"Potential takeovers: {len(vulnerable)}\"\
+        n\")\n\nwith open('/tmp/ofx_bb_takeover.txt', 'w') as f:\n    f.write('\\n'.join(vulnerable))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"takeover_findings_file=/tmp/ofx_bb_takeover.txt\\n\")\n\nprint(f\"Potential takeovers: {len(vulnerable)}\"\
         )\n"
   port-scan:
     name: Port Scanning
@@ -94,7 +96,7 @@ jobs:
     - task: naabu
       name: naabu-scan
       with:
-        target: '{{ jobs[''dns-verify''].outputs.alive_subs }}'
+        target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
         top_ports: '1000'
         rate: 1000
       log-stdout: true
@@ -102,8 +104,8 @@ jobs:
     - name: collect-ports
       script: "ports = set()\nhosts = set()\nnaabu_out = {{ steps[0].outputs.typed_outputs | tojson }}\nfor item in naabu_out:\n\
         \    if item.get('_type') == 'port':\n        host = item.get('host') or item.get('ip', '')\n        port = item.get('port',\
-        \ '')\n        if host and port:\n            ports.add(f\"{host}:{port}\")\n            hosts.add(host)\n\nwith open('{{\
-        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports))}\\n\")\n    f.write(f\"\
+        \ '')\n        if host and port:\n            ports.add(f\"{host}:{port}\")\n            hosts.add(host)\n\nwith open('/tmp/ofx_bb_ports.txt', 'w') as f:\n    f.write('\\n'.join(sorted(ports)))\n\nwith open('{{\
+        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ports_file=/tmp/ofx_bb_ports.txt\\n\")\n    f.write(f\"\
         port_count={len(ports)}\\n\")\n\nprint(f\"Found {len(ports)} open ports across {len(hosts)} hosts\")\n"
   http-probe:
     name: HTTP Probing
@@ -113,7 +115,7 @@ jobs:
     - task: httpx
       name: probe-http
       with:
-        target: '{{ jobs[''dns-verify''].outputs.alive_subs }}'
+        target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
         tech_detect: true
         status_code: true
         title: true
@@ -158,8 +160,8 @@ jobs:
         \ {}).get('typed_outputs', [])\n    for item in typed:\n        if item.get('_type') == 'url':\n            urls.add(item['url'])\n\
         \n# From hakrawler\ntry:\n    with open('/tmp/hakrawler-urls.txt') as f:\n        for line in f:\n            url\
         \ = line.strip()\n            if url and url.startswith('http'):\n                urls.add(url)\nexcept FileNotFoundError:\n\
-        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_urls={chr(10).join(sorted(urls))}\\\
-        n\")\n    f.write(f\"crawl_count={len(urls)}\\n\")\n\nprint(f\"Crawled {len(urls)} unique URLs\")\n"
+        \    pass\n\nwith open('/tmp/ofx_bb_crawled.txt', 'w') as f:\n    f.write('\\n'.join(sorted(urls)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_file=/tmp/ofx_bb_crawled.txt\\n\")\n\
+        \    f.write(f\"crawl_count={len(urls)}\\n\")\n\nprint(f\"Crawled {len(urls)} unique URLs\")\n"
   param-mine:
     name: Parameter Mining
     needs:
@@ -180,7 +182,7 @@ jobs:
         \ param_urls.add(url)\nexcept FileNotFoundError:\n    pass\n\ntry:\n    with open('/tmp/arjun-params.json') as f:\n\
         \        data = json.load(f)\n    for url, url_params in data.items():\n        for p in url_params:\n           \
         \ params.add(p)\nexcept (FileNotFoundError, json.JSONDecodeError):\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"param_urls={chr(10).join(sorted(param_urls))}\\n\")\n    f.write(f\"param_url_count={len(param_urls)}\\\
+        \ 'a') as f:\n    f.write(f\"param_file=/tmp/ofx_bb_params.txt\\n\")\n    f.write(f\"param_url_count={len(param_urls)}\\\
         n\")\n    f.write(f\"unique_params={len(params)}\\n\")\n\nprint(f\"Parameterized URLs: {len(param_urls)}, Unique params:\
         \ {len(params)}\")\n"
   vuln-scan:
@@ -199,7 +201,7 @@ jobs:
     - task: dalfox
       name: dalfox-xss
       with:
-        target: '{{ jobs[''param-mine''].outputs.param_urls | default(jobs[''http-probe''].outputs.live_urls, true) }}'
+        target: '{{ jobs[''param-mine''].outputs.param_file | default(jobs[''http-probe''].outputs.live_urls, true) }}'
       continue-on-error: true
       log-stdout: true
     - name: crlfuzz-scan
@@ -311,15 +313,10 @@ jobs:
     - name: export-to-project
       script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
         \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # subdomains\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['subdomain-enum'].outputs.all_subs\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'subdomains.txt').write_text(data)\n        print(f'\
-        \  [+] scans/subdomains.txt ({len(data.splitlines())} lines)')\n\n    # alive subs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    data = '''{{ jobs['dns-verify'].outputs.alive_subs | default('', true) }}'''.strip()\n    if\
-        \ data:\n        (d / 'alive-subs.txt').write_text(data)\n        print(f'  [+] scans/alive-subs.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    # open ports\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['port-scan'].outputs.open_ports\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'ports.txt').write_text(data)\n        print(f'  [+]\
-        \ scans/ports.txt ({len(data.splitlines())} lines)')\n\n    # crawled URLs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
-        \ exist_ok=True)\n    data = '''{{ jobs['web-crawl'].outputs.crawled_urls | default('', true) }}'''.strip()\n    if\
-        \ data:\n        (d / 'crawled-urls.txt').write_text(data)\n        print(f'  [+] scans/crawled-urls.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    print(f'Project export complete: {project}')"
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    sf = '{{ jobs[\"subdomain-enum\"].outputs.subs_file | default(\"\", true) }}'\n\
+        \    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'subdomains.txt')\n        print(f'  [+] scans/subdomains.txt')\n\
+        \n    # alive subs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    af = '{{ jobs[\"dns-verify\"].outputs.alive_file | default(\"\", true) }}'\n\
+        \    if af:\n        import shutil\n        shutil.copy2(af, d / 'alive-subs.txt')\n        print(f'  [+] scans/alive-subs.txt')\n\n    # open ports\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    pf = '{{ jobs[\"port-scan\"].outputs.ports_file | default(\"\", true) }}'\n    if pf:\n        import shutil\n        shutil.copy2(pf, d / 'ports.txt')\n        print(f'  [+]\
+        \ scans/ports.txt')\n\n    # crawled URLs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
+        \ exist_ok=True)\n    cf = '{{ jobs[\"web-crawl\"].outputs.crawled_file | default(\"\", true) }}'\n    if cf:\n        import shutil\n        shutil.copy2(cf, d / 'crawled-urls.txt')\n        print(f'  [+] scans/crawled-urls.txt')\n\n    print(f'Project export complete: {project}')"
       continue-on-error: true

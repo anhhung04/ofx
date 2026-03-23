@@ -40,9 +40,9 @@ jobs:
         \ types found\n    types = re.findall(r'Type: (.+)', content)\n    findings.extend(types)\n\
         \n    # Extract database info if found\n    dbs = re.findall(r'available databases\
         \ \\[(\\d+)\\]', content)\n    db_count = dbs[0] if dbs else '0'\nexcept FileNotFoundError:\n\
-        \    db_count = '0'\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n   \
+        \    db_count = '0'\n\nwith open('/tmp/ofx_sqli_types.txt', 'w') as tf:\n    tf.write('\\n'.join(findings))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n   \
         \ f.write(f\"vulnerable={'true' if vulnerable else 'false'}\\n\")\n    f.write(f\"\
-        injection_types={chr(10).join(findings)}\\n\")\n    f.write(f\"finding_count={len(findings)}\\\
+        injection_types_file=/tmp/ofx_sqli_types.txt\\n\")\n    f.write(f\"finding_count={len(findings)}\\\
         n\")\n    f.write(f\"db_count={db_count}\\n\")\n\nstatus = \"VULNERABLE\"\
         \ if vulnerable else \"Not vulnerable\"\nprint(f\"Target is: {status}\")\n\
         print(f\"Injection types found: {len(findings)}\")\n"

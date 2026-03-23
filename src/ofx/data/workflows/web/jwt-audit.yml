@@ -58,9 +58,8 @@ jobs:
       script: "import re\n\nvulns = []\ntry:\n    with open('/tmp/jwt-vulns.txt')\
         \ as f:\n        for line in f:\n            if '[+]' in line or 'VULNERABLE'\
         \ in line.upper():\n                vulns.append(line.strip())\nexcept FileNotFoundError:\n\
-        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        jwt_vuln_count={len(vulns)}\\n\")\n    f.write(f\"jwt_vulns={chr(10).join(vulns)}\\\
-        n\")\n\nprint(f\"JWT vulnerabilities found: {len(vulns)}\")\nfor v in vulns:\n\
+        \    pass\n\nwith open('/tmp/ofx_jwtaudit_vulns.txt', 'w') as tf:\n    tf.write('\\n'.join(vulns))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        jwt_vuln_count={len(vulns)}\\n\")\n    f.write(f\"jwt_vulns_file=/tmp/ofx_jwtaudit_vulns.txt\\n\")\n\nprint(f\"JWT vulnerabilities found: {len(vulns)}\")\nfor v in vulns:\n\
         \    print(f\"  [!] {v}\")\n"
   summary:
     name: JWT Audit Summary

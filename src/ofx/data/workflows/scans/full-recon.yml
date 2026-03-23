@@ -42,8 +42,7 @@ jobs:
         \            if sub and '{{ inputs.target }}' in sub:\n                subs.add(sub)\nexcept FileNotFoundError:\n\
         \    pass\n\n# From assetfinder\ntry:\n    with open('/tmp/assetfinder-subs.txt') as f:\n        for line in f:\n\
         \            sub = line.strip()\n            if sub and '{{ inputs.target }}' in sub:\n                subs.add(sub)\n\
-        except FileNotFoundError:\n    pass\n\nsub_list = '\\n'.join(sorted(subs))\nwith open('/tmp/subs.txt', 'w') as f:\n\
-        \    f.write(sub_list)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"all_subs={sub_list}\\n\")\n\
+        except FileNotFoundError:\n    pass\n\nwith open('/tmp/subs.txt', 'w') as f:\n    f.write('\\n'.join(sorted(subs)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"subs_file=/tmp/subs.txt\\n\")\n\
         \    f.write(f\"sub_count={len(subs)}\\n\")\n\nprint(f\"Collected {len(subs)} unique subdomains\")\n"
   dns-resolve:
     name: DNS Resolution
@@ -53,7 +52,7 @@ jobs:
     - task: dnsx
       name: dns-verify
       with:
-        target: '{{ jobs[''subdomain-enum''].outputs.all_subs }}'
+        target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
         a: true
         cname: true
         resp: true
@@ -66,8 +65,8 @@ jobs:
       continue-on-error: true
     - name: export-verified
       script: "import json\n\nverified = set()\ndnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}\nfor item in dnsx_out:\n\
-        \    host = item.get('host', '')\n    if host:\n        verified.add(host)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
-        \ as f:\n    f.write(f\"verified_subs={chr(10).join(sorted(verified))}\\n\")\n    f.write(f\"verified_count={len(verified)}\\\
+        \    host = item.get('host', '')\n    if host:\n        verified.add(host)\n\nwith open('/tmp/ofx_fullrecon_verified.txt', 'w') as f:\n    f.write('\\n'.join(sorted(verified)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"verified_file=/tmp/ofx_fullrecon_verified.txt\\n\")\n    f.write(f\"verified_count={len(verified)}\\\
         n\")\n\nprint(f\"Verified {len(verified)} subdomains via DNS\")\n"
       log-stdout: true
   port-scan:
@@ -78,7 +77,7 @@ jobs:
     - task: naabu
       name: naabu-scan
       with:
-        target: '{{ jobs[''dns-resolve''].outputs.verified_subs | default(jobs[''subdomain-enum''].outputs.all_subs, true)
+        target: '{{ jobs[''dns-resolve''].outputs.verified_file | default(jobs[''subdomain-enum''].outputs.subs_file, true)
           }}'
         top_ports: '1000'
         rate: 1000
@@ -88,8 +87,8 @@ jobs:
       script: "import json\n\nports = set()\nhosts = set()\nnaabu_out = {{ steps[0].outputs.typed_outputs | tojson }}\nfor\
         \ item in naabu_out:\n    if item.get('_type') == 'port':\n        host = item.get('host') or item.get('ip', '')\n\
         \        port = item.get('port', '')\n        if host and port:\n            ports.add(f\"{host}:{port}\")\n     \
-        \       hosts.add(host)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports))}\\\
-        n\")\n    f.write(f\"port_count={len(ports)}\\n\")\n    f.write(f\"port_hosts={chr(10).join(sorted(hosts))}\\n\")\n\
+        \       hosts.add(host)\n\nwith open('/tmp/ofx_fullrecon_ports.txt', 'w') as f:\n    f.write('\\n'.join(sorted(ports)))\nwith open('/tmp/ofx_fullrecon_porthosts.txt', 'w') as f:\n    f.write('\\n'.join(sorted(hosts)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ports_file=/tmp/ofx_fullrecon_ports.txt\\n\")\n\
+        \    f.write(f\"port_count={len(ports)}\\n\")\n    f.write(f\"port_hosts_file=/tmp/ofx_fullrecon_porthosts.txt\\n\")\n\
         \nprint(f\"Found {len(ports)} open ports across {len(hosts)} hosts\")\n"
       log-stdout: true
   http-probe:
@@ -100,7 +99,7 @@ jobs:
     - task: httpx
       name: probe-subs
       with:
-        target: '{{ jobs[''dns-resolve''].outputs.verified_subs | default(jobs[''subdomain-enum''].outputs.all_subs, true)
+        target: '{{ jobs[''dns-resolve''].outputs.verified_file | default(jobs[''subdomain-enum''].outputs.subs_file, true)
           }}'
         tech_detect: true
         status_code: true
@@ -146,15 +145,15 @@ jobs:
         \ {}).get('typed_outputs', [])\n    for item in typed:\n        if item.get('_type') == 'url':\n            urls.add(item['url'])\n\
         \n# From hakrawler\ntry:\n    with open('/tmp/hakrawler-urls.txt') as f:\n        for line in f:\n            u =\
         \ line.strip()\n            if u and u.startswith('http'):\n                urls.add(u)\nexcept FileNotFoundError:\n\
-        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_urls={chr(10).join(sorted(urls))}\\\
-        n\")\n    f.write(f\"crawl_count={len(urls)}\\n\")\n\nprint(f\"Crawled {len(urls)} unique URLs\")\n"
+        \    pass\n\nwith open('/tmp/ofx_fullrecon_crawled.txt', 'w') as f:\n    f.write('\\n'.join(sorted(urls)))\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_file=/tmp/ofx_fullrecon_crawled.txt\\n\")\n\
+        \    f.write(f\"crawl_count={len(urls)}\\n\")\n\nprint(f\"Crawled {len(urls)} unique URLs\")\n"
   takeover-check:
     name: Subdomain Takeover Check
     needs:
     - dns-resolve
     steps:
     - name: subzy-check
-      run: 'echo "{{ jobs[''dns-resolve''].outputs.verified_subs }}" > /tmp/verified-subs.txt
+      run: 'cat {{ jobs[''dns-resolve''].outputs.verified_file }} > /tmp/verified-subs.txt
 
         subzy run --targets /tmp/verified-subs.txt --hide_fails 2>/dev/null | tee /tmp/subzy-output.txt
 
@@ -253,12 +252,10 @@ jobs:
     - name: export-to-project
       script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
         \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # subdomains\n\
-        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['subdomain-enum'].outputs.all_subs\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'subdomains.txt').write_text(data)\n        print(f'\
-        \  [+] scans/subdomains.txt ({len(data.splitlines())} lines)')\n\n    # alive subs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    sf = '{{ jobs[\"subdomain-enum\"].outputs.subs_file | default(\"\", true) }}'\n    if sf:\n        import shutil\n        shutil.copy2(sf, d / 'subdomains.txt')\n        print(f'\
+        \  [+] scans/subdomains.txt')\n\n    # alive subs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
         \ exist_ok=True)\n    data = '''{{ jobs['dns-verify'].outputs.alive_subs | default('', true) }}'''.strip()\n    if\
         \ data:\n        (d / 'alive-subs.txt').write_text(data)\n        print(f'  [+] scans/alive-subs.txt ({len(data.splitlines())}\
-        \ lines)')\n\n    # ports\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['port-scan'].outputs.open_ports\
-        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'ports.txt').write_text(data)\n        print(f'  [+]\
-        \ scans/ports.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+        \ lines)')\n\n    # ports\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    pf = '{{ jobs[\"port-scan\"].outputs.ports_file | default(\"\", true) }}'\n    if pf:\n        import shutil\n        shutil.copy2(pf, d / 'ports.txt')\n        print(f'  [+]\
+        \ scans/ports.txt')\n\n    print(f'Project export complete: {project}')"
       continue-on-error: true
