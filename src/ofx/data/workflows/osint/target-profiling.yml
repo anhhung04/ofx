@@ -1,15 +1,14 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: target-profiling
-description: >
-  Deep OSINT target profiling — harvests emails, social accounts,
-  breach data, domain registration info, and online presence for
-  a target organization or individual.
+description: 'Deep OSINT target profiling — harvests emails, social accounts, breach data, domain registration info, and online
+  presence for a target organization or individual.
+
+  '
 tags:
-  - osint
-  - recon
-  - email
-  - social
-  - breach
+- osint
+- recon
+- email
+- social
+- breach
 dispatch:
   inputs:
     target:
@@ -18,219 +17,193 @@ dispatch:
       description: Target domain or email address
     username:
       type: string
-      default: ""
+      default: ''
       description: Specific username to investigate
-
 jobs:
   domain-intel:
     name: Domain Intelligence
     steps:
-      - task: whois
-        name: whois-lookup
-        with:
-          target: "{{ inputs.target }}"
-        log-stdout: true
-        continue-on-error: true
-
-      - task: dnsx
-        name: dns-records
-        with:
-          target: "{{ inputs.target }}"
-          a: true
-          aaaa: true
-          cname: true
-          mx: true
-          ns: true
-          txt: true
-          resp: true
-        log-stdout: true
-        continue-on-error: true
-
-      - task: subfinder
-        name: subdomains
-        with:
-          target: "{{ inputs.target }}"
-          all: true
-        log-stdout: true
-        continue-on-error: true
-
-      - name: collect-domain
-        script: |
-          subs = {{ steps[2].outputs.typed_outputs | tojson }}
-          sub_count = sum(1 for s in subs if s.get('_type') == 'subdomain')
-          records = {{ steps[1].outputs.typed_outputs | tojson }}
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"sub_count={sub_count}\n")
-              f.write(f"record_count={len(records)}\n")
-
-          print(f"Subdomains: {sub_count}, DNS records: {len(records)}")
-        log-stdout: true
-
+    - task: whois
+      name: whois-lookup
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - task: dnsx
+      name: dns-records
+      with:
+        target: '{{ inputs.target }}'
+        a: true
+        aaaa: true
+        cname: true
+        mx: true
+        ns: true
+        txt: true
+        resp: true
+      log-stdout: true
+      continue-on-error: true
+    - task: subfinder
+      name: subdomains
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-domain
+      script: "subs = {{ steps[2].outputs.typed_outputs | tojson }}\nsub_count = sum(1 for s in subs if s.get('_type') ==\
+        \ 'subdomain')\nrecords = {{ steps[1].outputs.typed_outputs | tojson }}\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"sub_count={sub_count}\\n\")\n    f.write(f\"record_count={len(records)}\\n\")\n\nprint(f\"\
+        Subdomains: {sub_count}, DNS records: {len(records)}\")\n"
+      log-stdout: true
   email-harvest:
     name: Email Harvesting
     steps:
-      - task: theharvester
-        name: theharvester-search
-        with:
-          target: "{{ inputs.target }}"
-          source: all
-          limit: 500
-        log-stdout: true
-        continue-on-error: true
-
-      - name: collect-emails
-        script: |
-          import re
-
-          emails = set()
-          # From theHarvester typed outputs
-          th_out = {{ steps[0].outputs.typed_outputs | tojson }}
-          for item in th_out:
-              if item.get('_type') == 'user_account' and item.get('username'):
-                  if '@' in item['username']:
-                      emails.add(item['username'])
-              if item.get('_type') == 'subdomain' and '@' in item.get('host', ''):
-                  emails.add(item['host'])
-
-          # Also parse raw stdout for email patterns
-          raw = '{{ steps[0].outputs.stdout | default("", true) }}'
-          found = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', raw)
-          emails.update(found)
-
-          email_list = '\n'.join(sorted(emails))
-          with open('/tmp/harvested-emails.txt', 'w') as f:
-              f.write(email_list)
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"emails={email_list}\n")
-              f.write(f"email_count={len(emails)}\n")
-
-          print(f"Harvested {len(emails)} email addresses")
-
+    - task: theharvester
+      name: theharvester-search
+      with:
+        target: '{{ inputs.target }}'
+        source: all
+        limit: 500
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-emails
+      script: "import re\n\nemails = set()\n# From theHarvester typed outputs\nth_out = {{ steps[0].outputs.typed_outputs\
+        \ | tojson }}\nfor item in th_out:\n    if item.get('_type') == 'user_account' and item.get('username'):\n       \
+        \ if '@' in item['username']:\n            emails.add(item['username'])\n    if item.get('_type') == 'subdomain' and\
+        \ '@' in item.get('host', ''):\n        emails.add(item['host'])\n\n# Also parse raw stdout for email patterns\nraw\
+        \ = '{{ steps[0].outputs.stdout | default(\"\", true) }}'\nfound = re.findall(r'[\\w.+-]+@[\\w-]+\\.[\\w.-]+', raw)\n\
+        emails.update(found)\n\nemail_list = '\\n'.join(sorted(emails))\nwith open('/tmp/harvested-emails.txt', 'w') as f:\n\
+        \    f.write(email_list)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"emails={email_list}\\n\"\
+        )\n    f.write(f\"email_count={len(emails)}\\n\")\n\nprint(f\"Harvested {len(emails)} email addresses\")\n"
   account-check:
     name: Account Verification
-    needs: [email-harvest]
+    needs:
+    - email-harvest
     steps:
-      - task: holehe
-        name: holehe-check
-        with:
-          target: "{{ jobs['email-harvest'].outputs.emails | default(inputs.target, true) }}"
-          only_used: true
-        log-stdout: true
-        continue-on-error: true
-
-      - name: collect-accounts
-        script: |
-          accounts = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-          services = set()
-          for a in accounts:
-              if a.get('host'):
-                  services.add(a['host'])
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"account_count={len(accounts)}\n")
-              f.write(f"services_with_accounts={','.join(sorted(services))}\n")
-
-          print(f"Email registered on {len(services)} services")
-        log-stdout: true
-
+    - task: holehe
+      name: holehe-check
+      with:
+        target: '{{ jobs[''email-harvest''].outputs.emails | default(inputs.target, true) }}'
+        only_used: true
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-accounts
+      script: "accounts = {{ users(steps[0].outputs.typed_outputs) | tojson }}\nservices = set()\nfor a in accounts:\n   \
+        \ if a.get('host'):\n        services.add(a['host'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        account_count={len(accounts)}\\n\")\n    f.write(f\"services_with_accounts={','.join(sorted(services))}\\n\")\n\n\
+        print(f\"Email registered on {len(services)} services\")\n"
+      log-stdout: true
   social-recon:
     name: Social Media & Username Search
     steps:
-      - task: maigret
-        name: maigret-search
-        with:
-          target: "{{ inputs.username if inputs.username else inputs.target.split('.')[0] }}"
-        log-stdout: true
-        continue-on-error: true
-
-      - name: collect-social
-        script: |
-          social = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-          platforms = set()
-          for s in social:
-              if s.get('host'):
-                  platforms.add(s['host'])
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"social_count={len(social)}\n")
-              f.write(f"platforms={','.join(sorted(platforms))}\n")
-
-          print(f"Found {len(social)} social accounts across {len(platforms)} platforms")
-        log-stdout: true
-
+    - task: maigret
+      name: maigret-search
+      with:
+        target: '{{ inputs.username if inputs.username else inputs.target.split(''.'')[0] }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-social
+      script: "social = {{ users(steps[0].outputs.typed_outputs) | tojson }}\nplatforms = set()\nfor s in social:\n    if\
+        \ s.get('host'):\n        platforms.add(s['host'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
+        social_count={len(social)}\\n\")\n    f.write(f\"platforms={','.join(sorted(platforms))}\\n\")\n\nprint(f\"Found {len(social)}\
+        \ social accounts across {len(platforms)} platforms\")\n"
+      log-stdout: true
   breach-search:
     name: Breach Database Search
-    needs: [email-harvest]
+    needs:
+    - email-harvest
     steps:
-      - task: h8mail
-        name: h8mail-breach
-        with:
-          target: "{{ jobs['email-harvest'].outputs.emails | default(inputs.target, true) }}"
-        log-stdout: true
-        continue-on-error: true
-
-      - name: collect-breaches
-        script: |
-          breach_data = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-          breached_emails = set()
-          for b in breach_data:
-              if b.get('username'):
-                  breached_emails.add(b['username'])
-
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"breach_count={len(breach_data)}\n")
-              f.write(f"breached_emails={len(breached_emails)}\n")
-
-          print(f"Breach entries: {len(breach_data)} for {len(breached_emails)} emails")
-        log-stdout: true
-
+    - task: h8mail
+      name: h8mail-breach
+      with:
+        target: '{{ jobs[''email-harvest''].outputs.emails | default(inputs.target, true) }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-breaches
+      script: "breach_data = {{ users(steps[0].outputs.typed_outputs) | tojson }}\nbreached_emails = set()\nfor b in breach_data:\n\
+        \    if b.get('username'):\n        breached_emails.add(b['username'])\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"breach_count={len(breach_data)}\\n\")\n    f.write(f\"breached_emails={len(breached_emails)}\\\
+        n\")\n\nprint(f\"Breach entries: {len(breach_data)} for {len(breached_emails)} emails\")\n"
+      log-stdout: true
   secret-scan:
     name: Secret & Leak Scanning
     steps:
-      - task: gitleaks
-        name: gitleaks-org
-        with:
-          target: "{{ inputs.target }}"
-        log-stdout: true
-        continue-on-error: true
-
-      - task: trufflehog
-        name: trufflehog-org
-        with:
-          target: "{{ inputs.target }}"
-          mode: filesystem
-        log-stdout: true
-        continue-on-error: true
-
+    - task: gitleaks
+      name: gitleaks-org
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - task: trufflehog
+      name: trufflehog-org
+      with:
+        target: '{{ inputs.target }}'
+        mode: filesystem
+      log-stdout: true
+      continue-on-error: true
   summary:
     name: OSINT Profile Summary
     needs:
-      [domain-intel, account-check, social-recon, breach-search, secret-scan]
+    - domain-intel
+    - account-check
+    - social-recon
+    - breach-search
+    - secret-scan
     steps:
-      - name: report
-        run: |
-          echo "======================================================"
-          echo " TARGET PROFILING COMPLETE: {{ inputs.target }}"
-          echo "======================================================"
-          echo ""
-          echo "--- Domain Intelligence ---"
-          echo "Subdomains: {{ jobs['domain-intel'].outputs.sub_count }}"
-          echo "DNS records: {{ jobs['domain-intel'].outputs.record_count }}"
-          echo ""
-          echo "--- Email Harvesting ---"
-          echo "Emails found: {{ jobs['email-harvest'].outputs.email_count }}"
-          echo ""
-          echo "--- Account Verification ---"
-          echo "Accounts found: {{ jobs['account-check'].outputs.account_count }}"
-          echo "Services: {{ jobs['account-check'].outputs.services_with_accounts }}"
-          echo ""
-          echo "--- Social Media ---"
-          echo "Profiles found: {{ jobs['social-recon'].outputs.social_count }}"
-          echo "Platforms: {{ jobs['social-recon'].outputs.platforms }}"
-          echo ""
-          echo "--- Breach Data ---"
-          echo "Breach entries: {{ jobs['breach-search'].outputs.breach_count }}"
-          echo "Breached emails: {{ jobs['breach-search'].outputs.breached_emails }}"
-        log-stdout: true
+    - name: report
+      run: 'echo "======================================================"
+
+        echo " TARGET PROFILING COMPLETE: {{ inputs.target }}"
+
+        echo "======================================================"
+
+        echo ""
+
+        echo "--- Domain Intelligence ---"
+
+        echo "Subdomains: {{ jobs[''domain-intel''].outputs.sub_count }}"
+
+        echo "DNS records: {{ jobs[''domain-intel''].outputs.record_count }}"
+
+        echo ""
+
+        echo "--- Email Harvesting ---"
+
+        echo "Emails found: {{ jobs[''email-harvest''].outputs.email_count }}"
+
+        echo ""
+
+        echo "--- Account Verification ---"
+
+        echo "Accounts found: {{ jobs[''account-check''].outputs.account_count }}"
+
+        echo "Services: {{ jobs[''account-check''].outputs.services_with_accounts }}"
+
+        echo ""
+
+        echo "--- Social Media ---"
+
+        echo "Profiles found: {{ jobs[''social-recon''].outputs.social_count }}"
+
+        echo "Platforms: {{ jobs[''social-recon''].outputs.platforms }}"
+
+        echo ""
+
+        echo "--- Breach Data ---"
+
+        echo "Breach entries: {{ jobs[''breach-search''].outputs.breach_count }}"
+
+        echo "Breached emails: {{ jobs[''breach-search''].outputs.breached_emails }}"
+
+        '
+      log-stdout: true
+    - name: export-to-project
+      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
+        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # emails\n\
+        \    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['email-harvest'].outputs.emails\
+        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'emails.txt').write_text(data)\n        print(f' \
+        \ [+] evidence/data/emails.txt ({len(data.splitlines())} lines)')\n\n    # social platforms\n    d = p / 'evidence/data'\n\
+        \    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['social-recon'].outputs.platforms | default('', true)\
+        \ }}'''.strip()\n    if data:\n        (d / 'social-platforms.txt').write_text(data)\n        print(f'  [+] evidence/data/social-platforms.txt\
+        \ ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+      continue-on-error: true

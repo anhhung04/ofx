@@ -1,7 +1,6 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: internal-recon
-description: 'Internal network reconnaissance — host discovery, port scanning, service
-  fingerprinting, and initial enumeration for internal pentests.
+description: 'Internal network reconnaissance — host discovery, port scanning, service fingerprinting, and initial enumeration
+  for internal pentests.
 
   '
 tags:
@@ -30,12 +29,10 @@ jobs:
         '
       continue-on-error: true
     - name: collect-alive
-      script: "hosts = set()\ntry:\n    with open('/tmp/alive-hosts.txt') as f:\n\
-        \        for line in f:\n            ip = line.strip()\n            if ip:\n\
-        \                hosts.add(ip)\nexcept FileNotFoundError:\n    pass\n\nwith\
-        \ open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"alive_hosts={chr(10).join(sorted(hosts))}\\\
-        n\")\n    f.write(f\"alive_count={len(hosts)}\\n\")\n\nprint(f\"Discovered\
-        \ {len(hosts)} alive hosts\")\n"
+      script: "hosts = set()\ntry:\n    with open('/tmp/alive-hosts.txt') as f:\n        for line in f:\n            ip =\
+        \ line.strip()\n            if ip:\n                hosts.add(ip)\nexcept FileNotFoundError:\n    pass\n\nwith open('{{\
+        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"alive_hosts={chr(10).join(sorted(hosts))}\\n\")\n    f.write(f\"\
+        alive_count={len(hosts)}\\n\")\n\nprint(f\"Discovered {len(hosts)} alive hosts\")\n"
   port-scan:
     name: Port Scanning
     needs:
@@ -44,8 +41,7 @@ jobs:
     - name: rustscan-fast
       run: 'echo "{{ jobs[''host-discovery''].outputs.alive_hosts }}" > /tmp/scan-targets.txt
 
-        rustscan -a /tmp/scan-targets.txt --ulimit 5000 -b 1000 2>/dev/null | tee
-        /tmp/rustscan-output.txt
+        rustscan -a /tmp/scan-targets.txt --ulimit 5000 -b 1000 2>/dev/null | tee /tmp/rustscan-output.txt
 
         '
       continue-on-error: true
@@ -58,24 +54,18 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: collect-ports
-      script: "import re\n\nports = set()\nhosts_with_ports = {}\n\n# Parse naabu\
-        \ results\nnaabu_out = {{ steps[1].outputs.typed_outputs | tojson }}\nfor\
-        \ item in naabu_out:\n    if item.get('_type') == 'port':\n        host =\
-        \ item.get('host') or item.get('ip', '')\n        port = item.get('port',\
-        \ '')\n        if host and port:\n            ports.add(f\"{host}:{port}\"\
-        )\n            hosts_with_ports.setdefault(host, set()).add(str(port))\n\n\
-        # Parse rustscan fallback\ntry:\n    with open('/tmp/rustscan-output.txt')\
-        \ as f:\n        for line in f:\n            match = re.search(r'(\\d+\\.\\\
-        d+\\.\\d+\\.\\d+):(\\d+)', line)\n            if match:\n                host,\
-        \ port = match.group(1), match.group(2)\n                ports.add(f\"{host}:{port}\"\
-        )\n                hosts_with_ports.setdefault(host, set()).add(port)\nexcept\
-        \ FileNotFoundError:\n    pass\n\n# Build nmap-compatible target list\nnmap_targets\
-        \ = []\nfor host, host_ports in hosts_with_ports.items():\n    port_str =\
-        \ ','.join(sorted(host_ports, key=int))\n    nmap_targets.append(f\"{host}:{port_str}\"\
-        )\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports))}\\\
-        n\")\n    f.write(f\"port_count={len(ports)}\\n\")\n    f.write(f\"scan_targets={chr(10).join(nmap_targets)}\\\
-        n\")\n\nprint(f\"Found {len(ports)} open ports across {len(hosts_with_ports)}\
-        \ hosts\")\n"
+      script: "import re\n\nports = set()\nhosts_with_ports = {}\n\n# Parse naabu results\nnaabu_out = {{ steps[1].outputs.typed_outputs\
+        \ | tojson }}\nfor item in naabu_out:\n    if item.get('_type') == 'port':\n        host = item.get('host') or item.get('ip',\
+        \ '')\n        port = item.get('port', '')\n        if host and port:\n            ports.add(f\"{host}:{port}\")\n\
+        \            hosts_with_ports.setdefault(host, set()).add(str(port))\n\n# Parse rustscan fallback\ntry:\n    with\
+        \ open('/tmp/rustscan-output.txt') as f:\n        for line in f:\n            match = re.search(r'(\\d+\\.\\d+\\.\\\
+        d+\\.\\d+):(\\d+)', line)\n            if match:\n                host, port = match.group(1), match.group(2)\n  \
+        \              ports.add(f\"{host}:{port}\")\n                hosts_with_ports.setdefault(host, set()).add(port)\n\
+        except FileNotFoundError:\n    pass\n\n# Build nmap-compatible target list\nnmap_targets = []\nfor host, host_ports\
+        \ in hosts_with_ports.items():\n    port_str = ','.join(sorted(host_ports, key=int))\n    nmap_targets.append(f\"\
+        {host}:{port_str}\")\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports))}\\\
+        n\")\n    f.write(f\"port_count={len(ports)}\\n\")\n    f.write(f\"scan_targets={chr(10).join(nmap_targets)}\\n\"\
+        )\n\nprint(f\"Found {len(ports)} open ports across {len(hosts_with_ports)} hosts\")\n"
   service-detect:
     name: Service Detection
     needs:
@@ -84,8 +74,7 @@ jobs:
     - name: nmap-service
       run: 'echo "{{ jobs[''host-discovery''].outputs.alive_hosts }}" > /tmp/nmap-hosts.txt
 
-        nmap -sV -iL /tmp/nmap-hosts.txt -oN /tmp/nmap-services.txt 2>/dev/null |
-        tee /tmp/nmap-output.txt
+        nmap -sV -iL /tmp/nmap-hosts.txt -oN /tmp/nmap-services.txt 2>/dev/null | tee /tmp/nmap-output.txt
 
         '
       continue-on-error: true
@@ -99,44 +88,35 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: collect-services
-      script: "import re\n\nservices = []\nhttp_targets = set()\n\n# Parse nmap services\n\
-        try:\n    with open('/tmp/nmap-services.txt') as f:\n        for line in f:\n\
-        \            match = re.search(r'(\\d+)/tcp\\s+open\\s+(\\S+)\\s*(.*)', line)\n\
-        \            if match:\n                port, svc, version = match.groups()\n\
-        \                services.append(f\"{port}/tcp {svc} {version.strip()}\")\n\
-        except FileNotFoundError:\n    pass\n\n# Collect HTTP targets from httpx\n\
-        httpx_out = {{ steps[1].outputs.typed_outputs | tojson }}\nfor item in httpx_out:\n\
-        \    url = item.get('url', '')\n    if url:\n        http_targets.add(url)\n\
-        \nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"service_count={len(services)}\\\
-        n\")\n    f.write(f\"http_urls={chr(10).join(sorted(http_targets))}\\n\")\n\
-        \    f.write(f\"http_count={len(http_targets)}\\n\")\n\nprint(f\"Services\
-        \ detected: {len(services)}, HTTP targets: {len(http_targets)}\")\n"
+      script: "import re\n\nservices = []\nhttp_targets = set()\n\n# Parse nmap services\ntry:\n    with open('/tmp/nmap-services.txt')\
+        \ as f:\n        for line in f:\n            match = re.search(r'(\\d+)/tcp\\s+open\\s+(\\S+)\\s*(.*)', line)\n  \
+        \          if match:\n                port, svc, version = match.groups()\n                services.append(f\"{port}/tcp\
+        \ {svc} {version.strip()}\")\nexcept FileNotFoundError:\n    pass\n\n# Collect HTTP targets from httpx\nhttpx_out\
+        \ = {{ steps[1].outputs.typed_outputs | tojson }}\nfor item in httpx_out:\n    url = item.get('url', '')\n    if url:\n\
+        \        http_targets.add(url)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"service_count={len(services)}\\\
+        n\")\n    f.write(f\"http_urls={chr(10).join(sorted(http_targets))}\\n\")\n    f.write(f\"http_count={len(http_targets)}\\\
+        n\")\n\nprint(f\"Services detected: {len(services)}, HTTP targets: {len(http_targets)}\")\n"
   web-enum:
     name: Web Enumeration
     needs:
     - service-detect
     steps:
     - name: whatweb-scan
-      run: "echo \"{{ jobs['service-detect'].outputs.http_urls | default(inputs.target,\
-        \ true) }}\" | head -50 | while read url; do\n  whatweb -a 3 \"$url\" --color=never\
-        \ 2>/dev/null\ndone | tee /tmp/whatweb-output.txt\n"
+      run: "echo \"{{ jobs['service-detect'].outputs.http_urls | default(inputs.target, true) }}\" | head -50 | while read\
+        \ url; do\n  whatweb -a 3 \"$url\" --color=never 2>/dev/null\ndone | tee /tmp/whatweb-output.txt\n"
       continue-on-error: true
     - name: gowitness-screenshots
-      run: 'echo "{{ jobs[''service-detect''].outputs.http_urls | default(inputs.target,
-        true) }}" > /tmp/gowitness-targets.txt
+      run: 'echo "{{ jobs[''service-detect''].outputs.http_urls | default(inputs.target, true) }}" > /tmp/gowitness-targets.txt
 
-        gowitness scan file -f /tmp/gowitness-targets.txt --screenshot-path /tmp/gowitness-shots
-        2>/dev/null || true
+        gowitness scan file -f /tmp/gowitness-targets.txt --screenshot-path /tmp/gowitness-shots 2>/dev/null || true
 
         '
       continue-on-error: true
     - name: collect-web
-      script: "import re\n\ntechs = set()\ntry:\n    with open('/tmp/whatweb-output.txt')\
-        \ as f:\n        content = f.read()\n    matches = re.findall(r'\\[([^\\]]+)\\\
-        ]', content)\n    for m in matches:\n        m = m.strip()\n        if m and\
-        \ not m.startswith('http'):\n            techs.add(m)\nexcept FileNotFoundError:\n\
-        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        web_tech_count={len(techs)}\\n\")\n\nprint(f\"Web technologies detected: {len(techs)}\"\
+      script: "import re\n\ntechs = set()\ntry:\n    with open('/tmp/whatweb-output.txt') as f:\n        content = f.read()\n\
+        \    matches = re.findall(r'\\[([^\\]]+)\\]', content)\n    for m in matches:\n        m = m.strip()\n        if m\
+        \ and not m.startswith('http'):\n            techs.add(m)\nexcept FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS\
+        \ }}', 'a') as f:\n    f.write(f\"web_tech_count={len(techs)}\\n\")\n\nprint(f\"Web technologies detected: {len(techs)}\"\
         )\n"
   ad-detect:
     name: AD Detection
@@ -151,17 +131,14 @@ jobs:
         '
       continue-on-error: true
     - name: collect-ad-info
-      script: "import re\n\ndomains = set()\ndcs = set()\n\ntry:\n    with open('/tmp/nxc-smb-scan.txt')\
-        \ as f:\n        for line in f:\n            # Detect domain from SMB output\n\
-        \            match = re.search(r'SMB\\s+(\\S+)\\s+445\\s+\\S+\\s+.*?domain:(\\\
-        S+)', line, re.IGNORECASE)\n            if match:\n                ip = match.group(1)\n\
-        \                domain = match.group(2).rstrip(')')\n                domains.add(domain)\n\
-        \                if 'DC' in line.upper() or 'PDC' in line.upper():\n     \
-        \               dcs.add(ip)\nexcept FileNotFoundError:\n    pass\n\nwith open('{{\
-        \ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ad_domains={chr(10).join(sorted(domains))}\\\
-        n\")\n    f.write(f\"domain_controllers={chr(10).join(sorted(dcs))}\\n\")\n\
-        \    f.write(f\"dc_count={len(dcs)}\\n\")\n\nprint(f\"AD domains: {', '.join(domains)\
-        \ if domains else 'none detected'}\")\nprint(f\"Domain controllers: {len(dcs)}\"\
+      script: "import re\n\ndomains = set()\ndcs = set()\n\ntry:\n    with open('/tmp/nxc-smb-scan.txt') as f:\n        for\
+        \ line in f:\n            # Detect domain from SMB output\n            match = re.search(r'SMB\\s+(\\S+)\\s+445\\\
+        s+\\S+\\s+.*?domain:(\\S+)', line, re.IGNORECASE)\n            if match:\n                ip = match.group(1)\n  \
+        \              domain = match.group(2).rstrip(')')\n                domains.add(domain)\n                if 'DC' in\
+        \ line.upper() or 'PDC' in line.upper():\n                    dcs.add(ip)\nexcept FileNotFoundError:\n    pass\n\n\
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ad_domains={chr(10).join(sorted(domains))}\\n\")\n \
+        \   f.write(f\"domain_controllers={chr(10).join(sorted(dcs))}\\n\")\n    f.write(f\"dc_count={len(dcs)}\\n\")\n\n\
+        print(f\"AD domains: {', '.join(domains) if domains else 'none detected'}\")\nprint(f\"Domain controllers: {len(dcs)}\"\
         )\n"
   summary:
     name: Internal Recon Summary
@@ -193,8 +170,7 @@ jobs:
 
         echo "--- Services ---"
 
-        echo "Services detected: {{ jobs[''service-detect''].outputs.service_count
-        }}"
+        echo "Services detected: {{ jobs[''service-detect''].outputs.service_count }}"
 
         echo "HTTP targets: {{ jobs[''service-detect''].outputs.http_count }}"
 
@@ -202,8 +178,7 @@ jobs:
 
         echo "--- Web ---"
 
-        echo "Technologies detected: {{ jobs[''web-enum''].outputs.web_tech_count
-        }}"
+        echo "Technologies detected: {{ jobs[''web-enum''].outputs.web_tech_count }}"
 
         echo ""
 
@@ -215,3 +190,21 @@ jobs:
 
         '
       log-stdout: true
+    - name: export-to-project
+      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
+        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # alive hosts\n\
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['host-discovery'].outputs.alive_hosts\
+        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'alive-hosts.txt').write_text(data)\n        print(f'\
+        \  [+] scans/alive-hosts.txt ({len(data.splitlines())} lines)')\n\n    # open ports\n    d = p / 'scans'\n    d.mkdir(parents=True,\
+        \ exist_ok=True)\n    data = '''{{ jobs['port-scan'].outputs.open_ports | default('', true) }}'''.strip()\n    if\
+        \ data:\n        (d / 'open-ports.txt').write_text(data)\n        print(f'  [+] scans/open-ports.txt ({len(data.splitlines())}\
+        \ lines)')\n\n    # HTTP URLs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['service-detect'].outputs.http_urls\
+        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'http-urls.txt').write_text(data)\n        print(f'\
+        \  [+] scans/http-urls.txt ({len(data.splitlines())} lines)')\n\n    # AD domains\n    d = p / 'evidence/data'\n \
+        \   d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['ad-detect'].outputs.ad_domains | default('', true)\
+        \ }}'''.strip()\n    if data:\n        (d / 'ad-domains.txt').write_text(data)\n        print(f'  [+] evidence/data/ad-domains.txt\
+        \ ({len(data.splitlines())} lines)')\n\n    # DCs\n    d = p / 'evidence/data'\n    d.mkdir(parents=True, exist_ok=True)\n\
+        \    data = '''{{ jobs['ad-detect'].outputs.domain_controllers | default('', true) }}'''.strip()\n    if data:\n \
+        \       (d / 'domain-controllers.txt').write_text(data)\n        print(f'  [+] evidence/data/domain-controllers.txt\
+        \ ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+      continue-on-error: true

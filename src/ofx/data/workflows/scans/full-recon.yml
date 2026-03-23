@@ -1,8 +1,6 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: full-recon
-description: 'Full reconnaissance pipeline — comprehensive target assessment combining
-  subdomain discovery, DNS enumeration, port scanning, service detection, web crawling,
-  vulnerability scanning, and OSINT.
+description: 'Full reconnaissance pipeline — comprehensive target assessment combining subdomain discovery, DNS enumeration,
+  port scanning, service detection, web crawling, vulnerability scanning, and OSINT.
 
   '
 tags:
@@ -38,20 +36,15 @@ jobs:
         '
       continue-on-error: true
     - name: collect-subdomains
-      script: "import json\n\nsubs = set()\nsubs.add('{{ inputs.target }}')\n\n# From\
-        \ subfinder\nsf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}\n\
-        for item in sf_outputs:\n    if item.get('_type') == 'subdomain':\n      \
-        \  subs.add(item['host'])\n\n# From amass\ntry:\n    with open('/tmp/amass-subs.txt')\
-        \ as f:\n        for line in f:\n            sub = line.strip()\n        \
-        \    if sub and '{{ inputs.target }}' in sub:\n                subs.add(sub)\n\
-        except FileNotFoundError:\n    pass\n\n# From assetfinder\ntry:\n    with\
-        \ open('/tmp/assetfinder-subs.txt') as f:\n        for line in f:\n      \
-        \      sub = line.strip()\n            if sub and '{{ inputs.target }}' in\
-        \ sub:\n                subs.add(sub)\nexcept FileNotFoundError:\n    pass\n\
-        \nsub_list = '\\n'.join(sorted(subs))\nwith open('/tmp/subs.txt', 'w') as\
-        \ f:\n    f.write(sub_list)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as\
-        \ f:\n    f.write(f\"all_subs={sub_list}\\n\")\n    f.write(f\"sub_count={len(subs)}\\\
-        n\")\n\nprint(f\"Collected {len(subs)} unique subdomains\")\n"
+      script: "import json\n\nsubs = set()\nsubs.add('{{ inputs.target }}')\n\n# From subfinder\nsf_outputs = {{ steps[0].outputs.typed_outputs\
+        \ | tojson }}\nfor item in sf_outputs:\n    if item.get('_type') == 'subdomain':\n        subs.add(item['host'])\n\
+        \n# From amass\ntry:\n    with open('/tmp/amass-subs.txt') as f:\n        for line in f:\n            sub = line.strip()\n\
+        \            if sub and '{{ inputs.target }}' in sub:\n                subs.add(sub)\nexcept FileNotFoundError:\n\
+        \    pass\n\n# From assetfinder\ntry:\n    with open('/tmp/assetfinder-subs.txt') as f:\n        for line in f:\n\
+        \            sub = line.strip()\n            if sub and '{{ inputs.target }}' in sub:\n                subs.add(sub)\n\
+        except FileNotFoundError:\n    pass\n\nsub_list = '\\n'.join(sorted(subs))\nwith open('/tmp/subs.txt', 'w') as f:\n\
+        \    f.write(sub_list)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"all_subs={sub_list}\\n\")\n\
+        \    f.write(f\"sub_count={len(subs)}\\n\")\n\nprint(f\"Collected {len(subs)} unique subdomains\")\n"
   dns-resolve:
     name: DNS Resolution
     needs:
@@ -72,12 +65,10 @@ jobs:
         '
       continue-on-error: true
     - name: export-verified
-      script: "import json\n\nverified = set()\ndnsx_out = {{ steps[0].outputs.typed_outputs\
-        \ | tojson }}\nfor item in dnsx_out:\n    host = item.get('host', '')\n  \
-        \  if host:\n        verified.add(host)\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"verified_subs={chr(10).join(sorted(verified))}\\\
-        n\")\n    f.write(f\"verified_count={len(verified)}\\n\")\n\nprint(f\"Verified\
-        \ {len(verified)} subdomains via DNS\")\n"
+      script: "import json\n\nverified = set()\ndnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}\nfor item in dnsx_out:\n\
+        \    host = item.get('host', '')\n    if host:\n        verified.add(host)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
+        \ as f:\n    f.write(f\"verified_subs={chr(10).join(sorted(verified))}\\n\")\n    f.write(f\"verified_count={len(verified)}\\\
+        n\")\n\nprint(f\"Verified {len(verified)} subdomains via DNS\")\n"
       log-stdout: true
   port-scan:
     name: Port Scanning
@@ -87,22 +78,19 @@ jobs:
     - task: naabu
       name: naabu-scan
       with:
-        target: '{{ jobs[''dns-resolve''].outputs.verified_subs | default(jobs[''subdomain-enum''].outputs.all_subs,
-          true) }}'
+        target: '{{ jobs[''dns-resolve''].outputs.verified_subs | default(jobs[''subdomain-enum''].outputs.all_subs, true)
+          }}'
         top_ports: '1000'
         rate: 1000
       log-stdout: true
       continue-on-error: true
     - name: export-ports
-      script: "import json\n\nports = set()\nhosts = set()\nnaabu_out = {{ steps[0].outputs.typed_outputs\
-        \ | tojson }}\nfor item in naabu_out:\n    if item.get('_type') == 'port':\n\
-        \        host = item.get('host') or item.get('ip', '')\n        port = item.get('port',\
-        \ '')\n        if host and port:\n            ports.add(f\"{host}:{port}\"\
-        )\n            hosts.add(host)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a')\
-        \ as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports))}\\n\")\n \
-        \   f.write(f\"port_count={len(ports)}\\n\")\n    f.write(f\"port_hosts={chr(10).join(sorted(hosts))}\\\
-        n\")\n\nprint(f\"Found {len(ports)} open ports across {len(hosts)} hosts\"\
-        )\n"
+      script: "import json\n\nports = set()\nhosts = set()\nnaabu_out = {{ steps[0].outputs.typed_outputs | tojson }}\nfor\
+        \ item in naabu_out:\n    if item.get('_type') == 'port':\n        host = item.get('host') or item.get('ip', '')\n\
+        \        port = item.get('port', '')\n        if host and port:\n            ports.add(f\"{host}:{port}\")\n     \
+        \       hosts.add(host)\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"open_ports={chr(10).join(sorted(ports))}\\\
+        n\")\n    f.write(f\"port_count={len(ports)}\\n\")\n    f.write(f\"port_hosts={chr(10).join(sorted(hosts))}\\n\")\n\
+        \nprint(f\"Found {len(ports)} open ports across {len(hosts)} hosts\")\n"
       log-stdout: true
   http-probe:
     name: HTTP Probing
@@ -112,8 +100,8 @@ jobs:
     - task: httpx
       name: probe-subs
       with:
-        target: '{{ jobs[''dns-resolve''].outputs.verified_subs | default(jobs[''subdomain-enum''].outputs.all_subs,
-          true) }}'
+        target: '{{ jobs[''dns-resolve''].outputs.verified_subs | default(jobs[''subdomain-enum''].outputs.all_subs, true)
+          }}'
         tech_detect: true
         status_code: true
         title: true
@@ -121,11 +109,11 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-live
-      run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
-        ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
+      run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'', ''gt'', 0) | map(attribute=''url'')
+        | unique | join(''\n'') }}" >> $OFX_OUTPUTS
 
-        echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
-        ''gt'', 0) | list | length }}" >> $OFX_OUTPUTS
+        echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'', ''gt'', 0) | list | length
+        }}" >> $OFX_OUTPUTS
 
         '
       log-stdout: true
@@ -137,8 +125,7 @@ jobs:
     - task: katana
       name: katana-crawl
       with:
-        target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target,
-          true) }}'
+        target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
       log-stdout: true
       continue-on-error: true
@@ -149,21 +136,18 @@ jobs:
         subs: true
       continue-on-error: true
     - name: hakrawler-crawl
-      run: 'echo "{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target,
-        true) }}" | hakrawler -d 2 -subs 2>/dev/null | tee /tmp/hakrawler-urls.txt
+      run: 'echo "{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}" | hakrawler -d 2 -subs 2>/dev/null
+        | tee /tmp/hakrawler-urls.txt
 
         '
       continue-on-error: true
     - name: collect-urls
-      script: "import json\n\nurls = set()\nfor idx in [0, 1]:\n    step_data = {{\
-        \ steps | tojson }}\n    typed = step_data[idx].get('outputs', {}).get('typed_outputs',\
-        \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n  \
-        \          urls.add(item['url'])\n\n# From hakrawler\ntry:\n    with open('/tmp/hakrawler-urls.txt')\
-        \ as f:\n        for line in f:\n            u = line.strip()\n          \
-        \  if u and u.startswith('http'):\n                urls.add(u)\nexcept FileNotFoundError:\n\
-        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"\
-        crawled_urls={chr(10).join(sorted(urls))}\\n\")\n    f.write(f\"crawl_count={len(urls)}\\\
-        n\")\n\nprint(f\"Crawled {len(urls)} unique URLs\")\n"
+      script: "import json\n\nurls = set()\nfor idx in [0, 1]:\n    step_data = {{ steps | tojson }}\n    typed = step_data[idx].get('outputs',\
+        \ {}).get('typed_outputs', [])\n    for item in typed:\n        if item.get('_type') == 'url':\n            urls.add(item['url'])\n\
+        \n# From hakrawler\ntry:\n    with open('/tmp/hakrawler-urls.txt') as f:\n        for line in f:\n            u =\
+        \ line.strip()\n            if u and u.startswith('http'):\n                urls.add(u)\nexcept FileNotFoundError:\n\
+        \    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"crawled_urls={chr(10).join(sorted(urls))}\\\
+        n\")\n    f.write(f\"crawl_count={len(urls)}\\n\")\n\nprint(f\"Crawled {len(urls)} unique URLs\")\n"
   takeover-check:
     name: Subdomain Takeover Check
     needs:
@@ -172,18 +156,15 @@ jobs:
     - name: subzy-check
       run: 'echo "{{ jobs[''dns-resolve''].outputs.verified_subs }}" > /tmp/verified-subs.txt
 
-        subzy run --targets /tmp/verified-subs.txt --hide_fails 2>/dev/null | tee
-        /tmp/subzy-output.txt
+        subzy run --targets /tmp/verified-subs.txt --hide_fails 2>/dev/null | tee /tmp/subzy-output.txt
 
         '
       continue-on-error: true
     - name: export-takeovers
-      script: "takeovers = []\ntry:\n    with open('/tmp/subzy-output.txt') as f:\n\
-        \        for line in f:\n            line = line.strip()\n            if line\
-        \ and 'VULNERABLE' in line.upper():\n                takeovers.append(line)\n\
-        except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"takeover_count={len(takeovers)}\\n\")\n\nprint(f\"\
-        Potential takeovers: {len(takeovers)}\")\n"
+      script: "takeovers = []\ntry:\n    with open('/tmp/subzy-output.txt') as f:\n        for line in f:\n            line\
+        \ = line.strip()\n            if line and 'VULNERABLE' in line.upper():\n                takeovers.append(line)\n\
+        except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"takeover_count={len(takeovers)}\\\
+        n\")\n\nprint(f\"Potential takeovers: {len(takeovers)}\")\n"
       log-stdout: true
   fingerprint:
     name: Fingerprinting
@@ -191,9 +172,8 @@ jobs:
     - http-probe
     steps:
     - name: whatweb-scan
-      run: "echo \"{{ jobs['http-probe'].outputs.live_urls | default(inputs.target,\
-        \ true) }}\" | head -50 | while read url; do\n  whatweb -a 3 \"$url\" --color=never\
-        \ 2>/dev/null\ndone | tee /tmp/whatweb-output.txt\n"
+      run: "echo \"{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}\" | head -50 | while read url;\
+        \ do\n  whatweb -a 3 \"$url\" --color=never 2>/dev/null\ndone | tee /tmp/whatweb-output.txt\n"
       continue-on-error: true
     - task: wafw00f
       name: waf-detect
@@ -212,8 +192,7 @@ jobs:
     - task: nuclei
       name: nuclei-scan
       with:
-        target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target,
-          true) }}'
+        target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
       log-stdout: true
       continue-on-error: true
@@ -223,21 +202,18 @@ jobs:
         '
       continue-on-error: true
     - name: crlfuzz-scan
-      run: 'echo "{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target,
-        true) }}" | crlfuzz -s 2>/dev/null | tee /tmp/crlfuzz-output.txt
+      run: 'echo "{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}" | crlfuzz -s 2>/dev/null |
+        tee /tmp/crlfuzz-output.txt
 
         '
       continue-on-error: true
     - name: export-vulns
-      script: "import json\n\nnuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
-        \ | tojson }}\ncritical = [v for v in nuclei_vulns if v.get('severity') ==\
-        \ 'critical']\nhigh = [v for v in nuclei_vulns if v.get('severity') == 'high']\n\
-        medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']\n\nwith\
-        \ open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"vuln_count={len(nuclei_vulns)}\\\
-        n\")\n    f.write(f\"critical_count={len(critical)}\\n\")\n    f.write(f\"\
-        high_count={len(high)}\\n\")\n    f.write(f\"medium_count={len(medium)}\\\
-        n\")\n\nprint(f\"Vulnerabilities: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)}\
-        \ M:{len(medium)})\")\n"
+      script: "import json\n\nnuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}\ncritical = [v for v in\
+        \ nuclei_vulns if v.get('severity') == 'critical']\nhigh = [v for v in nuclei_vulns if v.get('severity') == 'high']\n\
+        medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as\
+        \ f:\n    f.write(f\"vuln_count={len(nuclei_vulns)}\\n\")\n    f.write(f\"critical_count={len(critical)}\\n\")\n \
+        \   f.write(f\"high_count={len(high)}\\n\")\n    f.write(f\"medium_count={len(medium)}\\n\")\n\nprint(f\"Vulnerabilities:\
+        \ {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})\")\n"
       log-stdout: true
   summary:
     name: Full Recon Summary
@@ -252,8 +228,7 @@ jobs:
 
         echo "=================================================="
 
-        echo "Subdomains discovered: {{ jobs[''subdomain-enum''].outputs.sub_count
-        }}"
+        echo "Subdomains discovered: {{ jobs[''subdomain-enum''].outputs.sub_count }}"
 
         echo "DNS verified: {{ jobs[''dns-resolve''].outputs.verified_count }}"
 
@@ -263,8 +238,7 @@ jobs:
 
         echo "URLs crawled: {{ jobs[''web-crawl''].outputs.crawl_count }}"
 
-        echo "Subdomain takeovers: {{ jobs[''takeover-check''].outputs.takeover_count
-        }}"
+        echo "Subdomain takeovers: {{ jobs[''takeover-check''].outputs.takeover_count }}"
 
         echo "Vulnerabilities: {{ jobs[''vuln-scan''].outputs.vuln_count }}"
 
@@ -276,3 +250,15 @@ jobs:
 
         '
       log-stdout: true
+    - name: export-to-project
+      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
+        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # subdomains\n\
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['subdomain-enum'].outputs.all_subs\
+        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'subdomains.txt').write_text(data)\n        print(f'\
+        \  [+] scans/subdomains.txt ({len(data.splitlines())} lines)')\n\n    # alive subs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
+        \ exist_ok=True)\n    data = '''{{ jobs['dns-verify'].outputs.alive_subs | default('', true) }}'''.strip()\n    if\
+        \ data:\n        (d / 'alive-subs.txt').write_text(data)\n        print(f'  [+] scans/alive-subs.txt ({len(data.splitlines())}\
+        \ lines)')\n\n    # ports\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['port-scan'].outputs.open_ports\
+        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'ports.txt').write_text(data)\n        print(f'  [+]\
+        \ scans/ports.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+      continue-on-error: true

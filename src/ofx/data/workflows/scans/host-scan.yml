@@ -1,19 +1,16 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: host-scan
-description:
-  "In-depth host security assessment — combines host reconnaissance with
-  URL crawling and vulnerability scanning.
+description: 'In-depth host security assessment — combines host reconnaissance with URL crawling and vulnerability scanning.
 
-  "
+  '
 tags:
-  - recon
-  - dns
-  - network
-  - http
-  - crawl
-  - ssl
-  - vuln
-  - secrets
+- recon
+- dns
+- network
+- http
+- crawl
+- ssl
+- vuln
+- secrets
 dispatch:
   inputs:
     target:
@@ -24,139 +21,130 @@ jobs:
   host-recon:
     name: Host Reconnaissance
     steps:
-      - task: rustscan
-        name: rustscan-fast
-        with:
-          target: "{{ inputs.target }}"
-          range: "1-65535"
-          batch_size: 4500
-        continue-on-error: true
-      - task: naabu
-        name: port-discovery
-        with:
-          target: "{{ inputs.target }}"
-          top_ports: "1000"
-          rate: 1000
-        log-stdout: true
-        continue-on-error: true
-      - task: masscan
-        name: masscan-scan
-        with:
-          target: "{{ inputs.target }}"
-          top_ports: "100"
-          rate: 1000
-        continue-on-error: true
-        log-stdout: true
-      - task: nmap
-        name: service-detect
-        with:
-          target: "{{ inputs.target }}"
-          version_detection: true
-        log-stdout: true
-        continue-on-error: true
-      - task: ssh-audit
-        name: ssh-audit
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-        log-stdout: true
-      - task: httpx
-        name: http-probe
-        with:
-          target: "{{ inputs.target }}"
-          tech_detect: true
-          status_code: true
-          follow_redirects: true
-        log-stdout: true
-        continue-on-error: true
-      - task: searchsploit
-        name: exploit-search
-        with:
-          target: "{{ inputs.target }}"
-        log-stdout: true
-        continue-on-error: true
-      - name: export-data
-        run:
-          'echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr(''status_code'',
-          ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
+    - task: rustscan
+      name: rustscan-fast
+      with:
+        target: '{{ inputs.target }}'
+        range: 1-65535
+        batch_size: 4500
+      continue-on-error: true
+    - task: naabu
+      name: port-discovery
+      with:
+        target: '{{ inputs.target }}'
+        top_ports: '1000'
+        rate: 1000
+      log-stdout: true
+      continue-on-error: true
+    - task: masscan
+      name: masscan-scan
+      with:
+        target: '{{ inputs.target }}'
+        top_ports: '100'
+        rate: 1000
+      continue-on-error: true
+      log-stdout: true
+    - task: nmap
+      name: service-detect
+      with:
+        target: '{{ inputs.target }}'
+        version_detection: true
+      log-stdout: true
+      continue-on-error: true
+    - task: ssh-audit
+      name: ssh-audit
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+      log-stdout: true
+    - task: httpx
+      name: http-probe
+      with:
+        target: '{{ inputs.target }}'
+        tech_detect: true
+        status_code: true
+        follow_redirects: true
+      log-stdout: true
+      continue-on-error: true
+    - task: searchsploit
+      name: exploit-search
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: export-data
+      run: 'echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr(''status_code'', ''gt'', 0) | map(attribute=''url'')
+        | unique | join(''\n'') }}" >> $OFX_OUTPUTS
 
-          '
-        log-stdout: true
+        '
+      log-stdout: true
   web-analysis:
     name: Web Analysis
     needs:
-      - host-recon
+    - host-recon
     steps:
-      - task: whatweb
-        name: whatweb-fingerprint
-        with:
-          target:
-            "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target,
-            true) }}"
-          aggression: 3
-        continue-on-error: true
-        log-stdout: true
-      - task: nikto
-        name: nikto-scan
-        with:
-          target:
-            "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target,
-            true) }}"
-        continue-on-error: true
-        log-stdout: true
+    - task: whatweb
+      name: whatweb-fingerprint
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        aggression: 3
+      continue-on-error: true
+      log-stdout: true
+    - task: nikto
+      name: nikto-scan
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+      continue-on-error: true
+      log-stdout: true
   url-crawl:
     name: URL Crawling
     needs:
-      - host-recon
+    - host-recon
     steps:
-      - task: katana
-        name: crawl
-        with:
-          target:
-            "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target,
-            true) }}"
-          depth: 3
-        log-stdout: true
-        continue-on-error: true
-      - task: gospider
-        name: spider
-        with:
-          target:
-            "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target,
-            true) }}"
-          depth: 2
-        log-stdout: true
-        continue-on-error: true
+    - task: katana
+      name: crawl
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        depth: 3
+      log-stdout: true
+      continue-on-error: true
+    - task: gospider
+      name: spider
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        depth: 2
+      log-stdout: true
+      continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
     needs:
-      - url-crawl
-      - web-analysis
+    - url-crawl
+    - web-analysis
     steps:
-      - task: nuclei
-        name: nuclei-scan
-        with:
-          target:
-            "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target,
-            true) }}"
-          severity: critical,high,medium
-        log-stdout: true
-        continue-on-error: true
-      - task: dalfox
-        name: xss-scan
-        with:
-          target:
-            "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target,
-            true) }}"
-        log-stdout: true
-        continue-on-error: true
-      - name: final-summary
-        script:
-          "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs)\
-          \ | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs) |\
-          \ tojson }}\ncritical = [v for v in all_vulns if v.get('severity') == 'critical']\n\
-          high = [v for v in all_vulns if v.get('severity') == 'high']\n\nprint(\"=\"\
-          \ * 50)\nprint(f\" HOST SCAN COMPLETE: {{ inputs.target }}\")\nprint(\"=\"\
-          \ * 50)\nprint(f\"Total vulnerabilities: {len(all_vulns)}\")\nprint(f\"  Critical:\
-          \ {len(critical)}\")\nprint(f\"  High: {len(high)}\")\n"
-        log-stdout: true
+    - task: nuclei
+      name: nuclei-scan
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        severity: critical,high,medium
+      log-stdout: true
+      continue-on-error: true
+    - task: dalfox
+      name: xss-scan
+      with:
+        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: final-summary
+      script: "import json\n\nall_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \\\n            {{ vulns(steps[1].outputs.typed_outputs)\
+        \ | tojson }}\ncritical = [v for v in all_vulns if v.get('severity') == 'critical']\nhigh = [v for v in all_vulns\
+        \ if v.get('severity') == 'high']\n\nprint(\"=\" * 50)\nprint(f\" HOST SCAN COMPLETE: {{ inputs.target }}\")\nprint(\"\
+        =\" * 50)\nprint(f\"Total vulnerabilities: {len(all_vulns)}\")\nprint(f\"  Critical: {len(critical)}\")\nprint(f\"\
+        \  High: {len(high)}\")\n"
+      log-stdout: true
+    - name: export-to-project
+      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
+        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # live HTTP\
+        \ URLs\n    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['host-recon'].outputs.live_urls\
+        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'http-urls.txt').write_text(data)\n        print(f'\
+        \  [+] scans/http-urls.txt ({len(data.splitlines())} lines)')\n\n    print(f'Project export complete: {project}')"
+      continue-on-error: true

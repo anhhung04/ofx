@@ -1,8 +1,6 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: subdomain-recon
-description: 'Subdomain reconnaissance — discovers subdomains using passive and active
-  techniques, verifies with DNS probes, checks for takeover vulnerabilities, and hunts
-  for secrets.
+description: 'Subdomain reconnaissance — discovers subdomains using passive and active techniques, verifies with DNS probes,
+  checks for takeover vulnerabilities, and hunts for secrets.
 
   '
 tags:
@@ -47,20 +45,16 @@ jobs:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - name: collect-subdomains
-      script: "import json\n\nall_subs = set()\n\nsf_outputs = {{ steps[0].outputs.typed_outputs\
-        \ | tojson }}\nfor item in sf_outputs:\n    if item.get('_type') == 'subdomain':\n\
-        \        all_subs.add(item['host'])\n\ngau_outputs = {{ steps[1].outputs.typed_outputs\
-        \ | tojson }}\nfor item in gau_outputs:\n    if item.get('_type') == 'url':\n\
-        \        host = item.get('host', '')\n        if host and '{{ inputs.target\
-        \ }}' in host:\n            all_subs.add(host)\n\namass_outputs = {{ steps[2].outputs.typed_outputs\
-        \ | tojson }}\nfor item in amass_outputs:\n    if item.get('_type') == 'subdomain':\n\
-        \        all_subs.add(item['host'])\n\nassetfinder_outputs = {{ steps[3].outputs.typed_outputs\
-        \ | tojson }}\nfor item in assetfinder_outputs:\n    if item.get('_type')\
-        \ == 'subdomain':\n        all_subs.add(item['host'])\n\nwith open('/tmp/subdomains.txt',\
-        \ 'w') as f:\n    f.write('\\n'.join(sorted(all_subs)))\n\nprint(f\"Found\
-        \ {len(all_subs)} unique subdomains\")\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"subdomain_list={chr(10).join(sorted(all_subs))}\\\
-        n\")\n    f.write(f\"subdomain_count={len(all_subs)}\\n\")\n"
+      script: "import json\n\nall_subs = set()\n\nsf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}\nfor item in\
+        \ sf_outputs:\n    if item.get('_type') == 'subdomain':\n        all_subs.add(item['host'])\n\ngau_outputs = {{ steps[1].outputs.typed_outputs\
+        \ | tojson }}\nfor item in gau_outputs:\n    if item.get('_type') == 'url':\n        host = item.get('host', '')\n\
+        \        if host and '{{ inputs.target }}' in host:\n            all_subs.add(host)\n\namass_outputs = {{ steps[2].outputs.typed_outputs\
+        \ | tojson }}\nfor item in amass_outputs:\n    if item.get('_type') == 'subdomain':\n        all_subs.add(item['host'])\n\
+        \nassetfinder_outputs = {{ steps[3].outputs.typed_outputs | tojson }}\nfor item in assetfinder_outputs:\n    if item.get('_type')\
+        \ == 'subdomain':\n        all_subs.add(item['host'])\n\nwith open('/tmp/subdomains.txt', 'w') as f:\n    f.write('\\\
+        n'.join(sorted(all_subs)))\n\nprint(f\"Found {len(all_subs)} unique subdomains\")\nwith open('{{ env.OFX_OUTPUTS }}',\
+        \ 'a') as f:\n    f.write(f\"subdomain_list={chr(10).join(sorted(all_subs))}\\n\")\n    f.write(f\"subdomain_count={len(all_subs)}\\\
+        n\")\n"
   dns-verification:
     name: DNS Verification
     needs:
@@ -91,8 +85,8 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - name: export-urls
-      run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'',
-        ''gt'', 0) | map(attribute=''url'') | unique | join(''\n'') }}" >> $OFX_OUTPUTS
+      run: 'echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr(''status_code'', ''gt'', 0) | map(attribute=''url'')
+        | unique | join(''\n'') }}" >> $OFX_OUTPUTS
 
         '
       log-stdout: true
@@ -115,10 +109,19 @@ jobs:
 
         echo "======================================="
 
-        echo "Subdomains found: {{ jobs[''passive-enum''].outputs.subdomain_count
-        }}"
+        echo "Subdomains found: {{ jobs[''passive-enum''].outputs.subdomain_count }}"
 
         echo "Takeover vulns: {{ vulns(steps[0].outputs.typed_outputs) | length }}"
 
         '
       log-stdout: true
+    - name: export-to-project
+      script: "import json, os\nfrom pathlib import Path\n\nproject = '{{ vars.project_path | default(\"\", true) }}'\nif\
+        \ not project:\n    print('No --project set, skipping file export')\nelse:\n    p = Path(project)\n\n    # subdomains\n\
+        \    d = p / 'scans'\n    d.mkdir(parents=True, exist_ok=True)\n    data = '''{{ jobs['passive-enum'].outputs.all_subs\
+        \ | default('', true) }}'''.strip()\n    if data:\n        (d / 'subdomains.txt').write_text(data)\n        print(f'\
+        \  [+] scans/subdomains.txt ({len(data.splitlines())} lines)')\n\n    # alive subs\n    d = p / 'scans'\n    d.mkdir(parents=True,\
+        \ exist_ok=True)\n    data = '''{{ jobs['dns-verification'].outputs.alive_subs | default('', true) }}'''.strip()\n\
+        \    if data:\n        (d / 'alive-subs.txt').write_text(data)\n        print(f'  [+] scans/alive-subs.txt ({len(data.splitlines())}\
+        \ lines)')\n\n    print(f'Project export complete: {project}')"
+      continue-on-error: true
