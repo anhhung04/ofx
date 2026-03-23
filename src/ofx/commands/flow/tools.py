@@ -73,54 +73,90 @@ class ToolsInstallHandler:
     def _collect_tools_from_workflows(
         self, workflow_paths: list[Path]
     ) -> dict[str, str]:
-        """Collect all unique tools from workflow tools blocks and task steps."""
+        """Collect all unique tools from workflows, recursively resolving subworkflows."""
+        all_tools: dict[str, str] = {}
+        visited: set[Path] = set()
+
+        for workflow_path in workflow_paths:
+            self._collect_tools_recursive(workflow_path, all_tools, visited)
+
+        return all_tools
+
+    def _collect_tools_recursive(
+        self,
+        workflow_path: Path,
+        all_tools: dict[str, str],
+        visited: set[Path],
+    ) -> None:
+        """Recursively collect tools from a workflow and its subworkflows."""
         import yaml
 
         from ofx.models.workflow import Workflow
         from ofx.tasks.registry import TaskRegistry
+        from ofx.utils.workflow_utils import find_workflow
 
-        all_tools: dict[str, str] = {}
+        resolved = workflow_path.resolve()
+        if resolved in visited:
+            return
+        visited.add(resolved)
 
-        for workflow_path in workflow_paths:
-            try:
-                with open(workflow_path) as f:
-                    workflow_data = yaml.safe_load(f)
+        try:
+            with open(workflow_path) as f:
+                workflow_data = yaml.safe_load(f)
 
-                workflow = Workflow.model_validate(workflow_data)
+            workflow = Workflow.model_validate(workflow_data)
 
-                # Collect from workflow-level tools: block
-                if workflow.tools:
-                    for tool_bin, tool_val in workflow.tools.items():
-                        if isinstance(tool_val, str):
-                            all_tools[tool_bin] = tool_val
-                        elif hasattr(tool_val, "install"):
-                            all_tools[tool_bin] = tool_val.install
-                        elif isinstance(tool_val, dict):
-                            all_tools[tool_bin] = tool_val.get("install", "")
+            # Collect from workflow-level tools: block
+            if workflow.tools:
+                for tool_bin, tool_val in workflow.tools.items():
+                    if isinstance(tool_val, str):
+                        all_tools[tool_bin] = tool_val
+                    elif hasattr(tool_val, "install"):
+                        all_tools[tool_bin] = tool_val.install
+                    elif isinstance(tool_val, dict):
+                        all_tools[tool_bin] = tool_val.get("install", "")
 
-                # Collect from task: steps via TaskRegistry
-                for job in workflow.jobs.values():
-                    for step in job.steps:
-                        if not step.task:
-                            continue
+            # Build search dirs including the parent workflow's directory
+            search_dirs = list(get_workflow_search_dirs())
+            parent_dir = workflow_path.parent.resolve()
+            if parent_dir not in search_dirs:
+                search_dirs.insert(0, parent_dir)
+
+            for job in workflow.jobs.values():
+                for step in job.steps:
+                    # Collect from task: steps via TaskRegistry
+                    if step.task:
                         task_cls = TaskRegistry.get(step.task)
                         if task_cls and task_cls.install_cmd and task_cls.cmd:
                             all_tools[task_cls.cmd] = task_cls.install_cmd
 
-                if all_tools:
-                    logger.debug(
-                        f"Found {len(all_tools)} tools in workflow: {workflow_path.name}"
-                    )
-            except Exception as e:
-                logger.error(f"Error loading workflow {workflow_path}: {e}")
-                from ofx.settings import get_console
+                    # Recurse into uses: subworkflows
+                    if step.uses:
+                        try:
+                            sub_wf = find_workflow(
+                                step.uses, tuple(search_dirs)
+                            )
+                            if sub_wf.workflow_path:
+                                self._collect_tools_recursive(
+                                    sub_wf.workflow_path, all_tools, visited
+                                )
+                        except Exception as e:
+                            logger.debug(
+                                f"Could not resolve subworkflow '{step.uses}': {e}"
+                            )
 
-                console = get_console()
-                console.print(
-                    f"[yellow]Warning: Could not load {workflow_path.name}: {e}[/yellow]"
+            if all_tools:
+                logger.debug(
+                    f"Found {len(all_tools)} tools in workflow: {workflow_path.name}"
                 )
+        except Exception as e:
+            logger.error(f"Error loading workflow {workflow_path}: {e}")
+            from ofx.settings import get_console
 
-        return all_tools
+            console = get_console()
+            console.print(
+                f"[yellow]Warning: Could not load {workflow_path.name}: {e}[/yellow]"
+            )
 
     def _display_tools_table(self, tools: dict[str, str]):
         """Display tools in a formatted table"""
