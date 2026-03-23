@@ -23,19 +23,29 @@ HELP = "Manage and run workflows in the OFX system"
 
 
 @app.command("list")
-def list_workflows():
-    """List available workflows from user dirs, built-ins, and installed collections."""
+def list_workflows(
+    builtin: Annotated[
+        bool,
+        typer.Option("--builtin", "-b", help="Show only built-in workflows."),
+    ] = False,
+    collection: Annotated[
+        str,
+        typer.Option("--collection", "-c", help="Show workflows from a specific installed collection."),
+    ] = "",
+):
+    """List available workflows (default: all sources). Use --builtin or --collection <name> to filter."""
     from pathlib import Path
 
     from ofx.collections import CollectionManager
     from ofx.collections.manifest import CollectionManifest
-    from ofx.commands.ui_helpers import print_warning, status_table
+    from ofx.commands.ui_helpers import print_error, print_warning, status_table
     from ofx.settings import (
         ALLOWED_WORKFLOW_FILE_EXTENSIONS,
         BUILTIN_WORKFLOWS_DIR,
-        DEFAULT_WORKFLOWS_DIRS,
         get_console,
     )
+
+    show_all = not builtin and not collection
 
     def _scan_yaml_files(root: Path) -> list[Path]:
         files: list[Path] = []
@@ -53,41 +63,45 @@ def list_workflows():
         seen_paths.add(resolved)
         rows.append((path.stem, source, str(path)))
 
-    # User workflow dirs (cwd + ~/.ofx/workflows)
-    for directory in DEFAULT_WORKFLOWS_DIRS:
-        if not directory.is_dir():
-            continue
-        for file in _scan_yaml_files(directory):
-            _add(file, "user")
+    # Built-in workflows
+    if builtin or show_all:
+        if BUILTIN_WORKFLOWS_DIR.is_dir():
+            for subdir in sorted(BUILTIN_WORKFLOWS_DIR.iterdir()):
+                if not subdir.is_dir():
+                    continue
+                for file in _scan_yaml_files(subdir):
+                    _add(file, "builtin")
 
-    # Built-in workflows packaged with OFX
-    if BUILTIN_WORKFLOWS_DIR.is_dir():
-        for subdir in sorted(BUILTIN_WORKFLOWS_DIR.iterdir()):
-            if not subdir.is_dir():
+    # Collection workflows
+    if collection or show_all:
+        manager = CollectionManager()
+        installed = manager.list_installed()
+
+        if collection and collection not in installed:
+            print_error(
+                "Collection not found",
+                f"'{collection}' is not installed.",
+                f"Installed: {', '.join(installed) or '(none)'}",
+            )
+            raise typer.Exit(code=1)
+
+        targets = {collection: installed[collection]} if collection else installed
+        for coll_name, entry in targets.items():
+            coll_path = Path(entry.path)
+            if not coll_path.is_dir():
                 continue
-            for file in _scan_yaml_files(subdir):
-                _add(file, "builtin")
-
-    # Workflows from installed collections
-    manager = CollectionManager()
-    for coll_name, entry in manager.list_installed().items():
-        coll_path = Path(entry.path)
-        if not coll_path.is_dir():
-            continue
-        manifest = CollectionManifest.from_directory(coll_path)
-        if manifest.workflows:
-            for workflow in manifest.workflows:
-                wf_path = coll_path / workflow
-                if wf_path.exists():
-                    _add(wf_path, f"collection:{coll_name}")
-                else:
-                    rows.append((Path(workflow).stem, f"collection:{coll_name}", str(wf_path)))
-        else:
-            for file in _scan_yaml_files(coll_path):
-                _add(file, f"collection:{coll_name}")
+            manifest = CollectionManifest.from_directory(coll_path)
+            if manifest.workflows:
+                for workflow in manifest.workflows:
+                    wf_path = coll_path / workflow
+                    if wf_path.exists():
+                        _add(wf_path, f"collection:{coll_name}")
+            else:
+                for file in _scan_yaml_files(coll_path):
+                    _add(file, f"collection:{coll_name}")
 
     if not rows:
-        print_warning("No Workflows Found", "No workflows were discovered in search paths.")
+        print_warning("No Workflows Found", "No workflows matched the filter.")
         return
 
     rows.sort(key=lambda r: (r[1], r[0]))
