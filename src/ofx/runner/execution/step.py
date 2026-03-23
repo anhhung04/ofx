@@ -142,7 +142,20 @@ class StepRunner(BaseRunner[Step]):
         stdout = result.outputs.get("stdout", "")
         stderr = result.outputs.get("stderr", "")
 
-        self._log_output("stdout", stdout)
+        # For task steps with typed outputs, show formatted tables
+        typed_outputs = result.outputs.get("typed_outputs")
+        if typed_outputs and isinstance(typed_outputs, list) and len(typed_outputs) > 0:
+            from ofx.runner.execution.output_formatter import format_typed_outputs
+            from ofx.settings import get_console
+
+            format_typed_outputs(
+                typed_outputs,
+                task_name=self.model.name or self.model.task or "",
+                console=get_console(),
+            )
+        else:
+            self._log_output("stdout", stdout)
+
         self._log_output("stderr", stderr)
 
         if self.model.log_stdout and stdout and self.ctx.output_path:
