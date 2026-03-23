@@ -43,10 +43,15 @@ class CommandExecutor:
 
     def prepare_outputs_file(self) -> None:
         if not self._command.interactive:
-            self._outputs_file = Path(
-                tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")[1]
-            )
-            self._envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
+            # Reuse outputs file if already created by StepRunner
+            existing = self._envs.get("RUNNER_OUTPUTS")
+            if existing:
+                self._outputs_file = Path(existing)
+            else:
+                self._outputs_file = Path(
+                    tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")[1]
+                )
+                self._envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
 
     async def execute_streaming(
         self,

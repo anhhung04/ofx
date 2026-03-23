@@ -356,6 +356,7 @@ class BaseRunner[TModel: BaseModel]:
                 "registry": self._registry,
                 "runner": self,
                 "ctx": self.ctx,
+                "env": context_vars.get("envs", {}),
             }
         )
         return await self._template_service.resolve(

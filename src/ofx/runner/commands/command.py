@@ -33,9 +33,15 @@ def exec_script_in_process(
     inputs,
     secrets,
     channels_dir,
+    outputs_file=None,
 ):
     """Execute script in a separate process with channel communication"""
     store = ChannelStore(channels_dir)
+
+    # Make RUNNER_OUTPUTS / OFX_OUTPUTS available inside scripts
+    if outputs_file:
+        os.environ["RUNNER_OUTPUTS"] = outputs_file
+        os.environ["OFX_OUTPUTS"] = outputs_file
 
     globals_dict = {
         "__builtins__": builtins.__dict__,
@@ -186,6 +192,31 @@ class ScriptRunner(BaseRunner[Script]):
                 "stdout": result["stdout"],
                 "stderr": result["stderr"],
             }
+
+            # Parse outputs file (like CommandExecutor does for run: steps)
+            outputs_file_path = self.ctx.envs.get("RUNNER_OUTPUTS")
+            if outputs_file_path:
+                outputs_file = Path(outputs_file_path)
+                if outputs_file.exists():
+                    try:
+                        content = outputs_file.read_text().strip()
+                        if content:
+                            for line in content.splitlines():
+                                line = line.strip()
+                                if line and "=" in line:
+                                    k, v = line.split("=", 1)
+                                    k, v = k.strip(), v.strip()
+                                    if k:
+                                        outputs[k] = v
+                                        self._log_debug(f"Captured output: {k}={v}")
+                    except Exception as e:
+                        self._log_debug(f"Failed to parse RUNNER_OUTPUTS: {e}")
+                    finally:
+                        try:
+                            outputs_file.unlink()
+                        except Exception:
+                            pass
+
             await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
             status = (
                 RunnerStatus.COMPLETED
@@ -211,6 +242,7 @@ class ScriptRunner(BaseRunner[Script]):
         """Run the script execution in a separate process"""
         # Use shared channels directory for inter-job communication
         channels_dir = settings.channels_dir
+        outputs_file = self.ctx.envs.get("RUNNER_OUTPUTS")
 
         with ProcessPoolExecutor() as executor:
             future = executor.submit(
@@ -228,6 +260,7 @@ class ScriptRunner(BaseRunner[Script]):
                 self.ctx.inputs,
                 self.ctx.secrets,
                 channels_dir,
+                outputs_file,
             )
             result = await asyncio.get_running_loop().run_in_executor(None, future.result)
             return result

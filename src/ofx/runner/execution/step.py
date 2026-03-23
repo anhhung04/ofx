@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from random import uniform
@@ -33,11 +34,21 @@ class StepRunner(BaseRunner[Step]):
         parent: BaseRunner[Job],
     ):
         super().__init__(step, context, parent, parent.registry)
+        self._outputs_file: Path | None = None
 
     async def _pre_run(self) -> None:
         """Prepare the step for execution, resolve templates"""
         self._apply_retry_profile_defaults()
         self._run_type = self.model.get_run_type()
+
+        # Create outputs file early so {{ env.OFX_OUTPUTS }} resolves in templates
+        if self._run_type in (RunType.COMMAND, RunType.SCRIPT, RunType.SCRIPT_FILE):
+            self._outputs_file = Path(
+                tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")[1]
+            )
+            self.ctx.envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
+            self.ctx.envs["OFX_OUTPUTS"] = str(self._outputs_file)
+
         resolve_fields = [
             "name",
             "shell",
@@ -176,6 +187,13 @@ class StepRunner(BaseRunner[Step]):
             duration_ms=self.duration_ms(),
         )
         await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
+
+        # Cleanup outputs file if it still exists
+        if self._outputs_file and self._outputs_file.exists():
+            try:
+                self._outputs_file.unlink()
+            except Exception:
+                pass
 
     def _log_output(self, stream: str, content: str) -> None:
         """Log a stdout/stderr stream to the console."""
