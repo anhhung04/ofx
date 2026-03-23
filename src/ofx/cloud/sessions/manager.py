@@ -252,7 +252,10 @@ def _step_bundle_filename(step_index: int) -> str:
 
 def _build_step_bundle_source(step: Any) -> str:
     """Build bundled Python bootstrap source for `script`/`script_file` steps."""
-    from ofx.cloud.script_runtime import build_python_payload, resolve_python_step_source
+    from ofx.cloud.script_runtime import (
+        build_python_payload,
+        resolve_python_step_source,
+    )
 
     source = resolve_python_step_source(step)
     return build_python_payload(source, opsec_mode=True, obfuscate_sources=True)

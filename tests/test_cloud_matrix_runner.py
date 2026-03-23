@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -466,10 +465,10 @@ class TestDiscoverPythonCache:
 
     def _make_step_runner_with_parent(self):
         """Return a CloudStepRunner whose parent is a minimal CloudJobRunner stub."""
-        from ofx.runner.execution.cloud_step import CloudStepRunner
-        from ofx.runner.execution.cloud_job import CloudJobRunner
-        from ofx.runner.core import RunContext
         from ofx.models.step import Step
+        from ofx.runner.core import RunContext
+        from ofx.runner.execution.cloud_job import CloudJobRunner
+        from ofx.runner.execution.cloud_step import CloudStepRunner
 
         # Minimal CloudJobRunner stub — only needs _cached_python
         parent_job = object.__new__(CloudJobRunner)
@@ -551,9 +550,9 @@ class TestFleetInputUploadFailure:
     @pytest.mark.asyncio
     async def test_upload_failure_raises(self, tmp_path):
         """If _remote_runner.upload raises, _upload_fleet_input should propagate it."""
-        from ofx.runner.execution.cloud_job import CloudJobRunner
-        from ofx.runner.core import RunContext
         from ofx.models.job import Job
+        from ofx.runner.core import RunContext
+        from ofx.runner.execution.cloud_job import CloudJobRunner
 
         # Create a real chunk file to pass the is_file() check
         chunk = tmp_path / "chunk.txt"
@@ -594,9 +593,9 @@ class TestCloudStepRunIfContext:
     """Tests that _run_if_context builds the correct helpers for cloud steps."""
 
     def _make_step_runner(self, step_index: int = 0):
-        from ofx.runner.execution.cloud_step import CloudStepRunner
-        from ofx.runner.core import RunContext, RunnerStatus
         from ofx.models.step import Step
+        from ofx.runner.core import RunContext
+        from ofx.runner.execution.cloud_step import CloudStepRunner
 
         step = Step(run="echo hi", step_index=step_index)
         ctx = RunContext()
@@ -683,11 +682,11 @@ class TestCloudStepWindowsSupport:
     """Tests for Windows-specific (WinRM) env prefix and command formatting."""
 
     def _make_runner(self, connection_type: str = "ssh"):
-        from ofx.runner.execution.cloud_step import CloudStepRunner
-        from ofx.runner.execution.cloud_job import CloudJobRunner
-        from ofx.runner.core import RunContext
-        from ofx.models.step import Step
         from ofx.models.cloud import CloudConfig
+        from ofx.models.step import Step
+        from ofx.runner.core import RunContext
+        from ofx.runner.execution.cloud_job import CloudJobRunner
+        from ofx.runner.execution.cloud_step import CloudStepRunner
 
         class _FakeRemote:
             def run(self, cmd, timeout=None):

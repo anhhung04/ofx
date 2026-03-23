@@ -6,6 +6,7 @@ Extracted from ``cloud_job.py`` to follow the File-Per-Struct rule.
 from __future__ import annotations
 
 import asyncio
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path

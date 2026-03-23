@@ -55,7 +55,7 @@ provisioning → uploading → running → completed → fetched → encrypted �
 
 ### `session submit`
 
-Submit a workflow job as a detached session.
+Submit a workflow as a detached session.
 
 ```bash
 ofx session submit <workflow> [options]
@@ -65,7 +65,7 @@ ofx session submit <workflow> [options]
 |--------|-------|-------------|
 | `--local` | `-l` | Run as a local background process (default) |
 | `--cloud <profile>` | `-c` | Run on a cloud VPS using the named profile |
-| `--job <id>` | `-j` | Job ID to run (default: first job in workflow) |
+| `--job <id>` | `-j` | Job ID override (default: full workflow) |
 | `--name <tag>` | `-n` | Human-readable session name |
 | `--input KEY=VAL` | `-i` | Pass inputs (repeatable) |
 | `--env KEY=VAL` | `-e` | Set environment variables (repeatable) |

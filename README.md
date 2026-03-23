@@ -658,7 +658,7 @@ Options:
 Commands:
   flow      Manage and run workflows (aliases: x, task)
   cloud     Manage cloud profiles, instances, and images
-  session   Manage detached job sessions (local & cloud)
+  session   Manage detached workflow sessions (local & cloud)
   project   Manage Red Team projects
   api       Display OFX API reference
   secret    Manage secrets for workflows

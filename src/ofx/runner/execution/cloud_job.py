@@ -256,7 +256,6 @@ class CloudJobRunner(BaseRunner[Job]):
         if not self._instance:
             raise RuntimeError("Cannot create remote runner without instance info")
         ip = self._instance.ip
-        is_windows = cfg.connection_type == "winrm"
         is_log_commands = cfg.log_commands or False
         log_path = None
         if is_log_commands:

@@ -596,7 +596,6 @@ class TestWaitForLogin:
 
         cfg = CloudConfig(provider="static", host="10.0.0.99", ssh_key="/tmp/fake.pem")
 
-        import asyncio
 
         async def _failing_probe(*_args, **_kwargs):
             raise ConnectionRefusedError("refused")
@@ -627,10 +626,6 @@ class TestWaitForLogin:
         from ofx.models.cloud import CloudConfig
 
         cfg = CloudConfig(provider="static", host="10.0.0.1", ssh_key="/tmp/fake.pem")
-
-        import time as _time
-
-        start = _time.time()
 
         async def mock_to_thread(fn, *_args, **_kwargs):
             return None  # probe succeeds
@@ -687,6 +682,7 @@ class TestFleetDistributorEdgeCases:
     def test_expand_fleet_chunk_files_have_content(self):
         """Chunk files written by expand_fleet_to_matrix contain the targets."""
         import shutil
+
         from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
 
         combos, files = expand_fleet_to_matrix(
@@ -696,7 +692,7 @@ class TestFleetDistributorEdgeCases:
             assert len(combos) == 2
             assert len(files) == 2
             total_lines = sum(
-                len([l for l in f.read_text().splitlines() if l.strip()])
+                len([line for line in f.read_text().splitlines() if line.strip()])
                 for f in files
             )
             assert total_lines == 3
