@@ -1,0 +1,226 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: api-fuzz
+description: >
+  API endpoint discovery and parameter fuzzing — discovers hidden
+  parameters with arjun/x8/paramspider, fuzzes inputs with ffuf,
+  tests for injection vulnerabilities with sqlmap and commix.
+tags:
+  - web
+  - api
+  - fuzz
+  - params
+  - injection
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL (e.g. https://api.target.com)
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/seclists/Discovery/Web-Content/api/api-endpoints.txt
+      description: Wordlist for endpoint discovery
+    param_wordlist:
+      type: string
+      default: ""
+      description: Custom parameter wordlist (optional)
+
+jobs:
+  endpoint-discovery:
+    name: Endpoint Discovery
+    steps:
+      - task: ffuf
+        name: ffuf-endpoints
+        with:
+          target: "{{ inputs.target }}/FUZZ"
+          wordlist: "{{ inputs.wordlist }}"
+          match_codes: "200,201,204,301,302,307,401,403,405"
+          threads: 50
+        log-stdout: true
+        continue-on-error: true
+
+      - task: feroxbuster
+        name: feroxbuster-api
+        with:
+          target: "{{ inputs.target }}"
+          wordlist: "{{ inputs.wordlist }}"
+          threads: 50
+          depth: 2
+          status_codes: "200,201,204,301,302,307,401,403,405"
+        log-stdout: true
+        continue-on-error: true
+
+      - task: katana
+        name: katana-crawl
+        with:
+          target: "{{ inputs.target }}"
+          depth: 3
+        log-stdout: true
+        continue-on-error: true
+
+      - task: gau
+        name: gau-archive
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - name: collect-endpoints
+        script: |
+          endpoints = set()
+          for idx in range(4):
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  url = item.get('url', '')
+                  if url:
+                      endpoints.add(url)
+
+          ep_list = '\n'.join(sorted(endpoints))
+          with open('/tmp/api-endpoints.txt', 'w') as f:
+              f.write(ep_list)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"endpoints={ep_list}\n")
+              f.write(f"endpoint_count={len(endpoints)}\n")
+
+          print(f"Discovered {len(endpoints)} API endpoints")
+        log-stdout: true
+
+  param-discovery:
+    name: Parameter Discovery
+    needs: [endpoint-discovery]
+    steps:
+      - task: arjun
+        name: arjun-params
+        with:
+          target: "{{ jobs['endpoint-discovery'].outputs.endpoints | default(inputs.target, true) }}"
+          threads: 20
+        log-stdout: true
+        continue-on-error: true
+
+      - task: x8
+        name: x8-params
+        with:
+          target: "{{ jobs['endpoint-discovery'].outputs.endpoints | default(inputs.target, true) }}"
+          method: GET
+        log-stdout: true
+        continue-on-error: true
+
+      - task: paramspider
+        name: paramspider-find
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - name: collect-params
+        script: |
+          param_urls = set()
+          for idx in range(3):
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  url = item.get('url', '')
+                  if url and ('=' in url or '?' in url):
+                      param_urls.add(url)
+
+          with open('/tmp/param-urls.txt', 'w') as f:
+              f.write('\n'.join(sorted(param_urls)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"param_urls={chr(10).join(sorted(param_urls))}\n")
+              f.write(f"param_count={len(param_urls)}\n")
+
+          print(f"Discovered {len(param_urls)} parameterized URLs")
+        log-stdout: true
+
+  injection-test:
+    name: Injection Testing
+    needs: [param-discovery]
+    steps:
+      - task: sqlmap
+        name: sqli-test
+        with:
+          target: "{{ jobs['param-discovery'].outputs.param_urls | default(inputs.target, true) }}"
+          batch: true
+          level: 3
+          risk: 2
+          threads: 5
+        log-stdout: true
+        continue-on-error: true
+
+      - task: commix
+        name: cmdi-test
+        with:
+          target: "{{ jobs['param-discovery'].outputs.param_urls | default(inputs.target, true) }}"
+          batch: true
+          level: 2
+        log-stdout: true
+        continue-on-error: true
+
+      - task: dalfox
+        name: xss-test
+        with:
+          target: "{{ jobs['param-discovery'].outputs.param_urls | default(inputs.target, true) }}"
+        log-stdout: true
+        continue-on-error: true
+
+      - task: crlfuzz
+        name: crlf-test
+        with:
+          target: "{{ jobs['endpoint-discovery'].outputs.endpoints | default(inputs.target, true) }}"
+        log-stdout: true
+        continue-on-error: true
+
+      - name: collect-vulns
+        script: |
+          sqli = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          cmdi = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          xss = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+          crlf = {{ vulns(steps[3].outputs.typed_outputs) | tojson }}
+
+          total = len(sqli) + len(cmdi) + len(xss) + len(crlf)
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"total_vulns={total}\n")
+              f.write(f"sqli_count={len(sqli)}\n")
+              f.write(f"cmdi_count={len(cmdi)}\n")
+              f.write(f"xss_count={len(xss)}\n")
+              f.write(f"crlf_count={len(crlf)}\n")
+
+          print(f"Injection findings: SQLi={len(sqli)} CMDi={len(cmdi)} XSS={len(xss)} CRLF={len(crlf)}")
+        log-stdout: true
+
+  nuclei-scan:
+    name: API Vulnerability Scan
+    needs: [endpoint-discovery]
+    steps:
+      - task: nuclei
+        name: nuclei-api
+        with:
+          target: "{{ jobs['endpoint-discovery'].outputs.endpoints | default(inputs.target, true) }}"
+          severity: critical,high,medium
+          tags: api,cve
+        log-stdout: true
+        continue-on-error: true
+
+  summary:
+    name: API Fuzz Summary
+    needs: [injection-test, nuclei-scan]
+    steps:
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " API FUZZ COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "--- Discovery ---"
+          echo "Endpoints found: {{ jobs['endpoint-discovery'].outputs.endpoint_count }}"
+          echo "Parameterized URLs: {{ jobs['param-discovery'].outputs.param_count }}"
+          echo ""
+          echo "--- Injection Testing ---"
+          echo "Total vulnerabilities: {{ jobs['injection-test'].outputs.total_vulns }}"
+          echo "  SQLi: {{ jobs['injection-test'].outputs.sqli_count }}"
+          echo "  Command Injection: {{ jobs['injection-test'].outputs.cmdi_count }}"
+          echo "  XSS: {{ jobs['injection-test'].outputs.xss_count }}"
+          echo "  CRLF: {{ jobs['injection-test'].outputs.crlf_count }}"
+        log-stdout: true

