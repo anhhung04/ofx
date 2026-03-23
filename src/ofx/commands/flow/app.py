@@ -33,12 +33,15 @@ def list_workflows(
         typer.Option("--collection", "-c", help="Show workflows from a specific installed collection."),
     ] = "",
 ):
-    """List available workflows (default: all sources). Use --builtin or --collection <name> to filter."""
+    """List available workflows as a folder tree. Use --builtin or --collection <name> to filter."""
+    from collections import defaultdict
     from pathlib import Path
+
+    from rich.tree import Tree
 
     from ofx.collections import CollectionManager
     from ofx.collections.manifest import CollectionManifest
-    from ofx.commands.ui_helpers import print_error, print_warning, status_table
+    from ofx.commands.ui_helpers import print_error, print_warning
     from ofx.settings import (
         ALLOWED_WORKFLOW_FILE_EXTENSIONS,
         BUILTIN_WORKFLOWS_DIR,
@@ -47,30 +50,35 @@ def list_workflows(
 
     show_all = not builtin and not collection
 
+    MANIFEST_NAMES = {"collection.yaml", "collection.yml"}
+
     def _scan_yaml_files(root: Path) -> list[Path]:
         files: list[Path] = []
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            files.extend(root.rglob(f"*{ext}"))
+            files.extend(f for f in root.rglob(f"*{ext}") if f.name not in MANIFEST_NAMES)
         return sorted(set(files))
 
-    rows: list[tuple[str, str, str]] = []
+    # group: source_label -> {category -> [workflow_stem]}
+    groups: dict[str, dict[str, list[str]]] = {}
     seen_paths: set[str] = set()
 
-    def _add(path: Path, source: str) -> None:
+    def _add(path: Path, source: str, base_root: Path) -> None:
         resolved = str(path.resolve())
         if resolved in seen_paths:
             return
         seen_paths.add(resolved)
-        rows.append((path.stem, source, str(path)))
+        try:
+            category = path.relative_to(base_root).parent
+            cat_str = str(category) if str(category) != "." else ""
+        except ValueError:
+            cat_str = ""
+        groups.setdefault(source, defaultdict(list))[cat_str].append(path.stem)
 
     # Built-in workflows
     if builtin or show_all:
         if BUILTIN_WORKFLOWS_DIR.is_dir():
-            for subdir in sorted(BUILTIN_WORKFLOWS_DIR.iterdir()):
-                if not subdir.is_dir():
-                    continue
-                for file in _scan_yaml_files(subdir):
-                    _add(file, "builtin")
+            for file in _scan_yaml_files(BUILTIN_WORKFLOWS_DIR):
+                _add(file, "📦 Built-in", BUILTIN_WORKFLOWS_DIR)
 
     # Collection workflows
     if collection or show_all:
@@ -90,29 +98,36 @@ def list_workflows(
             coll_path = Path(entry.path)
             if not coll_path.is_dir():
                 continue
+            label = f"📦 {coll_name}"
             manifest = CollectionManifest.from_directory(coll_path)
             if manifest.workflows:
                 for workflow in manifest.workflows:
                     wf_path = coll_path / workflow
                     if wf_path.exists():
-                        _add(wf_path, f"collection:{coll_name}")
+                        _add(wf_path, label, coll_path)
             else:
                 for file in _scan_yaml_files(coll_path):
-                    _add(file, f"collection:{coll_name}")
+                    _add(file, label, coll_path)
 
-    if not rows:
+    if not groups:
         print_warning("No Workflows Found", "No workflows matched the filter.")
         return
 
-    rows.sort(key=lambda r: (r[1], r[0]))
-    table = status_table(
-        ("Workflow", "bold cyan"),
-        ("Source", "magenta"),
-        ("Path", "dim"),
-        rows=rows,
-    )
-    table.title = "Available Workflows"
-    get_console().print(table)
+    console = get_console()
+    root = Tree("[bold]Available Workflows[/bold]")
+
+    for source_label in sorted(groups):
+        categories = groups[source_label]
+        source_branch = root.add(f"[bold magenta]{source_label}[/bold magenta]")
+        for cat in sorted(categories):
+            if cat:
+                cat_branch = source_branch.add(f"[yellow]📁 {cat}[/yellow]")
+            else:
+                cat_branch = source_branch
+            for name in sorted(categories[cat]):
+                cat_branch.add(f"[cyan]{name}[/cyan]")
+
+    console.print(root)
 
 
 @app.command()

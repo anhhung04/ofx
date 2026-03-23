@@ -1,5 +1,7 @@
 """Base runner class for workflow, job, and step execution"""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
