@@ -1,4 +1,4 @@
-"""Session data models for detached job execution."""
+"""Session data models for detached workflow execution."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class SessionTarget(str, Enum):
 
 
 class Session(OFXBaseModel):
-    """Persistent session metadata for a detached job run."""
+    """Persistent session metadata for a detached workflow run."""
 
     model_config = {**OFXBaseModel.model_config, "extra": "allow"}
 
@@ -46,7 +46,10 @@ class Session(OFXBaseModel):
 
     # What to run
     workflow_file: str = Field(..., description="Workflow path or name")
-    job_id: str = Field(default="", description="Specific job ID (empty = all jobs)")
+    job_id: str = Field(
+        default="",
+        description="Specific job ID override (empty = full workflow session)",
+    )
 
     # Execution target
     target: SessionTarget = Field(
@@ -63,6 +66,10 @@ class Session(OFXBaseModel):
     cloud_provider: str = Field(default="", description="Provider name")
     instance_id: str = Field(default="", description="Cloud instance ID")
     instance_ip: str = Field(default="", description="VPS IP address")
+    auto_destroy: bool = Field(
+        default=True,
+        description="Whether to auto-destroy non-static cloud instances after fetch",
+    )
 
     # Process tracking
     remote_pid: int | None = Field(

@@ -1,13 +1,14 @@
-"""Detached session management for OFX cloud and local jobs.
+"""Detached session management for OFX local and cloud workflow execution.
 
-Sessions allow fire-and-forget workflow execution — submit a job, disconnect,
+Sessions allow fire-and-forget workflow execution — submit a workflow (or a
+specific job via override), disconnect,
 and come back later to check status, fetch results, and optionally encrypt them.
 
 Usage:
     from ofx.cloud.sessions import SessionManager, SessionStore, Session
 
     manager = SessionManager()
-    session = await manager.submit("scan.yml", "recon", target="local")
+    session = await manager.submit("scan.yml", job_id="recon", target="local")
     await manager.status(session.id)
     await manager.fetch(session.id, passphrase="secret")
 """

@@ -545,7 +545,13 @@ class CloudJobRunner(BaseRunner[Job]):
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        msg = f"'{self.model.jid}' [cloud] › {message_str}"
+        workflow_name = ""
+        if self.parent and getattr(self.parent, "model", None):
+            workflow_name = getattr(self.parent.model, "name", "") or ""
+        msg = (
+            f"workflow[{workflow_name}] "
+            f"job[{self.model.jid}] [cloud] › {message_str}"
+        )
         if self.parent:
             return self.parent._produce_log(msg)
         return msg

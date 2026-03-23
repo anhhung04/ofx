@@ -604,7 +604,12 @@ class TestCloudStepRunIfContext:
         step_runner = CloudStepRunner.__new__(CloudStepRunner)
         step_runner.model = step
         step_runner.ctx = ctx
-        step_runner.parent = None
+        parent_job = type("ParentJobStub", (), {})()
+        parent_job.model = type("JobModelStub", (), {"jid": "job-a"})()
+        parent_job.parent = type("ParentWorkflowStub", (), {})()
+        parent_job.parent.model = type("WorkflowModelStub", (), {"name": "wf-a"})()
+        parent_job._produce_log = lambda msg: msg
+        step_runner.parent = parent_job
         step_runner._remote = None
         step_runner._work_dir = "/tmp"
         return step_runner
@@ -658,6 +663,20 @@ class TestCloudStepRunIfContext:
         ctx = runner._run_if_context()
         assert ctx["success"]() is True
         assert ctx["failure"]() is False
+
+    def test_produce_log_includes_step_name_and_run_type(self):
+        """Cloud step logs should include index, step name, and run type."""
+        runner = self._make_step_runner(step_index=2)
+        runner.model.name = "recon-step"
+        runner._run_type = None  # force fallback path
+
+        msg = runner._produce_log("hello")
+        assert "workflow[wf-a]" in msg
+        assert "job[job-a]" in msg
+        assert "step[2]" in msg
+        assert "[recon-step]" in msg
+        assert "[command]" in msg
+        assert "hello" in msg
 
 
 class TestCloudStepWindowsSupport:

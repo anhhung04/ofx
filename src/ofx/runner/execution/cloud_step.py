@@ -548,7 +548,21 @@ class CloudStepRunner(BaseRunner):
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        msg = f"step[{self.model.step_index}] › {message_str}"
+        run_type = self._run_type.value if self._run_type else self.model.get_run_type().value
+        step_name = self.model.name or f"step_{self.model.step_index}"
+        job_id = ""
+        workflow_name = ""
+        if self.parent and getattr(self.parent, "model", None):
+            job_id = getattr(self.parent.model, "jid", "") or ""
+            if getattr(self.parent, "parent", None) and getattr(self.parent.parent, "model", None):
+                workflow_name = getattr(self.parent.parent.model, "name", "") or ""
+        msg = (
+            f"workflow[{workflow_name}]"
+            f"job[{job_id}]"
+            f"step[{self.model.step_index}]"
+            f"[{step_name}]"
+            f"[{run_type}] › {message_str}"
+        )
         if self.parent:
             return self.parent._produce_log(msg)
         return msg

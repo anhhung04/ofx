@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import shutil
+import tarfile
 import textwrap
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -173,12 +174,19 @@ class TestScriptBuilder:
 
     def test_bash_single_command(self):
         steps = [self._make_step(name="recon", run="nmap -sV 10.0.0.1")]
-        script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
+        script = build_session_script(
+            steps,
+            session_id="aabb",
+            work_dir="/tmp/test",
+            workflow_name="wf-one",
+            job_name="recon-job",
+        )
         assert "#!/bin/bash" in script
         assert "SESSION_ID" in script
         assert "nmap -sV 10.0.0.1" in script
         assert "__TASK_OK__" in script
         assert "__TASK_ERR__" in script
+        assert "workflow=wf-one job=recon-job" in script
 
     def test_bash_multiple_steps(self):
         steps = [
@@ -186,9 +194,15 @@ class TestScriptBuilder:
             self._make_step(name="step2", run="echo world"),
         ]
         script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
-        assert "step1" in script
-        assert "step2" in script
+        assert "step1 [command]" in script
+        assert "step2 [command]" in script
         assert script.count(">>> Step") == 2
+
+    def test_bash_log_descriptor_includes_run_type(self):
+        steps = [self._make_step(name="py-inline", script='print("ok")')]
+        script = build_session_script(steps, session_id="aabb", work_dir="/tmp/test")
+        assert "py-inline [script]" in script
+        assert "FAILED" in script
 
     def test_bash_env_vars(self):
         steps = [self._make_step(run="env")]
@@ -213,11 +227,15 @@ class TestScriptBuilder:
         steps = [self._make_step(name="wincheck", run="Get-Process")]
         script = build_session_script(
             steps, session_id="aabb", work_dir="C:\\Windows\\Temp\\test",
+            workflow_name="wf-win",
+            job_name="win-job",
             os_type="windows",
         )
         assert "$ErrorActionPreference" in script
         assert "SESSION_ID" in script
         assert "Get-Process" in script
+        assert "wincheck [command]" in script
+        assert "workflow=wf-win job=win-job" in script
         assert "__TASK_OK__" in script
 
     def test_script_file_step(self):
@@ -372,6 +390,24 @@ class TestSessionManagerLocal:
         """))
         return wf
 
+    def _create_multi_job_workflow(self, tmp_path: Path) -> Path:
+        """Write a two-job workflow to validate full-workflow session submit."""
+        wf = tmp_path / "test_session_multi.yml"
+        wf.write_text(textwrap.dedent("""\
+            name: session-multi
+            jobs:
+              first-job:
+                steps:
+                  - name: first
+                    run: echo "FIRST_JOB" >> output/trace.txt
+              second-job:
+                needs: [first-job]
+                steps:
+                  - name: second
+                    run: echo "SECOND_JOB" >> output/trace.txt
+        """))
+        return wf
+
     def test_submit_local_creates_session(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -430,6 +466,52 @@ class TestSessionManagerLocal:
         # Key file should have been shredded
         assert not (work / ".skey").exists(), "key file should be shredded"
         # Bundled python step artifact should exist for script step in local workspace
+
+    def test_submit_local_runs_full_workflow_by_default(self, tmp_path):
+        wf_path = self._create_multi_job_workflow(tmp_path)
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
+        assert session.job_id == ""
+
+        import time
+
+        for _ in range(60):
+            time.sleep(0.1)
+            session = asyncio.run(mgr.status(session.id))
+            if session.is_done():
+                break
+
+        assert session.status == SessionStatus.COMPLETED
+        results_path = asyncio.run(mgr.fetch(session.id))
+        trace = (results_path / "trace.txt").read_text()
+        assert "FIRST_JOB" in trace
+        assert "SECOND_JOB" in trace
+
+    def test_submit_local_job_override_runs_only_selected_job(self, tmp_path):
+        wf_path = self._create_multi_job_workflow(tmp_path)
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        session = asyncio.run(
+            mgr.submit(str(wf_path), target=SessionTarget.LOCAL, job_id="second-job")
+        )
+        assert session.job_id == "second-job"
+
+        import time
+
+        for _ in range(60):
+            time.sleep(0.1)
+            session = asyncio.run(mgr.status(session.id))
+            if session.is_done():
+                break
+
+        assert session.status == SessionStatus.COMPLETED
+        results_path = asyncio.run(mgr.fetch(session.id))
+        trace = (results_path / "trace.txt").read_text()
+        assert "FIRST_JOB" not in trace
+        assert "SECOND_JOB" in trace
 
     def test_submit_local_stages_bundled_python_script(self, tmp_path):
         wf = tmp_path / "test_script_session.yml"
@@ -594,6 +676,56 @@ class TestSessionManagerLocal:
         bundle = asyncio.run(mgr.bundle_artifacts(session.id))
         assert bundle.exists()
         assert bundle.suffixes[-2:] == [".tar", ".gz"]
+
+    def test_bundle_manifest_marks_full_workflow_scope(self, tmp_path):
+        wf_path = self._create_multi_job_workflow(tmp_path)
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
+        import time
+
+        for _ in range(60):
+            time.sleep(0.1)
+            session = asyncio.run(mgr.status(session.id))
+            if session.is_done():
+                break
+
+        asyncio.run(mgr.fetch(session.id))
+        bundle = asyncio.run(mgr.bundle_artifacts(session.id))
+        with tarfile.open(bundle, "r:gz") as tf:
+            manifest = json.loads(
+                tf.extractfile("manifest.json").read().decode("utf-8")
+            )
+
+        assert manifest["job_id"] == ""
+        assert manifest["execution_scope"] == "full-workflow"
+
+    def test_bundle_manifest_marks_single_job_scope(self, tmp_path):
+        wf_path = self._create_multi_job_workflow(tmp_path)
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        session = asyncio.run(
+            mgr.submit(str(wf_path), target=SessionTarget.LOCAL, job_id="second-job")
+        )
+        import time
+
+        for _ in range(60):
+            time.sleep(0.1)
+            session = asyncio.run(mgr.status(session.id))
+            if session.is_done():
+                break
+
+        asyncio.run(mgr.fetch(session.id))
+        bundle = asyncio.run(mgr.bundle_artifacts(session.id))
+        with tarfile.open(bundle, "r:gz") as tf:
+            manifest = json.loads(
+                tf.extractfile("manifest.json").read().decode("utf-8")
+            )
+
+        assert manifest["job_id"] == "second-job"
+        assert manifest["execution_scope"] == "second-job"
 
     def test_fetch_while_running_raises(self, tmp_path):
         wf = tmp_path / "long_running.yml"
@@ -833,6 +965,99 @@ class TestCloudCancelTmux:
 
         assert out.status == SessionStatus.CANCELED
         assert any("tmux kill-session -t ofx-ses-tmuxkill" in c for c in seen)
+
+
+class TestCloudAutoDestroyAfterFetch:
+    @pytest.mark.asyncio
+    async def test_auto_destroy_after_fetch_non_static_enabled(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
+        from ofx.cloud.sessions.store import SessionStore
+        from ofx.models.cloud import CloudConfig
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="autod1",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.COMPLETED,
+            cloud_provider="digitalocean",
+            instance_id="i-123",
+            instance_ip="10.0.0.5",
+            auto_destroy=True,
+        )
+
+        destroyed: list[str] = []
+
+        class _FakeProvider:
+            async def destroy_instance(self, instance_id):
+                destroyed.append(instance_id)
+
+        class _FakeProfileMgr:
+            def resolve(self, cfg):
+                return CloudConfig(provider="digitalocean")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "ofx.cloud.config.get_cloud_profile_manager",
+                lambda: _FakeProfileMgr(),
+            )
+            mp.setattr(
+                "ofx.cloud.CloudProviderRegistry.create",
+                lambda provider, **kwargs: _FakeProvider(),
+            )
+            out = await mgr._auto_destroy_after_fetch(session)
+
+        assert destroyed == ["i-123"]
+        assert out.instance_id == ""
+        assert out.instance_ip == ""
+
+    @pytest.mark.asyncio
+    async def test_auto_destroy_after_fetch_skips_static(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
+        from ofx.cloud.sessions.store import SessionStore
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="autod2",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.COMPLETED,
+            cloud_provider="static",
+            instance_id="i-static",
+            instance_ip="10.0.0.6",
+            auto_destroy=True,
+        )
+
+        out = await mgr._auto_destroy_after_fetch(session)
+        assert out.instance_id == "i-static"
+        assert out.instance_ip == "10.0.0.6"
+
+    @pytest.mark.asyncio
+    async def test_auto_destroy_after_fetch_skips_when_disabled(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
+        from ofx.cloud.sessions.store import SessionStore
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="autod3",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.COMPLETED,
+            cloud_provider="digitalocean",
+            instance_id="i-keep",
+            instance_ip="10.0.0.7",
+            auto_destroy=False,
+        )
+
+        out = await mgr._auto_destroy_after_fetch(session)
+        assert out.instance_id == "i-keep"
+        assert out.instance_ip == "10.0.0.7"
 
 
 # ======================================================================

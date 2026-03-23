@@ -349,7 +349,7 @@ Submit with:
 ofx session submit network-scan.yml --local -i target=10.0.0.0/24
 ```
 
-The session extracts the specified job (or first job), generates a self-contained script from its steps, and runs it detached.
+The session resolves either the full workflow (default) or a specific `--job`, generates a self-contained script from those steps, and runs it detached.
 
 ## Cleanup & What to Check
 
@@ -358,7 +358,7 @@ The session extracts the specified job (or first job), generates a self-containe
 | Item | Local session | Cloud session |
 |------|--------------|---------------|
 | Background process | Killed on `cancel` | Killed via SSH on `cancel` |
-| VPS instance | N/A | Destroyed on `destroy` |
+| VPS instance | N/A | Auto-destroyed after `fetch` if profile has `auto_destroy: true` and provider is non-static; otherwise on `destroy` |
 | Session workspace | Removed on `clean` | Removed on `clean` |
 | At-rest encryption key | Shredded after encryption | Shredded on VPS after encryption |
 | Generated script | Shredded after completion | Shredded on VPS after completion |
@@ -372,8 +372,10 @@ The session extracts the specified job (or first job), generates a self-containe
 
 ### Cost control for cloud sessions
 
-- Cloud sessions leave the VPS running until you explicitly `destroy` — there is no `auto_destroy`
-- Always destroy sessions after fetching results
+- Cloud sessions respect the cloud profile's `auto_destroy` setting
+- With `auto_destroy: true` (default), non-static instances are destroyed automatically after `ofx session fetch`
+- Static providers are never auto-destroyed
+- If `auto_destroy: false`, destroy sessions manually after fetching results
 - Use `ofx session list --status completed` to find sessions ready for cleanup
 - Set up cloud provider billing alerts
 

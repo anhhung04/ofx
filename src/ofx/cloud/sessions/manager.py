@@ -293,7 +293,7 @@ class SessionManager:
 
         Args:
             workflow_file: Workflow path or name.
-            job_id: Specific job ID to run (empty = first job).
+            job_id: Specific job ID to run (empty = full workflow).
             target: LOCAL or CLOUD.
             cloud_profile: Cloud profile slug (for CLOUD target).
             inputs: Workflow inputs.
@@ -312,13 +312,14 @@ class SessionManager:
         from ofx.utils.workflow_utils import find_workflow
 
         workflow = find_workflow(workflow_file, tuple(DEFAULT_WORKFLOWS_DIRS))
-        job = self._resolve_job(workflow, job_id)
+        session_steps, resolved_job_id = self._resolve_session_steps(workflow, job_id)
+        workflow_name = workflow.name or Path(workflow_file).stem
 
         session = Session(
             id=session_id,
-            name=name or job.name or workflow.name or Path(workflow_file).stem,
+            name=name or workflow_name,
             workflow_file=workflow_file,
-            job_id=job.jid,
+            job_id=resolved_job_id,
             target=target,
             status=SessionStatus.PROVISIONING,
             cloud_profile=cloud_profile,
@@ -331,9 +332,20 @@ class SessionManager:
         self.store.save(session)
 
         if target == SessionTarget.LOCAL:
-            session = await self._submit_local(session, job, env or {})
+            session = await self._submit_local(
+                session,
+                session_steps,
+                env or {},
+                workflow_name=workflow_name,
+            )
         else:
-            session = await self._submit_cloud(session, job, env or {}, cloud_profile)
+            session = await self._submit_cloud(
+                session,
+                session_steps,
+                env or {},
+                cloud_profile,
+                workflow_name=workflow_name,
+            )
 
         return session
 
@@ -350,8 +362,10 @@ class SessionManager:
     async def _submit_local(
         self,
         session: Session,
-        job: Any,
+        steps: list[Any],
         env: dict[str, str],
+        *,
+        workflow_name: str,
     ) -> Session:
         """Start workflow steps as a detached local background process."""
         session_dir = self.store.session_dir(session.id)
@@ -384,8 +398,14 @@ class SessionManager:
         merged_env = {**input_env, **env}  # explicit env takes precedence
 
         script_content = build_session_script(
-            job.steps, session_id=session.id, work_dir=str(work_dir),
-            env=merged_env, os_type="linux", encrypt_at_rest=True,
+            steps,
+            session_id=session.id,
+            work_dir=str(work_dir),
+            workflow_name=workflow_name,
+            job_name=session.job_id,
+            env=merged_env,
+            os_type="linux",
+            encrypt_at_rest=True,
         )
 
         script_path = work_dir / "run.sh"
@@ -393,7 +413,7 @@ class SessionManager:
         script_path.chmod(0o700)
 
         log_file_path = work_dir / "output.log"
-        self._stage_script_files(job.steps, work_dir)
+        self._stage_script_files(steps, work_dir)
         work_dir.chmod(0o700)
 
         session = session.model_copy(update={
@@ -424,9 +444,11 @@ class SessionManager:
     async def _submit_cloud(
         self,
         session: Session,
-        job: Any,
+        steps: list[Any],
         env: dict[str, str],
         cloud_profile: str,
+        *,
+        workflow_name: str,
     ) -> Session:
         """Provision a VPS, upload the script, and start detached via SSH/WinRM."""
         from ofx.cloud import CloudProviderRegistry
@@ -444,6 +466,7 @@ class SessionManager:
 
         session = self._save_session(session, {
             "cloud_provider": resolved.provider or "static",
+            "auto_destroy": bool(getattr(resolved, "auto_destroy", True)),
             "os_type": os_type,
             "ssh_user": resolved.ssh_user or "root",
             "ssh_port": resolved.ssh_port or 22,
@@ -511,8 +534,14 @@ class SessionManager:
         merged_env = {**input_env, **env}  # explicit env takes precedence
 
         script_content = build_session_script(
-            job.steps, session_id=session.id, work_dir=remote_work_dir,
-            env=merged_env, os_type=os_type, encrypt_at_rest=True,
+            steps,
+            session_id=session.id,
+            work_dir=remote_work_dir,
+            workflow_name=workflow_name,
+            job_name=session.job_id,
+            env=merged_env,
+            os_type=os_type,
+            encrypt_at_rest=True,
         )
         session = session.model_copy(update={"at_rest_key": at_rest_key, "at_rest_encrypted": True})
 
@@ -534,8 +563,14 @@ class SessionManager:
                 # Rebuild script with corrected remote paths
                 merged_env.update(file_overrides)
                 script_content = build_session_script(
-                    job.steps, session_id=session.id, work_dir=remote_work_dir,
-                    env=merged_env, os_type=os_type, encrypt_at_rest=True,
+                    steps,
+                    session_id=session.id,
+                    work_dir=remote_work_dir,
+                    workflow_name=workflow_name,
+                    job_name=session.job_id,
+                    env=merged_env,
+                    os_type=os_type,
+                    encrypt_at_rest=True,
                 )
 
             # Upload key and script via temp files
@@ -552,7 +587,7 @@ class SessionManager:
                 remote.run(f"chmod 600 {remote_work_dir}/.skey")
                 remote.run(f"chmod 700 {remote_work_dir}/run.sh")
 
-            self._upload_script_files(job.steps, remote, remote_work_dir, is_windows=is_windows)
+            self._upload_script_files(steps, remote, remote_work_dir, is_windows=is_windows)
 
             # Start detached
             pid, launcher, tmux_name = _launch_remote_detached(
@@ -809,6 +844,7 @@ class SessionManager:
         else:
             # Cloud — download via SCP
             await self._fetch_cloud_results(session, results)
+            session = await self._auto_destroy_after_fetch(session)
 
         # Re-encrypt with user passphrase if requested
         if passphrase:
@@ -823,6 +859,53 @@ class SessionManager:
             })
 
         return results if not passphrase else Path(session.encrypted_file)
+
+    async def _auto_destroy_after_fetch(self, session: Session) -> Session:
+        """Auto-destroy cloud instance after fetch when configured and non-static."""
+        if session.target != SessionTarget.CLOUD:
+            return session
+        if not session.instance_id:
+            return session
+        if not session.auto_destroy:
+            return session
+        if (session.cloud_provider or "static") == "static":
+            return session
+
+        from ofx.cloud import CloudProviderRegistry
+        from ofx.cloud.config import get_cloud_profile_manager
+        from ofx.models.cloud import CloudConfig
+
+        try:
+            cfg = (
+                CloudConfig(profile=session.cloud_profile)
+                if session.cloud_profile
+                else CloudConfig()
+            )
+            mgr = get_cloud_profile_manager()
+            resolved = mgr.resolve(cfg)
+            from ofx.cloud.runtime import build_provider_kwargs
+
+            provider_kwargs = build_provider_kwargs(resolved)
+            provider = CloudProviderRegistry.create(
+                session.cloud_provider or resolved.provider or "static",
+                **provider_kwargs,
+            )
+            await provider.destroy_instance(session.instance_id)
+            return self._save_session(
+                session,
+                {
+                    "instance_id": "",
+                    "instance_ip": "",
+                },
+            )
+        except Exception as exc:
+            logger.warning(
+                "Auto-destroy after fetch failed for session %s (instance %s): %s",
+                session.id,
+                session.instance_id,
+                exc,
+            )
+            return session
 
     def _fetch_local_results(self, session: Session, results: Path) -> None:
         """Copy local session output to results dir, decrypting if needed."""
@@ -1054,6 +1137,7 @@ class SessionManager:
             "target": session.target.value,
             "workflow_file": session.workflow_file,
             "job_id": session.job_id,
+            "execution_scope": session.job_id or "full-workflow",
             "project": session.project,
             "started_at": session.started_at.isoformat(),
             "finished_at": session.finished_at.isoformat() if session.finished_at else None,
@@ -1111,28 +1195,39 @@ class SessionManager:
                 pass  # fall back to default
         return self.store.results_dir(session.id)
 
-    def _resolve_job(self, workflow: Any, job_id: str) -> Any:
-        """Pick a job from the workflow."""
-        # workflow.jobs is a dict[str, Job] keyed by jid
+    def _resolve_session_steps(
+        self, workflow: Any, job_id: str
+    ) -> tuple[list[Any], str]:
+        """Resolve steps to execute for a session.
+
+        When ``job_id`` is provided, only that job's steps are used.
+        Otherwise, all workflow jobs are linearized by dependency stage order.
+        """
         jobs = workflow.jobs
-        if isinstance(jobs, dict):
-            if job_id:
-                if job_id in jobs:
-                    return jobs[job_id]
-                raise ValueError(f"Job '{job_id}' not found in workflow")
-            # Return first job
-            if jobs:
-                return next(iter(jobs.values()))
+        if not isinstance(jobs, dict):
+            raise ValueError("Workflow jobs must be a mapping of job_id -> job")
+        if not jobs:
             raise ValueError("Workflow has no jobs")
-        # Fallback for list-style
+
         if job_id:
-            for job in jobs:
-                if job.jid == job_id:
-                    return job
-            raise ValueError(f"Job '{job_id}' not found in workflow")
-        if jobs:
-            return jobs[0]
-        raise ValueError("Workflow has no jobs")
+            job = jobs.get(job_id)
+            if job is None:
+                raise ValueError(f"Job '{job_id}' not found in workflow")
+            return list(job.steps), job.jid
+
+        from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+
+        schedule = WorkflowScheduler(jobs).plan().schedule
+        selected_steps: list[Any] = []
+        for stage in schedule:
+            for staged_job_id in stage:
+                job = jobs[staged_job_id]
+                for idx, step in enumerate(job.steps):
+                    base_name = step.name or f"step_{idx}"
+                    selected_steps.append(
+                        step.model_copy(update={"name": f"{job.jid}::{base_name}"})
+                    )
+        return selected_steps, ""
 
     def _reconnect(self, session: Session) -> Any:
         """Create a PostSSH or PostWinRM to reconnect to a session's host."""

@@ -33,6 +33,7 @@ def profile_list():
     table.add_column("Region")
     table.add_column("Size")
     table.add_column("Image")
+    table.add_column("Auto Destroy", justify="center")
     table.add_column("Default", justify="center")
 
     for name in sorted(profiles):
@@ -43,6 +44,7 @@ def profile_list():
             data.get("region", ""),
             data.get("size", ""),
             data.get("image", ""),
+            "Yes" if data.get("auto_destroy", True) else "No",
             "✓" if name == default else "",
         )
 
@@ -71,6 +73,13 @@ def profile_add(
     connection_type: Annotated[
         str, typer.Option("--connection", help="Connection type (ssh or winrm)")
     ] = "",
+    auto_destroy: Annotated[
+        bool | None,
+        typer.Option(
+            "--auto-destroy/--no-auto-destroy",
+            help="Destroy non-static instances automatically after completion",
+        ),
+    ] = None,
     set_default: Annotated[
         bool, typer.Option("--default", help="Set as default profile")
     ] = False,
@@ -98,6 +107,8 @@ def profile_add(
         data["ssh_password"] = ssh_password
     if connection_type:
         data["connection_type"] = connection_type
+    if auto_destroy is not None:
+        data["auto_destroy"] = auto_destroy
 
     mgr.add(name, data)
     if set_default:

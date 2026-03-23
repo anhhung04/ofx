@@ -35,7 +35,7 @@ from ofx.settings import get_console
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
 NAME = "session"
-HELP = "Manage detached job sessions (local & cloud)"
+HELP = "Manage detached workflow sessions (local & cloud)"
 
 
 # ======================================================================
@@ -82,13 +82,17 @@ def _session_detail_table(session) -> Table:
     style = session_status_style(session.status.value)
     rows.append(("Status", f"[{style}]{session.status.value}[/{style}]"))
     rows.append(("Workflow", session.workflow_file))
-    rows.append(("Job", session.job_id))
+    scope = session.job_id if session.job_id else "full-workflow"
+    rows.append(("Execution scope", scope))
     if session.remote_pid:
         rows.append(("PID", str(session.remote_pid)))
     if session.instance_ip:
         rows.append(("IP", session.instance_ip))
     if getattr(session, "cloud_provider", None):
         rows.append(("Provider", session.cloud_provider))
+    if session.target.value == "cloud":
+        auto_destroy = "Yes" if getattr(session, "auto_destroy", True) else "No"
+        rows.append(("Auto destroy", auto_destroy))
     if getattr(session, "started_at", None):
         rows.append(("Started", str(session.started_at)))
     if getattr(session, "finished_at", None):
@@ -132,7 +136,7 @@ def _parse_duration(s: str) -> int | None:
 @app.command("submit")
 def session_submit(
     workflow: Annotated[str, typer.Argument(help="Workflow file name or path")],
-    job: Annotated[str, typer.Option("--job", "-j", help="Job ID to run (default: first job)")] = "",
+    job: Annotated[str, typer.Option("--job", "-j", help="Job ID to run (default: full workflow)")] = "",
     local: Annotated[bool, typer.Option("--local", "-l", help="Run as local background process")] = False,
     cloud: Annotated[str, typer.Option("--cloud", "-c", help="Cloud profile to use")] = "",
     name: Annotated[str, typer.Option("--name", "-n", help="Session name/tag")] = "",
@@ -173,7 +177,13 @@ def session_submit(
     print_success("Session submitted", "Session submitted successfully.", details={
         "Session ID": session.id, "Name": session.name,
         "Target": session.target.value, "Status": session.status.value,
-        "Workflow": session.workflow_file, "Job": session.job_id,
+        "Workflow": session.workflow_file,
+        "Execution scope": session.job_id or "full-workflow",
+        **(
+            {"Auto destroy": "Yes" if getattr(session, "auto_destroy", True) else "No"}
+            if session.target.value == "cloud"
+            else {}
+        ),
         **({"Project": session.project} if session.project else {}),
     })
     console.print(_session_detail_table(session))
