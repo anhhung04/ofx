@@ -148,6 +148,20 @@ def _resolve_type_hints(func: Any) -> dict:
         return getattr(func, "__annotations__", {})
 
 
+def _normalize_doc_and_example(doc: str) -> tuple[str, str | None]:
+    """Split docstring into normalized description and optional example."""
+    parts = doc.split("Example:")
+    description = "\n".join(
+        line for line in (line.strip() for line in parts[0].strip().split("\n")) if line
+    )
+    example: str | None = None
+    if len(parts) > 1:
+        example = "\n".join(
+            line for line in (line.strip() for line in parts[1].strip().split("\n")) if line
+        )
+    return description, example
+
+
 def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
     """Get detailed information about a specific class method."""
     try:
@@ -332,12 +346,7 @@ def create_function_tree(
         func_tree = tree.add(func_name)
 
         if func["doc"]:
-            parts = func["doc"].split("Example:")
-            description = parts[0].strip()
-            example = parts[1].strip() if len(parts) > 1 else None
-
-            description_lines = [line.strip() for line in description.split("\n")]
-            description = "\n".join(line for line in description_lines if line)
+            description, example = _normalize_doc_and_example(func["doc"])
 
             func_tree.add(
                 Panel(
@@ -348,8 +357,6 @@ def create_function_tree(
             )
 
             if example:
-                example_lines = [line.strip() for line in example.split("\n")]
-                example = "\n".join(line for line in example_lines if line)
                 func_tree.add(
                     Panel(
                         Syntax(example, "python", theme="monokai"),

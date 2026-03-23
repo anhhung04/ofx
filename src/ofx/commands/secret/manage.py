@@ -24,6 +24,14 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 logger = logging.getLogger(settings.app_branding)
 
 
+def _print_values_warning() -> None:
+    typer.secho(
+        "\n⚠️ WARNING: Secret values are displayed above!",
+        fg=typer.colors.YELLOW,
+        bold=True,
+    )
+
+
 def _build_secrets_table(
     secrets: dict[str, Any],
     *,
@@ -215,11 +223,7 @@ def list_secrets(
     )
 
     if show_values:
-        typer.secho(
-            "\n⚠️ WARNING: Secret values are displayed above!",
-            fg=typer.colors.YELLOW,
-            bold=True,
-        )
+        _print_values_warning()
 
 
 @app.command("search")
@@ -277,11 +281,7 @@ def search_secrets(
     )
 
     if show_values:
-        typer.secho(
-            "\n⚠️ WARNING: Secret values are displayed above!",
-            fg=typer.colors.YELLOW,
-            bold=True,
-        )
+        _print_values_warning()
 
 
 @app.command("delete")
@@ -512,4 +512,3 @@ def show_store_location():
     if info["exists"]:
         typer.secho(f"Store size: {info['size']} bytes", fg=typer.colors.CYAN)
         typer.secho(f"Secret count: {info['count']}", fg=typer.colors.CYAN)
-

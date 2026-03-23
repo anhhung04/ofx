@@ -15,6 +15,24 @@ fleet_app = typer.Typer(
 )
 
 
+def _resolve_active_project_name() -> str:
+    """Resolve active project name from global flag or active project."""
+    from ofx.commands import get_cli_project
+
+    project = get_cli_project()
+    if project:
+        return project
+    from ofx.commands.project.project_manager import ProjectManager
+
+    active_path = ProjectManager.get_active_path()
+    return active_path.name if active_path else ""
+
+
+def _fleet_group_not_found(console, fleet_group_id: str) -> None:
+    console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
+    raise typer.Exit(code=1)
+
+
 async def _refresh_sessions(mgr, sessions: list):
     """Best-effort status refresh; keep original session on failure."""
     refreshed = []
@@ -154,7 +172,7 @@ def fleet_run(
     from ofx.cloud.fleet_distributor import FleetDistributor
     from ofx.cloud.fleet_input import FleetInputParser
     from ofx.cloud.sessions import SessionManager, SessionTarget
-    from ofx.commands import get_cli_env_vars, get_cli_project
+    from ofx.commands import get_cli_env_vars
     from ofx.utils.args import parse_key_value_pairs
 
     if inputs is None:
@@ -164,13 +182,7 @@ def fleet_run(
     parsed_env: dict = get_cli_env_vars()
 
     # Resolve project: global -p > active project
-    fleet_project = get_cli_project()
-    if not fleet_project:
-        from ofx.commands.project.project_manager import ProjectManager
-
-        active_path = ProjectManager.get_active_path()
-        if active_path:
-            fleet_project = active_path.name
+    fleet_project = _resolve_active_project_name()
 
     if not profile:
         console.print("[red]Fleet run requires --profile for cloud execution[/red]")
@@ -283,10 +295,7 @@ def fleet_status(
     sessions = store.list_by_fleet_group(fleet_group_id)
 
     if not sessions:
-        console.print(
-            f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]"
-        )
-        raise typer.Exit(code=1)
+        _fleet_group_not_found(console, fleet_group_id)
 
     if refresh:
         mgr = SessionManager(store=store)
@@ -361,10 +370,7 @@ def fleet_results(
     sessions = store.list_by_fleet_group(fleet_group_id)
 
     if not sessions:
-        console.print(
-            f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]"
-        )
-        raise typer.Exit(code=1)
+        _fleet_group_not_found(console, fleet_group_id)
 
     # Refresh statuses first
     mgr = SessionManager(store=store)
@@ -462,10 +468,7 @@ def fleet_cancel(
     sessions = store.list_by_fleet_group(fleet_group_id)
 
     if not sessions:
-        console.print(
-            f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]"
-        )
-        raise typer.Exit(code=1)
+        _fleet_group_not_found(console, fleet_group_id)
 
     running = [s for s in sessions if s.is_running()]
     if not running:
