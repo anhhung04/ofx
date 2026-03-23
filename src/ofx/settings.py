@@ -27,13 +27,13 @@ CONFIG_FILE = BASE_DATA_DIR / "config.ini"
 CONFIG_YAML = BASE_DATA_DIR / "config.yml"
 SECRETS_STORE = Path(os.getenv("OFX_SECRETS_STORE", BASE_DATA_DIR / "secrets.enc"))
 SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
+DATA_DIR = Path(__file__).parent / "data"
+BUILTIN_WORKFLOWS_DIR = DATA_DIR / "workflows"
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
-DEFAULT_WORKFLOWS_DIRS = [Path.cwd().absolute(), DEFAULT_WORKFLOWS_DIR.absolute()]
+DEFAULT_WORKFLOWS_DIRS = [Path.cwd().absolute(), DEFAULT_WORKFLOWS_DIR.absolute(), BUILTIN_WORKFLOWS_DIR.absolute()]
 DEFAULT_PROJECTS_PATH = BASE_DATA_DIR / "projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
-DATA_DIR = Path(__file__).parent / "data"
-BUILTIN_WORKFLOWS_DIR = DATA_DIR / "workflows"
 USER_EXPLOITS_DIR = BASE_DATA_DIR / "exploits"
 USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
@@ -53,18 +53,6 @@ def get_workflow_search_dirs() -> list[Path]:
     installed after process start are still found.
     """
     dirs = list(DEFAULT_WORKFLOWS_DIRS)
-    # Include built-in workflows shipped with the package.
-    # Add root first (allows "recon/domain-recon" style paths),
-    # then each subdirectory (allows bare "domain-recon").
-    if BUILTIN_WORKFLOWS_DIR.is_dir():
-        abs_root = BUILTIN_WORKFLOWS_DIR.absolute()
-        if abs_root not in dirs:
-            dirs.append(abs_root)
-        for child in sorted(BUILTIN_WORKFLOWS_DIR.iterdir()):
-            if child.is_dir() and child.name != "__pycache__":
-                abs_child = child.absolute()
-                if abs_child not in dirs:
-                    dirs.append(abs_child)
     # Include installed collections
     collections_dir = COLLECTIONS_DIR
     if collections_dir.is_dir():
