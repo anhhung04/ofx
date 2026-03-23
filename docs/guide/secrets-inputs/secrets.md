@@ -40,4 +40,4 @@ run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.c
 
 ## See Also
 - [Inputs](inputs.md)
-- [Secret CLI Reference](../../cli/commands.md#secret)
+- [Secret CLI Reference](../../cli/commands/secret.md)

@@ -656,5 +656,5 @@ The task is automatically discovered if placed in `src/ofx/tasks/tools/`.
 ## See Also
 
 - [Steps](jobs-steps/steps.md)
-- [Workflows](workflows/index.md)
-- [Cloud Execution](cloud/index.md)
+- [Workflows](workflows.md)
+- [Cloud Execution](cloud-runners.md)

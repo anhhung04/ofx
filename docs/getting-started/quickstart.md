@@ -1,201 +1,86 @@
 # Quick Start
 
-> [!INFO]
-> This guide will help you install OFX, initialize a project, and run your first workflow in minutes.
+This quick start gets you from install to a successful workflow run.
 
----
-
-## Installation
+## 1) Install OFX
 
 ```bash
 pip install ofx
 ```
 
-> [!TIP]
-> For cloud runners, install extras: `pip install ofx[cloud]` or `ofx[digitalocean]`, `ofx[aws]`
+Optional cloud extras:
 
----
+```bash
+pip install "ofx[cloud]"
+```
 
-## Project Initialization
+## 2) Create a project
 
 ```bash
 ofx project init quickstart-demo
 cd ~/.ofx/projects/quickstart-demo
 ```
 
----
+## 3) Create a workflow
 
-## Create Your First Workflow
-
-Create `hello.yml` in your workflows directory:
+Create `hello.yml`:
 
 ```yaml
 name: hello-world
-jobs:
-  greet:
-    steps:
-      - run: echo "Hello from OFX"
-  info:
-    needs: [greet]
-    steps:
-      - run: date
-      - run: pwd
-```
 
----
-
-## Validate & Run
-
-```bash
-ofx flow validate hello-world
-ofx flow run hello-world
-```
-
-> [!SUCCESS]
-> You’ve just run your first OFX workflow!
-
----
-
-## Next Steps
-
-- [Workflow Design](../guide/workflows.md)
-- [Cloud Execution](../guide/cloud-runners.md)
-- [API Reference](../reference/api.md)
-
----
-
-## 3️⃣ Add User Inputs
-
-Make your workflow dynamic with inputs:
-
-```yaml
-name: port-scanner
 dispatch:
   inputs:
     target:
+      type: string
       required: true
-      description: Target host to scan
-    ports:
-      default: "80,443"
-      description: Comma-separated ports
+      description: Target label to print
 
 jobs:
-  scan:
+  greet:
     steps:
-      - run: uv_install nmap-python
-      - run: nmap -p {{ inputs.ports }} {{ inputs.target }}
+      - run: echo "Hello {{ inputs.target }} from OFX"
+
+  metadata:
+    needs: [greet]
+    steps:
+      - run: echo "Run ID: {{ ctx.run_id }}"
+      - run: echo "Output: {{ ctx.output_path }}"
 ```
 
-**Run with inputs:**
+## 4) Validate and run
 
 ```bash
-ofx flow run port-scanner --input target=scanme.nmap.org --input ports=22,80,443
+ofx flow validate hello.yml
+ofx flow run hello.yml --input target=team
 ```
 
----
-
-## 4️⃣ Secure Your Secrets
-
-Store sensitive credentials securely:
+## 5) Add secrets (optional)
 
 ```bash
 ofx secret set API_KEY
-# Enter your secret when prompted
 ```
 
-**Use in workflow:**
+Use in workflow:
 
 ```yaml
-name: api-test
 call:
   secrets:
     API_KEY:
       required: true
-
-jobs:
-  call:
-    steps:
-      - run: |
-          curl -H "Authorization: Bearer {{ secrets.API_KEY }}" \
-               https://api.example.com/data
 ```
+
+## 6) Useful next commands
 
 ```bash
-ofx flow run api-test
+ofx flow visualize hello.yml --format mermaid
+ofx flow run hello.yml --output ./runs/hello
+ofx doctor check
 ```
 
----
+## What to read next
 
-## 5️⃣ Chain Multiple Jobs
-
-Create complex workflows with job dependencies:
-
-```yaml
-name: basic-recon
-dispatch:
-  inputs:
-    domain:
-      required: true
-      description: Target domain
-
-jobs:
-  subdomain-enum:
-    steps:
-      - run: subfinder -d {{ inputs.domain }} -o subdomains.txt
-
-  port-scan:
-    needs: [subdomain-enum]
-    steps:
-      - run: nmap -iL subdomains.txt -p 80,443 -oN nmap-results.txt
-
-  analyze:
-    needs: [subdomain-enum, port-scan]
-    steps:
-      - run: cat nmap-results.txt
-```
-
-> **💡 Tip:** Jobs run in parallel unless `needs` specifies dependencies.
-
----
-
-## 6️⃣ Durable Execution (Resume)
-
-Durable execution writes checkpoints to the output directory so you can resume
-from the last completed step after a restart:
-
-```bash
-ofx flow run basic-recon --output ./runs/basic-recon --durable --resume
-```
-
-To use Redis-backed checkpoints:
-
-```bash
-ofx flow run basic-recon \
-  --output ./runs/basic-recon \
-  --durable \
-  --durable-backend redis \
-  --durable-redis-prefix ofx:durable:
-```
-
----
-
-## 📋 Command Reference
-
-| Command | Description |
-|---------|-------------|
-| `ofx flow validate <workflow>` | Check workflow syntax |
-| `ofx flow run <workflow>` | Execute workflow |
-| `ofx x run <workflow>` | Shorthand for run |
-| `ofx secret list` | List stored secrets |
-| `ofx secret set <name>` | Add new secret |
-| `ofx docs serve` | View docs locally |
-| `ofx doctor` | Check installation |
-
----
-
-## ➡️ Next Steps
-
-1. **[Core Concepts](concepts.md)** — Understand the architecture
-2. **[Workflows Guide](../guide/workflows.md)** — Deep dive into workflow syntax
-3. **[Templates](../guide/templates.md)** — Jinja2 templating & helpers
-4. **[CLI Reference](../cli/commands.md)** — Full command documentation
+- [Workflows](../guide/workflows.md)
+- [Jobs & Steps](../guide/jobs-steps.md)
+- [Templates](../guide/templates.md)
+- [Secrets & Inputs](../guide/secrets-inputs.md)
+- [Cloud Runners](../guide/cloud-runners.md)
