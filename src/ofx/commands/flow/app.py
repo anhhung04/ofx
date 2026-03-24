@@ -32,11 +32,30 @@ def list_workflows(
         str,
         typer.Option("--collection", "-c", help="Show workflows from a specific installed collection."),
     ] = "",
+    tag: Annotated[
+        list[str],
+        typer.Option("--tag", "-t", help="Filter workflows by tag. Can be specified multiple times (OR logic)."),
+    ] = [],
+    show_tags: Annotated[
+        bool,
+        typer.Option("--tags", help="Show tags alongside each workflow name."),
+    ] = False,
+    list_tags: Annotated[
+        bool,
+        typer.Option("--list-tags", help="List all available tags with workflow counts."),
+    ] = False,
 ):
-    """List available workflows as a folder tree. Use --builtin or --collection <name> to filter."""
+    """List available workflows as a folder tree.
+
+    Use --tag/-t to filter by tag, --tags to show tags, or --list-tags to see all tags.
+    """
     from collections import defaultdict
     from pathlib import Path
 
+    import yaml
+    from rich.columns import Columns
+    from rich.table import Table
+    from rich.text import Text
     from rich.tree import Tree
 
     from ofx.collections import CollectionManager
@@ -48,6 +67,7 @@ def list_workflows(
     )
 
     show_all = not builtin and not collection
+    filter_tags = {t.lower() for t in tag}
 
     def _scan_yaml_files(root: Path) -> list[Path]:
         files: list[Path] = []
@@ -55,27 +75,33 @@ def list_workflows(
             files.extend(sorted(root.rglob(f"*{ext}")))
         return sorted(set(files))
 
-    # group: source_label -> {category -> [workflow_stem]}
-    groups: dict[str, dict[str, list[str]]] = {}
+    def _read_tags(path: Path) -> list[str]:
+        """Read tags from a workflow YAML file (fast, partial parse)."""
+        try:
+            with open(path) as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                tags = data.get("tags", [])
+                return [str(t).lower() for t in tags] if isinstance(tags, list) else []
+        except Exception:
+            pass
+        return []
+
+    # Collect all files first: (path, source_label, base_root)
+    all_files: list[tuple[Path, str, Path]] = []
     seen_paths: set[str] = set()
 
-    def _add(path: Path, source: str, base_root: Path) -> None:
-        resolved = str(path.resolve())
-        if resolved in seen_paths:
-            return
-        seen_paths.add(resolved)
-        try:
-            category = path.relative_to(base_root).parent
-            cat_str = str(category) if str(category) != "." else ""
-        except ValueError:
-            cat_str = ""
-        groups.setdefault(source, defaultdict(list))[cat_str].append(path.stem)
+    def _collect(root: Path, source: str) -> None:
+        for file in _scan_yaml_files(root):
+            resolved = str(file.resolve())
+            if resolved not in seen_paths:
+                seen_paths.add(resolved)
+                all_files.append((file, source, root))
 
     # Built-in workflows
     if builtin or show_all:
         if BUILTIN_WORKFLOWS_DIR.is_dir():
-            for file in _scan_yaml_files(BUILTIN_WORKFLOWS_DIR):
-                _add(file, "📦 Built-in", BUILTIN_WORKFLOWS_DIR)
+            _collect(BUILTIN_WORKFLOWS_DIR, "📦 Built-in")
 
     # Collection workflows
     if collection or show_all:
@@ -95,15 +121,61 @@ def list_workflows(
             coll_path = Path(entry.path)
             if not coll_path.is_dir():
                 continue
-            label = f"📦 {coll_name}"
-            for file in _scan_yaml_files(coll_path):
-                _add(file, label, coll_path)
-
-    if not groups:
-        print_warning("No Workflows Found", "No workflows matched the filter.")
-        return
+            _collect(coll_path, f"📦 {coll_name}")
 
     console = get_console()
+
+    # --list-tags mode: show all unique tags with counts
+    if list_tags:
+        tag_counts: dict[str, int] = defaultdict(int)
+        for file, _, _ in all_files:
+            for t in _read_tags(file):
+                tag_counts[t] += 1
+
+        if not tag_counts:
+            print_warning("No Tags Found", "No workflows have tags defined.")
+            return
+
+        table = Table(title="Available Tags", show_lines=False, padding=(0, 2))
+        table.add_column("Tag", style="cyan bold")
+        table.add_column("Workflows", style="white", justify="right")
+        for t in sorted(tag_counts, key=lambda x: (-tag_counts[x], x)):
+            table.add_row(t, str(tag_counts[t]))
+        console.print(table)
+        return
+
+    # Read tags when filtering or showing
+    need_tags = bool(filter_tags) or show_tags
+    file_tags: dict[str, list[str]] = {}
+    if need_tags:
+        for file, _, _ in all_files:
+            file_tags[str(file.resolve())] = _read_tags(file)
+
+    # Build grouped tree: source_label -> {category -> [(name, tags)]}
+    groups: dict[str, dict[str, list[tuple[str, list[str]]]]] = {}
+
+    for file, source, base_root in all_files:
+        resolved = str(file.resolve())
+        tags = file_tags.get(resolved, [])
+
+        # Apply tag filter
+        if filter_tags and not filter_tags.intersection(tags):
+            continue
+
+        try:
+            category = file.relative_to(base_root).parent
+            cat_str = str(category) if str(category) != "." else ""
+        except ValueError:
+            cat_str = ""
+        groups.setdefault(source, defaultdict(list))[cat_str].append((file.stem, tags))
+
+    if not groups:
+        if filter_tags:
+            print_warning("No Workflows Found", f"No workflows matched tags: {', '.join(sorted(filter_tags))}")
+        else:
+            print_warning("No Workflows Found", "No workflows matched the filter.")
+        return
+
     root = Tree("[bold]Available Workflows[/bold]")
 
     for source_label in sorted(groups):
@@ -114,8 +186,12 @@ def list_workflows(
                 cat_branch = source_branch.add(f"[yellow]📁 {cat}[/yellow]")
             else:
                 cat_branch = source_branch
-            for name in sorted(categories[cat]):
-                cat_branch.add(f"[cyan]{name}[/cyan]")
+            for name, tags in sorted(categories[cat]):
+                if show_tags and tags:
+                    tag_str = " ".join(f"[dim]#{t}[/dim]" for t in tags)
+                    cat_branch.add(f"[cyan]{name}[/cyan]  {tag_str}")
+                else:
+                    cat_branch.add(f"[cyan]{name}[/cyan]")
 
     console.print(root)
 
