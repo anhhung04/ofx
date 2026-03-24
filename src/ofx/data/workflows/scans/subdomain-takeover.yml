@@ -24,7 +24,6 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           all: true
-        log-stdout: true
         continue-on-error: true
       - task: findomain
         name: findomain-enum
@@ -74,7 +73,6 @@ jobs:
               f.write(f"sub_count={len(subs)}\n")
 
           print(f"Enumerated {len(subs)} unique subdomains from 5 sources")
-        log-stdout: true
   dns-verify:
     name: DNS Verification & CNAME Check
     needs:
@@ -93,7 +91,6 @@ jobs:
           a: true
           cname: true
           resp: true
-        log-stdout: true
         continue-on-error: true
       - name: analyze-cnames
         script: |
@@ -156,7 +153,6 @@ jobs:
           print(f"Alive: {len(alive)}, CNAMEs: {len(cnames)}, Potentially dangling: {len(dangling)}")
           for d in dangling:
               print(f"  [!] {d}")
-        log-stdout: true
   takeover-check:
     name: Takeover Fingerprinting
     needs:
@@ -170,14 +166,12 @@ jobs:
         with:
           target: /tmp/alive-subs.txt
           concurrency: 20
-        log-stdout: true
         continue-on-error: true
       - task: nuclei
         name: nuclei-takeover
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
           tags: takeover
-        log-stdout: true
         continue-on-error: true
       - name: collect-takeovers
         script: |
@@ -202,7 +196,6 @@ jobs:
           print(f"Confirmed takeover vulnerabilities: {len(takeovers)}")
           for t in takeovers:
               print(f"  [!] {t}")
-        log-stdout: true
   screenshot:
     name: Visual Evidence
     needs:
@@ -213,7 +206,6 @@ jobs:
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
           threads: 10
-        log-stdout: true
         continue-on-error: true
       - task: httpx
         name: http-fingerprint
@@ -223,7 +215,6 @@ jobs:
           status_code: true
           title: true
           follow_redirects: true
-        log-stdout: true
         continue-on-error: true
   summary:
     name: Takeover Summary

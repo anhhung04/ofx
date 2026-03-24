@@ -54,7 +54,6 @@ jobs:
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write("cluster_reachable=true\n")
-      log-stdout: true
 
   rbac-audit:
     name: RBAC Audit
@@ -105,7 +104,6 @@ jobs:
 
         for finding in findings:
             print(f"  {finding}")
-      log-stdout: true
       continue-on-error: true
 
   pod-security:
@@ -179,7 +177,6 @@ jobs:
 
         for finding in findings:
             print(f"  {finding}")
-      log-stdout: true
       continue-on-error: true
 
   summary:

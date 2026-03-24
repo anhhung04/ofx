@@ -30,7 +30,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - name: dnsrecon-enum
       run: |
         dnsrecon -d {{ inputs.target }} --no_color 2>/dev/null | tee /tmp/dnsrecon-output.txt
@@ -41,7 +40,6 @@ jobs:
         target: '{{ inputs.target }}'
         server_defaults: true
       continue-on-error: true
-      log-stdout: true
     - name: export-intel
       script: |
         import json
@@ -52,7 +50,6 @@ jobs:
             f.write(f"domain_intel=complete\n")
 
         print("Domain intelligence gathering complete")
-      log-stdout: true
   subdomain-enum:
     name: Subdomain Enumeration
     outputs:
@@ -64,7 +61,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - name: amass-passive
       run: |
@@ -126,7 +122,6 @@ jobs:
         a: true
         cname: true
         resp: true
-      log-stdout: true
       continue-on-error: true
     - name: filter-alive
       script: |
@@ -162,7 +157,6 @@ jobs:
         target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - name: masscan-sweep
       run: |
@@ -207,13 +201,11 @@ jobs:
         status_code: true
         title: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: export-live
       run: |
         echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
         echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
-      log-stdout: true
   web-fingerprint:
     name: Web Fingerprinting
     outputs:
@@ -233,7 +225,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - name: export-fingerprint
       script: |
         import re
@@ -262,7 +253,6 @@ jobs:
             f.write(f"waf_detected_file=/tmp/ofx_extrecon_waf.txt\n")
 
         print(f"Technologies: {len(techs)}, WAFs: {len(waf_names)}")
-      log-stdout: true
   web-crawl:
     name: Web Crawling
     outputs:
@@ -276,14 +266,12 @@ jobs:
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
-      log-stdout: true
       continue-on-error: true
     - task: gospider
       name: gospider-crawl
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 2
-      log-stdout: true
       continue-on-error: true
     - task: gau
       name: gau-archive
@@ -365,7 +353,6 @@ jobs:
             f.write(f"takeover_count={len(takeovers)}\n")
 
         print(f"Potential takeovers: {len(takeovers)}")
-      log-stdout: true
   secret-hunt:
     name: Secret Hunting
     outputs:
@@ -378,14 +365,12 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
-      log-stdout: true
       continue-on-error: true
     - task: gitleaks
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - name: export-secrets
       script: |
         import json
@@ -398,7 +383,6 @@ jobs:
             f.write(f"secrets_count={total}\n")
 
         print(f"Found {total} secrets/leaks")
-      log-stdout: true
   vuln-scan:
     name: Vulnerability Scanning
     outputs:
@@ -418,7 +402,6 @@ jobs:
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
-      log-stdout: true
       continue-on-error: true
     - name: nikto-scan
       run: |
@@ -474,7 +457,6 @@ jobs:
         print(f"Nuclei: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
         print(f"Nikto: {nikto_count}")
         print(f"CRLF injections: {crlf_count}")
-      log-stdout: true
   osint:
     name: OSINT & Credential Hunting
     outputs:
@@ -514,7 +496,6 @@ jobs:
       with:
         target: '{{ steps[1].outputs.email_file if steps[1].outputs is defined else inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - name: export-osint
       script: |
         import json
@@ -525,7 +506,6 @@ jobs:
             f.write(f"breach_count={len(breach_results)}\n")
 
         print(f"Breach results: {len(breach_results)}")
-      log-stdout: true
   summary:
     name: External Recon Summary
     needs:

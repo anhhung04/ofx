@@ -101,7 +101,6 @@ jobs:
             f.write(f"hash_file={hash_file}\n")
             f.write(f"identified_types={results[0]['types'][0] if results and results[0]['types'] else 'unknown'}\n")
             f.write(f"results={json.dumps(results)}\n")
-      log-stdout: true
 
   crack:
     name: Crack Hashes
@@ -178,4 +177,3 @@ jobs:
         print(f"\n[+] Total cracked: {len(cracked)}")
         for c in cracked:
             print(f"    {c}")
-      log-stdout: true

@@ -62,7 +62,6 @@ jobs:
           echo "hash_count=0" >> {{ env.OFX_OUTPUTS }}
           echo "[-] No kerberoastable accounts found"
         fi
-      log-stdout: true
       continue-on-error: true
 
   asrep-roast:
@@ -94,7 +93,6 @@ jobs:
           echo "asrep_count=0" >> {{ env.OFX_OUTPUTS }}
           echo "[-] No AS-REP roastable accounts found"
         fi
-      log-stdout: true
       continue-on-error: true
 
   crack:

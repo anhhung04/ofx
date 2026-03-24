@@ -26,14 +26,12 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         depth: 3
-      log-stdout: true
       continue-on-error: true
     - task: gospider
       name: gospider-crawl
       with:
         target: '{{ inputs.target }}'
         depth: 2
-      log-stdout: true
       continue-on-error: true
     - task: gau
       name: gau-passive
@@ -76,13 +74,11 @@ jobs:
         tech_detect: true
         status_code: true
         title: true
-      log-stdout: true
       continue-on-error: true
     - name: export-live
       run: |
         echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
         echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
-      log-stdout: true
   secrets:
     name: Secret Hunting
     needs:
@@ -93,7 +89,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
-      log-stdout: true
       continue-on-error: true
     - task: cariddi
       name: cariddi-crawl

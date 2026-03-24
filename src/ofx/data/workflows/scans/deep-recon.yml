@@ -34,7 +34,6 @@ jobs:
         name: whois-lookup
         with:
           target: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: theharvester
@@ -43,14 +42,12 @@ jobs:
           target: '{{ inputs.target }}'
           source: google,bing,dnsdumpster,crtsh,rapiddns
           limit: 500
-        log-stdout: true
         continue-on-error: true
 
       - task: gitleaks
         name: gitleaks-scan
         with:
           target: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - name: export-osint
@@ -65,7 +62,6 @@ jobs:
               f.write(f"osint_user_count={len(users)}\n")
 
           print(f"OSINT: {len(domains)} domain records, {len(users)} users/emails found")
-        log-stdout: true
 
   passive-enum:
     name: Passive Subdomain Enumeration
@@ -78,7 +74,6 @@ jobs:
         with:
           target: '{{ inputs.target }}'
           all: true
-        log-stdout: true
         continue-on-error: true
 
       - task: gau
@@ -114,7 +109,6 @@ jobs:
         with:
           target: '{{ inputs.target }}'
           domain: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - name: collect-subdomains
@@ -175,7 +169,6 @@ jobs:
               f.write(f"sub_count={len(subs)}\n")
 
           print(f"Collected {len(subs)} unique subdomains from passive sources")
-        log-stdout: true
 
   active-enum:
     name: Active Enumeration & Resolution
@@ -195,7 +188,6 @@ jobs:
           aaaa: true
           cname: true
           resp: true
-        log-stdout: true
         continue-on-error: true
 
       - task: tlsx
@@ -203,7 +195,6 @@ jobs:
         with:
           target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
           san: true
-        log-stdout: true
         continue-on-error: true
 
       - task: puredns
@@ -211,14 +202,12 @@ jobs:
         with:
           target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
           resolvers: '{{ inputs.resolvers if inputs.resolvers else "" }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: asnmap
         name: asnmap-enum
         with:
           target: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: gotator
@@ -227,7 +216,6 @@ jobs:
           target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
           depth: 1
           fast: true
-        log-stdout: true
         continue-on-error: true
 
       - name: merge-active
@@ -287,7 +275,6 @@ jobs:
               f.write(f"asn_ip_count={len(asn_ips)}\n")
 
           print(f"Active verification: {len(verified)} resolved subdomains, {len(asn_ips)} ASN IPs/CIDRs")
-        log-stdout: true
 
   web-probe:
     name: Web Probing & Technology Detection
@@ -308,28 +295,24 @@ jobs:
           status_code: true
           title: true
           follow_redirects: true
-        log-stdout: true
         continue-on-error: true
 
       - task: wafw00f
         name: waf-detect
         with:
           target: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: cdncheck
         name: cdn-detect
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: favirecon
         name: favicon-detect
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
-        log-stdout: true
         continue-on-error: true
 
       - name: export-live
@@ -357,7 +340,6 @@ jobs:
               f.write(f"favicon_count={len(favi_tags)}\n")
 
           print(f"Live: {len(urls)} URLs, WAFs: {len(waf_tags)}, CDNs: {len(cdn_tags)}, Favicons: {len(favi_tags)}")
-        log-stdout: true
 
   url-collection:
     name: URL Collection & Crawling
@@ -375,7 +357,6 @@ jobs:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
           depth: 3
           js_crawl: true
-        log-stdout: true
         continue-on-error: true
 
       - task: gospider
@@ -383,7 +364,6 @@ jobs:
         with:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
           depth: 2
-        log-stdout: true
         continue-on-error: true
 
       - name: hakrawler-crawl
@@ -395,7 +375,6 @@ jobs:
         name: paramspider-extract
         with:
           target: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - name: jsluice-extract
@@ -412,7 +391,6 @@ jobs:
         name: jsluice-scan
         with:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
-        log-stdout: true
         continue-on-error: true
 
       - name: collect-urls
@@ -488,7 +466,6 @@ jobs:
               f.write(f"param_count={len(param_urls)}\n")
 
           print(f"URLs: {len(urls)} total, {len(param_urls)} parameterized")
-        log-stdout: true
 
   port-scan:
     name: Port Scanning & Service Detection
@@ -504,7 +481,6 @@ jobs:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
           top_ports: '1000'
           rate: 1000
-        log-stdout: true
         continue-on-error: true
 
       - task: nmap
@@ -512,7 +488,6 @@ jobs:
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
           version_detection: true
-        log-stdout: true
         continue-on-error: true
 
       - name: export-ports
@@ -538,7 +513,6 @@ jobs:
               f.write(f"port_count={len(ports)}\n")
 
           print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
-        log-stdout: true
 
   vuln-scan:
     name: Vulnerability Scanning
@@ -560,14 +534,12 @@ jobs:
         with:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
           severity: critical,high,medium
-        log-stdout: true
         continue-on-error: true
 
       - task: dalfox
         name: xss-scan
         with:
           target: '{{ jobs[''url-collection''].outputs.param_file | default(inputs.target, true) }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: nuclei
@@ -575,7 +547,6 @@ jobs:
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
           tags: takeover
-        log-stdout: true
         continue-on-error: true
 
       - name: crlfuzz-scan
@@ -587,7 +558,6 @@ jobs:
         name: dnstake-scan
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
-        log-stdout: true
         continue-on-error: true
 
       - name: export-vulns
@@ -615,7 +585,6 @@ jobs:
 
           print(f"Vulns: {len(all_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
           print(f"  XSS: {len(xss_vulns)}, Takeover: {len(takeover_vulns)}, DNS Takeover: {len(dnstake_vulns)}")
-        log-stdout: true
 
   summary:
     name: Summary & Export

@@ -67,7 +67,6 @@ jobs:
         target: '{{ jobs[''host-discovery''].outputs.alive_file | default(inputs.target, true) }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - name: collect-ports
       script: |
@@ -106,7 +105,6 @@ jobs:
       with:
         target: '{{ jobs[''port-scan''].outputs.hosts_file | default(inputs.target, true) }}'
         version_detection: true
-      log-stdout: true
       continue-on-error: true
     - task: httpx
       name: http-probe
@@ -115,13 +113,11 @@ jobs:
         tech_detect: true
         status_code: true
         title: true
-      log-stdout: true
       continue-on-error: true
     - name: export-http
       run: |
         echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
         echo "live_count={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
-      log-stdout: true
   summary:
     name: Discovery Summary
     needs:

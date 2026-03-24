@@ -29,7 +29,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         severity: '{{ inputs.severity_threshold }},high,critical'
-      log-stdout: true
       continue-on-error: true
     - task: nmap
       name: nmap-vuln
@@ -38,7 +37,6 @@ jobs:
         scripts: vulners,vulscan
         ports: '-'
         service_detection: true
-      log-stdout: true
       continue-on-error: true
 
   exploit-check:
@@ -97,7 +95,6 @@ jobs:
             for t in e['titles']:
                 print(f"      • {t}")
             print()
-      log-stdout: true
       continue-on-error: true
 
   prioritize:

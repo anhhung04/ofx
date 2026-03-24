@@ -25,14 +25,12 @@ jobs:
       name: dependency-vulns
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: trivy
       name: code-vulns
       with:
         target: '{{ inputs.target }}'
         severity: CRITICAL,HIGH,MEDIUM
-      log-stdout: true
       continue-on-error: true
     - name: export-vulns
       script: |
@@ -54,7 +52,6 @@ jobs:
             f.write(f"critical_count={len([v for v in unique if v.get('severity') == 'critical'])}\n")
 
         print(f"Found {len(unique)} unique vulnerabilities")
-      log-stdout: true
   secrets-scan:
     name: Secret & Leak Scanning
     outputs:
@@ -64,14 +61,12 @@ jobs:
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: trufflehog
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
-      log-stdout: true
       continue-on-error: true
     - name: export-secrets
       script: |
@@ -85,7 +80,6 @@ jobs:
             f.write(f"secrets_count={total}\n")
 
         print(f"Found {total} secrets/leaks")
-      log-stdout: true
   summary:
     name: Code Scan Summary
     needs:

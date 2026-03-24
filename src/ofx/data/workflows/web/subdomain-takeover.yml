@@ -21,7 +21,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
 
   check-takeover:

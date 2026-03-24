@@ -26,7 +26,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - name: amass-passive
       run: |
@@ -76,7 +75,6 @@ jobs:
         a: true
         cname: true
         resp: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-dns
       script: |
@@ -119,7 +117,6 @@ jobs:
         target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
         tags: takeover
       continue-on-error: true
-      log-stdout: true
     - name: collect-takeovers
       script: |
         import re

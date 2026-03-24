@@ -31,7 +31,6 @@ jobs:
         wordlist: '{{ inputs.wordlist or "/usr/share/seclists/Discovery/Web-Content/api/api-endpoints.txt" }}'
         mc: '200,201,204,301,302,401,403,405'
         rate: 100
-      log-stdout: true
       continue-on-error: true
 
   method-test:

@@ -35,7 +35,6 @@ jobs:
           range: 1-65535
           batch_size: 4500
           timeout: 3000
-        log-stdout: true
         continue-on-error: true
       - task: naabu
         name: naabu-top
@@ -43,7 +42,6 @@ jobs:
           target: "{{ inputs.target }}"
           top_ports: "1000"
           rate: "{{ inputs.rate }}"
-        log-stdout: true
         continue-on-error: true
       - task: masscan
         name: masscan-top
@@ -51,7 +49,6 @@ jobs:
           target: "{{ inputs.target }}"
           ports: 0-1024,1433,1521,3306,3389,5432,5900,6379,8080,8443,9090,9200,11211,27017
           rate: "{{ inputs.rate }}"
-        log-stdout: true
         continue-on-error: true
       - name: merge-ports
         script: |
@@ -112,7 +109,6 @@ jobs:
           target: "{{ inputs.target }}"
           ports: "{{ jobs['fast-scan'].outputs.merged_ports }}"
           version_detection: true
-        log-stdout: true
         continue-on-error: true
       - task: httpx
         name: http-probe
@@ -122,7 +118,6 @@ jobs:
           status_code: true
           title: true
           follow_redirects: true
-        log-stdout: true
         continue-on-error: true
       - task: ssh-audit
         name: ssh-check
@@ -133,7 +128,6 @@ jobs:
         name: exploit-lookup
         with:
           target: "{{ inputs.target }}"
-        log-stdout: true
         continue-on-error: true
       - name: collect-services
         script: |
@@ -162,7 +156,6 @@ jobs:
               f.write(f"exploit_count={len(exploits)}\n")
 
           print(f"Services: {len(services)}, HTTP: {len(live_urls)}, Vulns: {len(nmap_vulns)}, Exploits: {len(exploits)}")
-        log-stdout: true
   summary:
     name: Port Blitz Summary
     needs:

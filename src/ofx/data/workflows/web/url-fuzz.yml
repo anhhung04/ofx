@@ -33,7 +33,6 @@ jobs:
         threads: 50
         follow_redirect: true
         auto_calibration: true
-      log-stdout: true
       continue-on-error: true
     - task: feroxbuster
       name: feroxbuster-fuzz
@@ -42,7 +41,6 @@ jobs:
         wordlist: '{{ inputs.wordlist }}'
         depth: 2
         threads: 50
-      log-stdout: true
       continue-on-error: true
     - name: collect-urls
       script: |
@@ -76,7 +74,6 @@ jobs:
         tech_detect: true
         status_code: true
         title: true
-      log-stdout: true
       continue-on-error: true
   secrets:
     name: Secret Hunting
@@ -88,7 +85,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
-      log-stdout: true
       continue-on-error: true
     - name: summary
       run: |

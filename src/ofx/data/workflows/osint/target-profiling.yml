@@ -36,7 +36,6 @@ jobs:
             f.write(f"record_count={len(records)}\n")
 
         print(f"Subdomains: {sub_count}, DNS records: {len(records)}")
-      log-stdout: true
   email-harvest:
     name: Email Harvesting
     outputs:
@@ -49,7 +48,6 @@ jobs:
         target: '{{ inputs.target }}'
         source: all
         limit: 500
-      log-stdout: true
       continue-on-error: true
     - name: collect-emails
       script: |
@@ -92,7 +90,6 @@ jobs:
       with:
         target: '{{ jobs[''email-harvest''].outputs.emails | default(inputs.target, true) }}'
         only_used: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-accounts
       script: |
@@ -107,7 +104,6 @@ jobs:
             f.write(f"services_with_accounts={','.join(sorted(services))}\n")
 
         print(f"Email registered on {len(services)} services")
-      log-stdout: true
   social-recon:
     name: Social Media & Username Search
     outputs:
@@ -118,7 +114,6 @@ jobs:
       name: maigret-search
       with:
         target: '{{ inputs.username if inputs.username else inputs.target.split(''.'')[0] }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-social
       script: |
@@ -133,7 +128,6 @@ jobs:
             f.write(f"platforms={','.join(sorted(platforms))}\n")
 
         print(f"Found {len(social)} social accounts across {len(platforms)} platforms")
-      log-stdout: true
   breach-search:
     name: Breach Database Search
     outputs:
@@ -146,7 +140,6 @@ jobs:
       name: h8mail-breach
       with:
         target: '{{ jobs[''email-harvest''].outputs.emails | default(inputs.target, true) }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-breaches
       script: |
@@ -161,7 +154,6 @@ jobs:
             f.write(f"breached_emails={len(breached_emails)}\n")
 
         print(f"Breach entries: {len(breach_data)} for {len(breached_emails)} emails")
-      log-stdout: true
   secret-scan:
     name: Secret & Leak Scanning
     steps:
@@ -169,14 +161,12 @@ jobs:
       name: gitleaks-org
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: trufflehog
       name: trufflehog-org
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
-      log-stdout: true
       continue-on-error: true
   summary:
     name: OSINT Profile Summary

@@ -65,7 +65,6 @@ jobs:
 
         echo "enum_file=/tmp/ofx_adcs_enum.json" >> {{ env.OFX_OUTPUTS }}
         echo "vuln_file=/tmp/ofx_adcs_vuln.json" >> {{ env.OFX_OUTPUTS }}
-      log-stdout: true
       continue-on-error: true
 
   analyze:

@@ -39,7 +39,6 @@ jobs:
           echo "alive_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
           echo "hosts_file=/tmp/ofx_alive_hosts.txt" >> {{ env.OFX_OUTPUTS }}
         fi
-      log-stdout: true
       continue-on-error: true
 
   port-scan:
@@ -73,7 +72,6 @@ jobs:
           echo "[+] Found $COUNT open ports"
           cat /tmp/ofx_ports.txt
         fi
-      log-stdout: true
       continue-on-error: true
 
   service-id:
@@ -102,7 +100,6 @@ jobs:
           echo "service_file=/tmp/ofx_service_scan.txt" >> {{ env.OFX_OUTPUTS }}
           echo "[+] Results: /tmp/ofx_service_scan.txt"
         fi
-      log-stdout: true
       continue-on-error: true
       timeout: 30
 

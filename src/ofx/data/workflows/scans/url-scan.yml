@@ -32,14 +32,12 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         depth: 3
-      log-stdout: true
       continue-on-error: true
     - task: gospider
       name: gospider-crawl
       with:
         target: '{{ inputs.target }}'
         depth: 2
-      log-stdout: true
       continue-on-error: true
     - task: gau
       name: gau-passive
@@ -53,7 +51,6 @@ jobs:
         tech_detect: true
         status_code: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-urls
       script: |
@@ -86,7 +83,6 @@ jobs:
         threads: 50
         auto_calibration: true
         follow_redirect: true
-      log-stdout: true
       continue-on-error: true
     - task: feroxbuster
       name: feroxbuster-fuzz
@@ -95,7 +91,6 @@ jobs:
         wordlist: '{{ inputs.wordlist }}'
         depth: 2
         threads: 50
-      log-stdout: true
       continue-on-error: true
   param-fuzz:
     name: Parameter Discovery
@@ -106,7 +101,6 @@ jobs:
       name: param-discovery
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
@@ -120,20 +114,17 @@ jobs:
         target: '{{ inputs.target }}'
         severity: critical,high,medium
         exclude_tags: network,ssl,file,dns,osint,token-spray,headers
-      log-stdout: true
       continue-on-error: true
     - task: dalfox
       name: xss-scan
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: trufflehog
       name: secret-scan
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
-      log-stdout: true
       continue-on-error: true
     - task: cariddi
       name: cariddi-crawl
@@ -150,13 +141,11 @@ jobs:
         target: '{{ inputs.target }}'
         aggression: 3
       continue-on-error: true
-      log-stdout: true
     - task: nikto
       name: nikto-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - task: gobuster
       name: gobuster-dirs
       with:
@@ -167,7 +156,6 @@ jobs:
         follow_redirect: true
         no_tls_validation: true
       continue-on-error: true
-      log-stdout: true
     - name: final-summary
       script: |
         import json

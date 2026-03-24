@@ -24,14 +24,12 @@ jobs:
       name: whois-lookup
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: subfinder
       name: subdomain-enum
       with:
         target: '{{ inputs.domain or inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - task: dnsx
       name: dns-records
@@ -43,7 +41,6 @@ jobs:
         txt: true
         ns: true
         resp: true
-      log-stdout: true
       continue-on-error: true
 
   email-harvest:
@@ -58,13 +55,11 @@ jobs:
         target: '{{ inputs.domain or inputs.target }}'
         source: all
         limit: 500
-      log-stdout: true
       continue-on-error: true
     - task: holehe
       name: email-existence
       with:
         target: '{{ inputs.domain or inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-emails
       script: |
@@ -88,7 +83,6 @@ jobs:
         print(f"[+] Collected {len(emails)} emails")
         for e in sorted(emails)[:20]:
             print(f"    {e}")
-      log-stdout: true
 
   tech-detection:
     name: Technology Stack Detection
@@ -102,13 +96,11 @@ jobs:
         status_code: true
         title: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - task: wafw00f
       name: waf-detect
       with:
         target: '{{ inputs.domain or inputs.target }}'
-      log-stdout: true
       continue-on-error: true
 
   breach-search:
@@ -120,7 +112,6 @@ jobs:
       name: breach-lookup
       with:
         target: '{{ inputs.domain or inputs.target }}'
-      log-stdout: true
       continue-on-error: true
 
   summary:

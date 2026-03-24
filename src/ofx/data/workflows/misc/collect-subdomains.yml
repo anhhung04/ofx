@@ -50,4 +50,3 @@ jobs:
             f.write(f"subdomain_count={len(subs)}\n")
 
         print(f"Collected {len(subs)} unique subdomains")
-      log-stdout: true

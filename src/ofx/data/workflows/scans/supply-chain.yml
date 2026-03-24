@@ -53,7 +53,6 @@ jobs:
         [ -f "composer.lock" ] && MANAGERS="$MANAGERS composer"
         echo "pkg_managers=$MANAGERS" >> {{ env.OFX_OUTPUTS }}
         echo "[+] Detected: $MANAGERS"
-      log-stdout: true
       continue-on-error: true
 
   vuln-scan:
@@ -63,13 +62,11 @@ jobs:
       name: grype-scan
       with:
         target: 'dir:{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: trivy
       name: trivy-fs
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
 
   secret-scan:
@@ -79,13 +76,11 @@ jobs:
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: trufflehog
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
 
   summary:

@@ -24,7 +24,6 @@ jobs:
       name: testssl-scan
       with:
         target: '{{ inputs.target }}:{{ inputs.port }}'
-      log-stdout: true
       continue-on-error: true
 
   sshaudit:
@@ -34,7 +33,6 @@ jobs:
       name: ssh-audit
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
 
   cert-details:

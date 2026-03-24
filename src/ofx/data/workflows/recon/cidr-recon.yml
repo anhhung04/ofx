@@ -39,7 +39,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         timing: 4
-      log-stdout: true
       continue-on-error: true
     - task: naabu
       name: port-scan
@@ -47,7 +46,6 @@ jobs:
         target: '{{ inputs.target }}'
         top_ports: '1000'
         rate: 2000
-      log-stdout: true
       continue-on-error: true
     - task: masscan
       name: masscan-scan
@@ -56,7 +54,6 @@ jobs:
         top_ports: '100'
         rate: 2000
       continue-on-error: true
-      log-stdout: true
     - name: collect-hosts
       script: |
         import json
@@ -93,7 +90,6 @@ jobs:
       with:
         target: '{{ jobs[''host-discovery''].outputs.live_hosts }}'
         version_detection: true
-      log-stdout: true
       continue-on-error: true
     - task: httpx
       name: http-probe
@@ -101,7 +97,6 @@ jobs:
         target: '{{ jobs[''host-discovery''].outputs.live_hosts }}'
         tech_detect: true
         status_code: true
-      log-stdout: true
       continue-on-error: true
   vuln-search:
     name: Vulnerability Search
@@ -112,7 +107,6 @@ jobs:
       name: exploit-search
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - name: summary
       run: |

@@ -40,7 +40,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - task: gau
       name: gau-passive
@@ -53,7 +52,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - task: assetfinder
       name: assetfinder-enum
       with:
@@ -86,7 +84,6 @@ jobs:
             f.write(f"subdomain_count={len(subs)}\n")
 
         print(f"Discovered {len(subs)} unique subdomains for {{ inputs.target }}")
-      log-stdout: true
 
   bulk-recon:
     name: Bulk Reconnaissance
@@ -103,7 +100,6 @@ jobs:
         a: true
         cname: true
         resp: true
-      log-stdout: true
       continue-on-error: true
     - task: httpx
       name: http-probe
@@ -113,7 +109,6 @@ jobs:
         status_code: true
         title: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-alive
       script: |
@@ -146,7 +141,6 @@ jobs:
             f.write(f"alive_count={len(alive)}\n")
 
         print(f"Alive subdomains: {len(alive)}, Live URLs: {len(live_urls)}")
-      log-stdout: true
     - task: naabu
       name: port-scan
       with:
@@ -154,7 +148,6 @@ jobs:
           jobs[''subdomain-discovery''].outputs.subs_file }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - task: nuclei
       name: quick-vuln-scan
@@ -162,14 +155,12 @@ jobs:
         target: '{{ steps[2].outputs.live_urls_file if steps[2].outputs is defined
           else jobs[''subdomain-discovery''].outputs.subs_file }}'
         severity: critical,high
-      log-stdout: true
       continue-on-error: true
     - task: nuclei
       name: takeover-check
       with:
         target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
         tags: takeover
-      log-stdout: true
       continue-on-error: true
     - name: bulk-summary
       script: |
@@ -191,7 +182,6 @@ jobs:
         print(f"  Open ports found: {port_count}")
         print(f"  Critical/High vulns: {vuln_count}")
         print(f"  Potential takeovers: {takeover_count}")
-      log-stdout: true
 
   per-subdomain-scan:
     name: Per-Subdomain Deep Scan
@@ -266,7 +256,6 @@ jobs:
                 f.write(f"fail_count={len(results['fail'])}\n")
 
         asyncio.run(main())
-      log-stdout: true
 
   summary:
     name: Final Summary & Export

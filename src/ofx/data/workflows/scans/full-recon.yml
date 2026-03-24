@@ -26,7 +26,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - name: amass-passive
       run: |
@@ -92,7 +91,6 @@ jobs:
         a: true
         cname: true
         resp: true
-      log-stdout: true
       continue-on-error: true
     - name: dnsrecon-enum
       run: |
@@ -117,7 +115,6 @@ jobs:
             f.write(f"verified_count={len(verified)}\n")
 
         print(f"Verified {len(verified)} subdomains via DNS")
-      log-stdout: true
   port-scan:
     name: Port Scanning
     needs:
@@ -133,7 +130,6 @@ jobs:
         target: '{{ jobs[''dns-resolve''].outputs.verified_file | default(jobs[''subdomain-enum''].outputs.subs_file, true) }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - name: export-ports
       script: |
@@ -161,7 +157,6 @@ jobs:
             f.write(f"port_hosts_file=/tmp/ofx_fullrecon_porthosts.txt\n")
 
         print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
-      log-stdout: true
   http-probe:
     name: HTTP Probing
     needs:
@@ -178,13 +173,11 @@ jobs:
         status_code: true
         title: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: export-live
       run: |
         echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
         echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
-      log-stdout: true
   web-crawl:
     name: Web Crawling
     needs:
@@ -198,7 +191,6 @@ jobs:
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
-      log-stdout: true
       continue-on-error: true
     - task: gau
       name: gau-archive
@@ -268,7 +260,6 @@ jobs:
             f.write(f"takeover_count={len(takeovers)}\n")
 
         print(f"Potential takeovers: {len(takeovers)}")
-      log-stdout: true
   fingerprint:
     name: Fingerprinting
     needs:
@@ -284,7 +275,6 @@ jobs:
       name: waf-detect
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
@@ -304,7 +294,6 @@ jobs:
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
-      log-stdout: true
       continue-on-error: true
     - name: nikto-scan
       run: |
@@ -330,7 +319,6 @@ jobs:
             f.write(f"medium_count={len(medium)}\n")
 
         print(f"Vulnerabilities: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
-      log-stdout: true
   summary:
     name: Full Recon Summary
     needs:

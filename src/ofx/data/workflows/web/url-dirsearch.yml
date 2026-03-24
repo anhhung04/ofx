@@ -29,7 +29,6 @@ jobs:
         tech_detect: true
         status_code: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
   dir-search:
     name: Directory Discovery
@@ -46,7 +45,6 @@ jobs:
         wordlist: '{{ inputs.wordlist }}'
         threads: 30
         extensions: php,asp,aspx,jsp,html,js,txt,bak,old,conf
-      log-stdout: true
       continue-on-error: true
     - task: ffuf
       name: ffuf-dirs
@@ -55,7 +53,6 @@ jobs:
         wordlist: '{{ inputs.wordlist }}'
         auto_calibration: true
         follow_redirect: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-dirs
       script: |
@@ -87,7 +84,6 @@ jobs:
       with:
         target: '{{ jobs[''dir-search''].outputs.found_file | default(inputs.target, true) }}'
         depth: 2
-      log-stdout: true
       continue-on-error: true
     - name: summary
       run: |

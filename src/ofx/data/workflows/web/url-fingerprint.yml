@@ -31,14 +31,12 @@ jobs:
         status_code: true
         title: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: export-probe
       run: |
         echo "status={{ urls(steps[0].outputs.typed_outputs) | map(attribute='status_code') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
         echo "title={{ urls(steps[0].outputs.typed_outputs) | map(attribute='title') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
         echo "webserver={{ urls(steps[0].outputs.typed_outputs) | map(attribute='webserver') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
-      log-stdout: true
   fingerprint:
     name: Technology Fingerprinting
     outputs:
@@ -84,7 +82,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - name: export-waf
       script: |
         import json
@@ -103,7 +100,6 @@ jobs:
             f.write(f"waf_count={len(waf_names)}\n")
 
         print(f"WAF detected: {', '.join(waf_names) if waf_names else 'None'}")
-      log-stdout: true
   summary:
     name: Fingerprint Summary
     needs:

@@ -67,7 +67,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         tags: rce,command-injection,cmdi,os-command-injection
-      log-stdout: true
       continue-on-error: true
     - name: collect-nuclei
       script: |

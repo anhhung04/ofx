@@ -55,4 +55,3 @@ jobs:
             f.write(f"target_count={len(sorted_targets)}\n")
 
         print(f"Parsed {len(sorted_targets)} unique targets")
-      log-stdout: true

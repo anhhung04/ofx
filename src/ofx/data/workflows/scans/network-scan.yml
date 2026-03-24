@@ -36,7 +36,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         timing: 4
-      log-stdout: true
       continue-on-error: true
     - task: naabu
       name: port-scan
@@ -44,7 +43,6 @@ jobs:
         target: '{{ inputs.target }}'
         top_ports: '1000'
         rate: 2000
-      log-stdout: true
       continue-on-error: true
     - task: masscan
       name: masscan-scan
@@ -53,7 +51,6 @@ jobs:
         top_ports: '100'
         rate: 2000
       continue-on-error: true
-      log-stdout: true
     - name: collect-hosts
       script: |
         import json
@@ -91,7 +88,6 @@ jobs:
       with:
         target: '{{ jobs[''network-discovery''].outputs.hosts_file }}'
         version_detection: true
-      log-stdout: true
       continue-on-error: true
     - task: httpx
       name: http-probe
@@ -100,7 +96,6 @@ jobs:
         tech_detect: true
         status_code: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - task: whatweb
       name: whatweb-fingerprint
@@ -108,11 +103,9 @@ jobs:
         target: '{{ jobs[''network-discovery''].outputs.hosts_file }}'
         aggression: 3
       continue-on-error: true
-      log-stdout: true
     - name: export-urls
       run: |
         echo "live_urls={{ urls(steps[2].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-      log-stdout: true
   url-crawl:
     name: URL Crawling
     needs:
@@ -123,7 +116,6 @@ jobs:
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 2
-      log-stdout: true
       continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
@@ -135,7 +127,6 @@ jobs:
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
-      log-stdout: true
       continue-on-error: true
     - task: whatweb
       name: whatweb-fingerprint
@@ -143,13 +134,11 @@ jobs:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         aggression: 3
       continue-on-error: true
-      log-stdout: true
     - task: nikto
       name: nikto-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
       continue-on-error: true
-      log-stdout: true
     - name: final-summary
       script: |
         import json

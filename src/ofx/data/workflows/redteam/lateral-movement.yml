@@ -49,7 +49,6 @@ jobs:
         username: '{{ inputs.username }}'
         password: '{{ inputs.password or inputs.nt_hash }}'
         domain: '{{ inputs.domain }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-smb-access
       script: |
@@ -78,7 +77,6 @@ jobs:
         print(f"[+] SMB: {len(accessible)} accessible, {len(admin_hosts)} with admin")
         for h in sorted(admin_hosts):
             print(f"    [ADMIN] {h}")
-      log-stdout: true
 
   spray-winrm:
     name: WinRM Access Testing
@@ -95,7 +93,6 @@ jobs:
         username: '{{ inputs.username }}'
         password: '{{ inputs.password or inputs.nt_hash }}'
         domain: '{{ inputs.domain }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-winrm-access
       script: |
@@ -117,7 +114,6 @@ jobs:
         print(f"[+] WinRM: {len(accessible)} accessible hosts")
         for h in sorted(accessible):
             print(f"    {h}")
-      log-stdout: true
 
   spray-ssh:
     name: SSH Access Testing
@@ -133,7 +129,6 @@ jobs:
         protocol: ssh
         username: '{{ inputs.username }}'
         password: '{{ inputs.password }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-ssh-access
       script: |
@@ -155,7 +150,6 @@ jobs:
         print(f"[+] SSH: {len(accessible)} accessible hosts")
         for h in sorted(accessible):
             print(f"    {h}")
-      log-stdout: true
 
   pivot:
     name: Establish Pivot Points
@@ -218,7 +212,6 @@ jobs:
                 print(f"    [✓] {host} via {info['protocol']} as {info.get('user', '?')}")
             else:
                 print(f"    [✗] {host}: {info.get('error', 'unknown')}")
-      log-stdout: true
 
   summary:
     name: Lateral Movement Summary

@@ -75,7 +75,6 @@ jobs:
             f.write(f"account={identity['Account']}\n")
             f.write(f"user_count={results.get('user_count', 0)}\n")
             f.write(f"no_mfa_count={len(results.get('no_mfa', []))}\n")
-      log-stdout: true
       continue-on-error: true
 
   s3-audit:
@@ -123,7 +122,6 @@ jobs:
             with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
                 f.write(f"bucket_count={len(buckets)}\n")
                 f.write(f"public_bucket_count={len(public_buckets)}\n")
-      log-stdout: true
       continue-on-error: true
 
   sg-audit:
@@ -169,7 +167,6 @@ jobs:
 
         if not risky:
             print("  [✓] No security groups open to 0.0.0.0/0")
-      log-stdout: true
       continue-on-error: true
 
   summary:

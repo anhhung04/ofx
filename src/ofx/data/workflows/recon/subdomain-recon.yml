@@ -27,7 +27,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - task: gau
       name: gau-urls
@@ -40,7 +39,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - task: assetfinder
       name: assetfinder-enum
       with:
@@ -95,7 +93,6 @@ jobs:
         a: true
         cname: true
         resp: true
-      log-stdout: true
       continue-on-error: true
   http-probe:
     name: HTTP Probing
@@ -112,12 +109,10 @@ jobs:
         status_code: true
         title: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: export-urls
       run: |
         echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-      log-stdout: true
   takeover-check:
     name: Subdomain Takeover & Vulnerability Check
     needs:
@@ -128,7 +123,6 @@ jobs:
       with:
         target: '{{ jobs[''passive-enum''].outputs.subdomain_file }}'
         tags: takeover
-      log-stdout: true
       continue-on-error: true
     - name: summary
       run: |

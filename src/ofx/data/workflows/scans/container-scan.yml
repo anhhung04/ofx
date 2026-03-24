@@ -19,13 +19,11 @@ jobs:
       name: trivy-image
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: grype
       name: grype-image
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
 
   secret-scan:
@@ -49,7 +47,6 @@ jobs:
           print('  No secrets found or parse error')
         "
         fi
-      log-stdout: true
       continue-on-error: true
 
   misconfig-scan:
@@ -63,7 +60,6 @@ jobs:
         else
           echo "[-] Trivy not installed"
         fi
-      log-stdout: true
       continue-on-error: true
 
   summary:

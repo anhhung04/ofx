@@ -43,7 +43,6 @@ jobs:
         username: '{{ inputs.username if inputs.username else ''"'' }}'
         password: '{{ inputs.password if inputs.password else ''"'' }}'
         shares: true
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-smb-users
@@ -53,7 +52,6 @@ jobs:
         username: '{{ inputs.username if inputs.username else ''"'' }}'
         password: '{{ inputs.password if inputs.password else ''"'' }}'
         users: true
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-smb-groups
@@ -63,7 +61,6 @@ jobs:
         username: '{{ inputs.username if inputs.username else ''"'' }}'
         password: '{{ inputs.password if inputs.password else ''"'' }}'
         groups: true
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-smb-sessions
@@ -73,7 +70,6 @@ jobs:
         username: '{{ inputs.username if inputs.username else ''"'' }}'
         password: '{{ inputs.password if inputs.password else ''"'' }}'
         sessions: true
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-smb-passpol
@@ -83,7 +79,6 @@ jobs:
         username: '{{ inputs.username if inputs.username else ''"'' }}'
         password: '{{ inputs.password if inputs.password else ''"'' }}'
         pass_pol: true
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-rid-brute
@@ -93,7 +88,6 @@ jobs:
         username: '{{ inputs.username if inputs.username else ''"'' }}'
         password: '{{ inputs.password if inputs.password else ''"'' }}'
         rid_brute: true
-      log-stdout: true
       continue-on-error: true
     - task: enum4linux
       name: enum4linux-full
@@ -102,7 +96,6 @@ jobs:
         username: '{{ inputs.username }}'
         password: '{{ inputs.password }}'
         domain: '{{ inputs.domain }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-smb
       script: |
@@ -129,7 +122,6 @@ jobs:
             f.write(f"smb_user_count={len(users)}\n")
 
         print(f"SMB enum: {len(users)} users discovered")
-      log-stdout: true
   kerberos-enum:
     name: Kerberos Enumeration
     outputs:
@@ -146,7 +138,6 @@ jobs:
         dc: '{{ inputs.target }}'
         domain: '{{ inputs.domain }}'
         users: /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames-dup.txt
-      log-stdout: true
       continue-on-error: true
     - name: asrep-roast
       run: |
@@ -185,7 +176,6 @@ jobs:
             f.write(f"asrep_count={len(asrep_users)}\n")
 
         print(f"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)} AS-REP roastable")
-      log-stdout: true
   ldap-enum:
     name: LDAP Enumeration
     outputs:
@@ -201,7 +191,6 @@ jobs:
         password: '{{ inputs.password }}'
         users: true
       if: '{{ inputs.username }}'
-      log-stdout: true
       continue-on-error: true
     - name: nxc-ldap-gmsa
       run: |
@@ -227,7 +216,6 @@ jobs:
             f.write(f"ldap_user_count={len(ldap_users)}\n")
 
         print(f"LDAP enum: {len(ldap_users)} users")
-      log-stdout: true
   summary:
     name: AD Enumeration Summary
     needs:

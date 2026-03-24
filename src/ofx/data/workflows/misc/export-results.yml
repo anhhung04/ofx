@@ -105,4 +105,3 @@ jobs:
                 f.write(f"exported_count={exported}\n")
 
             print(f"Exported {exported} result types to {project}")
-      log-stdout: true

@@ -67,7 +67,6 @@ jobs:
               f.write(f"name_count={len(names_list)}\n")
 
           print(f"Generated {len(names_list)} bucket name permutations from '{target}'")
-        log-stdout: true
 
   scan-buckets:
     name: Bucket Scanning
@@ -84,7 +83,6 @@ jobs:
         name: s3scanner-scan
         with:
           target: '{{ jobs[''generate-names''].outputs.names_file }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: nuclei
@@ -92,7 +90,6 @@ jobs:
         with:
           target: '{{ inputs.target }}'
           tags: s3,bucket,cloud,storage
-        log-stdout: true
         continue-on-error: true
 
       - name: collect-results
@@ -125,7 +122,6 @@ jobs:
               f.write(f"nuclei_vuln_count={len(nuclei_vulns)}\n")
 
           print(f"Cloud enum: {len(all_vulns)} findings, {len(buckets_found)} buckets identified")
-        log-stdout: true
 
   summary:
     name: Summary & Export

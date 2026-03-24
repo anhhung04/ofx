@@ -26,7 +26,6 @@ jobs:
       name: whois-lookup
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - task: dnsx
       name: dns-resolve
@@ -37,7 +36,6 @@ jobs:
         cname: true
         mx: true
         ns: true
-      log-stdout: true
       continue-on-error: true
     - task: httpx
       name: domain-probe
@@ -46,27 +44,23 @@ jobs:
         tech_detect: true
         status_code: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - task: testssl
       name: tls-check
       with:
         target: '{{ inputs.target }}'
         server_defaults: true
-      log-stdout: true
       continue-on-error: true
     - task: sslscan
       name: sslscan-check
       with:
         target: '{{ inputs.target }}'
         show_certificate: true
-      log-stdout: true
       continue-on-error: true
     - task: wafw00f
       name: waf-detect
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
   subdomain-recon:
     name: Subdomain Discovery
@@ -80,7 +74,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - task: gau
       name: gau-passive
@@ -93,7 +86,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - task: assetfinder
       name: assetfinder-enum
       with:
@@ -127,7 +119,6 @@ jobs:
         target: '{{ steps[4].outputs.hosts_file if steps[4].outputs is defined else inputs.target }}'
         a: true
         resp: true
-      log-stdout: true
       continue-on-error: true
     - task: dnsrecon
       name: dnsrecon-scan
@@ -135,7 +126,6 @@ jobs:
         target: '{{ inputs.target }}'
         type: std,srv
       continue-on-error: true
-      log-stdout: true
     - task: httpx
       name: probe-subdomains
       with:
@@ -143,12 +133,10 @@ jobs:
         tech_detect: true
         status_code: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: export-urls
       run: |
         echo "live_urls={{ urls(steps[7].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-      log-stdout: true
   host-recon:
     name: Host Reconnaissance
     needs:
@@ -162,20 +150,17 @@ jobs:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - task: nmap
       name: service-detect
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
         version_detection: true
-      log-stdout: true
       continue-on-error: true
     - task: searchsploit
       name: exploit-search
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
   url-crawl:
     name: URL Crawling
@@ -187,14 +172,12 @@ jobs:
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
-      log-stdout: true
       continue-on-error: true
     - task: gospider
       name: spider-urls
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 2
-      log-stdout: true
       continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
@@ -207,34 +190,29 @@ jobs:
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
-      log-stdout: true
       continue-on-error: true
     - task: dalfox
       name: xss-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
-      log-stdout: true
       continue-on-error: true
     - task: nuclei
       name: takeover-check
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
         tags: takeover
-      log-stdout: true
       continue-on-error: true
     - task: nikto
       name: nikto-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
       continue-on-error: true
-      log-stdout: true
     - task: whatweb
       name: whatweb-fingerprint
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         aggression: 3
       continue-on-error: true
-      log-stdout: true
     - name: final-summary
       script: |
         import json

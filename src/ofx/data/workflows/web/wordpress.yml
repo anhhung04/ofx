@@ -29,7 +29,6 @@ jobs:
         tech_detect: true
         status_code: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
   wordpress-scan:
     name: WordPress Security Scan
@@ -42,14 +41,12 @@ jobs:
         target: '{{ inputs.target }}'
         enumerate: vp,vt,u1-20
         api_token: '{{ inputs.api_token }}'
-      log-stdout: true
       continue-on-error: true
     - task: nuclei
       name: nuclei-wordpress
       with:
         target: '{{ inputs.target }}'
         tags: wordpress
-      log-stdout: true
       continue-on-error: true
     - name: summary
       script: |

@@ -100,7 +100,6 @@ jobs:
 
         print(f"[+] Generated {shell_type} webshell: {filename} ({len(code)} bytes)")
         print(f"    Obfuscated: {obfuscate}")
-      log-stdout: true
 
   upload:
     name: Upload Webshell
@@ -146,7 +145,6 @@ jobs:
 
         print(f"[+] Webshell uploaded: {remote_path}")
         print(f"[+] Shell URL: {shell_url}")
-      log-stdout: true
 
   verify:
     name: Verify Webshell
@@ -201,7 +199,6 @@ jobs:
         print(f"    User: {whoami}")
         print(f"    CWD: {pwd}")
         print(f"    OS: {info.get('os', 'unknown')}")
-      log-stdout: true
 
   enumerate:
     name: Host Enumeration via Webshell
@@ -258,7 +255,6 @@ jobs:
         for name in results:
             lines = len(results[name].splitlines())
             print(f"    {name}: {lines} lines")
-      log-stdout: true
 
   summary:
     name: Webshell Ops Summary

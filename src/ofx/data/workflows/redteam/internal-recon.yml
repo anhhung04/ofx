@@ -70,7 +70,6 @@ jobs:
         target: '{{ jobs[''host-discovery''].outputs.alive_file }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - name: collect-ports
       script: |
@@ -136,7 +135,6 @@ jobs:
         tech_detect: true
         status_code: true
         title: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-services
       script: |

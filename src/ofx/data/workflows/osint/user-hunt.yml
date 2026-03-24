@@ -25,7 +25,6 @@ jobs:
       name: maigret-search
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - name: export-accounts
       script: |
@@ -39,7 +38,6 @@ jobs:
             f.write(f"profile_urls={len(urls)}\n")
 
         print(f"Found {len(accounts)} accounts, {len(urls)} profile URLs")
-      log-stdout: true
   email-breach:
     name: Email Breach Search
     outputs:
@@ -49,7 +47,6 @@ jobs:
       name: breach-search
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - name: export-breaches
       script: |
@@ -61,7 +58,6 @@ jobs:
             f.write(f"breaches_found={len(users_found)}\n")
 
         print(f"Found {len(users_found)} breach results")
-      log-stdout: true
   summary:
     name: User Hunt Summary
     needs:

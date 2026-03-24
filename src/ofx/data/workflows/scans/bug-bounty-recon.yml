@@ -27,7 +27,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         all: true
-      log-stdout: true
       continue-on-error: true
     - name: amass-passive
       run: |
@@ -86,7 +85,6 @@ jobs:
         a: true
         cname: true
         resp: true
-      log-stdout: true
       continue-on-error: true
     - name: filter-alive
       script: |
@@ -155,7 +153,6 @@ jobs:
         target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - name: collect-ports
       script: |
@@ -194,13 +191,11 @@ jobs:
         status_code: true
         title: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - name: export-live
       run: |
         echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
         echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
-      log-stdout: true
   web-crawl:
     name: Web Crawling
     needs:
@@ -214,7 +209,6 @@ jobs:
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
-      log-stdout: true
       continue-on-error: true
     - name: hakrawler-crawl
       run: |
@@ -324,14 +318,12 @@ jobs:
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
-      log-stdout: true
       continue-on-error: true
     - task: dalfox
       name: dalfox-xss
       with:
         target: '{{ jobs[''param-mine''].outputs.param_file | default(jobs[''http-probe''].outputs.live_urls, true) }}'
       continue-on-error: true
-      log-stdout: true
     - name: crlfuzz-scan
       run: |
         echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | crlfuzz 2>/dev/null | tee /tmp/crlfuzz-output.txt
@@ -379,14 +371,12 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
-      log-stdout: true
       continue-on-error: true
     - task: gitleaks
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - name: collect-secrets
       script: |
         th_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}

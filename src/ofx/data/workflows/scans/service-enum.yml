@@ -26,7 +26,6 @@ jobs:
         target: '{{ inputs.target }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - name: identify-services
       script: |
@@ -58,7 +57,6 @@ jobs:
 
         print(f"[+] Open ports: {len(services)}")
         print(f"[+] Services: {', '.join(sorted(detected))}")
-      log-stdout: true
 
   deep-enum:
     name: Deep Service Enumeration

@@ -29,7 +29,6 @@ jobs:
         target: '{{ inputs.target }}'
         tech_detect: true
         status_code: true
-      log-stdout: true
       continue-on-error: true
   param-discovery:
     name: Parameter Discovery
@@ -43,7 +42,6 @@ jobs:
       name: find-params
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - name: export-params
       script: |
@@ -61,7 +59,6 @@ jobs:
             f.write(f"param_count={len(params)}\n")
 
         print(f"Discovered {len(params)} parameters")
-      log-stdout: true
   param-fuzz:
     name: Parameter Value Fuzzing
     needs:
@@ -74,7 +71,6 @@ jobs:
         wordlist: /usr/share/wordlists/dirb/common.txt
         auto_calibration: true
         follow_redirect: true
-      log-stdout: true
       continue-on-error: true
     - name: summary
       run: |

@@ -91,7 +91,6 @@ jobs:
         else
           echo "[-] No output generated"
         fi
-      log-stdout: true
       continue-on-error: true
 
   analyze:

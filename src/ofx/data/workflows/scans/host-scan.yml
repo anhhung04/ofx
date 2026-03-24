@@ -37,7 +37,6 @@ jobs:
         target: '{{ inputs.target }}'
         top_ports: '1000'
         rate: 1000
-      log-stdout: true
       continue-on-error: true
     - task: masscan
       name: masscan-scan
@@ -46,20 +45,17 @@ jobs:
         top_ports: '100'
         rate: 1000
       continue-on-error: true
-      log-stdout: true
     - task: nmap
       name: service-detect
       with:
         target: '{{ inputs.target }}'
         version_detection: true
-      log-stdout: true
       continue-on-error: true
     - task: ssh-audit
       name: ssh-audit
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
-      log-stdout: true
     - task: httpx
       name: http-probe
       with:
@@ -67,18 +63,15 @@ jobs:
         tech_detect: true
         status_code: true
         follow_redirects: true
-      log-stdout: true
       continue-on-error: true
     - task: searchsploit
       name: exploit-search
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - name: export-data
       run: |
         echo "live_urls={{ urls(steps[4].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-      log-stdout: true
   web-analysis:
     name: Web Analysis
     needs:
@@ -90,13 +83,11 @@ jobs:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         aggression: 3
       continue-on-error: true
-      log-stdout: true
     - task: nikto
       name: nikto-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
       continue-on-error: true
-      log-stdout: true
   url-crawl:
     name: URL Crawling
     needs:
@@ -107,14 +98,12 @@ jobs:
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
-      log-stdout: true
       continue-on-error: true
     - task: gospider
       name: spider
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 2
-      log-stdout: true
       continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
@@ -127,13 +116,11 @@ jobs:
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
-      log-stdout: true
       continue-on-error: true
     - task: dalfox
       name: xss-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
-      log-stdout: true
       continue-on-error: true
     - name: final-summary
       script: |

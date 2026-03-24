@@ -77,7 +77,6 @@ jobs:
         target: '{{ inputs.target }}'
         server_defaults: true
       continue-on-error: true
-      log-stdout: true
     - name: export-testssl
       script: |
         import json
@@ -99,7 +98,6 @@ jobs:
 
         print(f"TestSSL vulnerabilities: {vuln_count}")
         print(f"Certificate issues: {cert_issues}")
-      log-stdout: true
   summary:
     name: SSL Audit Summary
     needs:

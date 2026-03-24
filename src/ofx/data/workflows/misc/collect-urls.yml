@@ -45,4 +45,3 @@ jobs:
             f.write(f"url_count={len(urls)}\n")
 
         print(f"Collected {len(urls)} unique URLs")
-      log-stdout: true

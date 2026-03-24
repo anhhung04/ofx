@@ -47,7 +47,6 @@ jobs:
         password: '{{ inputs.password }}'
         domain: '{{ inputs.domain }}'
         users: true
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: pass-policy
@@ -58,7 +57,6 @@ jobs:
         password: '{{ inputs.password }}'
         domain: '{{ inputs.domain }}'
         pass_pol: true
-      log-stdout: true
       continue-on-error: true
     - task: enum4linux
       name: full-enum
@@ -71,7 +69,6 @@ jobs:
         shares: true
         groups: true
         policies: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-users
       script: |
@@ -142,7 +139,6 @@ jobs:
         print(f"Kerberoastable accounts: {len(spn_users)}, TGS hashes: {hashes}")
         for spn in spn_users:
             print(f"  [*] {spn}")
-      log-stdout: true
   asrep-roast:
     name: AS-REP Roasting
     outputs:
@@ -182,7 +178,6 @@ jobs:
         print(f"AS-REP roastable: {len(asrep_users)}, hashes: {hashes}")
         for u in sorted(asrep_users):
             print(f"  [*] {u}")
-      log-stdout: true
   targeted-spray:
     name: Targeted Password Spray
     outputs:
@@ -200,7 +195,6 @@ jobs:
         domain: '{{ inputs.domain }}'
         users: '{{ inputs.users_file if inputs.users_file else ''/tmp/ad-users.txt'' }}'
         password: '{{ inputs.password }}'
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-spray-smb
@@ -210,7 +204,6 @@ jobs:
         username: '{{ inputs.users_file if inputs.users_file else ''/tmp/ad-users.txt'' }}'
         password: '{{ inputs.password }}'
         domain: '{{ inputs.domain }}'
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-spray-ldap
@@ -220,7 +213,6 @@ jobs:
         username: '{{ inputs.users_file if inputs.users_file else ''/tmp/ad-users.txt'' }}'
         password: '{{ inputs.password }}'
         domain: '{{ inputs.domain }}'
-      log-stdout: true
       continue-on-error: true
     - name: collect-spray
       script: |
@@ -239,7 +231,6 @@ jobs:
             f.write(f"valid_users_file=/tmp/ofx_adattack_valid.txt\n")
 
         print(f"Spray hits: {len(all_valid)} valid credentials")
-      log-stdout: true
   credential-dump:
     name: Credential Dumping
     outputs:
@@ -263,7 +254,6 @@ jobs:
         password: '{{ inputs.password }}'
         domain: '{{ inputs.domain }}'
         sam: true
-      log-stdout: true
       continue-on-error: true
     - task: netexec
       name: nxc-lsa
@@ -274,7 +264,6 @@ jobs:
         password: '{{ inputs.password }}'
         domain: '{{ inputs.domain }}'
         lsa: true
-      log-stdout: true
       continue-on-error: true
     - name: collect-creds
       script: |
@@ -299,7 +288,6 @@ jobs:
 
         print(f"Secretsdump: {len(hashes)} hashes")
         print(f"SAM: {len(sam_creds)}, LSA: {len(lsa_creds)}")
-      log-stdout: true
   relay-detect:
     name: SMB Relay Detection
     outputs:
@@ -344,7 +332,6 @@ jobs:
 
         print(f"SMB signing disabled (relay targets): {len(relay_targets)}")
         print(f"WebDAV enabled: {webdav}")
-      log-stdout: true
   summary:
     name: AD Attack Summary
     needs:

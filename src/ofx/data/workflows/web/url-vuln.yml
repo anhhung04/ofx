@@ -23,12 +23,10 @@ jobs:
       name: dalfox-xss
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
       continue-on-error: true
     - name: export-xss
       run: |
         echo "xss_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
-      log-stdout: true
   nuclei-scan:
     name: Nuclei Vulnerability Scan
     outputs:
@@ -40,12 +38,10 @@ jobs:
         target: '{{ inputs.target }}'
         severity: critical,high,medium
         exclude_tags: network,ssl,file,dns,osint,token-spray,headers
-      log-stdout: true
       continue-on-error: true
     - name: export-vulns
       run: |
         echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
-      log-stdout: true
   summary:
     name: Vulnerability Summary
     needs:

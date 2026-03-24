@@ -48,4 +48,3 @@ jobs:
             f.write(f"port_count={len(host_ports)}\n")
 
         print(f"Collected {len(host_ports)} unique host:port pairs, {len(services)} with service info")
-      log-stdout: true

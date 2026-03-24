@@ -31,7 +31,6 @@ jobs:
           target: '{{ inputs.target }}'
           depth: 3
           js_crawl: true
-        log-stdout: true
         continue-on-error: true
 
       - task: httpx
@@ -40,7 +39,6 @@ jobs:
           target: '{{ inputs.target }}'
           tech_detect: true
           status_code: true
-        log-stdout: true
         continue-on-error: true
 
       - task: gau
@@ -88,7 +86,6 @@ jobs:
               f.write(f"url_count={len(all_urls)}\n")
 
           print(f"Found {len(js_urls)} JS files from {len(all_urls)} total URLs")
-        log-stdout: true
 
   analyze-js:
     name: JS Security Analysis
@@ -105,21 +102,18 @@ jobs:
         with:
           target: '{{ jobs[''discover-js''].outputs.js_file | default(inputs.target, true) }}'
           tags: exposure,token,secret
-        log-stdout: true
         continue-on-error: true
 
       - task: trufflehog
         name: trufflehog-scan
         with:
           target: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - task: gitleaks
         name: gitleaks-scan
         with:
           target: '{{ inputs.target }}'
-        log-stdout: true
         continue-on-error: true
 
       - name: js-summary

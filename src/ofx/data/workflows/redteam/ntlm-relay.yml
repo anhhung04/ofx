@@ -60,7 +60,6 @@ jobs:
         else
           echo "relay_target_count=0" >> {{ env.OFX_OUTPUTS }}
         fi
-      log-stdout: true
       continue-on-error: true
 
   coercion-check:
@@ -127,7 +126,6 @@ jobs:
             for name, cmd in vectors:
                 print(f"  {name}:")
                 print(f"    {cmd}")
-      log-stdout: true
       continue-on-error: true
 
   summary:
