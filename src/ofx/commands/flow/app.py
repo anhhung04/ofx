@@ -350,27 +350,27 @@ def validate(
     workflow_name: Annotated[
         str, typer.Argument(help="Name of the workflow to validate")
     ] = "",
+    all_workflows: Annotated[
+        bool,
+        typer.Option("--all", help="Validate all discoverable workflows."),
+    ] = False,
+    check_tasks: Annotated[
+        bool,
+        typer.Option("--check-tasks", help="Verify that referenced tasks are registered."),
+    ] = False,
 ):
-    """Validate a workflow configuration"""
-    from ofx.commands.ui_helpers import print_error, print_info, print_success
-    from ofx.settings import DEFAULT_WORKFLOWS_DIRS
-    from ofx.utils.workflow_utils import find_workflow
+    """Validate workflow configuration with detailed diagnostics.
 
-    print_info(
-        "Workflow Validation",
-        f"[bold]Validating:[/bold] [cyan]{workflow_name}[/cyan]",
+    Reports schema validity, structure summary, and optionally checks task references.
+    Use --all to bulk-validate every discoverable workflow.
+    """
+    from ofx.commands.flow.validate import validate_workflows
+
+    validate_workflows(
+        workflow_name=workflow_name,
+        all_workflows=all_workflows,
+        check_tasks=check_tasks,
     )
-
-    try:
-        workflow = find_workflow(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
-        print_success(
-            "Validation Successful",
-            f"Workflow '{workflow.name}' is valid!",
-            {"Details": "All schema validations passed", "Path": str(workflow.workflow_path)},
-        )
-    except Exception as e:
-        print_error("Validation Error", "Validation failed", str(e))
-        raise e
 
 
 @app.command()

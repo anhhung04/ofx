@@ -30,7 +30,7 @@ jobs:
   sshaudit:
     name: SSH Audit
     steps:
-    - task: sshaudit
+    - task: ssh-audit
       timeout: 10
       name: ssh-audit
       with:
