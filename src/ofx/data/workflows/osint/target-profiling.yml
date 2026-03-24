@@ -26,10 +26,28 @@ jobs:
       sub_count: '{{ steps.collect-domain.outputs.sub_count }}'
       record_count: '{{ steps.collect-domain.outputs.record_count }}'
     steps:
+    - task: subfinder
+      name: subfinder-enum
+      with:
+        target: '{{ inputs.target }}'
+      timeout: 10
+      continue-on-error: true
+    - task: dnsx
+      name: dnsx-resolve
+      with:
+        target: '{{ inputs.target }}'
+        a: true
+        aaaa: true
+        mx: true
+        ns: true
+        cname: true
+      timeout: 10
+      continue-on-error: true
+    - name: collect-domain
       script: |
-        subs = {{ steps[2].outputs.typed_outputs | tojson }}
-        sub_count = sum(1 for s in subs if s.get('_type') == 'subdomain')
-        records = {{ steps[1].outputs.typed_outputs | tojson }}
+        subs = {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | tojson }}
+        sub_count = len(subs)
+        records = {{ records(steps["dnsx-resolve"].outputs.typed_outputs) | tojson }}
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"sub_count={sub_count}\n")
