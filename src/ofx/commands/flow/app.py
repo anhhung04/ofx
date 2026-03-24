@@ -33,9 +33,9 @@ def list_workflows(
         typer.Option("--collection", "-c", help="Show workflows from a specific installed collection."),
     ] = "",
     tag: Annotated[
-        list[str],
+        list[str] | None,
         typer.Option("--tag", "-t", help="Filter workflows by tag. Can be specified multiple times (OR logic)."),
-    ] = [],
+    ] = None,
     search: Annotated[
         str,
         typer.Option("--search", "-s", help="Search workflows by name, description, or tags."),
@@ -69,7 +69,7 @@ def list_workflows(
     )
 
     show_all = not builtin and not collection
-    filter_tags = {t.lower() for t in tag}
+    filter_tags = {t.lower() for t in tag} if tag else set()
     search_term = search.lower().strip()
 
     def _scan_yaml_files(root: Path) -> list[Path]:
@@ -219,13 +219,13 @@ def list_workflows(
 def run(
     workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to run")],
     input: Annotated[
-        list[str],
+        list[str] | None,
         typer.Option(
             "-i",
             "--input",
             help="Input parameters for the workflow in key=value format. Can be specified multiple times.",
         ),
-    ] = [],
+    ] = None,
     output: Annotated[
         str,
         typer.Option(
@@ -396,6 +396,42 @@ def init(
     from ofx.commands.flow.init import FlowInitHandler
 
     FlowInitHandler().run(workflow_name=workflow_name, output=output, force=force)
+
+
+@app.command()
+def info(
+    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to inspect")],
+    detailed: Annotated[
+        bool,
+        typer.Option("--detailed", "-d", help="Show detailed step-level information."),
+    ] = False,
+):
+    """Display detailed information about a workflow (inputs, jobs, outputs, execution plan)."""
+    from ofx.commands.flow.info import show_info
+
+    show_info(workflow_name, detailed=detailed)
+
+
+@app.command("visualize")
+def visualize_cmd(
+    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to visualize")],
+    format: Annotated[
+        str,
+        typer.Option("--format", "-f", help="Output format: terminal (default), dot, json."),
+    ] = "terminal",
+    output: Annotated[
+        str,
+        typer.Option("--output", "-o", help="Save visualization to file instead of printing."),
+    ] = "",
+    detailed: Annotated[
+        bool,
+        typer.Option("--detailed", "-d", help="Show detailed step-level information in boxes."),
+    ] = False,
+):
+    """Visualize workflow dependencies and execution flow as a DAG."""
+    from ofx.commands.flow.visualize import visualize
+
+    visualize(workflow_name, format=format, output=output, detailed=detailed)
 
 
 @app.command()

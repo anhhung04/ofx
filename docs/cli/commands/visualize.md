@@ -1,6 +1,8 @@
-# flow visualize
+# Visualize
 
-Visualize workflow dependencies and execution flow.
+Visualize workflow dependencies and execution flow as a DAG.
+
+---
 
 ## Usage
 
@@ -8,96 +10,88 @@ Visualize workflow dependencies and execution flow.
 ofx flow visualize <workflow> [options]
 ```
 
+---
+
 ## Description
 
-Creates visual representations of workflow structure, dependencies, and execution stages. Displays:
+Creates visual representations of workflow structure and dependencies. Displays:
 
-- Workflow dependency graph
-- Execution stages
-- Job relationships
-- Parallel execution opportunities
+- Statistics panel (jobs, steps, stages, max parallelism, dependencies)
+- Stage-by-stage DAG with job boxes showing dependencies and badges (cloud, matrix)
+- Detailed mode adds step-level breakdown inside each box
+
+---
 
 ## Arguments
 
-- `workflow` - Workflow name (searched in default paths) or direct path to file
+- `workflow` — Workflow name or path. Supports bare names (recursive search), category paths, and file paths.
 
 ## Options
 
-- `--format <format>` - Output format: `terminal` (default), `dot`, `json`
-- `--output <file>` - Save visualization to file
-- `--detailed` - Show detailed job information
+| Option | Short | Description |
+|---|---|---|
+| `--format <format>` | `-f` | Output format: `terminal` (default), `dot`, `json` |
+| `--output <file>` | `-o` | Save visualization to file instead of printing |
+| `--detailed` | `-d` | Show step-level information in job boxes |
+
+---
 
 ## Examples
 
-### Basic visualization
+### Terminal visualization (default)
 
 ```bash
-ofx flow visualize scan-workflow.yaml
+ofx flow visualize subdomain-recon
 ```
 
-### Export to GraphViz DOT format
+### Detailed view with steps
 
 ```bash
-ofx flow visualize attack-chain --format dot --output workflow.dot
+ofx flow visualize host-scan --detailed
 ```
 
-### Detailed view
+### Export to GraphViz DOT
 
 ```bash
-ofx flow visualize complex-workflow --detailed
+ofx flow visualize host-scan --format dot --output workflow.dot
+dot -Tpng workflow.dot -o workflow.png
 ```
 
-## Visualization Output
-
-The terminal visualization shows:
-
-1. **Workflow Overview**
-   - Name, description
-   - Total jobs, execution stages
-   - Est. parallel efficiency
-
-2. **Workflow Statistics**
-   - Job count, stage count
-   - Dependencies, outputs
-   - Conditionals
-
-3. **Dependency Graph**
-   - ASCII art representation
-   - Job boxes with dependencies
-   - Stage grouping
-   - Edge connections
-
-4. **Job Specifications**
-   - Detailed job information
-   - Steps, dependencies
-   - Outputs
-
-## Graph Formats
-
-### Terminal (Default)
-ASCII art graph displayed in terminal with colors and formatting.
-
-### DOT Format
-GraphViz DOT language for rendering with `dot` command:
+### Export as JSON
 
 ```bash
-ofx flow visualize workflow.yaml --format dot --output graph.dot
+ofx flow visualize host-scan --format json --output dag.json
+```
+
+---
+
+## Output Formats
+
+### Terminal (default)
+
+ASCII art DAG with Rich formatting, showing:
+- Stage headers with parallel indicators
+- Job boxes with name, step count, dependencies
+- Cloud (☁) and matrix (⊞) badges
+- Connector arrows between stages
+
+### DOT
+
+GraphViz DOT language with stage subgraphs and dependency edges. Render with:
+
+```bash
 dot -Tpng graph.dot -o graph.png
+dot -Tsvg graph.dot -o graph.svg
 ```
 
-### JSON Format
-Machine-readable JSON structure:
+### JSON
 
-```json
-{
-  "stages": [[...]],
-  "dependencies": {...},
-  "jobs": {...}
-}
-```
+Machine-readable structure with stages, jobs, and dependency edges.
+
+---
 
 ## See Also
 
-- [flow run](run.md)
-- [flow validate](validate.md)
-- [Workflow Dependencies](../../guide/workflows/dependencies.md)
+- [Info Command](info.md)
+- [Run Command](run.md)
+- [Validate Command](validate.md)

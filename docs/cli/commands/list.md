@@ -7,7 +7,7 @@ List available workflows across local/user directories, built-in OFX workflows, 
 ## Usage
 
 ```bash
-ofx flow list
+ofx flow list [options]
 ```
 
 ---
@@ -21,28 +21,51 @@ ofx flow list
 - Built-in packaged workflows
 - Installed collections (`ofx flow collection add ...`)
 
-Output columns:
+---
 
-- **Workflow**: workflow name (file stem)
-- **Source**: `user`, `builtin`, or `collection:<name>`
-- **Path**: full workflow file path
+## Options
+
+| Option | Short | Description |
+|---|---|---|
+| `--builtin` | `-b` | Show only built-in workflows |
+| `--collection <name>` | `-c` | Show workflows from a specific installed collection |
+| `--tag <tag>` | `-t` | Filter by tag (repeatable, OR logic) |
+| `--search <text>` | `-s` | Search by name, description, or tags |
+| `--tags` | | Show tags alongside each workflow name |
+| `--list-tags` | | List all available tags with workflow counts |
 
 ---
 
 ## Examples
 
 ```bash
-# List everything available to the resolver
+# List everything available
 ofx flow list
 
-# Then run one directly
-ofx flow run domain-recon --input target=example.com
+# Show only built-in workflows
+ofx flow list --builtin
+
+# Filter by tag (multiple tags use OR logic)
+ofx flow list --tag recon --tag dns
+
+# Search across name, description, and tags
+ofx flow list --search "subdomain"
+
+# Show tags alongside names
+ofx flow list --tags
+
+# List all available tags with counts
+ofx flow list --list-tags
+
+# Combine filters
+ofx flow list --builtin --tag recon --tags
 ```
 
 ---
 
 ## See Also
 
+- [Info Command](info.md)
 - [Run Command](run.md)
 - [Collection Command](collection.md)
 - [Built-in Workflows Guide](../../guide/builtin-workflows.md)
