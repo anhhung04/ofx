@@ -183,6 +183,13 @@ class MatrixJobRunner(BaseRunner[Job]):
         if self.model.strategy:
             job_ctx.vars["strategy"] = self.model.strategy.model_dump()
         job_ctx.vars["matrix"] = matrix_values
+
+        # Propagate auto-expanded matrix values back into inputs so that
+        # {{ inputs.target }} resolves to the current matrix target value.
+        for key in job_ctx.vars.get("_matrix_input_keys", []):
+            if key in matrix_values:
+                job_ctx.inputs[key] = matrix_values[key]
+
         new_jid = f"{self.model.jid}_{str(matrix_idx)}"
         runner = JobRunner(
             self.model.model_copy(

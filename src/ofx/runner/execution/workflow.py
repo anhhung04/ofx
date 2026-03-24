@@ -54,6 +54,9 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 await self._process_inputs(self.ctx.inputs, self.model.dispatch.inputs)
             )
 
+        # ── Auto-matrix expansion for list inputs ──────────────────
+        self._expand_list_inputs_to_matrix()
+
         self._log_debug(f"Workflow Call: {self.model.call}")
         if self.model.call and self._is_reused:
             self.ctx = ctx_builder.with_inputs(
@@ -287,7 +290,10 @@ class WorkflowRunner(BaseRunner[Workflow]):
                         req_inputs[key] = value
                 else:
                     value = req_inputs[key]
-                if not self._check_input_type(value, constraint.type):
+                # Allow list values for string-type inputs (matrix-expanded later)
+                if isinstance(value, list) and constraint.type == "string":
+                    pass
+                elif not self._check_input_type(value, constraint.type):
                     raise ValueError(
                         f"Input '{key}' has invalid type: {type(value).__name__}. "
                         f"Expected type: {constraint.type}."
@@ -318,6 +324,46 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 f"Supported types are: {', '.join(type_map.keys())}."
             )
         return isinstance(value, expected_type)
+
+    def _expand_list_inputs_to_matrix(self) -> None:
+        """Auto-inject matrix strategy when an input is a list.
+
+        When a dispatch input declared as ``type: string`` receives a list
+        (e.g. multiple targets from ``@file`` or the targets folder), inject
+        each list value as a matrix dimension on every job.  The original
+        input key is stored in ``ctx.vars["_matrix_input_keys"]`` so that
+        ``MatrixJobRunner`` can override ``inputs.<key>`` per combination.
+        """
+        if not self.model.dispatch or self._is_reused:
+            return
+
+        matrix_inputs: dict[str, list] = {}
+        for key, constraint in self.model.dispatch.inputs.items():
+            value = self.ctx.inputs.get(key)
+            if isinstance(value, list) and constraint.type == "string":
+                matrix_inputs[key] = value
+
+        if not matrix_inputs:
+            return
+
+        from ofx.models.strategy import MatrixStrategy
+
+        for key, values in matrix_inputs.items():
+            self._log_info(
+                f"Auto-expanding input '{key}' ({len(values)} values) as matrix"
+            )
+            for job in self.model.jobs.values():
+                if not job.strategy:
+                    job.strategy = MatrixStrategy(matrix={key: values})
+                elif key not in job.strategy.matrix:
+                    job.strategy.matrix[key] = values
+
+        # Store which input keys are matrix-expanded so runners
+        # can propagate matrix values back into inputs per combination.
+        self.ctx.vars["_matrix_input_keys"] = list(matrix_inputs.keys())
+        # Remove list values from inputs — they live in matrix now.
+        for key in matrix_inputs:
+            del self.ctx.inputs[key]
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)

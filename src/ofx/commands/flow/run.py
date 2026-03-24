@@ -205,6 +205,9 @@ class FlowRunHandler:
 
         self.input = parse_key_value_pairs(self.preprocess_input)
 
+        # Expand @file references: target=@targets.txt reads file lines
+        self._expand_file_refs()
+
         # Auto-load targets from project targets/ folder when no target is provided
         if "target" not in self.input and self.project_vars:
             targets_dir = Path(self.project_vars.get("project_targets", ""))
@@ -217,6 +220,41 @@ class FlowRunHandler:
                         len(targets),
                         targets_dir,
                     )
+
+    def _expand_file_refs(self) -> None:
+        """Expand @file references in input values.
+
+        When a value starts with ``@``, treat the remainder as a file path.
+        Read the file, one entry per line (skip blanks and ``#`` comments),
+        and replace the value with a single string (one line) or a list.
+        """
+        for key, value in list(self.input.items()):
+            if not isinstance(value, str) or not value.startswith("@"):
+                continue
+            filepath = Path(value[1:]).expanduser()
+            if not filepath.is_file():
+                raise typer.BadParameter(
+                    f"File not found for input '{key}': {filepath}"
+                )
+            entries = self._read_target_file(filepath)
+            if not entries:
+                raise typer.BadParameter(
+                    f"File for input '{key}' is empty: {filepath}"
+                )
+            self.input[key] = entries[0] if len(entries) == 1 else entries
+            logger.info("Loaded %d value(s) for '%s' from %s", len(entries), key, filepath)
+
+    @staticmethod
+    def _read_target_file(filepath: Path) -> list[str]:
+        """Read a target file, returning unique non-empty, non-comment lines."""
+        entries: list[str] = []
+        seen: set[str] = set()
+        for line in filepath.read_text().splitlines():
+            entry = line.strip()
+            if entry and not entry.startswith("#") and entry not in seen:
+                seen.add(entry)
+                entries.append(entry)
+        return entries
 
     @staticmethod
     def _load_targets_dir(targets_dir: Path) -> list[str]:
