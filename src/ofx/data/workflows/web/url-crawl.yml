@@ -22,12 +22,14 @@ jobs:
       url_count: '${{ steps.collect-urls.outputs.url_count }}'
     steps:
     - task: katana
+      timeout: 15
       name: katana-crawl
       with:
         target: '{{ inputs.target }}'
         depth: 3
       continue-on-error: true
     - task: gospider
+      timeout: 15
       name: gospider-crawl
       with:
         target: '{{ inputs.target }}'

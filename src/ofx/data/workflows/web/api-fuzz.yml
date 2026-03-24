@@ -25,6 +25,7 @@ jobs:
     name: API Endpoint Discovery
     steps:
     - task: ffuf
+      timeout: 15
       name: fuzz-endpoints
       with:
         target: '{{ inputs.target }}/FUZZ'

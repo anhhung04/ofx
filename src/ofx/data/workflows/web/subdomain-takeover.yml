@@ -17,6 +17,7 @@ jobs:
     name: Subdomain Discovery
     steps:
     - task: subfinder
+      timeout: 10
       name: subdomain-find
       with:
         target: '{{ inputs.target }}'

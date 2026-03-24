@@ -39,6 +39,7 @@ jobs:
       url_count: '${{ steps.collect-dirs.outputs.url_count }}'
     steps:
     - task: dirsearch
+      timeout: 15
       name: dirsearch-scan
       with:
         target: '{{ inputs.target }}'
@@ -47,6 +48,7 @@ jobs:
         extensions: php,asp,aspx,jsp,html,js,txt,bak,old,conf
       continue-on-error: true
     - task: ffuf
+      timeout: 15
       name: ffuf-dirs
       with:
         target: '{{ inputs.target }}/FUZZ'
@@ -80,6 +82,7 @@ jobs:
     - dir-search
     steps:
     - task: katana
+      timeout: 15
       name: crawl-content
       with:
         target: '{{ jobs[''dir-search''].outputs.found_file | default(inputs.target, true) }}'

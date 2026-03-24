@@ -20,6 +20,7 @@ jobs:
       sub_count: '{{ steps.merge-subs.outputs.sub_count }}'
     steps:
       - task: subfinder
+        timeout: 10
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
@@ -31,6 +32,7 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: amass
+        timeout: 20
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
@@ -168,6 +170,7 @@ jobs:
           concurrency: 20
         continue-on-error: true
       - task: nuclei
+        timeout: 20
         name: nuclei-takeover
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"

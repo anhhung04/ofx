@@ -54,6 +54,7 @@ jobs:
       nuclei_count: '${{ steps.export-nuclei.outputs.nuclei_count }}'
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-web-scan
       with:
         target: '{{ inputs.target }}'

@@ -23,6 +23,7 @@ jobs:
       subdomain_count: '{{ steps.collect-subdomains.outputs.subdomain_count }}'
     steps:
     - task: subfinder
+      timeout: 10
       name: subfinder-enum
       with:
         target: '{{ inputs.target }}'
@@ -35,6 +36,7 @@ jobs:
         subs: true
       continue-on-error: true
     - task: amass
+      timeout: 20
       name: amass-enum
       with:
         target: '{{ inputs.target }}'
@@ -119,6 +121,7 @@ jobs:
     - http-probe
     steps:
     - task: nuclei
+      timeout: 20
       name: takeover-scan
       with:
         target: '{{ jobs[''passive-enum''].outputs.subdomain_file }}'

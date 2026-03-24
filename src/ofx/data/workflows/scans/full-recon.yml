@@ -22,6 +22,7 @@ jobs:
       sub_count: '{{ steps.collect-subdomains.outputs.sub_count }}'
     steps:
     - task: subfinder
+      timeout: 10
       name: subfinder-enum
       with:
         target: '{{ inputs.target }}'
@@ -125,6 +126,7 @@ jobs:
       port_hosts_file: '{{ steps.export-ports.outputs.port_hosts_file }}'
     steps:
     - task: naabu
+      timeout: 10
       name: naabu-scan
       with:
         target: '{{ jobs[''dns-resolve''].outputs.verified_file | default(jobs[''subdomain-enum''].outputs.subs_file, true) }}'
@@ -187,6 +189,7 @@ jobs:
       crawl_count: '{{ steps.collect-urls.outputs.crawl_count }}'
     steps:
     - task: katana
+      timeout: 15
       name: katana-crawl
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
@@ -290,6 +293,7 @@ jobs:
       medium_count: '{{ steps.export-vulns.outputs.medium_count }}'
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'

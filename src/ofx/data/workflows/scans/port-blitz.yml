@@ -44,6 +44,7 @@ jobs:
           rate: "{{ inputs.rate }}"
         continue-on-error: true
       - task: masscan
+        timeout: 10
         name: masscan-top
         with:
           target: "{{ inputs.target }}"
@@ -104,6 +105,7 @@ jobs:
       exploit_count: '{{ steps.collect-services.outputs.exploit_count }}'
     steps:
       - task: nmap
+        timeout: 30
         name: nmap-version
         with:
           target: "{{ inputs.target }}"

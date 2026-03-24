@@ -63,6 +63,7 @@ jobs:
       nuclei_vuln_count: '${{ steps.collect-nuclei.outputs.nuclei_vuln_count }}'
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-cmdi
       with:
         target: '{{ inputs.target }}'

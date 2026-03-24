@@ -23,6 +23,7 @@ jobs:
       sub_count: '{{ steps.merge-subdomains.outputs.sub_count }}'
     steps:
     - task: subfinder
+      timeout: 10
       name: subfinder-scan
       with:
         target: '{{ inputs.target }}'
@@ -148,6 +149,7 @@ jobs:
       port_count: '{{ steps.collect-ports.outputs.port_count }}'
     steps:
     - task: naabu
+      timeout: 10
       name: naabu-scan
       with:
         target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
@@ -205,6 +207,7 @@ jobs:
       crawl_count: '{{ steps.collect-crawled.outputs.crawl_count }}'
     steps:
     - task: katana
+      timeout: 15
       name: katana-crawl
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
@@ -314,12 +317,14 @@ jobs:
       crlf_count: '{{ steps.collect-vulns.outputs.crlf_count }}'
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
       continue-on-error: true
     - task: dalfox
+      timeout: 15
       name: dalfox-xss
       with:
         target: '{{ jobs[''param-mine''].outputs.param_file | default(jobs[''http-probe''].outputs.live_urls, true) }}'

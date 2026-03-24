@@ -32,6 +32,7 @@ jobs:
         batch_size: 4500
       continue-on-error: true
     - task: naabu
+      timeout: 10
       name: port-discovery
       with:
         target: '{{ inputs.target }}'
@@ -39,6 +40,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: masscan
+      timeout: 10
       name: masscan-scan
       with:
         target: '{{ inputs.target }}'
@@ -46,6 +48,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: nmap
+      timeout: 30
       name: service-detect
       with:
         target: '{{ inputs.target }}'
@@ -84,6 +87,7 @@ jobs:
         aggression: 3
       continue-on-error: true
     - task: nikto
+      timeout: 15
       name: nikto-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
@@ -94,12 +98,14 @@ jobs:
     - host-recon
     steps:
     - task: katana
+      timeout: 15
       name: crawl
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
       continue-on-error: true
     - task: gospider
+      timeout: 15
       name: spider
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
@@ -112,12 +118,14 @@ jobs:
     - web-analysis
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
       continue-on-error: true
     - task: dalfox
+      timeout: 15
       name: xss-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'

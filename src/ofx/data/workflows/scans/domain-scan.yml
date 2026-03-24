@@ -46,6 +46,7 @@ jobs:
         follow_redirects: true
       continue-on-error: true
     - task: testssl
+      timeout: 10
       name: tls-check
       with:
         target: '{{ inputs.target }}'
@@ -70,6 +71,7 @@ jobs:
       live_urls: '{{ steps.export-urls.outputs.live_urls }}'
     steps:
     - task: subfinder
+      timeout: 10
       name: subfinder-enum
       with:
         target: '{{ inputs.target }}'
@@ -82,6 +84,7 @@ jobs:
         subs: true
       continue-on-error: true
     - task: amass
+      timeout: 20
       name: amass-enum
       with:
         target: '{{ inputs.target }}'
@@ -145,6 +148,7 @@ jobs:
       open_ports: '{{ steps.port-scan.outputs.open_ports }}'
     steps:
     - task: naabu
+      timeout: 10
       name: port-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
@@ -152,6 +156,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: nmap
+      timeout: 30
       name: service-detect
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
@@ -168,12 +173,14 @@ jobs:
     - subdomain-recon
     steps:
     - task: katana
+      timeout: 15
       name: crawl-urls
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
       continue-on-error: true
     - task: gospider
+      timeout: 15
       name: spider-urls
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
@@ -186,23 +193,27 @@ jobs:
     - url-crawl
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
       continue-on-error: true
     - task: dalfox
+      timeout: 15
       name: xss-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
       continue-on-error: true
     - task: nuclei
+      timeout: 20
       name: takeover-check
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
         tags: takeover
       continue-on-error: true
     - task: nikto
+      timeout: 15
       name: nikto-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'

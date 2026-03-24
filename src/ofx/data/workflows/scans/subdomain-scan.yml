@@ -27,6 +27,7 @@ jobs:
       live_urls: '{{ steps.export-data.outputs.live_urls }}'
     steps:
     - task: subfinder
+      timeout: 10
       name: subfinder-enum
       with:
         target: '{{ inputs.target }}'
@@ -39,6 +40,7 @@ jobs:
         subs: true
       continue-on-error: true
     - task: amass
+      timeout: 20
       name: amass-enum
       with:
         target: '{{ inputs.target }}'
@@ -102,6 +104,7 @@ jobs:
       alive_subs: '{{ steps.port-scan.outputs.alive_subs }}'
     steps:
     - task: naabu
+      timeout: 10
       name: port-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
@@ -109,6 +112,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: nmap
+      timeout: 30
       name: service-detect
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'
@@ -120,12 +124,14 @@ jobs:
     - subdomain-recon
     steps:
     - task: katana
+      timeout: 15
       name: crawl
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         depth: 3
       continue-on-error: true
     - task: gospider
+      timeout: 15
       name: spider
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
@@ -138,17 +144,20 @@ jobs:
     - url-crawl
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
         severity: critical,high,medium
       continue-on-error: true
     - task: dalfox
+      timeout: 15
       name: xss-scan
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.live_urls | default(inputs.target, true) }}'
       continue-on-error: true
     - task: nuclei
+      timeout: 20
       name: takeover-check
       with:
         target: '{{ jobs[''subdomain-recon''].outputs.hosts_file }}'

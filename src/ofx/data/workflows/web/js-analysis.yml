@@ -26,6 +26,7 @@ jobs:
       url_count: '${{ steps.extract-js-urls.outputs.url_count }}'
     steps:
       - task: katana
+        timeout: 15
         name: katana-js-crawl
         with:
           target: '{{ inputs.target }}'
@@ -98,6 +99,7 @@ jobs:
       high_count: '${{ steps.js-summary.outputs.high_count }}'
     steps:
       - task: nuclei
+        timeout: 20
         name: nuclei-exposure
         with:
           target: '{{ jobs[''discover-js''].outputs.js_file | default(inputs.target, true) }}'

@@ -22,6 +22,7 @@ jobs:
       sub_count: '{{ steps.merge-subdomains.outputs.sub_count }}'
     steps:
     - task: subfinder
+      timeout: 10
       name: subfinder-scan
       with:
         target: '{{ inputs.target }}'
@@ -112,6 +113,7 @@ jobs:
         subzy run --targets /tmp/takeover-targets.txt 2>/dev/null | tee /tmp/subzy-output.txt
       continue-on-error: true
     - task: nuclei
+      timeout: 20
       name: nuclei-takeover
       with:
         target: '{{ jobs[''dns-verify''].outputs.alive_file }}'

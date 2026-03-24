@@ -32,12 +32,14 @@ jobs:
         generate: true
       continue-on-error: true
     - task: nmap
+      timeout: 30
       name: host-discovery
       with:
         target: '{{ inputs.target }}'
         timing: 4
       continue-on-error: true
     - task: naabu
+      timeout: 10
       name: port-scan
       with:
         target: '{{ inputs.target }}'
@@ -45,6 +47,7 @@ jobs:
         rate: 2000
       continue-on-error: true
     - task: masscan
+      timeout: 10
       name: masscan-scan
       with:
         target: '{{ inputs.target }}'
@@ -84,6 +87,7 @@ jobs:
       open_ports: '{{ steps.service-detect.outputs.open_ports }}'
     steps:
     - task: nmap
+      timeout: 30
       name: service-detect
       with:
         target: '{{ jobs[''network-discovery''].outputs.hosts_file }}'
@@ -112,6 +116,7 @@ jobs:
     - host-recon
     steps:
     - task: katana
+      timeout: 15
       name: crawl-urls
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
@@ -123,6 +128,7 @@ jobs:
     - url-crawl
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
@@ -135,6 +141,7 @@ jobs:
         aggression: 3
       continue-on-error: true
     - task: nikto
+      timeout: 15
       name: nikto-scan
       with:
         target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'

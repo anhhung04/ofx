@@ -21,6 +21,7 @@ jobs:
     name: TestSSL Analysis
     steps:
     - task: testssl
+      timeout: 10
       name: testssl-scan
       with:
         target: '{{ inputs.target }}:{{ inputs.port }}'

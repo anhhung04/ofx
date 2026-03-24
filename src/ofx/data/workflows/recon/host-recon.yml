@@ -20,6 +20,7 @@ jobs:
     name: Port Discovery
     steps:
     - task: naabu
+      timeout: 10
       name: fast-port-scan
       with:
         target: '{{ inputs.target }}'
@@ -27,6 +28,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: masscan
+      timeout: 10
       name: masscan-scan
       with:
         target: '{{ inputs.target }}'
@@ -41,6 +43,7 @@ jobs:
     - port-discovery
     steps:
     - task: nmap
+      timeout: 30
       name: service-scan
       with:
         target: '{{ inputs.target }}'
@@ -89,12 +92,14 @@ jobs:
     - http-probe
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ inputs.target }}'
         severity: critical,high,medium
       continue-on-error: true
     - task: nikto
+      timeout: 15
       name: nikto-scan
       with:
         target: '{{ inputs.target }}'

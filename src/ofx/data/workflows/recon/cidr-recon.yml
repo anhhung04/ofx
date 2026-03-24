@@ -35,12 +35,14 @@ jobs:
         generate: true
       continue-on-error: true
     - task: nmap
+      timeout: 30
       name: ping-sweep
       with:
         target: '{{ inputs.target }}'
         timing: 4
       continue-on-error: true
     - task: naabu
+      timeout: 10
       name: port-scan
       with:
         target: '{{ inputs.target }}'
@@ -48,6 +50,7 @@ jobs:
         rate: 2000
       continue-on-error: true
     - task: masscan
+      timeout: 10
       name: masscan-scan
       with:
         target: '{{ inputs.target }}'
@@ -86,6 +89,7 @@ jobs:
     - host-discovery
     steps:
     - task: nmap
+      timeout: 30
       name: service-detect
       with:
         target: '{{ jobs[''host-discovery''].outputs.live_hosts }}'

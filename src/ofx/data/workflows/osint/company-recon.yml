@@ -26,6 +26,7 @@ jobs:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: subfinder
+      timeout: 10
       name: subdomain-enum
       with:
         target: '{{ inputs.domain or inputs.target }}'

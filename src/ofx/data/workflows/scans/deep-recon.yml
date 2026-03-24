@@ -70,6 +70,7 @@ jobs:
       sub_count: '{{ steps.collect-subdomains.outputs.sub_count }}'
     steps:
       - task: subfinder
+        timeout: 10
         name: subfinder-enum
         with:
           target: '{{ inputs.target }}'
@@ -352,6 +353,7 @@ jobs:
       param_count: '{{ steps.collect-urls.outputs.param_count }}'
     steps:
       - task: katana
+        timeout: 15
         name: katana-crawl
         with:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
@@ -360,6 +362,7 @@ jobs:
         continue-on-error: true
 
       - task: gospider
+        timeout: 15
         name: gospider-crawl
         with:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
@@ -476,6 +479,7 @@ jobs:
       port_count: '{{ steps.export-ports.outputs.port_count }}'
     steps:
       - task: naabu
+        timeout: 10
         name: naabu-scan
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
@@ -484,6 +488,7 @@ jobs:
         continue-on-error: true
 
       - task: nmap
+        timeout: 30
         name: nmap-scan
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
@@ -530,6 +535,7 @@ jobs:
       dnstake_count: '{{ steps.export-vulns.outputs.dnstake_count }}'
     steps:
       - task: nuclei
+        timeout: 20
         name: nuclei-scan
         with:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
@@ -537,12 +543,14 @@ jobs:
         continue-on-error: true
 
       - task: dalfox
+        timeout: 15
         name: xss-scan
         with:
           target: '{{ jobs[''url-collection''].outputs.param_file | default(inputs.target, true) }}'
         continue-on-error: true
 
       - task: nuclei
+        timeout: 20
         name: takeover-check
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'

@@ -65,6 +65,7 @@ jobs:
         rustscan -a /tmp/scan-targets.txt --ulimit 5000 -b 1000 2>/dev/null | tee /tmp/rustscan-output.txt
       continue-on-error: true
     - task: naabu
+      timeout: 10
       name: naabu-precision
       with:
         target: '{{ jobs[''host-discovery''].outputs.alive_file }}'

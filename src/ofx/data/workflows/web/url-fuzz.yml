@@ -26,6 +26,7 @@ jobs:
       fuzz_count: '${{ steps.collect-urls.outputs.fuzz_count }}'
     steps:
     - task: ffuf
+      timeout: 15
       name: ffuf-fuzz
       with:
         target: '{{ inputs.target }}/FUZZ'
@@ -35,6 +36,7 @@ jobs:
         auto_calibration: true
       continue-on-error: true
     - task: feroxbuster
+      timeout: 20
       name: feroxbuster-fuzz
       with:
         target: '{{ inputs.target }}'

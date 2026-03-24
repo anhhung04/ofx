@@ -31,6 +31,7 @@ jobs:
         continue-on-error: true
 
       - task: arjun
+        timeout: 10
         name: arjun-params
         with:
           target: '{{ inputs.target }}'
@@ -103,6 +104,7 @@ jobs:
         continue-on-error: true
 
       - task: nuclei
+        timeout: 20
         name: nuclei-ssti
         with:
           target: '{{ jobs[''param-discovery''].outputs.param_file | default(inputs.target, true) }}'

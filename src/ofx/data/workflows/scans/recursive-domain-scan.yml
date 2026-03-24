@@ -36,6 +36,7 @@ jobs:
       subdomain_count: '{{ steps.collect-subdomains.outputs.subdomain_count }}'
     steps:
     - task: subfinder
+      timeout: 10
       name: subfinder-enum
       with:
         target: '{{ inputs.target }}'
@@ -48,6 +49,7 @@ jobs:
         subs: true
       continue-on-error: true
     - task: amass
+      timeout: 20
       name: amass-enum
       with:
         target: '{{ inputs.target }}'
@@ -142,6 +144,7 @@ jobs:
 
         print(f"Alive subdomains: {len(alive)}, Live URLs: {len(live_urls)}")
     - task: naabu
+      timeout: 10
       name: port-scan
       with:
         target: '{{ steps["collect-alive"].outputs.alive_file if steps["collect-alive"].outputs is defined else
@@ -150,6 +153,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: nuclei
+      timeout: 20
       name: quick-vuln-scan
       with:
         target: '{{ steps["collect-alive"].outputs.live_urls_file if steps["collect-alive"].outputs is defined
@@ -157,6 +161,7 @@ jobs:
         severity: critical,high
       continue-on-error: true
     - task: nuclei
+      timeout: 20
       name: takeover-check
       with:
         target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'

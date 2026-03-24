@@ -62,6 +62,7 @@ jobs:
         masscan -iL {{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }} --top-ports 100 --rate 1000 -oL /tmp/masscan-results.txt 2>/dev/null || true
       continue-on-error: true
     - task: naabu
+      timeout: 10
       name: naabu-scan
       with:
         target: '{{ jobs[''host-discovery''].outputs.alive_file | default(inputs.target, true) }}'
@@ -101,6 +102,7 @@ jobs:
     - port-scan
     steps:
     - task: nmap
+      timeout: 30
       name: version-detect
       with:
         target: '{{ jobs[''port-scan''].outputs.hosts_file | default(inputs.target, true) }}'

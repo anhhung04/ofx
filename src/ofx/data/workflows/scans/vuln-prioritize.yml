@@ -25,12 +25,14 @@ jobs:
     name: Vulnerability Scanning
     steps:
     - task: nuclei
+      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ inputs.target }}'
         severity: '{{ inputs.severity_threshold }},high,critical'
       continue-on-error: true
     - task: nmap
+      timeout: 30
       name: nmap-vuln
       with:
         target: '{{ inputs.target }}'

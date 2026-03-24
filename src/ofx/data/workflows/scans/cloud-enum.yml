@@ -86,6 +86,7 @@ jobs:
         continue-on-error: true
 
       - task: nuclei
+        timeout: 20
         name: nuclei-cloud-scan
         with:
           target: '{{ inputs.target }}'

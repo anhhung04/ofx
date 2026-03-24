@@ -39,6 +39,7 @@ jobs:
       param_count: '${{ steps.export-params.outputs.param_count }}'
     steps:
     - task: arjun
+      timeout: 10
       name: find-params
       with:
         target: '{{ inputs.target }}'
@@ -65,6 +66,7 @@ jobs:
     - param-discovery
     steps:
     - task: ffuf
+      timeout: 15
       name: fuzz-params
       with:
         target: '{{ inputs.target }}?FUZZ=test'

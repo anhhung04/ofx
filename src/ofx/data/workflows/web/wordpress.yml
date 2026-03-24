@@ -36,6 +36,7 @@ jobs:
     - probe
     steps:
     - task: wpscan
+      timeout: 15
       name: wpscan-full
       with:
         target: '{{ inputs.target }}'
@@ -43,6 +44,7 @@ jobs:
         api_token: '{{ inputs.api_token }}'
       continue-on-error: true
     - task: nuclei
+      timeout: 20
       name: nuclei-wordpress
       with:
         target: '{{ inputs.target }}'
