@@ -1,0 +1,171 @@
+name: cloud-enum
+description: |
+  Enumerate cloud storage buckets and misconfigurations (S3, GCP, Azure)
+  via name permutation and automated scanning.
+tags:
+  - recon
+  - cloud
+  - s3
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain or keyword for bucket discovery
+
+jobs:
+  generate-names:
+    name: Bucket Name Generation
+    steps:
+      - name: generate-permutations
+        script: |
+          import re
+
+          target = '{{ inputs.target }}'
+
+          # Strip TLD and www
+          base = re.sub(r'\.(com|net|org|io|co|dev|app|xyz|info|biz|us|uk|de|fr|eu)(\.[a-z]{2})?$', '', target)
+          base = re.sub(r'^www\.', '', base)
+          parts = [p for p in base.replace('.', '-').split('-') if p]
+
+          prefixes = ['', 'dev-', 'stg-', 'staging-', 'prod-', 'production-', 'test-', 'uat-',
+                       'internal-', 'private-', 'public-', 'api-', 'cdn-', 'static-', 'media-']
+          suffixes = ['', '-dev', '-staging', '-stg', '-prod', '-production', '-test', '-uat',
+                       '-backup', '-bak', '-data', '-db', '-logs', '-assets', '-static',
+                       '-media', '-uploads', '-files', '-content', '-images', '-docs',
+                       '-config', '-infra', '-ops', '-deploy', '-ci', '-artifacts',
+                       '-archive', '-tmp', '-temp', '-public', '-private', '-internal',
+                       '-s3', '-bucket', '-storage', '-cdn']
+
+          names = set()
+          bases = set()
+          bases.add(base)
+          for p in parts:
+              bases.add(p)
+          if len(parts) > 1:
+              bases.add(''.join(parts))
+              bases.add('-'.join(parts))
+
+          for b in bases:
+              for prefix in prefixes:
+                  for suffix in suffixes:
+                      candidate = f"{prefix}{b}{suffix}"
+                      if candidate and len(candidate) >= 3:
+                          names.add(candidate.lower())
+
+          names_list = sorted(names)
+          with open('/tmp/ofx_cloudenum_names.txt', 'w') as f:
+              f.write('\n'.join(names_list))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"names_file=/tmp/ofx_cloudenum_names.txt\n")
+              f.write(f"name_count={len(names_list)}\n")
+
+          print(f"Generated {len(names_list)} bucket name permutations from '{target}'")
+        log-stdout: true
+
+  scan-buckets:
+    name: Bucket Scanning
+    needs:
+      - generate-names
+    steps:
+      - task: s3scanner
+        name: s3scanner-scan
+        with:
+          target: '{{ jobs[''generate-names''].outputs.names_file }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - task: nuclei
+        name: nuclei-cloud-scan
+        with:
+          target: '{{ inputs.target }}'
+          tags: s3,bucket,cloud,storage
+        log-stdout: true
+        continue-on-error: true
+
+      - name: collect-results
+        script: |
+          import json
+
+          s3_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          s3_tags = {{ tags(steps[0].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+
+          all_vulns = s3_vulns + nuclei_vulns
+          buckets_found = set()
+          for tag in s3_tags:
+              name = tag.get('name', '')
+              if name:
+                  buckets_found.add(name)
+
+          with open('/tmp/ofx_cloudenum_buckets.txt', 'w') as f:
+              for v in all_vulns:
+                  name = v.get('name', 'unknown')
+                  host = v.get('host', v.get('url', ''))
+                  sev = v.get('severity', 'info')
+                  f.write(f"[{sev}] {name} - {host}\n")
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"results_file=/tmp/ofx_cloudenum_buckets.txt\n")
+              f.write(f"vuln_count={len(all_vulns)}\n")
+              f.write(f"bucket_count={len(buckets_found)}\n")
+              f.write(f"s3_vuln_count={len(s3_vulns)}\n")
+              f.write(f"nuclei_vuln_count={len(nuclei_vulns)}\n")
+
+          print(f"Cloud enum: {len(all_vulns)} findings, {len(buckets_found)} buckets identified")
+        log-stdout: true
+
+  summary:
+    name: Summary & Export
+    needs:
+      - scan-buckets
+    steps:
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " CLOUD ENUM COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "Bucket permutations: {{ jobs['generate-names'].outputs.name_count }}"
+          echo "S3Scanner findings: {{ jobs['scan-buckets'].outputs.s3_vuln_count }}"
+          echo "Nuclei findings: {{ jobs['scan-buckets'].outputs.nuclei_vuln_count }}"
+          echo "Total findings: {{ jobs['scan-buckets'].outputs.vuln_count }}"
+          echo "Buckets identified: {{ jobs['scan-buckets'].outputs.bucket_count }}"
+          echo ""
+          echo "Results file: {{ jobs['scan-buckets'].outputs.results_file }}"
+        log-stdout: true
+
+      - name: export-to-project
+        script: |
+          import shutil
+          from pathlib import Path
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              d = Path(project) / 'cloud'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['scan-buckets'].outputs.results_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, d / 'cloud-enum-results.txt')
+                  print('  [+] cloud/cloud-enum-results.txt')
+              src = '''{{ jobs['generate-names'].outputs.names_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, d / 'bucket-names.txt')
+                  print('  [+] cloud/bucket-names.txt')
+
+              all_typed = []
+              for typed in [
+                  {{ jobs['generate-names'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['scan-buckets'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
+
+              print(f'Project export complete: {project}')
+        continue-on-error: true

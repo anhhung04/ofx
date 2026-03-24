@@ -1,0 +1,194 @@
+name: ssti-scan
+description: |
+  Server-Side Template Injection testing with parameter discovery,
+  URL mining, and automated SSTI fuzzing.
+tags:
+  - web
+  - vuln
+  - ssti
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL or file of URLs
+
+jobs:
+  param-discovery:
+    name: Parameter Discovery
+    steps:
+      - task: httpx
+        name: probe-targets
+        with:
+          target: '{{ inputs.target }}'
+          status_code: true
+          follow_redirects: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: arjun
+        name: arjun-params
+        with:
+          target: '{{ inputs.target }}'
+          method: GET
+          threads: 10
+        log-stdout: true
+        continue-on-error: true
+
+      - task: paramspider
+        name: paramspider-mine
+        with:
+          target: '{{ inputs.target }}'
+          subs: true
+        log-stdout: true
+        continue-on-error: true
+
+      - name: merge-params
+        script: |
+          import json
+
+          param_urls = set()
+
+          # From httpx — live URLs with params
+          httpx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in httpx_out:
+              if item.get('_type') == 'url':
+                  url = item.get('url', '')
+                  if url and ('?' in url or '=' in url):
+                      param_urls.add(url)
+
+          # From arjun — discovered params
+          arjun_out = {{ steps[1].outputs.typed_outputs | tojson }}
+          for item in arjun_out:
+              if item.get('_type') == 'url':
+                  url = item.get('url', '')
+                  if url:
+                      param_urls.add(url)
+
+          # From paramspider
+          ps_out = {{ steps[2].outputs.typed_outputs | tojson }}
+          for item in ps_out:
+              if item.get('_type') == 'url':
+                  url = item.get('url', '')
+                  if url:
+                      param_urls.add(url)
+
+          with open('/tmp/ofx_ssti_params.txt', 'w') as f:
+              f.write('\n'.join(sorted(param_urls)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"param_file=/tmp/ofx_ssti_params.txt\n")
+              f.write(f"param_count={len(param_urls)}\n")
+
+          print(f"Merged {len(param_urls)} parameterized URLs for SSTI testing")
+        log-stdout: true
+
+  ssti-test:
+    name: SSTI Testing
+    needs:
+      - param-discovery
+    steps:
+      - task: tinja
+        name: tinja-scan
+        with:
+          target: '{{ jobs[''param-discovery''].outputs.param_file | default(inputs.target, true) }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - task: nuclei
+        name: nuclei-ssti
+        with:
+          target: '{{ jobs[''param-discovery''].outputs.param_file | default(inputs.target, true) }}'
+          tags: ssti
+        log-stdout: true
+        continue-on-error: true
+
+      - name: collect-results
+        script: |
+          import json
+
+          tinja_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+
+          all_vulns = tinja_vulns + nuclei_vulns
+          critical = [v for v in all_vulns if v.get('severity') == 'critical']
+          high = [v for v in all_vulns if v.get('severity') == 'high']
+
+          with open('/tmp/ofx_ssti_findings.txt', 'w') as f:
+              for v in all_vulns:
+                  name = v.get('name', 'unknown')
+                  url = v.get('url', v.get('host', ''))
+                  sev = v.get('severity', 'info')
+                  f.write(f"[{sev}] {name} - {url}\n")
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"findings_file=/tmp/ofx_ssti_findings.txt\n")
+              f.write(f"vuln_count={len(all_vulns)}\n")
+              f.write(f"critical_count={len(critical)}\n")
+              f.write(f"high_count={len(high)}\n")
+              f.write(f"tinja_count={len(tinja_vulns)}\n")
+              f.write(f"nuclei_count={len(nuclei_vulns)}\n")
+
+          print(f"SSTI findings: {len(all_vulns)} (C:{len(critical)} H:{len(high)})")
+          print(f"  Tinja: {len(tinja_vulns)}, Nuclei: {len(nuclei_vulns)}")
+        log-stdout: true
+
+  summary:
+    name: Summary & Export
+    needs:
+      - ssti-test
+    steps:
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " SSTI SCAN COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "Parameterized URLs: {{ jobs['param-discovery'].outputs.param_count }}"
+          echo ""
+          echo "--- Findings ---"
+          echo "Total: {{ jobs['ssti-test'].outputs.vuln_count }}"
+          echo "  Critical: {{ jobs['ssti-test'].outputs.critical_count }}"
+          echo "  High: {{ jobs['ssti-test'].outputs.high_count }}"
+          echo "  Tinja: {{ jobs['ssti-test'].outputs.tinja_count }}"
+          echo "  Nuclei: {{ jobs['ssti-test'].outputs.nuclei_count }}"
+          echo ""
+          echo "Findings file: {{ jobs['ssti-test'].outputs.findings_file }}"
+        log-stdout: true
+
+      - name: export-to-project
+        script: |
+          import shutil
+          from pathlib import Path
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              d = Path(project) / 'vulns'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['ssti-test'].outputs.findings_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, d / 'ssti-findings.txt')
+                  print('  [+] vulns/ssti-findings.txt')
+
+              d = Path(project) / 'urls'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['param-discovery'].outputs.param_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, d / 'ssti-param-urls.txt')
+                  print('  [+] urls/ssti-param-urls.txt')
+
+              all_typed = []
+              for typed in [
+                  {{ jobs['param-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['ssti-test'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
+
+              print(f'Project export complete: {project}')
+        continue-on-error: true
