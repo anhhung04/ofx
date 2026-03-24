@@ -70,3 +70,24 @@ jobs:
         for v in critical + high:
             print(f"  - [{v.get('severity', 'unknown').upper()}] {v.get('name', 'Unknown')}")
       log-stdout: true
+
+    - name: export-to-project
+      script: |
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping file export')
+        else:
+            all_typed = []
+            for typed in [
+            {{ jobs['probe'].outputs.typed_outputs | default([], true) | tojson }},
+            {{ jobs['wordpress-scan'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
+
+            print(f'Project export complete: {project}')
+      continue-on-error: true

@@ -89,3 +89,23 @@ jobs:
             f.write(f"vuln_count={len(vuln_data)}\n")
             f.write(f"critical_count={by_sev.get('CRITICAL', 0)}\n")
       log-stdout: true
+
+    - name: export-to-project
+      script: |
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping file export')
+        else:
+            all_typed = []
+            for typed in [
+            {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
+
+            print(f'Project export complete: {project}')
+      continue-on-error: true

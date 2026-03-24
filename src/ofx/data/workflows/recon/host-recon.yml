@@ -111,3 +111,32 @@ jobs:
         echo "=============================="
         echo "Vulnerabilities: {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}"
       log-stdout: true
+  summary:
+    name: Summary
+    needs:
+    - vuln-scan
+    - ssh-audit
+    steps:
+    - name: export-to-project
+      script: |
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping file export')
+        else:
+            all_typed = []
+            for typed in [
+            {{ jobs['port-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+            {{ jobs['service-detection'].outputs.typed_outputs | default([], true) | tojson }},
+            {{ jobs['ssh-audit'].outputs.typed_outputs | default([], true) | tojson }},
+            {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
+            {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
+
+            print(f'Project export complete: {project}')
+      continue-on-error: true
