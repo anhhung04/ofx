@@ -259,3 +259,34 @@ OUTPUT_TYPE_MAP: dict[str, type[OutputType]] = {
     "exploit": Exploit,
     "user_account": UserAccount,
 }
+
+# Mapping from output type to project subdirectory.
+# Used by workflows to auto-route typed outputs into the correct folder.
+OUTPUT_TYPE_DIR_MAP: dict[str, str] = {
+    "ip": "hosts",
+    "port": "hosts",
+    "subdomain": "subdomains",
+    "url": "web",
+    "vulnerability": "vulns",
+    "tag": "web",
+    "record": "subdomains",
+    "domain": "osint",
+    "certificate": "certs",
+    "exploit": "vulns",
+    "user_account": "evidence/creds",
+}
+
+# Default filename per output type for project exports.
+OUTPUT_TYPE_FILE_MAP: dict[str, str] = {
+    "ip": "ips.txt",
+    "port": "ports.txt",
+    "subdomain": "subdomains.txt",
+    "url": "urls.txt",
+    "vulnerability": "vulnerabilities.jsonl",
+    "tag": "tags.txt",
+    "record": "dns-records.txt",
+    "domain": "domains.txt",
+    "certificate": "certificates.jsonl",
+    "exploit": "exploits.jsonl",
+    "user_account": "accounts.jsonl",
+}

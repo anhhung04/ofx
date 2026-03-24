@@ -111,6 +111,12 @@ class FlowRunHandler:
             "project_scope": str(project_path / "scope"),
             "project_tools": str(project_path / "tools"),
             "project_exploits": str(project_path / "exploits"),
+            "project_hosts": str(project_path / "hosts"),
+            "project_osint": str(project_path / "osint"),
+            "project_subdomains": str(project_path / "subdomains"),
+            "project_vulns": str(project_path / "vulns"),
+            "project_web": str(project_path / "web"),
+            "project_certs": str(project_path / "certs"),
         }
 
     async def run(self):

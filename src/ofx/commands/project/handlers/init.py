@@ -20,9 +20,15 @@ logger = logging.getLogger(settings.app_branding)
 
 ENGAGEMENT_FILE_STRUCTURE = [
     ("evidence", ["creds", "data", "screenshots"]),
+    "hosts",
     "logs",
+    "osint",
     "scans",
     "scope",
+    "subdomains",
+    "vulns",
+    "web",
+    "certs",
     "tools",
     "exploits",
     "post-exploits",

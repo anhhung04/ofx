@@ -260,6 +260,91 @@ class TemplateResolver:
         def _users(items: list) -> list:
             return _of_type(items, "user_account")
 
+        def _export_typed_outputs(
+            project_path: str,
+            all_typed_outputs: list,
+            prefix: str = "",
+        ) -> list[str]:
+            """Export typed outputs to the correct project subdirectories.
+
+            Args:
+                project_path: Root project directory.
+                all_typed_outputs: Flat list of typed output dicts.
+                prefix: Optional filename prefix (e.g. workflow or job name).
+
+            Returns:
+                List of summary strings describing what was written.
+            """
+            from ofx.tasks.output_types import OUTPUT_TYPE_DIR_MAP, OUTPUT_TYPE_FILE_MAP
+
+            if not project_path or not all_typed_outputs:
+                return []
+
+            p = Path(project_path)
+            buckets: dict[str, list[dict]] = {}
+            for item in all_typed_outputs:
+                if not isinstance(item, dict):
+                    continue
+                t = item.get("_type", "")
+                if t:
+                    buckets.setdefault(t, []).append(item)
+
+            summaries: list[str] = []
+            for type_name, items in sorted(buckets.items()):
+                subdir = OUTPUT_TYPE_DIR_MAP.get(type_name, "scans")
+                filename = OUTPUT_TYPE_FILE_MAP.get(type_name, f"{type_name}.txt")
+                if prefix:
+                    stem, ext = (filename.rsplit(".", 1) + [""])[:2]
+                    filename = f"{prefix}-{stem}.{ext}" if ext else f"{prefix}-{stem}"
+
+                dest = p / subdir
+                dest.mkdir(parents=True, exist_ok=True)
+                fpath = dest / filename
+
+                if filename.endswith(".jsonl"):
+                    lines = [json.dumps(i, default=str) for i in items]
+                    existing = set()
+                    if fpath.exists():
+                        existing = set(fpath.read_text().strip().splitlines())
+                    new_lines = [ln for ln in lines if ln not in existing]
+                    if new_lines:
+                        with open(fpath, "a") as f:
+                            f.write("\n".join(new_lines) + "\n")
+                else:
+                    values = set()
+                    for i in items:
+                        key = _type_display_key(type_name, i)
+                        if key:
+                            values.add(key)
+                    if fpath.exists():
+                        values.update(
+                            ln for ln in fpath.read_text().strip().splitlines() if ln
+                        )
+                    if values:
+                        fpath.write_text("\n".join(sorted(values)) + "\n")
+
+                summaries.append(f"  [+] {subdir}/{filename} ({len(items)} items)")
+
+            return summaries
+
+        def _type_display_key(type_name: str, item: dict) -> str:
+            """Extract the primary display value for a typed output item."""
+            key_map = {
+                "ip": "ip",
+                "port": lambda i: f"{i.get('ip', i.get('host', ''))}:{i.get('port', '')}",
+                "subdomain": "host",
+                "url": "url",
+                "tag": "name",
+                "record": lambda i: f"{i.get('name', '')} {i.get('type', '')} {i.get('host', '')}",
+                "domain": "domain",
+            }
+            extractor = key_map.get(type_name, "")
+            if callable(extractor):
+                return extractor(item).strip()
+            if extractor:
+                return str(item.get(extractor, "")).strip()
+            return ""
+
         if self._support_funcs_cache is None:
             shell_exports = get_shell_exports()
 
@@ -326,6 +411,7 @@ class TemplateResolver:
                 "records": _records,
                 "domains": _domains,
                 "users": _users,
+                "export_typed_outputs": _export_typed_outputs,
             }
 
         support_funcs = self._support_funcs_cache.copy()
