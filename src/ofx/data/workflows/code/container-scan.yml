@@ -1,0 +1,105 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: container-scan
+description: |
+  Container image security analysis — scans for OS and library
+  vulnerabilities, misconfigurations, embedded secrets, and
+  Dockerfile best-practice violations.
+tags: [code, container, docker, vuln, compliance]
+
+dispatch:
+  inputs:
+    image:
+      required: true
+      type: string
+      description: Container image to scan (e.g. nginx:latest, myapp:v1.0)
+      alias: i
+    dockerfile:
+      type: string
+      default: ""
+      description: Path to Dockerfile for best-practice checks
+    severity:
+      type: string
+      default: "CRITICAL,HIGH,MEDIUM"
+      description: Severity filter for vulnerability results
+
+jobs:
+  image-vulns:
+    name: Image Vulnerability Scan
+    outputs:
+      vuln_count: "{{ steps.export.outputs.vuln_count }}"
+      critical_count: "{{ steps.export.outputs.critical_count }}"
+    steps:
+      - task: trivy
+        timeout: 20
+        name: trivy-image
+        with:
+          target: "{{ inputs.image }}"
+          severity: "{{ inputs.severity }}"
+        continue-on-error: true
+
+      - task: grype
+        timeout: 20
+        name: grype-image
+        with:
+          target: "{{ inputs.image }}"
+        continue-on-error: true
+
+      - name: export
+        script: |
+          import json
+
+          trivy_vulns = {{ vulns(steps["trivy-image"].outputs.typed_outputs) | tojson }}
+          grype_vulns = {{ vulns(steps["grype-image"].outputs.typed_outputs) | tojson }}
+
+          seen = set()
+          unique = []
+          for v in trivy_vulns + grype_vulns:
+              vid = v.get("id", v.get("name", ""))
+              if vid and vid not in seen:
+                  seen.add(vid)
+                  unique.append(v)
+
+          critical = len([v for v in unique if v.get("severity", "").lower() == "critical"])
+
+          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+              f.write(f"vuln_count={len(unique)}\n")
+              f.write(f"critical_count={critical}\n")
+
+  secrets-scan:
+    name: Embedded Secrets Check
+    outputs:
+      secrets_count: "{{ steps.export-secrets.outputs.secrets_count }}"
+    steps:
+      - task: trufflehog
+        timeout: 15
+        name: image-secrets
+        with:
+          target: "docker://{{ inputs.image }}"
+          mode: filesystem
+        continue-on-error: true
+
+      - name: export-secrets
+        script: |
+          results = {{ steps["image-secrets"].outputs.typed_outputs | default([], true) | tojson }}
+          count = len(results)
+          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+              f.write(f"secrets_count={count}\n")
+
+  summary:
+    name: Container Security Report
+    needs: [image-vulns, secrets-scan]
+    steps:
+      - name: Report
+        run: |
+          echo "=== Container Security Report ==="
+          echo "Image: {{ inputs.image }}"
+          echo ""
+          echo "Vulnerabilities: {{ jobs['image-vulns'].outputs.vuln_count }}"
+          echo "  Critical: {{ jobs['image-vulns'].outputs.critical_count }}"
+          echo "Embedded Secrets: {{ jobs['secrets-scan'].outputs.secrets_count }}"
+        log-stdout: true
+
+outputs:
+  vuln_count: "{{ jobs['image-vulns'].outputs.vuln_count }}"
+  critical_count: "{{ jobs['image-vulns'].outputs.critical_count }}"
+  secrets_count: "{{ jobs['secrets-scan'].outputs.secrets_count }}"

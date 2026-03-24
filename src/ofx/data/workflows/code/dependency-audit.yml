@@ -1,0 +1,94 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: dependency-audit
+description: |
+  Audit project dependencies for known vulnerabilities — scans with
+  grype and trivy, deduplicates findings, and reports by severity.
+  Supports source code directories, container images, and SBOMs.
+tags: [code, vuln, supply-chain, audit]
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Path to source code, container image, or SBOM file
+      alias: t
+    severity:
+      type: string
+      default: "CRITICAL,HIGH"
+      description: Minimum severity filter (CRITICAL, HIGH, MEDIUM, LOW)
+    fail_on_critical:
+      type: boolean
+      default: false
+      description: Exit with error if critical vulnerabilities found
+
+jobs:
+  scan:
+    name: Dependency Vulnerability Scan
+    outputs:
+      vuln_count: "{{ steps.aggregate.outputs.vuln_count }}"
+      critical_count: "{{ steps.aggregate.outputs.critical_count }}"
+      high_count: "{{ steps.aggregate.outputs.high_count }}"
+    steps:
+      - task: grype
+        timeout: 15
+        name: grype-scan
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+
+      - task: trivy
+        timeout: 15
+        name: trivy-scan
+        with:
+          target: "{{ inputs.target }}"
+          severity: "{{ inputs.severity }}"
+        continue-on-error: true
+
+      - name: aggregate
+        script: |
+          import json
+
+          grype_vulns = {{ vulns(steps["grype-scan"].outputs.typed_outputs) | tojson }}
+          trivy_vulns = {{ vulns(steps["trivy-scan"].outputs.typed_outputs) | tojson }}
+
+          seen = set()
+          unique = []
+          for v in grype_vulns + trivy_vulns:
+              vid = v.get("id", v.get("name", ""))
+              if vid and vid not in seen:
+                  seen.add(vid)
+                  unique.append(v)
+
+          critical = [v for v in unique if v.get("severity", "").lower() == "critical"]
+          high = [v for v in unique if v.get("severity", "").lower() == "high"]
+
+          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+              f.write(f"vuln_count={len(unique)}\n")
+              f.write(f"critical_count={len(critical)}\n")
+              f.write(f"high_count={len(high)}\n")
+
+  report:
+    name: Audit Report
+    needs: [scan]
+    steps:
+      - name: Summary
+        run: |
+          echo "=== Dependency Audit Report ==="
+          echo "Target: {{ inputs.target }}"
+          echo "Vulnerabilities: {{ jobs['scan'].outputs.vuln_count }}"
+          echo "  Critical: {{ jobs['scan'].outputs.critical_count }}"
+          echo "  High: {{ jobs['scan'].outputs.high_count }}"
+        log-stdout: true
+
+      - name: Check threshold
+        run: |
+          critical={{ jobs['scan'].outputs.critical_count | default('0', true) }}
+          if [ "{{ inputs.fail_on_critical }}" = "true" ] && [ "$critical" -gt 0 ]; then
+            echo "FAIL: $critical critical vulnerabilities found"
+            exit 1
+          fi
+
+outputs:
+  vuln_count: "{{ jobs['scan'].outputs.vuln_count }}"
+  critical_count: "{{ jobs['scan'].outputs.critical_count }}"

