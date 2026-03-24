@@ -19,6 +19,7 @@ from ofx.cloud.script_runtime import (
 from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.runner.core import (
     BaseRunner,
+    ConditionNotMetError,
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
@@ -107,7 +108,7 @@ class CloudStepRunner(BaseRunner):
         if self.model.run_if is not None and self.model.run_if is not True:
             if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
                 self._state_machine.transition(RunnerStatus.CANCELED)
-                raise Exception(self._produce_log("Step condition not met"))
+                raise ConditionNotMetError(self._produce_log("Step condition not met"))
 
     async def _do_run(self) -> None:
         from ofx.models.step import RunType

@@ -11,7 +11,13 @@ from typing import Any
 from ofx.models.job import Job
 from ofx.models.step import RunType, Step
 from ofx.runner.context import RunnerContextBuilder
-from ofx.runner.core import BaseRunner, RunContext, RunnerRegistryKeys, RunnerStatus
+from ofx.runner.core import (
+    BaseRunner,
+    ConditionNotMetError,
+    RunContext,
+    RunnerRegistryKeys,
+    RunnerStatus,
+)
 from ofx.runner.core.models import RunResult
 from ofx.runner.execution.error_helpers import (
     step_execution_error,
@@ -72,7 +78,7 @@ class StepRunner(BaseRunner[Step]):
 
         if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
             self._state_machine.transition(RunnerStatus.CANCELED)
-            raise Exception("Step skipped due to run_if condition")
+            raise ConditionNotMetError("Step skipped due to run_if condition")
 
         self.ctx = RunnerContextBuilder(self.ctx).with_env(self.model.env)
         self.ctx.inputs.update(await self._resolve_template(self.model.run_with))

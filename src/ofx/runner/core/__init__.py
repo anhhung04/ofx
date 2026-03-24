@@ -1,7 +1,12 @@
 """Core runner components"""
 
 from ofx.runner.core.base import BaseRunner
-from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
+from ofx.runner.core.models import (
+    ConditionNotMetError,
+    RunContext,
+    RunnerStatus,
+    RunResult,
+)
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import (
     MemoryJobRegistry,
@@ -12,6 +17,7 @@ from ofx.runner.registry import (
 
 __all__ = [
     "BaseRunner",
+    "ConditionNotMetError",
     "RunContext",
     "RunnerStatus",
     "RunResult",

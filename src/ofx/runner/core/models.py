@@ -58,3 +58,7 @@ class RunResult(BaseModel):
     status: RunnerStatus
     error: str | None = None
     outputs: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConditionNotMetError(RuntimeError):
+    """Raised when a job/step run_if condition evaluates to false."""

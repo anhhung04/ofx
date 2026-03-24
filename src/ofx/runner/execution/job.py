@@ -11,6 +11,7 @@ from ofx.models.workflow import Workflow
 from ofx.runner.context import RunnerContextBuilder
 from ofx.runner.core import (
     BaseRunner,
+    ConditionNotMetError,
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
@@ -62,7 +63,7 @@ class JobRunner(BaseRunner[Job]):
 
         if not self._evaluate_run_if(run_if_expr, build_run_if_context(dep_runners)):
             self._state_machine.transition(RunnerStatus.CANCELED)
-            raise Exception(self._produce_log("Job condition is not met"))
+            raise ConditionNotMetError(self._produce_log("Job condition is not met"))
 
         job_default_config = self.model.defaults.model_dump(exclude_defaults=True)
         workflow_default_config = self.parent.model.defaults.model_dump()  # type: ignore

@@ -14,6 +14,7 @@ from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.core import (
     BaseRunner,
+    ConditionNotMetError,
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
@@ -146,7 +147,7 @@ class CloudJobRunner(BaseRunner[Job]):
 
         if not self._evaluate_run_if(run_if_expr, build_run_if_context(dep_runners)):
             self._state_machine.transition(RunnerStatus.CANCELED)
-            raise Exception(self._produce_log("Job condition is not met"))
+            raise ConditionNotMetError(self._produce_log("Job condition is not met"))
 
         # Provision VPS or connect to static host
         self._log_info(
