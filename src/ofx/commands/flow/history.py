@@ -3,7 +3,6 @@
 import json
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from ofx.settings import BASE_DATA_DIR, ensure_dir, settings
@@ -102,7 +101,7 @@ def prune_history(keep: int = MAX_HISTORY_ENTRIES) -> int:
     if not HISTORY_FILE.exists():
         return 0
     try:
-        lines = [l for l in open(HISTORY_FILE) if l.strip()]
+        lines = [line for line in open(HISTORY_FILE) if line.strip()]
         if len(lines) <= keep:
             return 0
         pruned = len(lines) - keep

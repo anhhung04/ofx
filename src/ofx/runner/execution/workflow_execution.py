@@ -90,7 +90,7 @@ class WorkflowExecutionManager:
                     del tasks[job_id]
         except (asyncio.CancelledError, KeyboardInterrupt):
             # Cancel remaining tasks on interruption
-            for job_id, task in tasks.items():
+            for _job_id, task in tasks.items():
                 if not task.done():
                     task.cancel()
             await asyncio.gather(*tasks.values(), return_exceptions=True)

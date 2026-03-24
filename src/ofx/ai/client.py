@@ -62,7 +62,7 @@ def call_llm_stream(
     temperature: float = 0.7,
     max_tokens: int = 8192,
     base_url: str | None = None,
-) -> Generator[StreamChunk, None, None]:
+) -> Generator[StreamChunk]:
     """Stream LLM response chunks via the OpenAI Chat Completions API.
 
     Yields :class:`StreamChunk` objects whose *kind* is either

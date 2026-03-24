@@ -9,12 +9,11 @@ Provides:
 
 from __future__ import annotations
 
-from typing import Any, Callable, Protocol, TypeVar, Generic, runtime_checkable
+from collections.abc import Callable
+from typing import Any, Protocol, runtime_checkable
 
-T = TypeVar("T")
 
-
-class Result(Generic[T]):
+class Result[T]:
     """Simple Result/Either type.
 
     ``Result`` instances are either ``Ok(value)`` or ``Err(error)``.
@@ -31,11 +30,11 @@ class Result(Generic[T]):
         self._ok = ok
 
     @classmethod
-    def Ok(cls, value: T) -> "Result[T]":
+    def Ok(cls, value: T) -> Result[T]:
         return cls(value=value, ok=True)
 
     @classmethod
-    def Err(cls, error: Exception) -> "Result[Any]":
+    def Err(cls, error: Exception) -> Result[Any]:
         return cls(error=error, ok=False)
 
     def is_ok(self) -> bool:
@@ -54,7 +53,7 @@ class Result(Generic[T]):
             return self._error  # type: ignore[return-value]
         raise ValueError("Result is Ok, no error present")
 
-    def map(self, fn: Callable[[T], Any]) -> "Result[Any]":
+    def map(self, fn: Callable[[T], Any]) -> Result[Any]:
         if self._ok:
             try:
                 return Result.Ok(fn(self._value))  # type: ignore[arg-type]

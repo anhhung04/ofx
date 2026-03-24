@@ -7,8 +7,11 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel, Field, SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict, NestedSecretsSettingsSource
-from typing import Optional
+from pydantic_settings import (
+    BaseSettings,
+    NestedSecretsSettingsSource,
+    SettingsConfigDict,
+)
 from rich.console import Console
 from rich.theme import Theme
 
@@ -231,7 +234,7 @@ class Settings(BaseSettings):
     ai: AiSettings = Field(default_factory=AiSettings)
 
     # Active project name (populated from env var or CLI)
-    active_project: Optional[str] = Field(
+    active_project: str | None = Field(
         default=None, description="Active project name"
     )
 
@@ -322,7 +325,7 @@ class Settings(BaseSettings):
         secrets_dir=SECRETS_DIR.absolute(),
         yaml_file=CONFIG_YAML,
     )
-    
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -372,7 +375,7 @@ def _dump_default_config() -> str:
     defaults = Settings()
     data: dict = {}
 
-    for name, field_info in Settings.model_fields.items():
+    for name, _field_info in Settings.model_fields.items():
         if name in _CONFIG_EXCLUDE_FIELDS:
             continue
         value = getattr(defaults, name)
