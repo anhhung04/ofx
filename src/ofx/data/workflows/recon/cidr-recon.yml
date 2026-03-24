@@ -15,6 +15,7 @@ dispatch:
       required: true
       type: string
       description: CIDR range or IP (e.g. 192.168.1.0/24)
+      alias: t
 jobs:
   host-discovery:
     name: Host & Port Discovery

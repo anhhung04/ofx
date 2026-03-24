@@ -13,6 +13,7 @@ dispatch:
       required: true
       type: string
       description: Target URL or file of URLs
+      alias: t
 
 jobs:
   discover:

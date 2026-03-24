@@ -17,6 +17,7 @@ dispatch:
       required: true
       type: string
       description: Target host or IP address
+      alias: t
 jobs:
   host-recon:
     name: Host Reconnaissance

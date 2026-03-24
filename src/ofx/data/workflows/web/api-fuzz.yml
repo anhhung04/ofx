@@ -12,6 +12,7 @@ dispatch:
       required: true
       type: string
       description: Target URL (e.g. https://api.target.com)
+      alias: t
     wordlist:
       type: string
       default: /usr/share/wordlists/seclists/Discovery/Web-Content/api/api-endpoints.txt

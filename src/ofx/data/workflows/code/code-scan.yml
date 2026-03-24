@@ -13,6 +13,7 @@ dispatch:
       required: true
       type: string
       description: Path to codebase, Git repo URL, or container image
+      alias: t
 jobs:
   vuln-scan:
     name: Vulnerability Scanning

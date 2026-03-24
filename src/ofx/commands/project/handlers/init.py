@@ -26,6 +26,7 @@ ENGAGEMENT_FILE_STRUCTURE = [
     "scans",
     "scope",
     "subdomains",
+    "targets",
     "vulns",
     "web",
     "certs",

@@ -14,6 +14,7 @@ dispatch:
       required: true
       type: string
       description: Target CIDR or IP range (e.g. 10.0.0.0/24)
+      alias: t
 jobs:
   host-discovery:
     name: Host Discovery

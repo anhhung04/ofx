@@ -15,6 +15,7 @@ dispatch:
       required: true
       type: string
       description: Target URL or domain (e.g. https://example.com)
+      alias: t
 
 jobs:
   collect-params:

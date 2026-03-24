@@ -18,6 +18,7 @@ dispatch:
       required: true
       type: string
       description: Root domain to scan recursively (e.g. example.com)
+      alias: t
     max_parallel:
       type: string
       default: '5'

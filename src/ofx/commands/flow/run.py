@@ -114,6 +114,7 @@ class FlowRunHandler:
             "project_hosts": str(project_path / "hosts"),
             "project_osint": str(project_path / "osint"),
             "project_subdomains": str(project_path / "subdomains"),
+            "project_targets": str(project_path / "targets"),
             "project_vulns": str(project_path / "vulns"),
             "project_web": str(project_path / "web"),
             "project_certs": str(project_path / "certs"),
@@ -203,6 +204,32 @@ class FlowRunHandler:
         from ofx.utils.args import parse_key_value_pairs
 
         self.input = parse_key_value_pairs(self.preprocess_input)
+
+        # Auto-load targets from project targets/ folder when no target is provided
+        if "target" not in self.input and self.project_vars:
+            targets_dir = Path(self.project_vars.get("project_targets", ""))
+            if targets_dir.is_dir():
+                targets = self._load_targets_dir(targets_dir)
+                if targets:
+                    self.input["target"] = targets[0] if len(targets) == 1 else targets
+                    logger.info(
+                        "Loaded %d target(s) from %s",
+                        len(targets),
+                        targets_dir,
+                    )
+
+    @staticmethod
+    def _load_targets_dir(targets_dir: Path) -> list[str]:
+        """Read all .txt files in a targets directory and return unique targets."""
+        targets: list[str] = []
+        seen: set[str] = set()
+        for txt_file in sorted(targets_dir.glob("*.txt")):
+            for line in txt_file.read_text().splitlines():
+                entry = line.strip()
+                if entry and not entry.startswith("#") and entry not in seen:
+                    seen.add(entry)
+                    targets.append(entry)
+        return targets
 
     def _durable_overrides(self) -> DurableRunConfig | None:
         if (

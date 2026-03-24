@@ -15,6 +15,7 @@ dispatch:
       required: true
       type: string
       description: Target host:port (e.g. example.com:443)
+      alias: t
 jobs:
   sslscan-check:
     name: SSLScan Analysis

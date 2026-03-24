@@ -14,6 +14,7 @@ dispatch:
       required: true
       type: string
       description: Target CIDR or IP range
+      alias: t
     domain:
       type: string
       default: ''

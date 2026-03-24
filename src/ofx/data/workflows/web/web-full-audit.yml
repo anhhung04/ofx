@@ -16,6 +16,7 @@ dispatch:
       required: true
       type: string
       description: Target URL or hostname (e.g. https://target.com)
+      alias: t
     wordlist:
       type: string
       default: /usr/share/wordlists/seclists/Discovery/Web-Content/raft-medium-directories.txt

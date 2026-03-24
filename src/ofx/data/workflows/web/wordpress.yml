@@ -13,6 +13,7 @@ dispatch:
       required: true
       type: string
       description: Target WordPress URL (e.g. https://example.com)
+      alias: t
     api_token:
       type: string
       default: ''

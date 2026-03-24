@@ -13,6 +13,7 @@ dispatch:
       required: true
       type: string
       description: Username or email address to search
+      alias: t
 jobs:
   username-hunt:
     name: Username Hunting

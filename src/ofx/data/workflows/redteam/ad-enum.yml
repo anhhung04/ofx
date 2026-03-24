@@ -15,6 +15,7 @@ dispatch:
       required: true
       type: string
       description: Domain controller IP or hostname
+      alias: t
     domain:
       required: true
       type: string

@@ -11,6 +11,7 @@ dispatch:
       required: true
       type: string
       description: Target domain (e.g. target.com)
+      alias: t
 jobs:
   enum:
     name: Subdomain Enumeration

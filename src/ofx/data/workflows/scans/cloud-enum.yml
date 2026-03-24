@@ -13,6 +13,7 @@ dispatch:
       required: true
       type: string
       description: Target domain or keyword for bucket discovery
+      alias: t
 
 jobs:
   generate-names:

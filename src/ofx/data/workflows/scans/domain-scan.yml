@@ -17,6 +17,7 @@ dispatch:
       required: true
       type: string
       description: Target domain (e.g. example.com)
+      alias: t
 jobs:
   domain-recon:
     name: Domain Reconnaissance

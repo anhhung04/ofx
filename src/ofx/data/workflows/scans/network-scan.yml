@@ -17,6 +17,7 @@ dispatch:
       required: true
       type: string
       description: CIDR range (e.g. 192.168.1.0/24)
+      alias: t
 jobs:
   network-discovery:
     name: Network Discovery
