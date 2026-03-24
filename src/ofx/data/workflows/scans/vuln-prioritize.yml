@@ -1,0 +1,194 @@
+name: vuln-prioritize
+description: |
+  Vulnerability prioritization pipeline — ingest scan results (Nuclei, Nmap,
+  Trivy), rank by severity, cross-reference with Exploit-DB, and generate
+  an actionable remediation report.
+tags: [vulnerability, prioritize, report, triage]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target to scan for vulnerabilities
+      alias: t
+    scan_type:
+      type: string
+      default: full
+      description: 'Scan type: full, web-only, infra-only'
+    severity_threshold:
+      type: string
+      default: medium
+      description: 'Minimum severity to report: info, low, medium, high, critical'
+
+jobs:
+  scan:
+    name: Vulnerability Scanning
+    steps:
+    - task: nuclei
+      name: nuclei-scan
+      with:
+        target: '{{ inputs.target }}'
+        severity: '{{ inputs.severity_threshold }},high,critical'
+      log-stdout: true
+      continue-on-error: true
+    - task: nmap
+      name: nmap-vuln
+      with:
+        target: '{{ inputs.target }}'
+        scripts: vulners,vulscan
+        ports: '-'
+        service_detection: true
+      log-stdout: true
+      continue-on-error: true
+
+  exploit-check:
+    name: Exploit Availability Check
+    needs: [scan]
+    steps:
+    - name: check-exploits
+      script: |
+        import json
+        import subprocess
+        from pathlib import Path
+
+        vulns = {{ vulns(jobs['scan'].outputs.typed_outputs) | tojson }}
+
+        print(f"[+] Checking {len(vulns)} vulnerabilities against exploit-db...\n")
+
+        exploitable = []
+        for vuln in vulns:
+            name = vuln.get('name', '')
+            # Extract CVE IDs
+            import re
+            cves = re.findall(r'CVE-\d{4}-\d+', name)
+
+            for cve in cves:
+                try:
+                    proc = subprocess.run(
+                        ['searchsploit', '--cve', cve.replace('CVE-', ''), '-j'],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if proc.returncode == 0:
+                        data = json.loads(proc.stdout)
+                        if data.get('RESULTS_EXPLOIT'):
+                            exploitable.append({
+                                'cve': cve,
+                                'vuln_name': name,
+                                'severity': vuln.get('severity', ''),
+                                'host': vuln.get('host', ''),
+                                'exploits': len(data['RESULTS_EXPLOIT']),
+                                'titles': [e.get('Title', '') for e in data['RESULTS_EXPLOIT'][:3]]
+                            })
+                except Exception:
+                    pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"exploitable_count={len(exploitable)}\n")
+            f.write(f"exploitable_data={json.dumps(exploitable)}\n")
+
+        print(f"[+] {len(exploitable)} vulnerabilities have public exploits:\n")
+        for e in exploitable:
+            print(f"  [{e['severity'].upper()}] {e['cve']} — {e['vuln_name'][:60]}")
+            print(f"    Host: {e['host']}")
+            print(f"    Exploits: {e['exploits']}")
+            for t in e['titles']:
+                print(f"      • {t}")
+            print()
+      log-stdout: true
+      continue-on-error: true
+
+  prioritize:
+    name: Prioritization & Report
+    needs: [scan, exploit-check]
+    steps:
+    - name: generate-report
+      script: |
+        import json
+        from pathlib import Path
+
+        vulns = {{ vulns(jobs['scan'].outputs.typed_outputs) | tojson }}
+        threshold = '{{ inputs.severity_threshold }}'
+
+        sev_order = {'critical': 5, 'high': 4, 'medium': 3, 'low': 2, 'info': 1}
+        min_sev = sev_order.get(threshold, 1)
+
+        # Filter and sort
+        filtered = [v for v in vulns if sev_order.get(v.get('severity', '').lower(), 0) >= min_sev]
+        filtered.sort(key=lambda v: sev_order.get(v.get('severity', '').lower(), 0), reverse=True)
+
+        # Dedup by name+host
+        seen = set()
+        unique = []
+        for v in filtered:
+            key = f"{v.get('name', '')}:{v.get('host', '')}"
+            if key not in seen:
+                seen.add(key)
+                unique.append(v)
+
+        # Count by severity
+        by_severity = {}
+        for v in unique:
+            sev = v.get('severity', 'unknown').upper()
+            by_severity[sev] = by_severity.get(sev, 0) + 1
+
+        exploitable_count = int('{{ jobs["exploit-check"].outputs.exploitable_count | default("0", true) }}')
+
+        print("=" * 60)
+        print(f" VULNERABILITY REPORT: {{ inputs.target }}")
+        print("=" * 60)
+        print()
+        print("--- Summary ---")
+        print(f"  Total vulnerabilities: {len(unique)}")
+        print(f"  With public exploits: {exploitable_count}")
+        for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']:
+            count = by_severity.get(sev, 0)
+            if count:
+                print(f"  {sev}: {count}")
+        print()
+
+        print("--- Top Findings (by severity) ---")
+        for v in unique[:30]:
+            sev = v.get('severity', '?').upper()
+            name = v.get('name', 'Unknown')
+            host = v.get('host', '?')
+            print(f"  [{sev}] {name}")
+            print(f"    Host: {host}")
+        if len(unique) > 30:
+            print(f"  ... and {len(unique) - 30} more")
+
+        # Save report
+        report_file = '/tmp/ofx_vuln_report.txt'
+        with open(report_file, 'w') as f:
+            f.write(f"VULNERABILITY REPORT: {{ inputs.target }}\n")
+            f.write(f"Total: {len(unique)} | Exploitable: {exploitable_count}\n\n")
+            for v in unique:
+                f.write(f"[{v.get('severity', '?').upper()}] {v.get('name', '?')} — {v.get('host', '?')}\n")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"vuln_count={len(unique)}\n")
+            f.write(f"critical_count={by_severity.get('CRITICAL', 0)}\n")
+            f.write(f"high_count={by_severity.get('HIGH', 0)}\n")
+            f.write(f"report_file={report_file}\n")
+      log-stdout: true
+    - name: export-to-project
+      script: |
+        import shutil
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping export')
+        else:
+            vulns_dir = Path(project) / 'vulns'
+            vulns_dir.mkdir(parents=True, exist_ok=True)
+            report = '/tmp/ofx_vuln_report.txt'
+            if Path(report).is_file():
+                target_safe = '{{ inputs.target }}'.replace('.', '_').replace('/', '_')
+                shutil.copy2(report, vulns_dir / f'{target_safe}-vulns.txt')
+                print(f'  [+] vulns/{target_safe}-vulns.txt')
+
+            all_typed = {{ jobs['scan'].outputs.typed_outputs | default([], true) | tojson }}
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
+      continue-on-error: true

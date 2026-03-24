@@ -1,0 +1,69 @@
+name: defang-refang
+description: |
+  Defang or refang IOCs for safe sharing — convert URLs, IPs, domains,
+  and emails to/from safe formats for reports and documentation.
+tags: [utility, ioc, defang, dfir, cyberchef]
+dispatch:
+  inputs:
+    data:
+      required: true
+      type: string
+      description: IOC data to defang or refang (text or @file)
+    operation:
+      type: string
+      default: defang
+      description: 'Operation: defang or refang'
+
+jobs:
+  transform:
+    name: IOC Transform
+    steps:
+    - name: defang-refang
+      script: |
+        import re
+        from pathlib import Path
+
+        raw = '''{{ inputs.data }}'''
+        operation = '{{ inputs.operation }}'
+
+        if Path(raw).is_file():
+            raw = Path(raw).read_text()
+
+        if operation == 'defang':
+            result = raw
+            result = re.sub(r'https?://', lambda m: m.group().replace('http', 'hxxp'), result)
+            result = re.sub(
+                r'(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})',
+                r'\1[.]\2[.]\3[.]\4',
+                result
+            )
+            result = re.sub(
+                r'([a-zA-Z0-9.-]+)\.([a-zA-Z]{2,})',
+                lambda m: f"{m.group(1)}[.]{m.group(2)}" if not re.match(r'\d+\[\.\]\d+', m.group(1)) else m.group(0),
+                result
+            )
+            result = result.replace('@', '[@]')
+        elif operation == 'refang':
+            result = raw
+            result = result.replace('hxxp', 'http')
+            result = result.replace('hXXp', 'http')
+            result = result.replace('[.]', '.')
+            result = result.replace('[:]', ':')
+            result = result.replace('[@]', '@')
+            result = result.replace('[at]', '@')
+            result = result.replace('[dot]', '.')
+        else:
+            print(f"[-] Unknown operation: {operation}")
+            raise SystemExit(1)
+
+        print(f"=== {operation.upper()} ===")
+        print(result)
+
+        out_file = f'/tmp/ofx_{operation}ed.txt'
+        Path(out_file).write_text(result)
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"result_file={out_file}\n")
+            f.write(f"operation={operation}\n")
+            f.write(f"line_count={len(result.splitlines())}\n")
+      log-stdout: true

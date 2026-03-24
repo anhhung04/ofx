@@ -1,0 +1,173 @@
+name: jwt-analyze
+description: |
+  JWT token analyzer — decode header/payload, verify signature, check
+  for common vulnerabilities (none algorithm, weak secrets, expired tokens,
+  missing claims).
+tags: [utility, jwt, token, cyberchef, web]
+dispatch:
+  inputs:
+    token:
+      required: true
+      type: string
+      description: JWT token to analyze
+    secret:
+      type: string
+      default: ''
+      description: Secret key for signature verification
+    wordlist:
+      type: string
+      default: ''
+      description: Wordlist for brute-forcing weak HMAC secrets
+
+jobs:
+  analyze:
+    name: JWT Analysis
+    steps:
+    - name: decode-jwt
+      script: |
+        import base64
+        import json
+        import hashlib
+        import hmac
+        import time
+
+        token = '{{ inputs.token }}'
+        secret = '{{ inputs.secret }}'
+
+        parts = token.split('.')
+        if len(parts) != 3:
+            print(f"[-] Invalid JWT: expected 3 parts, got {len(parts)}")
+            raise SystemExit(1)
+
+        def b64url_decode(s):
+            s += '=' * (4 - len(s) % 4)
+            return base64.urlsafe_b64decode(s)
+
+        header = json.loads(b64url_decode(parts[0]))
+        payload = json.loads(b64url_decode(parts[1]))
+        signature = parts[2]
+
+        print("=== JWT HEADER ===")
+        print(json.dumps(header, indent=2))
+        print()
+        print("=== JWT PAYLOAD ===")
+        print(json.dumps(payload, indent=2))
+        print()
+
+        # Security checks
+        issues = []
+        alg = header.get('alg', '')
+
+        if alg.lower() == 'none':
+            issues.append('[CRITICAL] Algorithm set to "none" — signature bypass!')
+        if alg in ('HS256', 'HS384', 'HS512') and not secret:
+            issues.append('[INFO] HMAC algorithm — secret needed for verification')
+        if alg in ('RS256', 'RS384', 'RS512'):
+            issues.append('[INFO] RSA algorithm — check for algorithm confusion (RS→HS)')
+        if 'kid' in header:
+            issues.append(f'[INFO] Key ID (kid): {header["kid"]} — check for injection')
+        if 'jku' in header:
+            issues.append(f'[WARNING] JKU header present: {header["jku"]} — possible SSRF')
+        if 'x5u' in header:
+            issues.append(f'[WARNING] X5U header present: {header["x5u"]} — possible SSRF')
+
+        # Time checks
+        now = int(time.time())
+        if 'exp' in payload:
+            exp = payload['exp']
+            if exp < now:
+                issues.append(f'[WARNING] Token EXPIRED at {time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(exp))}')
+            else:
+                remaining = exp - now
+                issues.append(f'[OK] Expires in {remaining//3600}h {(remaining%3600)//60}m')
+        else:
+            issues.append('[WARNING] No expiration (exp) claim — token never expires')
+
+        if 'nbf' in payload:
+            nbf = payload['nbf']
+            if nbf > now:
+                issues.append(f'[WARNING] Token not valid until {time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(nbf))}')
+
+        if 'iat' not in payload:
+            issues.append('[INFO] No issued-at (iat) claim')
+        if 'iss' not in payload:
+            issues.append('[INFO] No issuer (iss) claim')
+        if 'sub' not in payload:
+            issues.append('[INFO] No subject (sub) claim')
+
+        # Verify signature if secret provided
+        verified = False
+        if secret and alg.startswith('HS'):
+            hash_alg = {'HS256': 'sha256', 'HS384': 'sha384', 'HS512': 'sha512'}.get(alg)
+            if hash_alg:
+                signing_input = f'{parts[0]}.{parts[1]}'.encode()
+                expected = base64.urlsafe_b64encode(
+                    hmac.new(secret.encode(), signing_input, hash_alg).digest()
+                ).rstrip(b'=').decode()
+                if expected == signature:
+                    verified = True
+                    issues.append('[OK] Signature VALID with provided secret')
+                else:
+                    issues.append('[FAIL] Signature INVALID with provided secret')
+
+        print("=== SECURITY ANALYSIS ===")
+        for issue in issues:
+            print(f"  {issue}")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"algorithm={alg}\n")
+            f.write(f"header={json.dumps(header)}\n")
+            f.write(f"payload={json.dumps(payload)}\n")
+            f.write(f"issue_count={len(issues)}\n")
+            f.write(f"verified={verified}\n")
+            f.write(f"expired={'exp' in payload and payload['exp'] < now}\n")
+      log-stdout: true
+
+    - name: brute-secret
+      if: "{{ inputs.wordlist }}"
+      script: |
+        import base64
+        import hashlib
+        import hmac
+        from pathlib import Path
+
+        token = '{{ inputs.token }}'
+        wordlist = '{{ inputs.wordlist }}'
+        parts = token.split('.')
+        alg = '{{ steps[0].outputs.algorithm | default("HS256", true) }}'
+
+        if not alg.startswith('HS'):
+            print("[*] Not an HMAC algorithm, skipping brute-force")
+        elif not Path(wordlist).is_file():
+            print(f"[-] Wordlist not found: {wordlist}")
+        else:
+            hash_alg = {'HS256': 'sha256', 'HS384': 'sha384', 'HS512': 'sha512'}.get(alg, 'sha256')
+            signing_input = f'{parts[0]}.{parts[1]}'.encode()
+            target_sig = parts[2]
+
+            print(f"[+] Brute-forcing {alg} secret with {wordlist}...")
+            found = None
+            count = 0
+            for line in Path(wordlist).read_text(errors='ignore').splitlines():
+                secret = line.strip()
+                if not secret:
+                    continue
+                count += 1
+                expected = base64.urlsafe_b64encode(
+                    hmac.new(secret.encode(), signing_input, hash_alg).digest()
+                ).rstrip(b'=').decode()
+                if expected == target_sig:
+                    found = secret
+                    break
+                if count >= 1000000:
+                    print(f"  [*] Tried {count} secrets, stopping...")
+                    break
+
+            if found:
+                print(f"  [+] SECRET FOUND: {found}")
+                with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+                    f.write(f"cracked_secret={found}\n")
+            else:
+                print(f"  [-] Secret not found in {count} attempts")
+      log-stdout: true
+      continue-on-error: true

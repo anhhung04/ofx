@@ -1,0 +1,131 @@
+name: extract-iocs
+description: |
+  Extract Indicators of Compromise (IOCs) from text or files — IPs, domains,
+  URLs, email addresses, MD5/SHA hashes, CVEs, and Bitcoin addresses.
+  Outputs deduplicated, categorized IOC lists.
+tags: [utility, ioc, extract, dfir, cyberchef]
+dispatch:
+  inputs:
+    data:
+      required: true
+      type: string
+      description: Text input or @file path containing IOCs to extract
+    defang:
+      type: string
+      default: 'false'
+      description: Defang extracted IOCs for safe sharing
+
+jobs:
+  extract:
+    name: Extract IOCs
+    steps:
+    - name: parse-iocs
+      script: |
+        import re
+        import json
+        from pathlib import Path
+
+        raw = '''{{ inputs.data }}'''
+        defang = '{{ inputs.defang }}' == 'true'
+
+        # Read from file if path
+        if Path(raw).is_file():
+            raw = Path(raw).read_text()
+
+        # Refang common defanged patterns first
+        text = raw.replace('[.]', '.').replace('hxxp', 'http').replace('[:]', ':').replace('[@]', '@')
+
+        iocs = {
+            'ipv4': set(),
+            'ipv6': set(),
+            'domains': set(),
+            'urls': set(),
+            'emails': set(),
+            'md5': set(),
+            'sha1': set(),
+            'sha256': set(),
+            'sha512': set(),
+            'cves': set(),
+            'btc': set(),
+        }
+
+        # IPv4
+        for m in re.findall(r'\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b', text):
+            parts = m.split('.')
+            if all(0 <= int(p) <= 255 for p in parts):
+                iocs['ipv4'].add(m)
+
+        # URLs
+        for m in re.findall(r'(https?://[^\s<>"\')\]]+)', text):
+            iocs['urls'].add(m.rstrip('.,;:'))
+
+        # Emails
+        for m in re.findall(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', text):
+            iocs['emails'].add(m.lower())
+
+        # Domains (after URL extraction to avoid duplication)
+        for m in re.findall(r'\b([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+)\b', text):
+            if not re.match(r'^\d+\.\d+\.\d+\.\d+$', m):
+                iocs['domains'].add(m.lower())
+
+        # Hashes
+        hex_words = re.findall(r'\b([a-fA-F0-9]+)\b', text)
+        for h in hex_words:
+            l = len(h)
+            if l == 32:
+                iocs['md5'].add(h.lower())
+            elif l == 40:
+                iocs['sha1'].add(h.lower())
+            elif l == 64:
+                iocs['sha256'].add(h.lower())
+            elif l == 128:
+                iocs['sha512'].add(h.lower())
+
+        # CVEs
+        for m in re.findall(r'(CVE-\d{4}-\d{4,})', text, re.IGNORECASE):
+            iocs['cves'].add(m.upper())
+
+        # Bitcoin addresses
+        for m in re.findall(r'\b([13][a-km-zA-HJ-NP-Z1-9]{25,34})\b', text):
+            iocs['btc'].add(m)
+
+        def defang_ioc(ioc, ioc_type):
+            if not defang:
+                return ioc
+            if ioc_type in ('ipv4', 'domains'):
+                return ioc.replace('.', '[.]')
+            if ioc_type == 'urls':
+                return ioc.replace('http', 'hxxp').replace('.', '[.]')
+            if ioc_type == 'emails':
+                return ioc.replace('@', '[@]').replace('.', '[.]')
+            return ioc
+
+        total = sum(len(v) for v in iocs.values())
+        print(f"=== IOC EXTRACTION: {total} indicators found ===")
+        print()
+
+        all_iocs = {}
+        for ioc_type, items in iocs.items():
+            if not items:
+                continue
+            sorted_items = sorted(items)
+            all_iocs[ioc_type] = [defang_ioc(i, ioc_type) for i in sorted_items]
+            print(f"--- {ioc_type.upper()} ({len(items)}) ---")
+            for item in sorted_items[:50]:
+                print(f"  {defang_ioc(item, ioc_type)}")
+            if len(items) > 50:
+                print(f"  ... and {len(items) - 50} more")
+            print()
+
+        # Write to files
+        for ioc_type, items in all_iocs.items():
+            out = Path(f'/tmp/ofx_iocs_{ioc_type}.txt')
+            out.write_text('\n'.join(items) + '\n')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"total_iocs={total}\n")
+            for ioc_type, items in all_iocs.items():
+                f.write(f"{ioc_type}_count={len(items)}\n")
+                f.write(f"{ioc_type}_file=/tmp/ofx_iocs_{ioc_type}.txt\n")
+            f.write(f"summary={json.dumps({k: len(v) for k, v in all_iocs.items()})}\n")
+      log-stdout: true

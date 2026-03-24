@@ -1,0 +1,126 @@
+name: ip-tools
+description: |
+  IP and network utilities — CIDR expansion, subnet calculation, reverse DNS,
+  WHOIS lookup, IP geolocation, and network range analysis.
+tags: [utility, network, ip, cidr, cyberchef]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: IP address, CIDR range, or hostname
+      alias: t
+    operation:
+      type: string
+      default: info
+      description: |
+        Operation: info (all info), cidr-expand, reverse-dns, whois,
+        subnet-calc, ping-sweep
+
+jobs:
+  ip-info:
+    name: IP Information
+    steps:
+    - name: analyze-ip
+      script: |
+        import ipaddress
+        import socket
+        import subprocess
+        import json
+
+        target = '{{ inputs.target }}'
+        operation = '{{ inputs.operation }}'
+
+        results = {}
+
+        # Parse IP/CIDR
+        try:
+            if '/' in target:
+                net = ipaddress.ip_network(target, strict=False)
+                results['type'] = 'network'
+                results['network'] = str(net.network_address)
+                results['broadcast'] = str(net.broadcast_address)
+                results['netmask'] = str(net.netmask)
+                results['prefix'] = net.prefixlen
+                results['host_count'] = net.num_addresses - 2 if net.prefixlen < 31 else net.num_addresses
+                results['is_private'] = net.is_private
+                results['first_host'] = str(list(net.hosts())[0]) if net.num_addresses > 2 else str(net.network_address)
+                results['last_host'] = str(list(net.hosts())[-1]) if net.num_addresses > 2 else str(net.broadcast_address)
+            else:
+                try:
+                    ip = ipaddress.ip_address(target)
+                    results['type'] = 'ip'
+                    results['version'] = ip.version
+                    results['is_private'] = ip.is_private
+                    results['is_loopback'] = ip.is_loopback
+                    results['is_multicast'] = ip.is_multicast
+                    results['is_reserved'] = ip.is_reserved
+                    results['is_link_local'] = ip.is_link_local
+                    # Calculate /24 subnet
+                    if ip.version == 4:
+                        net24 = ipaddress.ip_network(f'{ip}/24', strict=False)
+                        results['slash24'] = str(net24)
+                except ValueError:
+                    # It's a hostname
+                    results['type'] = 'hostname'
+                    try:
+                        ips = socket.getaddrinfo(target, None)
+                        resolved = set(addr[4][0] for addr in ips)
+                        results['resolved_ips'] = sorted(resolved)
+                    except Exception as e:
+                        results['resolved_ips'] = [f'Error: {e}']
+        except Exception as e:
+            results['error'] = str(e)
+
+        # Reverse DNS
+        if operation in ('info', 'reverse-dns'):
+            try:
+                if results.get('type') == 'ip':
+                    rdns = socket.gethostbyaddr(target)
+                    results['reverse_dns'] = rdns[0]
+                elif results.get('type') == 'hostname':
+                    pass  # Already resolved
+            except Exception:
+                results['reverse_dns'] = 'N/A'
+
+        # WHOIS
+        if operation in ('info', 'whois'):
+            try:
+                proc = subprocess.run(['whois', target], capture_output=True, text=True, timeout=15)
+                whois_data = proc.stdout
+                # Extract key fields
+                for field in ['OrgName', 'Organization', 'org-name', 'netname', 'NetName', 'Country', 'country', 'descr']:
+                    for line in whois_data.splitlines():
+                        if line.lower().startswith(field.lower()):
+                            results[f'whois_{field.lower()}'] = line.split(':', 1)[-1].strip()
+                            break
+                results['whois_raw_lines'] = len(whois_data.splitlines())
+            except Exception as e:
+                results['whois_error'] = str(e)
+
+        # CIDR expansion
+        if operation == 'cidr-expand' and '/' in target:
+            net = ipaddress.ip_network(target, strict=False)
+            hosts = [str(ip) for ip in net.hosts()]
+            from pathlib import Path
+            out = '/tmp/ofx_cidr_expanded.txt'
+            Path(out).write_text('\n'.join(hosts) + '\n')
+            results['expanded_file'] = out
+            results['expanded_count'] = len(hosts)
+            print(f"[+] Expanded {target} to {len(hosts)} hosts → {out}")
+
+        # Print results
+        print(f"=== IP TOOLS: {target} ===")
+        print()
+        for key, val in results.items():
+            if key.startswith('whois_raw'):
+                continue
+            print(f"  {key}: {val}")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            for key, val in results.items():
+                if isinstance(val, (list, dict)):
+                    f.write(f"{key}={json.dumps(val)}\n")
+                else:
+                    f.write(f"{key}={val}\n")
+      log-stdout: true
