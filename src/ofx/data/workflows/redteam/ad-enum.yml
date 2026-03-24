@@ -1,14 +1,15 @@
 name: ad-enum
-description: 'Active Directory enumeration — discovers users, shares, groups, policies, and service accounts using SMB, LDAP, and Kerberos protocols.
+description:
+  "Active Directory enumeration — discovers users, shares, groups, policies, and service accounts using SMB, LDAP, and Kerberos protocols.
 
-  '
+  "
 tags:
-- redteam
-- ad
-- enum
-- smb
-- ldap
-- kerberos
+  - redteam
+  - ad
+  - enum
+  - smb
+  - ldap
+  - kerberos
 dispatch:
   inputs:
     target:
@@ -22,286 +23,286 @@ dispatch:
       description: AD domain name (e.g. corp.local)
     username:
       type: string
-      default: ''
+      default: ""
       description: Username for authenticated enum
     password:
       type: string
-      default: ''
+      default: ""
       description: Password or NTLM hash
 jobs:
   smb-enum:
     name: SMB Enumeration
     outputs:
-      smb_users_file: '{{ steps.collect-smb.outputs.smb_users_file }}'
-      smb_user_count: '{{ steps.collect-smb.outputs.smb_user_count }}'
+      smb_users_file: "{{ steps.collect-smb.outputs.smb_users_file }}"
+      smb_user_count: "{{ steps.collect-smb.outputs.smb_user_count }}"
     steps:
-    - task: netexec
-      timeout: 15
-      name: nxc-smb-shares
-      with:
-        target: '{{ inputs.target }}'
-        protocol: smb
-        username: '{{ inputs.username if inputs.username else ''"'' }}'
-        password: '{{ inputs.password if inputs.password else ''"'' }}'
-        shares: true
-      continue-on-error: true
-    - task: netexec
-      timeout: 15
-      name: nxc-smb-users
-      with:
-        target: '{{ inputs.target }}'
-        protocol: smb
-        username: '{{ inputs.username if inputs.username else ''"'' }}'
-        password: '{{ inputs.password if inputs.password else ''"'' }}'
-        users: true
-      continue-on-error: true
-    - task: netexec
-      timeout: 15
-      name: nxc-smb-groups
-      with:
-        target: '{{ inputs.target }}'
-        protocol: smb
-        username: '{{ inputs.username if inputs.username else ''"'' }}'
-        password: '{{ inputs.password if inputs.password else ''"'' }}'
-        groups: true
-      continue-on-error: true
-    - task: netexec
-      timeout: 15
-      name: nxc-smb-sessions
-      with:
-        target: '{{ inputs.target }}'
-        protocol: smb
-        username: '{{ inputs.username if inputs.username else ''"'' }}'
-        password: '{{ inputs.password if inputs.password else ''"'' }}'
-        sessions: true
-      continue-on-error: true
-    - task: netexec
-      timeout: 15
-      name: nxc-smb-passpol
-      with:
-        target: '{{ inputs.target }}'
-        protocol: smb
-        username: '{{ inputs.username if inputs.username else ''"'' }}'
-        password: '{{ inputs.password if inputs.password else ''"'' }}'
-        pass_pol: true
-      continue-on-error: true
-    - task: netexec
-      timeout: 15
-      name: nxc-rid-brute
-      with:
-        target: '{{ inputs.target }}'
-        protocol: smb
-        username: '{{ inputs.username if inputs.username else ''"'' }}'
-        password: '{{ inputs.password if inputs.password else ''"'' }}'
-        rid_brute: true
-      continue-on-error: true
-    - task: enum4linux
-      timeout: 10
-      name: enum4linux-full
-      with:
-        target: '{{ inputs.target }}'
-        username: '{{ inputs.username }}'
-        password: '{{ inputs.password }}'
-        domain: '{{ inputs.domain }}'
-      continue-on-error: true
-    - name: collect-smb
-      script: |
-        users = set()
-        shares = set()
+      - task: netexec
+        timeout: 15
+        name: nxc-smb-shares
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          shares: true
+        continue-on-error: true
+      - task: netexec
+        timeout: 15
+        name: nxc-smb-users
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          users: true
+        continue-on-error: true
+      - task: netexec
+        timeout: 15
+        name: nxc-smb-groups
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          groups: true
+        continue-on-error: true
+      - task: netexec
+        timeout: 15
+        name: nxc-smb-sessions
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          sessions: true
+        continue-on-error: true
+      - task: netexec
+        timeout: 15
+        name: nxc-smb-passpol
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          pass_pol: true
+        continue-on-error: true
+      - task: netexec
+        timeout: 15
+        name: nxc-rid-brute
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: '{{ inputs.username if inputs.username else ''"'' }}'
+          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          rid_brute: true
+        continue-on-error: true
+      - task: enum4linux
+        timeout: 10
+        name: enum4linux-full
+        with:
+          target: "{{ inputs.target }}"
+          username: "{{ inputs.username }}"
+          password: "{{ inputs.password }}"
+          domain: "{{ inputs.domain }}"
+        continue-on-error: true
+      - name: collect-smb
+        script: |
+          users = set()
+          shares = set()
 
-        # From netexec user enumeration (typed outputs)
-        for idx in [1, 5]:  # nxc-smb-users, nxc-rid-brute
-            step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                if item.get('_type') == 'user_account' and item.get('username'):
-                    users.add(item['username'])
+          # From netexec user enumeration (typed outputs)
+          for idx in [1, 5]:  # nxc-smb-users, nxc-rid-brute
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'user_account' and item.get('username'):
+                      users.add(item['username'])
 
-        # From enum4linux
-        e4l_data = {{ users(steps["enum4linux-full"].outputs.typed_outputs) | tojson }}
-        for item in e4l_data:
-            if item.get('username'):
-                users.add(item['username'])
+          # From enum4linux
+          e4l_data = {{ users(steps["enum4linux-full"].outputs.typed_outputs) | tojson }}
+          for item in e4l_data:
+              if item.get('username'):
+                  users.add(item['username'])
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            open('/tmp/ofx_adenum_smb_users.txt', 'w').write('\n'.join(sorted(users)))
-            f.write(f"smb_users_file=/tmp/ofx_adenum_smb_users.txt\n")
-            f.write(f"smb_user_count={len(users)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              open('/tmp/ofx_adenum_smb_users.txt', 'w').write('\n'.join(sorted(users)))
+              f.write(f"smb_users_file=/tmp/ofx_adenum_smb_users.txt\n")
+              f.write(f"smb_user_count={len(users)}\n")
 
-        print(f"SMB enum: {len(users)} users discovered")
+          print(f"SMB enum: {len(users)} users discovered")
   kerberos-enum:
     name: Kerberos Enumeration
     outputs:
-      kerb_users_file: '{{ steps.collect-kerberos.outputs.kerb_users_file }}'
-      kerb_user_count: '{{ steps.collect-kerberos.outputs.kerb_user_count }}'
-      asrep_users_file: '{{ steps.collect-kerberos.outputs.asrep_users_file }}'
-      asrep_count: '{{ steps.collect-kerberos.outputs.asrep_count }}'
+      kerb_users_file: "{{ steps.collect-kerberos.outputs.kerb_users_file }}"
+      kerb_user_count: "{{ steps.collect-kerberos.outputs.kerb_user_count }}"
+      asrep_users_file: "{{ steps.collect-kerberos.outputs.asrep_users_file }}"
+      asrep_count: "{{ steps.collect-kerberos.outputs.asrep_count }}"
     steps:
-    - task: kerbrute
-      timeout: 15
-      name: kerbrute-userenum
-      with:
-        target: '{{ inputs.target }}'
-        mode: userenum
-        dc: '{{ inputs.target }}'
-        domain: '{{ inputs.domain }}'
-        users: /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames-dup.txt
-      continue-on-error: true
-    - name: asrep-roast
-      run: |
-        netexec ldap {{ inputs.target }} -u {{ inputs.username if inputs.username else '""' }} -p {{ inputs.password if inputs.password else '""' }} --asreproast /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt
-      continue-on-error: true
-    - name: collect-kerberos
-      script: |
-        import re
+      - task: kerbrute
+        timeout: 15
+        name: kerbrute-userenum
+        with:
+          target: "{{ inputs.target }}"
+          mode: userenum
+          dc: "{{ inputs.target }}"
+          domain: "{{ inputs.domain }}"
+          users: /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames-dup.txt
+        continue-on-error: true
+      - name: asrep-roast
+        run: |
+          netexec ldap {{ inputs.target }} -u {{ inputs.username if inputs.username else '""' }} -p {{ inputs.password if inputs.password else '""' }} --asreproast /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt
+        continue-on-error: true
+      - name: collect-kerberos
+        script: |
+          import re
 
-        kerb_users = set()
-        asrep_users = set()
+          kerb_users = set()
+          asrep_users = set()
 
-        # From kerbrute typed outputs
-        kerb_out = {{ users(steps["kerbrute-userenum"].outputs.typed_outputs) | tojson }}
-        for item in kerb_out:
-            if item.get('username'):
-                kerb_users.add(item['username'])
+          # From kerbrute typed outputs
+          kerb_out = {{ users(steps["kerbrute-userenum"].outputs.typed_outputs) | tojson }}
+          for item in kerb_out:
+              if item.get('username'):
+                  kerb_users.add(item['username'])
 
-        # Parse AS-REP roastable users
-        try:
-            with open('/tmp/asrep-hashes.txt') as f:
-                for line in f:
-                    if line.startswith('$krb5asrep$'):
-                        match = re.search(r'\$krb5asrep\$23?\$(.+?)@', line)
-                        if match:
-                            asrep_users.add(match.group(1))
-        except FileNotFoundError:
-            pass
+          # Parse AS-REP roastable users
+          try:
+              with open('/tmp/asrep-hashes.txt') as f:
+                  for line in f:
+                      if line.startswith('$krb5asrep$'):
+                          match = re.search(r'\$krb5asrep\$23?\$(.+?)@', line)
+                          if match:
+                              asrep_users.add(match.group(1))
+          except FileNotFoundError:
+              pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            open('/tmp/ofx_adenum_kerb_users.txt', 'w').write('\n'.join(sorted(kerb_users)))
-            f.write(f"kerb_users_file=/tmp/ofx_adenum_kerb_users.txt\n")
-            f.write(f"kerb_user_count={len(kerb_users)}\n")
-            open('/tmp/ofx_adenum_asrep_users.txt', 'w').write('\n'.join(sorted(asrep_users)))
-            f.write(f"asrep_users_file=/tmp/ofx_adenum_asrep_users.txt\n")
-            f.write(f"asrep_count={len(asrep_users)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              open('/tmp/ofx_adenum_kerb_users.txt', 'w').write('\n'.join(sorted(kerb_users)))
+              f.write(f"kerb_users_file=/tmp/ofx_adenum_kerb_users.txt\n")
+              f.write(f"kerb_user_count={len(kerb_users)}\n")
+              open('/tmp/ofx_adenum_asrep_users.txt', 'w').write('\n'.join(sorted(asrep_users)))
+              f.write(f"asrep_users_file=/tmp/ofx_adenum_asrep_users.txt\n")
+              f.write(f"asrep_count={len(asrep_users)}\n")
 
-        print(f"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)} AS-REP roastable")
+          print(f"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)} AS-REP roastable")
   ldap-enum:
     name: LDAP Enumeration
     outputs:
-      ldap_users_file: '{{ steps.collect-ldap.outputs.ldap_users_file }}'
-      ldap_user_count: '{{ steps.collect-ldap.outputs.ldap_user_count }}'
+      ldap_users_file: "{{ steps.collect-ldap.outputs.ldap_users_file }}"
+      ldap_user_count: "{{ steps.collect-ldap.outputs.ldap_user_count }}"
     steps:
-    - task: netexec
-      timeout: 15
-      name: nxc-ldap-users
-      with:
-        target: '{{ inputs.target }}'
-        protocol: ldap
-        username: '{{ inputs.username }}'
-        password: '{{ inputs.password }}'
-        users: true
-      if: '{{ inputs.username }}'
-      continue-on-error: true
-    - name: nxc-ldap-gmsa
-      run: |
-        {% if inputs.username %}
-        netexec ldap {{ inputs.target }} -u {{ inputs.username }} -p {{ inputs.password }} --gmsa 2>/dev/null | tee /tmp/ldap-gmsa.txt
-        {% else %}
-        echo "Skipping LDAP gMSA enum (no credentials provided)"
-        {% endif %}
-      continue-on-error: true
-    - name: collect-ldap
-      script: |
-        ldap_users = set()
+      - task: netexec
+        timeout: 15
+        name: nxc-ldap-users
+        with:
+          target: "{{ inputs.target }}"
+          protocol: ldap
+          username: "{{ inputs.username }}"
+          password: "{{ inputs.password }}"
+          users: true
+        if: "{{ inputs.username }}"
+        continue-on-error: true
+      - name: nxc-ldap-gmsa
+        run: |
+          {% if inputs.username %}
+          netexec ldap {{ inputs.target }} -u {{ inputs.username }} -p {{ inputs.password }} --gmsa 2>/dev/null | tee /tmp/ldap-gmsa.txt
+          {% else %}
+          echo "Skipping LDAP gMSA enum (no credentials provided)"
+          {% endif %}
+        continue-on-error: true
+      - name: collect-ldap
+        script: |
+          ldap_users = set()
 
-        # From netexec LDAP typed outputs
-        nxc_out = {{ users(steps["nxc-ldap-users"].outputs.typed_outputs) | tojson }}
-        for item in nxc_out:
-            if item.get('username'):
-                ldap_users.add(item['username'])
+          # From netexec LDAP typed outputs
+          nxc_out = {{ users(steps["nxc-ldap-users"].outputs.typed_outputs) | tojson }}
+          for item in nxc_out:
+              if item.get('username'):
+                  ldap_users.add(item['username'])
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            open('/tmp/ofx_adenum_ldap_users.txt', 'w').write('\n'.join(sorted(ldap_users)))
-            f.write(f"ldap_users_file=/tmp/ofx_adenum_ldap_users.txt\n")
-            f.write(f"ldap_user_count={len(ldap_users)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              open('/tmp/ofx_adenum_ldap_users.txt', 'w').write('\n'.join(sorted(ldap_users)))
+              f.write(f"ldap_users_file=/tmp/ofx_adenum_ldap_users.txt\n")
+              f.write(f"ldap_user_count={len(ldap_users)}\n")
 
-        print(f"LDAP enum: {len(ldap_users)} users")
+          print(f"LDAP enum: {len(ldap_users)} users")
   summary:
     name: AD Enumeration Summary
     needs:
-    - smb-enum
-    - kerberos-enum
-    - ldap-enum
+      - smb-enum
+      - kerberos-enum
+      - ldap-enum
     steps:
-    - name: report
-      run: |
-        echo "======================================================"
-        echo " AD ENUMERATION COMPLETE: {{ inputs.target }}"
-        echo " Domain: {{ inputs.domain }}"
-        echo "======================================================"
-        echo ""
-        echo "--- SMB Enumeration ---"
-        echo "Users found: {{ jobs['smb-enum'].outputs.smb_user_count }}"
-        echo ""
-        echo "--- Kerberos Enumeration ---"
-        echo "Valid users: {{ jobs['kerberos-enum'].outputs.kerb_user_count }}"
-        echo "AS-REP roastable: {{ jobs['kerberos-enum'].outputs.asrep_count }}"
-        echo ""
-        echo "--- LDAP Enumeration ---"
-        echo "LDAP users: {{ jobs['ldap-enum'].outputs.ldap_user_count }}"
-      log-stdout: true
-    - name: export-to-project
-      script: |
-        import shutil
-        from pathlib import Path
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " AD ENUMERATION COMPLETE: {{ inputs.target }}"
+          echo " Domain: {{ inputs.domain }}"
+          echo "======================================================"
+          echo ""
+          echo "--- SMB Enumeration ---"
+          echo "Users found: {{ jobs['smb-enum'].outputs.smb_user_count }}"
+          echo ""
+          echo "--- Kerberos Enumeration ---"
+          echo "Valid users: {{ jobs['kerberos-enum'].outputs.kerb_user_count }}"
+          echo "AS-REP roastable: {{ jobs['kerberos-enum'].outputs.asrep_count }}"
+          echo ""
+          echo "--- LDAP Enumeration ---"
+          echo "LDAP users: {{ jobs['ldap-enum'].outputs.ldap_user_count }}"
+        log-stdout: true
+      - name: export-to-project
+        script: |
+          import shutil
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
 
-            # SMB users
-            d = '{{ vars.project_hosts }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['smb-enum'].outputs.smb_users_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'ad-users-smb.txt')
-                print('  [+] hosts/ad-users-smb.txt')
+              # SMB users
+              d = '{{ vars.project_hosts }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['smb-enum'].outputs.smb_users_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'ad-users-smb.txt')
+                  print('  [+] hosts/ad-users-smb.txt')
 
-            # Kerberos users
-            d = '{{ vars.project_hosts }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['kerberos-enum'].outputs.kerb_users_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'ad-users-kerb.txt')
-                print('  [+] hosts/ad-users-kerb.txt')
+              # Kerberos users
+              d = '{{ vars.project_hosts }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['kerberos-enum'].outputs.kerb_users_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'ad-users-kerb.txt')
+                  print('  [+] hosts/ad-users-kerb.txt')
 
-            # LDAP users
-            d = '{{ vars.project_hosts }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['ldap-enum'].outputs.ldap_users_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'ad-users-ldap.txt')
-                print('  [+] hosts/ad-users-ldap.txt')
+              # LDAP users
+              d = '{{ vars.project_hosts }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['ldap-enum'].outputs.ldap_users_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'ad-users-ldap.txt')
+                  print('  [+] hosts/ad-users-ldap.txt')
 
-            # AS-REP roastable
-            d = '{{ vars.project_vulns }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['kerberos-enum'].outputs.asrep_users_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'asrep-users.txt')
-                print('  [+] vulns/asrep-users.txt')
+              # AS-REP roastable
+              d = '{{ vars.project_vulns }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['kerberos-enum'].outputs.asrep_users_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'asrep-users.txt')
+                  print('  [+] vulns/asrep-users.txt')
 
-            # Auto-export typed outputs
-            all_typed = []
-            for typed in [
-                {{ jobs['smb-enum'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['kerberos-enum'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['ldap-enum'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
+              # Auto-export typed outputs
+              all_typed = []
+              for typed in [
+                  {{ jobs['smb-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['kerberos-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['ldap-enum'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true

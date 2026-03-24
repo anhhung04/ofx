@@ -25,7 +25,7 @@ jobs:
   fingerprint:
     name: Fingerprinting
     outputs:
-      live_urls: '${{ steps.export-info.outputs.live_urls }}'
+      live_urls: "${{ steps.export-info.outputs.live_urls }}"
     steps:
       - task: rustscan
         timeout: 10
@@ -66,8 +66,8 @@ jobs:
     needs:
       - fingerprint
     outputs:
-      dir_urls_file: '${{ steps.collect-dirs.outputs.dir_urls_file }}'
-      dir_count: '${{ steps.collect-dirs.outputs.dir_count }}'
+      dir_urls_file: "${{ steps.collect-dirs.outputs.dir_urls_file }}"
+      dir_count: "${{ steps.collect-dirs.outputs.dir_count }}"
     steps:
       - task: feroxbuster
         timeout: 20
@@ -120,8 +120,8 @@ jobs:
     needs:
       - fingerprint
     outputs:
-      crawled_file: '${{ steps.collect-crawled.outputs.crawled_file }}'
-      crawl_count: '${{ steps.collect-crawled.outputs.crawl_count }}'
+      crawled_file: "${{ steps.collect-crawled.outputs.crawled_file }}"
+      crawl_count: "${{ steps.collect-crawled.outputs.crawl_count }}"
     steps:
       - task: katana
         timeout: 15
@@ -177,8 +177,8 @@ jobs:
       - crawl
       - dir-brute
     outputs:
-      param_file: '${{ steps.collect-params.outputs.param_file }}'
-      param_count: '${{ steps.collect-params.outputs.param_count }}'
+      param_file: "${{ steps.collect-params.outputs.param_file }}"
+      param_count: "${{ steps.collect-params.outputs.param_count }}"
     steps:
       - task: arjun
         timeout: 10
@@ -224,13 +224,13 @@ jobs:
     needs:
       - param-fuzz
     outputs:
-      total_vulns: '${{ steps.collect-vulns.outputs.total_vulns }}'
-      critical_count: '${{ steps.collect-vulns.outputs.critical_count }}'
-      high_count: '${{ steps.collect-vulns.outputs.high_count }}'
-      xss_count: '${{ steps.collect-vulns.outputs.xss_count }}'
-      sqli_count: '${{ steps.collect-vulns.outputs.sqli_count }}'
-      cmdi_count: '${{ steps.collect-vulns.outputs.cmdi_count }}'
-      crlf_count: '${{ steps.collect-vulns.outputs.crlf_count }}'
+      total_vulns: "${{ steps.collect-vulns.outputs.total_vulns }}"
+      critical_count: "${{ steps.collect-vulns.outputs.critical_count }}"
+      high_count: "${{ steps.collect-vulns.outputs.high_count }}"
+      xss_count: "${{ steps.collect-vulns.outputs.xss_count }}"
+      sqli_count: "${{ steps.collect-vulns.outputs.sqli_count }}"
+      cmdi_count: "${{ steps.collect-vulns.outputs.cmdi_count }}"
+      crlf_count: "${{ steps.collect-vulns.outputs.crlf_count }}"
     steps:
       - task: nuclei
         timeout: 20

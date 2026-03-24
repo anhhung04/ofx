@@ -2,12 +2,12 @@ name: subdomain-recon
 description: |
   Subdomain reconnaissance — discovers subdomains using passive and active techniques, verifies with DNS probes, checks for takeover vulnerabilities, and hunts for secrets.
 tags:
-- recon
-- dns
-- http
-- ssl
-- secrets
-- takeovers
+  - recon
+  - dns
+  - http
+  - ssl
+  - secrets
+  - takeovers
 dispatch:
   inputs:
     target:
@@ -19,164 +19,164 @@ jobs:
   passive-enum:
     name: Passive Subdomain Enumeration
     outputs:
-      subdomain_file: '{{ steps.collect-subdomains.outputs.subdomain_file }}'
-      subdomain_count: '{{ steps.collect-subdomains.outputs.subdomain_count }}'
+      subdomain_file: "{{ steps.collect-subdomains.outputs.subdomain_file }}"
+      subdomain_count: "{{ steps.collect-subdomains.outputs.subdomain_count }}"
     steps:
-    - task: subfinder
-      timeout: 10
-      name: subfinder-enum
-      with:
-        target: '{{ inputs.target }}'
-        all: true
-      continue-on-error: true
-    - task: gau
-      name: gau-urls
-      timeout: 10
-      with:
-        target: '{{ inputs.target }}'
-        subs: true
-      continue-on-error: true
-    - task: amass
-      timeout: 20
-      name: amass-enum
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - task: assetfinder
-      timeout: 10
-      name: assetfinder-enum
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - name: collect-subdomains
-      script: |
-        import json
+      - task: subfinder
+        timeout: 10
+        name: subfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+        continue-on-error: true
+      - task: gau
+        name: gau-urls
+        timeout: 10
+        with:
+          target: "{{ inputs.target }}"
+          subs: true
+        continue-on-error: true
+      - task: amass
+        timeout: 20
+        name: amass-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: assetfinder
+        timeout: 10
+        name: assetfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - name: collect-subdomains
+        script: |
+          import json
 
-        all_subs = set()
+          all_subs = set()
 
-        sf_outputs = {{ steps["subfinder-enum"].outputs.typed_outputs | tojson }}
-        for item in sf_outputs:
-            if item.get('_type') == 'subdomain':
-                all_subs.add(item['host'])
+          sf_outputs = {{ steps["subfinder-enum"].outputs.typed_outputs | tojson }}
+          for item in sf_outputs:
+              if item.get('_type') == 'subdomain':
+                  all_subs.add(item['host'])
 
-        gau_outputs = {{ steps["gau-urls"].outputs.typed_outputs | tojson }}
-        for item in gau_outputs:
-            if item.get('_type') == 'url':
-                host = item.get('host', '')
-                if host and '{{ inputs.target }}' in host:
-                    all_subs.add(host)
+          gau_outputs = {{ steps["gau-urls"].outputs.typed_outputs | tojson }}
+          for item in gau_outputs:
+              if item.get('_type') == 'url':
+                  host = item.get('host', '')
+                  if host and '{{ inputs.target }}' in host:
+                      all_subs.add(host)
 
-        amass_outputs = {{ steps["amass-enum"].outputs.typed_outputs | tojson }}
-        for item in amass_outputs:
-            if item.get('_type') == 'subdomain':
-                all_subs.add(item['host'])
+          amass_outputs = {{ steps["amass-enum"].outputs.typed_outputs | tojson }}
+          for item in amass_outputs:
+              if item.get('_type') == 'subdomain':
+                  all_subs.add(item['host'])
 
-        assetfinder_outputs = {{ steps["assetfinder-enum"].outputs.typed_outputs | tojson }}
-        for item in assetfinder_outputs:
-            if item.get('_type') == 'subdomain':
-                all_subs.add(item['host'])
+          assetfinder_outputs = {{ steps["assetfinder-enum"].outputs.typed_outputs | tojson }}
+          for item in assetfinder_outputs:
+              if item.get('_type') == 'subdomain':
+                  all_subs.add(item['host'])
 
-        with open('/tmp/subdomains.txt', 'w') as f:
-            f.write('\n'.join(sorted(all_subs)))
+          with open('/tmp/subdomains.txt', 'w') as f:
+              f.write('\n'.join(sorted(all_subs)))
 
-        print(f"Found {len(all_subs)} unique subdomains")
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"subdomain_file=/tmp/subdomains.txt\n")
-            f.write(f"subdomain_count={len(all_subs)}\n")
+          print(f"Found {len(all_subs)} unique subdomains")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"subdomain_file=/tmp/subdomains.txt\n")
+              f.write(f"subdomain_count={len(all_subs)}\n")
   dns-verification:
     name: DNS Verification
     outputs:
-      typed_outputs: '{{ steps.verify-dns.outputs.typed_outputs }}'
+      typed_outputs: "{{ steps.verify-dns.outputs.typed_outputs }}"
     needs:
-    - passive-enum
+      - passive-enum
     steps:
-    - task: dnsx
-      timeout: 10
-      name: verify-dns
-      with:
-        target: '{{ jobs[''passive-enum''].outputs.subdomain_file }}'
-        a: true
-        cname: true
-        resp: true
-      continue-on-error: true
+      - task: dnsx
+        timeout: 10
+        name: verify-dns
+        with:
+          target: "{{ jobs['passive-enum'].outputs.subdomain_file }}"
+          a: true
+          cname: true
+          resp: true
+        continue-on-error: true
   http-probe:
     name: HTTP Probing
     outputs:
-      live_urls: '{{ steps.export-urls.outputs.live_urls }}'
+      live_urls: "{{ steps.export-urls.outputs.live_urls }}"
     needs:
-    - dns-verification
+      - dns-verification
     steps:
-    - task: httpx
-      timeout: 10
-      name: probe-subdomains
-      with:
-        target: '{{ jobs[''passive-enum''].outputs.subdomain_file }}'
-        tech_detect: true
-        status_code: true
-        title: true
-        follow_redirects: true
-      continue-on-error: true
-    - name: export-urls
-      run: |
-        echo "live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+      - task: httpx
+        timeout: 10
+        name: probe-subdomains
+        with:
+          target: "{{ jobs['passive-enum'].outputs.subdomain_file }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+        continue-on-error: true
+      - name: export-urls
+        run: |
+          echo "live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   takeover-check:
     name: Subdomain Takeover & Vulnerability Check
     needs:
-    - http-probe
+      - http-probe
     steps:
-    - task: nuclei
-      timeout: 20
-      name: takeover-scan
-      with:
-        target: '{{ jobs[''passive-enum''].outputs.subdomain_file }}'
-        tags: takeover
-      continue-on-error: true
-    - name: summary
-      run: |
-        echo "======================================="
-        echo " Subdomain Recon: {{ inputs.target }}"
-        echo "======================================="
-        echo "Subdomains found: {{ jobs['passive-enum'].outputs.subdomain_count }}"
-        echo "Takeover vulns: {{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}"
-      log-stdout: true
-    - name: export-to-project
-      script: |-
-        import shutil
-        from pathlib import Path
+      - task: nuclei
+        timeout: 20
+        name: takeover-scan
+        with:
+          target: "{{ jobs['passive-enum'].outputs.subdomain_file }}"
+          tags: takeover
+        continue-on-error: true
+      - name: summary
+        run: |
+          echo "======================================="
+          echo " Subdomain Recon: {{ inputs.target }}"
+          echo "======================================="
+          echo "Subdomains found: {{ jobs['passive-enum'].outputs.subdomain_count }}"
+          echo "Takeover vulns: {{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}"
+        log-stdout: true
+      - name: export-to-project
+        script: |-
+          import shutil
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
 
-            # subdomains
-            d = '{{ vars.project_subdomains }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['passive-enum'].outputs.subdomain_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'subdomains.txt')
-                print('  [+] subdomains/subdomains.txt')
+              # subdomains
+              d = '{{ vars.project_subdomains }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['passive-enum'].outputs.subdomain_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'subdomains.txt')
+                  print('  [+] subdomains/subdomains.txt')
 
-            # alive subs
-            d = '{{ vars.project_subdomains }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            data = '''{{ jobs['dns-verification'].outputs.alive_subs | default('', true) }}'''.strip()
-            if data:
-                (Path(d) / 'alive-subs.txt').write_text(data)
-                print(f'  [+] subdomains/alive-subs.txt ({len(data.splitlines())} lines)')
+              # alive subs
+              d = '{{ vars.project_subdomains }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              data = '''{{ jobs['dns-verification'].outputs.alive_subs | default('', true) }}'''.strip()
+              if data:
+                  (Path(d) / 'alive-subs.txt').write_text(data)
+                  print(f'  [+] subdomains/alive-subs.txt ({len(data.splitlines())} lines)')
 
-            # Auto-export typed outputs
-            all_typed = []
-            for typed in [
-                {{ jobs['passive-enum'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['dns-verification'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['takeover-check'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
+              # Auto-export typed outputs
+              all_typed = []
+              for typed in [
+                  {{ jobs['passive-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['dns-verification'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['takeover-check'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true

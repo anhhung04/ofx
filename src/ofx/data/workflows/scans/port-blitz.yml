@@ -23,10 +23,10 @@ jobs:
   fast-scan:
     name: Fast Port Discovery
     outputs:
-      hosts_file: '{{ steps.merge-ports.outputs.hosts_file }}'
-      merged_ports: '{{ steps.merge-ports.outputs.merged_ports }}'
-      host_count: '{{ steps.merge-ports.outputs.host_count }}'
-      port_count: '{{ steps.merge-ports.outputs.port_count }}'
+      hosts_file: "{{ steps.merge-ports.outputs.hosts_file }}"
+      merged_ports: "{{ steps.merge-ports.outputs.merged_ports }}"
+      host_count: "{{ steps.merge-ports.outputs.host_count }}"
+      port_count: "{{ steps.merge-ports.outputs.port_count }}"
     steps:
       - task: rustscan
         name: rustscan-sweep
@@ -100,11 +100,11 @@ jobs:
     needs:
       - fast-scan
     outputs:
-      service_count: '{{ steps.collect-services.outputs.service_count }}'
-      live_urls_file: '{{ steps.collect-services.outputs.live_urls_file }}'
-      http_count: '{{ steps.collect-services.outputs.http_count }}'
-      vuln_count: '{{ steps.collect-services.outputs.vuln_count }}'
-      exploit_count: '{{ steps.collect-services.outputs.exploit_count }}'
+      service_count: "{{ steps.collect-services.outputs.service_count }}"
+      live_urls_file: "{{ steps.collect-services.outputs.live_urls_file }}"
+      http_count: "{{ steps.collect-services.outputs.http_count }}"
+      vuln_count: "{{ steps.collect-services.outputs.vuln_count }}"
+      exploit_count: "{{ steps.collect-services.outputs.exploit_count }}"
     steps:
       - task: nmap
         timeout: 30

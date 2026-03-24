@@ -1,185 +1,185 @@
 name: api-fuzz
 description: |
-  REST API endpoint fuzzing — discover endpoints, test for IDOR,
-  method tampering, parameter pollution, auth bypass, and injection
-  via common API security checks.
+    REST API endpoint fuzzing — discover endpoints, test for IDOR,
+    method tampering, parameter pollution, auth bypass, and injection
+    via common API security checks.
 tags: [web, api, fuzzing, security]
 dispatch:
-  inputs:
-    target:
-      required: true
-      type: string
-      description: API base URL (e.g. https://api.target.com/v1)
-      alias: t
-    wordlist:
-      type: string
-      default: ''
-      description: Custom endpoint wordlist path
-    auth_header:
-      type: string
-      default: ''
-      description: Authorization header value (e.g. "Bearer token123")
+    inputs:
+        target:
+            required: true
+            type: string
+            description: API base URL (e.g. https://api.target.com/v1)
+            alias: t
+        wordlist:
+            type: string
+            default: ""
+            description: Custom endpoint wordlist path
+        auth_header:
+            type: string
+            default: ""
+            description: Authorization header value (e.g. "Bearer token123")
 
 jobs:
-  discovery:
-    name: API Endpoint Discovery
-    steps:
-    - task: ffuf
-      timeout: 15
-      name: fuzz-endpoints
-      with:
-        target: '{{ inputs.target }}/FUZZ'
-        wordlist: '{{ inputs.wordlist or "/usr/share/seclists/Discovery/Web-Content/api/api-endpoints.txt" }}'
-        mc: '200,201,204,301,302,401,403,405'
-        rate: 100
-      continue-on-error: true
+    discovery:
+        name: API Endpoint Discovery
+        steps:
+            - task: ffuf
+              timeout: 15
+              name: fuzz-endpoints
+              with:
+                  target: "{{ inputs.target }}/FUZZ"
+                  wordlist: '{{ inputs.wordlist or "/usr/share/seclists/Discovery/Web-Content/api/api-endpoints.txt" }}'
+                  mc: "200,201,204,301,302,401,403,405"
+                  rate: 100
+              continue-on-error: true
 
-  method-test:
-    name: HTTP Method Testing
-    outputs:
-      finding_count: '${{ steps.test-methods.outputs.finding_count }}'
-    steps:
-    - name: test-methods
-      script: |
-        import urllib.request
-        import urllib.error
+    method-test:
+        name: HTTP Method Testing
+        outputs:
+            finding_count: "${{ steps.test-methods.outputs.finding_count }}"
+        steps:
+            - name: test-methods
+              script: |
+                  import urllib.request
+                  import urllib.error
 
-        base_url = '{{ inputs.target }}'
-        auth = '{{ inputs.auth_header }}'
-        methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD', 'TRACE']
+                  base_url = '{{ inputs.target }}'
+                  auth = '{{ inputs.auth_header }}'
+                  methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD', 'TRACE']
 
-        findings = []
-        print(f"=== METHOD TESTING: {base_url} ===\n")
+                  findings = []
+                  print(f"=== METHOD TESTING: {base_url} ===\n")
 
-        for method in methods:
-            try:
-                req = urllib.request.Request(base_url, method=method)
-                if auth:
-                    req.add_header('Authorization', auth)
-                resp = urllib.request.urlopen(req, timeout=10)
-                status = resp.status
-                print(f"  {method}: {status}")
-                if method == 'TRACE' and status == 200:
-                    findings.append(f'[MEDIUM] TRACE method enabled')
-                if method in ('PUT', 'DELETE', 'PATCH') and status in (200, 201, 204):
-                    findings.append(f'[HIGH] {method} method allowed — test for unauthorized mutation')
-            except urllib.error.HTTPError as e:
-                print(f"  {method}: {e.code}")
-            except Exception as e:
-                print(f"  {method}: Error - {e}")
+                  for method in methods:
+                      try:
+                          req = urllib.request.Request(base_url, method=method)
+                          if auth:
+                              req.add_header('Authorization', auth)
+                          resp = urllib.request.urlopen(req, timeout=10)
+                          status = resp.status
+                          print(f"  {method}: {status}")
+                          if method == 'TRACE' and status == 200:
+                              findings.append(f'[MEDIUM] TRACE method enabled')
+                          if method in ('PUT', 'DELETE', 'PATCH') and status in (200, 201, 204):
+                              findings.append(f'[HIGH] {method} method allowed — test for unauthorized mutation')
+                      except urllib.error.HTTPError as e:
+                          print(f"  {method}: {e.code}")
+                      except Exception as e:
+                          print(f"  {method}: Error - {e}")
 
-        # Test without auth
-        if auth:
-            print(f"\n--- Without Auth ---")
-            for method in ['GET', 'POST']:
-                try:
-                    req = urllib.request.Request(base_url, method=method)
-                    resp = urllib.request.urlopen(req, timeout=10)
-                    if resp.status in (200, 201):
-                        findings.append(f'[CRITICAL] {method} accessible without auth')
-                    print(f"  {method} (no auth): {resp.status}")
-                except urllib.error.HTTPError as e:
-                    print(f"  {method} (no auth): {e.code}")
-                except Exception:
-                    pass
+                  # Test without auth
+                  if auth:
+                      print(f"\n--- Without Auth ---")
+                      for method in ['GET', 'POST']:
+                          try:
+                              req = urllib.request.Request(base_url, method=method)
+                              resp = urllib.request.urlopen(req, timeout=10)
+                              if resp.status in (200, 201):
+                                  findings.append(f'[CRITICAL] {method} accessible without auth')
+                              print(f"  {method} (no auth): {resp.status}")
+                          except urllib.error.HTTPError as e:
+                              print(f"  {method} (no auth): {e.code}")
+                          except Exception:
+                              pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
+                  with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+                      f.write(f"finding_count={len(findings)}\n")
 
-        for finding in findings:
-            print(f"\n  {finding}")
-      log-stdout: true
-      continue-on-error: true
+                  for finding in findings:
+                      print(f"\n  {finding}")
+              log-stdout: true
+              continue-on-error: true
 
-  security-headers:
-    name: Security Headers Check
-    outputs:
-      header_finding_count: '${{ steps.check-headers.outputs.header_finding_count }}'
-    steps:
-    - name: check-headers
-      script: |
-        import urllib.request
+    security-headers:
+        name: Security Headers Check
+        outputs:
+            header_finding_count: "${{ steps.check-headers.outputs.header_finding_count }}"
+        steps:
+            - name: check-headers
+              script: |
+                  import urllib.request
 
-        url = '{{ inputs.target }}'
-        auth = '{{ inputs.auth_header }}'
+                  url = '{{ inputs.target }}'
+                  auth = '{{ inputs.auth_header }}'
 
-        req = urllib.request.Request(url)
-        if auth:
-            req.add_header('Authorization', auth)
+                  req = urllib.request.Request(url)
+                  if auth:
+                      req.add_header('Authorization', auth)
 
-        findings = []
-        try:
-            resp = urllib.request.urlopen(req, timeout=10)
-            headers = dict(resp.headers)
+                  findings = []
+                  try:
+                      resp = urllib.request.urlopen(req, timeout=10)
+                      headers = dict(resp.headers)
 
-            expected_headers = {
-                'X-Content-Type-Options': 'nosniff',
-                'X-Frame-Options': None,
-                'Strict-Transport-Security': None,
-                'Content-Security-Policy': None,
-                'X-XSS-Protection': None,
-                'Cache-Control': None,
-            }
+                      expected_headers = {
+                          'X-Content-Type-Options': 'nosniff',
+                          'X-Frame-Options': None,
+                          'Strict-Transport-Security': None,
+                          'Content-Security-Policy': None,
+                          'X-XSS-Protection': None,
+                          'Cache-Control': None,
+                      }
 
-            dangerous_headers = ['Server', 'X-Powered-By', 'X-AspNet-Version']
+                      dangerous_headers = ['Server', 'X-Powered-By', 'X-AspNet-Version']
 
-            print(f"=== SECURITY HEADERS: {url} ===\n")
-            print("--- Present ---")
-            for h, v in sorted(headers.items()):
-                print(f"  {h}: {v}")
+                      print(f"=== SECURITY HEADERS: {url} ===\n")
+                      print("--- Present ---")
+                      for h, v in sorted(headers.items()):
+                          print(f"  {h}: {v}")
 
-            print("\n--- Missing ---")
-            for h in expected_headers:
-                if h.lower() not in {k.lower(): v for k, v in headers.items()}:
-                    findings.append(f'[MEDIUM] Missing header: {h}')
-                    print(f"  {h}")
+                      print("\n--- Missing ---")
+                      for h in expected_headers:
+                          if h.lower() not in {k.lower(): v for k, v in headers.items()}:
+                              findings.append(f'[MEDIUM] Missing header: {h}')
+                              print(f"  {h}")
 
-            print("\n--- Information Disclosure ---")
-            for h in dangerous_headers:
-                val = headers.get(h, '')
-                if val:
-                    findings.append(f'[LOW] Info leak: {h}: {val}')
-                    print(f"  {h}: {val}")
+                      print("\n--- Information Disclosure ---")
+                      for h in dangerous_headers:
+                          val = headers.get(h, '')
+                          if val:
+                              findings.append(f'[LOW] Info leak: {h}: {val}')
+                              print(f"  {h}: {val}")
 
-            # CORS headers
-            cors = headers.get('Access-Control-Allow-Origin', '')
-            if cors == '*':
-                findings.append('[MEDIUM] CORS allows any origin (*)')
-                print(f"\n  [!] CORS: {cors}")
+                      # CORS headers
+                      cors = headers.get('Access-Control-Allow-Origin', '')
+                      if cors == '*':
+                          findings.append('[MEDIUM] CORS allows any origin (*)')
+                          print(f"\n  [!] CORS: {cors}")
 
-        except Exception as e:
-            print(f"Error: {e}")
+                  except Exception as e:
+                      print(f"Error: {e}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"header_finding_count={len(findings)}\n")
+                  with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+                      f.write(f"header_finding_count={len(findings)}\n")
 
-        for finding in findings:
-            print(f"  {finding}")
-      log-stdout: true
-      continue-on-error: true
-  summary:
-    name: Summary
-    needs:
-    - discovery
-    - method-test
-    - security-headers
-    steps:
-    - name: export-to-project
-      script: |
-        from pathlib import Path
+                  for finding in findings:
+                      print(f"  {finding}")
+              log-stdout: true
+              continue-on-error: true
+    summary:
+        name: Summary
+        needs:
+            - discovery
+            - method-test
+            - security-headers
+        steps:
+            - name: export-to-project
+              script: |
+                  from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            all_typed = []
-            for typed in [
-            {{ jobs['discovery'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
+                  project = '{{ vars.project_path | default("", true) }}'
+                  if not project:
+                      print('No --project set, skipping file export')
+                  else:
+                      all_typed = []
+                      for typed in [
+                      {{ jobs['discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                      ]:
+                          all_typed.extend(typed)
+                      summaries = export_typed_outputs(project, all_typed)
+                      for s in summaries:
+                          print(s)
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+                      print(f'Project export complete: {project}')
+              continue-on-error: true
