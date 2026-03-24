@@ -344,7 +344,20 @@ def run(
             help="Run workflow for a specific project. Sets output to <project>/logs and exposes project vars.",
         ),
     ] = "",
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Show execution plan without running (jobs, stages, inputs, dependencies).",
+        ),
+    ] = False,
 ):
+    if dry_run:
+        from ofx.commands.flow.info import show_info
+
+        show_info(workflow_name, detailed=True)
+        return
+
     from ofx.commands import get_cli_env_vars, get_cli_project
     from ofx.commands.flow.run import FlowRunHandler
 
@@ -403,6 +416,22 @@ def validate(
         all_workflows=all_workflows,
         check_tasks=check_tasks,
     )
+
+
+@app.command()
+def lint(
+    workflow_name: Annotated[
+        str, typer.Argument(help="Name of the workflow to lint", autocompletion=_complete_workflow_names)
+    ] = "",
+    all_workflows: Annotated[
+        bool,
+        typer.Option("--all", help="Lint all discoverable workflows."),
+    ] = False,
+):
+    """Check workflows for best-practice issues (descriptions, tags, naming, timeouts)."""
+    from ofx.commands.flow.lint import lint_workflows
+
+    lint_workflows(all_workflows=all_workflows, workflow_name=workflow_name)
 
 
 @app.command()

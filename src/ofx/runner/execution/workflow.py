@@ -165,6 +165,10 @@ class WorkflowRunner(BaseRunner[Workflow]):
         unified = await reporter.build_unified()
         await self.reg_set(RunnerRegistryKeys.SUMMARY, summary.to_dict())
         await self.reg_set(RunnerRegistryKeys.SUMMARY_UNIFIED, unified)
+        # Expose unified summary in outputs for CLI consumption
+        existing = await self.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
+        existing["__summary__"] = unified
+        await self.reg_set(RunnerRegistryKeys.OUTPUTS, existing)
 
     async def _install_tools(self) -> None:
         tools = self.model.tools

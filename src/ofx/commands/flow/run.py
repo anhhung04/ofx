@@ -171,6 +171,10 @@ class FlowRunHandler:
                     "Error details: %s", result.error or "No error message available."
                 )
 
+            # Display execution summary
+            if not self.quiet:
+                self._print_summary(result, start_time)
+
         finally:
             if lock_fd is not None:
                 self._release_lock(lock_fd)
@@ -199,6 +203,30 @@ class FlowRunHandler:
                 stats.print_stats("time", 10)
 
         return result
+
+    def _print_summary(self, result, start_time: float) -> None:
+        """Print a rich execution summary after workflow completion."""
+        import time
+
+        from ofx.commands.ui_helpers import execution_summary_panel
+        from ofx.settings import get_console
+
+        console = get_console()
+        summary = result.outputs.pop("__summary__", None)
+        if not summary:
+            return
+
+        elapsed = time.time() - start_time
+        # Inject elapsed time into summary
+        summary["elapsed_seconds"] = round(elapsed, 1)
+
+        panel = execution_summary_panel(summary)
+        console.print()
+        console.print(panel)
+
+        # Show output path
+        console.print(f"  [dim]Output:[/] {self.output}")
+        console.print()
 
     def _process_inputs(self):
         from ofx.utils.args import parse_key_value_pairs

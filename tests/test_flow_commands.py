@@ -1,0 +1,224 @@
+"""Tests for flow info, visualize, validate, and lint commands."""
+
+from pathlib import Path
+
+import pytest
+import yaml
+
+from ofx.models.workflow import Workflow
+
+# Minimal valid workflow for testing
+MINIMAL_WORKFLOW = {
+    "name": "test-workflow",
+    "description": "A test workflow for validation",
+    "tags": ["test", "ci"],
+    "dispatch": {
+        "inputs": {
+            "target": {
+                "required": True,
+                "type": "string",
+                "description": "Test target",
+            }
+        }
+    },
+    "jobs": {
+        "job1": {
+            "name": "First Job",
+            "steps": [{"name": "step1", "run": "echo hello"}],
+            "outputs": {"result": "{{ steps.step1.outputs.result }}"},
+        },
+        "job2": {
+            "name": "Second Job",
+            "needs": ["job1"],
+            "steps": [
+                {"name": "step2", "run": "echo world"},
+                {"name": "step3", "run": "echo done"},
+            ],
+        },
+    },
+}
+
+
+@pytest.fixture
+def workflow_file(tmp_path: Path) -> Path:
+    """Create a temporary workflow YAML file."""
+    path = tmp_path / "test-workflow.yml"
+    path.write_text(yaml.dump(MINIMAL_WORKFLOW))
+    return path
+
+
+@pytest.fixture
+def workflow(workflow_file: Path) -> Workflow:
+    """Load the test workflow model."""
+    data = yaml.safe_load(workflow_file.read_text())
+    wf = Workflow.model_validate(data)
+    wf.workflow_path = workflow_file
+    return wf
+
+
+class TestFlowInfo:
+    def test_build_overview_table(self, workflow: Workflow):
+        from ofx.commands.flow.info import _build_overview_table
+
+        table = _build_overview_table(workflow)
+        assert table is not None
+        assert table.row_count >= 5  # name, desc, tags, jobs, steps
+
+    def test_build_inputs_table(self, workflow: Workflow):
+        from ofx.commands.flow.info import _build_inputs_table
+
+        table = _build_inputs_table(workflow)
+        assert table is not None
+        assert table.row_count == 1  # one input: target
+
+    def test_build_inputs_table_none_when_no_dispatch(self):
+        from ofx.commands.flow.info import _build_inputs_table
+
+        wf_data = {k: v for k, v in MINIMAL_WORKFLOW.items() if k != "dispatch"}
+        wf = Workflow.model_validate(wf_data)
+        assert _build_inputs_table(wf) is None
+
+    def test_build_jobs_tree(self, workflow: Workflow):
+        from ofx.commands.flow.info import _build_jobs_tree
+
+        tree = _build_jobs_tree(workflow, detailed=False)
+        assert tree is not None
+
+    def test_build_jobs_tree_detailed(self, workflow: Workflow):
+        from ofx.commands.flow.info import _build_jobs_tree
+
+        tree = _build_jobs_tree(workflow, detailed=True)
+        assert tree is not None
+
+    def test_build_outputs_table(self, workflow: Workflow):
+        from ofx.commands.flow.info import _build_outputs_table
+
+        table = _build_outputs_table(workflow)
+        assert table is not None
+        assert table.row_count == 1  # job1 has outputs
+
+    def test_step_type_label(self):
+        from ofx.commands.flow.info import _step_type_label
+        from ofx.models.step import Step
+
+        assert "task: nmap" in _step_type_label(Step(task="nmap", name="s"))
+        assert "run:" in _step_type_label(Step(run="echo hi", name="s"))
+        assert "script" == _step_type_label(Step(script="print(1)", name="s"))
+        assert "uses:" in _step_type_label(Step(uses="./other.yml", name="s"))
+
+
+class TestFlowVisualize:
+    def test_build_dag_data(self, workflow: Workflow):
+        from ofx.commands.flow.visualize import _build_dag_data
+
+        data = _build_dag_data(workflow)
+        assert data["name"] == "test-workflow"
+        assert len(data["stages"]) == 2  # 2 stages
+        assert len(data["jobs"]) == 2
+        assert len(data["dependencies"]) == 1  # job2 depends on job1
+
+    def test_render_dot(self, workflow: Workflow):
+        from ofx.commands.flow.visualize import _render_dot
+
+        dot = _render_dot(workflow)
+        assert 'digraph "test-workflow"' in dot
+        assert '"job1"' in dot
+        assert '"job2"' in dot
+        assert '"job1" -> "job2"' in dot
+        assert "cluster_stage" in dot
+
+    def test_render_json(self, workflow: Workflow):
+        import json
+
+        from ofx.commands.flow.visualize import _render_json
+
+        result = _render_json(workflow)
+        data = json.loads(result)
+        assert data["name"] == "test-workflow"
+        assert "stages" in data
+        assert "jobs" in data
+        assert "dependencies" in data
+
+
+class TestFlowValidate:
+    def test_validate_one_valid(self, workflow_file: Path):
+        from ofx.commands.flow.validate import _validate_one
+
+        result = _validate_one(workflow_file, check_tasks=False)
+        assert result.valid
+        assert result.name == "test-workflow"
+        assert result.jobs == 2
+        assert result.steps == 3
+        assert result.has_dispatch
+        assert "test" in result.tags
+
+    def test_validate_one_invalid(self, tmp_path: Path):
+        from ofx.commands.flow.validate import _validate_one
+
+        bad_file = tmp_path / "bad.yml"
+        bad_file.write_text("not: a: valid: workflow")
+        result = _validate_one(bad_file, check_tasks=False)
+        assert not result.valid
+        assert result.error
+
+    def test_validate_one_with_warnings(self, tmp_path: Path):
+        from ofx.commands.flow.validate import _validate_one
+
+        # Workflow without dispatch (triggers a warning)
+        wf_data = {
+            "name": "warn-test",
+            "jobs": {
+                "job1": {
+                    "steps": [{"name": "s", "run": "echo"}],
+                }
+            },
+        }
+        path = tmp_path / "warn.yml"
+        path.write_text(yaml.dump(wf_data))
+        result = _validate_one(path, check_tasks=False)
+        assert result.valid
+        assert any("dispatch" in w.lower() or "call" in w.lower() for w in result.warnings)
+
+
+class TestFlowLint:
+    def test_lint_clean_workflow(self, workflow_file: Path):
+        from ofx.commands.flow.lint import _lint_workflow
+
+        result = _lint_workflow(workflow_file)
+        assert result.name == "test-workflow"
+        # Should have some info issues (job2 has no outputs) but no errors/warns
+        assert result.error_count == 0
+        assert result.warn_count == 0
+
+    def test_lint_missing_description(self, tmp_path: Path):
+        from ofx.commands.flow.lint import _lint_workflow
+
+        wf_data = {
+            "name": "no-desc",
+            "jobs": {"j": {"steps": [{"name": "s", "run": "echo"}]}},
+        }
+        path = tmp_path / "no-desc.yml"
+        path.write_text(yaml.dump(wf_data))
+        result = _lint_workflow(path)
+        assert any("description" in i.message.lower() for i in result.issues)
+
+    def test_lint_missing_tags(self, tmp_path: Path):
+        from ofx.commands.flow.lint import _lint_workflow
+
+        wf_data = {
+            "name": "no-tags",
+            "description": "Has desc but no tags",
+            "jobs": {"j": {"steps": [{"name": "s", "run": "echo"}]}},
+        }
+        path = tmp_path / "no-tags.yml"
+        path.write_text(yaml.dump(wf_data))
+        result = _lint_workflow(path)
+        assert any("tags" in i.message.lower() for i in result.issues)
+
+    def test_lint_invalid_yaml(self, tmp_path: Path):
+        from ofx.commands.flow.lint import _lint_workflow
+
+        path = tmp_path / "bad.yml"
+        path.write_text("invalid: yaml: content")
+        result = _lint_workflow(path)
+        assert result.error_count > 0
