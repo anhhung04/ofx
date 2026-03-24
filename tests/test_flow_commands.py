@@ -222,3 +222,104 @@ class TestFlowLint:
         path.write_text("invalid: yaml: content")
         result = _lint_workflow(path)
         assert result.error_count > 0
+
+
+class TestFlowHistory:
+    """Tests for flow run history tracking."""
+
+    def test_save_and_load(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow import history
+
+        monkeypatch.setattr(history, "HISTORY_DIR", tmp_path)
+        monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
+
+        history.save_run_record(
+            run_id="abc-123",
+            workflow_name="test-flow",
+            status="completed",
+            elapsed_seconds=12.5,
+        )
+        history.save_run_record(
+            run_id="def-456",
+            workflow_name="other-flow",
+            status="failed",
+            error="something broke",
+            elapsed_seconds=3.2,
+        )
+
+        records = history.load_history(limit=10)
+        assert len(records) == 2
+        assert records[0]["run_id"] == "def-456"  # newest first
+        assert records[1]["run_id"] == "abc-123"
+
+    def test_filter_by_workflow(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow import history
+
+        monkeypatch.setattr(history, "HISTORY_DIR", tmp_path)
+        monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
+
+        history.save_run_record(run_id="1", workflow_name="scan-target", status="completed")
+        history.save_run_record(run_id="2", workflow_name="recon-dns", status="completed")
+
+        records = history.load_history(workflow="scan")
+        assert len(records) == 1
+        assert records[0]["workflow"] == "scan-target"
+
+    def test_filter_by_status(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow import history
+
+        monkeypatch.setattr(history, "HISTORY_DIR", tmp_path)
+        monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
+
+        history.save_run_record(run_id="1", workflow_name="a", status="completed")
+        history.save_run_record(run_id="2", workflow_name="b", status="failed")
+
+        records = history.load_history(status="failed")
+        assert len(records) == 1
+        assert records[0]["status"] == "failed"
+
+    def test_clear_history(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow import history
+
+        monkeypatch.setattr(history, "HISTORY_DIR", tmp_path)
+        monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
+
+        history.save_run_record(run_id="1", workflow_name="a", status="completed")
+        history.save_run_record(run_id="2", workflow_name="b", status="completed")
+
+        count = history.clear_history()
+        assert count == 2
+        assert history.load_history() == []
+
+    def test_prune_history(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow import history
+
+        monkeypatch.setattr(history, "HISTORY_DIR", tmp_path)
+        monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
+
+        for i in range(10):
+            history.save_run_record(run_id=str(i), workflow_name=f"flow-{i}", status="completed")
+
+        pruned = history.prune_history(keep=3)
+        assert pruned == 7
+        records = history.load_history(limit=100)
+        assert len(records) == 3
+
+    def test_relative_time(self):
+        from ofx.commands.flow.history import _relative_time
+        from datetime import datetime, UTC, timedelta
+
+        now = datetime.now(UTC)
+        assert _relative_time(now.isoformat()) == "just now"
+        assert "m ago" in _relative_time((now - timedelta(minutes=5)).isoformat())
+        assert "h ago" in _relative_time((now - timedelta(hours=3)).isoformat())
+        assert "d ago" in _relative_time((now - timedelta(days=2)).isoformat())
+
+    def test_empty_history(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow import history
+
+        monkeypatch.setattr(history, "HISTORY_DIR", tmp_path)
+        monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
+
+        records = history.load_history()
+        assert records == []

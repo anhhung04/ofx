@@ -1,55 +1,257 @@
 # Quickstart Examples
 
-Here are simple OFX workflow examples to get you started quickly.
+Real-world workflow examples from simple to advanced. Save any example as a `.yml` file and run with `ofx flow run <file>`.
 
 ---
 
-## Example 1: Hello World
+## 1. Hello World
+
+The simplest possible workflow — one job, one step.
+
 ```yaml
-name: Hello World
+name: hello-world
 jobs:
-  hello:
-    name: Say Hello
+  greet:
     steps:
-      - name: Print greeting
-        run: echo "Hello, OFX!"
+      - name: Say hello
+        run: echo "Hello from OFX!"
 ```
-Run: `ofx flow run Hello World` (save as `hello-world.yml`). Expected: a single step that prints `Hello, OFX!`.
+
+```bash
+ofx flow run hello-world.yml
+```
 
 ---
 
-## Example 2: Scan a Target
+## 2. Parameterized Scan
+
+Accept inputs from the command line and use them in steps.
+
 ```yaml
-name: Scan Target
+name: quick-scan
+description: Run a fast port scan against a target
+
 dispatch:
   inputs:
     target:
-      description: Target to scan
-      default: "localhost"
+      type: string
+      required: true
+      description: IP or hostname to scan
+    ports:
+      type: string
+      default: "80,443,22,8080"
+      description: Ports to scan
+
 jobs:
   scan:
-    name: Network Scan
     steps:
-      - name: Run nmap
-        run: nmap {{ inputs.target }}
+      - name: Port scan
+        run: nmap -sT -p {{ inputs.ports }} {{ inputs.target }}
 ```
-Run: `ofx flow run Scan Target --input target=scanme.nmap.org`. Expected: `nmap` scan output with exit code 0. Ensure `nmap` is installed or add `run: {{ uv_install('nmap') }}` before the scan step.
+
+```bash
+ofx flow run quick-scan.yml --input target=10.10.10.1 --input ports=1-1000
+```
 
 ---
 
-## Example 3: Use a Secret
+## 3. Multi-Job Pipeline with Dependencies
+
+Chain jobs together — `enumerate` runs first, then `analyze` uses its output.
+
 ```yaml
-name: API Request
+name: recon-pipeline
+description: Subdomain discovery → HTTP probing
+
+dispatch:
+  inputs:
+    domain:
+      type: string
+      required: true
+
 jobs:
-  api:
-    name: Call API
+  enumerate:
     steps:
-      - name: Make authenticated request
-        run: curl -H "Authorization: Bearer {{ secrets.API_KEY }}" https://api.example.com
+      - name: Find subdomains
+        run: subfinder -d {{ inputs.domain }} -silent -o subs.txt
+    outputs:
+      subs_file: subs.txt
+
+  probe:
+    needs: [enumerate]
+    steps:
+      - name: HTTP probe
+        run: httpx -l {{ jobs['enumerate'].outputs.subs_file }} -silent
 ```
-Prepare secret: `ofx secret set API_KEY`. Run: `ofx flow run API Request`. Expected: HTTP response body or failure message if the token is invalid.
+
+```bash
+ofx flow run recon-pipeline.yml --input domain=example.com
+```
 
 ---
 
-## See Also
-- [Quickstart Guide](../quickstart.md)
+## 4. Matrix Strategy (Parallel Expansion)
+
+Run the same job across multiple targets or configurations in parallel.
+
+```yaml
+name: multi-scan
+description: Scan multiple targets simultaneously
+
+jobs:
+  scan:
+    strategy:
+      matrix:
+        target: ["10.10.10.1", "10.10.10.2", "10.10.10.3"]
+      max_parallel: 3
+    steps:
+      - name: Scan host
+        run: nmap -sV {{ matrix.target }} -oN scan_{{ matrix.target }}.txt
+```
+
+```bash
+ofx flow run multi-scan.yml
+```
+
+---
+
+## 5. Using Secrets
+
+Store sensitive values securely and reference them in workflows.
+
+```bash
+# Set a secret
+ofx secret set API_KEY
+```
+
+```yaml
+name: api-check
+description: Call an API with authentication
+
+jobs:
+  check:
+    steps:
+      - name: Authenticated request
+        run: |
+          curl -s -H "Authorization: Bearer {{ secrets.API_KEY }}" \
+            https://api.example.com/status
+```
+
+---
+
+## 6. Task Steps (Built-in Tool Wrappers)
+
+Use pre-built task wrappers for common security tools — they parse output into structured data.
+
+```yaml
+name: task-example
+description: Port scan with structured output
+
+dispatch:
+  inputs:
+    target:
+      type: string
+      required: true
+
+jobs:
+  discover:
+    steps:
+      - name: Port scan
+        task: nmap
+        with:
+          target: "{{ inputs.target }}"
+          opts: "-sV --top-ports 100"
+        timeout: 10
+    outputs:
+      open_ports: "{{ steps['Port scan'].typed_outputs | ports | join(',') }}"
+```
+
+Available tasks: `nmap`, `nuclei`, `httpx`, `subfinder`, `ffuf`, `feroxbuster`, `katana`, and [many more](../../cli/commands/tasks.md).
+
+---
+
+## 7. Reusable Workflows
+
+Reference other workflows as steps with `uses:`.
+
+```yaml
+name: full-recon
+description: Chain multiple workflows together
+
+dispatch:
+  inputs:
+    domain:
+      type: string
+      required: true
+
+jobs:
+  subdomains:
+    steps:
+      - name: Run subdomain recon
+        uses: recon/subdomain-recon
+        with:
+          target: "{{ inputs.domain }}"
+
+  web-audit:
+    needs: [subdomains]
+    steps:
+      - name: Run web audit
+        uses: web/web-full-audit
+        with:
+          target: "{{ inputs.domain }}"
+```
+
+---
+
+## 8. Project Integration
+
+Bind a workflow to a project for organized output and scoped context.
+
+```bash
+# Create a project
+ofx project init pentest-acme
+
+# Run workflow within project context
+ofx flow run recon/subdomain-recon --input target=acme.com --project pentest-acme
+
+# All outputs saved to ~/.ofx/projects/pentest-acme/
+```
+
+---
+
+## Common Patterns
+
+### Conditional Steps
+
+```yaml
+- name: Exploit only if vulnerable
+  run: python3 exploit.py {{ inputs.target }}
+  if: "{{ 'VULNERABLE' in steps['Check vuln'].stdout }}"
+```
+
+### Retry on Failure
+
+```yaml
+- name: Flaky network request
+  run: curl -s https://unstable-api.example.com
+  retry: 3
+  retry-delay: 5
+```
+
+### Tool Installation
+
+```yaml
+tools:
+  subfinder:
+    install: "{{ go_install('github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest') }}"
+    check: subfinder -version
+```
+
+---
+
+## What's Next
+
+- Browse 120+ [built-in workflows](../../cli/commands/list.md): `ofx flow list --builtin`
+- [Workflow guide](../../guide/workflows.md) — full YAML reference
+- [Templates](../../guide/templates.md) — Jinja2 expressions and helpers
+- [Cloud runners](../../guide/cloud-runners.md) — run on remote VPS

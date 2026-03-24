@@ -203,6 +203,7 @@ nav:
                               - Info: cli/commands/info.md
                               - List Workflows: cli/commands/list.md
                               - Run: cli/commands/run.md
+                              - History: cli/commands/history.md
                               - Validate: cli/commands/validate.md
                               - Visualize: cli/commands/visualize.md
                               - Tools: cli/commands/tools.md

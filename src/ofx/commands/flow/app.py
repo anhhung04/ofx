@@ -496,6 +496,54 @@ def visualize_cmd(
 
 
 @app.command()
+def history(
+    limit: Annotated[
+        int,
+        typer.Option("-n", "--limit", help="Number of recent runs to show."),
+    ] = 20,
+    workflow: Annotated[
+        str,
+        typer.Option("-w", "--workflow", help="Filter by workflow name (substring match)."),
+    ] = "",
+    status: Annotated[
+        str,
+        typer.Option("-s", "--status", help="Filter by status: completed, failed, canceled."),
+    ] = "",
+    verbose: Annotated[
+        bool,
+        typer.Option("-v", "--verbose", help="Show additional columns (project, jobs, steps)."),
+    ] = False,
+    clear: Annotated[
+        bool,
+        typer.Option("--clear", help="Clear all run history."),
+    ] = False,
+    prune: Annotated[
+        int,
+        typer.Option("--prune", help="Prune history to keep only the last N entries."),
+    ] = 0,
+):
+    """Show past workflow run history."""
+    from ofx.commands.flow.history import clear_history, prune_history, show_history
+    from ofx.commands.ui_helpers import print_info
+    from ofx.settings import get_console
+
+    if clear:
+        count = clear_history()
+        print_info("History Cleared", f"Removed {count} run record(s).")
+        return
+
+    if prune > 0:
+        count = prune_history(keep=prune)
+        if count:
+            print_info("History Pruned", f"Removed {count} oldest record(s).")
+        else:
+            get_console().print("[dim]Nothing to prune.[/dim]")
+        return
+
+    show_history(limit=limit, workflow=workflow, status=status, verbose=verbose)
+
+
+@app.command()
 def tools(
     workflow_name: Annotated[
         str,

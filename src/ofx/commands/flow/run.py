@@ -175,6 +175,9 @@ class FlowRunHandler:
             if not self.quiet:
                 self._print_summary(result, start_time)
 
+            # Save to run history
+            self._save_history(result, start_time)
+
         finally:
             if lock_fd is not None:
                 self._release_lock(lock_fd)
@@ -227,6 +230,25 @@ class FlowRunHandler:
         # Show output path
         console.print(f"  [dim]Output:[/] {self.output}")
         console.print()
+
+    def _save_history(self, result, start_time: float) -> None:
+        """Save run record to history file."""
+        from ofx.commands.flow.history import save_run_record
+
+        elapsed = time.time() - start_time
+        summary = result.outputs.get("__summary__")
+
+        save_run_record(
+            run_id=result.run_id,
+            workflow_name=self.workflow_name,
+            status=result.status.value,
+            error=result.error,
+            inputs=getattr(self, "input", None),
+            project=self.project_vars.get("project_name", ""),
+            output_path=str(self.output),
+            elapsed_seconds=elapsed,
+            summary=summary,
+        )
 
     def _process_inputs(self):
         from ofx.utils.args import parse_key_value_pairs
