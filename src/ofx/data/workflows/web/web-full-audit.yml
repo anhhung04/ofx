@@ -1,14 +1,15 @@
 name: web-full-audit
-description: 'Comprehensive web application audit — port discovery, fingerprinting, directory brute-forcing, parameter fuzzing, vulnerability scanning (XSS, SQLi, CRLF, command injection), and secret hunting.
+description:
+  "Comprehensive web application audit — port discovery, fingerprinting, directory brute-forcing, parameter fuzzing, vulnerability scanning (XSS, SQLi, CRLF, command injection), and secret hunting.
 
-  '
+  "
 tags:
-- web
-- audit
-- vuln
-- fuzz
-- xss
-- sqli
+  - web
+  - audit
+  - vuln
+  - fuzz
+  - xss
+  - sqli
 dispatch:
   inputs:
     target:
@@ -23,343 +24,343 @@ jobs:
   fingerprint:
     name: Fingerprinting
     steps:
-    - task: rustscan
-      name: port-discovery
-      with:
-        target: '{{ inputs.target }}'
-        range: 1-10000
-        batch_size: 4500
-      continue-on-error: true
-    - task: httpx
-      name: http-probe
-      with:
-        target: '{{ inputs.target }}'
-        tech_detect: true
-        status_code: true
-        title: true
-        follow_redirects: true
-      log-stdout: true
-      continue-on-error: true
-    - task: wafw00f
-      name: waf-detect
-      with:
-        target: '{{ inputs.target }}'
-      log-stdout: true
-      continue-on-error: true
-    - task: whatweb
-      name: whatweb-scan
-      with:
-        target: '{{ inputs.target }}'
-        aggression: 3
-      log-stdout: true
-      continue-on-error: true
-    - name: export-info
-      run: |
-        echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-      log-stdout: true
+      - task: rustscan
+        name: port-discovery
+        with:
+          target: "{{ inputs.target }}"
+          range: 1-10000
+          batch_size: 4500
+        continue-on-error: true
+      - task: httpx
+        name: http-probe
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+        log-stdout: true
+        continue-on-error: true
+      - task: wafw00f
+        name: waf-detect
+        with:
+          target: "{{ inputs.target }}"
+        log-stdout: true
+        continue-on-error: true
+      - task: whatweb
+        name: whatweb-scan
+        with:
+          target: "{{ inputs.target }}"
+          aggression: 3
+        log-stdout: true
+        continue-on-error: true
+      - name: export-info
+        run: |
+          echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        log-stdout: true
   dir-brute:
     name: Directory Brute-Force
     needs:
-    - fingerprint
+      - fingerprint
     steps:
-    - task: feroxbuster
-      name: feroxbuster-deep
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        wordlist: '{{ inputs.wordlist }}'
-        threads: 50
-        depth: 3
-        status_codes: 200,201,204,301,302,307,401,403,405,500
-      log-stdout: true
-      continue-on-error: true
-    - task: gobuster
-      name: gobuster-scan
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        mode: dir
-        wordlist: '{{ inputs.wordlist }}'
-        threads: 50
-        status_codes: 200,201,204,301,302,307,401,403
-      log-stdout: true
-      continue-on-error: true
-    - task: dirsearch
-      name: dirsearch-scan
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        threads: 30
-        extensions: php,asp,aspx,jsp,html,js,json,xml,txt,bak,sql,conf
-      log-stdout: true
-      continue-on-error: true
-    - name: collect-dirs
-      script: |
-        urls = set()
-        for idx in [0, 1, 2]:
-            step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                if item.get('_type') == 'url' and item.get('url'):
-                    urls.add(item['url'])
+      - task: feroxbuster
+        name: feroxbuster-deep
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          wordlist: "{{ inputs.wordlist }}"
+          threads: 50
+          depth: 3
+          status_codes: 200,201,204,301,302,307,401,403,405,500
+        log-stdout: true
+        continue-on-error: true
+      - task: gobuster
+        name: gobuster-scan
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          mode: dir
+          wordlist: "{{ inputs.wordlist }}"
+          threads: 50
+          status_codes: 200,201,204,301,302,307,401,403
+        log-stdout: true
+        continue-on-error: true
+      - task: dirsearch
+        name: dirsearch-scan
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          threads: 30
+          extensions: php,asp,aspx,jsp,html,js,json,xml,txt,bak,sql,conf
+        log-stdout: true
+        continue-on-error: true
+      - name: collect-dirs
+        script: |
+          urls = set()
+          for idx in [0, 1, 2]:
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url' and item.get('url'):
+                      urls.add(item['url'])
 
-        with open('/tmp/ofx_webaudit_dirs.txt', 'w') as tf:
-            tf.write('\n'.join(sorted(urls)))
+          with open('/tmp/ofx_webaudit_dirs.txt', 'w') as tf:
+              tf.write('\n'.join(sorted(urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"dir_urls_file=/tmp/ofx_webaudit_dirs.txt\n")
-            f.write(f"dir_count={len(urls)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"dir_urls_file=/tmp/ofx_webaudit_dirs.txt\n")
+              f.write(f"dir_count={len(urls)}\n")
 
-        print(f"Discovered {len(urls)} unique URLs/directories")
-      log-stdout: true
+          print(f"Discovered {len(urls)} unique URLs/directories")
+        log-stdout: true
   crawl:
     name: Content Discovery
     needs:
-    - fingerprint
+      - fingerprint
     steps:
-    - task: katana
-      name: katana-crawl
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        depth: 3
-      log-stdout: true
-      continue-on-error: true
-    - task: hakrawler
-      name: hakrawler-crawl
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        depth: 3
-        scope: subs
-      log-stdout: true
-      continue-on-error: true
-    - task: gospider
-      name: gospider-crawl
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        depth: 2
-      continue-on-error: true
-    - task: gau
-      name: gau-archive
-      with:
-        target: '{{ inputs.target }}'
-        subs: true
-      continue-on-error: true
-    - name: collect-crawled
-      script: |
-        urls = set()
-        for idx in range(4):
-            step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                url = item.get('url', '')
-                if url:
-                    urls.add(url)
+      - task: katana
+        name: katana-crawl
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          depth: 3
+        log-stdout: true
+        continue-on-error: true
+      - task: hakrawler
+        name: hakrawler-crawl
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          depth: 3
+          scope: subs
+        log-stdout: true
+        continue-on-error: true
+      - task: gospider
+        name: gospider-crawl
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          depth: 2
+        continue-on-error: true
+      - task: gau
+        name: gau-archive
+        with:
+          target: "{{ inputs.target }}"
+          subs: true
+        continue-on-error: true
+      - name: collect-crawled
+        script: |
+          urls = set()
+          for idx in range(4):
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  url = item.get('url', '')
+                  if url:
+                      urls.add(url)
 
-        with open('/tmp/ofx_webaudit_crawled.txt', 'w') as tf:
-            tf.write('\n'.join(sorted(urls)))
+          with open('/tmp/ofx_webaudit_crawled.txt', 'w') as tf:
+              tf.write('\n'.join(sorted(urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"crawled_file=/tmp/ofx_webaudit_crawled.txt\n")
-            f.write(f"crawl_count={len(urls)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"crawled_file=/tmp/ofx_webaudit_crawled.txt\n")
+              f.write(f"crawl_count={len(urls)}\n")
 
-        print(f"Crawled {len(urls)} unique URLs")
-      log-stdout: true
+          print(f"Crawled {len(urls)} unique URLs")
+        log-stdout: true
   param-fuzz:
     name: Parameter Discovery & Fuzzing
     needs:
-    - crawl
-    - dir-brute
+      - crawl
+      - dir-brute
     steps:
-    - task: arjun
-      name: arjun-params
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        threads: 20
-      log-stdout: true
-      continue-on-error: true
-    - task: x8
-      name: x8-params
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        method: GET
-      log-stdout: true
-      continue-on-error: true
-    - task: paramspider
-      name: paramspider-discover
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - name: collect-params
-      script: |
-        param_urls = set()
-        for idx in range(3):
-            step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                url = item.get('url', '')
-                if url and ('=' in url or '?' in url):
-                    param_urls.add(url)
+      - task: arjun
+        name: arjun-params
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          threads: 20
+        log-stdout: true
+        continue-on-error: true
+      - task: x8
+        name: x8-params
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          method: GET
+        log-stdout: true
+        continue-on-error: true
+      - task: paramspider
+        name: paramspider-discover
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - name: collect-params
+        script: |
+          param_urls = set()
+          for idx in range(3):
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  url = item.get('url', '')
+                  if url and ('=' in url or '?' in url):
+                      param_urls.add(url)
 
-        with open('/tmp/ofx_param_urls.txt', 'w') as f:
-            f.write('\n'.join(sorted(param_urls)))
+          with open('/tmp/ofx_param_urls.txt', 'w') as f:
+              f.write('\n'.join(sorted(param_urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"param_file=/tmp/ofx_param_urls.txt\n")
-            f.write(f"param_count={len(param_urls)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"param_file=/tmp/ofx_param_urls.txt\n")
+              f.write(f"param_count={len(param_urls)}\n")
 
-        print(f"Discovered {len(param_urls)} parameterized URLs")
-      log-stdout: true
+          print(f"Discovered {len(param_urls)} parameterized URLs")
+        log-stdout: true
   vuln-scan:
     name: Vulnerability Scanning
     needs:
-    - param-fuzz
+      - param-fuzz
     steps:
-    - task: nuclei
-      name: nuclei-scan
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-        severity: critical,high,medium
-      log-stdout: true
-      continue-on-error: true
-    - task: dalfox
-      name: xss-scan
-      with:
-        target: '{{ jobs[''param-fuzz''].outputs.param_file | default(inputs.target, true) }}'
-      log-stdout: true
-      continue-on-error: true
-    - task: sqlmap
-      name: sqli-scan
-      with:
-        target: '{{ jobs[''param-fuzz''].outputs.param_file | default(inputs.target, true) }}'
-        batch: true
-        level: 3
-        risk: 2
-        threads: 5
-      log-stdout: true
-      continue-on-error: true
-    - task: commix
-      name: cmdi-scan
-      with:
-        target: '{{ jobs[''param-fuzz''].outputs.param_file | default(inputs.target, true) }}'
-        batch: true
-        level: 2
-      log-stdout: true
-      continue-on-error: true
-    - task: crlfuzz
-      name: crlf-scan
-      with:
-        target: '{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}'
-      log-stdout: true
-      continue-on-error: true
-    - task: nikto
-      name: nikto-scan
-      with:
-        target: '{{ inputs.target }}'
-      log-stdout: true
-      continue-on-error: true
-    - name: collect-vulns
-      script: |
-        nuclei_v = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        xss_v = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
-        sqli_v = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
-        cmdi_v = {{ vulns(steps[3].outputs.typed_outputs) | tojson }}
-        crlf_v = {{ vulns(steps[4].outputs.typed_outputs) | tojson }}
-        nikto_v = {{ vulns(steps[5].outputs.typed_outputs) | tojson }}
+      - task: nuclei
+        name: nuclei-scan
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+          severity: critical,high,medium
+        log-stdout: true
+        continue-on-error: true
+      - task: dalfox
+        name: xss-scan
+        with:
+          target: "{{ jobs['param-fuzz'].outputs.param_file | default(inputs.target, true) }}"
+        log-stdout: true
+        continue-on-error: true
+      - task: sqlmap
+        name: sqli-scan
+        with:
+          target: "{{ jobs['param-fuzz'].outputs.param_file | default(inputs.target, true) }}"
+          batch: true
+          level: 3
+          risk: 2
+          threads: 5
+        log-stdout: true
+        continue-on-error: true
+      - task: commix
+        name: cmdi-scan
+        with:
+          target: "{{ jobs['param-fuzz'].outputs.param_file | default(inputs.target, true) }}"
+          batch: true
+          level: 2
+        log-stdout: true
+        continue-on-error: true
+      - task: crlfuzz
+        name: crlf-scan
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+        log-stdout: true
+        continue-on-error: true
+      - task: nikto
+        name: nikto-scan
+        with:
+          target: "{{ inputs.target }}"
+        log-stdout: true
+        continue-on-error: true
+      - name: collect-vulns
+        script: |
+          nuclei_v = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          xss_v = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          sqli_v = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+          cmdi_v = {{ vulns(steps[3].outputs.typed_outputs) | tojson }}
+          crlf_v = {{ vulns(steps[4].outputs.typed_outputs) | tojson }}
+          nikto_v = {{ vulns(steps[5].outputs.typed_outputs) | tojson }}
 
-        total = len(nuclei_v) + len(xss_v) + len(sqli_v) + len(cmdi_v) + len(crlf_v) + len(nikto_v)
-        critical = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'critical')
-        high = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'high')
+          total = len(nuclei_v) + len(xss_v) + len(sqli_v) + len(cmdi_v) + len(crlf_v) + len(nikto_v)
+          critical = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'critical')
+          high = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'high')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"total_vulns={total}\n")
-            f.write(f"critical_count={critical}\n")
-            f.write(f"high_count={high}\n")
-            f.write(f"xss_count={len(xss_v)}\n")
-            f.write(f"sqli_count={len(sqli_v)}\n")
-            f.write(f"cmdi_count={len(cmdi_v)}\n")
-            f.write(f"crlf_count={len(crlf_v)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"total_vulns={total}\n")
+              f.write(f"critical_count={critical}\n")
+              f.write(f"high_count={high}\n")
+              f.write(f"xss_count={len(xss_v)}\n")
+              f.write(f"sqli_count={len(sqli_v)}\n")
+              f.write(f"cmdi_count={len(cmdi_v)}\n")
+              f.write(f"crlf_count={len(crlf_v)}\n")
 
-        print(f"Total: {total} vulns (C:{critical} H:{high})")
-        print(f"  XSS: {len(xss_v)}, SQLi: {len(sqli_v)}, CMDi: {len(cmdi_v)}, CRLF: {len(crlf_v)}")
-      log-stdout: true
+          print(f"Total: {total} vulns (C:{critical} H:{high})")
+          print(f"  XSS: {len(xss_v)}, SQLi: {len(sqli_v)}, CMDi: {len(cmdi_v)}, CRLF: {len(crlf_v)}")
+        log-stdout: true
   secrets:
     name: Secret Hunting
     needs:
-    - crawl
+      - crawl
     steps:
-    - task: trufflehog
-      name: trufflehog-scan
-      with:
-        target: '{{ inputs.target }}'
-        mode: filesystem
-      log-stdout: true
-      continue-on-error: true
-    - task: gitleaks
-      name: gitleaks-scan
-      with:
-        target: '{{ inputs.target }}'
-      log-stdout: true
-      continue-on-error: true
+      - task: trufflehog
+        name: trufflehog-scan
+        with:
+          target: "{{ inputs.target }}"
+          mode: filesystem
+        log-stdout: true
+        continue-on-error: true
+      - task: gitleaks
+        name: gitleaks-scan
+        with:
+          target: "{{ inputs.target }}"
+        log-stdout: true
+        continue-on-error: true
   summary:
     name: Web Audit Summary
     needs:
-    - vuln-scan
-    - secrets
+      - vuln-scan
+      - secrets
     steps:
-    - name: report
-      run: |
-        echo "======================================================"
-        echo " WEB FULL AUDIT COMPLETE: {{ inputs.target }}"
-        echo "======================================================"
-        echo ""
-        echo "--- Discovery ---"
-        echo "Directories found: {{ jobs['dir-brute'].outputs.dir_count }}"
-        echo "URLs crawled: {{ jobs.crawl.outputs.crawl_count }}"
-        echo "Parameterized URLs: {{ jobs['param-fuzz'].outputs.param_count }}"
-        echo ""
-        echo "--- Vulnerabilities ---"
-        echo "Total findings: {{ jobs['vuln-scan'].outputs.total_vulns }}"
-        echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
-        echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
-        echo "  XSS: {{ jobs['vuln-scan'].outputs.xss_count }}"
-        echo "  SQLi: {{ jobs['vuln-scan'].outputs.sqli_count }}"
-        echo "  Command Injection: {{ jobs['vuln-scan'].outputs.cmdi_count }}"
-        echo "  CRLF Injection: {{ jobs['vuln-scan'].outputs.crlf_count }}"
-      log-stdout: true
-    - name: export-to-project
-      script: |
-        import json, os
-        from pathlib import Path
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " WEB FULL AUDIT COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "--- Discovery ---"
+          echo "Directories found: {{ jobs['dir-brute'].outputs.dir_count }}"
+          echo "URLs crawled: {{ jobs.crawl.outputs.crawl_count }}"
+          echo "Parameterized URLs: {{ jobs['param-fuzz'].outputs.param_count }}"
+          echo ""
+          echo "--- Vulnerabilities ---"
+          echo "Total findings: {{ jobs['vuln-scan'].outputs.total_vulns }}"
+          echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+          echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
+          echo "  XSS: {{ jobs['vuln-scan'].outputs.xss_count }}"
+          echo "  SQLi: {{ jobs['vuln-scan'].outputs.sqli_count }}"
+          echo "  Command Injection: {{ jobs['vuln-scan'].outputs.cmdi_count }}"
+          echo "  CRLF Injection: {{ jobs['vuln-scan'].outputs.crlf_count }}"
+        log-stdout: true
+      - name: export-to-project
+        script: |
+          import json, os
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            p = Path(project)
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              p = Path(project)
 
-            # directories
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            src = '{{ jobs[''dir-brute''].outputs.dir_urls_file | default('', true) }}'
-            if src and Path(src).is_file():
-                import shutil
-                shutil.copy2(src, d / 'directories.txt')
-                print(f'  [+] scans/directories.txt')
+              # directories
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '{{ jobs[''dir-brute''].outputs.dir_urls_file | default('', true) }}'
+              if src and Path(src).is_file():
+                  import shutil
+                  shutil.copy2(src, d / 'directories.txt')
+                  print(f'  [+] scans/directories.txt')
 
-            # crawled URLs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            src = '{{ jobs.crawl.outputs.crawled_file | default('', true) }}'
-            if src and Path(src).is_file():
-                import shutil
-                shutil.copy2(src, d / 'crawled-urls.txt')
-                print(f'  [+] scans/crawled-urls.txt')
+              # crawled URLs
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '{{ jobs.crawl.outputs.crawled_file | default('', true) }}'
+              if src and Path(src).is_file():
+                  import shutil
+                  shutil.copy2(src, d / 'crawled-urls.txt')
+                  print(f'  [+] scans/crawled-urls.txt')
 
-            # param URLs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            src = '{{ jobs[''param-fuzz''].outputs.param_file | default('', true) }}'
-            if src and Path(src).is_file():
-                import shutil
-                shutil.copy2(src, d / 'param-urls.txt')
-                print(f'  [+] scans/param-urls.txt (copied from {src})')
+              # param URLs
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '{{ jobs[''param-fuzz''].outputs.param_file | default('', true) }}'
+              if src and Path(src).is_file():
+                  import shutil
+                  shutil.copy2(src, d / 'param-urls.txt')
+                  print(f'  [+] scans/param-urls.txt (copied from {src})')
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true

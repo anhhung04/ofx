@@ -1,10 +1,10 @@
 name: subdomain-takeover
 description: "Subdomain takeover detection — enumerates subdomains from multiple sources, verifies DNS, checks for dangling CNAMEs, runs takeover fingerprinting, and takes screenshots of vulnerable targets.\n"
 tags:
-- recon
-- subdomain
-- takeover
-- dns
+  - recon
+  - subdomain
+  - takeover
+  - dns
 dispatch:
   inputs:
     target:
@@ -15,282 +15,282 @@ jobs:
   enum:
     name: Subdomain Enumeration
     steps:
-    - task: subfinder
-      name: subfinder-enum
-      with:
-        target: "{{ inputs.target }}"
-        all: true
-      log-stdout: true
-      continue-on-error: true
-    - task: findomain
-      name: findomain-enum
-      with:
-        target: "{{ inputs.target }}"
-      continue-on-error: true
-    - task: amass
-      name: amass-passive
-      with:
-        target: "{{ inputs.target }}"
-      continue-on-error: true
-    - task: assetfinder
-      name: assetfinder-enum
-      with:
-        target: "{{ inputs.target }}"
-      continue-on-error: true
-    - task: gau
-      name: gau-subs
-      with:
-        target: "{{ inputs.target }}"
-        subs: true
-      continue-on-error: true
-    - name: merge-subs
-      script: |
-        import re
-        subs = set()
-        subs.add('{{ inputs.target }}')
+      - task: subfinder
+        name: subfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+        log-stdout: true
+        continue-on-error: true
+      - task: findomain
+        name: findomain-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: amass
+        name: amass-passive
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: assetfinder
+        name: assetfinder-enum
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: gau
+        name: gau-subs
+        with:
+          target: "{{ inputs.target }}"
+          subs: true
+        continue-on-error: true
+      - name: merge-subs
+        script: |
+          import re
+          subs = set()
+          subs.add('{{ inputs.target }}')
 
-        for idx in range(5):
-            step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                host = item.get('host', '')
-                if host and '{{ inputs.target }}' in host:
-                    subs.add(host)
-                url = item.get('url', '')
-                if url:
-                    match = re.search(r'https?://([^/:]+)', url)
-                    if match and '{{ inputs.target }}' in match.group(1):
-                        subs.add(match.group(1))
+          for idx in range(5):
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  host = item.get('host', '')
+                  if host and '{{ inputs.target }}' in host:
+                      subs.add(host)
+                  url = item.get('url', '')
+                  if url:
+                      match = re.search(r'https?://([^/:]+)', url)
+                      if match and '{{ inputs.target }}' in match.group(1):
+                          subs.add(match.group(1))
 
-        with open('/tmp/all-subs.txt', 'w') as f:
-            f.write('\n'.join(sorted(subs)))
+          with open('/tmp/all-subs.txt', 'w') as f:
+              f.write('\n'.join(sorted(subs)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"subs_file=/tmp/all-subs.txt\n")
-            f.write(f"sub_count={len(subs)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"subs_file=/tmp/all-subs.txt\n")
+              f.write(f"sub_count={len(subs)}\n")
 
-        print(f"Enumerated {len(subs)} unique subdomains from 5 sources")
-      log-stdout: true
+          print(f"Enumerated {len(subs)} unique subdomains from 5 sources")
+        log-stdout: true
   dns-verify:
     name: DNS Verification & CNAME Check
     needs:
-    - enum
+      - enum
     steps:
-    - task: dnsx
-      name: dns-resolve
-      with:
-        target: "{{ jobs.enum.outputs.subs_file }}"
-        a: true
-        cname: true
-        resp: true
-      log-stdout: true
-      continue-on-error: true
-    - name: analyze-cnames
-      script: |
-        records = {{ steps[0].outputs.typed_outputs | tojson }}
+      - task: dnsx
+        name: dns-resolve
+        with:
+          target: "{{ jobs.enum.outputs.subs_file }}"
+          a: true
+          cname: true
+          resp: true
+        log-stdout: true
+        continue-on-error: true
+      - name: analyze-cnames
+        script: |
+          records = {{ steps[0].outputs.typed_outputs | tojson }}
 
-        alive = set()
-        cnames = {}
-        dangling = []
+          alive = set()
+          cnames = {}
+          dangling = []
 
-        for r in records:
-            host = r.get('host', '')
-            if host:
-                alive.add(host)
+          for r in records:
+              host = r.get('host', '')
+              if host:
+                  alive.add(host)
 
-            # Detect CNAME records that could indicate takeover
-            rtype = r.get('type', '')
-            if rtype == 'CNAME' or 'cname' in str(r).lower():
-                name = r.get('name', host)
-                target = r.get('host', '')
-                if name and target:
-                    cnames[name] = target
+              # Detect CNAME records that could indicate takeover
+              rtype = r.get('type', '')
+              if rtype == 'CNAME' or 'cname' in str(r).lower():
+                  name = r.get('name', host)
+                  target = r.get('host', '')
+                  if name and target:
+                      cnames[name] = target
 
-        # Known takeover-vulnerable CNAME patterns
-        vuln_patterns = [
-            'amazonaws.com', 'cloudfront.net', 'azurewebsites.net',
-            'blob.core.windows.net', 'cloudapp.net', 'trafficmanager.net',
-            'herokuapp.com', 'herokudns.com', 'github.io', 'pages.dev',
-            'pantheonsite.io', 'shopify.com', 'myshopify.com',
-            'wpengine.com', 'wordpress.com', 'ghost.io',
-            'netlify.app', 'netlify.com', 'vercel.app',
-            'surge.sh', 'bitbucket.io', 'zendesk.com',
-            'freshdesk.com', 'statuspage.io', 'readme.io',
-            'cargo.site', 'feedpress.me', 'helpjuice.com',
-            'helpscoutdocs.com', 'tictail.com', 'aha.io',
-            'brightcove.com', 'bigcartel.com', 'campaignmonitor.com',
-            'acquia-test.co', 'proposify.biz', 'simplebooklet.com',
-            'getresponse.com', 'vend-pos.com', 'aftership.app',
-            'animaapp.io', 'airee.com', 'cargocollective.com',
-        ]
+          # Known takeover-vulnerable CNAME patterns
+          vuln_patterns = [
+              'amazonaws.com', 'cloudfront.net', 'azurewebsites.net',
+              'blob.core.windows.net', 'cloudapp.net', 'trafficmanager.net',
+              'herokuapp.com', 'herokudns.com', 'github.io', 'pages.dev',
+              'pantheonsite.io', 'shopify.com', 'myshopify.com',
+              'wpengine.com', 'wordpress.com', 'ghost.io',
+              'netlify.app', 'netlify.com', 'vercel.app',
+              'surge.sh', 'bitbucket.io', 'zendesk.com',
+              'freshdesk.com', 'statuspage.io', 'readme.io',
+              'cargo.site', 'feedpress.me', 'helpjuice.com',
+              'helpscoutdocs.com', 'tictail.com', 'aha.io',
+              'brightcove.com', 'bigcartel.com', 'campaignmonitor.com',
+              'acquia-test.co', 'proposify.biz', 'simplebooklet.com',
+              'getresponse.com', 'vend-pos.com', 'aftership.app',
+              'animaapp.io', 'airee.com', 'cargocollective.com',
+          ]
 
-        for name, target in cnames.items():
-            for pattern in vuln_patterns:
-                if pattern in target:
-                    dangling.append(f"{name} -> {target}")
-                    break
+          for name, target in cnames.items():
+              for pattern in vuln_patterns:
+                  if pattern in target:
+                      dangling.append(f"{name} -> {target}")
+                      break
 
-        with open('/tmp/alive-subs.txt', 'w') as f:
-            f.write('\n'.join(sorted(alive)))
+          with open('/tmp/alive-subs.txt', 'w') as f:
+              f.write('\n'.join(sorted(alive)))
 
-        with open('/tmp/ofx_subtakeover_dangling.txt', 'w') as f:
-            f.write('\n'.join(dangling))
+          with open('/tmp/ofx_subtakeover_dangling.txt', 'w') as f:
+              f.write('\n'.join(dangling))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"alive_file=/tmp/alive-subs.txt\n")
-            f.write(f"alive_count={len(alive)}\n")
-            f.write(f"cname_count={len(cnames)}\n")
-            f.write(f"dangling_count={len(dangling)}\n")
-            f.write(f"dangling_file=/tmp/ofx_subtakeover_dangling.txt\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"alive_file=/tmp/alive-subs.txt\n")
+              f.write(f"alive_count={len(alive)}\n")
+              f.write(f"cname_count={len(cnames)}\n")
+              f.write(f"dangling_count={len(dangling)}\n")
+              f.write(f"dangling_file=/tmp/ofx_subtakeover_dangling.txt\n")
 
-        print(f"Alive: {len(alive)}, CNAMEs: {len(cnames)}, Potentially dangling: {len(dangling)}")
-        for d in dangling:
-            print(f"  [!] {d}")
-      log-stdout: true
+          print(f"Alive: {len(alive)}, CNAMEs: {len(cnames)}, Potentially dangling: {len(dangling)}")
+          for d in dangling:
+              print(f"  [!] {d}")
+        log-stdout: true
   takeover-check:
     name: Takeover Fingerprinting
     needs:
-    - dns-verify
+      - dns-verify
     steps:
-    - task: subzy
-      name: subzy-check
-      with:
-        target: /tmp/alive-subs.txt
-        concurrency: 20
-      log-stdout: true
-      continue-on-error: true
-    - task: nuclei
-      name: nuclei-takeover
-      with:
-        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
-        tags: takeover
-      log-stdout: true
-      continue-on-error: true
-    - name: collect-takeovers
-      script: |
-        subzy_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+      - task: subzy
+        name: subzy-check
+        with:
+          target: /tmp/alive-subs.txt
+          concurrency: 20
+        log-stdout: true
+        continue-on-error: true
+      - task: nuclei
+        name: nuclei-takeover
+        with:
+          target: "{{ jobs['dns-verify'].outputs.alive_file }}"
+          tags: takeover
+        log-stdout: true
+        continue-on-error: true
+      - name: collect-takeovers
+        script: |
+          subzy_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
 
-        takeovers = []
-        for v in subzy_vulns + nuclei_vulns:
-            name = v.get('name', v.get('id', 'unknown'))
-            host = v.get('host', v.get('url', ''))
-            takeovers.append(f"{host}: {name}")
+          takeovers = []
+          for v in subzy_vulns + nuclei_vulns:
+              name = v.get('name', v.get('id', 'unknown'))
+              host = v.get('host', v.get('url', ''))
+              takeovers.append(f"{host}: {name}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"takeover_count={len(takeovers)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"takeover_count={len(takeovers)}\n")
 
-        with open('/tmp/ofx_subtakeover_details.txt', 'w') as f:
-            f.write('\n'.join(takeovers))
+          with open('/tmp/ofx_subtakeover_details.txt', 'w') as f:
+              f.write('\n'.join(takeovers))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"takeover_details_file=/tmp/ofx_subtakeover_details.txt\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"takeover_details_file=/tmp/ofx_subtakeover_details.txt\n")
 
-        print(f"Confirmed takeover vulnerabilities: {len(takeovers)}")
-        for t in takeovers:
-            print(f"  [!] {t}")
-      log-stdout: true
+          print(f"Confirmed takeover vulnerabilities: {len(takeovers)}")
+          for t in takeovers:
+              print(f"  [!] {t}")
+        log-stdout: true
   screenshot:
     name: Visual Evidence
     needs:
-    - dns-verify
+      - dns-verify
     steps:
-    - task: gowitness
-      name: gowitness-capture
-      with:
-        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
-        threads: 10
-      log-stdout: true
-      continue-on-error: true
-    - task: httpx
-      name: http-fingerprint
-      with:
-        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
-        tech_detect: true
-        status_code: true
-        title: true
-        follow_redirects: true
-      log-stdout: true
-      continue-on-error: true
+      - task: gowitness
+        name: gowitness-capture
+        with:
+          target: "{{ jobs['dns-verify'].outputs.alive_file }}"
+          threads: 10
+        log-stdout: true
+        continue-on-error: true
+      - task: httpx
+        name: http-fingerprint
+        with:
+          target: "{{ jobs['dns-verify'].outputs.alive_file }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+        log-stdout: true
+        continue-on-error: true
   summary:
     name: Takeover Summary
     needs:
-    - takeover-check
-    - screenshot
+      - takeover-check
+      - screenshot
     steps:
-    - name: report
-      run: |
-        echo "======================================================"
-        echo " SUBDOMAIN TAKEOVER SCAN: {{ inputs.target }}"
-        echo "======================================================"
-        echo ""
-        echo "--- Enumeration ---"
-        echo "Total subdomains: {{ jobs.enum.outputs.sub_count }}"
-        echo "Alive subdomains: {{ jobs['dns-verify'].outputs.alive_count }}"
-        echo ""
-        echo "--- CNAME Analysis ---"
-        echo "CNAME records: {{ jobs['dns-verify'].outputs.cname_count }}"
-        echo "Dangling CNAMEs: {{ jobs['dns-verify'].outputs.dangling_count }}"
-        echo ""
-        echo "--- Takeover Results ---"
-        echo "Confirmed vulnerable: {{ jobs['takeover-check'].outputs.takeover_count }}"
-        {% if jobs['takeover-check'].outputs.takeover_details_file %}
-        echo ""
-        echo "--- Details ---"
-        cat {{ jobs['takeover-check'].outputs.takeover_details_file }}
-        {% endif %}
-        {% if jobs['dns-verify'].outputs.dangling_file %}
-        echo ""
-        echo "--- Dangling CNAMEs (investigate manually) ---"
-        cat {{ jobs['dns-verify'].outputs.dangling_file }}
-        {% endif %}
-      log-stdout: true
-    - name: export-to-project
-      script: |
-        import json, os
-        from pathlib import Path
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " SUBDOMAIN TAKEOVER SCAN: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "--- Enumeration ---"
+          echo "Total subdomains: {{ jobs.enum.outputs.sub_count }}"
+          echo "Alive subdomains: {{ jobs['dns-verify'].outputs.alive_count }}"
+          echo ""
+          echo "--- CNAME Analysis ---"
+          echo "CNAME records: {{ jobs['dns-verify'].outputs.cname_count }}"
+          echo "Dangling CNAMEs: {{ jobs['dns-verify'].outputs.dangling_count }}"
+          echo ""
+          echo "--- Takeover Results ---"
+          echo "Confirmed vulnerable: {{ jobs['takeover-check'].outputs.takeover_count }}"
+          {% if jobs['takeover-check'].outputs.takeover_details_file %}
+          echo ""
+          echo "--- Details ---"
+          cat {{ jobs['takeover-check'].outputs.takeover_details_file }}
+          {% endif %}
+          {% if jobs['dns-verify'].outputs.dangling_file %}
+          echo ""
+          echo "--- Dangling CNAMEs (investigate manually) ---"
+          cat {{ jobs['dns-verify'].outputs.dangling_file }}
+          {% endif %}
+        log-stdout: true
+      - name: export-to-project
+        script: |
+          import json, os
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            p = Path(project)
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              p = Path(project)
 
-            # all subdomains
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '{{ jobs.enum.outputs.subs_file | default("", true) }}'
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'subdomains.txt')
-                print(f'  [+] scans/subdomains.txt')
+              # all subdomains
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              sf = '{{ jobs.enum.outputs.subs_file | default("", true) }}'
+              if sf:
+                  import shutil
+                  shutil.copy2(sf, d / 'subdomains.txt')
+                  print(f'  [+] scans/subdomains.txt')
 
-            # alive subdomains
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            af = '{{ jobs["dns-verify"].outputs.alive_file | default("", true) }}'
-            if af:
-                import shutil
-                shutil.copy2(af, d / 'alive-subs.txt')
-                print(f'  [+] scans/alive-subs.txt')
+              # alive subdomains
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              af = '{{ jobs["dns-verify"].outputs.alive_file | default("", true) }}'
+              if af:
+                  import shutil
+                  shutil.copy2(af, d / 'alive-subs.txt')
+                  print(f'  [+] scans/alive-subs.txt')
 
-            # dangling CNAMEs
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
-            df = '{{ jobs["dns-verify"].outputs.dangling_file | default("", true) }}'
-            if df:
-                import shutil
-                shutil.copy2(df, d / 'dangling-cnames.txt')
-                print(f'  [+] evidence/data/dangling-cnames.txt')
+              # dangling CNAMEs
+              d = p / 'evidence/data'
+              d.mkdir(parents=True, exist_ok=True)
+              df = '{{ jobs["dns-verify"].outputs.dangling_file | default("", true) }}'
+              if df:
+                  import shutil
+                  shutil.copy2(df, d / 'dangling-cnames.txt')
+                  print(f'  [+] evidence/data/dangling-cnames.txt')
 
-            # takeover vulns
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
-            tf = '{{ jobs["takeover-check"].outputs.takeover_details_file | default("", true) }}'
-            if tf:
-                import shutil
-                shutil.copy2(tf, d / 'takeover-details.txt')
-                print(f'  [+] evidence/data/takeover-details.txt')
+              # takeover vulns
+              d = p / 'evidence/data'
+              d.mkdir(parents=True, exist_ok=True)
+              tf = '{{ jobs["takeover-check"].outputs.takeover_details_file | default("", true) }}'
+              if tf:
+                  import shutil
+                  shutil.copy2(tf, d / 'takeover-details.txt')
+                  print(f'  [+] evidence/data/takeover-details.txt')
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true

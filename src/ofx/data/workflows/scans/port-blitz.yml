@@ -1,12 +1,13 @@
 name: port-blitz
-description: 'Fast multi-engine port scanning — chains rustscan (speed), naabu (accuracy), and masscan (breadth) then feeds discovered ports into nmap for service fingerprinting and exploit lookup.
+description:
+  "Fast multi-engine port scanning — chains rustscan (speed), naabu (accuracy), and masscan (breadth) then feeds discovered ports into nmap for service fingerprinting and exploit lookup.
 
-  '
+  "
 tags:
-- recon
-- port
-- scan
-- network
+  - recon
+  - port
+  - scan
+  - network
 dispatch:
   inputs:
     target:
@@ -15,199 +16,199 @@ dispatch:
       description: Target IP, CIDR, or hostname
     rate:
       type: string
-      default: '3000'
+      default: "3000"
       description: Scan rate (packets/sec)
 jobs:
   fast-scan:
     name: Fast Port Discovery
     steps:
-    - task: rustscan
-      name: rustscan-sweep
-      with:
-        target: '{{ inputs.target }}'
-        range: 1-65535
-        batch_size: 4500
-        timeout: 3000
-      log-stdout: true
-      continue-on-error: true
-    - task: naabu
-      name: naabu-top
-      with:
-        target: '{{ inputs.target }}'
-        top_ports: '1000'
-        rate: '{{ inputs.rate }}'
-      log-stdout: true
-      continue-on-error: true
-    - task: masscan
-      name: masscan-top
-      with:
-        target: '{{ inputs.target }}'
-        ports: 0-1024,1433,1521,3306,3389,5432,5900,6379,8080,8443,9090,9200,11211,27017
-        rate: '{{ inputs.rate }}'
-      log-stdout: true
-      continue-on-error: true
-    - name: merge-ports
-      script: |
-        ports_by_host = {}
+      - task: rustscan
+        name: rustscan-sweep
+        with:
+          target: "{{ inputs.target }}"
+          range: 1-65535
+          batch_size: 4500
+          timeout: 3000
+        log-stdout: true
+        continue-on-error: true
+      - task: naabu
+        name: naabu-top
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "1000"
+          rate: "{{ inputs.rate }}"
+        log-stdout: true
+        continue-on-error: true
+      - task: masscan
+        name: masscan-top
+        with:
+          target: "{{ inputs.target }}"
+          ports: 0-1024,1433,1521,3306,3389,5432,5900,6379,8080,8443,9090,9200,11211,27017
+          rate: "{{ inputs.rate }}"
+        log-stdout: true
+        continue-on-error: true
+      - name: merge-ports
+        script: |
+          ports_by_host = {}
 
-        # Merge from rustscan
-        for item in {{ ports(steps[0].outputs.typed_outputs) | tojson }}:
-            host = item.get('host') or item.get('ip', '')
-            port = str(item.get('port', ''))
-            if host and port:
-                ports_by_host.setdefault(host, set()).add(port)
+          # Merge from rustscan
+          for item in {{ ports(steps[0].outputs.typed_outputs) | tojson }}:
+              host = item.get('host') or item.get('ip', '')
+              port = str(item.get('port', ''))
+              if host and port:
+                  ports_by_host.setdefault(host, set()).add(port)
 
-        # Merge from naabu
-        for item in {{ ports(steps[1].outputs.typed_outputs) | tojson }}:
-            host = item.get('host') or item.get('ip', '')
-            port = str(item.get('port', ''))
-            if host and port:
-                ports_by_host.setdefault(host, set()).add(port)
+          # Merge from naabu
+          for item in {{ ports(steps[1].outputs.typed_outputs) | tojson }}:
+              host = item.get('host') or item.get('ip', '')
+              port = str(item.get('port', ''))
+              if host and port:
+                  ports_by_host.setdefault(host, set()).add(port)
 
-        # Merge from masscan
-        for item in {{ ports(steps[2].outputs.typed_outputs) | tojson }}:
-            host = item.get('host') or item.get('ip', '')
-            port = str(item.get('port', ''))
-            if host and port:
-                ports_by_host.setdefault(host, set()).add(port)
+          # Merge from masscan
+          for item in {{ ports(steps[2].outputs.typed_outputs) | tojson }}:
+              host = item.get('host') or item.get('ip', '')
+              port = str(item.get('port', ''))
+              if host and port:
+                  ports_by_host.setdefault(host, set()).add(port)
 
-        all_hosts = sorted(ports_by_host.keys())
-        all_ports = set()
-        for p_set in ports_by_host.values():
-            all_ports.update(p_set)
+          all_hosts = sorted(ports_by_host.keys())
+          all_ports = set()
+          for p_set in ports_by_host.values():
+              all_ports.update(p_set)
 
-        port_csv = ','.join(sorted(all_ports, key=int))
+          port_csv = ','.join(sorted(all_ports, key=int))
 
-        with open('/tmp/ofx_portblitz_hosts.txt', 'w') as tf:
-            tf.write('\n'.join(all_hosts))
+          with open('/tmp/ofx_portblitz_hosts.txt', 'w') as tf:
+              tf.write('\n'.join(all_hosts))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"hosts_file=/tmp/ofx_portblitz_hosts.txt\n")
-            f.write(f"merged_ports={port_csv}\n")
-            f.write(f"host_count={len(all_hosts)}\n")
-            f.write(f"port_count={len(all_ports)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"hosts_file=/tmp/ofx_portblitz_hosts.txt\n")
+              f.write(f"merged_ports={port_csv}\n")
+              f.write(f"host_count={len(all_hosts)}\n")
+              f.write(f"port_count={len(all_ports)}\n")
 
-        print(f"Merged {len(all_ports)} unique ports across {len(all_hosts)} hosts")
+          print(f"Merged {len(all_ports)} unique ports across {len(all_hosts)} hosts")
   service-detect:
     name: Service Fingerprinting
     needs:
-    - fast-scan
+      - fast-scan
     steps:
-    - task: nmap
-      name: nmap-version
-      with:
-        target: '{{ inputs.target }}'
-        ports: '{{ jobs[''fast-scan''].outputs.merged_ports }}'
-        version_detection: true
-      log-stdout: true
-      continue-on-error: true
-    - task: httpx
-      name: http-probe
-      with:
-        target: '{{ jobs[''fast-scan''].outputs.hosts_file | default(inputs.target, true) }}'
-        tech_detect: true
-        status_code: true
-        title: true
-        follow_redirects: true
-      log-stdout: true
-      continue-on-error: true
-    - task: ssh-audit
-      name: ssh-check
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - task: searchsploit
-      name: exploit-lookup
-      with:
-        target: '{{ inputs.target }}'
-      log-stdout: true
-      continue-on-error: true
-    - name: collect-services
-      script: |
-        nmap_ports = {{ ports(steps[0].outputs.typed_outputs) | tojson }}
-        nmap_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        http_urls = {{ urls(steps[1].outputs.typed_outputs) | tojson }}
-        exploits = {{ steps[3].outputs.typed_outputs | tojson }}
+      - task: nmap
+        name: nmap-version
+        with:
+          target: "{{ inputs.target }}"
+          ports: "{{ jobs['fast-scan'].outputs.merged_ports }}"
+          version_detection: true
+        log-stdout: true
+        continue-on-error: true
+      - task: httpx
+        name: http-probe
+        with:
+          target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+        log-stdout: true
+        continue-on-error: true
+      - task: ssh-audit
+        name: ssh-check
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: searchsploit
+        name: exploit-lookup
+        with:
+          target: "{{ inputs.target }}"
+        log-stdout: true
+        continue-on-error: true
+      - name: collect-services
+        script: |
+          nmap_ports = {{ ports(steps[0].outputs.typed_outputs) | tojson }}
+          nmap_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          http_urls = {{ urls(steps[1].outputs.typed_outputs) | tojson }}
+          exploits = {{ steps[3].outputs.typed_outputs | tojson }}
 
-        services = []
-        for p in nmap_ports:
-            svc = p.get('service_name', 'unknown')
-            port = p.get('port', '?')
-            host = p.get('host') or p.get('ip', '?')
-            services.append(f"{host}:{port}/{svc}")
+          services = []
+          for p in nmap_ports:
+              svc = p.get('service_name', 'unknown')
+              port = p.get('port', '?')
+              host = p.get('host') or p.get('ip', '?')
+              services.append(f"{host}:{port}/{svc}")
 
-        live_urls = [u['url'] for u in http_urls if u.get('url')]
+          live_urls = [u['url'] for u in http_urls if u.get('url')]
 
-        with open('/tmp/ofx_portblitz_urls.txt', 'w') as tf:
-            tf.write('\n'.join(live_urls))
+          with open('/tmp/ofx_portblitz_urls.txt', 'w') as tf:
+              tf.write('\n'.join(live_urls))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"service_count={len(services)}\n")
-            f.write(f"live_urls_file=/tmp/ofx_portblitz_urls.txt\n")
-            f.write(f"http_count={len(live_urls)}\n")
-            f.write(f"vuln_count={len(nmap_vulns)}\n")
-            f.write(f"exploit_count={len(exploits)}\n")
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"service_count={len(services)}\n")
+              f.write(f"live_urls_file=/tmp/ofx_portblitz_urls.txt\n")
+              f.write(f"http_count={len(live_urls)}\n")
+              f.write(f"vuln_count={len(nmap_vulns)}\n")
+              f.write(f"exploit_count={len(exploits)}\n")
 
-        print(f"Services: {len(services)}, HTTP: {len(live_urls)}, Vulns: {len(nmap_vulns)}, Exploits: {len(exploits)}")
-      log-stdout: true
+          print(f"Services: {len(services)}, HTTP: {len(live_urls)}, Vulns: {len(nmap_vulns)}, Exploits: {len(exploits)}")
+        log-stdout: true
   summary:
     name: Port Blitz Summary
     needs:
-    - service-detect
+      - service-detect
     steps:
-    - name: report
-      run: |
-        echo "======================================================"
-        echo " PORT BLITZ COMPLETE: {{ inputs.target }}"
-        echo "======================================================"
-        echo ""
-        echo "--- Discovery (3 engines) ---"
-        echo "Unique hosts: {{ jobs['fast-scan'].outputs.host_count }}"
-        echo "Unique ports: {{ jobs['fast-scan'].outputs.port_count }}"
-        echo "Merged port list: {{ jobs['fast-scan'].outputs.merged_ports }}"
-        echo ""
-        echo "--- Fingerprinting ---"
-        echo "Services identified: {{ jobs['service-detect'].outputs.service_count }}"
-        echo "HTTP services: {{ jobs['service-detect'].outputs.http_count }}"
-        echo "Known vulnerabilities: {{ jobs['service-detect'].outputs.vuln_count }}"
-        echo "Known exploits: {{ jobs['service-detect'].outputs.exploit_count }}"
-      log-stdout: true
-    - name: export-to-project
-      script: |
-        import json, os
-        from pathlib import Path
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " PORT BLITZ COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "--- Discovery (3 engines) ---"
+          echo "Unique hosts: {{ jobs['fast-scan'].outputs.host_count }}"
+          echo "Unique ports: {{ jobs['fast-scan'].outputs.port_count }}"
+          echo "Merged port list: {{ jobs['fast-scan'].outputs.merged_ports }}"
+          echo ""
+          echo "--- Fingerprinting ---"
+          echo "Services identified: {{ jobs['service-detect'].outputs.service_count }}"
+          echo "HTTP services: {{ jobs['service-detect'].outputs.http_count }}"
+          echo "Known vulnerabilities: {{ jobs['service-detect'].outputs.vuln_count }}"
+          echo "Known exploits: {{ jobs['service-detect'].outputs.exploit_count }}"
+        log-stdout: true
+      - name: export-to-project
+        script: |
+          import json, os
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            p = Path(project)
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              p = Path(project)
 
-            # merged port list
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            data = '''{{ jobs['fast-scan'].outputs.merged_ports | default('', true) }}'''.strip()
-            if data:
-                (d / 'ports.txt').write_text(data)
-                print(f'  [+] scans/ports.txt ({len(data.splitlines())} lines)')
+              # merged port list
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              data = '''{{ jobs['fast-scan'].outputs.merged_ports | default('', true) }}'''.strip()
+              if data:
+                  (d / 'ports.txt').write_text(data)
+                  print(f'  [+] scans/ports.txt ({len(data.splitlines())} lines)')
 
-            # target hosts
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            src = '{{ jobs[''fast-scan''].outputs.hosts_file | default('', true) }}'
-            if src and Path(src).is_file():
-                import shutil
-                shutil.copy2(src, d / 'hosts.txt')
-                print(f'  [+] scans/hosts.txt')
+              # target hosts
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '{{ jobs[''fast-scan''].outputs.hosts_file | default('', true) }}'
+              if src and Path(src).is_file():
+                  import shutil
+                  shutil.copy2(src, d / 'hosts.txt')
+                  print(f'  [+] scans/hosts.txt')
 
-            # HTTP services
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            src = '{{ jobs[''service-detect''].outputs.live_urls_file | default('', true) }}'
-            if src and Path(src).is_file():
-                import shutil
-                shutil.copy2(src, d / 'http-urls.txt')
-                print(f'  [+] scans/http-urls.txt')
+              # HTTP services
+              d = p / 'scans'
+              d.mkdir(parents=True, exist_ok=True)
+              src = '{{ jobs[''service-detect''].outputs.live_urls_file | default('', true) }}'
+              if src and Path(src).is_file():
+                  import shutil
+                  shutil.copy2(src, d / 'http-urls.txt')
+                  print(f'  [+] scans/http-urls.txt')
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true
