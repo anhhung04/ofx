@@ -40,7 +40,6 @@ def list_workflows(
     from rich.tree import Tree
 
     from ofx.collections import CollectionManager
-    from ofx.collections.manifest import CollectionManifest
     from ofx.commands.ui_helpers import print_error, print_warning
     from ofx.settings import (
         ALLOWED_WORKFLOW_FILE_EXTENSIONS,
@@ -50,12 +49,10 @@ def list_workflows(
 
     show_all = not builtin and not collection
 
-    MANIFEST_NAMES = {"collection.yaml", "collection.yml"}
-
     def _scan_yaml_files(root: Path) -> list[Path]:
         files: list[Path] = []
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            files.extend(f for f in root.rglob(f"*{ext}") if f.name not in MANIFEST_NAMES)
+            files.extend(sorted(root.rglob(f"*{ext}")))
         return sorted(set(files))
 
     # group: source_label -> {category -> [workflow_stem]}
@@ -99,15 +96,8 @@ def list_workflows(
             if not coll_path.is_dir():
                 continue
             label = f"📦 {coll_name}"
-            manifest = CollectionManifest.from_directory(coll_path)
-            if manifest.workflows:
-                for workflow in manifest.workflows:
-                    wf_path = coll_path / workflow
-                    if wf_path.exists():
-                        _add(wf_path, label, coll_path)
-            else:
-                for file in _scan_yaml_files(coll_path):
-                    _add(file, label, coll_path)
+            for file in _scan_yaml_files(coll_path):
+                _add(file, label, coll_path)
 
     if not groups:
         print_warning("No Workflows Found", "No workflows matched the filter.")

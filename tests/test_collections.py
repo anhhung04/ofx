@@ -1,13 +1,12 @@
 """Tests for the OFX collection system.
 
-Covers: manifest parsing, version checking, manager lifecycle,
-auto-discovery, dependency resolution, and workflow search integration.
+Covers: version checking, manager lifecycle,
+and workflow search integration.
 """
 
 from __future__ import annotations
 
 import json
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -79,98 +78,6 @@ class TestSemver:
 
 
 # ---------------------------------------------------------------------------
-# CollectionManifest
-# ---------------------------------------------------------------------------
-
-
-class TestCollectionManifest:
-    """Tests for manifest model and discovery."""
-
-    def test_from_yaml(self, tmp_path: Path):
-        from ofx.collections.manifest import CollectionManifest
-
-        manifest_file = tmp_path / "collection.yaml"
-        manifest_file.write_text(
-            textwrap.dedent("""\
-            name: my-collection
-            version: "1.2.0"
-            description: Test collection
-            author: tester
-            license: MIT
-            tags:
-              - recon
-              - enumeration
-            workflows:
-              - scan.yaml
-              - enum.yaml
-            tools:
-              - nmap
-            dependencies:
-              - name: helpers
-                version: ">=0.1.0"
-            """)
-        )
-
-        m = CollectionManifest.from_yaml(manifest_file)
-        assert m.name == "my-collection"
-        assert m.version == "1.2.0"
-        assert m.description == "Test collection"
-        assert m.author == "tester"
-        assert m.license == "MIT"
-        assert m.tags == ["recon", "enumeration"]
-        assert m.workflows == ["scan.yaml", "enum.yaml"]
-        assert m.tools == ["nmap"]
-        assert len(m.dependencies) == 1
-        assert m.dependencies[0].name == "helpers"
-        assert m.dependencies[0].version == ">=0.1.0"
-
-    def test_from_directory_with_manifest(self, tmp_path: Path):
-        from ofx.collections.manifest import CollectionManifest
-
-        (tmp_path / "collection.yaml").write_text("name: explicit\nversion: '2.0.0'\n")
-        (tmp_path / "wf1.yaml").write_text("name: wf1\n")
-        (tmp_path / "wf2.yml").write_text("name: wf2\n")
-
-        m = CollectionManifest.from_directory(tmp_path)
-        assert m.name == "explicit"
-        assert m.version == "2.0.0"
-        # workflows auto-discovered since manifest has empty list
-        assert sorted(m.workflows) == ["wf1.yaml", "wf2.yml"]
-
-    def test_from_directory_no_manifest(self, tmp_path: Path):
-        from ofx.collections.manifest import CollectionManifest
-
-        (tmp_path / "action.yml").write_text("name: action\n")
-        (tmp_path / "helper.yaml").write_text("name: helper\n")
-
-        m = CollectionManifest.from_directory(tmp_path)
-        assert m.name == tmp_path.name
-        assert sorted(m.workflows) == ["action.yml", "helper.yaml"]
-
-    def test_auto_discover_skips_collection_yaml(self, tmp_path: Path):
-        from ofx.collections.manifest import CollectionManifest
-
-        (tmp_path / "collection.yaml").write_text("name: test\n")
-        (tmp_path / "real-workflow.yaml").write_text("name: wf\n")
-
-        m = CollectionManifest.from_directory(tmp_path)
-        assert "collection.yaml" not in m.workflows
-        assert "real-workflow.yaml" in m.workflows
-
-    def test_explicit_workflows_not_overridden(self, tmp_path: Path):
-        from ofx.collections.manifest import CollectionManifest
-
-        (tmp_path / "collection.yaml").write_text(
-            "name: pinned\nworkflows:\n  - only-this.yaml\n"
-        )
-        (tmp_path / "only-this.yaml").write_text("name: x\n")
-        (tmp_path / "ignored.yaml").write_text("name: y\n")
-
-        m = CollectionManifest.from_directory(tmp_path)
-        assert m.workflows == ["only-this.yaml"]
-
-
-# ---------------------------------------------------------------------------
 # InstalledCollection
 # ---------------------------------------------------------------------------
 
@@ -202,8 +109,6 @@ class TestInstalledCollection:
         assert restored.version == ic.version
 
 
-
-
 # ---------------------------------------------------------------------------
 # CollectionManager
 # ---------------------------------------------------------------------------
@@ -223,22 +128,16 @@ class TestCollectionManager:
 
     def test_manual_install_and_list(self, mgr, tmp_path):
         """Simulate what add() does after cloning, without hitting git."""
-        from ofx.collections.manifest import CollectionManifest, InstalledCollection
+        from ofx.collections.manifest import InstalledCollection
 
         coll_dir = tmp_path / "my-coll"
         coll_dir.mkdir()
-        (coll_dir / "collection.yaml").write_text(
-            "name: my-coll\nversion: '1.0.0'\ndescription: test\n"
-        )
         (coll_dir / "scan.yaml").write_text("name: scan\n")
 
-        manifest = CollectionManifest.from_directory(coll_dir)
         entry = InstalledCollection(
             name="my-coll",
-            version=manifest.version,
             source="https://github.com/ofx-workflows/my-coll",
             path=str(coll_dir),
-            description=manifest.description,
         )
         mgr._installed["my-coll"] = entry
         mgr._save_installed()
@@ -248,7 +147,6 @@ class TestCollectionManager:
 
         mgr2 = CollectionManager(base_dir=tmp_path)
         assert "my-coll" in mgr2.list_installed()
-        assert mgr2.get("my-coll").version == "1.0.0"
 
     def test_remove(self, mgr, tmp_path):
         from ofx.collections.manifest import InstalledCollection
@@ -274,16 +172,12 @@ class TestCollectionManager:
 
         d = tmp_path / "info-test"
         d.mkdir()
-        (d / "collection.yaml").write_text(
-            "name: info-test\nversion: '0.5.0'\nauthor: dev\n"
-        )
         mgr._installed["info-test"] = InstalledCollection(
             name="info-test", path=str(d)
         )
-        m = mgr.info("info-test")
-        assert m is not None
-        assert m.version == "0.5.0"
-        assert m.author == "dev"
+        entry = mgr.info("info-test")
+        assert entry is not None
+        assert entry.name == "info-test"
 
     def test_collection_workflow_dirs(self, mgr, tmp_path):
         from ofx.collections.manifest import InstalledCollection
@@ -362,6 +256,3 @@ class TestWorkflowSearchIntegration:
         # Should include default dir + built-in workflow subdirs
         assert dirs[0] == tmp_path / "wf"
         assert len(dirs) >= 1
-
-
-

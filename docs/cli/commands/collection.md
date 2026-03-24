@@ -30,7 +30,6 @@ ofx flow collection add <source> [options]
 |--------|-------------|
 | `-n, --name <name>` | Override the local collection name |
 | `-r, --ref <ref>` | Pin a Git tag or branch |
-| `--no-deps` | Skip installing collection dependencies |
 
 **Examples:**
 
@@ -43,9 +42,6 @@ ofx flow collection add ./my-local-collection
 
 # Pin to a specific tag
 ofx flow collection add https://github.com/myorg/recon-tools.git --ref v1.2.0
-
-# Install without dependencies
-ofx flow collection add https://github.com/myorg/recon-tools.git --no-deps
 ```
 
 ---
@@ -120,40 +116,7 @@ ofx flow collection info <name>
 
 - `name` (required) — Collection name.
 
-Displays version, description, author, license, tags, workflows, tools, dependencies, source, pinned ref, and installation date.
-
----
-
-## Collection Manifest
-
-Collections may include a `collection.yaml` manifest:
-
-```yaml
-name: recon-tools
-version: 1.0.0
-description: Reconnaissance workflow collection
-author: security-team
-license: MIT
-min_ofx_version: "0.4.0"
-
-workflows:
-  - subdomain-enum.yaml
-  - port-scan.yaml
-
-tools:
-  - subfinder
-  - nmap
-
-tags:
-  - recon
-  - scanning
-
-dependencies:
-  - name: base-utils
-    version: ">=1.0.0"
-```
-
-If the manifest is absent or the `workflows` list is empty, OFX auto-discovers all `.yml`/`.yaml` files in the collection directory.
+Displays source, pinned ref, path, installation date, and discovered workflows.
 
 ---
 

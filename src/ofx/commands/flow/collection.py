@@ -29,8 +29,7 @@ def add(
     name_or_url: Annotated[
         str,
         typer.Argument(
-            help="Collection name, org/repo, or full git URL. "
-            "Bare names resolve to the ofx-workflows GitHub org."
+            help="Collection name, org/repo, or full git URL."
         ),
     ],
     name: Annotated[
@@ -41,23 +40,19 @@ def add(
         str,
         typer.Option("--ref", "-r", help="Git tag or branch to pin."),
     ] = "",
-    no_deps: Annotated[
-        bool,
-        typer.Option("--no-deps", help="Skip installing collection dependencies."),
-    ] = False,
 ):
     """Install a workflow collection."""
     mgr = _mgr()
     console = get_console()
     try:
-        entry = mgr.add(name_or_url, alias=name, ref=ref, install_deps=not no_deps)
+        entry = mgr.add(name_or_url, alias=name, ref=ref)
     except (ValueError, RuntimeError) as exc:
         console.print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1) from exc
 
     print_success(
         "Collection Installed",
-        f"{entry.name} v{entry.version}",
+        entry.name,
         details={
             "Source": entry.source,
             "Path": str(entry.path),
@@ -166,46 +161,35 @@ def info(
     name: Annotated[str, typer.Argument(help="Collection name.")],
 ):
     """Show detailed info for an installed collection."""
+    from pathlib import Path
+
+    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
+
     mgr = _mgr()
     console = get_console()
-    manifest = mgr.info(name)
     entry = mgr.get(name)
 
-    if not manifest or not entry:
+    if not entry:
         console.print(f"[yellow]Collection '{name}' not found.[/yellow]")
         raise typer.Exit(code=1)
 
-    tree = Tree(f"[bold cyan]{manifest.name}[/bold cyan] v{manifest.version}")
-    if manifest.description:
-        tree.add(f"[dim]{manifest.description}[/dim]")
-    if manifest.author:
-        tree.add(f"[bold]Author:[/bold] {manifest.author}")
-    if manifest.license:
-        tree.add(f"[bold]License:[/bold] {manifest.license}")
-    if manifest.tags:
-        tree.add(f"[bold]Tags:[/bold] {', '.join(manifest.tags)}")
-
+    tree = Tree(f"[bold cyan]{entry.name}[/bold cyan]")
+    if entry.description:
+        tree.add(f"[dim]{entry.description}[/dim]")
     tree.add(f"[bold]Source:[/bold] {entry.source}")
     tree.add(f"[bold]Ref:[/bold] {entry.pinned_ref}")
     tree.add(f"[bold]Path:[/bold] [dim]{entry.path}[/dim]")
     tree.add(f"[bold]Installed:[/bold] {entry.installed_at}")
 
-    if manifest.workflows:
-        wf_node = tree.add("[bold]Workflows:[/bold]")
-        for wf in manifest.workflows:
-            wf_node.add(wf)
-
-    if manifest.tools:
-        tool_node = tree.add("[bold]Tools:[/bold]")
-        for t in manifest.tools:
-            tool_node.add(t)
-
-    if manifest.dependencies:
-        dep_node = tree.add("[bold]Dependencies:[/bold]")
-        for d in manifest.dependencies:
-            label = d.name
-            if d.version:
-                label += f" {d.version}"
-            dep_node.add(label)
+    # Discover workflows from disk
+    coll_path = Path(entry.path)
+    if coll_path.is_dir():
+        workflows: list[str] = []
+        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            workflows.extend(f.name for f in sorted(coll_path.rglob(f"*{ext}")))
+        if workflows:
+            wf_node = tree.add(f"[bold]Workflows ({len(workflows)}):[/bold]")
+            for wf in sorted(set(workflows)):
+                wf_node.add(wf)
 
     console.print(tree)

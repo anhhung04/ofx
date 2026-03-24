@@ -12,12 +12,10 @@ from pathlib import Path
 import git
 from git.exc import GitCommandError
 
-from ofx.collections.manifest import CollectionManifest, InstalledCollection
+from ofx.collections.manifest import InstalledCollection
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
-
-MANIFEST_FILENAME = "collection.yaml"
 
 # ------------------------------------------------------------------
 # Lightweight semver helpers (no external dependency)
@@ -108,7 +106,6 @@ class CollectionManager:
         ~/.ofx/collections/
             installed.json          # registry of installed collections
             <name>/                 # cloned collection directory
-                collection.yaml     # manifest
                 *.yaml              # workflows
     """
 
@@ -147,15 +144,13 @@ class CollectionManager:
         *,
         alias: str = "",
         ref: str = "",
-        install_deps: bool = True,
     ) -> InstalledCollection:
-        """Install a collection from a git URL or local path
+        """Install a collection from a git URL or local path.
 
         Args:
-            name_or_url: Full git URL, ``local_path``.
+            name_or_url: Full git URL or local path.
             alias: Override the directory/display name.
             ref: Git tag or branch to pin (default: repo default branch).
-            install_deps: Recursively install declared dependencies.
 
         Returns:
             The ``InstalledCollection`` metadata.
@@ -189,30 +184,16 @@ class CollectionManager:
         except GitCommandError as exc:
             raise RuntimeError(f"Failed to clone '{source}': {exc}") from exc
 
-        # Read manifest (or synthesize one)
-        manifest = CollectionManifest.from_directory(target)
-
-        # --- min_ofx_version gate ---
-        self._check_min_ofx_version(manifest, inferred_name)
-
         entry = InstalledCollection(
             name=inferred_name,
-            version=manifest.version,
             source=source,
             pinned_ref=ref or self._current_ref(target),
             path=str(target),
             installed_at=datetime.now(UTC).isoformat(),
-            description=manifest.description,
-            author=manifest.author,
-            tags=manifest.tags,
         )
         self._installed[inferred_name] = entry
         self._save_installed()
-        logger.info("Installed collection '%s' v%s", inferred_name, manifest.version)
-
-        # --- recursive dependency resolution ---
-        if install_deps and manifest.dependencies:
-            self._install_dependencies(manifest.dependencies)
+        logger.info("Installed collection '%s'", inferred_name)
 
         return entry
 
@@ -256,15 +237,9 @@ class CollectionManager:
                     logger.warning("'%s' has no remote, skipping.", coll_name)
                     continue
                 repo.remotes.origin.pull()
-                # Refresh manifest
-                manifest = CollectionManifest.from_directory(path)
-                entry.version = manifest.version
                 entry.pinned_ref = self._current_ref(path)
-                entry.description = manifest.description
-                entry.author = manifest.author
-                entry.tags = manifest.tags
                 updated.append(coll_name)
-                logger.info("Updated '%s' → v%s", coll_name, manifest.version)
+                logger.info("Updated '%s'", coll_name)
             except GitCommandError as exc:
                 logger.error("Failed to update '%s': %s", coll_name, exc)
             except Exception as exc:
@@ -286,15 +261,9 @@ class CollectionManager:
         """Get metadata for a single installed collection."""
         return self._installed.get(name)
 
-    def info(self, name: str) -> CollectionManifest | None:
-        """Read the full manifest of an installed collection."""
-        entry = self._installed.get(name)
-        if not entry:
-            return None
-        path = Path(entry.path)
-        if not path.exists():
-            return None
-        return CollectionManifest.from_directory(path)
+    def info(self, name: str) -> InstalledCollection | None:
+        """Get metadata for an installed collection."""
+        return self._installed.get(name)
 
     def collection_workflow_dirs(self) -> list[Path]:
         """Return paths of all installed collections for workflow search."""
@@ -331,16 +300,11 @@ class CollectionManager:
                     continue
                 shutil.copytree(old_path, dest)
 
-            manifest = CollectionManifest.from_directory(dest)
             entry = InstalledCollection(
                 name=name,
-                version=manifest.version,
                 source=details.get("url", ""),
                 pinned_ref=self._current_ref(dest),
                 path=str(dest),
-                description=manifest.description,
-                author=manifest.author,
-                tags=manifest.tags,
             )
             self._installed[name] = entry
             count += 1
@@ -384,53 +348,3 @@ class CollectionManager:
             )
         return source
 
-    @staticmethod
-    def _check_min_ofx_version(manifest: CollectionManifest, name: str) -> None:
-        """Warn (non-fatal) if OFX version is below the collection requirement."""
-        if not manifest.min_ofx_version:
-            return
-        try:
-            from ofx import __version__ as ofx_version
-        except ImportError:
-            return
-        if not check_version_constraint(ofx_version, f">={manifest.min_ofx_version}"):
-            logger.warning(
-                "Collection '%s' requires OFX >= %s (you have %s). "
-                "Some features may not work.",
-                name,
-                manifest.min_ofx_version,
-                ofx_version,
-            )
-
-    def _install_dependencies(self, deps: list) -> None:
-        """Recursively install collection dependencies.
-
-        Already-installed collections are skipped.  Version constraints are
-        checked against what is installed; a warning is logged on mismatch.
-        """
-        from ofx.collections.manifest import CollectionDependency
-
-        for dep in deps:
-            if not isinstance(dep, CollectionDependency):
-                dep = CollectionDependency.model_validate(dep)
-
-            existing = self._installed.get(dep.name)
-            if existing:
-                if dep.version and not check_version_constraint(
-                    existing.version, dep.version
-                ):
-                    logger.warning(
-                        "Dependency '%s' installed as v%s but constraint is %s",
-                        dep.name,
-                        existing.version,
-                        dep.version,
-                    )
-                continue
-
-            # Install the dependency
-            source = dep.source or dep.name  # bare name → ofx-workflows org
-            try:
-                logger.info("Installing dependency '%s' …", dep.name)
-                self.add(source, alias=dep.name, install_deps=True)
-            except (ValueError, RuntimeError) as exc:
-                logger.warning("Could not install dependency '%s': %s", dep.name, exc)
