@@ -301,6 +301,8 @@ jobs:
           print(f"  XSS: {len(xss_v)}, SQLi: {len(sqli_v)}, CMDi: {len(cmdi_v)}, CRLF: {len(crlf_v)}")
   secrets:
     name: Secret Hunting
+    outputs:
+      typed_outputs: '{{ steps["trufflehog-scan"].outputs.typed_outputs + steps["gitleaks-scan"].outputs.typed_outputs }}'
     needs:
       - crawl
     steps:

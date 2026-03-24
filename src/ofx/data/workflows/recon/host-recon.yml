@@ -18,6 +18,9 @@ dispatch:
 jobs:
   port-discovery:
     name: Port Discovery
+    outputs:
+      typed_outputs: '{{ steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs }}'
+      open_ports: '{{ steps.export-ports.outputs.open_ports }}'
     steps:
     - task: naabu
       timeout: 10
@@ -35,6 +38,9 @@ jobs:
         top_ports: '100'
         rate: 1000
       continue-on-error: true
+    - name: export-ports
+      run: |
+        echo "open_ports={{ ports(steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs) | map(attribute='port') | unique | sort | join(',') }}" >> $OFX_OUTPUTS
   service-detection:
     name: Service Detection & Analysis
     outputs:
@@ -47,6 +53,7 @@ jobs:
       name: service-scan
       with:
         target: '{{ inputs.target }}'
+        ports: "{{ jobs['port-discovery'].outputs.open_ports | default('', true) }}"
         version_detection: true
       continue-on-error: true
     - name: extract-targets
@@ -54,6 +61,8 @@ jobs:
         echo "http_targets={{ ports(steps["service-scan"].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}" >> $OFX_OUTPUTS
   ssh-audit:
     name: SSH Audit
+    outputs:
+      typed_outputs: '{{ steps["audit-ssh"].outputs.typed_outputs }}'
     needs:
     - service-detection
     steps:
@@ -65,6 +74,9 @@ jobs:
       continue-on-error: true
   http-probe:
     name: HTTP Probe & Exploit Search
+    outputs:
+      typed_outputs: '{{ steps["probe-http"].outputs.typed_outputs + steps["whatweb-fingerprint"].outputs.typed_outputs }}'
+      live_urls: '{{ steps.export-urls.outputs.live_urls }}'
     needs:
     - service-detection
     steps:
@@ -72,7 +84,7 @@ jobs:
       timeout: 10
       name: probe-http
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['service-detection'].outputs.http_targets | default(inputs.target, true) }}"
         tech_detect: true
         status_code: true
         title: true
@@ -87,11 +99,17 @@ jobs:
       timeout: 10
       name: whatweb-fingerprint
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['service-detection'].outputs.http_targets | default(inputs.target, true) }}"
         aggression: 3
       continue-on-error: true
+    - name: export-urls
+      run: |
+        echo "live_urls={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   vuln-scan:
     name: Vulnerability Scan
+    outputs:
+      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs }}'
+      vuln_count: '{{ steps.summary.outputs.vuln_count }}'
     needs:
     - http-probe
     steps:
@@ -99,14 +117,14 @@ jobs:
       timeout: 20
       name: nuclei-scan
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
         severity: critical,high,medium
       continue-on-error: true
     - task: nikto
       timeout: 15
       name: nikto-scan
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
       continue-on-error: true
     - name: summary
       run: |
@@ -114,6 +132,7 @@ jobs:
         echo " Host Recon: {{ inputs.target }}"
         echo "=============================="
         echo "Vulnerabilities: {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}"
+        echo "vuln_count={{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
       log-stdout: true
   summary:
     name: Summary

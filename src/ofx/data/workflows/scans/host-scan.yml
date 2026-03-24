@@ -78,9 +78,11 @@ jobs:
       continue-on-error: true
     - name: export-data
       run: |
-        echo "live_urls={{ urls(steps["ssh-audit"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "live_urls={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   web-analysis:
     name: Web Analysis
+    outputs:
+      typed_outputs: '{{ steps["whatweb-fingerprint"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs }}'
     needs:
     - host-recon
     steps:
@@ -99,6 +101,8 @@ jobs:
       continue-on-error: true
   url-crawl:
     name: URL Crawling
+    outputs:
+      typed_outputs: '{{ steps.crawl.outputs.typed_outputs + steps.spider.outputs.typed_outputs }}'
     needs:
     - host-recon
     steps:
@@ -118,6 +122,8 @@ jobs:
       continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
+    outputs:
+      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["xss-scan"].outputs.typed_outputs }}'
     needs:
     - url-crawl
     - web-analysis

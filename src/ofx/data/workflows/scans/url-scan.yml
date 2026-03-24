@@ -93,7 +93,7 @@ jobs:
       timeout: 20
       name: feroxbuster-fuzz
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
         wordlist: '{{ inputs.wordlist }}'
         depth: 2
         threads: 50
@@ -107,7 +107,7 @@ jobs:
       timeout: 10
       name: param-discovery
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
       continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
@@ -119,7 +119,7 @@ jobs:
       timeout: 20
       name: nuclei-scan
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
         severity: critical,high,medium
         exclude_tags: network,ssl,file,dns,osint,token-spray,headers
       continue-on-error: true
@@ -127,7 +127,7 @@ jobs:
       timeout: 15
       name: xss-scan
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
       continue-on-error: true
     - task: trufflehog
       timeout: 15

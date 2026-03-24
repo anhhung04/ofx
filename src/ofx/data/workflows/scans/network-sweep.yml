@@ -51,7 +51,7 @@ jobs:
     - name: fast-portscan
       run: |
         echo "[+] Port scanning alive hosts..."
-        HOSTS_FILE="/tmp/ofx_alive_hosts.txt"
+        HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
         if [ ! -f "$HOSTS_FILE" ]; then
           echo "[-] No hosts file found"
           exit 0
@@ -84,9 +84,9 @@ jobs:
       run: |
         echo "[+] Service identification..."
 
-        # Run nmap service detection on discovered hosts
-        if [ -f /tmp/ofx_alive_hosts.txt ]; then
-          nmap -sV -sC --version-intensity 5 -iL /tmp/ofx_alive_hosts.txt \
+        HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
+        if [ -f "$HOSTS_FILE" ]; then
+          nmap -sV -sC --version-intensity 5 -iL "$HOSTS_FILE" \
             -oN /tmp/ofx_service_scan.txt -oX /tmp/ofx_service_scan.xml \
             {% if inputs.speed == 'fast' %}
             --top-ports 100 -T4 \

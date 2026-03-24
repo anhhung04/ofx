@@ -87,6 +87,9 @@ jobs:
         print(f"Discovered {len(hosts)} live hosts")
   service-scan:
     name: Service Detection
+    outputs:
+      typed_outputs: '{{ steps["service-detect"].outputs.typed_outputs + steps["http-probe"].outputs.typed_outputs }}'
+      http_targets: '{{ steps.export-svc.outputs.http_targets }}'
     needs:
     - host-discovery
     steps:
@@ -105,8 +108,13 @@ jobs:
         tech_detect: true
         status_code: true
       continue-on-error: true
+    - name: export-svc
+      run: |
+        echo "http_targets={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   vuln-search:
     name: Vulnerability Search
+    outputs:
+      typed_outputs: '{{ steps["exploit-search"].outputs.typed_outputs }}'
     needs:
     - service-scan
     steps:
@@ -122,6 +130,7 @@ jobs:
         echo " CIDR Recon: {{ inputs.target }}"
         echo "=============================="
         echo "Live hosts: {{ jobs['host-discovery'].outputs.host_count }}"
+        echo "HTTP targets: {{ jobs['service-scan'].outputs.http_targets | default('none', true) }}"
       log-stdout: true
 
     - name: export-to-project

@@ -22,6 +22,9 @@ dispatch:
 jobs:
   probe:
     name: Initial Probe
+    outputs:
+      typed_outputs: '{{ steps["probe-url"].outputs.typed_outputs }}'
+      live_url: '{{ steps.export-url.outputs.live_url }}'
     steps:
     - task: httpx
       timeout: 10
@@ -31,6 +34,9 @@ jobs:
         tech_detect: true
         status_code: true
       continue-on-error: true
+    - name: export-url
+      run: |
+        echo "live_url={{ urls(steps["probe-url"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | first | default(inputs.target, true) }}" >> $OFX_OUTPUTS
   param-discovery:
     name: Parameter Discovery
     needs:
@@ -43,7 +49,7 @@ jobs:
       timeout: 10
       name: find-params
       with:
-        target: '{{ inputs.target }}'
+        target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}"
       continue-on-error: true
     - name: export-params
       script: |
@@ -70,7 +76,7 @@ jobs:
       timeout: 15
       name: fuzz-params
       with:
-        target: '{{ inputs.target }}?FUZZ=test'
+        target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}?FUZZ=test"
         wordlist: /usr/share/wordlists/dirb/common.txt
         auto_calibration: true
         follow_redirect: true

@@ -121,6 +121,9 @@ jobs:
           echo "live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   takeover-check:
     name: Subdomain Takeover & Vulnerability Check
+    outputs:
+      typed_outputs: '{{ steps["takeover-scan"].outputs.typed_outputs }}'
+      vuln_count: '{{ steps.summary.outputs.vuln_count }}'
     needs:
       - http-probe
     steps:
@@ -138,6 +141,7 @@ jobs:
           echo "======================================="
           echo "Subdomains found: {{ jobs['passive-enum'].outputs.subdomain_count }}"
           echo "Takeover vulns: {{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}"
+          echo "vuln_count={{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
         log-stdout: true
       - name: export-to-project
         script: |-
