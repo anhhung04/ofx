@@ -1,0 +1,139 @@
+name: opsec-cleanup
+description: |
+  OPSEC cleanup script generator — produce cleanup and timestomp commands
+  tailored for Linux or Windows targets.
+tags: [redteam, opsec, cleanup, anti-forensics]
+dispatch:
+  inputs:
+    target_os:
+      required: true
+      type: string
+      description: "Target OS: linux or windows"
+    aggressive:
+      type: string
+      default: "false"
+      description: Enable aggressive log cleanup (truncate wtmp/btmp/lastlog)
+    files_to_delete:
+      type: string
+      default: ""
+      description: "Comma-separated paths to securely delete"
+
+jobs:
+  cleanup:
+    name: Generate Cleanup Commands
+    outputs:
+      cleanup_file: "{{ steps.build-cleanup.outputs.cleanup_file }}"
+      command_count: "{{ steps.build-cleanup.outputs.command_count }}"
+    steps:
+    - name: build-cleanup
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.opsec import (
+            clean_history_commands,
+            clean_linux_logs,
+            clean_windows_artifacts,
+            secure_delete_command,
+        )
+
+        target_os = "{{ inputs.target_os }}".lower()
+        aggressive = "{{ inputs.aggressive }}" == "true"
+        files_input = "{{ inputs.files_to_delete }}"
+
+        commands = []
+
+        if target_os == "linux":
+            commands.append("# === Shell History Cleanup ===")
+            commands.extend(clean_history_commands())
+            commands.append("")
+            commands.append("# === Log Cleanup ===")
+            commands.extend(clean_linux_logs(aggressive=aggressive))
+
+            if files_input:
+                commands.append("")
+                commands.append("# === Secure File Deletion ===")
+                for fpath in files_input.split(","):
+                    fpath = fpath.strip()
+                    if fpath:
+                        commands.append(secure_delete_command(fpath, passes=3))
+
+        elif target_os == "windows":
+            commands.append("# === Windows Artifact Cleanup ===")
+            commands.extend(clean_windows_artifacts())
+
+            if files_input:
+                commands.append("")
+                commands.append("# === File Deletion ===")
+                for fpath in files_input.split(","):
+                    fpath = fpath.strip()
+                    if fpath:
+                        commands.append(f"Remove-Item -Force -Path '{fpath}' -ErrorAction SilentlyContinue")
+
+        else:
+            print(f"[-] Unsupported OS: {target_os}")
+            print("    Supported: linux, windows")
+            raise SystemExit(1)
+
+        print(f"[+] Generated {len([c for c in commands if c and not c.startswith('#')])} cleanup commands for {target_os}")
+        if aggressive:
+            print("    Mode: AGGRESSIVE (includes wtmp/btmp/lastlog)")
+
+        out_file = f"/tmp/ofx_cleanup_{target_os}.sh"
+        ext = ".ps1" if target_os == "windows" else ".sh"
+        out_file = f"/tmp/ofx_cleanup_{target_os}{ext}"
+
+        with open(out_file, "w") as f:
+            if target_os == "linux":
+                f.write("#!/bin/bash\n")
+            f.write(f"# OFX OPSEC Cleanup - {target_os}\n")
+            f.write(f"# Aggressive: {aggressive}\n\n")
+            for cmd in commands:
+                f.write(f"{cmd}\n")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"cleanup_file={out_file}\n")
+            f.write(f"command_count={len([c for c in commands if c and not c.startswith('#')])}\n")
+
+  timestomp:
+    name: Generate Timestomp Commands
+    outputs:
+      timestomp_file: "{{ steps.build-timestomp.outputs.timestomp_file }}"
+      timestomp_count: "{{ steps.build-timestomp.outputs.timestomp_count }}"
+    steps:
+    - name: build-timestomp
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.opsec import timestomp_command
+
+        target_os = "{{ inputs.target_os }}".lower()
+        files_input = "{{ inputs.files_to_delete }}"
+
+        commands = []
+        if files_input:
+            if target_os == "linux":
+                reference = "/usr/bin/ls"
+            else:
+                reference = "C:\\Windows\\System32\\notepad.exe"
+
+            commands.append(f"# Timestomp files to match: {reference}")
+            for fpath in files_input.split(","):
+                fpath = fpath.strip()
+                if fpath:
+                    commands.append(timestomp_command(fpath, reference))
+        else:
+            print("[*] No files specified for timestomping, skipping")
+
+        out_file = f"/tmp/ofx_timestomp_{target_os}.sh"
+        with open(out_file, "w") as f:
+            f.write("#!/bin/bash\n" if target_os == "linux" else "")
+            f.write("# OFX Timestomp Commands\n\n")
+            for cmd in commands:
+                f.write(f"{cmd}\n")
+
+        print(f"[+] Generated {len([c for c in commands if not c.startswith('#')])} timestomp commands")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"timestomp_file={out_file}\n")
+            f.write(f"timestomp_count={len([c for c in commands if not c.startswith('#')])}\n")
+      log-stdout: true

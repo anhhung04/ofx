@@ -1,0 +1,99 @@
+name: proxy-setup
+description: |
+  Proxy configuration generator — build a proxychains4.conf and
+  environment variables for HTTP proxy routing using ofx.api.opsec.
+tags: [misc, opsec, proxy, proxychains, networking]
+dispatch:
+  inputs:
+    proxies:
+      required: true
+      type: string
+      description: >
+        JSON array of proxy configs, e.g.
+        [{"type":"socks5","host":"127.0.0.1","port":1080}]
+    chain_type:
+      type: string
+      default: dynamic_chain
+      description: "Chain type: dynamic_chain, strict_chain, round_robin_chain, random_chain"
+    proxy_dns:
+      type: string
+      default: "true"
+      description: Route DNS through proxy chain
+
+jobs:
+  generate:
+    name: Generate Proxy Config
+    steps:
+    - name: build-config
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.opsec.proxy import build_proxychains_conf, http_proxy_env
+        from pathlib import Path
+        import json
+
+        proxies_raw = """{{ inputs.proxies }}"""
+        chain_type = "{{ inputs.chain_type }}"
+        proxy_dns = "{{ inputs.proxy_dns }}" == "true"
+
+        try:
+            proxies = json.loads(proxies_raw)
+        except json.JSONDecodeError as e:
+            print(f"[-] Invalid JSON for proxies input: {e}")
+            print("    Expected format: [{" + '"type":"socks5","host":"127.0.0.1","port":1080}]')
+            raise SystemExit(1)
+
+        if not isinstance(proxies, list) or not proxies:
+            print("[-] proxies must be a non-empty JSON array")
+            raise SystemExit(1)
+
+        # Generate proxychains config
+        conf = build_proxychains_conf(
+            proxies,
+            chain_type=chain_type,
+            proxy_dns=proxy_dns,
+        )
+
+        output_dir = Path("/tmp/ofx_proxy")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        conf_file = output_dir / "proxychains4.conf"
+        conf_file.write_text(conf)
+        print(f"[+] proxychains4.conf written to {conf_file}")
+        print(f"    Chain type: {chain_type}")
+        print(f"    Proxy DNS: {proxy_dns}")
+        print(f"    Proxies: {len(proxies)}")
+
+        print(f"\n--- proxychains4.conf ---")
+        print(conf)
+
+        # Generate HTTP proxy env vars from first proxy
+        first = proxies[0]
+        env_vars = http_proxy_env(
+            host=first["host"],
+            port=int(first["port"]),
+            scheme=first.get("type", "socks5"),
+            user=first.get("user", ""),
+            password=first.get("pass", ""),
+        )
+
+        env_file = output_dir / "proxy_env.sh"
+        with open(env_file, "w") as f:
+            f.write("#!/bin/bash\n")
+            f.write("# HTTP proxy environment variables\n")
+            for key, val in env_vars.items():
+                f.write(f'export {key}="{val}"\n')
+
+        print(f"\n--- proxy_env.sh ---")
+        for key, val in env_vars.items():
+            print(f"  {key}={val}")
+
+        print(f"\n[+] Usage:")
+        print(f"    proxychains4 -f {conf_file} <command>")
+        print(f"    source {env_file} && curl https://check.torproject.org")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"conf_file={conf_file}\n")
+            f.write(f"env_file={env_file}\n")
+            f.write(f"proxy_count={len(proxies)}\n")
+      log-stdout: true

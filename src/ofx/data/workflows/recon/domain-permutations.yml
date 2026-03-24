@@ -1,0 +1,137 @@
+name: domain-permutations
+description: |
+  Domain permutation and typosquatting detector — generate lookalike
+  domains, resolve them via DNS, and report which are registered.
+  Useful for brand protection and phishing detection.
+tags: [recon, domain, typosquatting, phishing, dns]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain to check (e.g. example.com)
+      alias: t
+    resolve_timeout:
+      type: string
+      default: "2"
+      description: DNS resolution timeout per domain in seconds
+
+jobs:
+  generate:
+    name: Generate Permutations
+    outputs:
+      perms_file: "{{ steps.gen-perms.outputs.perms_file }}"
+      perm_count: "{{ steps.gen-perms.outputs.perm_count }}"
+    steps:
+    - name: gen-perms
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.recon.osint import domain_permutations
+
+        domain = "{{ inputs.target }}"
+        perms = domain_permutations(domain)
+
+        out_file = "/tmp/ofx_domain_perms.txt"
+        with open(out_file, "w") as f:
+            for p in perms:
+                f.write(f"{p}\n")
+
+        print(f"[+] Generated {len(perms)} permutations for {domain}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"perms_file={out_file}\n")
+            f.write(f"perm_count={len(perms)}\n")
+
+  resolve:
+    name: Resolve Domains
+    needs: [generate]
+    outputs:
+      registered_file: "{{ steps.dns-resolve.outputs.registered_file }}"
+      registered_count: "{{ steps.dns-resolve.outputs.registered_count }}"
+    steps:
+    - name: dns-resolve
+      timeout: 10
+      continue-on-error: true
+      script: |
+        from ofx.api.dns import resolve_host_sync
+        from pathlib import Path
+
+        timeout = float("{{ inputs.resolve_timeout }}")
+        perms_file = "{{ jobs.generate.outputs.perms_file }}"
+
+        domains = [
+            line.strip()
+            for line in Path(perms_file).read_text().splitlines()
+            if line.strip()
+        ]
+
+        print(f"[*] Resolving {len(domains)} domains (timeout={timeout}s) ...")
+
+        registered = []
+        for i, domain in enumerate(domains):
+            try:
+                ips = resolve_host_sync(domain, timeout=timeout)
+                if ips:
+                    registered.append({"domain": domain, "ips": ips})
+                    print(f"  [+] {domain:<40} -> {', '.join(ips)}")
+            except Exception:
+                pass
+
+            if (i + 1) % 50 == 0:
+                print(f"  ... checked {i + 1}/{len(domains)}")
+
+        out_file = "/tmp/ofx_registered_domains.txt"
+        with open(out_file, "w") as f:
+            for entry in registered:
+                f.write(f"{entry['domain']}\t{','.join(entry['ips'])}\n")
+
+        print(f"\n[+] {len(registered)}/{len(domains)} domains resolve (potentially registered)")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"registered_file={out_file}\n")
+            f.write(f"registered_count={len(registered)}\n")
+
+  report:
+    name: Typosquatting Report
+    needs: [generate, resolve]
+    steps:
+    - name: display-report
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from pathlib import Path
+
+        print("=" * 60)
+        print(" DOMAIN TYPOSQUATTING REPORT")
+        print(f" Target: {{ inputs.target }}")
+        print("=" * 60)
+
+        perm_count = int("{{ jobs.generate.outputs.perm_count }}" or "0")
+        registered_count = int("{{ jobs.resolve.outputs.registered_count }}" or "0")
+
+        print(f"\n  Permutations generated: {perm_count}")
+        print(f"  Domains registered:    {registered_count}")
+
+        if registered_count > 0:
+            print(f"\n--- Registered Lookalike Domains ---")
+            reg_file = "{{ jobs.resolve.outputs.registered_file }}"
+            try:
+                for line in Path(reg_file).read_text().splitlines():
+                    if line.strip():
+                        parts = line.split("\t")
+                        domain = parts[0]
+                        ips = parts[1] if len(parts) > 1 else "?"
+                        print(f"  [!] {domain:<40} {ips}")
+            except Exception:
+                pass
+
+            if registered_count > 0:
+                print(f"\n[!] WARNING: {registered_count} typosquatting domain(s) appear to be registered")
+                print("    These could be used for phishing or brand impersonation")
+        else:
+            print("\n  [+] No registered lookalike domains found")
+
+        print(f"\n[*] Full permutations: {{ jobs.generate.outputs.perms_file }}")
+        print(f"[*] Registered list:   {{ jobs.resolve.outputs.registered_file }}")
+      log-stdout: true

@@ -1,0 +1,136 @@
+name: banner-grab
+description: |
+  Port scan and banner grab — discover open ports on a target using
+  async port scanning, then grab service banners for fingerprinting.
+tags: [recon, banner, portscan, fingerprint]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target IP or hostname
+      alias: t
+    ports:
+      type: string
+      default: ""
+      description: "Comma-separated ports or empty for top-100"
+
+jobs:
+  portscan:
+    name: Port Scan
+    outputs:
+      open_ports: "{{ steps.scan-ports.outputs.open_ports }}"
+      port_count: "{{ steps.scan-ports.outputs.port_count }}"
+    steps:
+    - name: scan-ports
+      timeout: 5
+      continue-on-error: true
+      script: |
+        from ofx.api.recon import async_port_scan, TOP_100_PORTS
+        import asyncio
+        import json
+
+        target = "{{ inputs.target }}"
+        ports_input = "{{ inputs.ports }}"
+
+        if ports_input:
+            ports = [int(p.strip()) for p in ports_input.split(",") if p.strip().isdigit()]
+        else:
+            ports = TOP_100_PORTS
+
+        print(f"[*] Scanning {target} ({len(ports)} ports)...")
+        results = asyncio.run(async_port_scan(target, ports, concurrency=250, timeout=1.5))
+        open_ports = [r.port for r in results if r.open]
+
+        print(f"[+] Found {len(open_ports)} open ports:")
+        for p in sorted(open_ports):
+            print(f"    {p}/tcp open")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"open_ports={json.dumps(sorted(open_ports))}\n")
+            f.write(f"port_count={len(open_ports)}\n")
+
+  banners:
+    name: Banner Grab
+    needs: [portscan]
+    outputs:
+      banners_file: "{{ steps.grab-banners.outputs.banners_file }}"
+      service_count: "{{ steps.grab-banners.outputs.service_count }}"
+    steps:
+    - name: grab-banners
+      timeout: 10
+      continue-on-error: true
+      script: |
+        from ofx.api.service import scan_banner
+        import json
+
+        target = "{{ inputs.target }}"
+        ports_raw = '{{ jobs.portscan.outputs.open_ports }}'
+        open_ports = json.loads(ports_raw) if ports_raw else []
+
+        if not open_ports:
+            print("[-] No open ports to banner grab")
+            with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+                f.write("banners_file=\n")
+                f.write("service_count=0\n")
+            raise SystemExit(0)
+
+        print(f"[*] Grabbing banners for {len(open_ports)} ports on {target}...")
+        services = []
+        for port in sorted(open_ports):
+            try:
+                info = scan_banner(target, port, timeout=3.0)
+                entry = {
+                    "port": info.port,
+                    "banner": info.banner or "",
+                    "tls": info.tls,
+                    "protocol": info.protocol or "unknown",
+                }
+                services.append(entry)
+                banner_preview = (info.banner or "")[:60].replace("\n", " ")
+                tls_tag = " [TLS]" if info.tls else ""
+                print(f"    {port}/tcp  {info.protocol or 'unknown':12s}{tls_tag}  {banner_preview}")
+            except Exception as e:
+                services.append({"port": port, "banner": "", "tls": False, "protocol": f"error: {e}"})
+                print(f"    {port}/tcp  error: {e}")
+
+        out_file = "/tmp/ofx_banners.json"
+        with open(out_file, "w") as f:
+            json.dump(services, f, indent=2)
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"banners_file={out_file}\n")
+            f.write(f"service_count={len(services)}\n")
+
+  summary:
+    name: Service Summary
+    needs: [portscan, banners]
+    steps:
+    - name: display-table
+      script: |
+        import json
+
+        target = "{{ inputs.target }}"
+        banners_file = "{{ jobs.banners.outputs.banners_file }}"
+
+        services = []
+        if banners_file:
+            try:
+                with open(banners_file) as f:
+                    services = json.load(f)
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
+
+        print("=" * 70)
+        print(f" BANNER GRAB RESULTS: {target}")
+        print("=" * 70)
+        print(f"\n  {'PORT':<10} {'PROTOCOL':<14} {'TLS':<6} {'BANNER'}")
+        print(f"  {'-'*8:<10} {'-'*12:<14} {'-'*4:<6} {'-'*30}")
+
+        for svc in sorted(services, key=lambda x: x["port"]):
+            banner = svc["banner"][:40].replace("\n", " ") if svc["banner"] else "-"
+            tls = "yes" if svc["tls"] else "no"
+            print(f"  {svc['port']:<10} {svc['protocol']:<14} {tls:<6} {banner}")
+
+        print(f"\n  Total: {{ jobs.portscan.outputs.port_count }} open ports, {{ jobs.banners.outputs.service_count }} services identified")
+      log-stdout: true

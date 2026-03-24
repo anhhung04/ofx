@@ -1,0 +1,120 @@
+name: email-gen
+description: |
+  Email pattern and domain permutation generator — create likely email
+  addresses for a target person and typosquatting domains for phishing
+  prep or OSINT investigation.
+tags: [misc, osint, email, phishing, recon]
+dispatch:
+  inputs:
+    first_name:
+      required: true
+      type: string
+      description: Target first name
+    last_name:
+      required: true
+      type: string
+      description: Target last name
+    domain:
+      required: true
+      type: string
+      description: Target email domain (e.g. example.com)
+
+jobs:
+  email-patterns:
+    name: Generate Email Patterns
+    outputs:
+      patterns_file: "{{ steps.gen-emails.outputs.patterns_file }}"
+      pattern_count: "{{ steps.gen-emails.outputs.pattern_count }}"
+    steps:
+    - name: gen-emails
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.recon.osint import email_patterns
+
+        first = "{{ inputs.first_name }}"
+        last = "{{ inputs.last_name }}"
+        domain = "{{ inputs.domain }}"
+
+        emails = email_patterns(first, last, domain)
+
+        out_file = "/tmp/ofx_email_patterns.txt"
+        with open(out_file, "w") as f:
+            for email in emails:
+                f.write(f"{email}\n")
+
+        print(f"[+] Generated {len(emails)} email patterns for {first} {last} @ {domain}")
+        for email in emails:
+            print(f"    {email}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"patterns_file={out_file}\n")
+            f.write(f"pattern_count={len(emails)}\n")
+
+  domain-perms:
+    name: Generate Domain Permutations
+    outputs:
+      perms_file: "{{ steps.gen-perms.outputs.perms_file }}"
+      perm_count: "{{ steps.gen-perms.outputs.perm_count }}"
+    steps:
+    - name: gen-perms
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.recon.osint import domain_permutations
+
+        domain = "{{ inputs.domain }}"
+        perms = domain_permutations(domain)
+
+        out_file = "/tmp/ofx_domain_permutations.txt"
+        with open(out_file, "w") as f:
+            for p in perms:
+                f.write(f"{p}\n")
+
+        print(f"[+] Generated {len(perms)} domain permutations for {domain}")
+        print(f"    Preview (first 15):")
+        for p in perms[:15]:
+            print(f"      {p}")
+        if len(perms) > 15:
+            print(f"      ... ({len(perms) - 15} more)")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"perms_file={out_file}\n")
+            f.write(f"perm_count={len(perms)}\n")
+
+  summary:
+    name: Email & Domain Summary
+    needs: [email-patterns, domain-perms]
+    steps:
+    - name: display-summary
+      timeout: 2
+      continue-on-error: true
+      script: |
+        print("=" * 60)
+        print(" EMAIL & DOMAIN GENERATION REPORT")
+        print("=" * 60)
+
+        print(f"\n  Target: {{ inputs.first_name }} {{ inputs.last_name }}")
+        print(f"  Domain: {{ inputs.domain }}")
+
+        print(f"\n--- Email Patterns ---")
+        print(f"  Count: {{ jobs['email-patterns'].outputs.pattern_count }}")
+        print(f"  File:  {{ jobs['email-patterns'].outputs.patterns_file }}")
+
+        print(f"\n--- Domain Permutations (Typosquatting) ---")
+        print(f"  Count: {{ jobs['domain-perms'].outputs.perm_count }}")
+        print(f"  File:  {{ jobs['domain-perms'].outputs.perms_file }}")
+
+        # Show email list
+        try:
+            with open("{{ jobs['email-patterns'].outputs.patterns_file }}") as f:
+                emails = [line.strip() for line in f if line.strip()]
+            print(f"\n--- All Email Patterns ---")
+            for e in emails:
+                print(f"    {e}")
+        except Exception:
+            pass
+
+        print("\n[*] Use email patterns for password spraying or account discovery")
+        print("[*] Use domain permutations for phishing infrastructure detection")
+      log-stdout: true

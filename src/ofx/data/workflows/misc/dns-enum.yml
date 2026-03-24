@@ -1,0 +1,169 @@
+name: dns-enum
+description: |
+  DNS enumeration — brute-force subdomains using a wordlist, then
+  resolve discovered subdomains to IP addresses.
+tags: [misc, dns, enumeration, recon]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain to enumerate
+      alias: t
+    wordlist:
+      type: string
+      default: ""
+      description: "Path to subdomain wordlist (uses built-in if empty)"
+
+jobs:
+  bruteforce:
+    name: DNS Brute-force
+    outputs:
+      found_subs: "{{ steps.dns-brute.outputs.found_subs }}"
+      found_count: "{{ steps.dns-brute.outputs.found_count }}"
+    steps:
+    - name: dns-brute
+      timeout: 15
+      continue-on-error: true
+      script: |
+        from ofx.api.dns import bruteforce_subdomains_sync
+        from pathlib import Path
+        import json
+
+        domain = "{{ inputs.target }}"
+        wordlist_path = "{{ inputs.wordlist }}"
+
+        # Built-in default wordlist
+        default_words = [
+            "www", "mail", "ftp", "smtp", "pop", "imap", "webmail",
+            "ns1", "ns2", "ns3", "dns", "dns1", "dns2",
+            "vpn", "gateway", "proxy", "firewall", "fw",
+            "dev", "staging", "test", "qa", "uat", "beta", "alpha",
+            "api", "app", "mobile", "m", "web",
+            "admin", "panel", "portal", "dashboard", "manage", "cms",
+            "db", "database", "mysql", "postgres", "mongo", "redis", "sql",
+            "git", "gitlab", "github", "svn", "repo", "ci", "cd", "jenkins",
+            "jira", "confluence", "wiki", "docs", "help", "support",
+            "cdn", "static", "assets", "media", "images", "img", "files",
+            "shop", "store", "blog", "forum", "community",
+            "monitoring", "grafana", "prometheus", "kibana", "elastic",
+            "cloud", "aws", "azure", "gcp", "s3", "storage",
+            "ldap", "ad", "dc", "exchange", "owa", "autodiscover",
+            "ssh", "sftp", "remote", "rdp", "citrix",
+            "backup", "bak", "old", "new", "temp", "tmp",
+            "intranet", "extranet", "internal", "external",
+            "login", "auth", "sso", "oauth", "id", "identity",
+        ]
+
+        if wordlist_path:
+            candidates = Path(wordlist_path).read_text().strip().splitlines()
+            candidates = [w.strip() for w in candidates if w.strip()]
+        else:
+            candidates = default_words
+
+        print(f"[*] DNS brute-forcing {domain} with {len(candidates)} candidates...")
+        results = bruteforce_subdomains_sync(domain, candidates, concurrency=100, timeout=2.0)
+
+        found = []
+        for subdomain, ip in sorted(results):
+            found.append({"subdomain": subdomain, "ip": ip})
+            print(f"    {subdomain} -> {ip}")
+
+        print(f"\n[+] Found {len(found)} subdomains")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"found_subs={json.dumps(found)}\n")
+            f.write(f"found_count={len(found)}\n")
+
+  resolve:
+    name: Resolve Subdomains
+    needs: [bruteforce]
+    outputs:
+      resolved_file: "{{ steps.resolve-ips.outputs.resolved_file }}"
+      unique_ips: "{{ steps.resolve-ips.outputs.unique_ips }}"
+    steps:
+    - name: resolve-ips
+      timeout: 10
+      continue-on-error: true
+      script: |
+        from ofx.api.dns import resolve_host_sync
+        import json
+
+        found_raw = '{{ jobs.bruteforce.outputs.found_subs }}'
+        found = json.loads(found_raw) if found_raw else []
+
+        if not found:
+            print("[-] No subdomains to resolve")
+            with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+                f.write("resolved_file=\n")
+                f.write("unique_ips=[]\n")
+            raise SystemExit(0)
+
+        resolved = {}
+        all_ips = set()
+
+        print(f"[*] Resolving {len(found)} subdomains...")
+        for entry in found:
+            sub = entry["subdomain"]
+            try:
+                ips = resolve_host_sync(sub, timeout=2.0)
+                resolved[sub] = ips
+                all_ips.update(ips)
+                print(f"    {sub} -> {', '.join(ips)}")
+            except Exception as e:
+                resolved[sub] = [entry.get("ip", "unresolved")]
+                print(f"    {sub} -> {entry.get('ip', 'error')} (fallback)")
+
+        out_file = "/tmp/ofx_dns_resolved.json"
+        with open(out_file, "w") as f:
+            json.dump(resolved, f, indent=2)
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"resolved_file={out_file}\n")
+            f.write(f"unique_ips={json.dumps(sorted(all_ips))}\n")
+
+  summary:
+    name: DNS Enumeration Summary
+    needs: [bruteforce, resolve]
+    steps:
+    - name: display-mapping
+      script: |
+        import json
+        from pathlib import Path
+
+        domain = "{{ inputs.target }}"
+        found_count = "{{ jobs.bruteforce.outputs.found_count }}"
+        resolved_file = "{{ jobs.resolve.outputs.resolved_file }}"
+        unique_ips_raw = '{{ jobs.resolve.outputs.unique_ips }}'
+
+        resolved = {}
+        if resolved_file:
+            try:
+                resolved = json.loads(Path(resolved_file).read_text())
+            except (FileNotFoundError, json.JSONDecodeError):
+                pass
+
+        unique_ips = json.loads(unique_ips_raw) if unique_ips_raw else []
+
+        print("=" * 60)
+        print(f" DNS ENUMERATION: {domain}")
+        print("=" * 60)
+        print(f"\n  Subdomains found: {found_count}")
+        print(f"  Unique IPs: {len(unique_ips)}")
+
+        if resolved:
+            print(f"\n  {'SUBDOMAIN':<40} {'IP ADDRESSES'}")
+            print(f"  {'-'*38:<40} {'-'*20}")
+            for sub, ips in sorted(resolved.items()):
+                ip_str = ", ".join(ips) if ips else "unresolved"
+                print(f"  {sub:<40} {ip_str}")
+
+        if unique_ips:
+            print(f"\n  Unique IP addresses:")
+            for ip in unique_ips:
+                # Count how many subdomains point to this IP
+                count = sum(1 for ips in resolved.values() if ip in ips)
+                print(f"    {ip} ({count} subdomains)")
+
+        print(f"\n  Results: {resolved_file}")
+      log-stdout: true

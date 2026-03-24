@@ -1,0 +1,166 @@
+name: http-probe
+description: |
+  HTTP prober — read a list of URLs, probe each with randomized
+  User-Agent headers and timing jitter, then classify responses.
+tags: [misc, http, probe, recon]
+dispatch:
+  inputs:
+    targets_file:
+      required: true
+      type: string
+      description: Path to file containing URLs (one per line)
+    rate_limit:
+      type: string
+      default: "5"
+      description: Maximum requests per second
+
+jobs:
+  probe:
+    name: HTTP Probe Targets
+    outputs:
+      results_file: "{{ steps.probe-targets.outputs.results_file }}"
+      total_probed: "{{ steps.probe-targets.outputs.total_probed }}"
+      alive_count: "{{ steps.probe-targets.outputs.alive_count }}"
+    steps:
+    - name: probe-targets
+      timeout: 30
+      continue-on-error: true
+      script: |
+        from ofx.api.http import get_http_client
+        from ofx.api.evasion import sleep_with_jitter
+        from ofx.api.opsec import rotate_user_agent
+        from pathlib import Path
+        import json
+
+        targets_file = "{{ inputs.targets_file }}"
+        rate_limit = float("{{ inputs.rate_limit }}")
+
+        targets = Path(targets_file).read_text().strip().splitlines()
+        targets = [t.strip() for t in targets if t.strip() and not t.startswith("#")]
+        print(f"[*] Loaded {len(targets)} targets from {targets_file}")
+
+        delay = 1.0 / rate_limit if rate_limit > 0 else 0.2
+        results = []
+        client = get_http_client(timeout=10)
+
+        for i, url in enumerate(targets):
+            if not url.startswith("http"):
+                url = f"https://{url}"
+
+            ua = rotate_user_agent()
+            headers = {"User-Agent": ua}
+
+            try:
+                resp = client.get(url, headers=headers, follow_redirects=True)
+                status = resp.status_code
+                final_url = str(resp.url)
+                title = ""
+                ct = resp.headers.get("content-type", "")
+                if "html" in ct:
+                    text = resp.text[:5000]
+                    import re
+                    match = re.search(r"<title[^>]*>(.*?)</title>", text, re.IGNORECASE | re.DOTALL)
+                    if match:
+                        title = match.group(1).strip()[:80]
+
+                entry = {
+                    "url": url,
+                    "status": status,
+                    "final_url": final_url,
+                    "title": title,
+                    "content_type": ct.split(";")[0] if ct else "",
+                    "content_length": len(resp.content),
+                }
+                results.append(entry)
+                print(f"    [{status}] {url}  {title[:40]}")
+            except Exception as e:
+                results.append({"url": url, "status": 0, "error": str(e)})
+                print(f"    [ERR] {url}  {e}")
+
+            if i < len(targets) - 1:
+                sleep_with_jitter(delay, jitter_pct=0.3)
+
+        out_file = "/tmp/ofx_http_probe.json"
+        with open(out_file, "w") as f:
+            json.dump(results, f, indent=2)
+
+        alive = [r for r in results if r.get("status", 0) > 0]
+        print(f"\n[+] Probed {len(results)} targets, {len(alive)} alive")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"results_file={out_file}\n")
+            f.write(f"total_probed={len(results)}\n")
+            f.write(f"alive_count={len(alive)}\n")
+
+  classify:
+    name: Classify Responses
+    needs: [probe]
+    steps:
+    - name: classify-results
+      script: |
+        import json
+        from pathlib import Path
+
+        results_file = "{{ jobs.probe.outputs.results_file }}"
+        results = json.loads(Path(results_file).read_text()) if results_file else []
+
+        alive = []
+        dead = []
+        redirects = []
+        auth_required = []
+        errors = []
+
+        for r in results:
+            status = r.get("status", 0)
+            if status == 0:
+                errors.append(r)
+            elif status in (301, 302, 303, 307, 308):
+                redirects.append(r)
+            elif status in (401, 403):
+                auth_required.append(r)
+            elif 200 <= status < 400:
+                alive.append(r)
+            else:
+                dead.append(r)
+
+        print("=" * 60)
+        print(" HTTP PROBE RESULTS")
+        print("=" * 60)
+        print(f"\n  Total probed: {len(results)}")
+        print(f"  Alive (2xx):        {len(alive)}")
+        print(f"  Redirects (3xx):    {len(redirects)}")
+        print(f"  Auth required:      {len(auth_required)}")
+        print(f"  Dead/error (4xx+):  {len(dead)}")
+        print(f"  Connection errors:  {len(errors)}")
+
+        if alive:
+            print(f"\n  --- Alive Hosts ---")
+            for r in alive:
+                title = r.get("title", "")[:40]
+                print(f"    [{r['status']}] {r['url']}  {title}")
+
+        if auth_required:
+            print(f"\n  --- Auth Required ---")
+            for r in auth_required:
+                print(f"    [{r['status']}] {r['url']}")
+
+        if redirects:
+            print(f"\n  --- Redirects ---")
+            for r in redirects:
+                final = r.get("final_url", "")
+                print(f"    [{r['status']}] {r['url']} -> {final}")
+
+        # Save alive hosts list
+        alive_file = "/tmp/ofx_alive_hosts.txt"
+        with open(alive_file, "w") as f:
+            for r in alive:
+                f.write(f"{r['url']}\n")
+
+        print(f"\n  Alive hosts saved to: {alive_file}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"alive_file={alive_file}\n")
+            f.write(f"alive_count={len(alive)}\n")
+            f.write(f"redirect_count={len(redirects)}\n")
+            f.write(f"auth_count={len(auth_required)}\n")
+      log-stdout: true

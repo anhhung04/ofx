@@ -1,0 +1,240 @@
+name: ad-recon-api
+description: |
+  Active Directory reconnaissance using ofx.api command builders —
+  enumerate shares, query LDAP, perform Kerberoasting, AS-REP roasting,
+  and delegation discovery.  All steps generate ready-to-run commands.
+tags: [redteam, ad, recon, kerberos, ldap]
+dispatch:
+  inputs:
+    dc_ip:
+      required: true
+      type: string
+      description: Domain controller IP address
+      alias: t
+    domain:
+      required: true
+      type: string
+      description: AD domain name (e.g. corp.local)
+    username:
+      required: true
+      type: string
+      description: Username for authenticated enumeration
+    password:
+      type: string
+      default: ""
+      description: Password (falls back to ad_password secret)
+call:
+  secrets:
+    ad_password:
+      required: false
+
+jobs:
+  enumerate:
+    name: AD Enumeration Commands
+    outputs:
+      bloodhound_cmd: "{{ steps.bloodhound-cmd.outputs.bloodhound_cmd }}"
+      shares_cmd: "{{ steps.shares-cmd.outputs.shares_cmd }}"
+      ldap_cmd: "{{ steps.ldap-cmd.outputs.ldap_cmd }}"
+      commands_file: "{{ steps.collect-enum.outputs.commands_file }}"
+    steps:
+    - name: bloodhound-cmd
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.ad.enum import bloodhound_collection_command
+
+        pw = "{{ inputs.password }}" or "{{ secrets.ad_password | default('', true) }}"
+        cmd = bloodhound_collection_command(
+            domain="{{ inputs.domain }}",
+            username="{{ inputs.username }}",
+            password=pw,
+            dc="{{ inputs.dc_ip }}",
+        )
+        print(f"[+] BloodHound collection:\n    {cmd}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"bloodhound_cmd={cmd}\n")
+
+    - name: shares-cmd
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.ad.enum import enumerate_shares_command
+
+        pw = "{{ inputs.password }}" or "{{ secrets.ad_password | default('', true) }}"
+        cmd = enumerate_shares_command(
+            target="{{ inputs.dc_ip }}",
+            username="{{ inputs.username }}",
+            password=pw,
+            domain="{{ inputs.domain }}",
+        )
+        print(f"[+] Share enumeration:\n    {cmd}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"shares_cmd={cmd}\n")
+
+    - name: ldap-cmd
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.ad.enum import ldap_query_command
+
+        pw = "{{ inputs.password }}" or "{{ secrets.ad_password | default('', true) }}"
+        cmd = ldap_query_command(
+            dc_ip="{{ inputs.dc_ip }}",
+            domain="{{ inputs.domain }}",
+            username="{{ inputs.username }}",
+            password=pw,
+        )
+        print(f"[+] LDAP query:\n    {cmd}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"ldap_cmd={cmd}\n")
+
+    - name: collect-enum
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.ad.enum import (
+            bloodhound_collection_command,
+            enumerate_shares_command,
+            ldap_query_command,
+        )
+
+        pw = "{{ inputs.password }}" or "{{ secrets.ad_password | default('', true) }}"
+        commands = [
+            "# BloodHound collection",
+            bloodhound_collection_command(
+                domain="{{ inputs.domain }}",
+                username="{{ inputs.username }}",
+                password=pw,
+                dc="{{ inputs.dc_ip }}",
+            ),
+            "",
+            "# Share enumeration",
+            enumerate_shares_command(
+                target="{{ inputs.dc_ip }}",
+                username="{{ inputs.username }}",
+                password=pw,
+                domain="{{ inputs.domain }}",
+            ),
+            "",
+            "# LDAP user query",
+            ldap_query_command(
+                dc_ip="{{ inputs.dc_ip }}",
+                domain="{{ inputs.domain }}",
+                username="{{ inputs.username }}",
+                password=pw,
+            ),
+        ]
+
+        out_file = "/tmp/ofx_ad_enum_commands.sh"
+        with open(out_file, "w") as f:
+            f.write("#!/bin/bash\n")
+            f.write(f"# AD Enumeration Commands — {{ inputs.domain }}\n\n")
+            for line in commands:
+                f.write(f"{line}\n")
+
+        print(f"[+] Saved {len([c for c in commands if c and not c.startswith('#')])} commands to {out_file}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"commands_file={out_file}\n")
+
+  kerberos:
+    name: Kerberos Attack Commands
+    outputs:
+      kerberoast_cmd: "{{ steps.kerberoast-cmd.outputs.kerberoast_cmd }}"
+      asreproast_cmd: "{{ steps.asreproast-cmd.outputs.asreproast_cmd }}"
+      delegation_cmds: "{{ steps.delegation-cmd.outputs.delegation_cmds }}"
+    steps:
+    - name: kerberoast-cmd
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.ad.kerberos import kerberoast_command
+
+        pw = "{{ inputs.password }}" or "{{ secrets.ad_password | default('', true) }}"
+        cmd = kerberoast_command(
+            domain="{{ inputs.domain }}",
+            username="{{ inputs.username }}",
+            password=pw,
+            dc_ip="{{ inputs.dc_ip }}",
+        )
+        print(f"[+] Kerberoast:\n    {cmd}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"kerberoast_cmd={cmd}\n")
+
+    - name: asreproast-cmd
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.ad.kerberos import asreproast_command
+
+        pw = "{{ inputs.password }}" or "{{ secrets.ad_password | default('', true) }}"
+        cmd = asreproast_command(
+            domain="{{ inputs.domain }}",
+            dc_ip="{{ inputs.dc_ip }}",
+            username="{{ inputs.username }}",
+            password=pw,
+        )
+        print(f"[+] AS-REP Roast:\n    {cmd}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"asreproast_cmd={cmd}\n")
+
+    - name: delegation-cmd
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from ofx.api.ad.kerberos import find_delegation_command
+        import json
+
+        pw = "{{ inputs.password }}" or "{{ secrets.ad_password | default('', true) }}"
+        cmds = find_delegation_command(
+            domain="{{ inputs.domain }}",
+            username="{{ inputs.username }}",
+            password=pw,
+            dc_ip="{{ inputs.dc_ip }}",
+        )
+        for cmd in cmds:
+            print(f"[+] Delegation:\n    {cmd}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"delegation_cmds={json.dumps(cmds)}\n")
+
+  summary:
+    name: AD Recon Summary
+    needs: [enumerate, kerberos]
+    steps:
+    - name: display-summary
+      timeout: 2
+      continue-on-error: true
+      script: |
+        import json
+
+        print("=" * 60)
+        print(" AD RECON API — {{ inputs.domain }}")
+        print(f" DC: {{ inputs.dc_ip }}  |  User: {{ inputs.username }}")
+        print("=" * 60)
+
+        print("\n--- Enumeration Commands ---")
+        print(f"  BloodHound : {{ jobs.enumerate.outputs.bloodhound_cmd }}")
+        print(f"  Shares     : {{ jobs.enumerate.outputs.shares_cmd }}")
+        print(f"  LDAP       : {{ jobs.enumerate.outputs.ldap_cmd }}")
+
+        print("\n--- Kerberos Commands ---")
+        print(f"  Kerberoast : {{ jobs.kerberos.outputs.kerberoast_cmd }}")
+        print(f"  AS-REP     : {{ jobs.kerberos.outputs.asreproast_cmd }}")
+
+        delegation_raw = """{{ jobs.kerberos.outputs.delegation_cmds | default('[]', true) }}"""
+        try:
+            delegation = json.loads(delegation_raw)
+        except Exception:
+            delegation = []
+        for cmd in delegation:
+            print(f"  Delegation : {cmd}")
+
+        commands_file = "{{ jobs.enumerate.outputs.commands_file }}"
+        print(f"\n[*] All enumeration commands saved to: {commands_file}")
+      log-stdout: true

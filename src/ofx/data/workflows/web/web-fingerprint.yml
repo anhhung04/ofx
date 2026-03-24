@@ -1,0 +1,210 @@
+name: web-fingerprint
+description: |
+  Web technology fingerprinting and security posture assessment —
+  fetch URL headers, identify the tech stack, check robots.txt, and
+  audit security headers using ofx.api.recon.web and ofx.api.http.
+tags: [web, recon, fingerprint, headers, security]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL (e.g. https://example.com)
+      alias: t
+
+jobs:
+  fingerprint:
+    name: Technology Fingerprint
+    outputs:
+      tech_stack: "{{ steps.fetch-and-fingerprint.outputs.tech_stack }}"
+      server: "{{ steps.fetch-and-fingerprint.outputs.server }}"
+      waf: "{{ steps.fetch-and-fingerprint.outputs.waf }}"
+    steps:
+    - name: fetch-and-fingerprint
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.http import get_http_client
+        from ofx.api.recon.web import web_fingerprint
+        import json
+
+        target = "{{ inputs.target }}"
+        if not target.startswith("http"):
+            target = f"https://{target}"
+
+        print(f"[*] Fetching headers from {target} ...")
+        client = get_http_client(timeout=15)
+        try:
+            resp = client.get(target, follow_redirects=True)
+            headers = dict(resp.headers)
+            print(f"    Status: {resp.status_code}")
+        except Exception as e:
+            print(f"[-] Request failed: {e}")
+            headers = {}
+
+        fingerprint = web_fingerprint(headers)
+        print(f"\n[+] Technology Fingerprint:")
+        for category, value in fingerprint.items():
+            print(f"    {category:<15}: {value}")
+
+        if not fingerprint:
+            print("    (no technologies detected from headers)")
+
+        server = fingerprint.get("server", "unknown")
+        waf = fingerprint.get("waf_cdn", "none")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"tech_stack={json.dumps(fingerprint)}\n")
+            f.write(f"server={server}\n")
+            f.write(f"waf={waf}\n")
+
+  security:
+    name: Security Headers & Robots
+    outputs:
+      security_audit: "{{ steps.audit-headers.outputs.security_audit }}"
+      missing_count: "{{ steps.audit-headers.outputs.missing_count }}"
+      robots_content: "{{ steps.check-robots.outputs.robots_content }}"
+    steps:
+    - name: audit-headers
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.http import get_http_client
+        from ofx.api.recon.web import security_headers_audit
+        import json
+
+        target = "{{ inputs.target }}"
+        if not target.startswith("http"):
+            target = f"https://{target}"
+
+        client = get_http_client(timeout=15)
+        try:
+            resp = client.get(target, follow_redirects=True)
+            headers = dict(resp.headers)
+        except Exception as e:
+            print(f"[-] Request failed: {e}")
+            headers = {}
+
+        audit = security_headers_audit(headers)
+        missing = [h for h, v in audit.items() if v == "MISSING"]
+
+        print(f"[+] Security Headers Audit for {target}")
+        for header, value in audit.items():
+            status = "MISSING" if value == "MISSING" else "PRESENT"
+            icon = "[-]" if value == "MISSING" else "[+]"
+            display = value if value != "MISSING" else ""
+            print(f"  {icon} {header:<40} {status}  {display[:60]}")
+
+        print(f"\n    Present: {len(audit) - len(missing)}/{len(audit)}")
+        print(f"    Missing: {len(missing)}/{len(audit)}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"security_audit={json.dumps(audit)}\n")
+            f.write(f"missing_count={len(missing)}\n")
+
+    - name: check-robots
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.http import get_http_client
+        from ofx.api.recon.web import robots_txt_url
+
+        target = "{{ inputs.target }}"
+        if not target.startswith("http"):
+            target = f"https://{target}"
+
+        robots_url = robots_txt_url(target)
+        print(f"[*] Checking {robots_url} ...")
+
+        client = get_http_client(timeout=10)
+        try:
+            resp = client.get(robots_url, follow_redirects=True)
+            if resp.status_code == 200:
+                content = resp.text[:2000]
+                print(f"[+] robots.txt found ({len(resp.text)} bytes):")
+                for line in content.splitlines()[:30]:
+                    print(f"    {line}")
+                if len(resp.text) > 2000:
+                    print(f"    ... (truncated)")
+            else:
+                content = ""
+                print(f"[-] robots.txt returned {resp.status_code}")
+        except Exception as e:
+            content = ""
+            print(f"[-] Failed to fetch robots.txt: {e}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"robots_content={content[:500]}\n")
+
+  report:
+    name: Combined Report
+    needs: [fingerprint, security]
+    steps:
+    - name: combined-report
+      timeout: 2
+      continue-on-error: true
+      script: |
+        import json
+
+        print("=" * 60)
+        print(" WEB FINGERPRINT & SECURITY REPORT")
+        print(f" Target: {{ inputs.target }}")
+        print("=" * 60)
+
+        # Tech stack
+        print("\n--- Technology Stack ---")
+        tech_raw = """{{ jobs.fingerprint.outputs.tech_stack | default('{}', true) }}"""
+        try:
+            tech = json.loads(tech_raw)
+        except Exception:
+            tech = {}
+        if tech:
+            for k, v in tech.items():
+                print(f"  {k:<15}: {v}")
+        else:
+            print("  No technologies detected")
+
+        print(f"  Server: {{ jobs.fingerprint.outputs.server }}")
+        print(f"  WAF/CDN: {{ jobs.fingerprint.outputs.waf }}")
+
+        # Security headers
+        print("\n--- Security Posture ---")
+        missing = int("{{ jobs.security.outputs.missing_count | default('0', true) }}" or "0")
+        audit_raw = """{{ jobs.security.outputs.security_audit | default('{}', true) }}"""
+        try:
+            audit = json.loads(audit_raw)
+            total = len(audit)
+        except Exception:
+            audit = {}
+            total = 9
+        present = total - missing
+
+        if total > 0:
+            score = present / total * 100
+            if score >= 80:
+                grade = "A"
+            elif score >= 60:
+                grade = "B"
+            elif score >= 40:
+                grade = "C"
+            elif score >= 20:
+                grade = "D"
+            else:
+                grade = "F"
+            print(f"  Grade: {grade} ({present}/{total} headers present, {score:.0f}%)")
+        else:
+            print("  Grade: N/A")
+
+        for header, value in audit.items():
+            icon = "[+]" if value != "MISSING" else "[-]"
+            print(f"  {icon} {header}")
+
+        # Robots
+        robots = "{{ jobs.security.outputs.robots_content | default('', true) }}"
+        if robots:
+            print(f"\n--- robots.txt (preview) ---")
+            for line in robots.splitlines()[:10]:
+                print(f"  {line}")
+
+        print("\n" + "=" * 60)
+      log-stdout: true

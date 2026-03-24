@@ -1,0 +1,104 @@
+name: payload-pack
+description: |
+  Payload packer — read a payload file and apply XOR, gzip, or
+  base64+gzip packing.  Optionally obfuscate with ofx.api.evasion.
+  Writes packed variants to the output directory.
+tags: [misc, packing, evasion, payload]
+dispatch:
+  inputs:
+    input_file:
+      required: true
+      type: string
+      description: Path to payload file to pack
+    method:
+      type: string
+      default: all
+      description: "Packing method: xor, gzip, b64gzip, or all"
+    xor_key:
+      type: string
+      default: ofxkey
+      description: XOR key (used for xor and all methods)
+    obfuscate_lang:
+      type: string
+      default: ""
+      description: "Optionally obfuscate: bash, powershell, python, php (empty = skip)"
+
+jobs:
+  pack:
+    name: Pack Payload
+    outputs:
+      output_dir: "{{ steps.apply-packing.outputs.output_dir }}"
+      variants: "{{ steps.apply-packing.outputs.variants }}"
+      variant_count: "{{ steps.apply-packing.outputs.variant_count }}"
+    steps:
+    - name: apply-packing
+      timeout: 5
+      continue-on-error: true
+      script: |
+        from ofx.api.packers import xor_pack, gzip_pack, b64_gzip_pack
+        from pathlib import Path
+        import base64
+        import json
+
+        input_file = "{{ inputs.input_file }}"
+        method = "{{ inputs.method }}"
+        xor_key = "{{ inputs.xor_key }}"
+        obfuscate_lang = "{{ inputs.obfuscate_lang }}"
+
+        src = Path(input_file)
+        if not src.exists():
+            print(f"[-] File not found: {input_file}")
+            raise SystemExit(1)
+
+        data = src.read_bytes()
+        print(f"[+] Read {len(data)} bytes from {input_file}")
+
+        output_dir = Path("/tmp/ofx_packed")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        variants = {}
+
+        if method in ("xor", "all"):
+            packed = xor_pack(data, xor_key)
+            packed_b64 = base64.b64encode(packed).decode()
+            out = output_dir / f"{src.stem}.xor"
+            out.write_bytes(packed)
+            variants["xor"] = str(out)
+            print(f"  [xor] {len(packed)} bytes -> {out}")
+
+            out_b64 = output_dir / f"{src.stem}.xor.b64"
+            out_b64.write_text(packed_b64)
+            variants["xor_b64"] = str(out_b64)
+            print(f"  [xor+b64] {len(packed_b64)} chars -> {out_b64}")
+
+        if method in ("gzip", "all"):
+            packed = gzip_pack(data)
+            out = output_dir / f"{src.stem}.gz"
+            out.write_bytes(packed)
+            variants["gzip"] = str(out)
+            ratio = len(packed) / len(data) * 100 if data else 0
+            print(f"  [gzip] {len(packed)} bytes ({ratio:.1f}%) -> {out}")
+
+        if method in ("b64gzip", "all"):
+            packed = b64_gzip_pack(data)
+            out = output_dir / f"{src.stem}.b64gz"
+            out.write_text(packed)
+            variants["b64gzip"] = str(out)
+            print(f"  [b64gzip] {len(packed)} chars -> {out}")
+
+        # Optional obfuscation
+        if obfuscate_lang:
+            from ofx.api.evasion.payload import obfuscate_payload
+            text = data.decode(errors="replace")
+            obfuscated = obfuscate_payload(text, obfuscate_lang)
+            out = output_dir / f"{src.stem}.obf.{obfuscate_lang}"
+            out.write_text(obfuscated)
+            variants[f"obfuscated_{obfuscate_lang}"] = str(out)
+            print(f"  [obfuscated-{obfuscate_lang}] {len(obfuscated)} chars -> {out}")
+
+        print(f"\n[+] {len(variants)} variant(s) written to {output_dir}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"output_dir={output_dir}\n")
+            f.write(f"variants={json.dumps(variants)}\n")
+            f.write(f"variant_count={len(variants)}\n")
+      log-stdout: true

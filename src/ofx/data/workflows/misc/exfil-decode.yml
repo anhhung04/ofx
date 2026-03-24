@@ -1,0 +1,115 @@
+name: exfil-decode
+description: |
+  Exfiltration decoder — reassemble and decode data that was exfiltrated
+  via DNS, base64 chunking, or XOR encoding.  Inverse of exfil-prep.
+tags: [misc, exfiltration, decode, data]
+dispatch:
+  inputs:
+    input_file:
+      required: true
+      type: string
+      description: Path to encoded data file (JSON with chunks or raw data)
+    method:
+      required: true
+      type: string
+      description: "Decoding method: dns, b64, or xor"
+    xor_key:
+      type: string
+      default: ofxkey
+      description: XOR key (required for xor method)
+
+jobs:
+  decode:
+    name: Decode Exfiltrated Data
+    steps:
+    - name: reassemble
+      timeout: 5
+      continue-on-error: true
+      script: |
+        from pathlib import Path
+        import json
+
+        input_file = "{{ inputs.input_file }}"
+        method = "{{ inputs.method }}".lower()
+        xor_key = "{{ inputs.xor_key }}"
+
+        src = Path(input_file)
+        if not src.exists():
+            print(f"[-] File not found: {input_file}")
+            raise SystemExit(1)
+
+        raw = src.read_text()
+        decoded_data = b""
+
+        if method == "dns":
+            from ofx.api.exfil.dns import dns_decode_payload
+
+            # Expect JSON with "chunks" key (list of labels) or one label per line
+            try:
+                parsed = json.loads(raw)
+                labels = parsed.get("chunks", parsed) if isinstance(parsed, dict) else parsed
+            except json.JSONDecodeError:
+                labels = [line.strip() for line in raw.splitlines() if line.strip()]
+
+            decoded_data = dns_decode_payload(labels)
+            print(f"[+] DNS-decoded {len(labels)} labels -> {len(decoded_data)} bytes")
+
+        elif method == "b64":
+            from ofx.api.exfil.http import reassemble_b64
+
+            try:
+                parsed = json.loads(raw)
+                chunks = parsed.get("chunks", parsed) if isinstance(parsed, dict) else parsed
+            except json.JSONDecodeError:
+                chunks = [line.strip() for line in raw.splitlines() if line.strip()]
+
+            decoded_data = reassemble_b64(chunks)
+            print(f"[+] Base64-decoded {len(chunks)} chunks -> {len(decoded_data)} bytes")
+
+        elif method == "xor":
+            from ofx.api.packers import xor_unpack
+            import base64
+
+            # Expect base64-encoded XOR data
+            try:
+                parsed = json.loads(raw)
+                b64_data = parsed.get("data", raw)
+            except json.JSONDecodeError:
+                b64_data = raw.strip()
+
+            xor_data = base64.b64decode(b64_data)
+            decoded_data = xor_unpack(xor_data, xor_key)
+            print(f"[+] XOR-decoded {len(xor_data)} bytes (key={xor_key}) -> {len(decoded_data)} bytes")
+
+        else:
+            print(f"[-] Unknown method: {method}")
+            print("    Supported: dns, b64, xor")
+            raise SystemExit(1)
+
+        out_file = "/tmp/ofx_exfil_decoded.bin"
+        Path(out_file).write_bytes(decoded_data)
+
+        # Try to detect if result is text
+        try:
+            text = decoded_data.decode("utf-8")
+            is_text = True
+        except UnicodeDecodeError:
+            is_text = False
+
+        print(f"\n[+] Output: {out_file} ({len(decoded_data)} bytes)")
+        if is_text:
+            print(f"    Type: text (UTF-8)")
+            preview = text[:500]
+            print(f"\n--- Preview ---")
+            print(preview)
+            if len(text) > 500:
+                print("... (truncated)")
+        else:
+            print(f"    Type: binary")
+            print(f"    Hex preview: {decoded_data[:64].hex()}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"output_file={out_file}\n")
+            f.write(f"decoded_size={len(decoded_data)}\n")
+            f.write(f"is_text={is_text}\n")
+      log-stdout: true

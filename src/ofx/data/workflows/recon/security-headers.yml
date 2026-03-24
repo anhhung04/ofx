@@ -1,0 +1,127 @@
+name: security-headers
+description: |
+  Security headers audit — fetch HTTP response headers from a target
+  and grade them based on security best practices (A-F).
+tags: [recon, web, headers, security-audit]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL or domain to audit
+      alias: t
+
+jobs:
+  audit:
+    name: Fetch and Audit Headers
+    outputs:
+      headers_json: "{{ steps.fetch-headers.outputs.headers_json }}"
+      audit_json: "{{ steps.fetch-headers.outputs.audit_json }}"
+    steps:
+    - name: fetch-headers
+      timeout: 3
+      continue-on-error: true
+      script: |
+        from ofx.api.http import fetch, get_http_client
+        from ofx.api.recon import security_headers_audit
+        import json
+
+        target = "{{ inputs.target }}"
+        if not target.startswith("http"):
+            target = f"https://{target}"
+
+        print(f"[*] Fetching headers from: {target}")
+        client = get_http_client(timeout=15)
+        try:
+            resp = client.get(target, follow_redirects=True)
+            headers = dict(resp.headers)
+        except Exception as e:
+            print(f"[!] HTTPS failed ({e}), trying HTTP...")
+            target_http = target.replace("https://", "http://")
+            resp = client.get(target_http, follow_redirects=True)
+            headers = dict(resp.headers)
+
+        print(f"[+] Response: {resp.status_code}")
+        print(f"[+] Headers received: {len(headers)}")
+
+        audit = security_headers_audit(headers)
+        print(f"\n[*] Security Headers Audit:")
+        for header, value in sorted(audit.items()):
+            status = "MISSING" if value == "MISSING" else "OK"
+            icon = "[-]" if status == "MISSING" else "[+]"
+            print(f"    {icon} {header}: {value}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"headers_json={json.dumps(headers)}\n")
+            f.write(f"audit_json={json.dumps(audit)}\n")
+
+  report:
+    name: Security Grade Report
+    needs: [audit]
+    steps:
+    - name: grade-headers
+      script: |
+        import json
+
+        audit_raw = '{{ jobs.audit.outputs.audit_json }}'
+        audit = json.loads(audit_raw) if audit_raw else {}
+
+        total = len(audit)
+        present = sum(1 for v in audit.values() if v != "MISSING")
+        missing = total - present
+
+        # Grading: A = all present, F = mostly missing
+        if total == 0:
+            grade = "F"
+        else:
+            ratio = present / total
+            if ratio >= 0.9:
+                grade = "A"
+            elif ratio >= 0.75:
+                grade = "B"
+            elif ratio >= 0.6:
+                grade = "C"
+            elif ratio >= 0.4:
+                grade = "D"
+            else:
+                grade = "F"
+
+        missing_headers = [h for h, v in audit.items() if v == "MISSING"]
+        present_headers = [h for h, v in audit.items() if v != "MISSING"]
+
+        print("=" * 56)
+        print(f" SECURITY HEADERS REPORT: {{ inputs.target }}")
+        print("=" * 56)
+        print(f"\n  Grade: {grade}")
+        print(f"  Present: {present}/{total}")
+        print(f"  Missing: {missing}/{total}")
+
+        if present_headers:
+            print(f"\n  [+] Present headers:")
+            for h in sorted(present_headers):
+                print(f"      {h}: {audit[h][:60]}")
+
+        if missing_headers:
+            print(f"\n  [-] Missing headers:")
+            for h in sorted(missing_headers):
+                print(f"      {h}")
+
+        print(f"\n  Recommendations:")
+        recs = {
+            "Strict-Transport-Security": "Add HSTS: max-age=31536000; includeSubDomains",
+            "Content-Security-Policy": "Add CSP to prevent XSS and injection attacks",
+            "X-Frame-Options": "Add X-Frame-Options: DENY or SAMEORIGIN",
+            "X-Content-Type-Options": "Add X-Content-Type-Options: nosniff",
+            "Referrer-Policy": "Add Referrer-Policy: strict-origin-when-cross-origin",
+            "Permissions-Policy": "Add Permissions-Policy to restrict browser features",
+            "X-XSS-Protection": "Add X-XSS-Protection: 0 (rely on CSP instead)",
+        }
+        for h in missing_headers:
+            if h in recs:
+                print(f"    - {recs[h]}")
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"grade={grade}\n")
+            f.write(f"present_count={present}\n")
+            f.write(f"missing_count={missing}\n")
+      log-stdout: true

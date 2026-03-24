@@ -1,0 +1,75 @@
+name: port-scan
+description: |
+  Lightweight async port scan — uses the ofx.api.recon async port scanner
+  as a fast alternative to nmap or naabu for quick port discovery.
+tags: [recon, portscan, network]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target IP or hostname
+      alias: t
+    ports:
+      type: string
+      default: ""
+      description: "Comma-separated ports or empty for top-100"
+    concurrency:
+      type: string
+      default: "250"
+      description: Number of concurrent connections
+
+jobs:
+  scan:
+    name: Async Port Scan
+    outputs:
+      open_ports: "{{ steps.run-scan.outputs.open_ports }}"
+      port_count: "{{ steps.run-scan.outputs.port_count }}"
+      results_file: "{{ steps.run-scan.outputs.results_file }}"
+    steps:
+    - name: run-scan
+      timeout: 10
+      continue-on-error: true
+      script: |
+        from ofx.api.recon import async_port_scan, PortResult, TOP_100_PORTS
+        import asyncio
+        import json
+
+        target = "{{ inputs.target }}"
+        ports_input = "{{ inputs.ports }}"
+        concurrency = int("{{ inputs.concurrency }}")
+
+        if ports_input:
+            ports = [int(p.strip()) for p in ports_input.split(",") if p.strip().isdigit()]
+        else:
+            ports = TOP_100_PORTS
+
+        print(f"[*] Scanning {target} ({len(ports)} ports, concurrency={concurrency})...")
+        results = asyncio.run(async_port_scan(target, ports, concurrency=concurrency, timeout=1.5))
+
+        open_results = [r for r in results if r.open]
+        open_ports = sorted(r.port for r in open_results)
+
+        print(f"[+] Scan complete: {len(open_ports)} open / {len(ports)} scanned\n")
+        if open_ports:
+            print(f"  {'PORT':<10} {'STATE':<10} {'BANNER'}")
+            print(f"  {'-'*8:<10} {'-'*8:<10} {'-'*30}")
+            for r in sorted(open_results, key=lambda x: x.port):
+                banner = r.banner[:40] if r.banner else "-"
+                print(f"  {r.port:<10} {'open':<10} {banner}")
+        else:
+            print("  No open ports found")
+
+        out_file = "/tmp/ofx_portscan.json"
+        output_data = [
+            {"port": r.port, "open": r.open, "banner": r.banner}
+            for r in sorted(results, key=lambda x: x.port) if r.open
+        ]
+        with open(out_file, "w") as f:
+            json.dump(output_data, f, indent=2)
+
+        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+            f.write(f"open_ports={json.dumps(open_ports)}\n")
+            f.write(f"port_count={len(open_ports)}\n")
+            f.write(f"results_file={out_file}\n")
+      log-stdout: true
