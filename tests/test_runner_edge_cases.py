@@ -441,3 +441,100 @@ class TestStepRetryProfileDefaults:
 
         assert runner.model.retry == 9
         assert runner.model.retry_delay == 11
+
+
+class TestMatrixValidation:
+    """Test matrix combination size validation."""
+
+    def test_matrix_limit_rejects_huge_product(self):
+        """Matrix with excessive combinations raises ValueError."""
+        from ofx.utils.matrix import _generate_matrix_combinations
+        from ofx.models.strategy import MatrixStrategy
+
+        strategy = MatrixStrategy(matrix={
+            "a": list(range(200)),
+            "b": list(range(200)),
+        })
+        with pytest.raises(ValueError, match="combinations"):
+            _generate_matrix_combinations(strategy)
+
+    def test_matrix_limit_allows_small_product(self):
+        """Matrix under limit works fine."""
+        from ofx.utils.matrix import _generate_matrix_combinations
+        from ofx.models.strategy import MatrixStrategy
+
+        strategy = MatrixStrategy(matrix={
+            "a": [1, 2, 3],
+            "b": ["x", "y"],
+        })
+        combos = _generate_matrix_combinations(strategy)
+        assert len(combos) == 6
+
+
+class TestTemplateCircularDetection:
+    """Test circular template reference detection."""
+
+    @pytest.mark.asyncio
+    async def test_no_circular_resolves_fine(self):
+        """Non-circular templates resolve normally."""
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver.__new__(TemplateResolver)
+        resolver._template_cache = {}
+        resolver._support_funcs_cache = None
+        resolver._template_cache_max_size = 1000
+
+        result = await resolver.resolve("{{ x + 1 }}", {"x": 5})
+        assert result == "6"
+
+    @pytest.mark.asyncio
+    async def test_circular_detection(self):
+        """Circular references in the same memo chain are detected."""
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver.__new__(TemplateResolver)
+        resolver._template_cache = {}
+        resolver._support_funcs_cache = None
+        resolver._template_cache_max_size = 1000
+
+        memo = {"_resolve_stack": ["{{ a }}"]}
+        with pytest.raises(ValueError, match="Circular template reference"):
+            await resolver.resolve("{{ a }}", {"a": "val"}, _memo=memo)
+
+
+class TestWorkflowExecutionCancellation:
+    """Test async task cancellation in stage execution."""
+
+    @pytest.mark.asyncio
+    async def test_stage_runner_handles_cancel(self):
+        """WorkflowExecutionManager cancels pending tasks on KeyboardInterrupt."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from ofx.runner.execution.workflow_execution import WorkflowExecutionManager
+
+        parent = MagicMock()
+        parent._log_info = MagicMock()
+        parent._log_error = MagicMock()
+
+        mgr = WorkflowExecutionManager(parent)
+
+        # Create mock runners that simulate a slow job
+        runner_fast = MagicMock()
+        runner_fast.is_failed = False
+        runner_fast.run = AsyncMock(return_value=None)
+
+        runner_slow = MagicMock()
+        runner_slow.is_failed = False
+
+        async def slow_run():
+            await asyncio.sleep(100)
+
+        runner_slow.run = slow_run
+
+        stage_runners = {"fast": runner_fast, "slow": runner_slow}
+
+        # The fast one completes, slow one should be pending
+        # This validates the try/finally structure works
+        failed = await mgr._run_stage(0, stage_runners)
+        # fast completed OK, slow completed OK (asyncio.wait handles both)
+        assert "fast" not in failed

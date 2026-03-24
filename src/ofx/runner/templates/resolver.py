@@ -57,6 +57,13 @@ class TemplateResolver:
         if "{{" not in value_str and "{%" not in value_str:
             return value
 
+        # Circular reference detection
+        resolve_stack: list[str] = memo.setdefault("_resolve_stack", [])
+        if value_str in resolve_stack:
+            chain = " → ".join(resolve_stack + [value_str])
+            raise ValueError(f"Circular template reference detected: {chain}")
+        resolve_stack.append(value_str)
+
         support_funcs = await self._build_support_functions(context_vars, memo)
 
         if value_str not in self._template_cache:
@@ -74,6 +81,8 @@ class TemplateResolver:
         template_vars.update(support_funcs)
 
         result = await template.render_async(template_vars)
+
+        resolve_stack.pop()
 
         if isinstance(value, bool):
             return result.lower() in ("true", "yes", "1", "t", "y")

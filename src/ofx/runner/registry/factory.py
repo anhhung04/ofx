@@ -164,7 +164,7 @@ class RegistryFactory:
             kwargs["config"] = getattr(settings, config_map.get(backend, ""), None)
 
         try:
-            return cls.create(
+            registry = cls.create(
                 backend,
                 enable_cache=settings.registry_cache_enabled,
                 enable_failover=settings.registry_failover_enabled,
@@ -172,8 +172,16 @@ class RegistryFactory:
                 cache_max_entries=settings.registry_cache_max_entries,
                 **kwargs,
             )
-        except ValueError:
-            logger.warning("Unknown registry backend '%s', falling back to memory", backend)
+            if backend not in ("memory",):
+                logger.debug("Using %s registry backend", backend)
+            return registry
+        except Exception as exc:
+            logger.warning(
+                "Registry backend '%s' failed (%s). "
+                "Falling back to in-memory registry — data will not persist across runs.",
+                backend,
+                exc,
+            )
             return cls.create("memory", enable_cache=settings.registry_cache_enabled)
 
 

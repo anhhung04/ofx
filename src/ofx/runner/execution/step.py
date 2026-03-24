@@ -111,6 +111,7 @@ class StepRunner(BaseRunner[Step]):
         timeout_seconds = self.model.timeout * 60
 
         last_res = None
+        attempt_errors: list[str] = []
 
         for attempt in range(max_attempts):
             try:
@@ -126,13 +127,15 @@ class StepRunner(BaseRunner[Step]):
             except TimeoutError as e:
                 raise RuntimeError(step_timeout_error(self.model.timeout)) from e
             except Exception as e:
+                err_msg = str(e)[:200]
+                attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
                 if attempt < max_attempts - 1:
                     next_delay = self._retry_delay_seconds(
                         attempt=attempt,
                         base_delay=self.model.retry_delay,
                     )
                     self._log_info(
-                        f"Retrying in {next_delay:.2f}s (attempt {attempt + 2}/{max_attempts})..."
+                        f"Retry {attempt + 2}/{max_attempts} in {next_delay:.1f}s — {err_msg}"
                     )
                     await asyncio.sleep(next_delay)
                 else:
@@ -141,9 +144,13 @@ class StepRunner(BaseRunner[Step]):
                         if last_res.status != RunnerStatus.COMPLETED:
                             raise RuntimeError(
                                 step_retry_error(max_attempts, last_res.error)
+                                + f"\n  Attempts: {'; '.join(attempt_errors)}"
                             ) from e
                     else:
-                        raise RuntimeError(step_retry_error(max_attempts, e)) from e
+                        raise RuntimeError(
+                            step_retry_error(max_attempts, e)
+                            + f"\n  Attempts: {'; '.join(attempt_errors)}"
+                        ) from e
 
         self._log_debug(f"Final result after retries: {await self.get_result()}")
 

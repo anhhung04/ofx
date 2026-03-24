@@ -43,9 +43,25 @@ def _generate_matrix_combinations(strategy: MatrixStrategy) -> list[dict[str, An
 
     Returns:
         List of matrix value combinations
+
+    Raises:
+        ValueError: If the estimated combination count exceeds 10,000
     """
+    MAX_MATRIX_COMBINATIONS = 10_000
+
     matrix_keys = list(strategy.matrix.keys())
     matrix_values = [strategy.matrix[key] for key in matrix_keys]
+
+    # Pre-check: estimate combination count without materializing
+    estimated = 1
+    for vals in matrix_values:
+        estimated *= len(vals) if isinstance(vals, list) else 1
+        if estimated > MAX_MATRIX_COMBINATIONS:
+            raise ValueError(
+                f"Matrix would produce ~{estimated} combinations "
+                f"(limit: {MAX_MATRIX_COMBINATIONS}). "
+                f"Reduce matrix values or add exclude rules."
+            )
 
     # Generate base combinations (cartesian product)
     base_combinations = [

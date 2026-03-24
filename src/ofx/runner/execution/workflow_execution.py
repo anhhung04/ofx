@@ -73,20 +73,28 @@ class WorkflowExecutionManager:
             for job_id in job_ids
         }
         failed_jobs: list[str] = []
-        while tasks:
-            done, _ = await asyncio.wait(
-                tasks.values(), timeout=0.01, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in done:
-                job_id = next(jid for jid, t in tasks.items() if t is task)
-                runner = stage_runners[job_id]
-                try:
-                    task.result()
-                except Exception:
-                    pass  # Error is captured in runner._error
-                if runner.is_failed:
-                    failed_jobs.append(job_id)
-                del tasks[job_id]
+        try:
+            while tasks:
+                done, _ = await asyncio.wait(
+                    tasks.values(), timeout=0.01, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    job_id = next(jid for jid, t in tasks.items() if t is task)
+                    runner = stage_runners[job_id]
+                    try:
+                        task.result()
+                    except Exception:
+                        pass  # Error is captured in runner._error
+                    if runner.is_failed:
+                        failed_jobs.append(job_id)
+                    del tasks[job_id]
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            # Cancel remaining tasks on interruption
+            for job_id, task in tasks.items():
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks.values(), return_exceptions=True)
+            raise
         return failed_jobs
 
     def _matrix_combo_count(self, runner) -> int:
