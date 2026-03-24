@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ import typer
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+logger = logging.getLogger("ofx")
 
 
 class SecretStore:
@@ -123,7 +126,8 @@ class SecretStore:
             encrypted_data = self.store_path.read_bytes()
             decrypted_data = self._get_cipher().decrypt(encrypted_data)
             return json.loads(decrypted_data.decode())
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to decrypt secret store: %s", e)
             return {}
 
     def _save_data(self, data: dict[str, Any]) -> None:

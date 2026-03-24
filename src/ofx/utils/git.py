@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 from urllib.parse import urlparse
 
 import git
 
 from ofx.settings import TEMP_DIR, ensure_dir, settings
+
+logger = logging.getLogger("ofx")
 
 _REPO_CACHE_DIR = TEMP_DIR / "repos"
 
@@ -52,5 +55,6 @@ def clone_remote_repo(path: str, default_registry: str | None) -> Path | None:
             opts.append(f"--branch={ref}")
         git.Repo.clone_from(path, str(cache_dir), multi_options=opts)
         return cache_dir
-    except Exception:
+    except Exception as e:
+        logger.warning("Git clone failed for '%s': %s", path, e)
         return None

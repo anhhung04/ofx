@@ -967,7 +967,8 @@ class SessionManager:
                         remote.download(
                             session.remote_log_file, str(results / "output.log")
                         )
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("Failed to download remote log: %s", e)
                         pass
                     return
 
@@ -993,7 +994,8 @@ class SessionManager:
             # Also grab the log
             try:
                 remote.download(session.remote_log_file, str(results / "output.log"))
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to download remote log: %s", e)
                 pass
         finally:
             _cleanup_remote(remote)
@@ -1167,7 +1169,8 @@ class SessionManager:
                         project_path = Path(ProjectManager.resolve_path(session.project))
                         if project_path.exists():
                             tf.add(project_path / "logs", arcname="project_logs")
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("Failed to add project logs to bundle: %s", e)
                         pass
         finally:
             manifest_path.unlink(missing_ok=True)
@@ -1386,7 +1389,8 @@ def _read_log_marker(path: Path) -> str | None:
     try:
         text = path.read_text(errors="replace")
         return _parse_marker(text)
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to read status file %s: %s", path, e)
         return None
 
 

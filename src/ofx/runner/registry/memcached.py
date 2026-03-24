@@ -119,7 +119,8 @@ class MemcachedJobRegistry(RegistryAdapter):
                         await client.set(index_key.encode(), json.dumps(keys, default=str).encode())
                     except (TypeError, ValueError) as exc:
                         logger.warning("Failed to serialize index after removing key '%s': %s", key, exc)
-        except Exception:
+        except Exception as e:
+            logger.warning("Memcached delete failed for key removal: %s", e)
             pass
 
     async def _set(self, key: str, value: Any) -> None:
@@ -199,7 +200,8 @@ class MemcachedJobRegistry(RegistryAdapter):
                     result[key] = json.loads(value.decode())
 
             return result
-        except Exception:
+        except Exception as e:
+            logger.warning("Memcached get_all failed: %s", e)
             return {}
 
     async def _clear(self) -> None:
@@ -217,7 +219,8 @@ class MemcachedJobRegistry(RegistryAdapter):
 
                 # Clear the index itself
                 await client.delete(index_key.encode())
-        except Exception:
+        except Exception as e:
+            logger.warning("Memcached clear failed: %s", e)
             pass
 
         self._log_debug("Cleared MemcachedJobRegistry")

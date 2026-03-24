@@ -324,7 +324,8 @@ class CollectionManager:
         try:
             repo = git.Repo(repo_path)
             return str(repo.head.commit)[:12]
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to get git ref for %s: %s", repo_path, e)
             return ""
 
     @staticmethod

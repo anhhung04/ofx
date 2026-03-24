@@ -2,6 +2,7 @@
 
 import importlib
 import inspect
+import logging
 from pathlib import Path
 from typing import (
     Annotated,
@@ -13,6 +14,8 @@ from typing import (
 
 import typer
 from pydantic import BaseModel
+
+logger = logging.getLogger("ofx")
 
 app = typer.Typer()
 
@@ -38,7 +41,8 @@ def discover_api_modules() -> dict[str, dict[str, str]]:
                 _try_register_module(f"ofx.api.{subdir.name}", subdir.name, modules, require_all=True)
 
         return modules
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to discover API modules: %s", e)
         return {}
 
 
@@ -55,7 +59,8 @@ def _try_register_module(
         ):
             doc = inspect.getdoc(mod) or f"{name.title()} utilities"
             registry[name] = {"path": module_path, "description": doc.split("\n")[0]}
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to register API module '%s': %s", name, e)
         pass
 
 
@@ -236,7 +241,8 @@ def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
             "models": model_schemas,
             "class_name": cls.__name__,
         }
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to introspect method '%s': %s", method_name, e)
         return None
 
 

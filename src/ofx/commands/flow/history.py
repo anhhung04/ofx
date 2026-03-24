@@ -89,10 +89,11 @@ def clear_history() -> int:
     if not HISTORY_FILE.exists():
         return 0
     try:
-        count = sum(1 for line in open(HISTORY_FILE) if line.strip())
+        count = sum(1 for line in HISTORY_FILE.read_text().splitlines() if line.strip())
         HISTORY_FILE.unlink()
         return count
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to clear history: %s", e)
         return 0
 
 
@@ -101,7 +102,7 @@ def prune_history(keep: int = MAX_HISTORY_ENTRIES) -> int:
     if not HISTORY_FILE.exists():
         return 0
     try:
-        lines = [line for line in open(HISTORY_FILE) if line.strip()]
+        lines = [line for line in HISTORY_FILE.read_text().splitlines(keepends=True) if line.strip()]
         if len(lines) <= keep:
             return 0
         pruned = len(lines) - keep
@@ -109,7 +110,8 @@ def prune_history(keep: int = MAX_HISTORY_ENTRIES) -> int:
             for line in lines[-keep:]:
                 f.write(line if line.endswith("\n") else line + "\n")
         return pruned
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to prune history: %s", e)
         return 0
 
 

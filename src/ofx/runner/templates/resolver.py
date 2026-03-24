@@ -1,5 +1,6 @@
 """Template resolver for Jinja2-based workflow templates"""
 
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -7,6 +8,8 @@ from jinja2 import Template
 from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
+
+_resolver_lock = threading.Lock()
 
 
 class TemplateResolver:
@@ -16,13 +19,18 @@ class TemplateResolver:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
+            with _resolver_lock:
+                if cls._instance is None:
+                    inst = super().__new__(cls)
+                    inst._template_cache = {}
+                    inst._support_funcs_cache = None
+                    inst._template_cache_max_size = 1000
+                    cls._instance = inst
         return cls._instance
 
     def __init__(self):
-        self._template_cache: dict[str, Template] = {}
-        self._support_funcs_cache: dict[str, Any] | None = None
-        self._template_cache_max_size = 1000
+        # Initialization moved to __new__ to avoid resetting on repeated calls
+        pass
 
     async def resolve(
         self,

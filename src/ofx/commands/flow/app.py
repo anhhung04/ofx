@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Annotated
 
 import typer
@@ -8,6 +9,8 @@ from ofx.commands.flow.profile_commands import app as profile_cmd_app
 from ofx.commands.flow.schema import app as dump_app
 from ofx.commands.flow.task_commands import app as task_cmd_app
 from ofx.commands.project.project_manager import ProjectManager
+
+logger = logging.getLogger("ofx")
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 app.add_typer(dump_app, name="dump", help="Dumping workflow/job/step model schemas")
@@ -122,7 +125,8 @@ def list_workflows(
                     "description": str(data.get("description", "")),
                     "tags": [str(t).lower() for t in tags] if isinstance(tags, list) else [],
                 }
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to parse workflow metadata from %s: %s", path, e)
             pass
         return {"name": path.stem, "description": "", "tags": []}
 

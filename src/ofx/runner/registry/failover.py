@@ -73,13 +73,15 @@ class FailoverRegistryAdapter(RegistryAdapter):
         # Clear both for safety
         try:
             await self._primary.clear()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to clear primary registry: %s", e)
             pass
         await self._fallback.clear()
 
     async def _close(self) -> None:
         try:
             await self._primary.close()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to close primary registry: %s", e)
             pass
         await self._fallback.close()

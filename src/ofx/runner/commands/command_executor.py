@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import sys
 import tempfile
 from collections.abc import Callable
@@ -14,6 +15,8 @@ from typing import Any
 from ofx.models.command import Command
 from ofx.runner.commands.shell_functions import get_shell_functions
 from ofx.settings import settings
+
+logger = logging.getLogger("ofx")
 
 
 @dataclass
@@ -88,7 +91,8 @@ class CommandExecutor:
                 if on_line:
                     try:
                         on_line(line)
-                    except Exception:
+                    except Exception as e:
+                        logger.debug("on_line callback failed: %s", e)
                         pass
 
         async def _read_stderr():
@@ -259,7 +263,8 @@ class CommandExecutor:
             return
         try:
             transport.close()
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to close process transport: %s", e)
             pass
 
     async def capture_outputs_file(self, runner, key: str, log_fn) -> None:
@@ -282,5 +287,6 @@ class CommandExecutor:
         finally:
             try:
                 self._outputs_file.unlink()
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to remove outputs file: %s", e)
                 pass

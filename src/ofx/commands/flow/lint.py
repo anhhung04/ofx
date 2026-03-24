@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,6 +12,8 @@ from ofx.settings import (
     DEFAULT_WORKFLOWS_DIRS,
     get_console,
 )
+
+logger = logging.getLogger("ofx")
 
 
 @dataclass
@@ -195,7 +198,8 @@ def _discover_workflow_files() -> list[Path]:
             coll_path = Path(entry.path)
             if coll_path.is_dir():
                 dirs.append(coll_path)
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to load installed collections for linting: %s", e)
         pass
 
     for d in dirs:

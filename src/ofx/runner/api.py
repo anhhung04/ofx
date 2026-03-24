@@ -76,7 +76,8 @@ def _cleanup_run(output_dir: Path) -> None:
         from ofx.runner.channels import close_channel_store
 
         close_channel_store()
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to close channel store: %s", e)
         pass
 
     # 2. Remove empty output subdirectories (bottom-up)
@@ -87,7 +88,8 @@ def _cleanup_run(output_dir: Path) -> None:
     try:
         if TEMP_DIR.exists():
             _remove_empty_dirs(TEMP_DIR)
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to clean temp dir: %s", e)
         pass
 
 

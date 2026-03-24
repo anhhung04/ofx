@@ -264,7 +264,8 @@ class CloudStepRunner(BaseRunner):
                     if parent_job is not None:
                         parent_job._cached_python = candidate
                     return candidate
-            except Exception:
+            except Exception as e:
+                logger.debug("Python candidate %s failed: %s", candidate, e)
                 continue
 
         raise RuntimeError(
@@ -323,7 +324,8 @@ class CloudStepRunner(BaseRunner):
             try:
                 rm_cmd = f"del /f {remote_script}" if self._is_windows else f"rm -f {remote_script}"
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to remove remote script %s: %s", remote_script, e)
                 pass
 
     async def _run_remote_script_file(
@@ -383,7 +385,8 @@ class CloudStepRunner(BaseRunner):
             try:
                 rm_cmd = f"del /f {remote_path}" if self._is_windows else f"rm -f {remote_path}"
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to remove remote file %s: %s", remote_path, e)
                 pass
 
     # ------------------------------------------------------------------
@@ -411,7 +414,8 @@ class CloudStepRunner(BaseRunner):
             task = task_cls()
             results = task.parse_output(stdout=stdout, stderr="")
             return [r.to_dict() for r in results]
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to parse task output for '%s': %s", self.model.task, e)
             return []
 
     # ------------------------------------------------------------------

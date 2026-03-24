@@ -214,7 +214,8 @@ class ScriptRunner(BaseRunner[Script]):
                     finally:
                         try:
                             outputs_file.unlink()
-                        except Exception:
+                        except Exception as e:
+                            self._log_debug(f"Failed to remove outputs file: {e}")
                             pass
 
             await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)

@@ -1,10 +1,13 @@
 import json
+import logging
 import os
 import shutil
 from os import getenv
 from pathlib import Path
 
 from ofx.settings import DEFAULT_PROJECTS_PATH
+
+logger = logging.getLogger("ofx")
 
 # Configuration helpers for active project management
 CONFIG_PATH = Path.home() / ".ofx" / "config.json"
@@ -14,7 +17,8 @@ def _load_config() -> dict:
     """Load JSON config from CONFIG_PATH. Return empty dict on error."""
     try:
         return json.loads(Path(CONFIG_PATH).read_text())
-    except Exception:
+    except Exception as e:
+        logger.debug("Failed to load config from %s: %s", CONFIG_PATH, e)
         return {}
 
 
@@ -84,7 +88,8 @@ class ProjectManager:
             git.Repo.init(str(project_path), initial_branch="main")
             gitignore_path = project_path / ".gitignore"
             gitignore_path.write_text(".ofx-encryption-key\n*.enc\n")
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to init git repo for project '%s': %s", safe_name, e)
             pass
 
         return str(project_path)
@@ -106,7 +111,8 @@ class ProjectManager:
         if env_name:
             try:
                 return Path(cls.resolve_path(env_name))
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to resolve project from env var '%s': %s", env_name, e)
                 pass
         # 2️⃣ Settings field (populated from env var on Settings load)
         from ofx.settings import settings
@@ -114,7 +120,8 @@ class ProjectManager:
         if getattr(settings, "active_project", None):
             try:
                 return Path(cls.resolve_path(settings.active_project))
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to resolve active project from settings: %s", e)
                 pass
         # 3️⃣ JSON config fallback
         cfg = _load_config()
@@ -122,7 +129,8 @@ class ProjectManager:
         if name:
             try:
                 return Path(cls.resolve_path(name))
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to resolve project from config '%s': %s", name, e)
                 pass
         # 4️⃣ No active project defined
         return None

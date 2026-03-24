@@ -199,7 +199,8 @@ class StepRunner(BaseRunner[Step]):
         if self._outputs_file and self._outputs_file.exists():
             try:
                 self._outputs_file.unlink()
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to remove outputs file: %s", e)
                 pass
 
     def _log_output(self, stream: str, content: str) -> None:
