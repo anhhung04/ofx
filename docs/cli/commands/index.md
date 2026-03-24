@@ -23,6 +23,37 @@ Complete reference for all OFX command-line interface commands.
 
 - **[secret manage](secret.md)** - Manage secrets and credentials
 
+## Session Management
+
+- **[session submit](session.md#submit)** - Submit a workflow as a detached session (local or cloud)
+- **[session list](session.md#list)** - List all sessions with optional filters
+- **[session status](session.md#status)** - Check session status
+- **[session logs](session.md#logs)** - View session output log
+- **[session fetch](session.md#fetch)** - Fetch results from a completed session
+- **[session decrypt](session.md#decrypt)** - Decrypt encrypted session results
+- **[session cancel](session.md#cancel)** - Cancel a running session
+- **[session destroy](session.md#destroy)** - Destroy a session and its resources
+- **[session clean](session.md#clean)** - Remove old session data
+- **[session guard](session.md#guard)** - Auto-cleanup for unattended environments
+- **[session bundle](session.md#bundle)** - Create a run artifacts bundle
+
+## Cloud Management
+
+- **[cloud test](cloud.md#test)** - Test connectivity to a remote host
+- **[cloud providers](cloud.md#providers)** - List available cloud providers
+- **[cloud profile](cloud.md#profile-management)** - Manage cloud configuration profiles
+- **[cloud instance](cloud.md#instance-management)** - Create, list, and destroy instances
+- **[cloud image](cloud.md#image-snapshot-management)** - Manage snapshots and images
+- **[cloud fleet](cloud.md#fleet-management)** - Distributed fleet operations
+
+## AI Assistant
+
+- **[ai generate](ai.md#generate)** - Generate a workflow from natural language
+- **[ai analyze](ai.md#analyze)** - Analyze workflow output with AI
+- **[ai chat](ai.md#chat)** - Interactive AI chat session
+- **[ai skills](ai.md#skills)** - List analysis skill personas
+- **[ai setup](ai.md#setup)** - Show AI configuration status
+
 ## Utility Commands
 
 - **[docs](docs-serve.md)** - Display API documentation and data directories
@@ -101,6 +132,18 @@ ofx secret list
 | `ofx project init` | Initialize new project |
 | `ofx project sync` | Sync project to storage |
 | `ofx secret manage` | Manage secrets |
+| `ofx session submit` | Submit a detached workflow session |
+| `ofx session list` | List sessions |
+| `ofx session status` | Check session status |
+| `ofx session fetch` | Fetch session results |
+| `ofx cloud test` | Test remote host connectivity |
+| `ofx cloud profile` | Manage cloud profiles |
+| `ofx cloud instance` | Manage cloud instances |
+| `ofx cloud image` | Manage snapshots/images |
+| `ofx cloud fleet run` | Distributed fleet workflow execution |
+| `ofx ai generate` | Generate workflow from natural language |
+| `ofx ai analyze` | Analyze workflow output with AI |
+| `ofx ai chat` | Interactive AI chat |
 | `ofx docs` | Display API documentation and data directories |
 | `ofx docs --list` | List all available API modules |
 | `ofx docs --module <name>` | View specific module documentation |
