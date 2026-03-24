@@ -1,0 +1,124 @@
+name: file-analyze
+description: |
+  File analysis utility — detect file type, extract metadata,
+  calculate hashes, check for embedded content, and identify
+  potential malicious indicators.
+tags: [utility, file, forensics, dfir, analysis]
+dispatch:
+  inputs:
+    file:
+      required: true
+      type: string
+      description: Path to file to analyze
+
+jobs:
+  analyze:
+    name: File Analysis
+    steps:
+    - name: analyze-file
+      script: |
+        import hashlib
+        import json
+        import os
+        import subprocess
+        from pathlib import Path
+
+        filepath = '{{ inputs.file }}'
+        path = Path(filepath)
+
+        if not path.is_file():
+            print(f"[-] File not found: {filepath}")
+            raise SystemExit(1)
+
+        print(f"=== FILE ANALYSIS: {path.name} ===\n")
+
+        results = {}
+        results['name'] = path.name
+        results['path'] = str(path.absolute())
+        results['size'] = path.stat().st_size
+        results['size_human'] = f"{results['size']:,} bytes"
+
+        # Hashes
+        data = path.read_bytes()
+        results['md5'] = hashlib.md5(data).hexdigest()
+        results['sha1'] = hashlib.sha1(data).hexdigest()
+        results['sha256'] = hashlib.sha256(data).hexdigest()
+
+        print(f"  Size: {results['size_human']}")
+        print(f"  MD5:    {results['md5']}")
+        print(f"  SHA1:   {results['sha1']}")
+        print(f"  SHA256: {results['sha256']}")
+
+        # File type
+        try:
+            proc = subprocess.run(['file', '-b', filepath], capture_output=True, text=True, timeout=10)
+            results['file_type'] = proc.stdout.strip()
+            print(f"  Type: {results['file_type']}")
+        except Exception:
+            results['file_type'] = 'unknown'
+
+        # MIME type
+        try:
+            proc = subprocess.run(['file', '-b', '--mime-type', filepath], capture_output=True, text=True, timeout=10)
+            results['mime_type'] = proc.stdout.strip()
+            print(f"  MIME: {results['mime_type']}")
+        except Exception:
+            pass
+
+        # Entropy
+        import math
+        if data:
+            freq = [0] * 256
+            for byte in data:
+                freq[byte] += 1
+            entropy = -sum((f/len(data)) * math.log2(f/len(data)) for f in freq if f > 0)
+            results['entropy'] = round(entropy, 4)
+            print(f"  Entropy: {results['entropy']} {'(HIGH - possibly packed/encrypted)' if entropy > 7.0 else '(normal)'}")
+
+        # Strings (interesting ones)
+        try:
+            proc = subprocess.run(['strings', '-n', '8', filepath], capture_output=True, text=True, timeout=10)
+            all_strings = proc.stdout.splitlines()
+            results['string_count'] = len(all_strings)
+
+            import re
+            urls = [s for s in all_strings if re.match(r'https?://', s)]
+            ips = [s for s in all_strings if re.match(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', s)]
+            emails = [s for s in all_strings if '@' in s and '.' in s.split('@')[-1]]
+
+            print(f"\n--- Strings ({len(all_strings)} total) ---")
+            if urls:
+                print(f"  URLs: {len(urls)}")
+                for u in urls[:5]:
+                    print(f"    {u}")
+            if ips:
+                print(f"  IPs: {len(ips)}")
+                for ip in ips[:5]:
+                    print(f"    {ip}")
+            if emails:
+                print(f"  Emails: {len(emails)}")
+                for e in emails[:5]:
+                    print(f"    {e}")
+        except Exception:
+            pass
+
+        # Exiftool metadata
+        try:
+            proc = subprocess.run(['exiftool', '-json', filepath], capture_output=True, text=True, timeout=10)
+            if proc.returncode == 0:
+                meta = json.loads(proc.stdout)[0]
+                interesting = {k: v for k, v in meta.items() if k not in ('SourceFile', 'Directory', 'FileName', 'FileSize')}
+                results['metadata'] = interesting
+                print(f"\n--- Metadata ---")
+                for k, v in list(interesting.items())[:15]:
+                    print(f"  {k}: {v}")
+        except Exception:
+            pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            for k, v in results.items():
+                if isinstance(v, (dict, list)):
+                    f.write(f"{k}={json.dumps(v)}\n")
+                else:
+                    f.write(f"{k}={v}\n")
+      log-stdout: true

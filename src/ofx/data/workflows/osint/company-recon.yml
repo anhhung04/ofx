@@ -1,0 +1,139 @@
+name: company-recon
+description: |
+  Company OSINT reconnaissance — discover employees, email patterns,
+  technologies, social media, leaked credentials, and infrastructure
+  associated with an organization.
+tags: [osint, company, recon, email, social]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Company name or primary domain
+      alias: t
+    domain:
+      type: string
+      default: ''
+      description: Company email domain (auto-detected if empty)
+
+jobs:
+  domain-intel:
+    name: Domain Intelligence
+    steps:
+    - task: whois
+      name: whois-lookup
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - task: subfinder
+      name: subdomain-enum
+      with:
+        target: '{{ inputs.domain or inputs.target }}'
+        all: true
+      log-stdout: true
+      continue-on-error: true
+    - task: dnsx
+      name: dns-records
+      with:
+        target: '{{ inputs.domain or inputs.target }}'
+        a: true
+        cname: true
+        mx: true
+        txt: true
+        ns: true
+        resp: true
+      log-stdout: true
+      continue-on-error: true
+
+  email-harvest:
+    name: Email Harvesting
+    steps:
+    - task: theharvester
+      name: theharvester-scan
+      with:
+        target: '{{ inputs.domain or inputs.target }}'
+        source: all
+        limit: 500
+      log-stdout: true
+      continue-on-error: true
+    - task: holehe
+      name: email-existence
+      with:
+        target: '{{ inputs.domain or inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-emails
+      script: |
+        emails = set()
+        step_data = {{ steps | tojson }}
+        for idx in range(2):
+            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+            for item in typed:
+                email = item.get('email', item.get('username', ''))
+                if '@' in str(email):
+                    emails.add(email.lower())
+
+        from pathlib import Path
+        out = '/tmp/ofx_company_emails.txt'
+        Path(out).write_text('\n'.join(sorted(emails)) + '\n')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"emails_file={out}\n")
+            f.write(f"email_count={len(emails)}\n")
+
+        print(f"[+] Collected {len(emails)} emails")
+        for e in sorted(emails)[:20]:
+            print(f"    {e}")
+      log-stdout: true
+
+  tech-detection:
+    name: Technology Stack Detection
+    needs: [domain-intel]
+    steps:
+    - task: httpx
+      name: http-tech
+      with:
+        target: '{{ inputs.domain or inputs.target }}'
+        tech_detect: true
+        status_code: true
+        title: true
+        follow_redirects: true
+      log-stdout: true
+      continue-on-error: true
+    - task: wafw00f
+      name: waf-detect
+      with:
+        target: '{{ inputs.domain or inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+
+  breach-search:
+    name: Breach Database Search
+    steps:
+    - task: h8mail
+      name: breach-lookup
+      with:
+        target: '{{ inputs.domain or inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+
+  summary:
+    name: Company Recon Summary
+    needs: [domain-intel, email-harvest, tech-detection, breach-search]
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " COMPANY RECON: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "--- Domain Intel ---"
+        echo "  Subdomains: {{ subdomains(jobs['domain-intel'].outputs.typed_outputs) | list | length | default('?', true) }}"
+        echo ""
+        echo "--- Emails ---"
+        echo "  Harvested: {{ jobs['email-harvest'].outputs.email_count | default('?', true) }}"
+        echo ""
+        echo "--- Breach Data ---"
+        echo "  Hits: {{ users(jobs['breach-search'].outputs.typed_outputs) | list | length | default('?', true) }}"
+      log-stdout: true

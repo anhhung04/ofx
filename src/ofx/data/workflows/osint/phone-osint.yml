@@ -1,0 +1,82 @@
+name: phone-osint
+description: |
+  Phone number OSINT — identify carrier, location, line type, and
+  search for associated accounts and social media profiles.
+tags: [osint, phone, recon]
+dispatch:
+  inputs:
+    phone:
+      required: true
+      type: string
+      description: Phone number (with country code, e.g. +1234567890)
+
+jobs:
+  analyze:
+    name: Phone Analysis
+    steps:
+    - name: phone-lookup
+      script: |
+        import re
+
+        phone = '{{ inputs.phone }}'
+        phone_clean = re.sub(r'[^0-9+]', '', phone)
+
+        print(f"=== PHONE OSINT: {phone} ===\n")
+
+        results = {}
+        results['number'] = phone_clean
+        results['digits'] = len(phone_clean.replace('+', ''))
+
+        # Country code detection
+        cc_map = {
+            '+1': 'US/CA', '+44': 'UK', '+33': 'FR', '+49': 'DE',
+            '+81': 'JP', '+86': 'CN', '+91': 'IN', '+61': 'AU',
+            '+7': 'RU', '+55': 'BR', '+34': 'ES', '+39': 'IT',
+        }
+        for prefix, country in sorted(cc_map.items(), key=lambda x: -len(x[0])):
+            if phone_clean.startswith(prefix):
+                results['country'] = country
+                results['country_code'] = prefix
+                break
+
+        print(f"  Number: {phone_clean}")
+        print(f"  Country: {results.get('country', 'Unknown')}")
+        print(f"  Digits: {results['digits']}")
+
+        # Try phonenumbers lib
+        try:
+            import phonenumbers
+            parsed = phonenumbers.parse(phone_clean)
+            from phonenumbers import geocoder, carrier, timezone
+            results['valid'] = phonenumbers.is_valid_number(parsed)
+            results['location'] = geocoder.description_for_number(parsed, 'en')
+            results['carrier'] = carrier.name_for_number(parsed, 'en')
+            results['type'] = str(phonenumbers.number_type(parsed))
+            results['timezones'] = ', '.join(timezone.time_zones_for_number(parsed))
+            results['international'] = phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.INTERNATIONAL)
+
+            print(f"  Valid: {results['valid']}")
+            print(f"  Location: {results['location']}")
+            print(f"  Carrier: {results['carrier']}")
+            print(f"  Timezones: {results['timezones']}")
+            print(f"  International: {results['international']}")
+        except ImportError:
+            print("  [!] phonenumbers library not installed (pip install phonenumbers)")
+        except Exception as e:
+            print(f"  [!] Parse error: {e}")
+
+        # Google dork suggestions
+        print(f"\n--- Search Dorks ---")
+        dorks = [
+            f'"{phone_clean}"',
+            f'"{phone_clean}" site:linkedin.com',
+            f'"{phone_clean}" site:facebook.com',
+            f'intext:"{phone_clean}"',
+        ]
+        for d in dorks:
+            print(f"  Google: {d}")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            for k, v in results.items():
+                f.write(f"{k}={v}\n")
+      log-stdout: true

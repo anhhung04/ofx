@@ -1,0 +1,117 @@
+name: ad-certattack
+description: |
+  Active Directory Certificate Services (ADCS) attack workflow —
+  enumerate certificate templates, find vulnerable ESC1-ESC8 paths,
+  and exploit certificate-based authentication misconfigs using certipy.
+tags: [redteam, ad, adcs, certificate, privilege-escalation]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Domain controller IP or hostname
+      alias: t
+    domain:
+      required: true
+      type: string
+      description: Domain name (e.g. corp.local)
+    user:
+      required: true
+      type: string
+      description: Domain username
+    password:
+      type: string
+      default: ''
+      description: Password
+    hash:
+      type: string
+      default: ''
+      description: NTLM hash (pass-the-hash)
+
+jobs:
+  enumerate:
+    name: ADCS Enumeration
+    steps:
+    - name: certipy-find
+      run: |
+        AUTH_ARGS="{{ inputs.domain }}/{{ inputs.user }}"
+        {% if inputs.password %}
+        AUTH_ARGS="$AUTH_ARGS:{{ inputs.password }}"
+        {% endif %}
+
+        EXTRA_ARGS=""
+        {% if inputs.hash %}
+        EXTRA_ARGS="-hashes :{{ inputs.hash }}"
+        {% endif %}
+
+        echo "[+] Enumerating ADCS on {{ inputs.target }}..."
+        if command -v certipy-ad &>/dev/null; then
+          TOOL=certipy-ad
+        elif command -v certipy &>/dev/null; then
+          TOOL=certipy
+        else
+          echo "[-] certipy not found. Install with: pip install certipy-ad"
+          exit 1
+        fi
+
+        $TOOL find -u "$AUTH_ARGS" -dc-ip {{ inputs.target }} $EXTRA_ARGS -json -stdout 2>/dev/null | tee /tmp/ofx_adcs_enum.json
+
+        echo ""
+        echo "[+] Checking for vulnerable templates..."
+        $TOOL find -u "$AUTH_ARGS" -dc-ip {{ inputs.target }} $EXTRA_ARGS -vulnerable -json -stdout 2>/dev/null | tee /tmp/ofx_adcs_vuln.json
+
+        echo "enum_file=/tmp/ofx_adcs_enum.json" >> {{ env.OFX_OUTPUTS }}
+        echo "vuln_file=/tmp/ofx_adcs_vuln.json" >> {{ env.OFX_OUTPUTS }}
+      log-stdout: true
+      continue-on-error: true
+
+  analyze:
+    name: Vulnerability Analysis
+    needs: [enumerate]
+    steps:
+    - name: analyze-results
+      script: |
+        import json
+        from pathlib import Path
+
+        vuln_file = '{{ jobs["enumerate"].outputs.vuln_file }}'
+        findings = []
+
+        try:
+            data = json.loads(Path(vuln_file).read_text())
+        except Exception:
+            data = {}
+
+        templates = data.get('Certificate Templates', data.get('certificate_templates', {}))
+        cas = data.get('Certificate Authorities', data.get('certificate_authorities', {}))
+
+        print("=== ADCS VULNERABILITY ANALYSIS ===\n")
+
+        if isinstance(templates, dict):
+            for name, tmpl in templates.items():
+                vulns = tmpl.get('Vulnerabilities', tmpl.get('vulnerabilities', []))
+                if vulns:
+                    for v in vulns if isinstance(vulns, list) else [vulns]:
+                        finding = f"[HIGH] Template '{name}': {v}"
+                        findings.append(finding)
+                        print(f"  {finding}")
+
+        # ESC attack guidance
+        esc_attacks = {
+            'ESC1': 'Request cert with SAN -> authenticate as any user',
+            'ESC2': 'Any purpose template -> request client auth cert',
+            'ESC3': 'Enroll on behalf of -> request cert for another user',
+            'ESC4': 'Vulnerable ACL -> modify template to ESC1',
+            'ESC6': 'EDITF_ATTRIBUTESUBJECTALTNAME2 -> SAN in any cert',
+            'ESC7': 'Manage CA permission -> issue pending requests',
+            'ESC8': 'HTTP enrollment -> NTLM relay to get cert',
+        }
+
+        print(f"\n--- ESC Attack Reference ---")
+        for esc, desc in esc_attacks.items():
+            print(f"  {esc}: {desc}")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"finding_count={len(findings)}\n")
+            f.write(f"template_count={len(templates) if isinstance(templates, dict) else 0}\n")
+      log-stdout: true

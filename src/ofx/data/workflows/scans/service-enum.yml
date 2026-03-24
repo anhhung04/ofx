@@ -1,0 +1,146 @@
+name: service-enum
+description: |
+  Deep service enumeration — probe discovered services (SMB, FTP, SNMP,
+  SMTP, DNS, NFS, RDP, MySQL, MSSQL) for detailed information,
+  anonymous access, and misconfigurations.
+tags: [scan, enumeration, services, network]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target host IP or hostname
+      alias: t
+
+jobs:
+  port-discovery:
+    name: Port Discovery
+    steps:
+    - task: naabu
+      name: port-scan
+      with:
+        target: '{{ inputs.target }}'
+        top_ports: '1000'
+        rate: 1000
+      log-stdout: true
+      continue-on-error: true
+    - name: identify-services
+      script: |
+        ports_data = {{ ports(steps[0].outputs.typed_outputs) | tojson }}
+        services = {}
+        for p in ports_data:
+            port = p.get('port', 0)
+            services[port] = p.get('service', '')
+
+        svc_map = {
+            21: 'ftp', 22: 'ssh', 25: 'smtp', 53: 'dns', 80: 'http',
+            110: 'pop3', 111: 'rpc', 135: 'rpc', 139: 'smb', 143: 'imap',
+            161: 'snmp', 389: 'ldap', 443: 'https', 445: 'smb', 993: 'imaps',
+            1433: 'mssql', 1521: 'oracle', 2049: 'nfs', 3306: 'mysql',
+            3389: 'rdp', 5432: 'postgres', 5900: 'vnc', 6379: 'redis',
+            8080: 'http', 8443: 'https', 27017: 'mongodb',
+        }
+
+        detected = set()
+        for port in services:
+            svc = svc_map.get(port, '')
+            if svc:
+                detected.add(svc)
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"port_count={len(services)}\n")
+            f.write(f"detected_services={','.join(sorted(detected))}\n")
+            f.write(f"open_ports={','.join(str(p) for p in sorted(services.keys()))}\n")
+
+        print(f"[+] Open ports: {len(services)}")
+        print(f"[+] Services: {', '.join(sorted(detected))}")
+      log-stdout: true
+
+  deep-enum:
+    name: Deep Service Enumeration
+    needs: [port-discovery]
+    steps:
+    - name: enum-services
+      script: |
+        import subprocess
+
+        target = '{{ inputs.target }}'
+        services = '{{ jobs["port-discovery"].outputs.detected_services }}'.split(',')
+        ports = '{{ jobs["port-discovery"].outputs.open_ports }}'
+
+        results = {}
+
+        for svc in services:
+            if not svc:
+                continue
+            print(f"\n=== {svc.upper()} ===")
+
+            if svc == 'smb':
+                cmds = [
+                    ('nmap-smb', f'nmap -p 139,445 --script smb-enum-shares,smb-enum-users,smb-os-discovery -Pn {target}'),
+                    ('smbclient', f'smbclient -L //{target}/ -N 2>/dev/null'),
+                ]
+            elif svc == 'ftp':
+                cmds = [
+                    ('nmap-ftp', f'nmap -p 21 --script ftp-anon,ftp-syst,ftp-vsftpd-backdoor -Pn {target}'),
+                ]
+            elif svc == 'snmp':
+                cmds = [
+                    ('nmap-snmp', f'nmap -p 161 --script snmp-info,snmp-interfaces,snmp-netstat,snmp-processes -sU -Pn {target}'),
+                ]
+            elif svc == 'smtp':
+                cmds = [
+                    ('nmap-smtp', f'nmap -p 25 --script smtp-commands,smtp-enum-users,smtp-open-relay -Pn {target}'),
+                ]
+            elif svc == 'dns':
+                cmds = [
+                    ('nmap-dns', f'nmap -p 53 --script dns-zone-transfer,dns-recursion -Pn {target}'),
+                ]
+            elif svc == 'nfs':
+                cmds = [
+                    ('nmap-nfs', f'nmap -p 2049 --script nfs-ls,nfs-showmount,nfs-statfs -Pn {target}'),
+                    ('showmount', f'showmount -e {target} 2>/dev/null'),
+                ]
+            elif svc == 'mysql':
+                cmds = [
+                    ('nmap-mysql', f'nmap -p 3306 --script mysql-info,mysql-enum,mysql-empty-password -Pn {target}'),
+                ]
+            elif svc == 'mssql':
+                cmds = [
+                    ('nmap-mssql', f'nmap -p 1433 --script ms-sql-info,ms-sql-ntlm-info,ms-sql-empty-password -Pn {target}'),
+                ]
+            elif svc == 'redis':
+                cmds = [
+                    ('nmap-redis', f'nmap -p 6379 --script redis-info -Pn {target}'),
+                ]
+            elif svc == 'ldap':
+                cmds = [
+                    ('nmap-ldap', f'nmap -p 389 --script ldap-rootdse,ldap-search -Pn {target}'),
+                ]
+            else:
+                cmds = []
+
+            for name, cmd in cmds:
+                try:
+                    proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
+                    output = proc.stdout.strip()
+                    results[f'{svc}_{name}'] = output
+                    if output:
+                        for line in output.splitlines()[:20]:
+                            print(f"  {line}")
+                except Exception as e:
+                    print(f"  Error: {e}")
+
+        from pathlib import Path
+        out_file = '/tmp/ofx_service_enum.txt'
+        with open(out_file, 'w') as f:
+            for name, output in results.items():
+                f.write(f"=== {name.upper()} ===\n{output}\n\n")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"enum_file={out_file}\n")
+            f.write(f"service_count={len(services)}\n")
+
+        print(f"\n[+] Full results: {out_file}")
+      log-stdout: true
+      timeout: 10

@@ -1,0 +1,92 @@
+name: container-scan
+description: |
+  Container security scanning — scan Docker images for vulnerabilities,
+  misconfigurations, secrets, and compliance issues using Trivy and Grype.
+tags: [container, docker, security, vulnerability]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Docker image to scan (e.g. nginx:latest, myregistry/app:v1)
+      alias: t
+
+jobs:
+  vuln-scan:
+    name: Vulnerability Scanning
+    steps:
+    - task: trivy
+      name: trivy-image
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - task: grype
+      name: grype-image
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+
+  secret-scan:
+    name: Secret Detection
+    steps:
+    - name: scan-secrets
+      run: |
+        echo "[+] Scanning image for secrets..."
+        if command -v trivy &>/dev/null; then
+          trivy image --scanners secret --format json {{ inputs.target }} 2>/dev/null | python3 -c "
+        import json,sys
+        try:
+          data = json.load(sys.stdin)
+          secrets = data.get('Results', [])
+          count = sum(len(r.get('Secrets', [])) for r in secrets)
+          print(f'  Secrets found: {count}')
+          for r in secrets:
+            for s in r.get('Secrets', []):
+              print(f\"  [{s.get('Severity','?')}] {s.get('Title','?')} in {s.get('Target','?')}\")
+        except:
+          print('  No secrets found or parse error')
+        "
+        fi
+      log-stdout: true
+      continue-on-error: true
+
+  misconfig-scan:
+    name: Misconfiguration Check
+    steps:
+    - name: check-misconfig
+      run: |
+        echo "[+] Checking image misconfigurations..."
+        if command -v trivy &>/dev/null; then
+          trivy image --scanners misconfig {{ inputs.target }} 2>/dev/null || true
+        else
+          echo "[-] Trivy not installed"
+        fi
+      log-stdout: true
+      continue-on-error: true
+
+  summary:
+    name: Container Scan Summary
+    needs: [vuln-scan, secret-scan, misconfig-scan]
+    steps:
+    - name: report
+      script: |
+        vuln_data = {{ vulns(jobs['vuln-scan'].outputs.typed_outputs) | tojson }}
+        by_sev = {}
+        for v in vuln_data:
+            sev = v.get('severity', 'unknown').upper()
+            by_sev[sev] = by_sev.get(sev, 0) + 1
+
+        print("=" * 50)
+        print(f" CONTAINER SCAN: {{ inputs.target }}")
+        print("=" * 50)
+        print(f"\n  Total vulnerabilities: {len(vuln_data)}")
+        for sev in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']:
+            if by_sev.get(sev):
+                print(f"    {sev}: {by_sev[sev]}")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"vuln_count={len(vuln_data)}\n")
+            f.write(f"critical_count={by_sev.get('CRITICAL', 0)}\n")
+      log-stdout: true

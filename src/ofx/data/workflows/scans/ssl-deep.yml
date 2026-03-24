@@ -1,0 +1,131 @@
+name: ssl-deep
+description: |
+  Deep SSL/TLS analysis — comprehensive certificate chain validation,
+  cipher suite analysis, protocol version testing, vulnerability
+  checks (Heartbleed, ROBOT, DROWN, etc.), and compliance grading.
+tags: [ssl, tls, certificate, security, scan]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target hostname or IP:port
+      alias: t
+    port:
+      type: string
+      default: '443'
+      description: Target port
+
+jobs:
+  testssl:
+    name: TestSSL Analysis
+    steps:
+    - task: testssl
+      name: testssl-scan
+      with:
+        target: '{{ inputs.target }}:{{ inputs.port }}'
+      log-stdout: true
+      continue-on-error: true
+
+  sshaudit:
+    name: SSH Audit
+    steps:
+    - task: sshaudit
+      name: ssh-audit
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+
+  cert-details:
+    name: Certificate Details
+    steps:
+    - name: cert-chain
+      script: |
+        import subprocess
+        import ssl
+        import socket
+        import json
+        from datetime import datetime
+
+        host = '{{ inputs.target }}'
+        port = int('{{ inputs.port }}')
+
+        print(f"=== CERTIFICATE ANALYSIS: {host}:{port} ===\n")
+
+        findings = []
+        try:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+
+            with socket.create_connection((host, port), timeout=10) as sock:
+                with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                    cert = ssock.getpeercert(binary_form=False)
+                    cipher = ssock.cipher()
+                    version = ssock.version()
+
+                    # Get cert in DER form for chain
+                    der_cert = ssock.getpeercert(binary_form=True)
+
+            if cert:
+                subject = dict(x[0] for x in cert.get('subject', []))
+                issuer = dict(x[0] for x in cert.get('issuer', []))
+
+                print(f"  Subject: {subject.get('commonName', '?')}")
+                print(f"  Issuer: {issuer.get('organizationName', '?')} / {issuer.get('commonName', '?')}")
+                print(f"  Serial: {cert.get('serialNumber', '?')}")
+                print(f"  Version: {version}")
+                print(f"  Cipher: {cipher}")
+
+                # Dates
+                not_before = cert.get('notBefore', '')
+                not_after = cert.get('notAfter', '')
+                print(f"  Valid from: {not_before}")
+                print(f"  Valid until: {not_after}")
+
+                # Check expiry
+                try:
+                    expiry = datetime.strptime(not_after, '%b %d %H:%M:%S %Y %Z')
+                    days_left = (expiry - datetime.utcnow()).days
+                    print(f"  Days remaining: {days_left}")
+                    if days_left < 0:
+                        findings.append('[CRITICAL] Certificate is EXPIRED')
+                    elif days_left < 30:
+                        findings.append(f'[HIGH] Certificate expires in {days_left} days')
+                except Exception:
+                    pass
+
+                # SANs
+                sans = cert.get('subjectAltName', [])
+                if sans:
+                    san_list = [v for _, v in sans]
+                    print(f"  SANs: {', '.join(san_list[:10])}")
+                    if '*' in str(sans):
+                        findings.append('[INFO] Wildcard certificate')
+
+                # Weak cipher check
+                if cipher and cipher[0]:
+                    if 'RC4' in cipher[0] or 'DES' in cipher[0] or 'NULL' in cipher[0]:
+                        findings.append(f'[HIGH] Weak cipher: {cipher[0]}')
+                    if 'CBC' in cipher[0]:
+                        findings.append(f'[MEDIUM] CBC mode cipher: {cipher[0]}')
+
+                # Protocol version check
+                if version in ('SSLv2', 'SSLv3', 'TLSv1', 'TLSv1.1'):
+                    findings.append(f'[HIGH] Outdated protocol: {version}')
+
+            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+                f.write(f"version={version}\n")
+                f.write(f"cipher={cipher[0] if cipher else 'unknown'}\n")
+                f.write(f"finding_count={len(findings)}\n")
+
+        except Exception as e:
+            print(f"  Connection error: {e}")
+            findings.append(f'[ERROR] Cannot connect: {e}')
+
+        print(f"\n--- Findings ({len(findings)}) ---")
+        for finding in findings:
+            print(f"  {finding}")
+      log-stdout: true
+      continue-on-error: true

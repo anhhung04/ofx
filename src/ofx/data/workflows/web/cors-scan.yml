@@ -1,0 +1,99 @@
+name: cors-scan
+description: |
+  CORS misconfiguration scanner — test for reflected origins, null origin,
+  wildcard with credentials, subdomain trust, and other CORS bypass vectors.
+tags: [web, cors, security, misconfiguration]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL or @file with URLs
+      alias: t
+
+jobs:
+  scan:
+    name: CORS Misconfiguration Scan
+    steps:
+    - name: test-cors
+      script: |
+        import urllib.request
+        import urllib.error
+        from pathlib import Path
+
+        raw = '''{{ inputs.target }}'''
+        if Path(raw).is_file():
+            urls = [u.strip() for u in Path(raw).read_text().splitlines() if u.strip()]
+        else:
+            urls = [raw]
+
+        print(f"=== CORS SCAN: {len(urls)} URL(s) ===\n")
+
+        findings = []
+        test_origins = [
+            ('reflected', 'https://evil.com'),
+            ('null', 'null'),
+            ('subdomain', None),  # Dynamic
+            ('prefix', None),  # Dynamic
+            ('postfix', None),  # Dynamic
+        ]
+
+        for url in urls[:50]:
+            print(f"--- {url} ---")
+            vuln = False
+
+            # Extract domain for dynamic tests
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.hostname or ''
+
+            dynamic_origins = [
+                ('reflected', 'https://evil.com'),
+                ('null_origin', 'null'),
+                ('subdomain_trust', f'https://evil.{domain}'),
+                ('prefix_bypass', f'https://{domain}.evil.com'),
+                ('postfix_bypass', f'https://evil-{domain}'),
+                ('http_downgrade', f'http://{domain}'),
+            ]
+
+            for test_name, origin in dynamic_origins:
+                try:
+                    req = urllib.request.Request(url)
+                    req.add_header('Origin', origin)
+                    resp = urllib.request.urlopen(req, timeout=10)
+                    acao = resp.headers.get('Access-Control-Allow-Origin', '')
+                    acac = resp.headers.get('Access-Control-Allow-Credentials', '')
+
+                    if acao == origin or acao == '*':
+                        severity = 'HIGH' if acac.lower() == 'true' else 'MEDIUM'
+                        if acao == '*' and acac.lower() == 'true':
+                            severity = 'CRITICAL'
+
+                        finding = {
+                            'url': url,
+                            'test': test_name,
+                            'origin': origin,
+                            'acao': acao,
+                            'acac': acac,
+                            'severity': severity,
+                        }
+                        findings.append(finding)
+                        vuln = True
+                        print(f"  [{severity}] {test_name}: Origin '{origin}' reflected")
+                        print(f"    ACAO: {acao} | ACAC: {acac}")
+                except Exception:
+                    pass
+
+            if not vuln:
+                print("  [✓] No CORS misconfigurations found")
+            print()
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"finding_count={len(findings)}\n")
+            f.write(f"urls_tested={len(urls)}\n")
+
+        if findings:
+            print(f"=== SUMMARY: {len(findings)} CORS issues found ===")
+            for finding in findings:
+                print(f"  [{finding['severity']}] {finding['url']} — {finding['test']}")
+      log-stdout: true

@@ -1,0 +1,136 @@
+name: asn-recon
+description: |
+  ASN (Autonomous System Number) reconnaissance — discover IP ranges,
+  prefixes, peering relationships, and infrastructure associated
+  with an organization's ASN.
+tags: [recon, asn, network, infrastructure]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: ASN number (e.g. AS15169), org name, or IP address
+      alias: t
+
+jobs:
+  lookup:
+    name: ASN Lookup
+    steps:
+    - name: asn-lookup
+      script: |
+        import subprocess
+        import json
+        import re
+        import urllib.request
+        from pathlib import Path
+
+        target = '{{ inputs.target }}'
+        print(f"=== ASN RECONNAISSANCE: {target} ===\n")
+
+        results = {}
+        prefixes = set()
+
+        # Try to resolve target to ASN
+        asn = ''
+        if target.upper().startswith('AS'):
+            asn = target.upper().replace('AS', '')
+        else:
+            # Try whois for IP
+            try:
+                proc = subprocess.run(['whois', '-h', 'whois.cymru.com', f' -v {target}'], capture_output=True, text=True, timeout=15)
+                for line in proc.stdout.splitlines():
+                    m = re.search(r'(\d+)\s+\|\s+(\S+)', line)
+                    if m:
+                        asn = m.group(1)
+                        break
+            except Exception:
+                pass
+
+            if not asn:
+                # Try as org name via RIPEstat
+                try:
+                    url = f"https://stat.ripe.net/data/searchcomplete/data.json?resource={target}"
+                    resp = urllib.request.urlopen(url, timeout=10)
+                    data = json.loads(resp.read())
+                    for cat in data.get('data', {}).get('categories', []):
+                        if cat.get('category') == 'ASNs':
+                            suggestions = cat.get('suggestions', [])
+                            if suggestions:
+                                asn = suggestions[0].get('value', '').replace('AS', '')
+                                break
+                except Exception:
+                    pass
+
+        if not asn:
+            print(f"[-] Could not resolve ASN for: {target}")
+            print(f"    Try: AS<number>, IP address, or organization name")
+        else:
+            results['asn'] = asn
+            print(f"  ASN: AS{asn}")
+
+            # Get ASN details from RIPEstat
+            try:
+                url = f"https://stat.ripe.net/data/as-overview/data.json?resource=AS{asn}"
+                resp = urllib.request.urlopen(url, timeout=10)
+                data = json.loads(resp.read())
+                holder = data.get('data', {}).get('holder', '')
+                results['holder'] = holder
+                print(f"  Holder: {holder}")
+            except Exception:
+                pass
+
+            # Get prefixes
+            try:
+                url = f"https://stat.ripe.net/data/announced-prefixes/data.json?resource=AS{asn}"
+                resp = urllib.request.urlopen(url, timeout=10)
+                data = json.loads(resp.read())
+                for prefix_data in data.get('data', {}).get('prefixes', []):
+                    prefix = prefix_data.get('prefix', '')
+                    if prefix:
+                        prefixes.add(prefix)
+            except Exception:
+                pass
+
+            # Also try whois
+            try:
+                proc = subprocess.run(['whois', '-h', 'whois.radb.net', f'-i origin AS{asn}'], capture_output=True, text=True, timeout=15)
+                for line in proc.stdout.splitlines():
+                    m = re.match(r'route6?:\s+(\S+)', line)
+                    if m:
+                        prefixes.add(m.group(1))
+            except Exception:
+                pass
+
+            results['prefix_count'] = len(prefixes)
+            print(f"\n--- IP Prefixes ({len(prefixes)}) ---")
+            for prefix in sorted(prefixes):
+                print(f"  {prefix}")
+
+            # Get peers
+            try:
+                url = f"https://stat.ripe.net/data/asn-neighbours/data.json?resource=AS{asn}"
+                resp = urllib.request.urlopen(url, timeout=10)
+                data = json.loads(resp.read())
+                neighbours = data.get('data', {}).get('neighbours', [])
+                if neighbours:
+                    print(f"\n--- Peers ({len(neighbours)}) ---")
+                    for n in neighbours[:15]:
+                        print(f"  AS{n.get('asn', '?')} ({n.get('type', '?')})")
+                    results['peer_count'] = len(neighbours)
+            except Exception:
+                pass
+
+        # Save
+        out_file = '/tmp/ofx_asn_recon.txt'
+        with open(out_file, 'w') as f:
+            f.write(f"ASN: AS{asn}\n")
+            f.write(f"Holder: {results.get('holder', '?')}\n\n")
+            f.write("Prefixes:\n")
+            for p in sorted(prefixes):
+                f.write(f"  {p}\n")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"asn=AS{asn}\n")
+            f.write(f"prefix_count={len(prefixes)}\n")
+            f.write(f"results_file={out_file}\n")
+      log-stdout: true
