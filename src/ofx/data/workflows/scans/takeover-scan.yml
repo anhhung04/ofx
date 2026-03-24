@@ -70,6 +70,7 @@ jobs:
       cname_count: '{{ steps.collect-dns.outputs.cname_count }}'
     steps:
     - task: dnsx
+      timeout: 10
       name: resolve-dns
       with:
         target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'

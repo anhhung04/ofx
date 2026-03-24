@@ -23,6 +23,7 @@ jobs:
     name: URL Probe
     steps:
     - task: httpx
+      timeout: 10
       name: http-probe
       with:
         target: '{{ inputs.target }}'

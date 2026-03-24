@@ -22,6 +22,7 @@ jobs:
       profile_urls: '{{ steps.export-accounts.outputs.profile_urls }}'
     steps:
     - task: maigret
+      timeout: 10
       name: maigret-search
       with:
         target: '{{ inputs.target }}'
@@ -44,6 +45,7 @@ jobs:
       breaches_found: '{{ steps.export-breaches.outputs.breaches_found }}'
     steps:
     - task: h8mail
+      timeout: 15
       name: breach-search
       with:
         target: '{{ inputs.target }}'

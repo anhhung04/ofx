@@ -24,6 +24,7 @@ jobs:
     name: Initial Probe
     steps:
     - task: httpx
+      timeout: 10
       name: probe-url
       with:
         target: '{{ inputs.target }}'

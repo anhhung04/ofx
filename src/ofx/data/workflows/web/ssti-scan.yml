@@ -23,6 +23,7 @@ jobs:
       param_count: '${{ steps.merge-params.outputs.param_count }}'
     steps:
       - task: httpx
+        timeout: 10
         name: probe-targets
         with:
           target: '{{ inputs.target }}'
@@ -40,6 +41,7 @@ jobs:
         continue-on-error: true
 
       - task: paramspider
+        timeout: 10
         name: paramspider-mine
         with:
           target: '{{ inputs.target }}'
@@ -99,6 +101,7 @@ jobs:
     steps:
       - task: tinja
         name: tinja-scan
+        timeout: 10
         with:
           target: '{{ jobs[''param-discovery''].outputs.param_file | default(inputs.target, true) }}'
         continue-on-error: true

@@ -28,6 +28,7 @@ jobs:
       live_urls: '${{ steps.export-info.outputs.live_urls }}'
     steps:
       - task: rustscan
+        timeout: 10
         name: port-discovery
         with:
           target: "{{ inputs.target }}"
@@ -35,6 +36,7 @@ jobs:
           batch_size: 4500
         continue-on-error: true
       - task: httpx
+        timeout: 10
         name: http-probe
         with:
           target: "{{ inputs.target }}"
@@ -44,11 +46,13 @@ jobs:
           follow_redirects: true
         continue-on-error: true
       - task: wafw00f
+        timeout: 10
         name: waf-detect
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: whatweb
+        timeout: 10
         name: whatweb-scan
         with:
           target: "{{ inputs.target }}"
@@ -76,6 +80,7 @@ jobs:
           status_codes: 200,201,204,301,302,307,401,403,405,500
         continue-on-error: true
       - task: gobuster
+        timeout: 10
         name: gobuster-scan
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
@@ -126,6 +131,7 @@ jobs:
           depth: 3
         continue-on-error: true
       - task: hakrawler
+        timeout: 10
         name: hakrawler-crawl
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
@@ -140,6 +146,7 @@ jobs:
           depth: 2
         continue-on-error: true
       - task: gau
+        timeout: 10
         name: gau-archive
         with:
           target: "{{ inputs.target }}"
@@ -181,12 +188,14 @@ jobs:
           threads: 20
         continue-on-error: true
       - task: x8
+        timeout: 10
         name: x8-params
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           method: GET
         continue-on-error: true
       - task: paramspider
+        timeout: 10
         name: paramspider-discover
         with:
           target: "{{ inputs.target }}"
@@ -256,6 +265,7 @@ jobs:
         continue-on-error: true
       - task: crlfuzz
         name: crlf-scan
+        timeout: 10
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
         continue-on-error: true
@@ -295,12 +305,14 @@ jobs:
       - crawl
     steps:
       - task: trufflehog
+        timeout: 15
         name: trufflehog-scan
         with:
           target: "{{ inputs.target }}"
           mode: filesystem
         continue-on-error: true
       - task: gitleaks
+        timeout: 15
         name: gitleaks-scan
         with:
           target: "{{ inputs.target }}"

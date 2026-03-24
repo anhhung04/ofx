@@ -30,6 +30,7 @@ jobs:
     steps:
       - task: rustscan
         name: rustscan-sweep
+        timeout: 10
         with:
           target: "{{ inputs.target }}"
           range: 1-65535
@@ -37,6 +38,7 @@ jobs:
           timeout: 3000
         continue-on-error: true
       - task: naabu
+        timeout: 10
         name: naabu-top
         with:
           target: "{{ inputs.target }}"
@@ -113,6 +115,7 @@ jobs:
           version_detection: true
         continue-on-error: true
       - task: httpx
+        timeout: 10
         name: http-probe
         with:
           target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
@@ -122,11 +125,13 @@ jobs:
           follow_redirects: true
         continue-on-error: true
       - task: ssh-audit
+        timeout: 10
         name: ssh-check
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: searchsploit
+        timeout: 5
         name: exploit-lookup
         with:
           target: "{{ inputs.target }}"

@@ -35,6 +35,7 @@ jobs:
       continue-on-error: true
     - task: gau
       name: gau-passive
+      timeout: 10
       with:
         target: '{{ inputs.target }}'
         subs: true
@@ -46,6 +47,7 @@ jobs:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: assetfinder
+      timeout: 10
       name: assetfinder-enum
       with:
         target: '{{ inputs.target }}'
@@ -73,6 +75,7 @@ jobs:
             f.write(f"hosts_file=/tmp/ofx_subscan_hosts.txt\n")
             f.write(f"subdomain_count={len(subs)}\n")
     - task: dnsx
+      timeout: 10
       name: verify-dns
       with:
         target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
@@ -80,6 +83,7 @@ jobs:
         resp: true
       continue-on-error: true
     - task: httpx
+      timeout: 10
       name: probe-subdomains
       with:
         target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
@@ -88,6 +92,7 @@ jobs:
         follow_redirects: true
       continue-on-error: true
     - task: whatweb
+      timeout: 10
       name: whatweb-fingerprint
       with:
         target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'

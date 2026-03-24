@@ -130,6 +130,7 @@ jobs:
         nmap -sV -iL /tmp/nmap-hosts.txt -oN /tmp/nmap-services.txt 2>/dev/null | tee /tmp/nmap-output.txt
       continue-on-error: true
     - task: httpx
+      timeout: 10
       name: http-probe
       with:
         target: '{{ jobs[''host-discovery''].outputs.alive_file }}'

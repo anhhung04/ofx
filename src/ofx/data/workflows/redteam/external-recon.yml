@@ -26,6 +26,7 @@ jobs:
       domain_intel: '{{ steps.export-intel.outputs.domain_intel }}'
     steps:
     - task: whois
+      timeout: 5
       name: whois-lookup
       with:
         target: '{{ inputs.target }}'
@@ -118,6 +119,7 @@ jobs:
     - subdomain-enum
     steps:
     - task: dnsx
+      timeout: 10
       name: verify-dns
       with:
         target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
@@ -197,6 +199,7 @@ jobs:
     - dns-verify
     steps:
     - task: httpx
+      timeout: 10
       name: probe-subs
       with:
         target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
@@ -224,6 +227,7 @@ jobs:
         done | tee /tmp/whatweb-output.txt
       continue-on-error: true
     - task: wafw00f
+      timeout: 10
       name: waf-detect
       with:
         target: '{{ inputs.target }}'
@@ -279,6 +283,7 @@ jobs:
         depth: 2
       continue-on-error: true
     - task: gau
+      timeout: 10
       name: gau-archive
       with:
         target: '{{ inputs.target }}'
@@ -366,12 +371,14 @@ jobs:
     - web-crawl
     steps:
     - task: trufflehog
+      timeout: 15
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
       continue-on-error: true
     - task: gitleaks
+      timeout: 15
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
@@ -498,6 +505,7 @@ jobs:
 
         print(f"Harvested {len(emails)} email addresses")
     - task: h8mail
+      timeout: 15
       name: breach-search
       with:
         target: '{{ steps["collect-emails"].outputs.email_file if steps["collect-emails"].outputs is defined else inputs.target }}'

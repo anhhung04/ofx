@@ -23,6 +23,7 @@ jobs:
       live_count: '${{ steps.collect-cache-urls.outputs.live_count }}'
     steps:
       - task: httpx
+        timeout: 10
         name: probe-targets
         with:
           target: '{{ inputs.target }}'

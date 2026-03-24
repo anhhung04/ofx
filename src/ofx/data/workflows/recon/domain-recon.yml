@@ -32,12 +32,14 @@ jobs:
       cidrs_file: '{{ steps.export-osint.outputs.cidrs_file }}'
     steps:
       - task: whois
+        timeout: 5
         name: whois-lookup
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: theharvester
+        timeout: 15
         name: email-harvest
         with:
           target: '{{ inputs.target }}'
@@ -46,12 +48,14 @@ jobs:
         continue-on-error: true
 
       - task: gitleaks
+        timeout: 15
         name: gitleaks-scan
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: asnmap
+        timeout: 5
         name: asn-enum
         with:
           target: '{{ inputs.target }}'
@@ -88,6 +92,7 @@ jobs:
       dns_subdomain_count: '{{ steps.export-dns.outputs.dns_subdomain_count }}'
     steps:
       - task: dnsx
+        timeout: 10
         name: dns-resolve
         with:
           target: '{{ inputs.target }}'
@@ -102,6 +107,7 @@ jobs:
         continue-on-error: true
 
       - task: dnsrecon
+        timeout: 10
         name: dnsrecon-scan
         with:
           target: '{{ inputs.target }}'
@@ -137,18 +143,21 @@ jobs:
         continue-on-error: true
 
       - task: csprecon
+        timeout: 5
         name: csp-subdomains
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: gau
+        timeout: 10
         name: gau-passive
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: urlfinder
+        timeout: 10
         name: urlfinder-passive
         with:
           target: '{{ inputs.target }}'
@@ -223,6 +232,7 @@ jobs:
       - subdomain-enum
     steps:
       - task: dnsx
+        timeout: 10
         name: dns-resolve-all
         with:
           target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
@@ -232,6 +242,7 @@ jobs:
         continue-on-error: true
 
       - task: tlsx
+        timeout: 5
         name: tls-san-discovery
         with:
           target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
@@ -239,6 +250,7 @@ jobs:
         continue-on-error: true
 
       - task: cdncheck
+        timeout: 5
         name: cdn-detect
         with:
           target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
@@ -285,6 +297,7 @@ jobs:
       - dns-verify
     steps:
       - task: httpx
+        timeout: 10
         name: http-probe
         with:
           target: '{{ jobs[''dns-verify''].outputs.verified_file }}'
@@ -295,18 +308,21 @@ jobs:
         continue-on-error: true
 
       - task: wafw00f
+        timeout: 10
         name: waf-detect
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: whatweb
+        timeout: 10
         name: whatweb-fingerprint
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: favirecon
+        timeout: 5
         name: favicon-detect
         with:
           target: '{{ jobs[''dns-verify''].outputs.verified_file }}'
@@ -351,6 +367,7 @@ jobs:
         continue-on-error: true
 
       - task: sslscan
+        timeout: 5
         name: sslscan-check
         with:
           target: '{{ inputs.target }}'
@@ -358,6 +375,7 @@ jobs:
         continue-on-error: true
 
       - task: tlsx
+        timeout: 5
         name: tlsx-cert-analysis
         with:
           target: '{{ inputs.target }}'
@@ -407,12 +425,14 @@ jobs:
         continue-on-error: true
 
       - task: waymore
+        timeout: 10
         name: waymore-archive
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: paramspider
+        timeout: 10
         name: paramspider-extract
         with:
           target: '{{ inputs.target }}'
@@ -510,12 +530,14 @@ jobs:
       - url-collection
     steps:
       - task: trufflehog
+        timeout: 15
         name: trufflehog-scan
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: gitleaks
+        timeout: 15
         name: gitleaks-deep
         with:
           target: '{{ inputs.target }}'
@@ -547,6 +569,7 @@ jobs:
     steps:
       - task: dnstake
         name: dnstake-scan
+        timeout: 5
         with:
           target: '{{ jobs[''dns-verify''].outputs.verified_file }}'
         continue-on-error: true
@@ -560,6 +583,7 @@ jobs:
         continue-on-error: true
 
       - task: subzy
+        timeout: 5
         name: subzy-scan
         with:
           target: '{{ jobs[''dns-verify''].outputs.verified_file }}'

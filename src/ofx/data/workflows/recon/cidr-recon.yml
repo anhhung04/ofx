@@ -24,12 +24,14 @@ jobs:
       host_count: '{{ steps.collect-hosts.outputs.host_count }}'
     steps:
     - task: mapcidr
+      timeout: 5
       name: expand-cidr
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: fping
       name: fping-discovery
+      timeout: 5
       with:
         target: '{{ inputs.target }}'
         generate: true
@@ -96,6 +98,7 @@ jobs:
         version_detection: true
       continue-on-error: true
     - task: httpx
+      timeout: 10
       name: http-probe
       with:
         target: '{{ jobs[''host-discovery''].outputs.live_hosts }}'
@@ -108,6 +111,7 @@ jobs:
     - service-scan
     steps:
     - task: searchsploit
+      timeout: 5
       name: exploit-search
       with:
         target: '{{ inputs.target }}'

@@ -36,6 +36,7 @@ jobs:
         depth: 2
       continue-on-error: true
     - task: gau
+      timeout: 10
       name: gau-passive
       with:
         target: '{{ inputs.target }}'
@@ -70,6 +71,7 @@ jobs:
       live_count: '${{ steps.export-live.outputs.live_count }}'
     steps:
     - task: httpx
+      timeout: 10
       name: probe-urls
       with:
         target: '{{ jobs.crawl.outputs.crawled_file }}'
@@ -87,12 +89,14 @@ jobs:
     - probe
     steps:
     - task: trufflehog
+      timeout: 15
       name: hunt-secrets
       with:
         target: '{{ inputs.target }}'
         mode: filesystem
       continue-on-error: true
     - task: cariddi
+      timeout: 10
       name: cariddi-crawl
       with:
         target: '{{ inputs.target }}'

@@ -31,6 +31,7 @@ jobs:
       continue-on-error: true
     - task: gau
       name: gau-urls
+      timeout: 10
       with:
         target: '{{ inputs.target }}'
         subs: true
@@ -42,6 +43,7 @@ jobs:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: assetfinder
+      timeout: 10
       name: assetfinder-enum
       with:
         target: '{{ inputs.target }}'
@@ -89,6 +91,7 @@ jobs:
     - passive-enum
     steps:
     - task: dnsx
+      timeout: 10
       name: verify-dns
       with:
         target: '{{ jobs[''passive-enum''].outputs.subdomain_file }}'
@@ -104,6 +107,7 @@ jobs:
     - dns-verification
     steps:
     - task: httpx
+      timeout: 10
       name: probe-subdomains
       with:
         target: '{{ jobs[''passive-enum''].outputs.subdomain_file }}'

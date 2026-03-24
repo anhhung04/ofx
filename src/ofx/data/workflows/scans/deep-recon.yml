@@ -31,12 +31,14 @@ jobs:
       osint_user_count: '{{ steps.export-osint.outputs.osint_user_count }}'
     steps:
       - task: whois
+        timeout: 5
         name: whois-lookup
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: theharvester
+        timeout: 15
         name: theharvester-enum
         with:
           target: '{{ inputs.target }}'
@@ -45,6 +47,7 @@ jobs:
         continue-on-error: true
 
       - task: gitleaks
+        timeout: 15
         name: gitleaks-scan
         with:
           target: '{{ inputs.target }}'
@@ -78,6 +81,7 @@ jobs:
         continue-on-error: true
 
       - task: gau
+        timeout: 10
         name: gau-passive
         with:
           target: '{{ inputs.target }}'
@@ -99,6 +103,7 @@ jobs:
         continue-on-error: true
 
       - task: urlfinder
+        timeout: 10
         name: urlfinder-passive
         with:
           target: '{{ inputs.target }}'
@@ -106,6 +111,7 @@ jobs:
         continue-on-error: true
 
       - task: csprecon
+        timeout: 5
         name: csprecon-enum
         with:
           target: '{{ inputs.target }}'
@@ -182,6 +188,7 @@ jobs:
       asn_ip_count: '{{ steps.merge-active.outputs.asn_ip_count }}'
     steps:
       - task: dnsx
+        timeout: 10
         name: dns-resolve
         with:
           target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
@@ -192,6 +199,7 @@ jobs:
         continue-on-error: true
 
       - task: tlsx
+        timeout: 5
         name: tlsx-san
         with:
           target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
@@ -199,6 +207,7 @@ jobs:
         continue-on-error: true
 
       - task: puredns
+        timeout: 10
         name: puredns-resolve
         with:
           target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
@@ -206,12 +215,14 @@ jobs:
         continue-on-error: true
 
       - task: asnmap
+        timeout: 5
         name: asnmap-enum
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: gotator
+        timeout: 10
         name: gotator-permute
         with:
           target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
@@ -289,6 +300,7 @@ jobs:
       favicon_count: '{{ steps.export-live.outputs.favicon_count }}'
     steps:
       - task: httpx
+        timeout: 10
         name: http-probe
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
@@ -299,18 +311,21 @@ jobs:
         continue-on-error: true
 
       - task: wafw00f
+        timeout: 10
         name: waf-detect
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: cdncheck
+        timeout: 5
         name: cdn-detect
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
         continue-on-error: true
 
       - task: favirecon
+        timeout: 5
         name: favicon-detect
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'
@@ -375,6 +390,7 @@ jobs:
         continue-on-error: true
 
       - task: paramspider
+        timeout: 10
         name: paramspider-extract
         with:
           target: '{{ inputs.target }}'
@@ -391,6 +407,7 @@ jobs:
         continue-on-error: true
 
       - task: jsluice
+        timeout: 10
         name: jsluice-scan
         with:
           target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
@@ -563,6 +580,7 @@ jobs:
         continue-on-error: true
 
       - task: dnstake
+        timeout: 5
         name: dnstake-scan
         with:
           target: '{{ jobs[''active-enum''].outputs.verified_file }}'

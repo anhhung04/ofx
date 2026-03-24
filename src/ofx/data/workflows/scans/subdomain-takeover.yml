@@ -28,6 +28,7 @@ jobs:
         continue-on-error: true
       - task: findomain
         name: findomain-enum
+        timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
@@ -38,11 +39,13 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
+        timeout: 10
         name: assetfinder-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gau
+        timeout: 10
         name: gau-subs
         with:
           target: "{{ inputs.target }}"
@@ -87,6 +90,7 @@ jobs:
       dangling_file: '{{ steps.analyze-cnames.outputs.dangling_file }}'
     steps:
       - task: dnsx
+        timeout: 10
         name: dns-resolve
         with:
           target: "{{ jobs.enum.outputs.subs_file }}"
@@ -165,6 +169,7 @@ jobs:
     steps:
       - task: subzy
         name: subzy-check
+        timeout: 5
         with:
           target: /tmp/alive-subs.txt
           concurrency: 20
@@ -205,12 +210,14 @@ jobs:
       - dns-verify
     steps:
       - task: gowitness
+        timeout: 10
         name: gowitness-capture
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
           threads: 10
         continue-on-error: true
       - task: httpx
+        timeout: 10
         name: http-fingerprint
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"

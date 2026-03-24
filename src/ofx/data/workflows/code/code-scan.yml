@@ -22,11 +22,13 @@ jobs:
       critical_count: '{{ steps.export-vulns.outputs.critical_count }}'
     steps:
     - task: grype
+      timeout: 15
       name: dependency-vulns
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trivy
+      timeout: 15
       name: code-vulns
       with:
         target: '{{ inputs.target }}'
@@ -58,11 +60,13 @@ jobs:
       secrets_count: '{{ steps.export-secrets.outputs.secrets_count }}'
     steps:
     - task: gitleaks
+      timeout: 15
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trufflehog
+      timeout: 15
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'

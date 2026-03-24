@@ -59,11 +59,13 @@ jobs:
     name: Dependency Vulnerability Scan
     steps:
     - task: grype
+      timeout: 15
       name: grype-scan
       with:
         target: 'dir:{{ inputs.target }}'
       continue-on-error: true
     - task: trivy
+      timeout: 15
       name: trivy-fs
       with:
         target: '{{ inputs.target }}'
@@ -73,11 +75,13 @@ jobs:
     name: Secret Detection in Dependencies
     steps:
     - task: gitleaks
+      timeout: 15
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trufflehog
+      timeout: 15
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'

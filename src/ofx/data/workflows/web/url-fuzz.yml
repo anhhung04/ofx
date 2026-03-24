@@ -70,6 +70,7 @@ jobs:
     - fuzz
     steps:
     - task: httpx
+      timeout: 10
       name: probe-fuzzed
       with:
         target: '{{ jobs.fuzz.outputs.fuzzed_file }}'
@@ -83,6 +84,7 @@ jobs:
     - probe
     steps:
     - task: trufflehog
+      timeout: 15
       name: hunt-secrets
       with:
         target: '{{ inputs.target }}'

@@ -42,6 +42,7 @@ jobs:
     if: "{{ 'smb' in inputs.protocols }}"
     steps:
     - task: netexec
+      timeout: 15
       name: nxc-smb-test
       with:
         target: '{{ inputs.targets_file }}'
@@ -86,6 +87,7 @@ jobs:
     if: "{{ 'winrm' in inputs.protocols }}"
     steps:
     - task: netexec
+      timeout: 15
       name: nxc-winrm-test
       with:
         target: '{{ inputs.targets_file }}'
@@ -123,6 +125,7 @@ jobs:
     if: "{{ 'ssh' in inputs.protocols }}"
     steps:
     - task: netexec
+      timeout: 15
       name: nxc-ssh-test
       with:
         target: '{{ inputs.targets_file }}'

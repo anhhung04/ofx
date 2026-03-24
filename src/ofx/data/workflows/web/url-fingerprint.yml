@@ -24,6 +24,7 @@ jobs:
       webserver: '${{ steps.export-probe.outputs.webserver }}'
     steps:
     - task: httpx
+      timeout: 10
       name: http-probe
       with:
         target: '{{ inputs.target }}'
@@ -78,6 +79,7 @@ jobs:
       waf_count: '${{ steps.export-waf.outputs.waf_count }}'
     steps:
     - task: wafw00f
+      timeout: 10
       name: wafw00f-scan
       with:
         target: '{{ inputs.target }}'

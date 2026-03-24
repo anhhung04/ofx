@@ -58,6 +58,7 @@ jobs:
     - service-detection
     steps:
     - task: ssh-audit
+      timeout: 10
       name: audit-ssh
       with:
         target: '{{ inputs.target }}'
@@ -68,6 +69,7 @@ jobs:
     - service-detection
     steps:
     - task: httpx
+      timeout: 10
       name: probe-http
       with:
         target: '{{ inputs.target }}'
@@ -76,11 +78,13 @@ jobs:
         title: true
       continue-on-error: true
     - task: searchsploit
+      timeout: 5
       name: search-exploits
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: whatweb
+      timeout: 10
       name: whatweb-fingerprint
       with:
         target: '{{ inputs.target }}'

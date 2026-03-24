@@ -22,6 +22,7 @@ jobs:
     steps:
     - task: whois
       name: whois-lookup
+      timeout: 5
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
@@ -33,6 +34,7 @@ jobs:
         all: true
       continue-on-error: true
     - task: dnsx
+      timeout: 10
       name: dns-records
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -51,6 +53,7 @@ jobs:
       email_count: '{{ steps.collect-emails.outputs.email_count }}'
     steps:
     - task: theharvester
+      timeout: 15
       name: theharvester-scan
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -58,6 +61,7 @@ jobs:
         limit: 500
       continue-on-error: true
     - task: holehe
+      timeout: 10
       name: email-existence
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -90,6 +94,7 @@ jobs:
     needs: [domain-intel]
     steps:
     - task: httpx
+      timeout: 10
       name: http-tech
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -99,6 +104,7 @@ jobs:
         follow_redirects: true
       continue-on-error: true
     - task: wafw00f
+      timeout: 10
       name: waf-detect
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -110,6 +116,7 @@ jobs:
       typed_outputs: '{{ steps.breach-lookup.outputs.typed_outputs }}'
     steps:
     - task: h8mail
+      timeout: 15
       name: breach-lookup
       with:
         target: '{{ inputs.domain or inputs.target }}'

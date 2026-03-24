@@ -31,6 +31,7 @@ jobs:
     name: SSH Audit
     steps:
     - task: sshaudit
+      timeout: 10
       name: ssh-audit
       with:
         target: '{{ inputs.target }}'

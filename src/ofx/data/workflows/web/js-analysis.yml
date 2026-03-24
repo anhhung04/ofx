@@ -35,6 +35,7 @@ jobs:
         continue-on-error: true
 
       - task: httpx
+        timeout: 10
         name: httpx-probe
         with:
           target: '{{ inputs.target }}'
@@ -43,6 +44,7 @@ jobs:
         continue-on-error: true
 
       - task: gau
+        timeout: 10
         name: gau-archive
         with:
           target: '{{ inputs.target }}'
@@ -107,12 +109,14 @@ jobs:
         continue-on-error: true
 
       - task: trufflehog
+        timeout: 15
         name: trufflehog-scan
         with:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: gitleaks
+        timeout: 15
         name: gitleaks-scan
         with:
           target: '{{ inputs.target }}'

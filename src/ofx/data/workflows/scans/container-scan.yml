@@ -16,11 +16,13 @@ jobs:
     name: Vulnerability Scanning
     steps:
     - task: trivy
+      timeout: 15
       name: trivy-image
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: grype
+      timeout: 15
       name: grype-image
       with:
         target: '{{ inputs.target }}'
