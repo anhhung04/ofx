@@ -326,41 +326,52 @@ jobs:
         log-stdout: true
       - name: export-to-project
         script: |
-          import json, os
+          import shutil
           from pathlib import Path
 
           project = '{{ vars.project_path | default("", true) }}'
           if not project:
               print('No --project set, skipping file export')
           else:
-              p = Path(project)
 
               # directories
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              src = '{{ jobs[''dir-brute''].outputs.dir_urls_file | default('', true) }}'
+              d = '{{ vars.project_web }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['dir-brute'].outputs.dir_urls_file | default('', true) }}'''
               if src and Path(src).is_file():
-                  import shutil
-                  shutil.copy2(src, d / 'directories.txt')
-                  print(f'  [+] scans/directories.txt')
+                  shutil.copy2(src, Path(d) / 'directories.txt')
+                  print('  [+] web/directories.txt')
 
               # crawled URLs
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              src = '{{ jobs.crawl.outputs.crawled_file | default('', true) }}'
+              d = '{{ vars.project_web }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['crawl'].outputs.crawled_file | default('', true) }}'''
               if src and Path(src).is_file():
-                  import shutil
-                  shutil.copy2(src, d / 'crawled-urls.txt')
-                  print(f'  [+] scans/crawled-urls.txt')
+                  shutil.copy2(src, Path(d) / 'crawled-urls.txt')
+                  print('  [+] web/crawled-urls.txt')
 
               # param URLs
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              src = '{{ jobs[''param-fuzz''].outputs.param_file | default('', true) }}'
+              d = '{{ vars.project_web }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['param-fuzz'].outputs.param_file | default('', true) }}'''
               if src and Path(src).is_file():
-                  import shutil
-                  shutil.copy2(src, d / 'param-urls.txt')
-                  print(f'  [+] scans/param-urls.txt (copied from {src})')
+                  shutil.copy2(src, Path(d) / 'param-urls.txt')
+                  print('  [+] web/param-urls.txt')
+
+              # Auto-export typed outputs
+              all_typed = []
+              for typed in [
+                  {{ jobs['fingerprint'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['dir-brute'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['crawl'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['param-fuzz'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['secrets'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
               print(f'Project export complete: {project}')
         continue-on-error: true

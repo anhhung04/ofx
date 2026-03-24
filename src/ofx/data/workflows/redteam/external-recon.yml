@@ -530,67 +530,81 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # subdomains
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '{{ jobs["subdomain-enum"].outputs.subs_file | default("", true) }}'
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'subdomains.txt')
-                print(f'  [+] scans/subdomains.txt')
+            d = '{{ vars.project_subdomains }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['subdomain-enum'].outputs.subs_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'subdomains.txt')
+                print('  [+] subdomains/subdomains.txt')
 
             # alive subs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            af = '{{ jobs["dns-verify"].outputs.alive_file | default("", true) }}'
-            if af:
-                import shutil
-                shutil.copy2(af, d / 'alive-subs.txt')
-                print(f'  [+] scans/alive-subs.txt')
+            d = '{{ vars.project_subdomains }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'alive-subs.txt')
+                print('  [+] subdomains/alive-subs.txt')
 
             # open ports
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['port-scan'].outputs.ports_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'open-ports.txt')
-                print(f'  [+] scans/open-ports.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['port-scan'].outputs.ports_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'open-ports.txt')
+                print('  [+] hosts/open-ports.txt')
 
             # HTTP URLs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
+            d = '{{ vars.project_web }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
             data = '''{{ jobs['http-probe'].outputs.live_urls | default('', true) }}'''.strip()
             if data:
-                (d / 'http-urls.txt').write_text(data)
-                print(f'  [+] scans/http-urls.txt ({len(data.splitlines())} lines)')
+                (Path(d) / 'http-urls.txt').write_text(data)
+                print(f'  [+] web/http-urls.txt ({len(data.splitlines())} lines)')
 
             # crawled URLs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['web-crawl'].outputs.crawled_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'crawled-urls.txt')
-                print(f'  [+] scans/crawled-urls.txt')
+            d = '{{ vars.project_web }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['web-crawl'].outputs.crawled_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'crawled-urls.txt')
+                print('  [+] web/crawled-urls.txt')
 
             # emails
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs.osint.outputs.email_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'emails.txt')
-                print(f'  [+] evidence/data/emails.txt')
+            d = '{{ vars.project_osint }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['osint'].outputs.email_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'emails.txt')
+                print('  [+] osint/emails.txt')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['domain-intel'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['subdomain-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['dns-verify'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['port-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['web-fingerprint'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['web-crawl'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['takeover-check'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['secret-hunt'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['osint'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

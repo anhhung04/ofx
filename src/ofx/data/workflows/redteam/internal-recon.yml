@@ -266,59 +266,67 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # alive hosts
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            af = '{{ jobs["host-discovery"].outputs.alive_file | default("", true) }}'
-            if af:
-                import shutil
-                shutil.copy2(af, d / 'alive-hosts.txt')
-                print(f'  [+] scans/alive-hosts.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['host-discovery'].outputs.alive_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'alive-hosts.txt')
+                print('  [+] hosts/alive-hosts.txt')
 
             # open ports
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['port-scan'].outputs.ports_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'open-ports.txt')
-                print(f'  [+] scans/open-ports.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['port-scan'].outputs.ports_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'open-ports.txt')
+                print('  [+] hosts/open-ports.txt')
 
             # HTTP URLs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['service-detect'].outputs.http_urls_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'http-urls.txt')
-                print(f'  [+] scans/http-urls.txt')
+            d = '{{ vars.project_web }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['service-detect'].outputs.http_urls_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'http-urls.txt')
+                print('  [+] web/http-urls.txt')
 
             # AD domains
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['ad-detect'].outputs.ad_domains_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'ad-domains.txt')
-                print(f'  [+] evidence/data/ad-domains.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['ad-detect'].outputs.ad_domains_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'ad-domains.txt')
+                print('  [+] hosts/ad-domains.txt')
 
-            # DCs
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['ad-detect'].outputs.dcs_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'domain-controllers.txt')
-                print(f'  [+] evidence/data/domain-controllers.txt')
+            # domain controllers
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['ad-detect'].outputs.dcs_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'domain-controllers.txt')
+                print('  [+] hosts/domain-controllers.txt')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['host-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['port-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['service-detect'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['web-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['ad-detect'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

@@ -98,22 +98,33 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # subdomains
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
+            d = '{{ vars.project_subdomains }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
             data = '''{{ jobs['dns-enum'].outputs.subdomains | default('', true) }}'''.strip()
             if data:
-                (d / 'subdomains.txt').write_text(data)
-                print(f'  [+] scans/subdomains.txt ({len(data.splitlines())} lines)')
+                (Path(d) / 'subdomains.txt').write_text(data)
+                print(f'  [+] subdomains/subdomains.txt ({len(data.splitlines())} lines)')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['domain-info'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['http-analysis'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['dns-enum'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

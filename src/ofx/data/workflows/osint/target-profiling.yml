@@ -225,30 +225,44 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # emails
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
+            d = '{{ vars.project_osint }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
             data = '''{{ jobs['email-harvest'].outputs.emails | default('', true) }}'''.strip()
             if data:
-                (d / 'emails.txt').write_text(data)
-                print(f'  [+] evidence/data/emails.txt ({len(data.splitlines())} lines)')
+                (Path(d) / 'emails.txt').write_text(data)
+                print(f'  [+] osint/emails.txt ({len(data.splitlines())} lines)')
 
             # social platforms
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
+            d = '{{ vars.project_osint }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
             data = '''{{ jobs['social-recon'].outputs.platforms | default('', true) }}'''.strip()
             if data:
-                (d / 'social-platforms.txt').write_text(data)
-                print(f'  [+] evidence/data/social-platforms.txt ({len(data.splitlines())} lines)')
+                (Path(d) / 'social-platforms.txt').write_text(data)
+                print(f'  [+] osint/social-platforms.txt ({len(data.splitlines())} lines)')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['domain-intel'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['email-harvest'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['account-check'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['social-recon'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['breach-search'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['secret-scan'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

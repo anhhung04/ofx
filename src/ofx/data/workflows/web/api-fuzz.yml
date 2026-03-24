@@ -210,32 +210,42 @@ jobs:
         log-stdout: true
       - name: export-to-project
         script: |
-          import json, os
+          import shutil
           from pathlib import Path
 
           project = '{{ vars.project_path | default("", true) }}'
           if not project:
               print('No --project set, skipping file export')
           else:
-              p = Path(project)
 
               # API endpoints
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              ef = '{{ jobs["endpoint-discovery"].outputs.endpoints_file | default("", true) }}'
-              if ef:
-                  import shutil
-                  shutil.copy2(ef, d / 'api-endpoints.txt')
-                  print(f'  [+] scans/api-endpoints.txt')
+              d = '{{ vars.project_web }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['endpoint-discovery'].outputs.endpoints_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'api-endpoints.txt')
+                  print('  [+] web/api-endpoints.txt')
 
               # param URLs
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              pf = '{{ jobs["param-discovery"].outputs.param_file | default("", true) }}'
-              if pf:
-                  import shutil
-                  shutil.copy2(pf, d / 'param-urls.txt')
-                  print(f'  [+] scans/param-urls.txt')
+              d = '{{ vars.project_web }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['param-discovery'].outputs.param_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'param-urls.txt')
+                  print('  [+] web/param-urls.txt')
+
+              # Auto-export typed outputs
+              all_typed = []
+              for typed in [
+                  {{ jobs['endpoint-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['param-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['injection-test'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['nuclei-scan'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
               print(f'Project export complete: {project}')
         continue-on-error: true

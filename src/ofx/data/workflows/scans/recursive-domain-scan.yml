@@ -288,28 +288,44 @@ jobs:
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-
-            src = '{{ jobs[''subdomain-discovery''].outputs.subs_file | default('''', true) }}'
+            # subdomains
+            d = '{{ vars.project_subdomains }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['subdomain-discovery'].outputs.subs_file | default('', true) }}'''
             if src and Path(src).is_file():
-                shutil.copy2(src, d / 'subdomains.txt')
+                shutil.copy2(src, Path(d) / 'subdomains.txt')
                 count = len(Path(src).read_text().strip().splitlines())
-                print(f'  [+] scans/subdomains.txt ({count} entries)')
+                print(f'  [+] subdomains/subdomains.txt ({count} entries)')
 
-            src = '{{ jobs[''bulk-recon''].outputs.alive_file | default('''', true) }}'
+            # alive hosts
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['bulk-recon'].outputs.alive_file | default('', true) }}'''
             if src and Path(src).is_file():
-                shutil.copy2(src, d / 'alive-hosts.txt')
+                shutil.copy2(src, Path(d) / 'alive-hosts.txt')
                 count = len(Path(src).read_text().strip().splitlines())
-                print(f'  [+] scans/alive-hosts.txt ({count} entries)')
+                print(f'  [+] hosts/alive-hosts.txt ({count} entries)')
 
-            src = '{{ jobs[''bulk-recon''].outputs.live_urls_file | default('''', true) }}'
+            # live URLs
+            d = '{{ vars.project_web }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['bulk-recon'].outputs.live_urls_file | default('', true) }}'''
             if src and Path(src).is_file():
-                shutil.copy2(src, d / 'live-urls.txt')
+                shutil.copy2(src, Path(d) / 'live-urls.txt')
                 count = len(Path(src).read_text().strip().splitlines())
-                print(f'  [+] scans/live-urls.txt ({count} entries)')
+                print(f'  [+] web/live-urls.txt ({count} entries)')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['subdomain-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['bulk-recon'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

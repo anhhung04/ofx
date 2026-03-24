@@ -364,48 +364,62 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # AD users
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs.enum.outputs.users_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'ad-users.txt')
-                print(f'  [+] scans/ad-users.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['enum'].outputs.users_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'ad-users.txt')
+                print('  [+] hosts/ad-users.txt')
 
             # spray hits
-            d = p / 'evidence/creds'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['targeted-spray'].outputs.valid_users_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'spray-valid.txt')
-                print(f'  [+] evidence/creds/spray-valid.txt')
+            d = '{{ vars.project_evidence }}'
+            sub = Path(d) / 'creds'
+            sub.mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['targeted-spray'].outputs.valid_users_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, sub / 'spray-valid.txt')
+                print('  [+] evidence/creds/spray-valid.txt')
 
             # kerberoastable SPNs
-            d = p / 'evidence/creds'
-            d.mkdir(parents=True, exist_ok=True)
-            data = '''{{ jobs.kerberoast.outputs.spn_count | default('', true) }}'''.strip()
+            d = '{{ vars.project_evidence }}'
+            sub = Path(d) / 'creds'
+            sub.mkdir(parents=True, exist_ok=True)
+            data = '''{{ jobs['kerberoast'].outputs.spn_count | default('', true) }}'''.strip()
             if data:
-                (d / 'kerberoast-spns.txt').write_text(data)
+                (sub / 'kerberoast-spns.txt').write_text(data)
                 print(f'  [+] evidence/creds/kerberoast-spns.txt ({len(data.splitlines())} lines)')
 
             # AS-REP roastable
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
+            d = '{{ vars.project_vulns }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
             data = '''{{ jobs['asrep-roast'].outputs.asrep_count | default('', true) }}'''.strip()
             if data:
-                (d / 'asrep-users.txt').write_text(data)
-                print(f'  [+] evidence/data/asrep-users.txt ({len(data.splitlines())} lines)')
+                (Path(d) / 'asrep-users.txt').write_text(data)
+                print(f'  [+] vulns/asrep-users.txt ({len(data.splitlines())} lines)')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['enum'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['kerberoast'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['asrep-roast'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['targeted-spray'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['credential-dump'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['relay-detect'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

@@ -175,40 +175,48 @@ jobs:
         log-stdout: true
       - name: export-to-project
         script: |
-          import json, os
+          import shutil
           from pathlib import Path
 
           project = '{{ vars.project_path | default("", true) }}'
           if not project:
               print('No --project set, skipping file export')
           else:
-              p = Path(project)
 
               # merged port list
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
+              d = '{{ vars.project_hosts }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
               data = '''{{ jobs['fast-scan'].outputs.merged_ports | default('', true) }}'''.strip()
               if data:
-                  (d / 'ports.txt').write_text(data)
-                  print(f'  [+] scans/ports.txt ({len(data.splitlines())} lines)')
+                  (Path(d) / 'ports.txt').write_text(data)
+                  print(f'  [+] hosts/ports.txt ({len(data.splitlines())} lines)')
 
               # target hosts
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              src = '{{ jobs[''fast-scan''].outputs.hosts_file | default('', true) }}'
+              d = '{{ vars.project_hosts }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['fast-scan'].outputs.hosts_file | default('', true) }}'''
               if src and Path(src).is_file():
-                  import shutil
-                  shutil.copy2(src, d / 'hosts.txt')
-                  print(f'  [+] scans/hosts.txt')
+                  shutil.copy2(src, Path(d) / 'hosts.txt')
+                  print('  [+] hosts/hosts.txt')
 
               # HTTP services
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              src = '{{ jobs[''service-detect''].outputs.live_urls_file | default('', true) }}'
+              d = '{{ vars.project_web }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['service-detect'].outputs.live_urls_file | default('', true) }}'''
               if src and Path(src).is_file():
-                  import shutil
-                  shutil.copy2(src, d / 'http-urls.txt')
-                  print(f'  [+] scans/http-urls.txt')
+                  shutil.copy2(src, Path(d) / 'http-urls.txt')
+                  print('  [+] web/http-urls.txt')
+
+              # Auto-export typed outputs
+              all_typed = []
+              for typed in [
+                  {{ jobs['fast-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['service-detect'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
               print(f'Project export complete: {project}')
         continue-on-error: true

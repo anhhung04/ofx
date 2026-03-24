@@ -331,40 +331,53 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # subdomains
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '{{ jobs["subdomain-enum"].outputs.subs_file | default("", true) }}'
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'subdomains.txt')
-                print(f'  [+] scans/subdomains.txt')
+            d = '{{ vars.project_subdomains }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['subdomain-enum'].outputs.subs_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'subdomains.txt')
+                print('  [+] subdomains/subdomains.txt')
 
             # alive subs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
             data = '''{{ jobs['dns-verify'].outputs.alive_subs | default('', true) }}'''.strip()
             if data:
-                (d / 'alive-subs.txt').write_text(data)
-                print(f'  [+] scans/alive-subs.txt ({len(data.splitlines())} lines)')
+                (Path(d) / 'alive-subs.txt').write_text(data)
+                print(f'  [+] hosts/alive-subs.txt ({len(data.splitlines())} lines)')
 
             # ports
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            pf = '{{ jobs["port-scan"].outputs.ports_file | default("", true) }}'
-            if pf:
-                import shutil
-                shutil.copy2(pf, d / 'ports.txt')
-                print(f'  [+] scans/ports.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['port-scan'].outputs.ports_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'ports.txt')
+                print('  [+] hosts/ports.txt')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['subdomain-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['dns-resolve'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['port-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['web-crawl'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['fingerprint'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

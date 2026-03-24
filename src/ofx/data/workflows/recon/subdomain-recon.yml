@@ -132,31 +132,42 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |-
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # subdomains
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            src = '{{ jobs[\'passive-enum\'].outputs.subdomain_file | default(\'\', true) }}'
+            d = '{{ vars.project_subdomains }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['passive-enum'].outputs.subdomain_file | default('', true) }}'''
             if src and Path(src).is_file():
-                import shutil
-                shutil.copy2(src, d / 'subdomains.txt')
-                print(f'  [+] scans/subdomains.txt')
+                shutil.copy2(src, Path(d) / 'subdomains.txt')
+                print('  [+] subdomains/subdomains.txt')
 
             # alive subs
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
+            d = '{{ vars.project_subdomains }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
             data = '''{{ jobs['dns-verification'].outputs.alive_subs | default('', true) }}'''.strip()
             if data:
-                (d / 'alive-subs.txt').write_text(data)
-                print(f'  [+] scans/alive-subs.txt ({len(data.splitlines())} lines)')
+                (Path(d) / 'alive-subs.txt').write_text(data)
+                print(f'  [+] subdomains/alive-subs.txt ({len(data.splitlines())} lines)')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['passive-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['dns-verification'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['takeover-check'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true

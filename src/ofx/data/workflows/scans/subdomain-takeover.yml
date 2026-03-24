@@ -247,50 +247,58 @@ jobs:
         log-stdout: true
       - name: export-to-project
         script: |
-          import json, os
+          import shutil
           from pathlib import Path
 
           project = '{{ vars.project_path | default("", true) }}'
           if not project:
               print('No --project set, skipping file export')
           else:
-              p = Path(project)
 
               # all subdomains
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              sf = '{{ jobs.enum.outputs.subs_file | default("", true) }}'
-              if sf:
-                  import shutil
-                  shutil.copy2(sf, d / 'subdomains.txt')
-                  print(f'  [+] scans/subdomains.txt')
+              d = '{{ vars.project_subdomains }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['enum'].outputs.subs_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'subdomains.txt')
+                  print('  [+] subdomains/subdomains.txt')
 
               # alive subdomains
-              d = p / 'scans'
-              d.mkdir(parents=True, exist_ok=True)
-              af = '{{ jobs["dns-verify"].outputs.alive_file | default("", true) }}'
-              if af:
-                  import shutil
-                  shutil.copy2(af, d / 'alive-subs.txt')
-                  print(f'  [+] scans/alive-subs.txt')
+              d = '{{ vars.project_subdomains }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'alive-subs.txt')
+                  print('  [+] subdomains/alive-subs.txt')
 
               # dangling CNAMEs
-              d = p / 'evidence/data'
-              d.mkdir(parents=True, exist_ok=True)
-              df = '{{ jobs["dns-verify"].outputs.dangling_file | default("", true) }}'
-              if df:
-                  import shutil
-                  shutil.copy2(df, d / 'dangling-cnames.txt')
-                  print(f'  [+] evidence/data/dangling-cnames.txt')
+              d = '{{ vars.project_vulns }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['dns-verify'].outputs.dangling_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'dangling-cnames.txt')
+                  print('  [+] vulns/dangling-cnames.txt')
 
               # takeover vulns
-              d = p / 'evidence/data'
-              d.mkdir(parents=True, exist_ok=True)
-              tf = '{{ jobs["takeover-check"].outputs.takeover_details_file | default("", true) }}'
-              if tf:
-                  import shutil
-                  shutil.copy2(tf, d / 'takeover-details.txt')
-                  print(f'  [+] evidence/data/takeover-details.txt')
+              d = '{{ vars.project_vulns }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['takeover-check'].outputs.takeover_details_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'takeover-details.txt')
+                  print('  [+] vulns/takeover-details.txt')
+
+              # Auto-export typed outputs
+              all_typed = []
+              for typed in [
+                  {{ jobs['enum'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['dns-verify'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['takeover-check'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['screenshot'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
               print(f'Project export complete: {project}')
         continue-on-error: true

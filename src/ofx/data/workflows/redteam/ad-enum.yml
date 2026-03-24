@@ -242,50 +242,57 @@ jobs:
       log-stdout: true
     - name: export-to-project
       script: |
-        import json, os
+        import shutil
         from pathlib import Path
 
         project = '{{ vars.project_path | default("", true) }}'
         if not project:
             print('No --project set, skipping file export')
         else:
-            p = Path(project)
 
             # SMB users
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['smb-enum'].outputs.smb_users_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'ad-users-smb.txt')
-                print(f'  [+] scans/ad-users-smb.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['smb-enum'].outputs.smb_users_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'ad-users-smb.txt')
+                print('  [+] hosts/ad-users-smb.txt')
 
             # Kerberos users
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['kerberos-enum'].outputs.kerb_users_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'ad-users-kerb.txt')
-                print(f'  [+] scans/ad-users-kerb.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['kerberos-enum'].outputs.kerb_users_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'ad-users-kerb.txt')
+                print('  [+] hosts/ad-users-kerb.txt')
 
             # LDAP users
-            d = p / 'scans'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['ldap-enum'].outputs.ldap_users_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'ad-users-ldap.txt')
-                print(f'  [+] scans/ad-users-ldap.txt')
+            d = '{{ vars.project_hosts }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['ldap-enum'].outputs.ldap_users_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'ad-users-ldap.txt')
+                print('  [+] hosts/ad-users-ldap.txt')
 
             # AS-REP roastable
-            d = p / 'evidence/data'
-            d.mkdir(parents=True, exist_ok=True)
-            sf = '''{{ jobs['kerberos-enum'].outputs.asrep_users_file | default('', true) }}'''
-            if sf:
-                import shutil
-                shutil.copy2(sf, d / 'asrep-users.txt')
-                print(f'  [+] evidence/data/asrep-users.txt')
+            d = '{{ vars.project_vulns }}'
+            Path(d).mkdir(parents=True, exist_ok=True)
+            src = '''{{ jobs['kerberos-enum'].outputs.asrep_users_file | default('', true) }}'''
+            if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / 'asrep-users.txt')
+                print('  [+] vulns/asrep-users.txt')
+
+            # Auto-export typed outputs
+            all_typed = []
+            for typed in [
+                {{ jobs['smb-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['kerberos-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                {{ jobs['ldap-enum'].outputs.typed_outputs | default([], true) | tojson }},
+            ]:
+                all_typed.extend(typed)
+            summaries = export_typed_outputs(project, all_typed)
+            for s in summaries:
+                print(s)
 
             print(f'Project export complete: {project}')
       continue-on-error: true
