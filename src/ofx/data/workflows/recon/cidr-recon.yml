@@ -60,9 +60,9 @@ jobs:
 
         hosts = set()
 
-        nmap_out = {{ steps[2].outputs.typed_outputs | tojson }}
-        naabu_out = {{ steps[3].outputs.typed_outputs | tojson }}
-        masscan_out = {{ steps[4].outputs.typed_outputs | tojson }}
+        nmap_out = {{ steps["ping-sweep"].outputs.typed_outputs | tojson }}
+        naabu_out = {{ steps["port-scan"].outputs.typed_outputs | tojson }}
+        masscan_out = {{ steps["masscan-scan"].outputs.typed_outputs | tojson }}
 
         for item in nmap_out + naabu_out + masscan_out:
             if item.get('_type') == 'port':

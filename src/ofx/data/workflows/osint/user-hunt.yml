@@ -30,8 +30,8 @@ jobs:
       script: |
         import json
 
-        accounts = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-        urls = {{ urls(steps[0].outputs.typed_outputs) | tojson }}
+        accounts = {{ users(steps["maigret-search"].outputs.typed_outputs) | tojson }}
+        urls = {{ urls(steps["maigret-search"].outputs.typed_outputs) | tojson }}
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"accounts_found={len(accounts)}\n")
@@ -52,7 +52,7 @@ jobs:
       script: |
         import json
 
-        users_found = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        users_found = {{ users(steps["breach-search"].outputs.typed_outputs) | tojson }}
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"breaches_found={len(users_found)}\n")

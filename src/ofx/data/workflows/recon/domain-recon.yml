@@ -61,9 +61,9 @@ jobs:
         script: |
           import json
 
-          domains = {{ domains(steps[0].outputs.typed_outputs) | tojson }}
-          users = {{ users(steps[1].outputs.typed_outputs) | tojson }}
-          asn_ips = {{ ips(steps[3].outputs.typed_outputs) | tojson }}
+          domains = {{ domains(steps["whois-lookup"].outputs.typed_outputs) | tojson }}
+          users = {{ users(steps["email-harvest"].outputs.typed_outputs) | tojson }}
+          asn_ips = {{ ips(steps["asn-enum"].outputs.typed_outputs) | tojson }}
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
               f.write(f"domain_count={len(domains)}\n")
@@ -110,8 +110,8 @@ jobs:
 
       - name: export-dns
         script: |
-          records = {{ records(steps[0].outputs.typed_outputs) | tojson }}
-          subs = {{ subdomains(steps[0].outputs.typed_outputs) | tojson }}
+          records = {{ records(steps["dns-resolve"].outputs.typed_outputs) | tojson }}
+          subs = {{ subdomains(steps["dns-resolve"].outputs.typed_outputs) | tojson }}
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
               f.write(f"dns_record_count={len(records)}\n")
@@ -170,21 +170,21 @@ jobs:
           subs.add('{{ inputs.target }}')
 
           # From subfinder
-          for item in {{ subdomains(steps[0].outputs.typed_outputs) | tojson }}:
+          for item in {{ subdomains(steps.subfinder.outputs.typed_outputs) | tojson }}:
               subs.add(item['host'])
 
           # From CSP
-          for item in {{ subdomains(steps[1].outputs.typed_outputs) | tojson }}:
+          for item in {{ subdomains(steps["csp-subdomains"].outputs.typed_outputs) | tojson }}:
               subs.add(item['host'])
 
           # From gau — extract hosts
-          for item in {{ steps[2].outputs.typed_outputs | tojson }}:
+          for item in {{ steps["gau-passive"].outputs.typed_outputs | tojson }}:
               host = item.get('host', '')
               if host and '{{ inputs.target }}' in host:
                   subs.add(host)
 
           # From urlfinder
-          for item in {{ steps[3].outputs.typed_outputs | tojson }}:
+          for item in {{ steps["urlfinder-passive"].outputs.typed_outputs | tojson }}:
               host = item.get('host', '')
               if host and '{{ inputs.target }}' in host:
                   subs.add(host)
@@ -248,13 +248,13 @@ jobs:
           verified = set()
 
           # From dnsx resolved
-          for item in {{ steps[0].outputs.typed_outputs | tojson }}:
+          for item in {{ steps["dns-resolve-all"].outputs.typed_outputs | tojson }}:
               host = item.get('host', '')
               if host:
                   verified.add(host)
 
           # From TLS SANs — new subdomains
-          for item in {{ subdomains(steps[1].outputs.typed_outputs) | tojson }}:
+          for item in {{ subdomains(steps["tls-san-discovery"].outputs.typed_outputs) | tojson }}:
               host = item.get('host', '')
               if host and '{{ inputs.target }}' in host:
                   verified.add(host)
@@ -262,7 +262,7 @@ jobs:
           with open('/tmp/ofx_domrecon_verified.txt', 'w') as f:
               f.write('\n'.join(sorted(verified)))
 
-          cdn_tags = {{ tags(steps[2].outputs.typed_outputs) | tojson }}
+          cdn_tags = {{ tags(steps["cdn-detect"].outputs.typed_outputs) | tojson }}
           cdn_count = len([t for t in cdn_tags if t.get('category') in ('cdn', 'waf')])
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
@@ -314,15 +314,15 @@ jobs:
       - name: export-live
         script: |
           urls = set()
-          for item in {{ steps[0].outputs.typed_outputs | tojson }}:
+          for item in {{ steps["http-probe"].outputs.typed_outputs | tojson }}:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   urls.add(item['url'])
 
           with open('/tmp/ofx_domrecon_live.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))
 
-          waf_tags = {{ tags(steps[1].outputs.typed_outputs) | tojson }}
-          fav_tags = {{ tags(steps[3].outputs.typed_outputs) | tojson }}
+          waf_tags = {{ tags(steps["waf-detect"].outputs.typed_outputs) | tojson }}
+          fav_tags = {{ tags(steps["favicon-detect"].outputs.typed_outputs) | tojson }}
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
               f.write(f"live_file=/tmp/ofx_domrecon_live.txt\n")
@@ -366,9 +366,9 @@ jobs:
 
       - name: export-ssl
         script: |
-          certs = {{ steps[2].outputs.typed_outputs | tojson }}
+          certs = {{ steps["tlsx-cert-analysis"].outputs.typed_outputs | tojson }}
           cert_count = len([c for c in certs if c.get('_type') == 'certificate'])
-          vuln_count = len([v for v in {{ vulns(steps[0].outputs.typed_outputs) | tojson }}])
+          vuln_count = len([v for v in {{ vulns(steps["testssl-check"].outputs.typed_outputs) | tojson }}])
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
               f.write(f"ssl_cert_count={cert_count}\n")
@@ -429,7 +429,7 @@ jobs:
                               param_urls.add(url)
 
           # From paramspider
-          for item in {{ steps[3].outputs.typed_outputs | tojson }}:
+          for item in {{ steps["paramspider-extract"].outputs.typed_outputs | tojson }}:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
                   if url:
@@ -478,7 +478,7 @@ jobs:
         script: |
           ports = set()
           hosts = set()
-          for item in {{ ports(steps[0].outputs.typed_outputs) | tojson }}:
+          for item in {{ ports(steps["naabu-scan"].outputs.typed_outputs) | tojson }}:
               host = item.get('host') or item.get('ip', '')
               port = item.get('port', '')
               if host and port:
@@ -524,7 +524,7 @@ jobs:
 
       - name: export-secrets
         script: |
-          secret_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          secret_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
               f.write(f"secret_count={len(secret_vulns)}\n")
@@ -560,8 +560,8 @@ jobs:
 
       - name: export-takeover
         script: |
-          takeover_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          takeover_vulns = {{ vulns(steps["dnstake-scan"].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-takeover"].outputs.typed_outputs) | tojson }}
           all_takeover = takeover_vulns + nuclei_vulns
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
@@ -603,9 +603,9 @@ jobs:
 
       - name: export-vulns
         script: |
-          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          xss_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
-          nikto_vulns = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }}
+          xss_vulns = {{ vulns(steps["xss-scan"].outputs.typed_outputs) | tojson }}
+          nikto_vulns = {{ vulns(steps["nikto-scan"].outputs.typed_outputs) | tojson }}
 
           all_vulns = nuclei_vulns + xss_vulns + nikto_vulns
           critical = [v for v in all_vulns if v.get('severity') == 'critical']

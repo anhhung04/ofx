@@ -34,9 +34,9 @@ jobs:
       continue-on-error: true
     - name: export-probe
       run: |
-        echo "status={{ urls(steps[0].outputs.typed_outputs) | map(attribute='status_code') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
-        echo "title={{ urls(steps[0].outputs.typed_outputs) | map(attribute='title') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
-        echo "webserver={{ urls(steps[0].outputs.typed_outputs) | map(attribute='webserver') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
+        echo "status={{ urls(steps["http-probe"].outputs.typed_outputs) | map(attribute='status_code') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
+        echo "title={{ urls(steps["http-probe"].outputs.typed_outputs) | map(attribute='title') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
+        echo "webserver={{ urls(steps["http-probe"].outputs.typed_outputs) | map(attribute='webserver') | first | default('unknown', true) }}" >> $OFX_OUTPUTS
   fingerprint:
     name: Technology Fingerprinting
     outputs:
@@ -86,7 +86,7 @@ jobs:
       script: |
         import json
 
-        waf_results = {{ steps[0].outputs.typed_outputs | tojson }}
+        waf_results = {{ steps["wafw00f-scan"].outputs.typed_outputs | tojson }}
         waf_names = []
         for item in waf_results:
             if item.get('waf') or item.get('name'):

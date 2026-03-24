@@ -46,7 +46,7 @@ jobs:
         subs.add('{{ inputs.target }}')
 
         # From subfinder
-        sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+        sf_outputs = {{ steps["subfinder-scan"].outputs.typed_outputs | tojson }}
         for item in sf_outputs:
             if item.get('_type') == 'subdomain':
                 subs.add(item['host'])
@@ -89,7 +89,7 @@ jobs:
     - name: filter-alive
       script: |
         alive = set()
-        dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+        dnsx_out = {{ steps["verify-dns"].outputs.typed_outputs | tojson }}
         for item in dnsx_out:
             host = item.get('host', '')
             if host:
@@ -158,7 +158,7 @@ jobs:
       script: |
         ports = set()
         hosts = set()
-        naabu_out = {{ steps[0].outputs.typed_outputs | tojson }}
+        naabu_out = {{ steps["naabu-scan"].outputs.typed_outputs | tojson }}
         for item in naabu_out:
             if item.get('_type') == 'port':
                 host = item.get('host') or item.get('ip', '')
@@ -194,8 +194,8 @@ jobs:
       continue-on-error: true
     - name: export-live
       run: |
-        echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-        echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
+        echo "live_urls={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "live_count={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
   web-crawl:
     name: Web Crawling
     needs:
@@ -332,12 +332,12 @@ jobs:
       script: |
         import json
 
-        nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+        nuclei_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }}
         critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
         high = [v for v in nuclei_vulns if v.get('severity') == 'high']
         medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']
 
-        dalfox_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        dalfox_vulns = {{ vulns(steps["dalfox-xss"].outputs.typed_outputs) | tojson }}
 
         crlf_count = 0
         try:
@@ -379,8 +379,8 @@ jobs:
       continue-on-error: true
     - name: collect-secrets
       script: |
-        th_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        gl_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        th_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
+        gl_vulns = {{ vulns(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
         total = len(th_vulns) + len(gl_vulns)
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:

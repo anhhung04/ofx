@@ -55,7 +55,7 @@ jobs:
           all_urls = set()
 
           # From katana
-          katana_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          katana_out = {{ steps["katana-js-crawl"].outputs.typed_outputs | tojson }}
           for item in katana_out:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
@@ -65,7 +65,7 @@ jobs:
                           js_urls.add(url)
 
           # From gau
-          gau_out = {{ steps[2].outputs.typed_outputs | tojson }}
+          gau_out = {{ steps["gau-archive"].outputs.typed_outputs | tojson }}
           for item in gau_out:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
@@ -120,9 +120,9 @@ jobs:
         script: |
           import json
 
-          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          trufflehog_tags = {{ tags(steps[1].outputs.typed_outputs) | tojson }}
-          gitleaks_tags = {{ tags(steps[2].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-exposure"].outputs.typed_outputs) | tojson }}
+          trufflehog_tags = {{ tags(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
+          gitleaks_tags = {{ tags(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
 
           total_secrets = len(trufflehog_tags) + len(gitleaks_tags)
           total_vulns = len(nuclei_vulns)

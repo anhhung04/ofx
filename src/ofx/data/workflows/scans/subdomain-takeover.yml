@@ -94,7 +94,7 @@ jobs:
         continue-on-error: true
       - name: analyze-cnames
         script: |
-          records = {{ steps[0].outputs.typed_outputs | tojson }}
+          records = {{ steps["dns-resolve"].outputs.typed_outputs | tojson }}
 
           alive = set()
           cnames = {}
@@ -175,8 +175,8 @@ jobs:
         continue-on-error: true
       - name: collect-takeovers
         script: |
-          subzy_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          subzy_vulns = {{ vulns(steps["subzy-check"].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-takeover"].outputs.typed_outputs) | tojson }}
 
           takeovers = []
           for v in subzy_vulns + nuclei_vulns:

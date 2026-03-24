@@ -55,21 +55,21 @@ jobs:
           ports_by_host = {}
 
           # Merge from rustscan
-          for item in {{ ports(steps[0].outputs.typed_outputs) | tojson }}:
+          for item in {{ ports(steps["rustscan-sweep"].outputs.typed_outputs) | tojson }}:
               host = item.get('host') or item.get('ip', '')
               port = str(item.get('port', ''))
               if host and port:
                   ports_by_host.setdefault(host, set()).add(port)
 
           # Merge from naabu
-          for item in {{ ports(steps[1].outputs.typed_outputs) | tojson }}:
+          for item in {{ ports(steps["naabu-top"].outputs.typed_outputs) | tojson }}:
               host = item.get('host') or item.get('ip', '')
               port = str(item.get('port', ''))
               if host and port:
                   ports_by_host.setdefault(host, set()).add(port)
 
           # Merge from masscan
-          for item in {{ ports(steps[2].outputs.typed_outputs) | tojson }}:
+          for item in {{ ports(steps["masscan-top"].outputs.typed_outputs) | tojson }}:
               host = item.get('host') or item.get('ip', '')
               port = str(item.get('port', ''))
               if host and port:
@@ -131,10 +131,10 @@ jobs:
         continue-on-error: true
       - name: collect-services
         script: |
-          nmap_ports = {{ ports(steps[0].outputs.typed_outputs) | tojson }}
-          nmap_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          http_urls = {{ urls(steps[1].outputs.typed_outputs) | tojson }}
-          exploits = {{ steps[3].outputs.typed_outputs | tojson }}
+          nmap_ports = {{ ports(steps["nmap-version"].outputs.typed_outputs) | tojson }}
+          nmap_vulns = {{ vulns(steps["nmap-version"].outputs.typed_outputs) | tojson }}
+          http_urls = {{ urls(steps["http-probe"].outputs.typed_outputs) | tojson }}
+          exploits = {{ steps["exploit-lookup"].outputs.typed_outputs | tojson }}
 
           services = []
           for p in nmap_ports:

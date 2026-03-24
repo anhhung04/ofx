@@ -62,7 +62,7 @@ jobs:
       continue-on-error: true
     - name: export-nuclei
       run: |
-        echo "nuclei_count={{ vulns(steps[0].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
+        echo "nuclei_count={{ vulns(steps["nuclei-web-scan"].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
   summary:
     name: Vulnerability Summary
     needs:
@@ -73,7 +73,7 @@ jobs:
       script: |
         import json
 
-        nuclei_vulns = {{ vulns(jobs['nuclei-web'].steps[0].outputs.typed_outputs) | default([], true) | tojson }}
+        nuclei_vulns = {{ vulns(jobs['nuclei-web'].steps.report.outputs.typed_outputs) | default([], true) | tojson }}
         critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
         high = [v for v in nuclei_vulns if v.get('severity') == 'high']
 

@@ -56,7 +56,7 @@ jobs:
         continue-on-error: true
       - name: export-info
         run: |
-          echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo "live_urls={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   dir-brute:
     name: Directory Brute-Force
     needs:
@@ -257,12 +257,12 @@ jobs:
         continue-on-error: true
       - name: collect-vulns
         script: |
-          nuclei_v = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          xss_v = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
-          sqli_v = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
-          cmdi_v = {{ vulns(steps[3].outputs.typed_outputs) | tojson }}
-          crlf_v = {{ vulns(steps[4].outputs.typed_outputs) | tojson }}
-          nikto_v = {{ vulns(steps[5].outputs.typed_outputs) | tojson }}
+          nuclei_v = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }}
+          xss_v = {{ vulns(steps["xss-scan"].outputs.typed_outputs) | tojson }}
+          sqli_v = {{ vulns(steps["sqli-scan"].outputs.typed_outputs) | tojson }}
+          cmdi_v = {{ vulns(steps["cmdi-scan"].outputs.typed_outputs) | tojson }}
+          crlf_v = {{ vulns(steps["crlf-scan"].outputs.typed_outputs) | tojson }}
+          nikto_v = {{ vulns(steps["nikto-scan"].outputs.typed_outputs) | tojson }}
 
           total = len(nuclei_v) + len(xss_v) + len(sqli_v) + len(cmdi_v) + len(crlf_v) + len(nikto_v)
           critical = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'critical')

@@ -144,7 +144,7 @@ jobs:
     - task: naabu
       name: port-scan
       with:
-        target: '{{ steps[2].outputs.alive_file if steps[2].outputs is defined else
+        target: '{{ steps["collect-alive"].outputs.alive_file if steps["collect-alive"].outputs is defined else
           jobs[''subdomain-discovery''].outputs.subs_file }}'
         top_ports: '1000'
         rate: 1000
@@ -152,7 +152,7 @@ jobs:
     - task: nuclei
       name: quick-vuln-scan
       with:
-        target: '{{ steps[2].outputs.live_urls_file if steps[2].outputs is defined
+        target: '{{ steps["collect-alive"].outputs.live_urls_file if steps["collect-alive"].outputs is defined
           else jobs[''subdomain-discovery''].outputs.subs_file }}'
         severity: critical,high
       continue-on-error: true

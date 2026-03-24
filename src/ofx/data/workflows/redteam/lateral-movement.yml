@@ -52,7 +52,7 @@ jobs:
       continue-on-error: true
     - name: collect-smb-access
       script: |
-        results = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        results = {{ users(steps["nxc-smb-test"].outputs.typed_outputs) | tojson }}
         accessible = set()
         admin_hosts = set()
         for item in results:
@@ -96,7 +96,7 @@ jobs:
       continue-on-error: true
     - name: collect-winrm-access
       script: |
-        results = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        results = {{ users(steps["nxc-winrm-test"].outputs.typed_outputs) | tojson }}
         accessible = set()
         for item in results:
             host = item.get('host', '')
@@ -132,7 +132,7 @@ jobs:
       continue-on-error: true
     - name: collect-ssh-access
       script: |
-        results = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        results = {{ users(steps["nxc-ssh-test"].outputs.typed_outputs) | tojson }}
         accessible = set()
         for item in results:
             host = item.get('host', '')

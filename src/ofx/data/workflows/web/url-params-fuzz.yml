@@ -78,5 +78,5 @@ jobs:
         echo " Param Fuzz: {{ inputs.target }}"
         echo "======================================="
         echo "Parameters found: {{ jobs['param-discovery'].outputs.param_count }}"
-        echo "Fuzz results: {{ urls(steps[0].outputs.typed_outputs) | length }}"
+        echo "Fuzz results: {{ urls(steps["fuzz-params"].outputs.typed_outputs) | length }}"
       log-stdout: true

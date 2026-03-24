@@ -75,7 +75,7 @@ jobs:
         ports_found = set()
         hosts_with_ports = set()
 
-        naabu_out = {{ steps[1].outputs.typed_outputs | tojson }}
+        naabu_out = {{ steps["naabu-scan"].outputs.typed_outputs | tojson }}
         for item in naabu_out:
             if item.get('_type') == 'port':
                 host = item.get('host') or item.get('ip', '')
@@ -116,8 +116,8 @@ jobs:
       continue-on-error: true
     - name: export-http
       run: |
-        echo "live_urls={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-        echo "live_count={{ urls(steps[1].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
+        echo "live_urls={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "live_count={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
   summary:
     name: Discovery Summary
     needs:

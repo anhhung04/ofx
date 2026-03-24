@@ -55,7 +55,7 @@ jobs:
 
         emails = set()
         # From theHarvester typed outputs
-        th_out = {{ steps[0].outputs.typed_outputs | tojson }}
+        th_out = {{ steps["theharvester-search"].outputs.typed_outputs | tojson }}
         for item in th_out:
             if item.get('_type') == 'user_account' and item.get('username'):
                 if '@' in item['username']:
@@ -64,7 +64,7 @@ jobs:
                 emails.add(item['host'])
 
         # Also parse raw stdout for email patterns
-        raw = '{{ steps[0].outputs.stdout | default("", true) }}'
+        raw = '{{ steps["theharvester-search"].outputs.stdout | default("", true) }}'
         found = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', raw)
         emails.update(found)
 
@@ -93,7 +93,7 @@ jobs:
       continue-on-error: true
     - name: collect-accounts
       script: |
-        accounts = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        accounts = {{ users(steps["holehe-check"].outputs.typed_outputs) | tojson }}
         services = set()
         for a in accounts:
             if a.get('host'):
@@ -117,7 +117,7 @@ jobs:
       continue-on-error: true
     - name: collect-social
       script: |
-        social = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        social = {{ users(steps["maigret-search"].outputs.typed_outputs) | tojson }}
         platforms = set()
         for s in social:
             if s.get('host'):
@@ -143,7 +143,7 @@ jobs:
       continue-on-error: true
     - name: collect-breaches
       script: |
-        breach_data = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        breach_data = {{ users(steps["h8mail-breach"].outputs.typed_outputs) | tojson }}
         breached_emails = set()
         for b in breach_data:
             if b.get('username'):

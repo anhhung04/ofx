@@ -36,8 +36,8 @@ jobs:
       script: |
         import json
 
-        grype_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        trivy_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        grype_vulns = {{ vulns(steps["dependency-vulns"].outputs.typed_outputs) | tojson }}
+        trivy_vulns = {{ vulns(steps["code-vulns"].outputs.typed_outputs) | tojson }}
 
         seen = set()
         unique = []
@@ -72,8 +72,8 @@ jobs:
       script: |
         import json
 
-        gl_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        th_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        gl_vulns = {{ vulns(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
+        th_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
         total = len(gl_vulns) + len(th_vulns)
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:

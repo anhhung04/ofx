@@ -111,7 +111,7 @@ jobs:
                     users.add(item['username'])
 
         # From enum4linux
-        e4l_data = {{ users(steps[6].outputs.typed_outputs) | tojson }}
+        e4l_data = {{ users(steps["enum4linux-full"].outputs.typed_outputs) | tojson }}
         for item in e4l_data:
             if item.get('username'):
                 users.add(item['username'])
@@ -151,7 +151,7 @@ jobs:
         asrep_users = set()
 
         # From kerbrute typed outputs
-        kerb_out = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        kerb_out = {{ users(steps["kerbrute-userenum"].outputs.typed_outputs) | tojson }}
         for item in kerb_out:
             if item.get('username'):
                 kerb_users.add(item['username'])
@@ -205,7 +205,7 @@ jobs:
         ldap_users = set()
 
         # From netexec LDAP typed outputs
-        nxc_out = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        nxc_out = {{ users(steps["nxc-ldap-users"].outputs.typed_outputs) | tojson }}
         for item in nxc_out:
             if item.get('username'):
                 ldap_users.add(item['username'])

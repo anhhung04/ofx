@@ -116,7 +116,7 @@ jobs:
     - task: dnsx
       name: verify-subdomains
       with:
-        target: '{{ steps[4].outputs.hosts_file if steps[4].outputs is defined else inputs.target }}'
+        target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
         a: true
         resp: true
       continue-on-error: true
@@ -129,14 +129,14 @@ jobs:
     - task: httpx
       name: probe-subdomains
       with:
-        target: '{{ steps[4].outputs.hosts_file if steps[4].outputs is defined else inputs.target }}'
+        target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
         tech_detect: true
         status_code: true
         follow_redirects: true
       continue-on-error: true
     - name: export-urls
       run: |
-        echo "live_urls={{ urls(steps[7].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   host-recon:
     name: Host Reconnaissance
     needs:
@@ -217,9 +217,9 @@ jobs:
       script: |
         import json
 
-        all_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps[1].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+        all_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }} + \
+                    {{ vulns(steps["xss-scan"].outputs.typed_outputs) | tojson }} + \
+                    {{ vulns(steps["takeover-check"].outputs.typed_outputs) | tojson }}
 
         critical = [v for v in all_vulns if v.get('severity') == 'critical']
         high = [v for v in all_vulns if v.get('severity') == 'high']

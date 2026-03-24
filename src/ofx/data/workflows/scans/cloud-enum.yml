@@ -96,9 +96,9 @@ jobs:
         script: |
           import json
 
-          s3_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          s3_tags = {{ tags(steps[0].outputs.typed_outputs) | tojson }}
-          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          s3_vulns = {{ vulns(steps["s3scanner-scan"].outputs.typed_outputs) | tojson }}
+          s3_tags = {{ tags(steps["s3scanner-scan"].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-cloud-scan"].outputs.typed_outputs) | tojson }}
 
           all_vulns = s3_vulns + nuclei_vulns
           buckets_found = set()

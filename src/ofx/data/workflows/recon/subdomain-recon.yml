@@ -50,24 +50,24 @@ jobs:
 
         all_subs = set()
 
-        sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+        sf_outputs = {{ steps["subfinder-enum"].outputs.typed_outputs | tojson }}
         for item in sf_outputs:
             if item.get('_type') == 'subdomain':
                 all_subs.add(item['host'])
 
-        gau_outputs = {{ steps[1].outputs.typed_outputs | tojson }}
+        gau_outputs = {{ steps["gau-urls"].outputs.typed_outputs | tojson }}
         for item in gau_outputs:
             if item.get('_type') == 'url':
                 host = item.get('host', '')
                 if host and '{{ inputs.target }}' in host:
                     all_subs.add(host)
 
-        amass_outputs = {{ steps[2].outputs.typed_outputs | tojson }}
+        amass_outputs = {{ steps["amass-enum"].outputs.typed_outputs | tojson }}
         for item in amass_outputs:
             if item.get('_type') == 'subdomain':
                 all_subs.add(item['host'])
 
-        assetfinder_outputs = {{ steps[3].outputs.typed_outputs | tojson }}
+        assetfinder_outputs = {{ steps["assetfinder-enum"].outputs.typed_outputs | tojson }}
         for item in assetfinder_outputs:
             if item.get('_type') == 'subdomain':
                 all_subs.add(item['host'])
@@ -112,7 +112,7 @@ jobs:
       continue-on-error: true
     - name: export-urls
       run: |
-        echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
   takeover-check:
     name: Subdomain Takeover & Vulnerability Check
     needs:
@@ -130,7 +130,7 @@ jobs:
         echo " Subdomain Recon: {{ inputs.target }}"
         echo "======================================="
         echo "Subdomains found: {{ jobs['passive-enum'].outputs.subdomain_count }}"
-        echo "Takeover vulns: {{ vulns(steps[0].outputs.typed_outputs) | length }}"
+        echo "Takeover vulns: {{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}"
       log-stdout: true
     - name: export-to-project
       script: |-

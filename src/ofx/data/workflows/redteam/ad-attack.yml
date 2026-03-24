@@ -76,13 +76,13 @@ jobs:
 
         users = set()
         # From netexec user output
-        nxc_users = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        nxc_users = {{ users(steps["smb-info"].outputs.typed_outputs) | tojson }}
         for u in nxc_users:
             if u.get('username'):
                 users.add(u['username'])
 
         # From enum4linux
-        e4l_users = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+        e4l_users = {{ users(steps["full-enum"].outputs.typed_outputs) | tojson }}
         for u in e4l_users:
             if u.get('username'):
                 users.add(u['username'])
@@ -216,9 +216,9 @@ jobs:
       continue-on-error: true
     - name: collect-spray
       script: |
-        kerb_hits = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-        smb_hits = {{ users(steps[1].outputs.typed_outputs) | tojson }}
-        ldap_hits = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+        kerb_hits = {{ users(steps["kerbrute-spray"].outputs.typed_outputs) | tojson }}
+        smb_hits = {{ users(steps["nxc-spray-smb"].outputs.typed_outputs) | tojson }}
+        ldap_hits = {{ users(steps["nxc-spray-ldap"].outputs.typed_outputs) | tojson }}
 
         all_valid = set()
         for u in kerb_hits + smb_hits + ldap_hits:
@@ -278,8 +278,8 @@ jobs:
         except FileNotFoundError:
             pass
 
-        sam_creds = {{ users(steps[1].outputs.typed_outputs) | tojson }}
-        lsa_creds = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+        sam_creds = {{ users(steps["nxc-sam"].outputs.typed_outputs) | tojson }}
+        lsa_creds = {{ users(steps["nxc-lsa"].outputs.typed_outputs) | tojson }}
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"hash_count={len(hashes)}\n")

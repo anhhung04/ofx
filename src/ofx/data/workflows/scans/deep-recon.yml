@@ -54,8 +54,8 @@ jobs:
         script: |
           import json
 
-          domains = {{ domains(steps[0].outputs.typed_outputs) | tojson }}
-          users = {{ users(steps[1].outputs.typed_outputs) | tojson }}
+          domains = {{ domains(steps["whois-lookup"].outputs.typed_outputs) | tojson }}
+          users = {{ users(steps["theharvester-enum"].outputs.typed_outputs) | tojson }}
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
               f.write(f"osint_domain_count={len(domains)}\n")
@@ -119,13 +119,13 @@ jobs:
           subs.add('{{ inputs.target }}')
 
           # From subfinder
-          sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+          sf_outputs = {{ steps["subfinder-enum"].outputs.typed_outputs | tojson }}
           for item in sf_outputs:
               if item.get('_type') == 'subdomain':
                   subs.add(item['host'])
 
           # From gau — extract hosts from URLs
-          gau_outputs = {{ steps[1].outputs.typed_outputs | tojson }}
+          gau_outputs = {{ steps["gau-passive"].outputs.typed_outputs | tojson }}
           for item in gau_outputs:
               if item.get('_type') == 'subdomain':
                   subs.add(item['host'])
@@ -146,7 +146,7 @@ jobs:
                   pass
 
           # From urlfinder — extract hosts
-          uf_outputs = {{ steps[5].outputs.typed_outputs | tojson }}
+          uf_outputs = {{ steps["urlfinder-passive"].outputs.typed_outputs | tojson }}
           for item in uf_outputs:
               if item.get('_type') == 'url':
                   host = item.get('host', '')
@@ -154,7 +154,7 @@ jobs:
                       subs.add(host)
 
           # From csprecon
-          csp_outputs = {{ steps[6].outputs.typed_outputs | tojson }}
+          csp_outputs = {{ steps["csprecon-enum"].outputs.typed_outputs | tojson }}
           for item in csp_outputs:
               if item.get('_type') == 'subdomain':
                   host = item.get('host', '')
@@ -225,14 +225,14 @@ jobs:
           verified = set()
 
           # From dnsx
-          dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          dnsx_out = {{ steps["dns-resolve"].outputs.typed_outputs | tojson }}
           for item in dnsx_out:
               host = item.get('host', '')
               if host:
                   verified.add(host)
 
           # From tlsx SANs — new subdomains
-          tlsx_out = {{ steps[1].outputs.typed_outputs | tojson }}
+          tlsx_out = {{ steps["tlsx-san"].outputs.typed_outputs | tojson }}
           for item in tlsx_out:
               if item.get('_type') == 'subdomain':
                   host = item.get('host', '')
@@ -240,14 +240,14 @@ jobs:
                       verified.add(host)
 
           # From puredns
-          puredns_out = {{ steps[2].outputs.typed_outputs | tojson }}
+          puredns_out = {{ steps["puredns-resolve"].outputs.typed_outputs | tojson }}
           for item in puredns_out:
               if item.get('_type') == 'subdomain':
                   verified.add(item['host'])
 
           # From asnmap — IPs/CIDRs saved separately
           asn_ips = set()
-          asnmap_out = {{ steps[3].outputs.typed_outputs | tojson }}
+          asnmap_out = {{ steps["asnmap-enum"].outputs.typed_outputs | tojson }}
           for item in asnmap_out:
               if item.get('_type') == 'ip':
                   ip_val = item.get('ip', '') or item.get('host', '')
@@ -258,7 +258,7 @@ jobs:
               f.write('\n'.join(sorted(asn_ips)))
 
           # From gotator — permuted subdomains added as candidates
-          gotator_out = {{ steps[4].outputs.typed_outputs | tojson }}
+          gotator_out = {{ steps["gotator-permute"].outputs.typed_outputs | tojson }}
           for item in gotator_out:
               if item.get('_type') == 'subdomain':
                   host = item.get('host', '')
@@ -320,7 +320,7 @@ jobs:
           import json
 
           urls = set()
-          httpx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          httpx_out = {{ steps["http-probe"].outputs.typed_outputs | tojson }}
           for item in httpx_out:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   urls.add(item['url'])
@@ -328,9 +328,9 @@ jobs:
           with open('/tmp/ofx_deeprecon_live.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))
 
-          waf_tags = {{ tags(steps[1].outputs.typed_outputs) | tojson }}
-          cdn_tags = {{ tags(steps[2].outputs.typed_outputs) | tojson }}
-          favi_tags = {{ tags(steps[3].outputs.typed_outputs) | tojson }}
+          waf_tags = {{ tags(steps["waf-detect"].outputs.typed_outputs) | tojson }}
+          cdn_tags = {{ tags(steps["cdn-detect"].outputs.typed_outputs) | tojson }}
+          favi_tags = {{ tags(steps["favicon-detect"].outputs.typed_outputs) | tojson }}
 
           with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
               f.write(f"live_file=/tmp/ofx_deeprecon_live.txt\n")
@@ -424,7 +424,7 @@ jobs:
               pass
 
           # From paramspider
-          ps_out = {{ steps[3].outputs.typed_outputs | tojson }}
+          ps_out = {{ steps["paramspider-extract"].outputs.typed_outputs | tojson }}
           for item in ps_out:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
@@ -445,7 +445,7 @@ jobs:
               pass
 
           # From jsluice task
-          js_out = {{ steps[5].outputs.typed_outputs | tojson }}
+          js_out = {{ steps["jsluice-scan"].outputs.typed_outputs | tojson }}
           for item in js_out:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
@@ -496,7 +496,7 @@ jobs:
 
           ports = set()
           hosts = set()
-          naabu_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          naabu_out = {{ steps["naabu-scan"].outputs.typed_outputs | tojson }}
           for item in naabu_out:
               if item.get('_type') == 'port':
                   host = item.get('host') or item.get('ip', '')
@@ -564,10 +564,10 @@ jobs:
         script: |
           import json
 
-          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          xss_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
-          takeover_vulns = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
-          dnstake_vulns = {{ vulns(steps[4].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }}
+          xss_vulns = {{ vulns(steps["xss-scan"].outputs.typed_outputs) | tojson }}
+          takeover_vulns = {{ vulns(steps["takeover-check"].outputs.typed_outputs) | tojson }}
+          dnstake_vulns = {{ vulns(steps["dnstake-scan"].outputs.typed_outputs) | tojson }}
 
           all_vulns = nuclei_vulns + xss_vulns + takeover_vulns + dnstake_vulns
           critical = [v for v in all_vulns if v.get('severity') == 'critical']

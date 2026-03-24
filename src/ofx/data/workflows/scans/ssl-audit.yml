@@ -81,7 +81,7 @@ jobs:
       script: |
         import json
 
-        results = {{ steps[0].outputs.typed_outputs | tojson }}
+        results = {{ steps["testssl-scan"].outputs.typed_outputs | tojson }}
 
         vuln_count = 0
         cert_issues = 0

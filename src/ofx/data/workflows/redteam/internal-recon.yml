@@ -79,7 +79,7 @@ jobs:
         hosts_with_ports = {}
 
         # Parse naabu results
-        naabu_out = {{ steps[1].outputs.typed_outputs | tojson }}
+        naabu_out = {{ steps["naabu-precision"].outputs.typed_outputs | tojson }}
         for item in naabu_out:
             if item.get('_type') == 'port':
                 host = item.get('host') or item.get('ip', '')
@@ -155,7 +155,7 @@ jobs:
             pass
 
         # Collect HTTP targets from httpx
-        httpx_out = {{ steps[1].outputs.typed_outputs | tojson }}
+        httpx_out = {{ steps["http-probe"].outputs.typed_outputs | tojson }}
         for item in httpx_out:
             url = item.get('url', '')
             if url:

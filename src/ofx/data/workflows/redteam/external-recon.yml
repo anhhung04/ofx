@@ -44,7 +44,7 @@ jobs:
       script: |
         import json
 
-        whois_data = {{ steps[0].outputs.typed_outputs | tojson }}
+        whois_data = {{ steps["whois-lookup"].outputs.typed_outputs | tojson }}
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"domain_intel=complete\n")
@@ -82,7 +82,7 @@ jobs:
         subs.add('{{ inputs.target }}')
 
         # From subfinder
-        sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+        sf_outputs = {{ steps["subfinder-enum"].outputs.typed_outputs | tojson }}
         for item in sf_outputs:
             if item.get('_type') == 'subdomain':
                 subs.add(item['host'])
@@ -128,7 +128,7 @@ jobs:
         import json
 
         alive = set()
-        dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+        dnsx_out = {{ steps["verify-dns"].outputs.typed_outputs | tojson }}
         for item in dnsx_out:
             host = item.get('host', '')
             if host:
@@ -168,7 +168,7 @@ jobs:
 
         ports = set()
         hosts = set()
-        naabu_out = {{ steps[0].outputs.typed_outputs | tojson }}
+        naabu_out = {{ steps["naabu-scan"].outputs.typed_outputs | tojson }}
         for item in naabu_out:
             if item.get('_type') == 'port':
                 host = item.get('host') or item.get('ip', '')
@@ -204,8 +204,8 @@ jobs:
       continue-on-error: true
     - name: export-live
       run: |
-        echo "live_urls={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-        echo "live_count={{ urls(steps[0].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
+        echo "live_urls={{ urls(steps["probe-subs"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "live_count={{ urls(steps["probe-subs"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
   web-fingerprint:
     name: Web Fingerprinting
     outputs:
@@ -241,7 +241,7 @@ jobs:
         except FileNotFoundError:
             pass
 
-        waf_data = {{ steps[1].outputs.typed_outputs | tojson }}
+        waf_data = {{ steps["waf-detect"].outputs.typed_outputs | tojson }}
         waf_names = []
         for item in waf_data:
             if item.get('waf') or item.get('name'):
@@ -375,8 +375,8 @@ jobs:
       script: |
         import json
 
-        th_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        gl_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        th_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
+        gl_vulns = {{ vulns(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
         total = len(th_vulns) + len(gl_vulns)
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
@@ -421,7 +421,7 @@ jobs:
       script: |
         import json
 
-        nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+        nuclei_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }}
         critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
         high = [v for v in nuclei_vulns if v.get('severity') == 'high']
         medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']
@@ -494,13 +494,13 @@ jobs:
     - task: h8mail
       name: breach-search
       with:
-        target: '{{ steps[1].outputs.email_file if steps[1].outputs is defined else inputs.target }}'
+        target: '{{ steps["collect-emails"].outputs.email_file if steps["collect-emails"].outputs is defined else inputs.target }}'
       continue-on-error: true
     - name: export-osint
       script: |
         import json
 
-        breach_results = {{ users(steps[2].outputs.typed_outputs) | tojson }}
+        breach_results = {{ users(steps["breach-search"].outputs.typed_outputs) | tojson }}
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"breach_count={len(breach_results)}\n")

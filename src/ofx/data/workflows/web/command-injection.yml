@@ -72,7 +72,7 @@ jobs:
       script: |
         import json
 
-        nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+        nuclei_vulns = {{ vulns(steps["nuclei-cmdi"].outputs.typed_outputs) | tojson }}
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"nuclei_vuln_count={len(nuclei_vulns)}\n")

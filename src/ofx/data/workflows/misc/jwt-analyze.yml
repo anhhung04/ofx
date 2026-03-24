@@ -142,7 +142,7 @@ jobs:
         token = '{{ inputs.token }}'
         wordlist = '{{ inputs.wordlist }}'
         parts = token.split('.')
-        alg = '{{ steps[0].outputs.algorithm | default("HS256", true) }}'
+        alg = '{{ steps["decode-jwt"].outputs.algorithm | default("HS256", true) }}'
 
         if not alg.startswith('HS'):
             print("[*] Not an HMAC algorithm, skipping brute-force")

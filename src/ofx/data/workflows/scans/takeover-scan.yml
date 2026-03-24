@@ -37,7 +37,7 @@ jobs:
         subs.add('{{ inputs.target }}')
 
         # From subfinder
-        sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+        sf_outputs = {{ steps["subfinder-scan"].outputs.typed_outputs | tojson }}
         for item in sf_outputs:
             if item.get('_type') == 'subdomain':
                 subs.add(item['host'])
@@ -81,7 +81,7 @@ jobs:
         alive = set()
         cname_records = {}
 
-        dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+        dnsx_out = {{ steps["resolve-dns"].outputs.typed_outputs | tojson }}
         for item in dnsx_out:
             host = item.get('host', '')
             if host:
@@ -133,7 +133,7 @@ jobs:
             pass
 
         # Parse nuclei takeover results
-        nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        nuclei_vulns = {{ vulns(steps["nuclei-takeover"].outputs.typed_outputs) | tojson }}
         for v in nuclei_vulns:
             name = v.get('name', v.get('template_id', 'unknown'))
             host = v.get('host', v.get('matched_at', ''))

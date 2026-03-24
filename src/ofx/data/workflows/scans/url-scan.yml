@@ -160,9 +160,9 @@ jobs:
       script: |
         import json
 
-        all_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps[1].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+        all_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }} + \
+                    {{ vulns(steps["xss-scan"].outputs.typed_outputs) | tojson }} + \
+                    {{ vulns(steps["secret-scan"].outputs.typed_outputs) | tojson }}
 
         critical = [v for v in all_vulns if v.get('severity') == 'critical']
         high = [v for v in all_vulns if v.get('severity') == 'high']

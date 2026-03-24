@@ -52,8 +52,8 @@ jobs:
       script: |
         import json
 
-        wpscan_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-        nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+        wpscan_vulns = {{ vulns(steps["wpscan-full"].outputs.typed_outputs) | tojson }}
+        nuclei_vulns = {{ vulns(steps["nuclei-wordpress"].outputs.typed_outputs) | tojson }}
 
         all_vulns = wpscan_vulns + nuclei_vulns
         critical = [v for v in all_vulns if v.get('severity') == 'critical']

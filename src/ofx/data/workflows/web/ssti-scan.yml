@@ -52,7 +52,7 @@ jobs:
           param_urls = set()
 
           # From httpx — live URLs with params
-          httpx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          httpx_out = {{ steps["probe-targets"].outputs.typed_outputs | tojson }}
           for item in httpx_out:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
@@ -60,7 +60,7 @@ jobs:
                       param_urls.add(url)
 
           # From arjun — discovered params
-          arjun_out = {{ steps[1].outputs.typed_outputs | tojson }}
+          arjun_out = {{ steps["arjun-params"].outputs.typed_outputs | tojson }}
           for item in arjun_out:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
@@ -68,7 +68,7 @@ jobs:
                       param_urls.add(url)
 
           # From paramspider
-          ps_out = {{ steps[2].outputs.typed_outputs | tojson }}
+          ps_out = {{ steps["paramspider-mine"].outputs.typed_outputs | tojson }}
           for item in ps_out:
               if item.get('_type') == 'url':
                   url = item.get('url', '')
@@ -113,8 +113,8 @@ jobs:
         script: |
           import json
 
-          tinja_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          nuclei_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          tinja_vulns = {{ vulns(steps["tinja-scan"].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-ssti"].outputs.typed_outputs) | tojson }}
 
           all_vulns = tinja_vulns + nuclei_vulns
           critical = [v for v in all_vulns if v.get('severity') == 'critical']

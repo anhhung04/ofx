@@ -36,7 +36,7 @@ jobs:
           import json
 
           live_urls = set()
-          httpx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          httpx_out = {{ steps["probe-targets"].outputs.typed_outputs | tojson }}
           for item in httpx_out:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   live_urls.add(item['url'])
@@ -99,7 +99,7 @@ jobs:
         script: |
           import json
 
-          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          nuclei_vulns = {{ vulns(steps["nuclei-cache-poison"].outputs.typed_outputs) | tojson }}
 
           ffuf_findings = []
           try:

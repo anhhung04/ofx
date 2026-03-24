@@ -48,7 +48,7 @@ jobs:
       continue-on-error: true
     - name: extract-targets
       run: |
-        echo "http_targets={{ ports(steps[0].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo "http_targets={{ ports(steps["service-scan"].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}" >> $OFX_OUTPUTS
   ssh-audit:
     name: SSH Audit
     needs:
@@ -104,5 +104,5 @@ jobs:
         echo "=============================="
         echo " Host Recon: {{ inputs.target }}"
         echo "=============================="
-        echo "Vulnerabilities: {{ vulns(steps[0].outputs.typed_outputs) | length }}"
+        echo "Vulnerabilities: {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}"
       log-stdout: true
