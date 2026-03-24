@@ -1,0 +1,145 @@
+name: yara-scan
+description: |
+  YARA rule scanning for threat hunting — scan files and directories
+  against YARA rules for malware signatures, suspicious patterns,
+  and custom indicators of compromise.
+tags: [threat-hunting, yara, malware, dfir, forensics]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: File or directory to scan
+      alias: t
+    rules:
+      type: string
+      default: ''
+      description: Path to YARA rules file/directory
+
+jobs:
+  scan:
+    name: YARA Scan
+    steps:
+    - name: yara-scan
+      script: |
+        import subprocess
+        import json
+        from pathlib import Path
+
+        target = '{{ inputs.target }}'
+        rules_path = '{{ inputs.rules }}'
+
+        print(f"=== YARA SCAN: {target} ===\n")
+
+        # Find YARA rules
+        rule_locations = [
+            rules_path,
+            '/usr/share/yara-rules',
+            '/opt/yara-rules',
+            '/etc/yara',
+            str(Path.home() / '.yara'),
+        ]
+
+        rules_found = None
+        for loc in rule_locations:
+            if loc and Path(loc).exists():
+                rules_found = loc
+                break
+
+        if not rules_found:
+            # Generate basic rules
+            basic_rules = '''
+        rule suspicious_strings {
+            strings:
+                $s1 = "mimikatz" ascii nocase
+                $s2 = "bloodhound" ascii nocase
+                $s3 = "lazagne" ascii nocase
+                $s4 = "secretsdump" ascii nocase
+                $s5 = "powershell -enc" ascii nocase
+                $s6 = "Invoke-Mimikatz" ascii nocase
+                $s7 = "certutil -urlcache" ascii nocase
+                $s8 = "net user /add" ascii nocase
+                $s9 = "reg save HKLM" ascii nocase
+                $s10 = "procdump" ascii nocase
+            condition:
+                any of them
+        }
+
+        rule webshell_indicators {
+            strings:
+                $php1 = "eval(base64_decode" ascii
+                $php2 = "system($_" ascii
+                $php3 = "exec($_" ascii
+                $php4 = "passthru(" ascii
+                $php5 = "shell_exec(" ascii
+                $asp1 = "eval(Request" ascii
+                $asp2 = "Execute(Request" ascii
+                $jsp1 = "Runtime.getRuntime().exec" ascii
+            condition:
+                any of them
+        }
+
+        rule crypto_miner {
+            strings:
+                $s1 = "stratum+tcp" ascii
+                $s2 = "cryptonight" ascii nocase
+                $s3 = "xmrig" ascii nocase
+                $s4 = "minerd" ascii nocase
+                $s5 = "coinhive" ascii nocase
+            condition:
+                any of them
+        }
+
+        rule encoded_payload {
+            strings:
+                $b64_ps = /powershell[^\n]{0,50}-[Ee]nc[^\n]{50,}/ ascii
+                $b64_long = /[A-Za-z0-9+\/]{200,}={0,2}/ ascii
+            condition:
+                any of them
+        }
+        '''
+            rules_found = '/tmp/ofx_yara_rules.yar'
+            Path(rules_found).write_text(basic_rules)
+            print(f"  Using built-in rules (no external rules found)")
+
+        print(f"  Rules: {rules_found}")
+        print(f"  Target: {target}\n")
+
+        # Run YARA
+        findings = []
+        try:
+            args = ['yara', '-r', '-s']
+            if Path(rules_found).is_dir():
+                for rule_file in Path(rules_found).glob('**/*.yar'):
+                    proc = subprocess.run(
+                        args + [str(rule_file), target],
+                        capture_output=True, text=True, timeout=120
+                    )
+                    if proc.stdout.strip():
+                        for line in proc.stdout.strip().splitlines():
+                            findings.append(line)
+                            print(f"  [!] {line}")
+            else:
+                proc = subprocess.run(
+                    args + [rules_found, target],
+                    capture_output=True, text=True, timeout=120
+                )
+                if proc.stdout.strip():
+                    for line in proc.stdout.strip().splitlines():
+                        findings.append(line)
+                        print(f"  [!] {line}")
+
+        except FileNotFoundError:
+            print("[-] YARA not installed (apt install yara)")
+        except Exception as e:
+            print(f"[-] Error: {e}")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"match_count={len(findings)}\n")
+            f.write(f"rules_used={rules_found}\n")
+
+        print(f"\n  Matches: {len(findings)}")
+        if not findings:
+            print("  No matches found")
+      log-stdout: true
+      timeout: 5

@@ -1,119 +1,111 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: email-osint
-description: 'Email OSINT — discovers email addresses, checks for breached credentials, and identifies accounts across platforms.
-
-  '
-tags:
-- osint
-- email
-- credentials
-- breach
+description: |
+  Email address OSINT investigation — check email validity, find
+  associated accounts, discover breaches, and gather related
+  information for a target email address.
+tags: [osint, email, recon, breach]
 dispatch:
   inputs:
     target:
       required: true
       type: string
-      description: Target domain or email address
+      description: Email address to investigate
       alias: t
+
 jobs:
-  email-harvest:
-    name: Email Harvesting
+  investigate:
+    name: Email Investigation
     steps:
-    - name: theharvester-search
-      run: |
-        theHarvester -d {{ inputs.target }} -b all -l 500 2>/dev/null | tee /tmp/harvester-output.txt
+    - task: holehe
+      name: account-discovery
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
       continue-on-error: true
-    - name: collect-emails
+    - task: h8mail
+      name: breach-search
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: email-analysis
       script: |
         import re
+        import subprocess
 
-        emails = set()
-        target = '{{ inputs.target }}'
+        email = '{{ inputs.target }}'
+        local, domain = email.split('@') if '@' in email else (email, '')
 
-        # If input is an email address, add it directly
-        if '@' in target:
-            emails.add(target)
+        print(f"=== EMAIL OSINT: {email} ===\n")
 
-        # Parse theHarvester output
+        results = {}
+        results['email'] = email
+        results['local_part'] = local
+        results['domain'] = domain
+
+        # Email format analysis
+        print("--- Format Analysis ---")
+        patterns = {
+            'firstname.lastname': r'^[a-z]+\.[a-z]+$',
+            'firstlast': r'^[a-z]{2,}[a-z]{2,}$',
+            'f.lastname': r'^[a-z]\.[a-z]+$',
+            'first_last': r'^[a-z]+_[a-z]+$',
+        }
+        for name, pattern in patterns.items():
+            if re.match(pattern, local, re.IGNORECASE):
+                results['pattern'] = name
+                print(f"  Pattern: {name}")
+                # Try to extract name
+                if '.' in local:
+                    parts = local.split('.')
+                    results['possible_first'] = parts[0].capitalize()
+                    results['possible_last'] = parts[-1].capitalize()
+                    print(f"  Possible name: {parts[0].capitalize()} {parts[-1].capitalize()}")
+                break
+
+        # Domain analysis
+        print(f"\n--- Domain: {domain} ---")
         try:
-            with open('/tmp/harvester-output.txt') as f:
-                content = f.read()
-            found = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', content)
-            emails.update(found)
-        except FileNotFoundError:
+            proc = subprocess.run(['dig', '+short', 'MX', domain], capture_output=True, text=True, timeout=10)
+            mx = proc.stdout.strip()
+            if mx:
+                results['mx'] = mx
+                print(f"  MX: {mx}")
+                if 'google' in mx.lower():
+                    print("  Provider: Google Workspace")
+                elif 'outlook' in mx.lower() or 'microsoft' in mx.lower():
+                    print("  Provider: Microsoft 365")
+                elif 'protonmail' in mx.lower():
+                    print("  Provider: ProtonMail")
+        except Exception:
             pass
 
-        with open('/tmp/ofx_emailosint_emails.txt', 'w') as tf:
-            tf.write('\n'.join(sorted(emails)))
-
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"email_file=/tmp/ofx_emailosint_emails.txt\n")
-            f.write(f"email_count={len(emails)}\n")
-
-        print(f"Harvested {len(emails)} email addresses")
-  breach-search:
-    name: Breach Search
-    needs:
-    - email-harvest
-    steps:
-    - task: h8mail
-      name: h8mail-search
-      with:
-        target: '{{ jobs[''email-harvest''].outputs.email_file | default(inputs.target, true) }}'
-      continue-on-error: true
-      log-stdout: true
-    - name: export-breaches
-      script: |
-        import json
-
-        users_found = {{ users(steps[0].outputs.typed_outputs) | tojson }}
-
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"breach_count={len(users_found)}\n")
-
-        print(f"Found {len(users_found)} breach results")
-      log-stdout: true
-  account-check:
-    name: Account Discovery
-    needs:
-    - email-harvest
-    steps:
-    - name: holehe-check
-      run: |
-        holehe {{ jobs['email-harvest'].outputs.email_file | default(inputs.target, true) }} --no-color 2>/dev/null | tee /tmp/holehe-output.txt
-      continue-on-error: true
-    - name: collect-accounts
-      script: |
-        accounts = []
+        # SPF/DMARC
         try:
-            with open('/tmp/holehe-output.txt') as f:
-                for line in f:
-                    line = line.strip()
-                    if '[+]' in line:
-                        accounts.append(line)
-        except FileNotFoundError:
+            proc = subprocess.run(['dig', '+short', 'TXT', domain], capture_output=True, text=True, timeout=10)
+            for line in proc.stdout.splitlines():
+                if 'spf' in line.lower():
+                    print(f"  SPF: {line.strip()[:80]}")
+            proc = subprocess.run(['dig', '+short', 'TXT', f'_dmarc.{domain}'], capture_output=True, text=True, timeout=10)
+            dmarc = proc.stdout.strip()
+            if dmarc:
+                print(f"  DMARC: {dmarc[:80]}")
+        except Exception:
             pass
 
-        with open('/tmp/ofx_emailosint_accounts.txt', 'w') as tf:
-            tf.write('\n'.join(accounts))
+        # Google dorks
+        print(f"\n--- Search Dorks ---")
+        dorks = [
+            f'"{email}"',
+            f'"{email}" site:linkedin.com',
+            f'"{email}" site:github.com',
+            f'"{local}" site:{domain}',
+            f'intext:"{email}" filetype:pdf',
+        ]
+        for d in dorks:
+            print(f"  Google: {d}")
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"account_count={len(accounts)}\n")
-            f.write(f"account_file=/tmp/ofx_emailosint_accounts.txt\n")
-
-        print(f"Found {len(accounts)} registered accounts")
-  summary:
-    name: Email OSINT Summary
-    needs:
-    - breach-search
-    - account-check
-    steps:
-    - name: report
-      run: |
-        echo "================================="
-        echo " Email OSINT: {{ inputs.target }}"
-        echo "================================="
-        echo "Emails harvested: {{ jobs['email-harvest'].outputs.email_count }}"
-        echo "Breach results: {{ jobs['breach-search'].outputs.breach_count }}"
-        echo "Accounts found: {{ jobs['account-check'].outputs.account_count }}"
+            for k, v in results.items():
+                f.write(f"{k}={v}\n")
       log-stdout: true

@@ -1,0 +1,144 @@
+name: linux-hardening
+description: |
+  Linux security hardening audit — check SSH config, firewall rules,
+  kernel parameters, file permissions, running services, user accounts,
+  and apply CIS benchmark-inspired recommendations.
+tags: [compliance, hardening, linux, audit, cis]
+dispatch:
+  inputs:
+    target:
+      type: string
+      default: localhost
+      description: Target host (localhost for local, or SSH host)
+      alias: t
+    user:
+      type: string
+      default: ''
+      description: SSH username (for remote targets)
+    password:
+      type: string
+      default: ''
+      description: SSH password (for remote targets)
+
+jobs:
+  audit:
+    name: Linux Hardening Audit
+    steps:
+    - name: hardening-checks
+      script: |
+        import subprocess
+        import re
+        from pathlib import Path
+
+        target = '{{ inputs.target }}'
+        user = '{{ inputs.user }}'
+        password = '{{ inputs.password }}'
+
+        def run(cmd):
+            if target == 'localhost' or not user:
+                proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
+            else:
+                from ofx.api.post import RunnerRegistry
+                kwargs = {'host': target, 'user': user}
+                if password: kwargs['password'] = password
+                runner = RunnerRegistry.create('ssh', **kwargs)
+                return runner.run(cmd).strip()
+            return proc.stdout.strip()
+
+        findings = []
+        passed = []
+
+        print("=== LINUX HARDENING AUDIT ===\n")
+
+        # SSH Configuration
+        print("--- SSH Configuration ---")
+        ssh_config = run('cat /etc/ssh/sshd_config 2>/dev/null')
+        checks = {
+            'PermitRootLogin no': (r'^\s*PermitRootLogin\s+no', '[HIGH] Root login not disabled'),
+            'PasswordAuth disabled': (r'^\s*PasswordAuthentication\s+no', '[MEDIUM] Password auth not disabled'),
+            'Protocol 2': (r'^\s*Protocol\s+2', None),
+            'X11Forwarding no': (r'^\s*X11Forwarding\s+no', '[LOW] X11 forwarding not disabled'),
+            'MaxAuthTries': (r'^\s*MaxAuthTries\s+[1-4]$', '[LOW] MaxAuthTries not restricted'),
+        }
+        for name, (pattern, fail_msg) in checks.items():
+            if re.search(pattern, ssh_config, re.MULTILINE):
+                passed.append(f"  [✓] {name}")
+                print(f"  [✓] {name}")
+            elif fail_msg:
+                findings.append(fail_msg)
+                print(f"  [✗] {name}")
+
+        # Firewall
+        print("\n--- Firewall ---")
+        fw = run('iptables -L -n 2>/dev/null | head -20; ufw status 2>/dev/null; firewall-cmd --state 2>/dev/null')
+        if 'active' in fw.lower() or 'running' in fw.lower() or 'Chain' in fw:
+            passed.append("  [✓] Firewall active")
+            print("  [✓] Firewall active")
+        else:
+            findings.append('[HIGH] No firewall detected')
+            print("  [✗] No firewall detected")
+
+        # Kernel parameters
+        print("\n--- Kernel Security ---")
+        sysctl_checks = {
+            'net.ipv4.ip_forward': ('0', '[MEDIUM] IP forwarding enabled'),
+            'net.ipv4.conf.all.accept_redirects': ('0', '[MEDIUM] ICMP redirects accepted'),
+            'net.ipv4.conf.all.send_redirects': ('0', '[LOW] Sending ICMP redirects'),
+            'kernel.randomize_va_space': ('2', '[HIGH] ASLR not fully enabled'),
+            'fs.suid_dumpable': ('0', '[MEDIUM] SUID core dumps enabled'),
+        }
+        for param, (expected, fail_msg) in sysctl_checks.items():
+            val = run(f'sysctl -n {param} 2>/dev/null').strip()
+            if val == expected:
+                passed.append(f"  [✓] {param} = {val}")
+                print(f"  [✓] {param} = {val}")
+            else:
+                findings.append(f"{fail_msg} ({param} = {val})")
+                print(f"  [✗] {param} = {val} (expected {expected})")
+
+        # File permissions
+        print("\n--- Critical File Permissions ---")
+        perm_checks = [
+            ('/etc/passwd', '644', '[HIGH] /etc/passwd too permissive'),
+            ('/etc/shadow', '640', '[CRITICAL] /etc/shadow too permissive'),
+            ('/etc/gshadow', '640', '[HIGH] /etc/gshadow too permissive'),
+        ]
+        for fpath, max_perm, fail_msg in perm_checks:
+            perm = run(f'stat -c %a {fpath} 2>/dev/null').strip()
+            if perm and int(perm) <= int(max_perm):
+                print(f"  [✓] {fpath}: {perm}")
+            elif perm:
+                findings.append(f"{fail_msg} ({perm})")
+                print(f"  [✗] {fpath}: {perm} (should be ≤ {max_perm})")
+
+        # Accounts
+        print("\n--- User Accounts ---")
+        uid0 = run("awk -F: '$3 == 0 {print $1}' /etc/passwd 2>/dev/null")
+        if uid0 and uid0 != 'root':
+            findings.append(f'[CRITICAL] Non-root UID 0 accounts: {uid0}')
+            print(f"  [✗] UID 0 accounts: {uid0}")
+        else:
+            print("  [✓] Only root has UID 0")
+
+        empty_pw = run("awk -F: '($2 == \"\" || $2 == \"!\") {print $1}' /etc/shadow 2>/dev/null")
+        if empty_pw:
+            findings.append(f'[CRITICAL] Accounts with empty/no password: {empty_pw}')
+
+        # Services
+        print("\n--- Running Services ---")
+        services = run('systemctl list-units --type=service --state=running --no-pager 2>/dev/null | head -20')
+        print(f"  {services[:500]}")
+
+        # Summary
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"finding_count={len(findings)}\n")
+            f.write(f"passed_count={len(passed)}\n")
+            score = max(0, 100 - (len(findings) * 8))
+            f.write(f"score={score}\n")
+
+        print(f"\n{'=' * 50}")
+        print(f" Score: {score}/100 | Passed: {len(passed)} | Findings: {len(findings)}")
+        print(f"{'=' * 50}")
+        for finding in findings:
+            print(f"  {finding}")
+      log-stdout: true

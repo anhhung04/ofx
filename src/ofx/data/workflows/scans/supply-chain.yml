@@ -1,0 +1,102 @@
+name: supply-chain
+description: |
+  Software supply chain security audit — scan project dependencies
+  for known vulnerabilities, generate SBOM, check for typosquatting,
+  and audit lockfile integrity.
+tags: [supply-chain, sbom, vulnerability, dependency, audit]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Project directory to scan
+      alias: t
+
+jobs:
+  sbom:
+    name: SBOM Generation
+    steps:
+    - name: generate-sbom
+      run: |
+        echo "[+] Generating SBOM for {{ inputs.target }}..."
+
+        cd "{{ inputs.target }}"
+
+        # Try syft first
+        if command -v syft &>/dev/null; then
+          syft dir:. -o spdx-json > /tmp/ofx_sbom.json 2>/dev/null
+          echo "sbom_file=/tmp/ofx_sbom.json" >> {{ env.OFX_OUTPUTS }}
+          echo "[+] SBOM generated (syft → SPDX)"
+        elif command -v cyclonedx-py &>/dev/null; then
+          cyclonedx-py environment -o /tmp/ofx_sbom.json 2>/dev/null
+          echo "sbom_file=/tmp/ofx_sbom.json" >> {{ env.OFX_OUTPUTS }}
+          echo "[+] SBOM generated (cyclonedx-py)"
+        else
+          echo "[-] No SBOM tool found (install syft or cyclonedx-py)"
+        fi
+
+        # Detect package managers
+        MANAGERS=""
+        [ -f "package-lock.json" ] && MANAGERS="$MANAGERS npm"
+        [ -f "yarn.lock" ] && MANAGERS="$MANAGERS yarn"
+        [ -f "pnpm-lock.yaml" ] && MANAGERS="$MANAGERS pnpm"
+        [ -f "requirements.txt" ] && MANAGERS="$MANAGERS pip"
+        [ -f "Pipfile.lock" ] && MANAGERS="$MANAGERS pipenv"
+        [ -f "poetry.lock" ] && MANAGERS="$MANAGERS poetry"
+        [ -f "uv.lock" ] && MANAGERS="$MANAGERS uv"
+        [ -f "go.sum" ] && MANAGERS="$MANAGERS go"
+        [ -f "Cargo.lock" ] && MANAGERS="$MANAGERS cargo"
+        [ -f "Gemfile.lock" ] && MANAGERS="$MANAGERS bundler"
+        [ -f "composer.lock" ] && MANAGERS="$MANAGERS composer"
+        echo "pkg_managers=$MANAGERS" >> {{ env.OFX_OUTPUTS }}
+        echo "[+] Detected: $MANAGERS"
+      log-stdout: true
+      continue-on-error: true
+
+  vuln-scan:
+    name: Dependency Vulnerability Scan
+    steps:
+    - task: grype
+      name: grype-scan
+      with:
+        target: 'dir:{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - task: trivy
+      name: trivy-fs
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+
+  secret-scan:
+    name: Secret Detection in Dependencies
+    steps:
+    - task: gitleaks
+      name: gitleaks-scan
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+    - task: trufflehog
+      name: trufflehog-scan
+      with:
+        target: '{{ inputs.target }}'
+      log-stdout: true
+      continue-on-error: true
+
+  summary:
+    name: Supply Chain Audit Summary
+    needs: [sbom, vuln-scan, secret-scan]
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " SUPPLY CHAIN AUDIT: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "  Package managers: {{ jobs['sbom'].outputs.pkg_managers | default('?', true) }}"
+        echo "  Vulnerabilities: {{ vulns(jobs['vuln-scan'].outputs.typed_outputs) | list | length | default('?', true) }}"
+        echo ""
+        echo "  SBOM: {{ jobs['sbom'].outputs.sbom_file | default('not generated', true) }}"
+      log-stdout: true
