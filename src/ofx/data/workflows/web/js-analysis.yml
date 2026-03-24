@@ -1,0 +1,165 @@
+name: js-analysis
+description: |
+  JavaScript endpoint and secret extraction — crawls target for JS files,
+  analyzes them for exposed secrets, tokens, API keys, and sensitive endpoints.
+tags:
+  - web
+  - js
+  - secrets
+  - recon
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL or domain (e.g. https://example.com)
+
+jobs:
+  discover-js:
+    name: JS File Discovery
+    steps:
+      - task: katana
+        name: katana-js-crawl
+        with:
+          target: '{{ inputs.target }}'
+          depth: 3
+          js_crawl: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: httpx
+        name: httpx-probe
+        with:
+          target: '{{ inputs.target }}'
+          tech_detect: true
+          status_code: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: gau
+        name: gau-archive
+        with:
+          target: '{{ inputs.target }}'
+        continue-on-error: true
+
+      - name: extract-js-urls
+        script: |
+          import json
+
+          js_urls = set()
+          all_urls = set()
+
+          # From katana
+          katana_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in katana_out:
+              if item.get('_type') == 'url':
+                  url = item.get('url', '')
+                  if url:
+                      all_urls.add(url)
+                      if url.endswith('.js') or '.js?' in url or '/js/' in url:
+                          js_urls.add(url)
+
+          # From gau
+          gau_out = {{ steps[2].outputs.typed_outputs | tojson }}
+          for item in gau_out:
+              if item.get('_type') == 'url':
+                  url = item.get('url', '')
+                  if url:
+                      all_urls.add(url)
+                      if url.endswith('.js') or '.js?' in url or '/js/' in url:
+                          js_urls.add(url)
+
+          with open('/tmp/ofx_jsanalysis_jsurls.txt', 'w') as f:
+              f.write('\n'.join(sorted(js_urls)))
+          with open('/tmp/ofx_jsanalysis_allurls.txt', 'w') as f:
+              f.write('\n'.join(sorted(all_urls)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"js_file=/tmp/ofx_jsanalysis_jsurls.txt\n")
+              f.write(f"all_urls_file=/tmp/ofx_jsanalysis_allurls.txt\n")
+              f.write(f"js_count={len(js_urls)}\n")
+              f.write(f"url_count={len(all_urls)}\n")
+
+          print(f"Found {len(js_urls)} JS files from {len(all_urls)} total URLs")
+        log-stdout: true
+
+  analyze-js:
+    name: JS Security Analysis
+    needs:
+      - discover-js
+    steps:
+      - task: nuclei
+        name: nuclei-exposure
+        with:
+          target: '{{ jobs[''discover-js''].outputs.js_file | default(inputs.target, true) }}'
+          tags: exposure,token,secret
+        log-stdout: true
+        continue-on-error: true
+
+      - task: trufflehog
+        name: trufflehog-scan
+        with:
+          target: '{{ inputs.target }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - task: gitleaks
+        name: gitleaks-scan
+        with:
+          target: '{{ inputs.target }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - name: js-summary
+        script: |
+          import json
+
+          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          trufflehog_tags = {{ tags(steps[1].outputs.typed_outputs) | tojson }}
+          gitleaks_tags = {{ tags(steps[2].outputs.typed_outputs) | tojson }}
+
+          total_secrets = len(trufflehog_tags) + len(gitleaks_tags)
+          total_vulns = len(nuclei_vulns)
+
+          critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
+          high = [v for v in nuclei_vulns if v.get('severity') == 'high']
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"secret_count={total_secrets}\n")
+              f.write(f"vuln_count={total_vulns}\n")
+              f.write(f"critical_count={len(critical)}\n")
+              f.write(f"high_count={len(high)}\n")
+
+          print("=" * 50)
+          print(f" JS ANALYSIS COMPLETE: {{ inputs.target }}")
+          print("=" * 50)
+          print(f"JS files analyzed: {{ jobs['discover-js'].outputs.js_count }}")
+          print(f"Secrets found: {total_secrets}")
+          print(f"  TruffleHog: {len(trufflehog_tags)}")
+          print(f"  Gitleaks: {len(gitleaks_tags)}")
+          print(f"Vulnerabilities: {total_vulns}")
+          print(f"  Critical: {len(critical)}")
+          print(f"  High: {len(high)}")
+        log-stdout: true
+
+      - name: export-to-project
+        script: |
+          from pathlib import Path
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              all_typed = []
+              for typed in [
+                  {{ jobs['discover-js'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['analyze-js'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
+
+              print(f'Project export complete: {project}')
+        continue-on-error: true

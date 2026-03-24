@@ -1,0 +1,145 @@
+name: ssrf-scan
+description: |
+  Server-Side Request Forgery testing — collects parameterized URLs via
+  crawling and parameter discovery, then tests for SSRF using nuclei
+  templates and targeted fuzzing.
+tags:
+  - web
+  - vuln
+  - ssrf
+  - fuzz
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL or domain (e.g. https://example.com)
+
+jobs:
+  collect-params:
+    name: Parameter Collection
+    steps:
+      - task: paramspider
+        name: paramspider-extract
+        with:
+          target: '{{ inputs.target }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - task: arjun
+        name: arjun-discover
+        with:
+          target: '{{ inputs.target }}'
+          threads: 20
+        log-stdout: true
+        continue-on-error: true
+
+      - task: katana
+        name: katana-crawl
+        with:
+          target: '{{ inputs.target }}'
+          depth: 2
+        log-stdout: true
+        continue-on-error: true
+
+      - name: merge-params
+        script: |
+          import json
+
+          param_urls = set()
+
+          for idx in [0, 1, 2]:
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url':
+                      url = item.get('url', '')
+                      if url and ('=' in url or '?' in url):
+                          param_urls.add(url)
+
+          with open('/tmp/ofx_ssrf_params.txt', 'w') as f:
+              f.write('\n'.join(sorted(param_urls)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"param_file=/tmp/ofx_ssrf_params.txt\n")
+              f.write(f"param_count={len(param_urls)}\n")
+
+          print(f"Collected {len(param_urls)} parameterized URLs for SSRF testing")
+        log-stdout: true
+
+  ssrf-test:
+    name: SSRF Testing
+    needs:
+      - collect-params
+    steps:
+      - task: nuclei
+        name: nuclei-ssrf
+        with:
+          target: '{{ jobs[''collect-params''].outputs.param_file | default(inputs.target, true) }}'
+          tags: ssrf
+        log-stdout: true
+        continue-on-error: true
+
+      - task: ffuf
+        name: ffuf-ssrf
+        with:
+          target: '{{ inputs.target }}'
+          wordlist: /usr/share/wordlists/seclists/Fuzzing/SSRFmap-param.txt
+          threads: 20
+        log-stdout: true
+        continue-on-error: true
+
+      - task: nuclei
+        name: nuclei-oast
+        with:
+          target: '{{ jobs[''collect-params''].outputs.param_file | default(inputs.target, true) }}'
+          tags: oast
+        log-stdout: true
+        continue-on-error: true
+
+      - name: ssrf-summary
+        script: |
+          import json
+
+          ssrf_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          oast_vulns = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+
+          all_vulns = ssrf_vulns + oast_vulns
+          critical = [v for v in all_vulns if v.get('severity') == 'critical']
+          high = [v for v in all_vulns if v.get('severity') == 'high']
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"vuln_count={len(all_vulns)}\n")
+              f.write(f"critical_count={len(critical)}\n")
+              f.write(f"high_count={len(high)}\n")
+
+          print("=" * 50)
+          print(f" SSRF SCAN COMPLETE: {{ inputs.target }}")
+          print("=" * 50)
+          print(f"Parameterized URLs tested: {{ jobs['collect-params'].outputs.param_count }}")
+          print(f"SSRF findings: {len(ssrf_vulns)}")
+          print(f"OAST findings: {len(oast_vulns)}")
+          print(f"Total: {len(all_vulns)} (C:{len(critical)} H:{len(high)})")
+        log-stdout: true
+
+      - name: export-to-project
+        script: |
+          from pathlib import Path
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              all_typed = []
+              for typed in [
+                  {{ jobs['collect-params'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['ssrf-test'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
+
+              print(f'Project export complete: {project}')
+        continue-on-error: true

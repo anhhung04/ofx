@@ -1,0 +1,574 @@
+name: deep-recon
+description: |
+  reconftw-inspired comprehensive reconnaissance — passive & active subdomain
+  enumeration, DNS bruteforce, web probing, URL collection, JS analysis,
+  vulnerability scanning, and OSINT gathering in a single workflow.
+tags:
+  - recon
+  - dns
+  - web
+  - vuln
+  - osint
+  - comprehensive
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+    resolvers:
+      type: string
+      default: ""
+      description: Path to custom resolvers file
+
+jobs:
+  osint:
+    name: OSINT Gathering
+    steps:
+      - task: whois
+        name: whois-lookup
+        with:
+          target: '{{ inputs.target }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - task: theharvester
+        name: theharvester-enum
+        with:
+          target: '{{ inputs.target }}'
+          source: google,bing,dnsdumpster,crtsh,rapiddns
+          limit: 500
+        log-stdout: true
+        continue-on-error: true
+
+      - task: gitleaks
+        name: gitleaks-scan
+        with:
+          target: '{{ inputs.target }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - name: export-osint
+        script: |
+          import json
+
+          domains = {{ domains(steps[0].outputs.typed_outputs) | tojson }}
+          users = {{ users(steps[1].outputs.typed_outputs) | tojson }}
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"osint_domain_count={len(domains)}\n")
+              f.write(f"osint_user_count={len(users)}\n")
+
+          print(f"OSINT: {len(domains)} domain records, {len(users)} users/emails found")
+        log-stdout: true
+
+  passive-enum:
+    name: Passive Subdomain Enumeration
+    steps:
+      - task: subfinder
+        name: subfinder-enum
+        with:
+          target: '{{ inputs.target }}'
+          all: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: gau
+        name: gau-passive
+        with:
+          target: '{{ inputs.target }}'
+        continue-on-error: true
+
+      - name: amass-enum
+        run: |
+          amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/ofx_deeprecon_amass.txt
+        continue-on-error: true
+
+      - name: assetfinder-enum
+        run: |
+          assetfinder --subs-only {{ inputs.target }} 2>/dev/null | tee /tmp/ofx_deeprecon_assetfinder.txt
+        continue-on-error: true
+
+      - name: findomain-enum
+        run: |
+          findomain -t {{ inputs.target }} -q 2>/dev/null | tee /tmp/ofx_deeprecon_findomain.txt
+        continue-on-error: true
+
+      - task: urlfinder
+        name: urlfinder-passive
+        with:
+          target: '{{ inputs.target }}'
+          all: true
+        continue-on-error: true
+
+      - name: collect-subdomains
+        script: |
+          import json
+
+          subs = set()
+          subs.add('{{ inputs.target }}')
+
+          # From subfinder
+          sf_outputs = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in sf_outputs:
+              if item.get('_type') == 'subdomain':
+                  subs.add(item['host'])
+
+          # From gau — extract hosts from URLs
+          gau_outputs = {{ steps[1].outputs.typed_outputs | tojson }}
+          for item in gau_outputs:
+              if item.get('_type') == 'subdomain':
+                  subs.add(item['host'])
+              elif item.get('_type') == 'url':
+                  host = item.get('host', '')
+                  if host and '{{ inputs.target }}' in host:
+                      subs.add(host)
+
+          # From amass
+          for path in ['/tmp/ofx_deeprecon_amass.txt', '/tmp/ofx_deeprecon_assetfinder.txt', '/tmp/ofx_deeprecon_findomain.txt']:
+              try:
+                  with open(path) as f:
+                      for line in f:
+                          sub = line.strip()
+                          if sub and '{{ inputs.target }}' in sub:
+                              subs.add(sub)
+              except FileNotFoundError:
+                  pass
+
+          # From urlfinder — extract hosts
+          uf_outputs = {{ steps[5].outputs.typed_outputs | tojson }}
+          for item in uf_outputs:
+              if item.get('_type') == 'url':
+                  host = item.get('host', '')
+                  if host and '{{ inputs.target }}' in host:
+                      subs.add(host)
+
+          with open('/tmp/ofx_deeprecon_subs.txt', 'w') as f:
+              f.write('\n'.join(sorted(subs)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"subs_file=/tmp/ofx_deeprecon_subs.txt\n")
+              f.write(f"sub_count={len(subs)}\n")
+
+          print(f"Collected {len(subs)} unique subdomains from passive sources")
+        log-stdout: true
+
+  active-enum:
+    name: Active Enumeration & Resolution
+    needs:
+      - passive-enum
+    steps:
+      - task: dnsx
+        name: dns-resolve
+        with:
+          target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
+          a: true
+          aaaa: true
+          cname: true
+          resp: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: tlsx
+        name: tlsx-san
+        with:
+          target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
+          san: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: puredns
+        name: puredns-resolve
+        with:
+          target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
+          resolvers: '{{ inputs.resolvers if inputs.resolvers else "" }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - name: merge-active
+        script: |
+          import json
+
+          verified = set()
+
+          # From dnsx
+          dnsx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in dnsx_out:
+              host = item.get('host', '')
+              if host:
+                  verified.add(host)
+
+          # From tlsx SANs — new subdomains
+          tlsx_out = {{ steps[1].outputs.typed_outputs | tojson }}
+          for item in tlsx_out:
+              if item.get('_type') == 'subdomain':
+                  host = item.get('host', '')
+                  if host and '{{ inputs.target }}' in host:
+                      verified.add(host)
+
+          # From puredns
+          puredns_out = {{ steps[2].outputs.typed_outputs | tojson }}
+          for item in puredns_out:
+              if item.get('_type') == 'subdomain':
+                  verified.add(item['host'])
+
+          with open('/tmp/ofx_deeprecon_verified.txt', 'w') as f:
+              f.write('\n'.join(sorted(verified)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"verified_file=/tmp/ofx_deeprecon_verified.txt\n")
+              f.write(f"verified_count={len(verified)}\n")
+
+          print(f"Active verification: {len(verified)} resolved subdomains")
+        log-stdout: true
+
+  web-probe:
+    name: Web Probing & Technology Detection
+    needs:
+      - active-enum
+    steps:
+      - task: httpx
+        name: http-probe
+        with:
+          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: wafw00f
+        name: waf-detect
+        with:
+          target: '{{ inputs.target }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - task: cdncheck
+        name: cdn-detect
+        with:
+          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - name: export-live
+        script: |
+          import json
+
+          urls = set()
+          httpx_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in httpx_out:
+              if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
+                  urls.add(item['url'])
+
+          with open('/tmp/ofx_deeprecon_live.txt', 'w') as f:
+              f.write('\n'.join(sorted(urls)))
+
+          waf_tags = {{ tags(steps[1].outputs.typed_outputs) | tojson }}
+          cdn_tags = {{ tags(steps[2].outputs.typed_outputs) | tojson }}
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"live_file=/tmp/ofx_deeprecon_live.txt\n")
+              f.write(f"live_count={len(urls)}\n")
+              f.write(f"waf_count={len(waf_tags)}\n")
+              f.write(f"cdn_count={len(cdn_tags)}\n")
+
+          print(f"Live: {len(urls)} URLs, WAFs: {len(waf_tags)}, CDNs: {len(cdn_tags)}")
+        log-stdout: true
+
+  url-collection:
+    name: URL Collection & Crawling
+    needs:
+      - web-probe
+    steps:
+      - task: katana
+        name: katana-crawl
+        with:
+          target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
+          depth: 3
+          js_crawl: true
+        log-stdout: true
+        continue-on-error: true
+
+      - task: gospider
+        name: gospider-crawl
+        with:
+          target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
+          depth: 2
+        log-stdout: true
+        continue-on-error: true
+
+      - name: hakrawler-crawl
+        run: |
+          echo "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}" | hakrawler -d 2 -subs 2>/dev/null | tee /tmp/ofx_deeprecon_hakrawler.txt
+        continue-on-error: true
+
+      - task: paramspider
+        name: paramspider-extract
+        with:
+          target: '{{ inputs.target }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - name: collect-urls
+        script: |
+          import json
+
+          urls = set()
+          param_urls = set()
+
+          for idx in [0, 1]:
+              step_data = {{ steps | tojson }}
+              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url':
+                      url = item.get('url', '')
+                      if url:
+                          urls.add(url)
+                          if '=' in url or '?' in url:
+                              param_urls.add(url)
+
+          # From hakrawler
+          try:
+              with open('/tmp/ofx_deeprecon_hakrawler.txt') as f:
+                  for line in f:
+                      u = line.strip()
+                      if u and u.startswith('http'):
+                          urls.add(u)
+                          if '=' in u or '?' in u:
+                              param_urls.add(u)
+          except FileNotFoundError:
+              pass
+
+          # From paramspider
+          ps_out = {{ steps[3].outputs.typed_outputs | tojson }}
+          for item in ps_out:
+              if item.get('_type') == 'url':
+                  url = item.get('url', '')
+                  if url:
+                      urls.add(url)
+                      param_urls.add(url)
+
+          with open('/tmp/ofx_deeprecon_allurls.txt', 'w') as f:
+              f.write('\n'.join(sorted(urls)))
+          with open('/tmp/ofx_deeprecon_params.txt', 'w') as f:
+              f.write('\n'.join(sorted(param_urls)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"all_urls_file=/tmp/ofx_deeprecon_allurls.txt\n")
+              f.write(f"param_file=/tmp/ofx_deeprecon_params.txt\n")
+              f.write(f"url_count={len(urls)}\n")
+              f.write(f"param_count={len(param_urls)}\n")
+
+          print(f"URLs: {len(urls)} total, {len(param_urls)} parameterized")
+        log-stdout: true
+
+  port-scan:
+    name: Port Scanning & Service Detection
+    needs:
+      - active-enum
+    steps:
+      - task: naabu
+        name: naabu-scan
+        with:
+          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          top_ports: '1000'
+          rate: 1000
+        log-stdout: true
+        continue-on-error: true
+
+      - task: nmap
+        name: nmap-scan
+        with:
+          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          version_detection: true
+        log-stdout: true
+        continue-on-error: true
+
+      - name: export-ports
+        script: |
+          import json
+
+          ports = set()
+          hosts = set()
+          naabu_out = {{ steps[0].outputs.typed_outputs | tojson }}
+          for item in naabu_out:
+              if item.get('_type') == 'port':
+                  host = item.get('host') or item.get('ip', '')
+                  port = item.get('port', '')
+                  if host and port:
+                      ports.add(f"{host}:{port}")
+                      hosts.add(host)
+
+          with open('/tmp/ofx_deeprecon_ports.txt', 'w') as f:
+              f.write('\n'.join(sorted(ports)))
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"ports_file=/tmp/ofx_deeprecon_ports.txt\n")
+              f.write(f"port_count={len(ports)}\n")
+
+          print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
+        log-stdout: true
+
+  vuln-scan:
+    name: Vulnerability Scanning
+    needs:
+      - url-collection
+      - port-scan
+      - web-probe
+    steps:
+      - task: nuclei
+        name: nuclei-scan
+        with:
+          target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
+          severity: critical,high,medium
+        log-stdout: true
+        continue-on-error: true
+
+      - task: dalfox
+        name: xss-scan
+        with:
+          target: '{{ jobs[''url-collection''].outputs.param_file | default(inputs.target, true) }}'
+        log-stdout: true
+        continue-on-error: true
+
+      - task: nuclei
+        name: takeover-check
+        with:
+          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          tags: takeover
+        log-stdout: true
+        continue-on-error: true
+
+      - name: crlfuzz-scan
+        run: |
+          echo "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}" | crlfuzz -s 2>/dev/null | tee /tmp/ofx_deeprecon_crlf.txt
+        continue-on-error: true
+
+      - name: export-vulns
+        script: |
+          import json
+
+          nuclei_vulns = {{ vulns(steps[0].outputs.typed_outputs) | tojson }}
+          xss_vulns = {{ vulns(steps[1].outputs.typed_outputs) | tojson }}
+          takeover_vulns = {{ vulns(steps[2].outputs.typed_outputs) | tojson }}
+
+          all_vulns = nuclei_vulns + xss_vulns + takeover_vulns
+          critical = [v for v in all_vulns if v.get('severity') == 'critical']
+          high = [v for v in all_vulns if v.get('severity') == 'high']
+          medium = [v for v in all_vulns if v.get('severity') == 'medium']
+
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"vuln_count={len(all_vulns)}\n")
+              f.write(f"critical_count={len(critical)}\n")
+              f.write(f"high_count={len(high)}\n")
+              f.write(f"medium_count={len(medium)}\n")
+              f.write(f"xss_count={len(xss_vulns)}\n")
+              f.write(f"takeover_count={len(takeover_vulns)}\n")
+
+          print(f"Vulns: {len(all_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
+          print(f"  XSS: {len(xss_vulns)}, Takeover: {len(takeover_vulns)}")
+        log-stdout: true
+
+  summary:
+    name: Summary & Export
+    needs:
+      - vuln-scan
+      - osint
+    steps:
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " DEEP RECON COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo ""
+          echo "--- OSINT ---"
+          echo "Domain records: {{ jobs.osint.outputs.osint_domain_count }}"
+          echo "Users/emails: {{ jobs.osint.outputs.osint_user_count }}"
+          echo ""
+          echo "--- Subdomains ---"
+          echo "Passive subdomains: {{ jobs['passive-enum'].outputs.sub_count }}"
+          echo "Active verified: {{ jobs['active-enum'].outputs.verified_count }}"
+          echo ""
+          echo "--- Web ---"
+          echo "Live HTTP services: {{ jobs['web-probe'].outputs.live_count }}"
+          echo "WAFs detected: {{ jobs['web-probe'].outputs.waf_count }}"
+          echo "CDNs detected: {{ jobs['web-probe'].outputs.cdn_count }}"
+          echo ""
+          echo "--- URLs ---"
+          echo "Total URLs crawled: {{ jobs['url-collection'].outputs.url_count }}"
+          echo "Parameterized URLs: {{ jobs['url-collection'].outputs.param_count }}"
+          echo ""
+          echo "--- Ports ---"
+          echo "Open ports: {{ jobs['port-scan'].outputs.port_count }}"
+          echo ""
+          echo "--- Vulnerabilities ---"
+          echo "Total: {{ jobs['vuln-scan'].outputs.vuln_count }}"
+          echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+          echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
+          echo "  Medium: {{ jobs['vuln-scan'].outputs.medium_count }}"
+          echo "  XSS: {{ jobs['vuln-scan'].outputs.xss_count }}"
+          echo "  Takeover: {{ jobs['vuln-scan'].outputs.takeover_count }}"
+        log-stdout: true
+
+      - name: export-to-project
+        script: |
+          import shutil
+          from pathlib import Path
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              # Subdomains
+              d = '{{ vars.project_subdomains }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['passive-enum'].outputs.subs_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'passive-subs.txt')
+                  print('  [+] subdomains/passive-subs.txt')
+              src = '''{{ jobs['active-enum'].outputs.verified_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'verified-subs.txt')
+                  print('  [+] subdomains/verified-subs.txt')
+
+              # Hosts / ports
+              d = '{{ vars.project_hosts }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['port-scan'].outputs.ports_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'ports.txt')
+                  print('  [+] hosts/ports.txt')
+
+              # URLs
+              d = '{{ vars.project_urls }}'
+              Path(d).mkdir(parents=True, exist_ok=True)
+              src = '''{{ jobs['url-collection'].outputs.all_urls_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'all-urls.txt')
+                  print('  [+] urls/all-urls.txt')
+              src = '''{{ jobs['url-collection'].outputs.param_file | default('', true) }}'''
+              if src and Path(src).is_file():
+                  shutil.copy2(src, Path(d) / 'param-urls.txt')
+                  print('  [+] urls/param-urls.txt')
+
+              # Auto-export typed outputs
+              all_typed = []
+              for typed in [
+                  {{ jobs.osint.outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['passive-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['active-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['web-probe'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['url-collection'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['port-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
+
+              print(f'Project export complete: {project}')
+        continue-on-error: true

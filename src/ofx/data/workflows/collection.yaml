@@ -37,6 +37,8 @@ workflows:
   - web/wordpress.yml
   - web/command-injection.yml
   - web/jwt-audit.yml
+  - web/js-analysis.yml
+  - web/ssrf-scan.yml
   - code/code-scan.yml
   - osint/user-hunt.yml
   - osint/email-osint.yml
@@ -47,6 +49,7 @@ workflows:
   - scans/url-scan.yml
   - scans/ssl-audit.yml
   - scans/full-recon.yml
+  - scans/deep-recon.yml
   - scans/bug-bounty-recon.yml
   - scans/takeover-scan.yml
   - scans/pentest-external.yml
