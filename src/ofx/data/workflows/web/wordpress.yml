@@ -7,6 +7,9 @@ tags:
 - http
 - wordpress
 - vuln
+outputs:
+  probe_typed_outputs: '{{ jobs["probe"].outputs.typed_outputs }}'
+  scan_typed_outputs: '{{ jobs["wordpress-scan"].outputs.typed_outputs }}'
 dispatch:
   inputs:
     target:
@@ -21,6 +24,8 @@ dispatch:
 jobs:
   probe:
     name: URL Probe
+    outputs:
+      typed_outputs: '{{ steps["http-probe"].outputs.typed_outputs }}'
     steps:
     - task: httpx
       timeout: 10
@@ -35,6 +40,8 @@ jobs:
     name: WordPress Security Scan
     needs:
     - probe
+    outputs:
+      typed_outputs: '{{ steps["wpscan-full"].outputs.typed_outputs + steps["nuclei-wordpress"].outputs.typed_outputs }}'
     steps:
     - task: wpscan
       timeout: 15

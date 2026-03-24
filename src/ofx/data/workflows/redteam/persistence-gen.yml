@@ -3,6 +3,10 @@ description: |
   Persistence command generator — produce ready-to-execute persistence
   commands for Linux or Windows using ofx.api.persistence.
 tags: [redteam, persistence, linux, windows, post-exploitation]
+outputs:
+  commands_file: "{{ jobs.generate.outputs.commands_file }}"
+  command_count: "{{ jobs.generate.outputs.command_count }}"
+  methods: "{{ jobs.generate.outputs.methods }}"
 dispatch:
   inputs:
     target_os:
@@ -27,6 +31,10 @@ dispatch:
 jobs:
   generate:
     name: Generate Persistence Commands
+    outputs:
+      commands_file: '{{ steps["build-persistence"].outputs.commands_file }}'
+      command_count: '{{ steps["build-persistence"].outputs.command_count }}'
+      methods: '{{ steps["build-persistence"].outputs.methods }}'
     steps:
     - name: build-persistence
       timeout: 3

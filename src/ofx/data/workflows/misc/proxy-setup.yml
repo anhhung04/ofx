@@ -3,6 +3,10 @@ description: |
   Proxy configuration generator — build a proxychains4.conf and
   environment variables for HTTP proxy routing using ofx.api.opsec.
 tags: [misc, opsec, proxy, proxychains, networking]
+outputs:
+  conf_file: "{{ jobs.generate.outputs.conf_file }}"
+  env_file: "{{ jobs.generate.outputs.env_file }}"
+  proxy_count: "{{ jobs.generate.outputs.proxy_count }}"
 dispatch:
   inputs:
     proxies:
@@ -23,6 +27,10 @@ dispatch:
 jobs:
   generate:
     name: Generate Proxy Config
+    outputs:
+      conf_file: '{{ steps["build-config"].outputs.conf_file }}'
+      env_file: '{{ steps["build-config"].outputs.env_file }}'
+      proxy_count: '{{ steps["build-config"].outputs.proxy_count }}'
     steps:
     - name: build-config
       timeout: 3

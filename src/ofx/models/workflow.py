@@ -64,6 +64,10 @@ class Workflow(BaseModel):
         default_factory=DefaultConfig,
         description="Default configuration for the workflow",
     )
+    outputs: dict[str, str] = Field(
+        default_factory=dict,
+        description="Workflow-level outputs mapped from job outputs",
+    )
     jobs: dict[str, Job] = Field(..., description="List of jobs in the workflow")
     workflow_path: Path = Field(
         default_factory=Path.cwd,

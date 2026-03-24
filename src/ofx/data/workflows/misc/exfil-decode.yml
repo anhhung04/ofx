@@ -3,6 +3,10 @@ description: |
   Exfiltration decoder — reassemble and decode data that was exfiltrated
   via DNS, base64 chunking, or XOR encoding.  Inverse of exfil-prep.
 tags: [misc, exfiltration, decode, data]
+outputs:
+  output_file: "{{ jobs.decode.outputs.output_file }}"
+  decoded_size: "{{ jobs.decode.outputs.decoded_size }}"
+  is_text: "{{ jobs.decode.outputs.is_text }}"
 dispatch:
   inputs:
     input_file:
@@ -21,6 +25,10 @@ dispatch:
 jobs:
   decode:
     name: Decode Exfiltrated Data
+    outputs:
+      output_file: '{{ steps["reassemble"].outputs.output_file }}'
+      decoded_size: '{{ steps["reassemble"].outputs.decoded_size }}'
+      is_text: '{{ steps["reassemble"].outputs.is_text }}'
     steps:
     - name: reassemble
       timeout: 5

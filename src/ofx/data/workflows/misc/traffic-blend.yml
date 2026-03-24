@@ -4,6 +4,10 @@ description: |
   blend with normal browser traffic, rotate User-Agents, and set up
   domain fronting headers for covert communications.
 tags: [misc, opsec, traffic, evasion, domain-fronting]
+outputs:
+  headers_file: "{{ jobs.demonstrate.outputs.headers_file }}"
+  agent_count: "{{ jobs.demonstrate.outputs.agent_count }}"
+  sample_count: "{{ jobs.demonstrate.outputs.sample_count }}"
 dispatch:
   inputs:
     target:
@@ -22,6 +26,10 @@ dispatch:
 jobs:
   demonstrate:
     name: Traffic Blending Demo
+    outputs:
+      headers_file: '{{ steps["blend-demo"].outputs.headers_file }}'
+      agent_count: '{{ steps["blend-demo"].outputs.agent_count }}'
+      sample_count: '{{ steps["blend-demo"].outputs.sample_count }}'
     steps:
     - name: blend-demo
       timeout: 3
