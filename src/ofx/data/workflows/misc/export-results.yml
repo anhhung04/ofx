@@ -1,0 +1,108 @@
+name: export-results
+description: Export typed outputs to project directories (hosts, subdomains, web, vulns, etc).
+tags: [utility, export, project]
+call:
+  inputs:
+    typed_outputs:
+      type: string
+      required: true
+      description: JSON string of typed_outputs list to export
+    project_path:
+      type: string
+      required: true
+      description: Project root path
+    prefix:
+      type: string
+      default: ''
+      description: Optional filename prefix for exported files
+  outputs:
+    exported_count: Number of exported result types
+jobs:
+  export:
+    name: Export Results
+    steps:
+    - name: export-typed
+      script: |
+        import json
+        from pathlib import Path
+
+        typed = json.loads('''{{ inputs.typed_outputs }}''')
+        project = '{{ inputs.project_path }}'
+        prefix = '{{ inputs.prefix }}'
+
+        if not project or not Path(project).is_dir():
+            print('No valid project path, skipping export')
+            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+                f.write("exported_count=0\n")
+        else:
+            type_map = {
+                'port': ('hosts', 'ports.txt'),
+                'ip': ('hosts', 'ips.txt'),
+                'subdomain': ('subdomains', 'subdomains.txt'),
+                'url': ('web', 'urls.txt'),
+                'vulnerability': ('vulns', 'vulnerabilities.txt'),
+                'domain': ('subdomains', 'domains.txt'),
+                'record': ('subdomains', 'dns-records.txt'),
+                'certificate': ('certs', 'certificates.txt'),
+                'user_account': ('evidence/creds', 'accounts.txt'),
+                'tag': ('scans', 'tags.txt'),
+                'exploit': ('exploits', 'exploits.txt'),
+            }
+
+            buckets = {}
+            for item in typed:
+                t = item.get('_type', '')
+                if t in type_map:
+                    buckets.setdefault(t, []).append(item)
+
+            exported = 0
+            for t, items in buckets.items():
+                subdir, filename = type_map[t]
+                if prefix:
+                    filename = f"{prefix}-{filename}"
+                out_dir = Path(project) / subdir
+                out_dir.mkdir(parents=True, exist_ok=True)
+                out_file = out_dir / filename
+
+                lines = []
+                for item in items:
+                    if t == 'port':
+                        h = item.get('host') or item.get('ip', '')
+                        p = item.get('port', '')
+                        svc = item.get('service', '')
+                        lines.append(f"{h}:{p}" + (f"\t{svc}" if svc else ''))
+                    elif t == 'subdomain':
+                        lines.append(item.get('host', ''))
+                    elif t == 'url':
+                        lines.append(item.get('url', ''))
+                    elif t == 'vulnerability':
+                        name = item.get('name', '')
+                        sev = item.get('severity', '')
+                        host = item.get('host', '')
+                        lines.append(f"[{sev}] {name} — {host}")
+                    elif t == 'user_account':
+                        u = item.get('username', '')
+                        p = item.get('password', '')
+                        lines.append(f"{u}:{p}" if p else u)
+                    elif t == 'ip':
+                        lines.append(item.get('ip', ''))
+                    elif t == 'domain':
+                        lines.append(item.get('domain', item.get('host', '')))
+                    elif t == 'certificate':
+                        lines.append(json.dumps(item))
+                    elif t == 'exploit':
+                        lines.append(f"{item.get('id', '')} — {item.get('title', '')}")
+                    else:
+                        lines.append(json.dumps(item))
+
+                # Append mode — don't overwrite previous results
+                with open(out_file, 'a') as f:
+                    f.write('\n'.join(lines) + '\n')
+                exported += 1
+                print(f"  [+] {subdir}/{filename} ({len(items)} entries)")
+
+            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+                f.write(f"exported_count={exported}\n")
+
+            print(f"Exported {exported} result types to {project}")
+      log-stdout: true

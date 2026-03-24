@@ -1,0 +1,51 @@
+name: collect-ports
+description: Collect and deduplicate ports and services from typed output data.
+tags: [utility, ports, collect]
+call:
+  inputs:
+    typed_outputs:
+      type: string
+      required: true
+      description: JSON string of typed_outputs list
+  outputs:
+    ports_file: Deduplicated host:port file path
+    services_file: Services file path
+    port_count: Number of unique host:port pairs
+jobs:
+  collect:
+    name: Collect Ports
+    steps:
+    - name: dedup-ports
+      script: |
+        import json
+        from pathlib import Path
+
+        typed = json.loads('''{{ inputs.typed_outputs }}''')
+
+        host_ports = set()
+        services = {}
+        for item in typed:
+            if item.get('_type') != 'port':
+                continue
+            host = item.get('host') or item.get('ip', '')
+            port = item.get('port', '')
+            if host and port:
+                host_ports.add(f"{host}:{port}")
+                svc = item.get('service', '')
+                if svc:
+                    services[f"{host}:{port}"] = svc
+
+        ports_path = '/tmp/ofx_collected_ports.txt'
+        Path(ports_path).write_text('\n'.join(sorted(host_ports)) + '\n')
+
+        services_path = '/tmp/ofx_collected_services.txt'
+        svc_lines = [f"{k}\t{v}" for k, v in sorted(services.items())]
+        Path(services_path).write_text('\n'.join(svc_lines) + '\n')
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"ports_file={ports_path}\n")
+            f.write(f"services_file={services_path}\n")
+            f.write(f"port_count={len(host_ports)}\n")
+
+        print(f"Collected {len(host_ports)} unique host:port pairs, {len(services)} with service info")
+      log-stdout: true
