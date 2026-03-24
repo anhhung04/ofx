@@ -22,6 +22,34 @@ ALIAS = ["x"]
 HELP = "Manage and run workflows in the OFX system"
 
 
+def _complete_workflow_names(incomplete: str) -> list[str]:
+    """Shell completion for workflow names."""
+    from pathlib import Path
+
+    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, BUILTIN_WORKFLOWS_DIR
+
+    names: set[str] = set()
+    dirs = [BUILTIN_WORKFLOWS_DIR, Path.home() / ".ofx" / "workflows"]
+
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            for path in d.rglob(f"*{ext}"):
+                stem = path.stem
+                if stem.startswith(incomplete):
+                    names.add(stem)
+                # Also suggest category/name
+                try:
+                    rel = str(path.relative_to(d).with_suffix(""))
+                    if rel.startswith(incomplete):
+                        names.add(rel)
+                except ValueError:
+                    pass
+
+    return sorted(names)
+
+
 @app.command("list")
 def list_workflows(
     builtin: Annotated[
@@ -43,6 +71,10 @@ def list_workflows(
     show_tags: Annotated[
         bool,
         typer.Option("--tags", help="Show tags alongside each workflow name."),
+    ] = False,
+    show_descriptions: Annotated[
+        bool,
+        typer.Option("--descriptions", "-d", help="Show first line of description for each workflow."),
     ] = False,
     list_tags: Annotated[
         bool,
@@ -152,7 +184,7 @@ def list_workflows(
         return
 
     # Read metadata when filtering or showing
-    need_metadata = bool(filter_tags) or bool(search_term) or show_tags
+    need_metadata = bool(filter_tags) or bool(search_term) or show_tags or show_descriptions
     file_meta: dict[str, dict] = {}
     if need_metadata:
         for file, _, _ in all_files:
@@ -207,7 +239,7 @@ def list_workflows(
                 parts = [f"[cyan]{name}[/cyan]"]
                 if show_tags and tags:
                     parts.append(" ".join(f"[dim]#{t}[/dim]" for t in tags))
-                if search_term and description:
+                if (show_descriptions or search_term) and description:
                     desc = description.split("\n")[0][:80]
                     parts.append(f"[dim italic]{desc}[/dim italic]")
                 cat_branch.add("  ".join(parts))
@@ -217,7 +249,7 @@ def list_workflows(
 
 @app.command()
 def run(
-    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to run")],
+    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to run", autocompletion=_complete_workflow_names)],
     input: Annotated[
         list[str] | None,
         typer.Option(
@@ -348,7 +380,7 @@ def run(
 @app.command()
 def validate(
     workflow_name: Annotated[
-        str, typer.Argument(help="Name of the workflow to validate")
+        str, typer.Argument(help="Name of the workflow to validate", autocompletion=_complete_workflow_names)
     ] = "",
     all_workflows: Annotated[
         bool,
@@ -400,7 +432,7 @@ def init(
 
 @app.command()
 def info(
-    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to inspect")],
+    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to inspect", autocompletion=_complete_workflow_names)],
     detailed: Annotated[
         bool,
         typer.Option("--detailed", "-d", help="Show detailed step-level information."),
@@ -414,7 +446,7 @@ def info(
 
 @app.command("visualize")
 def visualize_cmd(
-    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to visualize")],
+    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to visualize", autocompletion=_complete_workflow_names)],
     format: Annotated[
         str,
         typer.Option("--format", "-f", help="Output format: terminal (default), dot, json."),

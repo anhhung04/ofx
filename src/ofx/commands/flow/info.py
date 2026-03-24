@@ -39,8 +39,8 @@ def _build_overview_table(workflow: Workflow) -> Table:
 
     desc = workflow.description or "—"
     if desc != "No provided description":
-        desc_lines = desc.strip().splitlines()
-        table.add_row("Description", desc_lines[0][:120])
+        # Show full description, wrapping naturally
+        table.add_row("Description", desc.strip())
     else:
         table.add_row("Description", "[dim]—[/]")
 

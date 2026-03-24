@@ -2,7 +2,7 @@ import typer
 
 from ofx.commands.ui_helpers import print_banner, print_error
 
-app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
+app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False, invoke_without_command=True)
 
 from ofx.commands import (  # noqa: E402
     ai,
@@ -64,6 +64,14 @@ def get_cli_project() -> str:
 
 def inject_env_vars(
     ctx: typer.Context,
+    version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        help="Show version and exit",
+        show_default=False,
+        is_eager=True,
+    ),
     e: list[str] = typer.Option(
         [],
         "-e",
@@ -79,6 +87,16 @@ def inject_env_vars(
         show_default=False,
     ),
 ):
+    if version:
+        from ofx import __version__
+
+        typer.echo(f"ofx {__version__}")
+        raise typer.Exit()
+
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
+
     import os
 
     from ofx.utils.args import parse_key_value_pairs

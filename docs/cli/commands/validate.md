@@ -1,57 +1,75 @@
-# flow validate
+# Validate
 
-Validate workflow syntax and configuration.
+Validate workflow configuration with detailed diagnostics.
+
+---
 
 ## Usage
 
 ```bash
-ofx flow validate <workflow>
+ofx flow validate <workflow> [options]
+ofx flow validate --all [--check-tasks]
 ```
+
+---
 
 ## Description
 
-The `validate` command checks workflow files for:
+Validates workflow files and reports:
 
-- YAML syntax errors
-- Schema validation
-- Dependency resolution
-- Required field validation
-- Type checking
+- Schema and YAML syntax validity
+- Structure summary (jobs, steps, tags, triggers)
+- Task reference verification (with `--check-tasks`)
+- Dependency warnings (missing job refs, empty steps)
+
+---
 
 ## Arguments
 
-- `workflow` - Workflow name (searched in default paths) or direct path to file
+- `workflow` — Workflow name or path. Supports bare names (recursive search), category paths, and file paths.
+
+## Options
+
+| Option | Description |
+|---|---|
+| `--all` | Validate all discoverable workflows (builtin + user + collections) |
+| `--check-tasks` | Verify that task references match registered task wrappers |
+
+---
 
 ## Examples
 
-### Validate a workflow file
-
 ```bash
-ofx flow validate my-workflow.yaml
+# Validate a single workflow
+ofx flow validate subdomain-recon
+
+# Validate all workflows
+ofx flow validate --all
+
+# Validate all with task reference checking
+ofx flow validate --all --check-tasks
 ```
 
-### Validate a named workflow
+### Single workflow output
+
+Shows a detailed panel with jobs, steps, tags, triggers, and task ref counts.
+
+### Bulk output
+
+Shows a summary table with pass/warn/fail status per workflow.
+
+---
+
+## Also available via doctor
 
 ```bash
-ofx flow validate attack-chain
+ofx doctor workflows --check-tasks
 ```
 
-## Validation Checks
-
-| Check | Description |
-|-------|-------------|
-| **Syntax** | Valid YAML format |
-| **Schema** | Matches workflow schema |
-| **Dependencies** | All job dependencies exist |
-| **Required Fields** | Name, jobs defined |
-| **Types** | Correct data types |
-
-## Exit Codes
-
-- `0` - Validation passed
-- `1` - Validation failed
+---
 
 ## See Also
 
-- [flow run](run.md)
-- [flow visualize](visualize.md)
+- [Info Command](info.md)
+- [Run Command](run.md)
+- [Visualize Command](visualize.md)

@@ -14,25 +14,45 @@ logger = logging.getLogger(settings.app_branding)
 WORKFLOW_TEMPLATE = """\
 # yaml-language-server: $schema={schema_path}
 name: {name}
-description: A new OFX workflow
+description: Describe what this workflow does
+tags:
+  - example
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Primary target
+      alias: t
 
 jobs:
   main:
     name: Main Job
+    outputs:
+      result: '{{{{ steps.hello.outputs.result }}}}'
     steps:
-      - name: Hello World
+      - name: hello
         run: |
-            echo "Hello, World!"
+            echo "Running against {{{{ inputs.target }}}}"
+            echo "result=success" >> "$OFX_OUTPUTS"
 
-      - name: Example Step Script
-        script: |
-            print("This is a Python script step.")
+      # Uncomment to use a task wrapper:
+      # - name: scan
+      #   task: nmap
+      #   with:
+      #     target: '{{{{ inputs.target }}}}'
 
-      - name: Example ScriptFile Step
-        script_file: ./example_script.py
+      # Uncomment to use inline Python:
+      # - name: process
+      #   script: |
+      #       print("Processing results...")
 
-      - name: Example Reusable Workflow
-        uses: ./path/to/other_workflow.yml
+      # Uncomment to call a reusable workflow:
+      # - name: export
+      #   uses: misc/export-results
+      #   with:
+      #     project: '{{{{ vars.project_path }}}}'
 
 """
 
