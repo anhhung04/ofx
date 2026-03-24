@@ -94,7 +94,8 @@ class MemcachedJobRegistry(RegistryAdapter):
                 keys = json.loads(index_data.decode())
             else:
                 keys = []
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to fetch memcached index for '%s': %s", index_key, exc)
             keys = []
 
         if key not in keys:

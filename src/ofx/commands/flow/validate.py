@@ -255,7 +255,7 @@ def validate_workflows(
                 break
 
     if not path:
-        print_error("Workflow Not Found", f"Could not find '{workflow_name}'")
+        print_error("Workflow Not Found", f"Could not find workflow '{workflow_name}'")
         return
 
     print_info("Validating", f"[cyan]{workflow_name}[/]")

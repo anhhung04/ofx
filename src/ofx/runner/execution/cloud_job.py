@@ -233,7 +233,8 @@ class CloudJobRunner(BaseRunner[Job]):
                 await asyncio.to_thread(
                     self._remote_runner.run, f"mkdir -p {self._work_dir}"
                 )
-            except Exception:
+            except Exception as e:
+                self._log_warning(f"Work dir creation failed, using /tmp: {e}")
                 self._work_dir = "/tmp"
         else:
             self._work_dir = f"C:\\Windows\\Temp\\.run-{self.run_id[:8]}"
@@ -241,7 +242,8 @@ class CloudJobRunner(BaseRunner[Job]):
                 await asyncio.to_thread(
                     self._remote_runner.run, f'mkdir "{self._work_dir}" 2>nul'
                 )
-            except Exception:
+            except Exception as e:
+                self._log_warning(f"Work dir creation failed, using Temp: {e}")
                 self._work_dir = "C:\\Windows\\Temp"
 
     def _build_provider_kwargs(self, cfg: CloudConfig) -> dict[str, Any]:

@@ -250,7 +250,8 @@ class BaseRunner[TModel: BaseModel]:
             try:
                 result = await self.get_result()
                 payload["outputs"] = result.outputs
-            except Exception:
+            except Exception as e:
+                self._log_warning(f"Failed to retrieve outputs for checkpoint: {e}")
                 payload["outputs"] = {}
 
         await write_checkpoint(

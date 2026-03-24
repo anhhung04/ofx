@@ -47,7 +47,7 @@ class ToolsInstallHandler:
             except RuntimeError:
                 print_warning(
                     "Workflow Not Found",
-                    f"Workflow '{self.workflow_name}' not found.",
+                    f"Could not find workflow '{self.workflow_name}'",
                 )
                 return
 

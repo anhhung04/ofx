@@ -31,7 +31,7 @@ def _find_workflow_fuzzy(name: str) -> Workflow:
                 wf = Workflow.model_validate(data)
                 wf.workflow_path = match
                 return wf
-    raise RuntimeError(f"Workflow {name} not found.")
+    raise RuntimeError(f"Could not find workflow '{name}'")
 
 
 def _build_dag_data(workflow: Workflow) -> dict[str, Any]:
