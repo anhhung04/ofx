@@ -36,6 +36,10 @@ def list_workflows(
         list[str],
         typer.Option("--tag", "-t", help="Filter workflows by tag. Can be specified multiple times (OR logic)."),
     ] = [],
+    search: Annotated[
+        str,
+        typer.Option("--search", "-s", help="Search workflows by name, description, or tags."),
+    ] = "",
     show_tags: Annotated[
         bool,
         typer.Option("--tags", help="Show tags alongside each workflow name."),
@@ -47,15 +51,13 @@ def list_workflows(
 ):
     """List available workflows as a folder tree.
 
-    Use --tag/-t to filter by tag, --tags to show tags, or --list-tags to see all tags.
+    Use --tag/-t to filter by tag, --search/-s to search, --tags to show tags.
     """
     from collections import defaultdict
     from pathlib import Path
 
     import yaml
-    from rich.columns import Columns
     from rich.table import Table
-    from rich.text import Text
     from rich.tree import Tree
 
     from ofx.collections import CollectionManager
@@ -68,6 +70,7 @@ def list_workflows(
 
     show_all = not builtin and not collection
     filter_tags = {t.lower() for t in tag}
+    search_term = search.lower().strip()
 
     def _scan_yaml_files(root: Path) -> list[Path]:
         files: list[Path] = []
@@ -75,17 +78,21 @@ def list_workflows(
             files.extend(sorted(root.rglob(f"*{ext}")))
         return sorted(set(files))
 
-    def _read_tags(path: Path) -> list[str]:
-        """Read tags from a workflow YAML file (fast, partial parse)."""
+    def _read_metadata(path: Path) -> dict:
+        """Read name, description, and tags from a workflow YAML file."""
         try:
             with open(path) as f:
                 data = yaml.safe_load(f)
             if isinstance(data, dict):
                 tags = data.get("tags", [])
-                return [str(t).lower() for t in tags] if isinstance(tags, list) else []
+                return {
+                    "name": str(data.get("name", path.stem)),
+                    "description": str(data.get("description", "")),
+                    "tags": [str(t).lower() for t in tags] if isinstance(tags, list) else [],
+                }
         except Exception:
             pass
-        return []
+        return {"name": path.stem, "description": "", "tags": []}
 
     # Collect all files first: (path, source_label, base_root)
     all_files: list[tuple[Path, str, Path]] = []
@@ -129,7 +136,7 @@ def list_workflows(
     if list_tags:
         tag_counts: dict[str, int] = defaultdict(int)
         for file, _, _ in all_files:
-            for t in _read_tags(file):
+            for t in _read_metadata(file)["tags"]:
                 tag_counts[t] += 1
 
         if not tag_counts:
@@ -144,34 +151,44 @@ def list_workflows(
         console.print(table)
         return
 
-    # Read tags when filtering or showing
-    need_tags = bool(filter_tags) or show_tags
-    file_tags: dict[str, list[str]] = {}
-    if need_tags:
+    # Read metadata when filtering or showing
+    need_metadata = bool(filter_tags) or bool(search_term) or show_tags
+    file_meta: dict[str, dict] = {}
+    if need_metadata:
         for file, _, _ in all_files:
-            file_tags[str(file.resolve())] = _read_tags(file)
+            file_meta[str(file.resolve())] = _read_metadata(file)
 
-    # Build grouped tree: source_label -> {category -> [(name, tags)]}
-    groups: dict[str, dict[str, list[tuple[str, list[str]]]]] = {}
+    # Build grouped tree: source_label -> {category -> [(name, tags, description)]}
+    groups: dict[str, dict[str, list[tuple[str, list[str], str]]]] = {}
 
     for file, source, base_root in all_files:
         resolved = str(file.resolve())
-        tags = file_tags.get(resolved, [])
+        meta = file_meta.get(resolved, {"name": file.stem, "description": "", "tags": []})
+        tags = meta["tags"]
+        description = meta["description"]
 
         # Apply tag filter
         if filter_tags and not filter_tags.intersection(tags):
             continue
+
+        # Apply search filter
+        if search_term:
+            searchable = f"{file.stem} {meta['name']} {description} {' '.join(tags)}".lower()
+            if search_term not in searchable:
+                continue
 
         try:
             category = file.relative_to(base_root).parent
             cat_str = str(category) if str(category) != "." else ""
         except ValueError:
             cat_str = ""
-        groups.setdefault(source, defaultdict(list))[cat_str].append((file.stem, tags))
+        groups.setdefault(source, defaultdict(list))[cat_str].append((file.stem, tags, description))
 
     if not groups:
         if filter_tags:
             print_warning("No Workflows Found", f"No workflows matched tags: {', '.join(sorted(filter_tags))}")
+        elif search_term:
+            print_warning("No Workflows Found", f"No workflows matched search: '{search_term}'")
         else:
             print_warning("No Workflows Found", "No workflows matched the filter.")
         return
@@ -186,12 +203,14 @@ def list_workflows(
                 cat_branch = source_branch.add(f"[yellow]📁 {cat}[/yellow]")
             else:
                 cat_branch = source_branch
-            for name, tags in sorted(categories[cat]):
+            for name, tags, description in sorted(categories[cat]):
+                parts = [f"[cyan]{name}[/cyan]"]
                 if show_tags and tags:
-                    tag_str = " ".join(f"[dim]#{t}[/dim]" for t in tags)
-                    cat_branch.add(f"[cyan]{name}[/cyan]  {tag_str}")
-                else:
-                    cat_branch.add(f"[cyan]{name}[/cyan]")
+                    parts.append(" ".join(f"[dim]#{t}[/dim]" for t in tags))
+                if search_term and description:
+                    desc = description.split("\n")[0][:80]
+                    parts.append(f"[dim italic]{desc}[/dim italic]")
+                cat_branch.add("  ".join(parts))
 
     console.print(root)
 
