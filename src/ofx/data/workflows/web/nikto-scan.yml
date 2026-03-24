@@ -18,6 +18,9 @@ dispatch:
 jobs:
   scan:
     name: Nikto Web Scan
+    outputs:
+      nikto_findings_file: '${{ steps.collect-nikto.outputs.nikto_findings_file }}'
+      nikto_count: '${{ steps.collect-nikto.outputs.nikto_count }}'
     steps:
     - name: nikto-scan
       run: |
@@ -47,6 +50,8 @@ jobs:
         print(f"Nikto found {len(findings)} items")
   nuclei-web:
     name: Nuclei Web Scan
+    outputs:
+      nuclei_count: '${{ steps.export-nuclei.outputs.nuclei_count }}'
     steps:
     - task: nuclei
       name: nuclei-web-scan

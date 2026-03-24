@@ -24,6 +24,9 @@ dispatch:
 jobs:
   transform:
     name: Data Transformation
+    outputs:
+      result: '${{ steps.encode-decode.outputs.result }}'
+      operation: '${{ steps.encode-decode.outputs.operation }}'
     steps:
     - name: encode-decode
       script: |

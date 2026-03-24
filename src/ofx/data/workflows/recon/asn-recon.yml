@@ -15,6 +15,10 @@ dispatch:
 jobs:
   lookup:
     name: ASN Lookup
+    outputs:
+      asn: '{{ steps.asn-lookup.outputs.asn }}'
+      prefix_count: '{{ steps.asn-lookup.outputs.prefix_count }}'
+      results_file: '{{ steps.asn-lookup.outputs.results_file }}'
     steps:
     - name: asn-lookup
       script: |

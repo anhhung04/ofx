@@ -18,6 +18,9 @@ dispatch:
 jobs:
   generate-names:
     name: Bucket Name Generation
+    outputs:
+      names_file: '{{ steps.generate-permutations.outputs.names_file }}'
+      name_count: '{{ steps.generate-permutations.outputs.name_count }}'
     steps:
       - name: generate-permutations
         script: |
@@ -70,6 +73,12 @@ jobs:
     name: Bucket Scanning
     needs:
       - generate-names
+    outputs:
+      results_file: '{{ steps.collect-results.outputs.results_file }}'
+      vuln_count: '{{ steps.collect-results.outputs.vuln_count }}'
+      bucket_count: '{{ steps.collect-results.outputs.bucket_count }}'
+      s3_vuln_count: '{{ steps.collect-results.outputs.s3_vuln_count }}'
+      nuclei_vuln_count: '{{ steps.collect-results.outputs.nuclei_vuln_count }}'
     steps:
       - task: s3scanner
         name: s3scanner-scan

@@ -22,6 +22,9 @@ dispatch:
 jobs:
   cmdi-scan:
     name: Command Injection Scan (commix)
+    outputs:
+      commix_vuln_count: '${{ steps.collect-commix.outputs.commix_vuln_count }}'
+      commix_vuln_param: '${{ steps.collect-commix.outputs.commix_vuln_param }}'
     steps:
     - name: commix-scan
       run: |
@@ -56,6 +59,8 @@ jobs:
             print(f"  [!] Parameter: {v['parameter']}")
   nuclei-rce:
     name: Nuclei RCE/Injection Scan
+    outputs:
+      nuclei_vuln_count: '${{ steps.collect-nuclei.outputs.nuclei_vuln_count }}'
     steps:
     - task: nuclei
       name: nuclei-cmdi

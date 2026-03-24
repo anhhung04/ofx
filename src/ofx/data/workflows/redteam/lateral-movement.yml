@@ -34,6 +34,11 @@ dispatch:
 jobs:
   spray-smb:
     name: SMB Access Testing
+    outputs:
+      smb_accessible: '{{ steps.collect-smb-access.outputs.smb_accessible }}'
+      smb_admin: '{{ steps.collect-smb-access.outputs.smb_admin }}'
+      smb_file: '{{ steps.collect-smb-access.outputs.smb_file }}'
+      smb_admin_file: '{{ steps.collect-smb-access.outputs.smb_admin_file }}'
     if: "{{ 'smb' in inputs.protocols }}"
     steps:
     - task: netexec
@@ -77,6 +82,9 @@ jobs:
 
   spray-winrm:
     name: WinRM Access Testing
+    outputs:
+      winrm_accessible: '{{ steps.collect-winrm-access.outputs.winrm_accessible }}'
+      winrm_file: '{{ steps.collect-winrm-access.outputs.winrm_file }}'
     if: "{{ 'winrm' in inputs.protocols }}"
     steps:
     - task: netexec
@@ -113,6 +121,9 @@ jobs:
 
   spray-ssh:
     name: SSH Access Testing
+    outputs:
+      ssh_accessible: '{{ steps.collect-ssh-access.outputs.ssh_accessible }}'
+      ssh_file: '{{ steps.collect-ssh-access.outputs.ssh_file }}'
     if: "{{ 'ssh' in inputs.protocols }}"
     steps:
     - task: netexec
@@ -148,6 +159,10 @@ jobs:
 
   pivot:
     name: Establish Pivot Points
+    outputs:
+      pivot_count: '{{ steps.pivot-enumeration.outputs.pivot_count }}'
+      pivot_file: '{{ steps.pivot-enumeration.outputs.pivot_file }}'
+      total_accessible: '{{ steps.pivot-enumeration.outputs.total_accessible }}'
     needs: [spray-smb, spray-winrm, spray-ssh]
     steps:
     - name: pivot-enumeration

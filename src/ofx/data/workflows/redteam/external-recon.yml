@@ -22,6 +22,8 @@ dispatch:
 jobs:
   domain-intel:
     name: Domain Intelligence
+    outputs:
+      domain_intel: '{{ steps.export-intel.outputs.domain_intel }}'
     steps:
     - task: whois
       name: whois-lookup
@@ -53,6 +55,9 @@ jobs:
       log-stdout: true
   subdomain-enum:
     name: Subdomain Enumeration
+    outputs:
+      subs_file: '{{ steps.collect-subdomains.outputs.subs_file }}'
+      sub_count: '{{ steps.collect-subdomains.outputs.sub_count }}'
     steps:
     - task: subfinder
       name: subfinder-enum
@@ -108,6 +113,9 @@ jobs:
         print(f"Collected {len(subs)} unique subdomains")
   dns-verify:
     name: DNS Verification
+    outputs:
+      alive_file: '{{ steps.filter-alive.outputs.alive_file }}'
+      alive_count: '{{ steps.filter-alive.outputs.alive_count }}'
     needs:
     - subdomain-enum
     steps:
@@ -141,6 +149,10 @@ jobs:
         print(f"Verified {len(alive)} alive subdomains")
   port-scan:
     name: Port Scanning
+    outputs:
+      ports_file: '{{ steps.collect-ports.outputs.ports_file }}'
+      port_count: '{{ steps.collect-ports.outputs.port_count }}'
+      port_hosts_file: '{{ steps.collect-ports.outputs.port_hosts_file }}'
     needs:
     - dns-verify
     steps:
@@ -181,6 +193,9 @@ jobs:
         print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
   http-probe:
     name: HTTP Probing
+    outputs:
+      live_urls: '{{ steps.export-live.outputs.live_urls }}'
+      live_count: '{{ steps.export-live.outputs.live_count }}'
     needs:
     - dns-verify
     steps:
@@ -201,6 +216,9 @@ jobs:
       log-stdout: true
   web-fingerprint:
     name: Web Fingerprinting
+    outputs:
+      tech_count: '{{ steps.export-fingerprint.outputs.tech_count }}'
+      waf_detected_file: '{{ steps.export-fingerprint.outputs.waf_detected_file }}'
     needs:
     - http-probe
     steps:
@@ -247,6 +265,9 @@ jobs:
       log-stdout: true
   web-crawl:
     name: Web Crawling
+    outputs:
+      crawled_file: '{{ steps.collect-crawled.outputs.crawled_file }}'
+      crawl_count: '{{ steps.collect-crawled.outputs.crawl_count }}'
     needs:
     - http-probe
     steps:
@@ -318,6 +339,8 @@ jobs:
         print(f"Crawled {len(urls)} unique URLs")
   takeover-check:
     name: Subdomain Takeover Check
+    outputs:
+      takeover_count: '{{ steps.export-takeovers.outputs.takeover_count }}'
     needs:
     - dns-verify
     steps:
@@ -345,6 +368,8 @@ jobs:
       log-stdout: true
   secret-hunt:
     name: Secret Hunting
+    outputs:
+      secrets_count: '{{ steps.export-secrets.outputs.secrets_count }}'
     needs:
     - web-crawl
     steps:
@@ -376,6 +401,13 @@ jobs:
       log-stdout: true
   vuln-scan:
     name: Vulnerability Scanning
+    outputs:
+      vuln_count: '{{ steps.export-vulns.outputs.vuln_count }}'
+      critical_count: '{{ steps.export-vulns.outputs.critical_count }}'
+      high_count: '{{ steps.export-vulns.outputs.high_count }}'
+      medium_count: '{{ steps.export-vulns.outputs.medium_count }}'
+      nikto_count: '{{ steps.export-vulns.outputs.nikto_count }}'
+      crlf_count: '{{ steps.export-vulns.outputs.crlf_count }}'
     needs:
     - web-crawl
     - web-fingerprint
@@ -445,6 +477,10 @@ jobs:
       log-stdout: true
   osint:
     name: OSINT & Credential Hunting
+    outputs:
+      email_file: '{{ steps.collect-emails.outputs.email_file }}'
+      email_count: '{{ steps.collect-emails.outputs.email_count }}'
+      breach_count: '{{ steps.export-osint.outputs.breach_count }}'
     needs:
     - domain-intel
     steps:

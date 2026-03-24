@@ -36,6 +36,8 @@ jobs:
 
   method-test:
     name: HTTP Method Testing
+    outputs:
+      finding_count: '${{ steps.test-methods.outputs.finding_count }}'
     steps:
     - name: test-methods
       script: |
@@ -91,6 +93,8 @@ jobs:
 
   security-headers:
     name: Security Headers Check
+    outputs:
+      header_finding_count: '${{ steps.check-headers.outputs.header_finding_count }}'
     steps:
     - name: check-headers
       script: |

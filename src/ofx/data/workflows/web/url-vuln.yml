@@ -16,6 +16,8 @@ dispatch:
 jobs:
   xss-scan:
     name: XSS Vulnerability Scan
+    outputs:
+      xss_count: '${{ steps.export-xss.outputs.xss_count }}'
     steps:
     - task: dalfox
       name: dalfox-xss
@@ -29,6 +31,8 @@ jobs:
       log-stdout: true
   nuclei-scan:
     name: Nuclei Vulnerability Scan
+    outputs:
+      nuclei_count: '${{ steps.export-vulns.outputs.nuclei_count }}'
     steps:
     - task: nuclei
       name: nuclei-http

@@ -48,6 +48,9 @@ jobs:
 
   email-harvest:
     name: Email Harvesting
+    outputs:
+      emails_file: '{{ steps.collect-emails.outputs.emails_file }}'
+      email_count: '{{ steps.collect-emails.outputs.email_count }}'
     steps:
     - task: theharvester
       name: theharvester-scan
@@ -110,6 +113,8 @@ jobs:
 
   breach-search:
     name: Breach Database Search
+    outputs:
+      typed_outputs: '{{ steps.breach-lookup.outputs.typed_outputs }}'
     steps:
     - task: h8mail
       name: breach-lookup

@@ -28,6 +28,11 @@ dispatch:
 jobs:
   encode:
     name: Payload Encoding
+    outputs:
+      encoded: '${{ steps.generate-payload.outputs.encoded }}'
+      format: '${{ steps.generate-payload.outputs.format }}'
+      original_size: '${{ steps.generate-payload.outputs.original_size }}'
+      encoded_size: '${{ steps.generate-payload.outputs.encoded_size }}'
     steps:
     - name: generate-payload
       script: |

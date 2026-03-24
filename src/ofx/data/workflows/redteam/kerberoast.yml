@@ -35,6 +35,9 @@ dispatch:
 jobs:
   kerberoast:
     name: Kerberoasting
+    outputs:
+      hash_count: '{{ steps.get-spn-tickets.outputs.hash_count }}'
+      hash_file: '{{ steps.get-spn-tickets.outputs.hash_file }}'
     steps:
     - name: get-spn-tickets
       run: |
@@ -64,6 +67,9 @@ jobs:
 
   asrep-roast:
     name: AS-REP Roasting
+    outputs:
+      asrep_count: '{{ steps.get-asrep-hashes.outputs.asrep_count }}'
+      asrep_file: '{{ steps.get-asrep-hashes.outputs.asrep_file }}'
     steps:
     - name: get-asrep-hashes
       run: |

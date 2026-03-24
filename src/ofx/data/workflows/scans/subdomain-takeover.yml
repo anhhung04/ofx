@@ -15,6 +15,9 @@ dispatch:
 jobs:
   enum:
     name: Subdomain Enumeration
+    outputs:
+      subs_file: '{{ steps.merge-subs.outputs.subs_file }}'
+      sub_count: '{{ steps.merge-subs.outputs.sub_count }}'
     steps:
       - task: subfinder
         name: subfinder-enum
@@ -76,6 +79,12 @@ jobs:
     name: DNS Verification & CNAME Check
     needs:
       - enum
+    outputs:
+      alive_file: '{{ steps.analyze-cnames.outputs.alive_file }}'
+      alive_count: '{{ steps.analyze-cnames.outputs.alive_count }}'
+      cname_count: '{{ steps.analyze-cnames.outputs.cname_count }}'
+      dangling_count: '{{ steps.analyze-cnames.outputs.dangling_count }}'
+      dangling_file: '{{ steps.analyze-cnames.outputs.dangling_file }}'
     steps:
       - task: dnsx
         name: dns-resolve
@@ -152,6 +161,9 @@ jobs:
     name: Takeover Fingerprinting
     needs:
       - dns-verify
+    outputs:
+      takeover_count: '{{ steps.collect-takeovers.outputs.takeover_count }}'
+      takeover_details_file: '{{ steps.collect-takeovers.outputs.takeover_details_file }}'
     steps:
       - task: subzy
         name: subzy-check

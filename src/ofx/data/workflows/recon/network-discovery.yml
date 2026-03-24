@@ -18,6 +18,10 @@ dispatch:
 jobs:
   host-discovery:
     name: Host Discovery
+    outputs:
+      alive_hosts: '{{ steps.ping-sweep.outputs.alive_hosts }}'
+      alive_file: '{{ steps.collect-alive.outputs.alive_file }}'
+      alive_count: '{{ steps.collect-alive.outputs.alive_count }}'
     steps:
     - name: ping-sweep
       run: |
@@ -47,6 +51,9 @@ jobs:
         print(f"Found {len(hosts)} alive hosts")
   port-scan:
     name: Port Scanning
+    outputs:
+      hosts_file: '{{ steps.collect-ports.outputs.hosts_file }}'
+      port_count: '{{ steps.collect-ports.outputs.port_count }}'
     needs:
     - host-discovery
     steps:
@@ -88,6 +95,9 @@ jobs:
         print(f"Found {len(ports_found)} open ports across {len(hosts_with_ports)} hosts")
   service-detection:
     name: Service Detection
+    outputs:
+      live_urls: '{{ steps.export-http.outputs.live_urls }}'
+      live_count: '{{ steps.export-http.outputs.live_count }}'
     needs:
     - port-scan
     steps:

@@ -18,6 +18,10 @@ dispatch:
 jobs:
   probe:
     name: HTTP Probe
+    outputs:
+      status: '${{ steps.export-probe.outputs.status }}'
+      title: '${{ steps.export-probe.outputs.title }}'
+      webserver: '${{ steps.export-probe.outputs.webserver }}'
     steps:
     - task: httpx
       name: http-probe
@@ -37,6 +41,9 @@ jobs:
       log-stdout: true
   fingerprint:
     name: Technology Fingerprinting
+    outputs:
+      tech_list_file: '${{ steps.collect-tech.outputs.tech_list_file }}'
+      tech_count: '${{ steps.collect-tech.outputs.tech_count }}'
     steps:
     - name: whatweb-scan
       run: |
@@ -68,6 +75,9 @@ jobs:
         print(f"Detected {len(techs)} technologies")
   waf-detect:
     name: WAF Detection
+    outputs:
+      waf_detected_file: '${{ steps.export-waf.outputs.waf_detected_file }}'
+      waf_count: '${{ steps.export-waf.outputs.waf_count }}'
     steps:
     - task: wafw00f
       name: wafw00f-scan

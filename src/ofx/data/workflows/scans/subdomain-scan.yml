@@ -21,6 +21,10 @@ dispatch:
 jobs:
   subdomain-recon:
     name: Subdomain Enumeration
+    outputs:
+      hosts_file: '{{ steps.collect-subdomains.outputs.hosts_file }}'
+      subdomain_count: '{{ steps.collect-subdomains.outputs.subdomain_count }}'
+      live_urls: '{{ steps.export-data.outputs.live_urls }}'
     steps:
     - task: subfinder
       name: subfinder-enum
@@ -100,6 +104,8 @@ jobs:
     name: Host Reconnaissance
     needs:
     - subdomain-recon
+    outputs:
+      alive_subs: '{{ steps.port-scan.outputs.alive_subs }}'
     steps:
     - task: naabu
       name: port-scan

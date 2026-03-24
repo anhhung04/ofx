@@ -34,6 +34,9 @@ dispatch:
 jobs:
   collect:
     name: BloodHound Collection
+    outputs:
+      output_file: '{{ steps.bh-collect.outputs.output_file }}'
+      output_dir: '{{ steps.bh-collect.outputs.output_dir }}'
     steps:
     - name: bh-collect
       run: |
@@ -93,6 +96,8 @@ jobs:
 
   analyze:
     name: Quick Analysis
+    outputs:
+      object_count: '{{ steps.analyze-data.outputs.object_count }}'
     needs: [collect]
     steps:
     - name: analyze-data

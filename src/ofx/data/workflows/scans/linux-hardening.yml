@@ -23,6 +23,10 @@ dispatch:
 jobs:
   audit:
     name: Linux Hardening Audit
+    outputs:
+      finding_count: '{{ steps.hardening-checks.outputs.finding_count }}'
+      passed_count: '{{ steps.hardening-checks.outputs.passed_count }}'
+      score: '{{ steps.hardening-checks.outputs.score }}'
     steps:
     - name: hardening-checks
       script: |

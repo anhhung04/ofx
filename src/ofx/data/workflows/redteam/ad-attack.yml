@@ -34,6 +34,9 @@ dispatch:
 jobs:
   enum:
     name: Pre-Attack Enumeration
+    outputs:
+      users_file: '{{ steps.collect-users.outputs.users_file }}'
+      user_count: '{{ steps.collect-users.outputs.user_count }}'
     steps:
     - task: netexec
       name: smb-info
@@ -98,6 +101,9 @@ jobs:
         print(f"Enumerated {len(users)} AD users")
   kerberoast:
     name: Kerberoasting
+    outputs:
+      spn_count: '{{ steps.collect-spns.outputs.spn_count }}'
+      tgs_hashes: '{{ steps.collect-spns.outputs.tgs_hashes }}'
     needs:
     - enum
     steps:
@@ -139,6 +145,9 @@ jobs:
       log-stdout: true
   asrep-roast:
     name: AS-REP Roasting
+    outputs:
+      asrep_count: '{{ steps.collect-asrep.outputs.asrep_count }}'
+      asrep_hashes: '{{ steps.collect-asrep.outputs.asrep_hashes }}'
     needs:
     - enum
     steps:
@@ -176,6 +185,9 @@ jobs:
       log-stdout: true
   targeted-spray:
     name: Targeted Password Spray
+    outputs:
+      spray_hits: '{{ steps.collect-spray.outputs.spray_hits }}'
+      valid_users_file: '{{ steps.collect-spray.outputs.valid_users_file }}'
     needs:
     - enum
     steps:
@@ -230,6 +242,10 @@ jobs:
       log-stdout: true
   credential-dump:
     name: Credential Dumping
+    outputs:
+      hash_count: '{{ steps.collect-creds.outputs.hash_count }}'
+      sam_count: '{{ steps.collect-creds.outputs.sam_count }}'
+      lsa_count: '{{ steps.collect-creds.outputs.lsa_count }}'
     needs:
     - enum
     steps:
@@ -286,6 +302,9 @@ jobs:
       log-stdout: true
   relay-detect:
     name: SMB Relay Detection
+    outputs:
+      relay_count: '{{ steps.collect-relay.outputs.relay_count }}'
+      webdav_enabled: '{{ steps.collect-relay.outputs.webdav_enabled }}'
     needs:
     - enum
     steps:

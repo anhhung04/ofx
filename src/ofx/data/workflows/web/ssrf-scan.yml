@@ -19,6 +19,9 @@ dispatch:
 jobs:
   scan:
     name: SSRF Detection
+    outputs:
+      finding_count: '${{ steps.test-ssrf.outputs.finding_count }}'
+      payloads_tested: '${{ steps.test-ssrf.outputs.payloads_tested }}'
     steps:
     - name: test-ssrf
       script: |

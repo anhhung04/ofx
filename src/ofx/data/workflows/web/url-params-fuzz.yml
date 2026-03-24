@@ -35,6 +35,9 @@ jobs:
     name: Parameter Discovery
     needs:
     - probe
+    outputs:
+      found_params: '${{ steps.export-params.outputs.found_params }}'
+      param_count: '${{ steps.export-params.outputs.param_count }}'
     steps:
     - task: arjun
       name: find-params

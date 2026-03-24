@@ -17,6 +17,9 @@ dispatch:
 jobs:
   username-hunt:
     name: Username Hunting
+    outputs:
+      accounts_found: '{{ steps.export-accounts.outputs.accounts_found }}'
+      profile_urls: '{{ steps.export-accounts.outputs.profile_urls }}'
     steps:
     - task: maigret
       name: maigret-search
@@ -39,6 +42,8 @@ jobs:
       log-stdout: true
   email-breach:
     name: Email Breach Search
+    outputs:
+      breaches_found: '{{ steps.export-breaches.outputs.breaches_found }}'
     steps:
     - task: h8mail
       name: breach-search

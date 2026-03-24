@@ -19,6 +19,9 @@ dispatch:
 jobs:
   host-discovery:
     name: Host & Port Discovery
+    outputs:
+      live_hosts: '{{ steps.collect-hosts.outputs.live_hosts }}'
+      host_count: '{{ steps.collect-hosts.outputs.host_count }}'
     steps:
     - task: mapcidr
       name: expand-cidr

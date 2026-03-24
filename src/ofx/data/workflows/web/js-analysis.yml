@@ -19,6 +19,11 @@ dispatch:
 jobs:
   discover-js:
     name: JS File Discovery
+    outputs:
+      js_file: '${{ steps.extract-js-urls.outputs.js_file }}'
+      all_urls_file: '${{ steps.extract-js-urls.outputs.all_urls_file }}'
+      js_count: '${{ steps.extract-js-urls.outputs.js_count }}'
+      url_count: '${{ steps.extract-js-urls.outputs.url_count }}'
     steps:
       - task: katana
         name: katana-js-crawl
@@ -89,6 +94,11 @@ jobs:
     name: JS Security Analysis
     needs:
       - discover-js
+    outputs:
+      secret_count: '${{ steps.js-summary.outputs.secret_count }}'
+      vuln_count: '${{ steps.js-summary.outputs.vuln_count }}'
+      critical_count: '${{ steps.js-summary.outputs.critical_count }}'
+      high_count: '${{ steps.js-summary.outputs.high_count }}'
     steps:
       - task: nuclei
         name: nuclei-exposure

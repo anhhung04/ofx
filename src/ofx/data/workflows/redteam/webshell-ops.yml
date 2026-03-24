@@ -51,6 +51,11 @@ dispatch:
 jobs:
   generate:
     name: Generate Webshell
+    outputs:
+      shell_file: '{{ steps.create-shell.outputs.shell_file }}'
+      shell_filename: '{{ steps.create-shell.outputs.shell_filename }}'
+      shell_type: '{{ steps.create-shell.outputs.shell_type }}'
+      shell_size: '{{ steps.create-shell.outputs.shell_size }}'
     steps:
     - name: create-shell
       script: |
@@ -99,6 +104,9 @@ jobs:
 
   upload:
     name: Upload Webshell
+    outputs:
+      shell_url: '{{ steps.deploy-shell.outputs.shell_url }}'
+      remote_path: '{{ steps.deploy-shell.outputs.remote_path }}'
     needs: [generate]
     if: "{{ inputs.upload_method != 'url' }}"
     steps:
@@ -142,6 +150,11 @@ jobs:
 
   verify:
     name: Verify Webshell
+    outputs:
+      shell_url: '{{ steps.test-connection.outputs.shell_url }}'
+      shell_user: '{{ steps.test-connection.outputs.shell_user }}'
+      shell_pwd: '{{ steps.test-connection.outputs.shell_pwd }}'
+      shell_os: '{{ steps.test-connection.outputs.shell_os }}'
     needs: [upload]
     steps:
     - name: test-connection
@@ -192,6 +205,9 @@ jobs:
 
   enumerate:
     name: Host Enumeration via Webshell
+    outputs:
+      enum_file: '{{ steps.enum-via-shell.outputs.enum_file }}'
+      enum_sections: '{{ steps.enum-via-shell.outputs.enum_sections }}'
     needs: [verify]
     steps:
     - name: enum-via-shell

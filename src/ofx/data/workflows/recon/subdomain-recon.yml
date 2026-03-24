@@ -18,6 +18,9 @@ dispatch:
 jobs:
   passive-enum:
     name: Passive Subdomain Enumeration
+    outputs:
+      subdomain_file: '{{ steps.collect-subdomains.outputs.subdomain_file }}'
+      subdomain_count: '{{ steps.collect-subdomains.outputs.subdomain_count }}'
     steps:
     - task: subfinder
       name: subfinder-enum
@@ -80,6 +83,8 @@ jobs:
             f.write(f"subdomain_count={len(all_subs)}\n")
   dns-verification:
     name: DNS Verification
+    outputs:
+      typed_outputs: '{{ steps.verify-dns.outputs.typed_outputs }}'
     needs:
     - passive-enum
     steps:
@@ -94,6 +99,8 @@ jobs:
       continue-on-error: true
   http-probe:
     name: HTTP Probing
+    outputs:
+      live_urls: '{{ steps.export-urls.outputs.live_urls }}'
     needs:
     - dns-verification
     steps:

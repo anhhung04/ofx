@@ -37,6 +37,8 @@ jobs:
       log-stdout: true
   service-detection:
     name: Service Detection & Analysis
+    outputs:
+      http_targets: '{{ steps.extract-targets.outputs.http_targets }}'
     needs:
     - port-discovery
     steps:

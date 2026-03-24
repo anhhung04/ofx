@@ -17,6 +17,9 @@ dispatch:
 jobs:
   vuln-scan:
     name: Vulnerability Scanning
+    outputs:
+      vuln_count: '{{ steps.export-vulns.outputs.vuln_count }}'
+      critical_count: '{{ steps.export-vulns.outputs.critical_count }}'
     steps:
     - task: grype
       name: dependency-vulns
@@ -54,6 +57,8 @@ jobs:
       log-stdout: true
   secrets-scan:
     name: Secret & Leak Scanning
+    outputs:
+      secrets_count: '{{ steps.export-secrets.outputs.secrets_count }}'
     steps:
     - task: gitleaks
       name: gitleaks-scan

@@ -21,6 +21,8 @@ dispatch:
 jobs:
   host-recon:
     name: Host Reconnaissance
+    outputs:
+      live_urls: '{{ steps.export-data.outputs.live_urls }}'
     steps:
     - task: rustscan
       name: rustscan-fast

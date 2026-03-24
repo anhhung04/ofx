@@ -22,6 +22,9 @@ dispatch:
 jobs:
   host-discovery:
     name: Host Discovery
+    outputs:
+      alive_file: '{{ steps.collect-alive.outputs.alive_file }}'
+      alive_count: '{{ steps.collect-alive.outputs.alive_count }}'
     steps:
     - name: fping-sweep
       run: |
@@ -49,6 +52,10 @@ jobs:
         print(f"Discovered {len(hosts)} alive hosts")
   port-scan:
     name: Port Scanning
+    outputs:
+      ports_file: '{{ steps.collect-ports.outputs.ports_file }}'
+      port_count: '{{ steps.collect-ports.outputs.port_count }}'
+      scan_targets_file: '{{ steps.collect-ports.outputs.scan_targets_file }}'
     needs:
     - host-discovery
     steps:
@@ -110,6 +117,10 @@ jobs:
         print(f"Found {len(ports)} open ports across {len(hosts_with_ports)} hosts")
   service-detect:
     name: Service Detection
+    outputs:
+      service_count: '{{ steps.collect-services.outputs.service_count }}'
+      http_urls_file: '{{ steps.collect-services.outputs.http_urls_file }}'
+      http_count: '{{ steps.collect-services.outputs.http_count }}'
     needs:
     - port-scan
     steps:
@@ -161,6 +172,8 @@ jobs:
         print(f"Services detected: {len(services)}, HTTP targets: {len(http_targets)}")
   web-enum:
     name: Web Enumeration
+    outputs:
+      web_tech_count: '{{ steps.collect-web.outputs.web_tech_count }}'
     needs:
     - service-detect
     steps:
@@ -197,6 +210,10 @@ jobs:
         print(f"Web technologies detected: {len(techs)}")
   ad-detect:
     name: AD Detection
+    outputs:
+      ad_domains_file: '{{ steps.collect-ad-info.outputs.ad_domains_file }}'
+      dcs_file: '{{ steps.collect-ad-info.outputs.dcs_file }}'
+      dc_count: '{{ steps.collect-ad-info.outputs.dc_count }}'
     needs:
     - host-discovery
     steps:

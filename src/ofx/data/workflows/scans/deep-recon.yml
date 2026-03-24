@@ -26,6 +26,9 @@ dispatch:
 jobs:
   osint:
     name: OSINT Gathering
+    outputs:
+      osint_domain_count: '{{ steps.export-osint.outputs.osint_domain_count }}'
+      osint_user_count: '{{ steps.export-osint.outputs.osint_user_count }}'
     steps:
       - task: whois
         name: whois-lookup
@@ -66,6 +69,9 @@ jobs:
 
   passive-enum:
     name: Passive Subdomain Enumeration
+    outputs:
+      subs_file: '{{ steps.collect-subdomains.outputs.subs_file }}'
+      sub_count: '{{ steps.collect-subdomains.outputs.sub_count }}'
     steps:
       - task: subfinder
         name: subfinder-enum
@@ -175,6 +181,11 @@ jobs:
     name: Active Enumeration & Resolution
     needs:
       - passive-enum
+    outputs:
+      verified_file: '{{ steps.merge-active.outputs.verified_file }}'
+      verified_count: '{{ steps.merge-active.outputs.verified_count }}'
+      asn_ips_file: '{{ steps.merge-active.outputs.asn_ips_file }}'
+      asn_ip_count: '{{ steps.merge-active.outputs.asn_ip_count }}'
     steps:
       - task: dnsx
         name: dns-resolve
@@ -282,6 +293,12 @@ jobs:
     name: Web Probing & Technology Detection
     needs:
       - active-enum
+    outputs:
+      live_file: '{{ steps.export-live.outputs.live_file }}'
+      live_count: '{{ steps.export-live.outputs.live_count }}'
+      waf_count: '{{ steps.export-live.outputs.waf_count }}'
+      cdn_count: '{{ steps.export-live.outputs.cdn_count }}'
+      favicon_count: '{{ steps.export-live.outputs.favicon_count }}'
     steps:
       - task: httpx
         name: http-probe
@@ -346,6 +363,11 @@ jobs:
     name: URL Collection & Crawling
     needs:
       - web-probe
+    outputs:
+      all_urls_file: '{{ steps.collect-urls.outputs.all_urls_file }}'
+      param_file: '{{ steps.collect-urls.outputs.param_file }}'
+      url_count: '{{ steps.collect-urls.outputs.url_count }}'
+      param_count: '{{ steps.collect-urls.outputs.param_count }}'
     steps:
       - task: katana
         name: katana-crawl
@@ -472,6 +494,9 @@ jobs:
     name: Port Scanning & Service Detection
     needs:
       - active-enum
+    outputs:
+      ports_file: '{{ steps.export-ports.outputs.ports_file }}'
+      port_count: '{{ steps.export-ports.outputs.port_count }}'
     steps:
       - task: naabu
         name: naabu-scan
@@ -521,6 +546,14 @@ jobs:
       - url-collection
       - port-scan
       - web-probe
+    outputs:
+      vuln_count: '{{ steps.export-vulns.outputs.vuln_count }}'
+      critical_count: '{{ steps.export-vulns.outputs.critical_count }}'
+      high_count: '{{ steps.export-vulns.outputs.high_count }}'
+      medium_count: '{{ steps.export-vulns.outputs.medium_count }}'
+      xss_count: '{{ steps.export-vulns.outputs.xss_count }}'
+      takeover_count: '{{ steps.export-vulns.outputs.takeover_count }}'
+      dnstake_count: '{{ steps.export-vulns.outputs.dnstake_count }}'
     steps:
       - task: nuclei
         name: nuclei-scan

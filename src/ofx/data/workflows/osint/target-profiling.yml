@@ -22,34 +22,10 @@ dispatch:
 jobs:
   domain-intel:
     name: Domain Intelligence
+    outputs:
+      sub_count: '{{ steps.collect-domain.outputs.sub_count }}'
+      record_count: '{{ steps.collect-domain.outputs.record_count }}'
     steps:
-    - task: whois
-      name: whois-lookup
-      with:
-        target: '{{ inputs.target }}'
-      log-stdout: true
-      continue-on-error: true
-    - task: dnsx
-      name: dns-records
-      with:
-        target: '{{ inputs.target }}'
-        a: true
-        aaaa: true
-        cname: true
-        mx: true
-        ns: true
-        txt: true
-        resp: true
-      log-stdout: true
-      continue-on-error: true
-    - task: subfinder
-      name: subdomains
-      with:
-        target: '{{ inputs.target }}'
-        all: true
-      log-stdout: true
-      continue-on-error: true
-    - name: collect-domain
       script: |
         subs = {{ steps[2].outputs.typed_outputs | tojson }}
         sub_count = sum(1 for s in subs if s.get('_type') == 'subdomain')
@@ -63,6 +39,9 @@ jobs:
       log-stdout: true
   email-harvest:
     name: Email Harvesting
+    outputs:
+      emails: '{{ steps.collect-emails.outputs.emails }}'
+      email_count: '{{ steps.collect-emails.outputs.email_count }}'
     steps:
     - task: theharvester
       name: theharvester-search
@@ -102,6 +81,9 @@ jobs:
         print(f"Harvested {len(emails)} email addresses")
   account-check:
     name: Account Verification
+    outputs:
+      account_count: '{{ steps.collect-accounts.outputs.account_count }}'
+      services_with_accounts: '{{ steps.collect-accounts.outputs.services_with_accounts }}'
     needs:
     - email-harvest
     steps:
@@ -128,6 +110,9 @@ jobs:
       log-stdout: true
   social-recon:
     name: Social Media & Username Search
+    outputs:
+      social_count: '{{ steps.collect-social.outputs.social_count }}'
+      platforms: '{{ steps.collect-social.outputs.platforms }}'
     steps:
     - task: maigret
       name: maigret-search
@@ -151,6 +136,9 @@ jobs:
       log-stdout: true
   breach-search:
     name: Breach Database Search
+    outputs:
+      breach_count: '{{ steps.collect-breaches.outputs.breach_count }}'
+      breached_emails: '{{ steps.collect-breaches.outputs.breached_emails }}'
     needs:
     - email-harvest
     steps:

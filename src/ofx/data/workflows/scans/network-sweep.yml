@@ -19,6 +19,9 @@ dispatch:
 jobs:
   discovery:
     name: Host Discovery
+    outputs:
+      alive_count: '{{ steps.host-sweep.outputs.alive_count }}'
+      hosts_file: '{{ steps.host-sweep.outputs.hosts_file }}'
     steps:
     - name: host-sweep
       run: |
@@ -42,6 +45,9 @@ jobs:
   port-scan:
     name: Port Scanning
     needs: [discovery]
+    outputs:
+      port_count: '{{ steps.fast-portscan.outputs.port_count }}'
+      ports_file: '{{ steps.fast-portscan.outputs.ports_file }}'
     steps:
     - name: fast-portscan
       run: |
@@ -73,6 +79,8 @@ jobs:
   service-id:
     name: Service Identification
     needs: [port-scan]
+    outputs:
+      service_file: '{{ steps.nmap-svc.outputs.service_file }}'
     steps:
     - name: nmap-svc
       run: |

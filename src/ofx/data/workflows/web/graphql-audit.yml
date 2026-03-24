@@ -15,6 +15,11 @@ dispatch:
 jobs:
   introspection:
     name: Introspection & Schema Analysis
+    outputs:
+      introspection: '${{ steps.introspection-query.outputs.introspection }}'
+      type_count: '${{ steps.introspection-query.outputs.type_count }}'
+      schema_file: '${{ steps.introspection-query.outputs.schema_file }}'
+      finding_count: '${{ steps.introspection-query.outputs.finding_count }}'
     steps:
     - name: introspection-query
       script: |

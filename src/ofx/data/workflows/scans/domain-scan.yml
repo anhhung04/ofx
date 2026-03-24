@@ -70,6 +70,10 @@ jobs:
       continue-on-error: true
   subdomain-recon:
     name: Subdomain Discovery
+    outputs:
+      hosts_file: '{{ steps.collect-subdomains.outputs.hosts_file }}'
+      subdomain_count: '{{ steps.collect-subdomains.outputs.subdomain_count }}'
+      live_urls: '{{ steps.export-urls.outputs.live_urls }}'
     steps:
     - task: subfinder
       name: subfinder-enum
@@ -149,6 +153,8 @@ jobs:
     name: Host Reconnaissance
     needs:
     - subdomain-recon
+    outputs:
+      open_ports: '{{ steps.port-scan.outputs.open_ports }}'
     steps:
     - task: naabu
       name: port-scan
