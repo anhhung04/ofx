@@ -24,7 +24,7 @@ steps:
 
 Use them later in the same job:
 ```yaml
-run: echo "Ports: {{ steps.0.outputs.open_ports }}"
+run: echo "Ports: {{ steps.Scan.outputs.open_ports }}"
 ```
 
 ---
@@ -35,11 +35,12 @@ Promote step outputs to the job level so other jobs can consume them:
 jobs:
   scan:
     steps:
-      - run: ...
+      - name: scan-step
+        run: ...
         outputs:
           result: "{{ step.stdout }}"
     outputs:
-      scan_result: "{{ steps.0.outputs.result }}"
+      scan_result: "{{ steps['scan-step'].outputs.result }}"
 ```
 
 Reference job outputs from dependents:
@@ -63,9 +64,9 @@ How it works for each command step:
 jobs:
   discover:
     outputs:
-      target_ip: "{{ steps.0.outputs.target_ip }}"
+      target_ip: "{{ steps['find-target'].outputs.target_ip }}"
     steps:
-      - name: Find target
+      - name: find-target
         run: |
           target=$(dig +short example.com | head -1)
           echo "target_ip=$target" >> $OFX_OUTPUTS
@@ -87,6 +88,119 @@ jobs:
 ## Tips
 - Prefer clear, stable output names so templates stay readable.
 - Use `stdout_lines` for simple lists; use `OFX_OUTPUTS` when you need structured key/value results.
+- Use `typed_outputs` and template filters when chaining task results between jobs.
+
+---
+
+## Typed outputs (task steps)
+
+When a step uses `task:`, OFX automatically parses the tool's output into **structured objects** stored in `step.outputs.typed_outputs`. Each object has a `_type` field indicating its kind.
+
+### Output types
+
+| Type | Description | Key fields |
+|------|------------|------------|
+| `port` | Open port | `host`, `port`, `protocol`, `service_name` |
+| `url` | Discovered URL | `url`, `host`, `status_code`, `title` |
+| `vulnerability` | Finding | `name`, `severity`, `url`, `matched_at` |
+| `subdomain` | Subdomain | `host`, `source` |
+| `ip` | IP address | `ip`, `host` |
+| `tag` | Metadata tag | `name`, `value`, `category` |
+| `record` | DNS record | `host`, `type`, `value` |
+| `domain` | Domain info | `domain`, `registrar`, `created_date` |
+| `certificate` | TLS cert | `host`, `issuer`, `subject`, `not_after` |
+| `exploit` | Known exploit | `name`, `id`, `platform` |
+| `user_account` | Credential | `username`, `password`, `hash` |
+
+### Using typed outputs in templates
+
+Filter typed outputs with built-in helper functions:
+
+```yaml
+# Get ports from a task step
+ports: "{{ ports(steps['nmap-scan'].outputs.typed_outputs) }}"
+
+# Get live URLs
+urls: "{{ urls(steps['http-probe'].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) }}"
+
+# Count vulnerabilities
+vuln_count: "{{ vulns(steps['nuclei-scan'].outputs.typed_outputs) | length }}"
+
+# Get subdomains
+subs: "{{ subdomains(steps['subfinder'].outputs.typed_outputs) | map(attribute='host') | list }}"
+```
+
+Available filter functions: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `of_type(items, type_name)`.
+
+### Passing typed outputs between jobs
+
+Expose typed outputs at the job level, then reference them downstream:
+
+```yaml
+jobs:
+  scan:
+    outputs:
+      typed_outputs: "{{ steps['nmap-scan'].outputs.typed_outputs }}"
+      live_hosts: "{{ steps.merge.outputs.live_hosts }}"
+    steps:
+      - task: nmap
+        name: nmap-scan
+        with:
+          target: "{{ inputs.target }}"
+      - name: merge
+        script: |
+          hosts = set()
+          for item in {{ ports(steps["nmap-scan"].outputs.typed_outputs) | tojson }}:
+              hosts.add(item.get('host', ''))
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"live_hosts={chr(10).join(sorted(hosts))}\n")
+
+  exploit:
+    needs: [scan]
+    steps:
+      - task: nuclei
+        with:
+          target: "{{ jobs.scan.outputs.live_hosts }}"
+```
+
+### Exporting typed outputs to a project
+
+Use `export_typed_outputs()` in a script step to write structured results to the project directory:
+
+```yaml
+- name: export-to-project
+  script: |
+    project = '{{ vars.project_path | default("", true) }}'
+    if project:
+        all_typed = {{ jobs['scan'].outputs.typed_outputs | default([], true) | tojson }}
+        summaries = export_typed_outputs(project, all_typed)
+        for s in summaries:
+            print(s)
+  continue-on-error: true
+```
+
+---
+
+## Workflow-level outputs
+
+Promote job outputs to the workflow level for use by callers or `uses:` references:
+
+```yaml
+name: my-scan
+outputs:
+  live_hosts: "${{ jobs.scan.outputs.live_hosts }}"
+  vuln_count: "${{ jobs.vuln.outputs.vuln_count }}"
+
+jobs:
+  scan:
+    outputs:
+      live_hosts: "{{ steps.merge.outputs.live_hosts }}"
+    steps: ...
+  vuln:
+    outputs:
+      vuln_count: "{{ steps.count.outputs.vuln_count }}"
+    steps: ...
+```
 
 ---
 

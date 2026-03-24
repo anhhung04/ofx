@@ -199,7 +199,8 @@ async def run_workflow(
                 )
             else:
                 runner_secrets = {}
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed to load secrets: %s (continuing without secrets)", exc)
             runner_secrets = {}
 
     # Register secret values for log redaction *before* any runner logs.

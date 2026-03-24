@@ -249,6 +249,9 @@ class FlowRunHandler:
                         targets_dir,
                     )
 
+        # Validate inputs against workflow dispatch schema
+        self._validate_inputs()
+
     def _expand_file_refs(self) -> None:
         """Expand @file references in input values.
 
@@ -271,6 +274,57 @@ class FlowRunHandler:
                 )
             self.input[key] = entries[0] if len(entries) == 1 else entries
             logger.info("Loaded %d value(s) for '%s' from %s", len(entries), key, filepath)
+
+    def _validate_inputs(self) -> None:
+        """Validate inputs against the workflow dispatch schema.
+
+        Checks required inputs are present and coerces types where possible.
+        """
+        from ofx.utils.workflow_utils import find_workflow
+
+        try:
+            wf = find_workflow(self.workflow_name, tuple(get_workflow_search_dirs()))
+        except Exception:
+            return  # Validation runs best-effort; workflow resolution errors handled later
+
+        if not wf.dispatch or not wf.dispatch.inputs:
+            return
+
+        errors: list[str] = []
+        for name, spec in wf.dispatch.inputs.items():
+            alias = getattr(spec, "alias", None)
+            # Resolve alias: if alias was used, map it to the canonical name
+            if alias and alias in self.input and name not in self.input:
+                self.input[name] = self.input.pop(alias)
+
+            if spec.required and name not in self.input:
+                label = f"'{name}'" + (f" (alias: -{alias})" if alias else "")
+                errors.append(f"Required input {label} is missing")
+                continue
+
+            if name not in self.input:
+                # Apply default if not provided
+                if spec.default is not None:
+                    self.input[name] = spec.default
+                continue
+
+            # Type coercion
+            value = self.input[name]
+            declared_type = getattr(spec, "type", "string") or "string"
+            if isinstance(value, str):
+                if declared_type == "integer":
+                    try:
+                        self.input[name] = int(value)
+                    except ValueError:
+                        errors.append(
+                            f"Input '{name}' expects integer, got '{value}'"
+                        )
+                elif declared_type == "boolean":
+                    self.input[name] = value.lower() in ("true", "1", "yes")
+
+        if errors:
+            msg = "Input validation failed:\n  " + "\n  ".join(errors)
+            raise typer.BadParameter(msg)
 
     @staticmethod
     def _read_target_file(filepath: Path) -> list[str]:

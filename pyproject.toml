@@ -62,7 +62,7 @@ winrm = [
   "pywinrm>=0.4.3",
 ]
 ssh = [
-  "paramiko>=3.4.0",
+  "paramiko>=4.0.0",
 ]
 ai = [
   "openai>=1.0.0",

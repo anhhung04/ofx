@@ -1340,7 +1340,7 @@ requires-dist = [
     { name = "mkdocs-minify-plugin", marker = "extra == 'docs'", specifier = ">=0.8.0" },
     { name = "openai", marker = "extra == 'ai'", specifier = ">=1.0.0" },
     { name = "paramiko", specifier = ">=4.0.0" },
-    { name = "paramiko", marker = "extra == 'ssh'", specifier = ">=3.4.0" },
+    { name = "paramiko", marker = "extra == 'ssh'", specifier = ">=4.0.0" },
     { name = "pycryptodomex", marker = "extra == 'interactsh'", specifier = ">=3.21.0" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
