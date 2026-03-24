@@ -75,7 +75,11 @@ class ChannelStore:
         fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX)
-            data_path.write_text(json.dumps(value, default=str))
+            try:
+                json_text = json.dumps(value, default=str)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Failed to serialize channel '{channel}' data: {exc}") from exc
+            data_path.write_text(json_text)
             # Update cache immediately
             mtime = data_path.stat().st_mtime
             self._cache[channel] = (mtime, value)

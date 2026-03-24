@@ -80,7 +80,11 @@ class EtcdJobRegistry(RegistryAdapter):
     async def _set(self, key: str, value: Any) -> None:
         """Store data in etcd"""
         etcd_key = self._make_key(key)
-        json_value = json.dumps(value)
+        try:
+            json_value = json.dumps(value, default=str)
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to serialize value for key '%s': %s", key, exc)
+            return
         self._client.put(etcd_key, json_value)
         self._log_debug(f"Set key '{key}' in EtcdJobRegistry")
 
@@ -89,7 +93,11 @@ class EtcdJobRegistry(RegistryAdapter):
         etcd_key = self._make_key(key)
         value, _ = self._client.get(etcd_key)
         if value:
-            return json.loads(value.decode())
+            try:
+                return json.loads(value.decode())
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                return None
         return None
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
@@ -131,7 +139,10 @@ class EtcdJobRegistry(RegistryAdapter):
                 # Extract the key from the full etcd key
                 etcd_key = metadata.key.decode()
                 key = etcd_key[len(prefix) :]
-                result[key] = json.loads(value.decode())
+                try:
+                    result[key] = json.loads(value.decode())
+                except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                    logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
 
         return result
 

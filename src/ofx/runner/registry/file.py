@@ -65,15 +65,27 @@ class FileRegistry(RegistryAdapter):
 
         with self._lock:
             content = self.filepath.read_text()
-            data = json.loads(content) if content.strip() else {}
+            if content.strip():
+                try:
+                    data = json.loads(content)
+                except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                    logger.warning("Failed to decode registry file '%s': %s", self.filepath, exc)
+                    data = {}
+            else:
+                data = {}
             self._cache = data
             self._cache_mtime = self.filepath.stat().st_mtime
             return data
 
     async def _write_registry(self, data: dict[str, Any]) -> None:
         """Write data to the registry file and update cache."""
+        try:
+            json_text = json.dumps(data, default=str)
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to serialize registry data: %s", exc)
+            return
         with self._lock:
-            self.filepath.write_text(json.dumps(data, default=str))
+            self.filepath.write_text(json_text)
             self.filepath.chmod(0o600)
             self._cache = data
             self._cache_mtime = self.filepath.stat().st_mtime

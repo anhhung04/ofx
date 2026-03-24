@@ -208,10 +208,16 @@ class TemplateResolver:
 
         # JSON utilities
         def _to_json(obj: Any) -> str:
-            return json.dumps(obj)
+            try:
+                return json.dumps(obj, default=str)
+            except (TypeError, ValueError):
+                return ""
 
         def _from_json(s: str) -> Any:
-            return json.loads(s)
+            try:
+                return json.loads(s)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return None
 
         # Path utilities
         def _join_path(*parts: str) -> str:
@@ -302,7 +308,13 @@ class TemplateResolver:
                 fpath = dest / filename
 
                 if filename.endswith(".jsonl"):
-                    lines = [json.dumps(i, default=str) for i in items]
+                    safe_lines = []
+                    for i in items:
+                        try:
+                            safe_lines.append(json.dumps(i, default=str))
+                        except (TypeError, ValueError):
+                            continue
+                    lines = safe_lines
                     existing = set()
                     if fpath.exists():
                         existing = set(fpath.read_text().strip().splitlines())

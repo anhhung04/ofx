@@ -99,7 +99,10 @@ class MemcachedJobRegistry(RegistryAdapter):
 
         if key not in keys:
             keys.append(key)
-            await client.set(index_key.encode(), json.dumps(keys).encode())
+            try:
+                await client.set(index_key.encode(), json.dumps(keys, default=str).encode())
+            except (TypeError, ValueError) as exc:
+                logger.warning("Failed to serialize index for key '%s': %s", key, exc)
 
     async def _remove_from_index(self, key: str) -> None:
         """Remove a key from the index of all keys"""
@@ -112,7 +115,10 @@ class MemcachedJobRegistry(RegistryAdapter):
                 keys = json.loads(index_data.decode())
                 if key in keys:
                     keys.remove(key)
-                    await client.set(index_key.encode(), json.dumps(keys).encode())
+                    try:
+                        await client.set(index_key.encode(), json.dumps(keys, default=str).encode())
+                    except (TypeError, ValueError) as exc:
+                        logger.warning("Failed to serialize index after removing key '%s': %s", key, exc)
         except Exception:
             pass
 
@@ -120,7 +126,11 @@ class MemcachedJobRegistry(RegistryAdapter):
         """Store data in Memcached"""
         client = await self._get_client()
         cache_key = self._make_key(key)
-        json_value = json.dumps(value)
+        try:
+            json_value = json.dumps(value, default=str)
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to serialize value for key '%s': %s", key, exc)
+            return
         await client.set(cache_key.encode(), json_value.encode())
         await self._add_to_index(key)
         self._log_debug(f"Set key '{key}' in MemcachedJobRegistry")
@@ -131,7 +141,11 @@ class MemcachedJobRegistry(RegistryAdapter):
         cache_key = self._make_key(key)
         value = await client.get(cache_key.encode())
         if value:
-            return json.loads(value.decode())
+            try:
+                return json.loads(value.decode())
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                return None
         return None
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:

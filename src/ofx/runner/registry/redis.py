@@ -77,7 +77,11 @@ class RedisJobRegistry(RegistryAdapter):
     async def _set(self, key: str, value: Any) -> None:
         """Store data in Redis"""
         redis_key = self._make_key(key)
-        json_value = json.dumps(value)
+        try:
+            json_value = json.dumps(value, default=str)
+        except (TypeError, ValueError) as exc:
+            logger.warning("Failed to serialize value for key '%s': %s", key, exc)
+            return
         await self._client.set(redis_key, json_value)
         self._log_debug(f"Set key '{key}' in RedisJobRegistry")
 
@@ -86,7 +90,11 @@ class RedisJobRegistry(RegistryAdapter):
         redis_key = self._make_key(key)
         value = await self._client.get(redis_key)
         if value:
-            return json.loads(value)
+            try:
+                return json.loads(value)
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                return None
         return None
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
@@ -123,7 +131,10 @@ class RedisJobRegistry(RegistryAdapter):
             key = redis_key[len(self.prefix) :]
             value = await self._client.get(redis_key)
             if value:
-                result[key] = json.loads(value)
+                try:
+                    result[key] = json.loads(value)
+                except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                    logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
 
         return result
 
