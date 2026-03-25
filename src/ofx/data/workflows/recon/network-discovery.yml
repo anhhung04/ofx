@@ -117,9 +117,17 @@ jobs:
         title: true
       continue-on-error: true
     - name: export-http
-      run: |
-        echo 'live_urls={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
-        echo 'live_count={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}' >> $OFX_OUTPUTS
+      script: |
+        typed = {{ steps["http-probe"].outputs.typed_outputs | default([], true) | tojson }}
+        live = []
+        for item in typed:
+            if item.get("_type") == "url" and item.get("status_code", 0) > 0:
+                live.append(item["url"])
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+        count = sum(1 for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0)
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write('live_count=' + str(count) + '\n')
   summary:
     name: Discovery Summary
     needs:

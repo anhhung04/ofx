@@ -84,8 +84,14 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - name: export-data
-        run: |
-          echo "live_urls={{ urls(steps['http-probe'].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        script: |
+          typed = {{ steps["http-probe"].outputs.typed_outputs | default([], true) | tojson }}
+          live = []
+          for item in typed:
+              if item.get("_type") == "url" and item.get("status_code", 0) > 0:
+                  live.append(item["url"])
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
   web-analysis:
     name: Web Analysis
     outputs:

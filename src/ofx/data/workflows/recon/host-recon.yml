@@ -38,8 +38,13 @@ jobs:
         rate: 1000
       continue-on-error: true
     - name: export-ports
-      run: |
-        echo "open_ports={{ ports(steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs) | map(attribute='port') | unique | sort | join(',') }}" >> $OFX_OUTPUTS
+      continue-on-error: true
+      script: |
+        typed_a = {{ steps["fast-port-scan"].outputs.typed_outputs | default([], true) | tojson }}
+        typed_b = {{ steps["masscan-scan"].outputs.typed_outputs | default([], true) | tojson }}
+        ports = sorted(set(str(item.get('port', '')) for item in typed_a + typed_b if item.get('_type') == 'port'))
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write('open_ports=' + ','.join(p for p in ports if p) + '\n')
   service-detection:
     name: Service Detection & Analysis
     outputs:
@@ -56,8 +61,16 @@ jobs:
         version_detection: true
       continue-on-error: true
     - name: extract-targets
-      run: |
-        echo 'http_targets={{ ports(steps["service-scan"].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}' >> $OFX_OUTPUTS
+      continue-on-error: true
+      script: |
+        typed = {{ steps["service-scan"].outputs.typed_outputs | default([], true) | tojson }}
+        targets = []
+        for item in typed:
+            hp = item.get('host_port', '')
+            if hp and hp not in targets:
+                targets.append(hp)
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write('http_targets=' + '\n'.join(targets) + '\n')
   ssh-audit:
     name: SSH Audit
     outputs:
