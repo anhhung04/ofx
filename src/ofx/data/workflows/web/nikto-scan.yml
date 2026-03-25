@@ -1,12 +1,13 @@
 name: nikto-scan
-description: 'Web server vulnerability scanning — identifies dangerous files, outdated software, and server misconfigurations.
+description:
+  "Web server vulnerability scanning — identifies dangerous files, outdated software, and server misconfigurations.
 
-  '
+  "
 tags:
-- web
-- vuln
-- scan
-- server
+  - web
+  - vuln
+  - scan
+  - server
 dispatch:
   inputs:
     target:
@@ -18,91 +19,82 @@ jobs:
   scan:
     name: Nikto Web Scan
     outputs:
-      nikto_findings_file: '{{ steps["collect-nikto"].outputs.nikto_findings_file | default("", true) }}'
       nikto_count: '{{ steps["collect-nikto"].outputs.nikto_count | default("", true) }}'
+      typed_outputs: '{{ steps["nikto-scan"].outputs.typed_outputs | default("", true) }}'
     steps:
-    - name: nikto-scan
-      run: |
-        nikto -host {{ inputs.target }} -nointeractive -no404 -C all 2>/dev/null | tee /tmp/nikto-output.txt
-      continue-on-error: true
-    - name: collect-nikto
-      script: |
-        findings = []
-        try:
-            with open('/tmp/nikto-output.txt') as f:
-                for line in f:
-                    line = line.strip()
-                    if line.startswith('+') and 'OSVDB' in line:
-                        findings.append(line)
-                    elif line.startswith('+') and (':' in line) and 'Target' not in line and 'Start' not in line and 'End' not in line:
-                        findings.append(line)
-        except FileNotFoundError:
-            pass
+      - task: nikto
+        name: nikto-scan
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+          tuning: "x"
+        continue-on-error: true
+      - name: collect-nikto
+        script: |
+          nikto_vulns = {{ vulns(steps["nikto-scan"].outputs.typed_outputs) | tojson }}
 
-        with open('/tmp/ofx_nikto_findings.txt', 'w') as tf:
-            tf.write('\n'.join(findings))
+          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+              f.write(f"nikto_findings_file=\n")
+              f.write(f"nikto_count={len(nikto_vulns)}\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"nikto_findings_file=/tmp/ofx_nikto_findings.txt\n")
-            f.write(f"nikto_count={len(findings)}\n")
-
-        print(f"Nikto found {len(findings)} items")
+          print(f"Nikto found {len(nikto_vulns)} items")
   nuclei-web:
     name: Nuclei Web Scan
     outputs:
       nuclei_count: '{{ steps["export-nuclei"].outputs.nuclei_count | default("", true) }}'
       typed_outputs: '{{ steps["nuclei-web-scan"].outputs.typed_outputs | default("", true) }}'
     steps:
-    - task: nuclei
-      timeout: 20
-      name: nuclei-web-scan
-      with:
-        target: '{{ inputs.target }}'
-        severity: critical,high,medium
-        exclude_tags: network,ssl,file,dns,osint,token-spray,headers
-      continue-on-error: true
-    - name: export-nuclei
-      run: |
-        echo 'nuclei_count={{ vulns(steps["nuclei-web-scan"].outputs.typed_outputs) | length }}' >> $OFX_OUTPUTS
+      - task: nuclei
+        timeout: 20
+        name: nuclei-web-scan
+        with:
+          target: "{{ inputs.target }}"
+          severity: critical,high,medium
+          exclude_tags: network,ssl,file,dns,osint,token-spray,headers
+        continue-on-error: true
+      - name: export-nuclei
+        run: |
+          echo 'nuclei_count={{ vulns(steps["nuclei-web-scan"].outputs.typed_outputs) | length }}' >> $OFX_OUTPUTS
   summary:
     name: Vulnerability Summary
     needs:
-    - scan
-    - nuclei-web
+      - scan
+      - nuclei-web
     steps:
-    - name: report
-      script: |
-        import json
+      - name: report
+        script: |
+          import json
 
-        nuclei_vulns = {{ vulns(jobs['nuclei-web'].outputs.typed_outputs) | default([], true) | tojson }}
-        critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
-        high = [v for v in nuclei_vulns if v.get('severity') == 'high']
+          nuclei_vulns = {{ vulns(jobs['nuclei-web'].outputs.typed_outputs) | default([], true) | tojson }}
+          critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
+          high = [v for v in nuclei_vulns if v.get('severity') == 'high']
 
-        print("=" * 50)
-        print(f" Web Vuln Scan: {{ inputs.target }}")
-        print("=" * 50)
-        print(f"Nikto findings: {{ jobs.scan.outputs.nikto_count }}")
-        print(f"Nuclei findings: {{ jobs['nuclei-web'].outputs.nuclei_count }}")
-        print(f"  Critical: {len(critical)}")
-        print(f"  High: {len(high)}")
-      log-stdout: true
+          print("=" * 50)
+          print(f" Web Vuln Scan: {{ inputs.target }}")
+          print("=" * 50)
+          print(f"Nikto findings: {{ jobs.scan.outputs.nikto_count }}")
+          print(f"Nuclei findings: {{ jobs['nuclei-web'].outputs.nuclei_count }}")
+          print(f"  Critical: {len(critical)}")
+          print(f"  High: {len(high)}")
+        log-stdout: true
 
-    - name: export-to-project
-      script: |
-        from pathlib import Path
+      - name: export-to-project
+        script: |
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            all_typed = []
-            for typed in [
-            {{ jobs['nuclei-web'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              all_typed = []
+              for typed in [
+              {{ jobs['nuclei-web'].outputs.typed_outputs | default([], true) | tojson }},
+              {{ jobs.scan.outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true
