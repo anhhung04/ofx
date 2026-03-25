@@ -190,9 +190,9 @@ jobs:
         for item in typed:
             if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                 live.append(item["url"])
-        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
+        add_outputs(live_urls='\n'.join(sorted(set(live))))
         count = sum(1 for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0)
-        add_outputs(live_count="' + str(count) + '")
+        add_outputs(live_count=count)
   web-crawl:
     name: Web Crawling
     needs:

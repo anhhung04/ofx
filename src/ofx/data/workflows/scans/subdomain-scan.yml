@@ -103,7 +103,7 @@ jobs:
         for item in typed:
             if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                 live.append(item["url"])
-        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
+        add_outputs(live_urls='\n'.join(sorted(set(live))))
   host-recon:
     name: Host Reconnaissance
     needs:

@@ -111,7 +111,7 @@ jobs:
         for item in typed:
             if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                 live.append(item["url"])
-        add_outputs(http_targets="' + '\n'.join(sorted(set(live))) + '")
+        add_outputs(http_targets='\n'.join(sorted(set(live))))
   vuln-search:
     name: Vulnerability Search
     outputs:

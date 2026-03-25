@@ -43,7 +43,7 @@ jobs:
         typed_a = {{ steps["fast-port-scan"].outputs.typed_outputs | default([], true) | tojson }}
         typed_b = {{ steps["masscan-scan"].outputs.typed_outputs | default([], true) | tojson }}
         ports = sorted(set(str(item.get('port', '')) for item in typed_a + typed_b if item.get('_type') == 'port'))
-        add_outputs(open_ports="' + ','.join(p for p in ports if p) + '")
+        add_outputs(open_ports=','.join(p for p in ports if p))
   service-detection:
     name: Service Detection & Analysis
     outputs:
@@ -68,7 +68,7 @@ jobs:
             hp = item.get('host_port', '')
             if hp and hp not in targets:
                 targets.append(hp)
-        add_outputs(http_targets="' + '\n'.join(targets) + '")
+        add_outputs(http_targets='\n'.join(targets))
   ssh-audit:
     name: SSH Audit
     outputs:
@@ -120,7 +120,7 @@ jobs:
         for item in typed:
             if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                 live.append(item['url'])
-        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
+        add_outputs(live_urls='\n'.join(sorted(set(live))))
   vuln-scan:
     name: Vulnerability Scan
     outputs:

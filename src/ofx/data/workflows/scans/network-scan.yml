@@ -121,7 +121,7 @@ jobs:
         for item in typed:
             if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                 live.append(item['url'])
-        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
+        add_outputs(live_urls='\n'.join(sorted(set(live))))
   default-cred-check:
     name: Default Credential Check
     needs:

@@ -38,7 +38,7 @@ jobs:
         typed = {{ steps["probe-url"].outputs.typed_outputs | default([], true) | tojson }}
         live = [item["url"] for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0]
         result = live[0] if live else '{{ inputs.target }}'
-        add_outputs(live_url="' + result + '")
+        add_outputs(live_url=result)
   param-discovery:
     name: Parameter Discovery
     needs:
