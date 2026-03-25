@@ -128,7 +128,15 @@ class TemplateResolver:
         template_vars = context_vars.copy()
         template_vars.update(support_funcs)
 
-        result = await template.render_async(template_vars)
+        try:
+            result = await template.render_async(template_vars)
+        except Exception as e:
+            # Provide actionable context for template errors
+            preview = value_str[:120] + ("…" if len(value_str) > 120 else "")
+            raise type(e)(
+                f"Template rendering failed: {e}\n"
+                f"  Template: {preview}"
+            ) from e
 
         resolve_stack.pop()
 

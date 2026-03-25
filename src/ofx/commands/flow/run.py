@@ -176,9 +176,7 @@ class FlowRunHandler:
                 logger.info("Workflow completed successfully!")
             else:
                 logger.error("Workflow failed")
-                logger.error(
-                    "Error details: %s", result.error or "No error message available."
-                )
+                self._print_failure_details(result)
 
             # Display execution summary
             if not self.quiet:
@@ -215,6 +213,32 @@ class FlowRunHandler:
                 stats.print_stats("time", 10)
 
         return result
+
+    def _print_failure_details(self, result) -> None:
+        """Show structured failure details when a workflow fails."""
+        from ofx.runner.execution.error_helpers import extract_root_error
+
+        error_str = result.error or ""
+        # Parse job failures from the error string
+        if "Job failure" in error_str:
+            logger.error("Job failure(s):")
+            for line in error_str.strip().splitlines():
+                line = line.strip()
+                if line.startswith("job '") or line.startswith("- job '"):
+                    # Extract root error for each job
+                    root = extract_root_error(line.split(":", 1)[-1] if ":" in line else line)
+                    job_name = line.split("'")[1] if "'" in line else "unknown"
+                    logger.error("  ✗ %s: %s", job_name, root)
+                elif line and not line.startswith("Job failure"):
+                    logger.error("  %s", line)
+        else:
+            root = extract_root_error(error_str)
+            logger.error("Error: %s", root)
+
+        if self.output:
+            log_dir = self.output / "logs"
+            if log_dir.exists() and any(log_dir.iterdir()):
+                logger.error("Logs: %s", log_dir)
 
     def _print_summary(self, result, start_time: float) -> None:
         """Print a rich execution summary after workflow completion."""

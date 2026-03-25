@@ -133,7 +133,7 @@ class StepRunner(BaseRunner[Step]):
             except TimeoutError as e:
                 raise RuntimeError(step_timeout_error(self.model.timeout)) from e
             except Exception as e:
-                err_msg = str(e)[:200]
+                err_msg = str(e)
                 attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
                 if attempt < max_attempts - 1:
                     next_delay = self._retry_delay_seconds(
