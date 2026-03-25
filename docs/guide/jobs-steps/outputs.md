@@ -59,7 +59,7 @@ How it works for each command step:
 3. After the command finishes, OFX parses the file into `step.outputs`.
 4. The temp file is removed automatically.
 
-### Quick example
+### Shell steps
 ```yaml
 jobs:
   discover:
@@ -77,6 +77,41 @@ jobs:
       - run: echo "Attacking {{ jobs.discover.outputs.target_ip }}"
 ```
 
+### Python script steps — `add_outputs()`
+
+Python script steps have a built-in `add_outputs(**kwargs)` function that writes key-value pairs to the outputs file automatically:
+
+```yaml
+steps:
+  - name: collect-results
+    script: |
+      subs = ["a.example.com", "b.example.com"]
+      add_outputs(sub_count=len(subs), subs_file="/tmp/subs.txt")
+```
+
+Lists and dicts are automatically serialized as JSON:
+
+```yaml
+steps:
+  - name: structured-output
+    script: |
+      hosts = ["10.0.0.1", "10.0.0.2"]
+      metadata = {"scan_type": "full", "ports": [22, 80, 443]}
+      add_outputs(hosts=hosts, metadata=metadata)
+      # hosts=["10.0.0.1","10.0.0.2"]
+      # metadata={"scan_type":"full","ports":[22,80,443]}
+```
+
+You can also use `**kwargs` expansion:
+
+```yaml
+steps:
+  - name: export-all
+    script: |
+      results = {"host": "10.0.0.1", "port": "22", "service": "ssh"}
+      add_outputs(**results)
+```
+
 ### Rules and limits
 - One `key=value` per line; first `=` is the delimiter.
 - Values are strings; the last write for a key wins.
@@ -89,6 +124,26 @@ jobs:
 - Prefer clear, stable output names so templates stay readable.
 - Use `stdout_lines` for simple lists; use `OFX_OUTPUTS` when you need structured key/value results.
 - Use `typed_outputs` and template filters when chaining task results between jobs.
+- In Python scripts, prefer `add_outputs(key=val)` over manual `OFX_OUTPUTS` file writes.
+
+---
+
+## Stdout display truncation
+
+By default, OFX shows the first **50 lines** of stdout/stderr in the console. Longer output is truncated with a notice:
+
+```
+... [950 more lines — full output saved to logs]
+```
+
+The full output is always saved to log files when `log-stdout: true` is set. Configure the limit:
+
+```yaml
+# ~/.ofx/config.yml
+max_display_lines: 100
+```
+
+Or via environment variable: `OFX_MAX_DISPLAY_LINES=100`
 
 ---
 
@@ -152,8 +207,7 @@ jobs:
           hosts = set()
           for item in {{ ports(steps["nmap-scan"].outputs.typed_outputs) | tojson }}:
               hosts.add(item.get('host', ''))
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"live_hosts={chr(10).join(sorted(hosts))}\n")
+          add_outputs(live_hosts=chr(10).join(sorted(hosts)))
 
   exploit:
     needs: [scan]

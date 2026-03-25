@@ -57,3 +57,26 @@ jobs:
           echo "Host: {{ jobs.generate_metadata.outputs.hostname }}"
           echo "User: {{ jobs.generate_metadata.outputs.user }}"
           echo "Directory: {{ jobs.generate_metadata.outputs.pwd }}"
+
+  python_outputs:
+    name: Python Script Outputs
+    outputs:
+      target: "{{ steps['add-outputs-test'].outputs.target }}"
+      count: "{{ steps['add-outputs-test'].outputs.count }}"
+      hosts: "{{ steps['add-outputs-test'].outputs.hosts }}"
+    steps:
+      - name: add-outputs-test
+        script: |
+          add_outputs(target="10.0.0.1", count=3)
+          add_outputs(hosts=["10.0.0.1", "10.0.0.2", "10.0.0.3"])
+          print("Outputs written via add_outputs()")
+
+  verify_python:
+    name: Verify Python Outputs
+    needs: [python_outputs]
+    steps:
+      - name: check-python-outputs
+        run: |
+          echo "Target: {{ jobs.python_outputs.outputs.target }}"
+          echo "Count: {{ jobs.python_outputs.outputs.count }}"
+          echo "Hosts: {{ jobs.python_outputs.outputs.hosts }}"
