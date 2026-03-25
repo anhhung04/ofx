@@ -47,13 +47,20 @@ def export_typed_outputs(
     project_path: str,
     all_typed_outputs: list,
     prefix: str = "",
+    run_timestamp: str = "",
 ) -> list[str]:
     """Export typed outputs to the correct project subdirectories.
+
+    Merges new findings into existing master files (deduplicated) and writes
+    a timestamped snapshot containing only newly discovered items so each
+    run's contributions are preserved.
 
     Args:
         project_path: Root project directory.
         all_typed_outputs: Flat list of typed output dicts.
         prefix: Optional filename prefix (e.g. workflow or job name).
+        run_timestamp: Timestamp string (``YYYYMMDD-HHMMSS``) for the
+            per-run snapshot.  When empty, no snapshot is written.
 
     Returns:
         List of summary strings describing what was written.
@@ -82,6 +89,8 @@ def export_typed_outputs(
         dest.mkdir(parents=True, exist_ok=True)
         fpath = dest / filename
 
+        new_count = 0
+
         if filename.endswith(".jsonl"):
             safe_lines = []
             for i in items:
@@ -93,25 +102,52 @@ def export_typed_outputs(
             if fpath.exists():
                 existing = set(fpath.read_text().strip().splitlines())
             new_lines = [ln for ln in safe_lines if ln not in existing]
+            new_count = len(new_lines)
             if new_lines:
                 with open(fpath, "a") as f:
                     f.write("\n".join(new_lines) + "\n")
+            # Timestamped snapshot with new items only
+            if run_timestamp and new_lines:
+                _write_timestamped(fpath, run_timestamp, "\n".join(new_lines) + "\n")
         else:
             values = set()
             for i in items:
                 key = type_display_key(type_name, i)
                 if key:
                     values.add(key)
+            existing_lines: set[str] = set()
             if fpath.exists():
-                values.update(
+                existing_lines = {
                     ln for ln in fpath.read_text().strip().splitlines() if ln
+                }
+            new_values = values - existing_lines
+            new_count = len(new_values)
+            merged = values | existing_lines
+            if merged:
+                fpath.write_text("\n".join(sorted(merged)) + "\n")
+            # Timestamped snapshot with new items only
+            if run_timestamp and new_values:
+                _write_timestamped(
+                    fpath, run_timestamp, "\n".join(sorted(new_values)) + "\n"
                 )
-            if values:
-                fpath.write_text("\n".join(sorted(values)) + "\n")
 
-        summaries.append(f"  [+] {subdir}/{filename} ({len(items)} items)")
+        label = f"{len(items)} items"
+        if new_count < len(items):
+            label += f", {new_count} new"
+        summaries.append(f"  [+] {subdir}/{filename} ({label})")
 
     return summaries
+
+
+def _write_timestamped(master_path: Path, timestamp: str, content: str) -> None:
+    """Write a timestamped snapshot file next to the master file.
+
+    ``subdomains.txt`` → ``subdomains_20260325-120500.txt``
+    """
+    stem = master_path.stem
+    suffix = master_path.suffix
+    ts_path = master_path.with_name(f"{stem}_{timestamp}{suffix}")
+    ts_path.write_text(content)
 
 
 async def collect_typed_outputs(runners: dict[str, BaseRunner]) -> list[dict]:
@@ -169,6 +205,8 @@ async def auto_export_findings(
     """Collect and export all typed findings to the project directory.
 
     Called automatically after workflow completion when --project is set.
+    Merges findings into master files and writes per-run timestamped
+    snapshots so every run's new discoveries are preserved.
 
     Returns:
         List of summary lines describing exported files.
@@ -180,7 +218,11 @@ async def auto_export_findings(
     if not all_typed:
         return []
 
-    summaries = export_typed_outputs(project_path, all_typed)
+    from datetime import UTC, datetime
+
+    run_ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+
+    summaries = export_typed_outputs(project_path, all_typed, run_timestamp=run_ts)
 
     if summaries and log_fn:
         log_fn("Findings exported to project:")
