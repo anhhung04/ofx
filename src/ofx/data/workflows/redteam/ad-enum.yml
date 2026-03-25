@@ -111,9 +111,9 @@ jobs:
           shares = set()
 
           # From netexec user enumeration (typed outputs)
-          for idx in [1, 5]:  # nxc-smb-users, nxc-rid-brute
+          for idx in ["1", "5"]:  # nxc-smb-users, nxc-rid-brute
               step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   if item.get('_type') == 'user_account' and item.get('username'):
                       users.add(item['username'])

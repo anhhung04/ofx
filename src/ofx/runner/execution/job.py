@@ -102,8 +102,11 @@ class JobRunner(BaseRunner[Job]):
         if self.model.outputs:
             resolved_outputs = {}
             for key, value in self.model.outputs.items():
-                resolved_value = await self._resolve_template(value)
-                resolved_outputs[key] = resolved_value
+                try:
+                    resolved_value = await self._resolve_template(value)
+                    resolved_outputs[key] = resolved_value
+                except Exception:
+                    resolved_outputs[key] = ""
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
 
         job_exec = build_job_execution_result(self, self._runners)

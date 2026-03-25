@@ -71,7 +71,7 @@ jobs:
         emails = set()
         step_data = {{ steps | tojson }}
         for idx in range(2):
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 email = item.get('email', item.get('username', ''))
                 if '@' in str(email):

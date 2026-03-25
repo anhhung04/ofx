@@ -74,8 +74,8 @@ jobs:
   http-probe:
     name: HTTP Probe & Exploit Search
     outputs:
-      typed_outputs: '{{ steps["probe-http"].outputs.typed_outputs + steps["whatweb-fingerprint"].outputs.typed_outputs }}'
-      live_urls: '{{ steps["export-urls"].outputs.live_urls }}'
+      typed_outputs: '{{ steps["probe-http"].outputs.typed_outputs | default([], true) + steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true) }}'
+      live_urls: '{{ steps["export-urls"].outputs.live_urls | default("", true) }}'
     needs:
     - service-detection
     steps:
@@ -102,8 +102,15 @@ jobs:
         aggression: 3
       continue-on-error: true
     - name: export-urls
-      run: |
-        echo 'live_urls={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
+      continue-on-error: true
+      script: |
+        typed = {{ steps["probe-http"].outputs.typed_outputs | default([], true) | tojson }}
+        live = []
+        for item in typed:
+            if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
+                live.append(item['url'])
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
   vuln-scan:
     name: Vulnerability Scan
     outputs:

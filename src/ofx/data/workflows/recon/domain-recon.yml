@@ -443,7 +443,7 @@ jobs:
           urls = set()
           param_urls = set()
 
-          for idx in [0, 1, 2]:
+          for idx in ["0", "1", "2"]:
               for item in {{ steps | tojson }}[idx].get('outputs', {}).get('typed_outputs', []):
                   if item.get('_type') == 'url':
                       url = item.get('url', '')

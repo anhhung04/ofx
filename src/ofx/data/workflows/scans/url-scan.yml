@@ -60,9 +60,9 @@ jobs:
         import json
 
         urls = set()
-        for idx in [0, 1, 2, 3]:
+        for idx in ["0", "1", "2", "3"]:
             step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 if item.get('_type') == 'url':
                     urls.add(item['url'])

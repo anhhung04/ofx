@@ -60,9 +60,9 @@ jobs:
         import json
 
         hosts = set()
-        for idx in [1, 2, 3]:
+        for idx in ["1", "2", "3"]:
             step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 if item.get('_type') == 'port':
                     host = item.get('host') or item.get('ip', '')
@@ -84,8 +84,8 @@ jobs:
     needs:
     - network-discovery
     outputs:
-      live_urls: '{{ steps["export-urls"].outputs.live_urls }}'
-      open_ports: '{{ steps["service-detect"].outputs.open_ports }}'
+      live_urls: '{{ steps["export-urls"].outputs.live_urls | default("", true) }}'
+      open_ports: '{{ steps["service-detect"].outputs.open_ports | default("", true) }}'
     steps:
     - task: nerva
       timeout: 15
@@ -117,8 +117,15 @@ jobs:
         aggression: 3
       continue-on-error: true
     - name: export-urls
-      run: |
-        echo 'live_urls={{ urls(steps["whatweb-fingerprint"].outputs.typed_outputs) | selectattr("status_code", "gt", 0) | map(attribute="url") | unique | join("\n") }}' >> $OFX_OUTPUTS
+      continue-on-error: true
+      script: |
+        typed = {{ steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true) | tojson }}
+        live = []
+        for item in typed:
+            if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
+                live.append(item['url'])
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
   default-cred-check:
     name: Default Credential Check
     needs:

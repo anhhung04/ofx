@@ -59,7 +59,7 @@ jobs:
 
           for idx in range(5):
               step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   host = item.get('host', '')
                   if host and '{{ inputs.target }}' in host:

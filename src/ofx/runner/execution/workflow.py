@@ -130,7 +130,10 @@ class WorkflowRunner(BaseRunner[Workflow]):
             # Ensure job execution data is present before summarizing
             for runner in self._runners.values():
                 if isinstance(runner, (JobRunner, MatrixJobRunner, CloudJobRunner)):
-                    await runner._post_run()
+                    try:
+                        await runner._post_run()
+                    except Exception:
+                        pass
             await self._store_summaries()
 
             # Build concise error: one line per failed job with root cause

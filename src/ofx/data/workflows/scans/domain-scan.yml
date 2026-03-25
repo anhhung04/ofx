@@ -71,9 +71,9 @@ jobs:
   subdomain-recon:
     name: Subdomain Discovery
     outputs:
-      hosts_file: '{{ steps["collect-subdomains"].outputs.hosts_file }}'
-      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count }}'
-      live_urls: '{{ steps["export-urls"].outputs.live_urls }}'
+      hosts_file: '{{ steps["collect-subdomains"].outputs.hosts_file | default("", true) }}'
+      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count | default("0", true) }}'
+      live_urls: '{{ steps["export-urls"].outputs.live_urls | default("", true) }}'
     steps:
     - task: subfinder
       timeout: 10
@@ -106,9 +106,10 @@ jobs:
         import json
 
         subs = set()
-        for idx in [0, 1, 2, 3]:
-            step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+        step_data = {{ steps | tojson }}
+        for idx in ["0", "1", "2", "3"]:
+            entry = step_data.get(idx, {})
+            typed = entry.get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 if item.get('_type') == 'subdomain':
                     subs.add(item['host'])
@@ -123,6 +124,7 @@ jobs:
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"hosts_file=/tmp/ofx_domscan_hosts.txt\n")
             f.write(f"subdomain_count={len(subs)}\n")
+      continue-on-error: true
     - task: dnsx
       timeout: 10
       name: verify-subdomains
@@ -148,8 +150,15 @@ jobs:
         follow_redirects: true
       continue-on-error: true
     - name: export-urls
-      run: |
-        echo 'live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
+      continue-on-error: true
+      script: |
+        typed = {{ steps["probe-subdomains"].outputs.typed_outputs | default([], true) | tojson }}
+        live = []
+        for item in typed:
+            if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
+                live.append(item['url'])
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
   host-recon:
     name: Host Reconnaissance
     needs:

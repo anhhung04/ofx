@@ -100,9 +100,9 @@ jobs:
       - name: collect-dirs
         script: |
           urls = set()
-          for idx in [0, 1, 2]:
+          for idx in ["0", "1", "2"]:
               step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   if item.get('_type') == 'url' and item.get('url'):
                       urls.add(item['url'])
@@ -157,7 +157,7 @@ jobs:
           urls = set()
           for idx in range(4):
               step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   url = item.get('url', '')
                   if url:
@@ -205,7 +205,7 @@ jobs:
           param_urls = set()
           for idx in range(3):
               step_data = {{ steps | tojson }}
-              typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   url = item.get('url', '')
                   if url and ('=' in url or '?' in url):

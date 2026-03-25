@@ -68,7 +68,7 @@ jobs:
         subs = set()
         for idx in range(4):
             step_data = {{ steps | tojson }}
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 if item.get('_type') == 'subdomain':
                     subs.add(item['host'])
@@ -125,7 +125,7 @@ jobs:
 
         step_data = {{ steps | tojson }}
         # from httpx results
-        typed = step_data[1].get('outputs', {}).get('typed_outputs', [])
+        typed = step_data.get("1", {}).get('outputs', {}).get('typed_outputs', [])
         for item in typed:
             if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                 host = item.get('host', '')
@@ -175,9 +175,9 @@ jobs:
 
         step_data = {{ steps | tojson }}
 
-        ports = step_data[3].get('outputs', {}).get('typed_outputs', [])
-        vulns = step_data[4].get('outputs', {}).get('typed_outputs', [])
-        takeovers = step_data[5].get('outputs', {}).get('typed_outputs', [])
+        ports = step_data.get("3", {}).get('outputs', {}).get('typed_outputs', [])
+        vulns = step_data.get("4", {}).get('outputs', {}).get('typed_outputs', [])
+        takeovers = step_data.get("5", {}).get('outputs', {}).get('typed_outputs', [])
 
         port_count = len([p for p in ports if p.get('_type') == 'port'])
         vuln_count = len([v for v in vulns if v.get('_type') == 'vulnerability'])

@@ -69,7 +69,7 @@ jobs:
         urls = set()
         for step_idx in [0, 1]:
             step_data = {{ steps | tojson }}
-            typed = step_data[step_idx].get('outputs', {}).get('typed_outputs', [])
+            typed = step_data.get(str(step_idx), {}).get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 if item.get('_type') == 'url':
                     urls.add(item['url'])

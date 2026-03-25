@@ -232,8 +232,8 @@ jobs:
 
         # From katana
         step_data = {{ steps | tojson }}
-        for idx in [0, 2]:
-            typed = step_data[idx].get('outputs', {}).get('typed_outputs', [])
+        for idx in ["0", "2"]:
+            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 if item.get('_type') == 'url':
                     urls.add(item['url'])
