@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: code-scan
 description: 'Code vulnerability scan and secret hunt — analyzes source code for security vulnerabilities in dependencies (grype, trivy) and hardcoded secrets (gitleaks, trufflehog).
 

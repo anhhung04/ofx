@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: nikto-scan
 description: 'Web server vulnerability scanning — identifies dangerous files, outdated software, and server misconfigurations.
 

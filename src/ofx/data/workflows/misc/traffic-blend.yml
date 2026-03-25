@@ -31,82 +31,82 @@ jobs:
       agent_count: '{{ steps["blend-demo"].outputs.agent_count }}'
       sample_count: '{{ steps["blend-demo"].outputs.sample_count }}'
     steps:
-    - name: blend-demo
-      timeout: 3
-      continue-on-error: true
-      script: |
-        from ofx.api.opsec.traffic import (
-            traffic_blend_headers,
-            rotate_user_agent,
-            domain_fronting_headers,
-        )
-        import json
+      - name: blend-demo
+        timeout: 3
+        continue-on-error: true
+        script: |
+          from ofx.api.opsec.traffic import (
+              traffic_blend_headers,
+              rotate_user_agent,
+              domain_fronting_headers,
+          )
+          import json
 
-        target = "{{ inputs.target }}"
-        front_domain = "{{ inputs.front_domain }}"
-        count = int("{{ inputs.requests }}")
+          target = "{{ inputs.target }}"
+          front_domain = "{{ inputs.front_domain }}"
+          count = int("{{ inputs.requests }}")
 
-        print("=" * 60)
-        print(" TRAFFIC BLENDING TECHNIQUES")
-        print("=" * 60)
+          print("=" * 60)
+          print(" TRAFFIC BLENDING TECHNIQUES")
+          print("=" * 60)
 
-        # 1. User-Agent rotation
-        print("\n--- User-Agent Rotation ---")
-        agents = set()
-        for i in range(max(count, 8)):
-            ua = rotate_user_agent()
-            agents.add(ua)
-        for ua in sorted(agents):
-            print(f"  {ua[:90]}")
-        print(f"  ({len(agents)} unique agents in pool)")
+          # 1. User-Agent rotation
+          print("\n--- User-Agent Rotation ---")
+          agents = set()
+          for i in range(max(count, 8)):
+              ua = rotate_user_agent()
+              agents.add(ua)
+          for ua in sorted(agents):
+              print(f"  {ua[:90]}")
+          print(f"  ({len(agents)} unique agents in pool)")
 
-        # 2. Traffic blend headers
-        print(f"\n--- Blended Request Headers ({count} samples) ---")
-        all_headers = []
-        for i in range(count):
-            headers = traffic_blend_headers(referer=f"https://www.google.com/search?q=test{i}")
-            all_headers.append(headers)
-            print(f"\n  Request {i + 1}:")
-            for k, v in headers.items():
-                print(f"    {k}: {v[:80]}")
+          # 2. Traffic blend headers
+          print(f"\n--- Blended Request Headers ({count} samples) ---")
+          all_headers = []
+          for i in range(count):
+              headers = traffic_blend_headers(referer=f"https://www.google.com/search?q=test{i}")
+              all_headers.append(headers)
+              print(f"\n  Request {i + 1}:")
+              for k, v in headers.items():
+                  print(f"    {k}: {v[:80]}")
 
-        # 3. Domain fronting
-        print(f"\n--- Domain Fronting Headers ---")
-        print(f"  Front domain (TLS SNI): {front_domain}")
-        print(f"  Real host (HTTP Host):  {target}")
-        df_headers = domain_fronting_headers(front_domain, target)
-        for k, v in df_headers.items():
-            print(f"    {k}: {v}")
+          # 3. Domain fronting
+          print(f"\n--- Domain Fronting Headers ---")
+          print(f"  Front domain (TLS SNI): {front_domain}")
+          print(f"  Real host (HTTP Host):  {target}")
+          df_headers = domain_fronting_headers(front_domain, target)
+          for k, v in df_headers.items():
+              print(f"    {k}: {v}")
 
-        print(f"\n  How it works:")
-        print(f"    1. TLS connection to {front_domain} (visible to network monitors)")
-        print(f"    2. HTTP Host header routes to {target} (hidden from DPI)")
-        print(f"    3. CDN forwards request to real backend")
+          print(f"\n  How it works:")
+          print(f"    1. TLS connection to {front_domain} (visible to network monitors)")
+          print(f"    2. HTTP Host header routes to {target} (hidden from DPI)")
+          print(f"    3. CDN forwards request to real backend")
 
-        # Summary
-        print(f"\n--- Integration Examples ---")
-        print(f"  # Python httpx with blended headers:")
-        print(f"  headers = traffic_blend_headers()")
-        print(f"  client.get(url, headers=headers)")
-        print(f"")
-        print(f"  # Domain fronting with httpx:")
-        print(f'  headers = domain_fronting_headers("{front_domain}", "{target}")')
-        print(f'  client.get("https://{front_domain}/", headers=headers,')
-        print(f'      extensions={{"sni_hostname": "{front_domain}"}})')
+          # Summary
+          print(f"\n--- Integration Examples ---")
+          print(f"  # Python httpx with blended headers:")
+          print(f"  headers = traffic_blend_headers()")
+          print(f"  client.get(url, headers=headers)")
+          print(f"")
+          print(f"  # Domain fronting with httpx:")
+          print(f'  headers = domain_fronting_headers("{front_domain}", "{target}")')
+          print(f'  client.get("https://{front_domain}/", headers=headers,')
+          print(f'      extensions={{"sni_hostname": "{front_domain}"}})')
 
-        # Save sample headers
-        out_file = "/tmp/ofx_blend_headers.json"
-        with open(out_file, "w") as f:
-            json.dump({
-                "blend_headers": all_headers,
-                "domain_fronting": df_headers,
-                "user_agents": sorted(agents),
-            }, f, indent=2)
+          # Save sample headers
+          out_file = "/tmp/ofx_blend_headers.json"
+          with open(out_file, "w") as f:
+              json.dump({
+                  "blend_headers": all_headers,
+                  "domain_fronting": df_headers,
+                  "user_agents": sorted(agents),
+              }, f, indent=2)
 
-        print(f"\n[+] Sample headers saved to {out_file}")
+          print(f"\n[+] Sample headers saved to {out_file}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"headers_file={out_file}\n")
-            f.write(f"agent_count={len(agents)}\n")
-            f.write(f"sample_count={count}\n")
-      log-stdout: true
+          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
+              f.write(f"headers_file={out_file}\n")
+              f.write(f"agent_count={len(agents)}\n")
+              f.write(f"sample_count={count}\n")
+        log-stdout: true

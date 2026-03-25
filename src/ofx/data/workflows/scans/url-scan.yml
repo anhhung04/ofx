@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: url-scan
 description: 'Comprehensive URL security assessment — combines crawling, fuzzing, parameter discovery, and vulnerability scanning for thorough web application testing.
 

@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: exfil-channels
 description: |
   Set up multiple data exfiltration channels — configures DNS, HTTP,

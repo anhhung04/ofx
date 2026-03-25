@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: container-scan
 description: |
   Container image security analysis — scans for OS and library

@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: dependency-audit
 description: |
   Audit project dependencies for known vulnerabilities — scans with

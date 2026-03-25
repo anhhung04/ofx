@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: ssl-audit
 description: 'SSL/TLS security audit — comprehensive analysis of SSL/TLS configuration, certificates, ciphers, and known vulnerabilities.
 

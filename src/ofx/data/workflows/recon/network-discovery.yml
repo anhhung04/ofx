@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=~/.ofx/workflow_schema.json
 name: network-discovery
 description: 'Network host discovery — uses ICMP ping sweep and port scanning to identify live hosts and open services on a network.
 
