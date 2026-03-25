@@ -32,6 +32,7 @@ jobs:
       log-stdout: true
       continue-on-error: true
     - task: h8mail
+      store-creds: true
       timeout: 15
       name: breach-search
       with:

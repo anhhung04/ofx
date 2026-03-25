@@ -41,6 +41,7 @@ jobs:
       breaches_found: '{{ steps["export-breaches"].outputs.breaches_found | default("", true) }}'
     steps:
     - task: h8mail
+      store-creds: true
       timeout: 15
       name: breach-search
       with:

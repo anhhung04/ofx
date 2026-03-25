@@ -37,6 +37,7 @@ jobs:
       smb_user_count: '{{ steps["collect-smb"].outputs.smb_user_count | default("", true) }}'
     steps:
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-smb-shares
         with:
@@ -47,6 +48,7 @@ jobs:
           shares: true
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-smb-users
         with:
@@ -57,6 +59,7 @@ jobs:
           users: true
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-smb-groups
         with:
@@ -67,6 +70,7 @@ jobs:
           groups: true
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-smb-sessions
         with:
@@ -77,6 +81,7 @@ jobs:
           sessions: true
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-smb-passpol
         with:
@@ -87,6 +92,7 @@ jobs:
           pass_pol: true
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-rid-brute
         with:
@@ -97,6 +103,7 @@ jobs:
           rid_brute: true
         continue-on-error: true
       - task: enum4linux
+        store-creds: true
         timeout: 10
         name: enum4linux-full
         with:
@@ -136,6 +143,7 @@ jobs:
       asrep_count: '{{ steps["collect-kerberos"].outputs.asrep_count | default("", true) }}'
     steps:
       - task: kerbrute
+        store-creds: true
         timeout: 15
         name: kerbrute-userenum
         with:
@@ -184,6 +192,7 @@ jobs:
       ldap_user_count: '{{ steps["collect-ldap"].outputs.ldap_user_count | default("", true) }}'
     steps:
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-ldap-users
         with:

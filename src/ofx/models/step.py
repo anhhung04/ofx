@@ -92,6 +92,15 @@ class Step(OFXBaseModel):
         default=False,
         description="Enable interactive mode (stdin/stdout passthrough). Only works in single-job stages.",
     )
+    store_creds: bool | None = Field(
+        default=None,
+        description=(
+            "Store discovered UserAccount credentials from task outputs "
+            "into the credential store. Overrides the global auto_store_creds setting. "
+            "Only applies to task steps."
+        ),
+        alias="store-creds",
+    )
     step_index: int = Field(
         default=-1, description="Index of the step in the job (set during execution)"
     )

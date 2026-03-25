@@ -113,6 +113,7 @@ jobs:
       typed_outputs: '{{ steps["breach-lookup"].outputs.typed_outputs | default("", true) }}'
     steps:
     - task: h8mail
+      store-creds: true
       timeout: 15
       name: breach-lookup
       with:

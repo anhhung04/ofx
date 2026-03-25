@@ -31,6 +31,10 @@ class TaskExecution(BaseModel):
         default_factory=Path.cwd, description="Working directory"
     )
     timeout_minutes: int = Field(default=60 * 24, description="Timeout in minutes")
+    store_creds: bool = Field(
+        default=False,
+        description="Store discovered UserAccount credentials into the credential store",
+    )
 
     def __str__(self) -> str:
         return f"TaskExecution(task='{self.task_name}', target='{self.target}')"
@@ -157,6 +161,14 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 lambda msg: self._log_debug(msg),
             )
 
+            # Auto-store UserAccount credentials if enabled
+            if self.model.store_creds and typed_outputs:
+                stored = self._store_credentials(typed_outputs)
+                if stored:
+                    self._log_info(
+                        f"Stored {stored} credential(s) in credential store"
+                    )
+
             # Clean up temp output file
             self._cleanup_output_file()
 
@@ -271,3 +283,48 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 self._output_file.unlink()
             except OSError:
                 pass
+
+    def _store_credentials(self, typed_outputs: list[OutputType]) -> int:
+        """Store UserAccount typed outputs in the credential store.
+
+        Returns the number of credentials successfully stored.
+        Gracefully handles missing pykeepass or DB file.
+        """
+        from ofx.tasks.output_types import UserAccount
+
+        accounts = [o for o in typed_outputs if isinstance(o, UserAccount)]
+        if not accounts:
+            return 0
+
+        try:
+            from ofx.api.creds.exegol_history import ExegolHistoryDB
+
+            db = ExegolHistoryDB()
+        except (ImportError, FileNotFoundError) as e:
+            self._log_debug(f"Credential store unavailable: {e}")
+            return 0
+
+        stored = 0
+        for account in accounts:
+            if not account.username:
+                continue
+            try:
+                cred = account.to_credential()
+                # Skip if an identical credential already exists
+                existing = db.get_credential(cred.username)
+                if existing and existing.password == cred.password and existing.hash == cred.hash and existing.domain == cred.domain:
+                    self._log_debug(
+                        f"Credential already exists: {cred.username}"
+                    )
+                    continue
+                db.add_credential(
+                    username=cred.username,
+                    password=cred.password,
+                    hash_value=cred.hash,
+                    domain=cred.domain,
+                    comment=cred.comment,
+                )
+                stored += 1
+            except Exception as e:
+                self._log_debug(f"Failed to store credential for {account.username}: {e}")
+        return stored

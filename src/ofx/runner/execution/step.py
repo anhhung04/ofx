@@ -395,6 +395,7 @@ class StepRunner(BaseRunner[Step]):
                 shell=self.model.shell,
                 working_directory=self._resolve_working_dir(),
                 timeout_minutes=self.model.timeout,
+                store_creds=self._resolve_store_creds(),
             )
             return TaskRunner(
                 task_model,
@@ -459,3 +460,12 @@ class StepRunner(BaseRunner[Step]):
         base_path = self.ctx.vars.get("working_directory", Path.cwd())
 
         return (base_path / step_path).resolve()
+
+    def _resolve_store_creds(self) -> bool:
+        """Resolve whether to store credentials from task outputs.
+
+        Step-level ``store-creds`` overrides global ``auto_store_creds``.
+        """
+        if self.model.store_creds is not None:
+            return self.model.store_creds
+        return settings.auto_store_creds

@@ -253,6 +253,15 @@ class Settings(BaseSettings):
         description="Maximum stdout/stderr lines shown in the console. Full output is saved to log files.",
     )
 
+    auto_store_creds: bool = Field(
+        default=False,
+        description=(
+            "Automatically store discovered UserAccount credentials from task outputs "
+            "into the credential store (exegol-history KeePass DB). "
+            "Can be overridden per-step with 'store-creds: true/false'."
+        ),
+    )
+
     default_remote_registry: str = Field(
         default="https://github.com",
         description="Default remote registry URL for cloning repositories",

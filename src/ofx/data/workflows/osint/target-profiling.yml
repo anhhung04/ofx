@@ -147,6 +147,7 @@ jobs:
       - email-harvest
     steps:
       - task: h8mail
+        store-creds: true
         timeout: 15
         name: h8mail-breach
         with:

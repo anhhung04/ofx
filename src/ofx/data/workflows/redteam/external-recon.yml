@@ -473,6 +473,7 @@ jobs:
           add_outputs(email_file="/tmp/ofx_extrecon_emails.txt", email_count=len(emails))
           print(f"Harvested {len(emails)} email addresses")
       - task: h8mail
+        store-creds: true
         timeout: 15
         name: breach-search
         with:

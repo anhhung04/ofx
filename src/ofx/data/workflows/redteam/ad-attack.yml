@@ -40,6 +40,7 @@ jobs:
       user_count: '{{ steps["collect-users"].outputs.user_count | default("", true) }}'
     steps:
       - task: netexec
+        store-creds: true
         timeout: 15
         name: smb-info
         with:
@@ -51,6 +52,7 @@ jobs:
           users: true
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: pass-policy
         with:
@@ -62,6 +64,7 @@ jobs:
           pass_pol: true
         continue-on-error: true
       - task: enum4linux
+        store-creds: true
         timeout: 10
         name: full-enum
         with:
@@ -182,6 +185,7 @@ jobs:
       - enum
     steps:
       - task: kerbrute
+        store-creds: true
         timeout: 15
         name: kerbrute-spray
         with:
@@ -193,6 +197,7 @@ jobs:
           password: "{{ inputs.password }}"
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-spray-smb
         with:
@@ -203,6 +208,7 @@ jobs:
           domain: "{{ inputs.domain }}"
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-spray-ldap
         with:
@@ -241,6 +247,7 @@ jobs:
             -outputfile /tmp/secretsdump 2>/dev/null | tee /tmp/secretsdump-output.txt
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-sam
         with:
@@ -252,6 +259,7 @@ jobs:
           sam: true
         continue-on-error: true
       - task: netexec
+        store-creds: true
         timeout: 15
         name: nxc-lsa
         with:
