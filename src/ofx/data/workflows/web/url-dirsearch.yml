@@ -36,7 +36,7 @@ jobs:
       continue-on-error: true
     - name: export-url
       run: |
-        echo "live_url={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | first | default(inputs.target, true) }}" >> $OFX_OUTPUTS
+        echo 'live_url={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | first | default(inputs.target, true) }}' >> $OFX_OUTPUTS
   dir-search:
     name: Directory Discovery
     needs:

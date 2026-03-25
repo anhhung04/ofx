@@ -16,9 +16,9 @@ jobs:
   enumerate:
     name: Generate Privesc Commands
     outputs:
-      commands_file: "{{ steps["gen-commands"].outputs.commands_file }}"
-      check_count: "{{ steps["gen-commands"].outputs.check_count }}"
-      target_os: "{{ steps["gen-commands"].outputs.target_os }}"
+      commands_file: '{{ steps["gen-commands"].outputs.commands_file }}'
+      check_count: '{{ steps["gen-commands"].outputs.check_count }}'
+      target_os: '{{ steps["gen-commands"].outputs.target_os }}'
     steps:
     - name: gen-commands
       timeout: 3

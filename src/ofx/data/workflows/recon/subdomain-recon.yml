@@ -19,8 +19,8 @@ jobs:
   passive-enum:
     name: Passive Subdomain Enumeration
     outputs:
-      subdomain_file: "{{ steps["collect-subdomains"].outputs.subdomain_file }}"
-      subdomain_count: "{{ steps["collect-subdomains"].outputs.subdomain_count }}"
+      subdomain_file: '{{ steps["collect-subdomains"].outputs.subdomain_file }}'
+      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count }}'
     steps:
       - task: subfinder
         timeout: 10
@@ -86,7 +86,7 @@ jobs:
   dns-verification:
     name: DNS Verification
     outputs:
-      typed_outputs: "{{ steps["verify-dns"].outputs.typed_outputs }}"
+      typed_outputs: '{{ steps["verify-dns"].outputs.typed_outputs }}'
     needs:
       - passive-enum
     steps:
@@ -102,7 +102,7 @@ jobs:
   http-probe:
     name: HTTP Probing
     outputs:
-      live_urls: "{{ steps["export-urls"].outputs.live_urls }}"
+      live_urls: '{{ steps["export-urls"].outputs.live_urls }}'
     needs:
       - dns-verification
     steps:
@@ -118,7 +118,7 @@ jobs:
         continue-on-error: true
       - name: export-urls
         run: |
-          echo "live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+          echo 'live_urls={{ urls(steps["probe-subdomains"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
   takeover-check:
     name: Subdomain Takeover & Vulnerability Check
     outputs:
@@ -140,8 +140,8 @@ jobs:
           echo " Subdomain Recon: {{ inputs.target }}"
           echo "======================================="
           echo "Subdomains found: {{ jobs['passive-enum'].outputs.subdomain_count }}"
-          echo "Takeover vulns: {{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}"
-          echo "vuln_count={{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
+          echo 'Takeover vulns: {{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}'
+          echo 'vuln_count={{ vulns(steps["takeover-scan"].outputs.typed_outputs) | length }}' >> $OFX_OUTPUTS
         log-stdout: true
       - name: export-to-project
         script: |-

@@ -27,8 +27,8 @@ jobs:
   search:
     name: Shodan Search
     outputs:
-      raw_results: "{{ steps["query-shodan"].outputs.raw_results }}"
-      result_count: "{{ steps["query-shodan"].outputs.result_count }}"
+      raw_results: '{{ steps["query-shodan"].outputs.raw_results }}'
+      result_count: '{{ steps["query-shodan"].outputs.result_count }}'
     steps:
     - name: query-shodan
       timeout: 5
@@ -64,9 +64,9 @@ jobs:
     name: Analyze Results
     needs: [search]
     outputs:
-      unique_ips: "{{ steps["parse-results"].outputs.unique_ips }}"
-      unique_ports: "{{ steps["parse-results"].outputs.unique_ports }}"
-      services_file: "{{ steps["parse-results"].outputs.services_file }}"
+      unique_ips: '{{ steps["parse-results"].outputs.unique_ips }}'
+      unique_ports: '{{ steps["parse-results"].outputs.unique_ports }}'
+      services_file: '{{ steps["parse-results"].outputs.services_file }}'
     steps:
     - name: parse-results
       script: |

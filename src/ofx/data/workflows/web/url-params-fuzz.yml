@@ -36,7 +36,7 @@ jobs:
       continue-on-error: true
     - name: export-url
       run: |
-        echo "live_url={{ urls(steps["probe-url"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | first | default(inputs.target, true) }}" >> $OFX_OUTPUTS
+        echo 'live_url={{ urls(steps["probe-url"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | first | default(inputs.target, true) }}' >> $OFX_OUTPUTS
   param-discovery:
     name: Parameter Discovery
     needs:
@@ -87,7 +87,7 @@ jobs:
         echo " Param Fuzz: {{ inputs.target }}"
         echo "======================================="
         echo "Parameters found: {{ jobs['param-discovery'].outputs.param_count }}"
-        echo "Fuzz results: {{ urls(steps["fuzz-params"].outputs.typed_outputs) | length }}"
+        echo 'Fuzz results: {{ urls(steps["fuzz-params"].outputs.typed_outputs) | length }}'
       log-stdout: true
 
     - name: export-to-project

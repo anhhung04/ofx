@@ -58,7 +58,7 @@ jobs:
       continue-on-error: true
     - name: extract-targets
       run: |
-        echo "http_targets={{ ports(steps["service-scan"].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo 'http_targets={{ ports(steps["service-scan"].outputs.typed_outputs) | map(attribute='host_port') | unique | join('\n') }}' >> $OFX_OUTPUTS
   ssh-audit:
     name: SSH Audit
     outputs:
@@ -104,7 +104,7 @@ jobs:
       continue-on-error: true
     - name: export-urls
       run: |
-        echo "live_urls={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo 'live_urls={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
   vuln-scan:
     name: Vulnerability Scan
     outputs:
@@ -131,8 +131,8 @@ jobs:
         echo "=============================="
         echo " Host Recon: {{ inputs.target }}"
         echo "=============================="
-        echo "Vulnerabilities: {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}"
-        echo "vuln_count={{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}" >> $OFX_OUTPUTS
+        echo 'Vulnerabilities: {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}'
+        echo 'vuln_count={{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}' >> $OFX_OUTPUTS
       log-stdout: true
   summary:
     name: Summary

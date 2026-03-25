@@ -198,8 +198,8 @@ jobs:
       continue-on-error: true
     - name: export-live
       run: |
-        echo "live_urls={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
-        echo "live_count={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}" >> $OFX_OUTPUTS
+        echo 'live_urls={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
+        echo 'live_count={{ urls(steps["probe-http"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | list | length }}' >> $OFX_OUTPUTS
   web-crawl:
     name: Web Crawling
     needs:

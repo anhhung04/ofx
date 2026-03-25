@@ -110,7 +110,7 @@ jobs:
       continue-on-error: true
     - name: export-svc
       run: |
-        echo "http_targets={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}" >> $OFX_OUTPUTS
+        echo 'http_targets={{ urls(steps["http-probe"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
   vuln-search:
     name: Vulnerability Search
     outputs:

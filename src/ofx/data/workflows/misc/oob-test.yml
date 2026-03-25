@@ -19,8 +19,8 @@ jobs:
   setup:
     name: Setup Interactsh Listener
     outputs:
-      callback_url: "{{ steps["start-listener"].outputs.callback_url }}"
-      callback_flag: "{{ steps["start-listener"].outputs.callback_flag }}"
+      callback_url: '{{ steps["start-listener"].outputs.callback_url }}'
+      callback_flag: '{{ steps["start-listener"].outputs.callback_flag }}'
     steps:
     - name: start-listener
       timeout: 3
@@ -46,7 +46,7 @@ jobs:
     name: Send OOB Probes
     needs: [setup]
     outputs:
-      probes_sent: "{{ steps["send-probes"].outputs.probes_sent }}"
+      probes_sent: '{{ steps["send-probes"].outputs.probes_sent }}'
     steps:
     - name: send-probes
       timeout: 3

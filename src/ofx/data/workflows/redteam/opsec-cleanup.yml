@@ -22,8 +22,8 @@ jobs:
   cleanup:
     name: Generate Cleanup Commands
     outputs:
-      cleanup_file: "{{ steps["build-cleanup"].outputs.cleanup_file }}"
-      command_count: "{{ steps["build-cleanup"].outputs.command_count }}"
+      cleanup_file: '{{ steps["build-cleanup"].outputs.cleanup_file }}'
+      command_count: '{{ steps["build-cleanup"].outputs.command_count }}'
     steps:
     - name: build-cleanup
       timeout: 3
@@ -97,8 +97,8 @@ jobs:
   timestomp:
     name: Generate Timestomp Commands
     outputs:
-      timestomp_file: "{{ steps["build-timestomp"].outputs.timestomp_file }}"
-      timestomp_count: "{{ steps["build-timestomp"].outputs.timestomp_count }}"
+      timestomp_file: '{{ steps["build-timestomp"].outputs.timestomp_file }}'
+      timestomp_count: '{{ steps["build-timestomp"].outputs.timestomp_count }}'
     steps:
     - name: build-timestomp
       timeout: 3
