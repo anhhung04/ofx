@@ -87,18 +87,24 @@ jobs:
       live_urls: '{{ steps["export-urls"].outputs.live_urls }}'
       open_ports: '{{ steps["service-detect"].outputs.open_ports }}'
     steps:
+    - task: nerva
+      timeout: 15
+      name: nerva-fingerprint
+      with:
+        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
+      continue-on-error: true
     - task: nmap
       timeout: 30
       name: service-detect
       with:
-        target: '{{ jobs[''network-discovery''].outputs.hosts_file }}'
+        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
         version_detection: true
       continue-on-error: true
     - task: httpx
       timeout: 10
       name: http-probe
       with:
-        target: '{{ jobs[''network-discovery''].outputs.hosts_file }}'
+        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
         tech_detect: true
         status_code: true
         follow_redirects: true
@@ -107,12 +113,60 @@ jobs:
       timeout: 10
       name: whatweb-fingerprint
       with:
-        target: '{{ jobs[''network-discovery''].outputs.hosts_file }}'
+        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
         aggression: 3
       continue-on-error: true
     - name: export-urls
       run: |
-        echo 'live_urls={{ urls(steps["whatweb-fingerprint"].outputs.typed_outputs) | selectattr('status_code', 'gt', 0) | map(attribute='url') | unique | join('\n') }}' >> $OFX_OUTPUTS
+        echo 'live_urls={{ urls(steps["whatweb-fingerprint"].outputs.typed_outputs) | selectattr("status_code", "gt", 0) | map(attribute="url") | unique | join("\n") }}' >> $OFX_OUTPUTS
+  default-cred-check:
+    name: Default Credential Check
+    needs:
+    - network-discovery
+    outputs:
+      cred_count: '{{ steps["parse-brutus"].outputs.cred_count }}'
+    steps:
+    - name: run-pipeline
+      run: |
+        naabu -list {{ jobs['network-discovery'].outputs.hosts_file }} -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
+          nerva --json 2>/dev/null | \
+          brutus --json 2>/dev/null | tee /tmp/ofx_netscan_brutus.jsonl
+      timeout: 20
+      continue-on-error: true
+    - name: parse-brutus
+      script: |
+        import json
+        creds = []
+        try:
+            with open('/tmp/ofx_netscan_brutus.jsonl') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or not line.startswith('{'):
+                        continue
+                    try:
+                        data = json.loads(line)
+                        username = data.get('username', data.get('login', ''))
+                        password = data.get('password', data.get('pass', ''))
+                        host = data.get('host', data.get('ip', ''))
+                        port = data.get('port', '')
+                        service = data.get('service', '')
+                        if username:
+                            creds.append({'user': username, 'pass': password, 'host': f"{host}:{port}", 'service': service})
+                    except json.JSONDecodeError:
+                        continue
+        except FileNotFoundError:
+            pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"cred_count={len(creds)}\n")
+
+        if creds:
+            print(f"[!] Default credentials found: {len(creds)}")
+            for c in creds:
+                print(f"  [+] {c['host']} ({c['service']}): {c['user']}:{c['pass']}")
+        else:
+            print("[*] No default credentials found")
+      log-stdout: true
   url-crawl:
     name: URL Crawling
     needs:
@@ -129,6 +183,7 @@ jobs:
     name: Vulnerability Scanning
     needs:
     - url-crawl
+    - default-cred-check
     steps:
     - task: nuclei
       timeout: 20
@@ -162,6 +217,7 @@ jobs:
         print(f" NETWORK SCAN COMPLETE: {{ inputs.target }}")
         print("=" * 50)
         print(f"Live hosts: {{ jobs['network-discovery'].outputs.host_count }}")
+        print(f"Default creds: {{ jobs['default-cred-check'].outputs.cred_count | default('0', true) }}")
         print(f"Total vulnerabilities: {len(vulns)}")
         print(f"  Critical: {len(critical)}")
         print(f"  High: {len(high)}")

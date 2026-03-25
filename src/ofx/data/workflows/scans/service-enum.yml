@@ -28,13 +28,16 @@ jobs:
         top_ports: '1000'
         rate: 1000
       continue-on-error: true
+    - task: nerva
+      timeout: 10
+      name: fingerprint
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
     - name: identify-services
       script: |
         ports_data = {{ ports(steps["port-scan"].outputs.typed_outputs) | tojson }}
-        services = {}
-        for p in ports_data:
-            port = p.get('port', 0)
-            services[port] = p.get('service', '')
+        nerva_data = {{ ports(steps["fingerprint"].outputs.typed_outputs) | tojson }}
 
         svc_map = {
             21: 'ftp', 22: 'ssh', 25: 'smtp', 53: 'dns', 80: 'http',
@@ -45,11 +48,27 @@ jobs:
             8080: 'http', 8443: 'https', 27017: 'mongodb',
         }
 
+        services = {}
+        for p in ports_data:
+            port = p.get('port', 0)
+            services[port] = svc_map.get(port, '')
+
+        # Enrich with nerva service detection
         detected = set()
-        for port in services:
-            svc = svc_map.get(port, '')
+        for p in nerva_data:
+            port = p.get('port', 0)
+            svc_name = p.get('service_name', '')
+            if '/' in svc_name:
+                svc_name = svc_name.split('/')[0]
+            if svc_name:
+                detected.add(svc_name)
+                services[port] = svc_name
+
+        for port, svc in services.items():
             if svc:
                 detected.add(svc)
+            elif port in svc_map:
+                detected.add(svc_map[port])
 
         with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
             f.write(f"port_count={len(services)}\n")
@@ -170,3 +189,51 @@ jobs:
 
             print(f'Project export complete: {project}')
       continue-on-error: true
+
+  default-cred-check:
+    name: Default Credential Check
+    needs: [port-discovery]
+    outputs:
+      cred_count: '{{ steps["parse-results"].outputs.cred_count }}'
+    steps:
+    - name: nerva-brutus
+      run: |
+        naabu -host {{ inputs.target }} -p {{ jobs['port-discovery'].outputs.open_ports | default('22,21,3306,5432,6379', true) }} -silent 2>/dev/null | \
+          nerva --json 2>/dev/null | \
+          brutus --json 2>/dev/null | tee /tmp/ofx_svc_brutus.jsonl
+      timeout: 15
+      continue-on-error: true
+    - name: parse-results
+      script: |
+        import json
+        creds = []
+        try:
+            with open('/tmp/ofx_svc_brutus.jsonl') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or not line.startswith('{'):
+                        continue
+                    try:
+                        data = json.loads(line)
+                        username = data.get('username', data.get('login', ''))
+                        password = data.get('password', data.get('pass', ''))
+                        service = data.get('service', '')
+                        host = data.get('host', data.get('ip', ''))
+                        port = data.get('port', '')
+                        if username:
+                            creds.append({'user': username, 'pass': password, 'service': service, 'target': f"{host}:{port}"})
+                    except json.JSONDecodeError:
+                        continue
+        except FileNotFoundError:
+            pass
+
+        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
+            f.write(f"cred_count={len(creds)}\n")
+
+        if creds:
+            print(f"[!] Default credentials found: {len(creds)}")
+            for c in creds:
+                print(f"  [+] {c['target']} ({c['service']}): {c['user']}:{c['pass']}")
+        else:
+            print("[*] No default credentials found")
+      log-stdout: true

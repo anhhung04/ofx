@@ -106,6 +106,12 @@ jobs:
       vuln_count: '{{ steps["collect-services"].outputs.vuln_count }}'
       exploit_count: '{{ steps["collect-services"].outputs.exploit_count }}'
     steps:
+      - task: nerva
+        timeout: 15
+        name: nerva-fingerprint
+        with:
+          target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
+        continue-on-error: true
       - task: nmap
         timeout: 30
         name: nmap-version
@@ -139,16 +145,21 @@ jobs:
       - name: collect-services
         script: |
           nmap_ports = {{ ports(steps["nmap-version"].outputs.typed_outputs) | tojson }}
+          nerva_ports = {{ ports(steps["nerva-fingerprint"].outputs.typed_outputs) | tojson }}
           nmap_vulns = {{ vulns(steps["nmap-version"].outputs.typed_outputs) | tojson }}
           http_urls = {{ urls(steps["http-probe"].outputs.typed_outputs) | tojson }}
           exploits = {{ steps["exploit-lookup"].outputs.typed_outputs | tojson }}
 
           services = []
-          for p in nmap_ports:
+          seen = set()
+          for p in nmap_ports + nerva_ports:
               svc = p.get('service_name', 'unknown')
               port = p.get('port', '?')
               host = p.get('host') or p.get('ip', '?')
-              services.append(f"{host}:{port}/{svc}")
+              key = f"{host}:{port}"
+              if key not in seen:
+                  services.append(f"{key}/{svc}")
+                  seen.add(key)
 
           live_urls = [u['url'] for u in http_urls if u.get('url')]
 
