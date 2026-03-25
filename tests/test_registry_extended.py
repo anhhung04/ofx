@@ -101,7 +101,11 @@ class TestRegistryFactoryExtended:
         """Test that factory recognizes memcached backend"""
         if _can_import("aiomcache"):
             registry = RegistryFactory.create("memcached")
-            assert registry.__class__.__name__ == "MemcachedJobRegistry"
+            # Factory wraps: base → CachedRegistryAdapter → FailoverRegistryAdapter
+            assert registry.__class__.__name__ == "FailoverRegistryAdapter"
+            cached = registry._primary
+            assert cached.__class__.__name__ == "CachedRegistryAdapter"
+            assert cached._backend.__class__.__name__ == "MemcachedJobRegistry"
         else:
             with pytest.raises(ImportError, match="aiomcache"):
                 RegistryFactory.create("memcached")
@@ -110,7 +114,11 @@ class TestRegistryFactoryExtended:
         """Test that factory recognizes etcd backend"""
         if _can_import("etcd3"):
             registry = RegistryFactory.create("etcd")
-            assert registry.__class__.__name__ == "EtcdJobRegistry"
+            # Factory wraps: base → CachedRegistryAdapter → FailoverRegistryAdapter
+            assert registry.__class__.__name__ == "FailoverRegistryAdapter"
+            cached = registry._primary
+            assert cached.__class__.__name__ == "CachedRegistryAdapter"
+            assert cached._backend.__class__.__name__ == "EtcdJobRegistry"
         else:
             with pytest.raises(ImportError, match="etcd3"):
                 RegistryFactory.create("etcd")
