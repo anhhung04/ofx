@@ -1,0 +1,88 @@
+name: cloud-security-audit
+description: |
+  Multi-cloud security audit using prowler and cloudfox.
+  Checks AWS/Azure/GCP for misconfigurations, IAM issues,
+  exposed services, and compliance violations.
+tags: [cloud, security, audit, aws, azure, gcp]
+dispatch:
+  inputs:
+    provider:
+      required: true
+      type: string
+      description: Cloud provider (aws, azure, gcp)
+      alias: p
+    profile:
+      type: string
+      default: ""
+      description: Cloud CLI profile name
+    services:
+      type: string
+      default: ""
+      description: Comma-separated services to scan (e.g. s3,iam,ec2)
+    severity:
+      type: string
+      default: ""
+      description: Minimum severity filter (info, low, medium, high, critical)
+
+jobs:
+  prowler-scan:
+    name: Prowler Cloud Audit
+    outputs:
+      finding_count: '{{ steps["prowler-audit"].outputs.finding_count | default("", true) }}'
+      typed_outputs: '{{ steps["prowler-audit"].outputs.typed_outputs | default("", true) }}'
+    steps:
+      - task: prowler
+        timeout: 60
+        name: prowler-audit
+        with:
+          target: "{{ inputs.provider }}"
+          provider: "{{ inputs.provider }}"
+          profile: '{{ inputs.profile or "" }}'
+          services: '{{ inputs.services or "" }}'
+          severity: '{{ inputs.severity or "" }}'
+        continue-on-error: true
+
+  cloudfox-enum:
+    name: CloudFox AWS Enumeration
+    run_if: "{{ inputs.provider == 'aws' }}"
+    outputs:
+      finding_count: '{{ steps["cloudfox-scan"].outputs.finding_count | default("", true) }}'
+      typed_outputs: '{{ steps["cloudfox-scan"].outputs.typed_outputs | default("", true) }}'
+    steps:
+      - task: cloudfox
+        timeout: 30
+        name: cloudfox-scan
+        with:
+          target: all-checks
+          profile: '{{ inputs.profile or "" }}'
+        continue-on-error: true
+
+  summary:
+    name: Cloud Security Audit Summary
+    needs: [prowler-scan, cloudfox-enum]
+    steps:
+      - name: report
+        script: |
+          prowler_count = '{{ jobs["prowler-scan"].outputs.finding_count | default("0", true) }}'
+          cloudfox_count = '{{ jobs["cloudfox-enum"].outputs.finding_count | default("0", true) }}'
+
+          print("=" * 56)
+          print(" CLOUD SECURITY AUDIT COMPLETE")
+          print("=" * 56)
+          print()
+          print(f"  Provider: {{ inputs.provider }}")
+          print(f"  Profile:  {{ inputs.profile | default('default', true) }}")
+          if '{{ inputs.services }}':
+              print(f"  Services: {{ inputs.services }}")
+          if '{{ inputs.severity }}':
+              print(f"  Severity: >= {{ inputs.severity }}")
+          print()
+          print("--- Prowler ---")
+          print(f"  Findings: {prowler_count}")
+          print()
+          print("--- CloudFox (AWS only) ---")
+          if '{{ inputs.provider }}' == 'aws':
+              print(f"  Findings: {cloudfox_count}")
+          else:
+              print("  Skipped (provider is not AWS)")
+        log-stdout: true
