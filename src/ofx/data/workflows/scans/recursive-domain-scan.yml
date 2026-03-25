@@ -32,8 +32,8 @@ jobs:
   subdomain-discovery:
     name: Subdomain Discovery
     outputs:
-      subs_file: '{{ steps["collect-subdomains"].outputs.subs_file }}'
-      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count }}'
+      subs_file: '{{ steps["collect-subdomains"].outputs.subs_file | default("", true) }}'
+      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count | default("", true) }}'
     steps:
     - task: subfinder
       timeout: 10
@@ -93,9 +93,9 @@ jobs:
     name: Bulk Reconnaissance
     needs: [subdomain-discovery]
     outputs:
-      alive_file: '{{ steps["collect-alive"].outputs.alive_file }}'
-      live_urls_file: '{{ steps["collect-alive"].outputs.live_urls_file }}'
-      alive_count: '{{ steps["collect-alive"].outputs.alive_count }}'
+      alive_file: '{{ steps["collect-alive"].outputs.alive_file | default("", true) }}'
+      live_urls_file: '{{ steps["collect-alive"].outputs.live_urls_file | default("", true) }}'
+      alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("", true) }}'
     steps:
     - task: dnsx
       timeout: 10
@@ -151,7 +151,7 @@ jobs:
       timeout: 10
       name: port-scan
       with:
-        target: '{{ steps["collect-alive"].outputs.alive_file if steps["collect-alive"].outputs is defined else jobs["subdomain-discovery"].outputs.subs_file }}'
+        target: '{{ steps["collect-alive"].outputs.alive_file if steps["collect-alive"].outputs is defined else jobs["subdomain-discovery"].outputs.subs_file | default("", true) }}'
         top_ports: '1000'
         rate: 1000
       continue-on-error: true
@@ -159,7 +159,7 @@ jobs:
       timeout: 20
       name: quick-vuln-scan
       with:
-        target: '{{ steps["collect-alive"].outputs.live_urls_file if steps["collect-alive"].outputs is defined else jobs["subdomain-discovery"].outputs.subs_file }}'
+        target: '{{ steps["collect-alive"].outputs.live_urls_file if steps["collect-alive"].outputs is defined else jobs["subdomain-discovery"].outputs.subs_file | default("", true) }}'
         severity: critical,high
       continue-on-error: true
     - task: nuclei
@@ -195,9 +195,9 @@ jobs:
     needs: [bulk-recon]
     run_if: "{{ inputs.skip_deep != 'true' }}"
     outputs:
-      scanned_count: '{{ steps["fan-out-domain-scan"].outputs.scanned_count }}'
-      success_count: '{{ steps["fan-out-domain-scan"].outputs.success_count }}'
-      fail_count: '{{ steps["fan-out-domain-scan"].outputs.fail_count }}'
+      scanned_count: '{{ steps["fan-out-domain-scan"].outputs.scanned_count | default("", true) }}'
+      success_count: '{{ steps["fan-out-domain-scan"].outputs.success_count | default("", true) }}'
+      fail_count: '{{ steps["fan-out-domain-scan"].outputs.fail_count | default("", true) }}'
     steps:
     - name: fan-out-domain-scan
       timeout: 120

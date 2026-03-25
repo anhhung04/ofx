@@ -17,8 +17,8 @@ jobs:
   crawl:
     name: URL Crawling
     outputs:
-      crawled_file: '{{ steps["collect-urls"].outputs.crawled_file }}'
-      url_count: '{{ steps["collect-urls"].outputs.url_count }}'
+      crawled_file: '{{ steps["collect-urls"].outputs.crawled_file | default("", true) }}'
+      url_count: '{{ steps["collect-urls"].outputs.url_count | default("", true) }}'
     steps:
     - task: katana
       timeout: 15
@@ -66,8 +66,8 @@ jobs:
     needs:
     - crawl
     outputs:
-      live_urls: '{{ steps["export-live"].outputs.live_urls }}'
-      live_count: '{{ steps["export-live"].outputs.live_count }}'
+      live_urls: '{{ steps["export-live"].outputs.live_urls | default("", true) }}'
+      live_count: '{{ steps["export-live"].outputs.live_count | default("", true) }}'
     steps:
     - task: httpx
       timeout: 10

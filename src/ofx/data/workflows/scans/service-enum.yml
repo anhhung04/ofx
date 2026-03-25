@@ -16,9 +16,9 @@ jobs:
   port-discovery:
     name: Port Discovery
     outputs:
-      port_count: '{{ steps["identify-services"].outputs.port_count }}'
-      detected_services: '{{ steps["identify-services"].outputs.detected_services }}'
-      open_ports: '{{ steps["identify-services"].outputs.open_ports }}'
+      port_count: '{{ steps["identify-services"].outputs.port_count | default("", true) }}'
+      detected_services: '{{ steps["identify-services"].outputs.detected_services | default("", true) }}'
+      open_ports: '{{ steps["identify-services"].outputs.open_ports | default("", true) }}'
     steps:
     - task: naabu
       timeout: 10
@@ -82,8 +82,8 @@ jobs:
     name: Deep Service Enumeration
     needs: [port-discovery]
     outputs:
-      enum_file: '{{ steps["enum-services"].outputs.enum_file }}'
-      service_count: '{{ steps["enum-services"].outputs.service_count }}'
+      enum_file: '{{ steps["enum-services"].outputs.enum_file | default("", true) }}'
+      service_count: '{{ steps["enum-services"].outputs.service_count | default("", true) }}'
     steps:
     - name: enum-services
       script: |
@@ -194,7 +194,7 @@ jobs:
     name: Default Credential Check
     needs: [port-discovery]
     outputs:
-      cred_count: '{{ steps["parse-results"].outputs.cred_count }}'
+      cred_count: '{{ steps["parse-results"].outputs.cred_count | default("", true) }}'
     steps:
     - name: nerva-brutus
       run: |

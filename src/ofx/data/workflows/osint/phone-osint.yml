@@ -14,16 +14,16 @@ jobs:
   analyze:
     name: Phone Analysis
     outputs:
-      number: '{{ steps["phone-lookup"].outputs.number }}'
-      digits: '{{ steps["phone-lookup"].outputs.digits }}'
-      country: '{{ steps["phone-lookup"].outputs.country }}'
-      country_code: '{{ steps["phone-lookup"].outputs.country_code }}'
-      valid: '{{ steps["phone-lookup"].outputs.valid }}'
-      location: '{{ steps["phone-lookup"].outputs.location }}'
-      carrier: '{{ steps["phone-lookup"].outputs.carrier }}'
-      type: '{{ steps["phone-lookup"].outputs.type }}'
-      timezones: '{{ steps["phone-lookup"].outputs.timezones }}'
-      international: '{{ steps["phone-lookup"].outputs.international }}'
+      number: '{{ steps["phone-lookup"].outputs.number | default("", true) }}'
+      digits: '{{ steps["phone-lookup"].outputs.digits | default("", true) }}'
+      country: '{{ steps["phone-lookup"].outputs.country | default("", true) }}'
+      country_code: '{{ steps["phone-lookup"].outputs.country_code | default("", true) }}'
+      valid: '{{ steps["phone-lookup"].outputs.valid | default("", true) }}'
+      location: '{{ steps["phone-lookup"].outputs.location | default("", true) }}'
+      carrier: '{{ steps["phone-lookup"].outputs.carrier | default("", true) }}'
+      type: '{{ steps["phone-lookup"].outputs.type | default("", true) }}'
+      timezones: '{{ steps["phone-lookup"].outputs.timezones | default("", true) }}'
+      international: '{{ steps["phone-lookup"].outputs.international | default("", true) }}'
     steps:
     - name: phone-lookup
       script: |

@@ -18,9 +18,9 @@ jobs:
   transform:
     name: IOC Transform
     outputs:
-      result_file: '{{ steps["defang-refang"].outputs.result_file }}'
-      operation: '{{ steps["defang-refang"].outputs.operation }}'
-      line_count: '{{ steps["defang-refang"].outputs.line_count }}'
+      result_file: '{{ steps["defang-refang"].outputs.result_file | default("", true) }}'
+      operation: '{{ steps["defang-refang"].outputs.operation | default("", true) }}'
+      line_count: '{{ steps["defang-refang"].outputs.line_count | default("", true) }}'
     steps:
     - name: defang-refang
       script: |

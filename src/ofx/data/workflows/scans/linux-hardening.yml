@@ -24,9 +24,9 @@ jobs:
   audit:
     name: Linux Hardening Audit
     outputs:
-      finding_count: '{{ steps["hardening-checks"].outputs.finding_count }}'
-      passed_count: '{{ steps["hardening-checks"].outputs.passed_count }}'
-      score: '{{ steps["hardening-checks"].outputs.score }}'
+      finding_count: '{{ steps["hardening-checks"].outputs.finding_count | default("", true) }}'
+      passed_count: '{{ steps["hardening-checks"].outputs.passed_count | default("", true) }}'
+      score: '{{ steps["hardening-checks"].outputs.score | default("", true) }}'
     steps:
     - name: hardening-checks
       script: |

@@ -22,8 +22,8 @@ jobs:
   network-discovery:
     name: Network Discovery
     outputs:
-      hosts_file: '{{ steps["collect-hosts"].outputs.hosts_file }}'
-      host_count: '{{ steps["collect-hosts"].outputs.host_count }}'
+      hosts_file: '{{ steps["collect-hosts"].outputs.hosts_file | default("", true) }}'
+      host_count: '{{ steps["collect-hosts"].outputs.host_count | default("", true) }}'
     steps:
     - task: fping
       name: fping-discovery
@@ -131,7 +131,7 @@ jobs:
     needs:
     - network-discovery
     outputs:
-      cred_count: '{{ steps["parse-brutus"].outputs.cred_count }}'
+      cred_count: '{{ steps["parse-brutus"].outputs.cred_count | default("", true) }}'
     steps:
     - name: run-pipeline
       run: |

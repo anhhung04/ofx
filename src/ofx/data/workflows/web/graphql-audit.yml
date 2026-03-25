@@ -16,10 +16,10 @@ jobs:
   introspection:
     name: Introspection & Schema Analysis
     outputs:
-      introspection: '{{ steps["introspection-query"].outputs.introspection }}'
-      type_count: '{{ steps["introspection-query"].outputs.type_count }}'
-      schema_file: '{{ steps["introspection-query"].outputs.schema_file }}'
-      finding_count: '{{ steps["introspection-query"].outputs.finding_count }}'
+      introspection: '{{ steps["introspection-query"].outputs.introspection | default("", true) }}'
+      type_count: '{{ steps["introspection-query"].outputs.type_count | default("", true) }}'
+      schema_file: '{{ steps["introspection-query"].outputs.schema_file | default("", true) }}'
+      finding_count: '{{ steps["introspection-query"].outputs.finding_count | default("", true) }}'
     steps:
     - name: introspection-query
       script: |

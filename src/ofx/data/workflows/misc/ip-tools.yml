@@ -21,21 +21,21 @@ jobs:
   ip-info:
     name: IP Information
     outputs:
-      type: '{{ steps["analyze-ip"].outputs.type }}'
-      version: '{{ steps["analyze-ip"].outputs.version }}'
-      is_private: '{{ steps["analyze-ip"].outputs.is_private }}'
-      network: '{{ steps["analyze-ip"].outputs.network }}'
-      broadcast: '{{ steps["analyze-ip"].outputs.broadcast }}'
-      netmask: '{{ steps["analyze-ip"].outputs.netmask }}'
-      prefix: '{{ steps["analyze-ip"].outputs.prefix }}'
-      host_count: '{{ steps["analyze-ip"].outputs.host_count }}'
-      first_host: '{{ steps["analyze-ip"].outputs.first_host }}'
-      last_host: '{{ steps["analyze-ip"].outputs.last_host }}'
-      slash24: '{{ steps["analyze-ip"].outputs.slash24 }}'
-      resolved_ips: '{{ steps["analyze-ip"].outputs.resolved_ips }}'
-      reverse_dns: '{{ steps["analyze-ip"].outputs.reverse_dns }}'
-      expanded_file: '{{ steps["analyze-ip"].outputs.expanded_file }}'
-      expanded_count: '{{ steps["analyze-ip"].outputs.expanded_count }}'
+      type: '{{ steps["analyze-ip"].outputs.type | default("", true) }}'
+      version: '{{ steps["analyze-ip"].outputs.version | default("", true) }}'
+      is_private: '{{ steps["analyze-ip"].outputs.is_private | default("", true) }}'
+      network: '{{ steps["analyze-ip"].outputs.network | default("", true) }}'
+      broadcast: '{{ steps["analyze-ip"].outputs.broadcast | default("", true) }}'
+      netmask: '{{ steps["analyze-ip"].outputs.netmask | default("", true) }}'
+      prefix: '{{ steps["analyze-ip"].outputs.prefix | default("", true) }}'
+      host_count: '{{ steps["analyze-ip"].outputs.host_count | default("", true) }}'
+      first_host: '{{ steps["analyze-ip"].outputs.first_host | default("", true) }}'
+      last_host: '{{ steps["analyze-ip"].outputs.last_host | default("", true) }}'
+      slash24: '{{ steps["analyze-ip"].outputs.slash24 | default("", true) }}'
+      resolved_ips: '{{ steps["analyze-ip"].outputs.resolved_ips | default("", true) }}'
+      reverse_dns: '{{ steps["analyze-ip"].outputs.reverse_dns | default("", true) }}'
+      expanded_file: '{{ steps["analyze-ip"].outputs.expanded_file | default("", true) }}'
+      expanded_count: '{{ steps["analyze-ip"].outputs.expanded_count | default("", true) }}'
     steps:
     - name: analyze-ip
       script: |

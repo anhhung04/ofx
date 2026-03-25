@@ -40,9 +40,9 @@ jobs:
   cert-details:
     name: Certificate Details
     outputs:
-      version: '{{ steps["cert-chain"].outputs.version }}'
-      cipher: '{{ steps["cert-chain"].outputs.cipher }}'
-      finding_count: '{{ steps["cert-chain"].outputs.finding_count }}'
+      version: '{{ steps["cert-chain"].outputs.version | default("", true) }}'
+      cipher: '{{ steps["cert-chain"].outputs.cipher | default("", true) }}'
+      finding_count: '{{ steps["cert-chain"].outputs.finding_count | default("", true) }}'
     steps:
     - name: cert-chain
       script: |

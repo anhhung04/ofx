@@ -25,8 +25,8 @@ jobs:
   search:
     name: Execute FOFA Search
     outputs:
-      raw_file: '{{ steps["fofa-query"].outputs.raw_file }}'
-      raw_count: '{{ steps["fofa-query"].outputs.raw_count }}'
+      raw_file: '{{ steps["fofa-query"].outputs.raw_file | default("", true) }}'
+      raw_count: '{{ steps["fofa-query"].outputs.raw_count | default("", true) }}'
     steps:
     - name: fofa-query
       timeout: 5
@@ -65,9 +65,9 @@ jobs:
     name: Parse & Deduplicate
     needs: [search]
     outputs:
-      dedup_file: '{{ steps["dedup-results"].outputs.dedup_file }}'
-      dedup_count: '{{ steps["dedup-results"].outputs.dedup_count }}'
-      hosts_file: '{{ steps["dedup-results"].outputs.hosts_file }}'
+      dedup_file: '{{ steps["dedup-results"].outputs.dedup_file | default("", true) }}'
+      dedup_count: '{{ steps["dedup-results"].outputs.dedup_count | default("", true) }}'
+      hosts_file: '{{ steps["dedup-results"].outputs.hosts_file | default("", true) }}'
     steps:
     - name: dedup-results
       timeout: 3

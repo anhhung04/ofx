@@ -16,8 +16,8 @@ jobs:
   enum:
     name: Subdomain Enumeration
     outputs:
-      subs_file: '{{ steps["merge-subs"].outputs.subs_file }}'
-      sub_count: '{{ steps["merge-subs"].outputs.sub_count }}'
+      subs_file: '{{ steps["merge-subs"].outputs.subs_file | default("", true) }}'
+      sub_count: '{{ steps["merge-subs"].outputs.sub_count | default("", true) }}'
     steps:
       - task: subfinder
         timeout: 10
@@ -83,11 +83,11 @@ jobs:
     needs:
       - enum
     outputs:
-      alive_file: '{{ steps["analyze-cnames"].outputs.alive_file }}'
-      alive_count: '{{ steps["analyze-cnames"].outputs.alive_count }}'
-      cname_count: '{{ steps["analyze-cnames"].outputs.cname_count }}'
-      dangling_count: '{{ steps["analyze-cnames"].outputs.dangling_count }}'
-      dangling_file: '{{ steps["analyze-cnames"].outputs.dangling_file }}'
+      alive_file: '{{ steps["analyze-cnames"].outputs.alive_file | default("", true) }}'
+      alive_count: '{{ steps["analyze-cnames"].outputs.alive_count | default("", true) }}'
+      cname_count: '{{ steps["analyze-cnames"].outputs.cname_count | default("", true) }}'
+      dangling_count: '{{ steps["analyze-cnames"].outputs.dangling_count | default("", true) }}'
+      dangling_file: '{{ steps["analyze-cnames"].outputs.dangling_file | default("", true) }}'
     steps:
       - task: dnsx
         timeout: 10
@@ -164,8 +164,8 @@ jobs:
     needs:
       - dns-verify
     outputs:
-      takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count }}'
-      takeover_details_file: '{{ steps["collect-takeovers"].outputs.takeover_details_file }}'
+      takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count | default("", true) }}'
+      takeover_details_file: '{{ steps["collect-takeovers"].outputs.takeover_details_file | default("", true) }}'
     steps:
       - task: subzy
         name: subzy-check

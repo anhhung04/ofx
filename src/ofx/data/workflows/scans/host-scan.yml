@@ -23,7 +23,7 @@ jobs:
   host-recon:
     name: Host Reconnaissance
     outputs:
-      live_urls: '{{ steps["export-data"].outputs.live_urls }}'
+      live_urls: '{{ steps["export-data"].outputs.live_urls | default("", true) }}'
     steps:
       - task: rustscan
         timeout: 10
@@ -95,7 +95,7 @@ jobs:
   web-analysis:
     name: Web Analysis
     outputs:
-      typed_outputs: '{{ steps["whatweb-fingerprint"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["whatweb-fingerprint"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs | default("", true) }}'
     needs:
       - host-recon
     steps:
@@ -136,7 +136,7 @@ jobs:
   vuln-scan:
     name: Vulnerability Scanning
     outputs:
-      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["xss-scan"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["xss-scan"].outputs.typed_outputs | default("", true) }}'
     needs:
       - url-crawl
       - web-analysis

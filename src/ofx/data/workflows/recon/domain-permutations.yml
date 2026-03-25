@@ -20,8 +20,8 @@ jobs:
   generate:
     name: Generate Permutations
     outputs:
-      perms_file: '{{ steps["gen-perms"].outputs.perms_file }}'
-      perm_count: '{{ steps["gen-perms"].outputs.perm_count }}'
+      perms_file: '{{ steps["gen-perms"].outputs.perms_file | default("", true) }}'
+      perm_count: '{{ steps["gen-perms"].outputs.perm_count | default("", true) }}'
     steps:
     - name: gen-perms
       timeout: 3
@@ -47,8 +47,8 @@ jobs:
     name: Resolve Domains
     needs: [generate]
     outputs:
-      registered_file: '{{ steps["dns-resolve"].outputs.registered_file }}'
-      registered_count: '{{ steps["dns-resolve"].outputs.registered_count }}'
+      registered_file: '{{ steps["dns-resolve"].outputs.registered_file | default("", true) }}'
+      registered_count: '{{ steps["dns-resolve"].outputs.registered_count | default("", true) }}'
     steps:
     - name: dns-resolve
       timeout: 10

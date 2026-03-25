@@ -25,7 +25,7 @@ jobs:
   fingerprint:
     name: Fingerprinting
     outputs:
-      live_urls: '{{ steps["export-info"].outputs.live_urls }}'
+      live_urls: '{{ steps["export-info"].outputs.live_urls | default("", true) }}'
     steps:
       - task: rustscan
         timeout: 10
@@ -72,8 +72,8 @@ jobs:
     needs:
       - fingerprint
     outputs:
-      dir_urls_file: '{{ steps["collect-dirs"].outputs.dir_urls_file }}'
-      dir_count: '{{ steps["collect-dirs"].outputs.dir_count }}'
+      dir_urls_file: '{{ steps["collect-dirs"].outputs.dir_urls_file | default("", true) }}'
+      dir_count: '{{ steps["collect-dirs"].outputs.dir_count | default("", true) }}'
     steps:
       - task: feroxbuster
         timeout: 20
@@ -126,8 +126,8 @@ jobs:
     needs:
       - fingerprint
     outputs:
-      crawled_file: '{{ steps["collect-crawled"].outputs.crawled_file }}'
-      crawl_count: '{{ steps["collect-crawled"].outputs.crawl_count }}'
+      crawled_file: '{{ steps["collect-crawled"].outputs.crawled_file | default("", true) }}'
+      crawl_count: '{{ steps["collect-crawled"].outputs.crawl_count | default("", true) }}'
     steps:
       - task: katana
         timeout: 15
@@ -183,8 +183,8 @@ jobs:
       - crawl
       - dir-brute
     outputs:
-      param_file: '{{ steps["collect-params"].outputs.param_file }}'
-      param_count: '{{ steps["collect-params"].outputs.param_count }}'
+      param_file: '{{ steps["collect-params"].outputs.param_file | default("", true) }}'
+      param_count: '{{ steps["collect-params"].outputs.param_count | default("", true) }}'
     steps:
       - task: arjun
         timeout: 10
@@ -230,13 +230,13 @@ jobs:
     needs:
       - param-fuzz
     outputs:
-      total_vulns: '{{ steps["collect-vulns"].outputs.total_vulns }}'
-      critical_count: '{{ steps["collect-vulns"].outputs.critical_count }}'
-      high_count: '{{ steps["collect-vulns"].outputs.high_count }}'
-      xss_count: '{{ steps["collect-vulns"].outputs.xss_count }}'
-      sqli_count: '{{ steps["collect-vulns"].outputs.sqli_count }}'
-      cmdi_count: '{{ steps["collect-vulns"].outputs.cmdi_count }}'
-      crlf_count: '{{ steps["collect-vulns"].outputs.crlf_count }}'
+      total_vulns: '{{ steps["collect-vulns"].outputs.total_vulns | default("", true) }}'
+      critical_count: '{{ steps["collect-vulns"].outputs.critical_count | default("", true) }}'
+      high_count: '{{ steps["collect-vulns"].outputs.high_count | default("", true) }}'
+      xss_count: '{{ steps["collect-vulns"].outputs.xss_count | default("", true) }}'
+      sqli_count: '{{ steps["collect-vulns"].outputs.sqli_count | default("", true) }}'
+      cmdi_count: '{{ steps["collect-vulns"].outputs.cmdi_count | default("", true) }}'
+      crlf_count: '{{ steps["collect-vulns"].outputs.crlf_count | default("", true) }}'
     steps:
       - task: nuclei
         timeout: 20
@@ -308,7 +308,7 @@ jobs:
   secrets:
     name: Secret Hunting
     outputs:
-      typed_outputs: '{{ steps["trufflehog-scan"].outputs.typed_outputs + steps["gitleaks-scan"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["trufflehog-scan"].outputs.typed_outputs + steps["gitleaks-scan"].outputs.typed_outputs | default("", true) }}'
     needs:
       - crawl
     steps:

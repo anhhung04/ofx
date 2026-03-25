@@ -19,8 +19,8 @@ jobs:
   bruteforce:
     name: DNS Brute-force
     outputs:
-      found_subs: '{{ steps["dns-brute"].outputs.found_subs }}'
-      found_count: '{{ steps["dns-brute"].outputs.found_count }}'
+      found_subs: '{{ steps["dns-brute"].outputs.found_subs | default("", true) }}'
+      found_count: '{{ steps["dns-brute"].outputs.found_count | default("", true) }}'
     steps:
     - name: dns-brute
       timeout: 15
@@ -79,8 +79,8 @@ jobs:
     name: Resolve Subdomains
     needs: [bruteforce]
     outputs:
-      resolved_file: '{{ steps["resolve-ips"].outputs.resolved_file }}'
-      unique_ips: '{{ steps["resolve-ips"].outputs.unique_ips }}'
+      resolved_file: '{{ steps["resolve-ips"].outputs.resolved_file | default("", true) }}'
+      unique_ips: '{{ steps["resolve-ips"].outputs.unique_ips | default("", true) }}'
     steps:
     - name: resolve-ips
       timeout: 10

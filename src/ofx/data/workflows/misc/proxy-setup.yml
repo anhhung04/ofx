@@ -28,9 +28,9 @@ jobs:
   generate:
     name: Generate Proxy Config
     outputs:
-      conf_file: '{{ steps["build-config"].outputs.conf_file }}'
-      env_file: '{{ steps["build-config"].outputs.env_file }}'
-      proxy_count: '{{ steps["build-config"].outputs.proxy_count }}'
+      conf_file: '{{ steps["build-config"].outputs.conf_file | default("", true) }}'
+      env_file: '{{ steps["build-config"].outputs.env_file | default("", true) }}'
+      proxy_count: '{{ steps["build-config"].outputs.proxy_count | default("", true) }}'
     steps:
       - name: build-config
         timeout: 3

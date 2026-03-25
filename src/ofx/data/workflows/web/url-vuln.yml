@@ -16,7 +16,7 @@ jobs:
   xss-scan:
     name: XSS Vulnerability Scan
     outputs:
-      xss_count: '{{ steps["export-xss"].outputs.xss_count }}'
+      xss_count: '{{ steps["export-xss"].outputs.xss_count | default("", true) }}'
     steps:
     - task: dalfox
       timeout: 15
@@ -30,7 +30,7 @@ jobs:
   nuclei-scan:
     name: Nuclei Vulnerability Scan
     outputs:
-      nuclei_count: '{{ steps["export-vulns"].outputs.nuclei_count }}'
+      nuclei_count: '{{ steps["export-vulns"].outputs.nuclei_count | default("", true) }}'
     steps:
     - task: nuclei
       timeout: 20

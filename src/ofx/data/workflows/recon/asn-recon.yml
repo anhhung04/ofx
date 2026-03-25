@@ -16,9 +16,9 @@ jobs:
   lookup:
     name: ASN Lookup
     outputs:
-      asn: '{{ steps["asn-lookup"].outputs.asn }}'
-      prefix_count: '{{ steps["asn-lookup"].outputs.prefix_count }}'
-      results_file: '{{ steps["asn-lookup"].outputs.results_file }}'
+      asn: '{{ steps["asn-lookup"].outputs.asn | default("", true) }}'
+      prefix_count: '{{ steps["asn-lookup"].outputs.prefix_count | default("", true) }}'
+      results_file: '{{ steps["asn-lookup"].outputs.results_file | default("", true) }}'
     steps:
     - name: asn-lookup
       script: |

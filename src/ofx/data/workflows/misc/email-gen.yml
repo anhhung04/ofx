@@ -23,8 +23,8 @@ jobs:
   email-patterns:
     name: Generate Email Patterns
     outputs:
-      patterns_file: '{{ steps["gen-emails"].outputs.patterns_file }}'
-      pattern_count: '{{ steps["gen-emails"].outputs.pattern_count }}'
+      patterns_file: '{{ steps["gen-emails"].outputs.patterns_file | default("", true) }}'
+      pattern_count: '{{ steps["gen-emails"].outputs.pattern_count | default("", true) }}'
     steps:
     - name: gen-emails
       timeout: 2
@@ -54,8 +54,8 @@ jobs:
   domain-perms:
     name: Generate Domain Permutations
     outputs:
-      perms_file: '{{ steps["gen-perms"].outputs.perms_file }}'
-      perm_count: '{{ steps["gen-perms"].outputs.perm_count }}'
+      perms_file: '{{ steps["gen-perms"].outputs.perms_file | default("", true) }}'
+      perm_count: '{{ steps["gen-perms"].outputs.perm_count | default("", true) }}'
     steps:
     - name: gen-perms
       timeout: 2

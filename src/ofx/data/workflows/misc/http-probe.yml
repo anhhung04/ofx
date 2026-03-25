@@ -18,9 +18,9 @@ jobs:
   probe:
     name: HTTP Probe Targets
     outputs:
-      results_file: '{{ steps["probe-targets"].outputs.results_file }}'
-      total_probed: '{{ steps["probe-targets"].outputs.total_probed }}'
-      alive_count: '{{ steps["probe-targets"].outputs.alive_count }}'
+      results_file: '{{ steps["probe-targets"].outputs.results_file | default("", true) }}'
+      total_probed: '{{ steps["probe-targets"].outputs.total_probed | default("", true) }}'
+      alive_count: '{{ steps["probe-targets"].outputs.alive_count | default("", true) }}'
     steps:
     - name: probe-targets
       timeout: 30

@@ -18,8 +18,8 @@ jobs:
   port-discovery:
     name: Port Discovery
     outputs:
-      typed_outputs: '{{ steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs }}'
-      open_ports: '{{ steps["export-ports"].outputs.open_ports }}'
+      typed_outputs: '{{ steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs | default("", true) }}'
+      open_ports: '{{ steps["export-ports"].outputs.open_ports | default("", true) }}'
     steps:
     - task: naabu
       timeout: 10
@@ -48,7 +48,7 @@ jobs:
   service-detection:
     name: Service Detection & Analysis
     outputs:
-      http_targets: '{{ steps["extract-targets"].outputs.http_targets }}'
+      http_targets: '{{ steps["extract-targets"].outputs.http_targets | default("", true) }}'
     needs:
     - port-discovery
     steps:
@@ -74,7 +74,7 @@ jobs:
   ssh-audit:
     name: SSH Audit
     outputs:
-      typed_outputs: '{{ steps["audit-ssh"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["audit-ssh"].outputs.typed_outputs | default("", true) }}'
     needs:
     - service-detection
     steps:
@@ -127,7 +127,7 @@ jobs:
   vuln-scan:
     name: Vulnerability Scan
     outputs:
-      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs | default("", true) }}'
       vuln_count: '{{ steps.summary.outputs.vuln_count }}'
     needs:
     - http-probe

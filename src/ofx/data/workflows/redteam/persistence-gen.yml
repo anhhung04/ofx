@@ -32,9 +32,9 @@ jobs:
     generate:
         name: Generate Persistence Commands
         outputs:
-            commands_file: '{{ steps["build-persistence"].outputs.commands_file }}'
-            command_count: '{{ steps["build-persistence"].outputs.command_count }}'
-            methods: '{{ steps["build-persistence"].outputs.methods }}'
+            commands_file: '{{ steps["build-persistence"].outputs.commands_file | default("", true) }}'
+            command_count: '{{ steps["build-persistence"].outputs.command_count | default("", true) }}'
+            methods: '{{ steps["build-persistence"].outputs.methods | default("", true) }}'
         steps:
             - name: build-persistence
               timeout: 3

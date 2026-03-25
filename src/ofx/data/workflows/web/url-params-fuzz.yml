@@ -22,8 +22,8 @@ jobs:
   probe:
     name: Initial Probe
     outputs:
-      typed_outputs: '{{ steps["probe-url"].outputs.typed_outputs }}'
-      live_url: '{{ steps["export-url"].outputs.live_url }}'
+      typed_outputs: '{{ steps["probe-url"].outputs.typed_outputs | default("", true) }}'
+      live_url: '{{ steps["export-url"].outputs.live_url | default("", true) }}'
     steps:
     - task: httpx
       timeout: 10
@@ -45,8 +45,8 @@ jobs:
     needs:
     - probe
     outputs:
-      found_params: '{{ steps["export-params"].outputs.found_params }}'
-      param_count: '{{ steps["export-params"].outputs.param_count }}'
+      found_params: '{{ steps["export-params"].outputs.found_params | default("", true) }}'
+      param_count: '{{ steps["export-params"].outputs.param_count | default("", true) }}'
     steps:
     - task: arjun
       timeout: 10

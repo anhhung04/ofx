@@ -23,9 +23,9 @@ jobs:
   scan:
     name: Async Port Scan
     outputs:
-      open_ports: '{{ steps["run-scan"].outputs.open_ports }}'
-      port_count: '{{ steps["run-scan"].outputs.port_count }}'
-      results_file: '{{ steps["run-scan"].outputs.results_file }}'
+      open_ports: '{{ steps["run-scan"].outputs.open_ports | default("", true) }}'
+      port_count: '{{ steps["run-scan"].outputs.port_count | default("", true) }}'
+      results_file: '{{ steps["run-scan"].outputs.results_file | default("", true) }}'
     steps:
     - name: run-scan
       timeout: 10

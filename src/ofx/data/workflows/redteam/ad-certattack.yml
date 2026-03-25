@@ -32,8 +32,8 @@ jobs:
   enumerate:
     name: ADCS Enumeration
     outputs:
-      enum_file: '{{ steps["certipy-find"].outputs.enum_file }}'
-      vuln_file: '{{ steps["certipy-find"].outputs.vuln_file }}'
+      enum_file: '{{ steps["certipy-find"].outputs.enum_file | default("", true) }}'
+      vuln_file: '{{ steps["certipy-find"].outputs.vuln_file | default("", true) }}'
     steps:
     - name: certipy-find
       run: |
@@ -70,8 +70,8 @@ jobs:
   analyze:
     name: Vulnerability Analysis
     outputs:
-      finding_count: '{{ steps["analyze-results"].outputs.finding_count }}'
-      template_count: '{{ steps["analyze-results"].outputs.template_count }}'
+      finding_count: '{{ steps["analyze-results"].outputs.finding_count | default("", true) }}'
+      template_count: '{{ steps["analyze-results"].outputs.template_count | default("", true) }}'
     needs: [enumerate]
     steps:
     - name: analyze-results

@@ -27,8 +27,8 @@ jobs:
   osint:
     name: OSINT Gathering
     outputs:
-      osint_domain_count: '{{ steps["export-osint"].outputs.osint_domain_count }}'
-      osint_user_count: '{{ steps["export-osint"].outputs.osint_user_count }}'
+      osint_domain_count: '{{ steps["export-osint"].outputs.osint_domain_count | default("", true) }}'
+      osint_user_count: '{{ steps["export-osint"].outputs.osint_user_count | default("", true) }}'
     steps:
       - task: whois
         timeout: 5
@@ -69,8 +69,8 @@ jobs:
   passive-enum:
     name: Passive Subdomain Enumeration
     outputs:
-      subs_file: '{{ steps["collect-subdomains"].outputs.subs_file }}'
-      sub_count: '{{ steps["collect-subdomains"].outputs.sub_count }}'
+      subs_file: '{{ steps["collect-subdomains"].outputs.subs_file | default("", true) }}'
+      sub_count: '{{ steps["collect-subdomains"].outputs.sub_count | default("", true) }}'
     steps:
       - task: subfinder
         timeout: 10
@@ -182,10 +182,10 @@ jobs:
     needs:
       - passive-enum
     outputs:
-      verified_file: '{{ steps["merge-active"].outputs.verified_file }}'
-      verified_count: '{{ steps["merge-active"].outputs.verified_count }}'
-      asn_ips_file: '{{ steps["merge-active"].outputs.asn_ips_file }}'
-      asn_ip_count: '{{ steps["merge-active"].outputs.asn_ip_count }}'
+      verified_file: '{{ steps["merge-active"].outputs.verified_file | default("", true) }}'
+      verified_count: '{{ steps["merge-active"].outputs.verified_count | default("", true) }}'
+      asn_ips_file: '{{ steps["merge-active"].outputs.asn_ips_file | default("", true) }}'
+      asn_ip_count: '{{ steps["merge-active"].outputs.asn_ip_count | default("", true) }}'
     steps:
       - task: dnsx
         timeout: 10
@@ -293,11 +293,11 @@ jobs:
     needs:
       - active-enum
     outputs:
-      live_file: '{{ steps["export-live"].outputs.live_file }}'
-      live_count: '{{ steps["export-live"].outputs.live_count }}'
-      waf_count: '{{ steps["export-live"].outputs.waf_count }}'
-      cdn_count: '{{ steps["export-live"].outputs.cdn_count }}'
-      favicon_count: '{{ steps["export-live"].outputs.favicon_count }}'
+      live_file: '{{ steps["export-live"].outputs.live_file | default("", true) }}'
+      live_count: '{{ steps["export-live"].outputs.live_count | default("", true) }}'
+      waf_count: '{{ steps["export-live"].outputs.waf_count | default("", true) }}'
+      cdn_count: '{{ steps["export-live"].outputs.cdn_count | default("", true) }}'
+      favicon_count: '{{ steps["export-live"].outputs.favicon_count | default("", true) }}'
     steps:
       - task: httpx
         timeout: 10
@@ -362,10 +362,10 @@ jobs:
     needs:
       - web-probe
     outputs:
-      all_urls_file: '{{ steps["collect-urls"].outputs.all_urls_file }}'
-      param_file: '{{ steps["collect-urls"].outputs.param_file }}'
-      url_count: '{{ steps["collect-urls"].outputs.url_count }}'
-      param_count: '{{ steps["collect-urls"].outputs.param_count }}'
+      all_urls_file: '{{ steps["collect-urls"].outputs.all_urls_file | default("", true) }}'
+      param_file: '{{ steps["collect-urls"].outputs.param_file | default("", true) }}'
+      url_count: '{{ steps["collect-urls"].outputs.url_count | default("", true) }}'
+      param_count: '{{ steps["collect-urls"].outputs.param_count | default("", true) }}'
     steps:
       - task: katana
         timeout: 15
@@ -492,8 +492,8 @@ jobs:
     needs:
       - active-enum
     outputs:
-      ports_file: '{{ steps["export-ports"].outputs.ports_file }}'
-      port_count: '{{ steps["export-ports"].outputs.port_count }}'
+      ports_file: '{{ steps["export-ports"].outputs.ports_file | default("", true) }}'
+      port_count: '{{ steps["export-ports"].outputs.port_count | default("", true) }}'
     steps:
       - task: naabu
         timeout: 10
@@ -543,13 +543,13 @@ jobs:
       - port-scan
       - web-probe
     outputs:
-      vuln_count: '{{ steps["export-vulns"].outputs.vuln_count }}'
-      critical_count: '{{ steps["export-vulns"].outputs.critical_count }}'
-      high_count: '{{ steps["export-vulns"].outputs.high_count }}'
-      medium_count: '{{ steps["export-vulns"].outputs.medium_count }}'
-      xss_count: '{{ steps["export-vulns"].outputs.xss_count }}'
-      takeover_count: '{{ steps["export-vulns"].outputs.takeover_count }}'
-      dnstake_count: '{{ steps["export-vulns"].outputs.dnstake_count }}'
+      vuln_count: '{{ steps["export-vulns"].outputs.vuln_count | default("", true) }}'
+      critical_count: '{{ steps["export-vulns"].outputs.critical_count | default("", true) }}'
+      high_count: '{{ steps["export-vulns"].outputs.high_count | default("", true) }}'
+      medium_count: '{{ steps["export-vulns"].outputs.medium_count | default("", true) }}'
+      xss_count: '{{ steps["export-vulns"].outputs.xss_count | default("", true) }}'
+      takeover_count: '{{ steps["export-vulns"].outputs.takeover_count | default("", true) }}'
+      dnstake_count: '{{ steps["export-vulns"].outputs.dnstake_count | default("", true) }}'
     steps:
       - task: nuclei
         timeout: 20

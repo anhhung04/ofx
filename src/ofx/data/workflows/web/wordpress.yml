@@ -25,7 +25,7 @@ jobs:
   probe:
     name: URL Probe
     outputs:
-      typed_outputs: '{{ steps["http-probe"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["http-probe"].outputs.typed_outputs | default("", true) }}'
     steps:
       - task: httpx
         timeout: 10
@@ -41,7 +41,7 @@ jobs:
     needs:
       - probe
     outputs:
-      typed_outputs: '{{ steps["wpscan-full"].outputs.typed_outputs + steps["nuclei-wordpress"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["wpscan-full"].outputs.typed_outputs + steps["nuclei-wordpress"].outputs.typed_outputs | default("", true) }}'
     steps:
       - task: wpscan
         timeout: 15

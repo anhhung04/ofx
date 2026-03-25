@@ -26,9 +26,9 @@ jobs:
   generate:
     name: Generate Payload
     outputs:
-      payload_file: '{{ steps["build-payload"].outputs.payload_file }}'
-      payload_type: '{{ steps["build-payload"].outputs.payload_type }}'
-      payload_size: '{{ steps["build-payload"].outputs.payload_size }}'
+      payload_file: '{{ steps["build-payload"].outputs.payload_file | default("", true) }}'
+      payload_type: '{{ steps["build-payload"].outputs.payload_type | default("", true) }}'
+      payload_size: '{{ steps["build-payload"].outputs.payload_size | default("", true) }}'
     steps:
     - name: build-payload
       timeout: 3

@@ -67,7 +67,7 @@ jobs:
   secrets-scan:
     name: Embedded Secrets Check
     outputs:
-      secrets_count: '{{ steps["export-secrets"].outputs.secrets_count }}'
+      secrets_count: '{{ steps["export-secrets"].outputs.secrets_count | default("", true) }}'
     steps:
       - task: trufflehog
         timeout: 15

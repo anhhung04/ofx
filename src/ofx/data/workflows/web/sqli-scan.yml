@@ -26,10 +26,10 @@ jobs:
   sqli-scan:
     name: SQL Injection Scan
     outputs:
-      vulnerable: '{{ steps["collect-findings"].outputs.vulnerable }}'
-      injection_types_file: '{{ steps["collect-findings"].outputs.injection_types_file }}'
-      finding_count: '{{ steps["collect-findings"].outputs.finding_count }}'
-      db_count: '{{ steps["collect-findings"].outputs.db_count }}'
+      vulnerable: '{{ steps["collect-findings"].outputs.vulnerable | default("", true) }}'
+      injection_types_file: '{{ steps["collect-findings"].outputs.injection_types_file | default("", true) }}'
+      finding_count: '{{ steps["collect-findings"].outputs.finding_count | default("", true) }}'
+      db_count: '{{ steps["collect-findings"].outputs.db_count | default("", true) }}'
     steps:
     - name: sqlmap-scan
       run: |

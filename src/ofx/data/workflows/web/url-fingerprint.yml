@@ -18,9 +18,9 @@ jobs:
   probe:
     name: HTTP Probe
     outputs:
-      status: '{{ steps["export-probe"].outputs.status }}'
-      title: '{{ steps["export-probe"].outputs.title }}'
-      webserver: '{{ steps["export-probe"].outputs.webserver }}'
+      status: '{{ steps["export-probe"].outputs.status | default("", true) }}'
+      title: '{{ steps["export-probe"].outputs.title | default("", true) }}'
+      webserver: '{{ steps["export-probe"].outputs.webserver | default("", true) }}'
     steps:
     - task: httpx
       timeout: 10
@@ -40,8 +40,8 @@ jobs:
   fingerprint:
     name: Technology Fingerprinting
     outputs:
-      tech_list_file: '{{ steps["collect-tech"].outputs.tech_list_file }}'
-      tech_count: '{{ steps["collect-tech"].outputs.tech_count }}'
+      tech_list_file: '{{ steps["collect-tech"].outputs.tech_list_file | default("", true) }}'
+      tech_count: '{{ steps["collect-tech"].outputs.tech_count | default("", true) }}'
     steps:
     - name: whatweb-scan
       run: |
@@ -74,8 +74,8 @@ jobs:
   waf-detect:
     name: WAF Detection
     outputs:
-      waf_detected_file: '{{ steps["export-waf"].outputs.waf_detected_file }}'
-      waf_count: '{{ steps["export-waf"].outputs.waf_count }}'
+      waf_detected_file: '{{ steps["export-waf"].outputs.waf_detected_file | default("", true) }}'
+      waf_count: '{{ steps["export-waf"].outputs.waf_count | default("", true) }}'
     steps:
     - task: wafw00f
       timeout: 10

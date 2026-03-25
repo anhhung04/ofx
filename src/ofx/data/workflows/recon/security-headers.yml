@@ -15,8 +15,8 @@ jobs:
   audit:
     name: Fetch and Audit Headers
     outputs:
-      headers_json: '{{ steps["fetch-headers"].outputs.headers_json }}'
-      audit_json: '{{ steps["fetch-headers"].outputs.audit_json }}'
+      headers_json: '{{ steps["fetch-headers"].outputs.headers_json | default("", true) }}'
+      audit_json: '{{ steps["fetch-headers"].outputs.audit_json | default("", true) }}'
     steps:
     - name: fetch-headers
       timeout: 3

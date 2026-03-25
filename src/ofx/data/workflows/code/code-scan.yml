@@ -17,8 +17,8 @@ jobs:
   vuln-scan:
     name: Vulnerability Scanning
     outputs:
-      vuln_count: '{{ steps["export-vulns"].outputs.vuln_count }}'
-      critical_count: '{{ steps["export-vulns"].outputs.critical_count }}'
+      vuln_count: '{{ steps["export-vulns"].outputs.vuln_count | default("", true) }}'
+      critical_count: '{{ steps["export-vulns"].outputs.critical_count | default("", true) }}'
     steps:
     - task: grype
       timeout: 15
@@ -56,7 +56,7 @@ jobs:
   secrets-scan:
     name: Secret & Leak Scanning
     outputs:
-      secrets_count: '{{ steps["export-secrets"].outputs.secrets_count }}'
+      secrets_count: '{{ steps["export-secrets"].outputs.secrets_count | default("", true) }}'
     steps:
     - task: gitleaks
       timeout: 15

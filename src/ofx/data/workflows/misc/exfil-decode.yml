@@ -26,9 +26,9 @@ jobs:
     decode:
         name: Decode Exfiltrated Data
         outputs:
-            output_file: '{{ steps["reassemble"].outputs.output_file }}'
-            decoded_size: '{{ steps["reassemble"].outputs.decoded_size }}'
-            is_text: '{{ steps["reassemble"].outputs.is_text }}'
+            output_file: '{{ steps["reassemble"].outputs.output_file | default("", true) }}'
+            decoded_size: '{{ steps["reassemble"].outputs.decoded_size | default("", true) }}'
+            is_text: '{{ steps["reassemble"].outputs.is_text | default("", true) }}'
         steps:
             - name: reassemble
               timeout: 5

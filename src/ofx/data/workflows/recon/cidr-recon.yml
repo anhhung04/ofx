@@ -19,8 +19,8 @@ jobs:
   host-discovery:
     name: Host & Port Discovery
     outputs:
-      live_hosts: '{{ steps["collect-hosts"].outputs.live_hosts }}'
-      host_count: '{{ steps["collect-hosts"].outputs.host_count }}'
+      live_hosts: '{{ steps["collect-hosts"].outputs.live_hosts | default("", true) }}'
+      host_count: '{{ steps["collect-hosts"].outputs.host_count | default("", true) }}'
     steps:
     - task: mapcidr
       timeout: 5
@@ -87,8 +87,8 @@ jobs:
   service-scan:
     name: Service Detection
     outputs:
-      typed_outputs: '{{ steps["service-detect"].outputs.typed_outputs + steps["http-probe"].outputs.typed_outputs }}'
-      http_targets: '{{ steps["export-svc"].outputs.http_targets }}'
+      typed_outputs: '{{ steps["service-detect"].outputs.typed_outputs + steps["http-probe"].outputs.typed_outputs | default("", true) }}'
+      http_targets: '{{ steps["export-svc"].outputs.http_targets | default("", true) }}'
     needs:
     - host-discovery
     steps:
@@ -119,7 +119,7 @@ jobs:
   vuln-search:
     name: Vulnerability Search
     outputs:
-      typed_outputs: '{{ steps["exploit-search"].outputs.typed_outputs }}'
+      typed_outputs: '{{ steps["exploit-search"].outputs.typed_outputs | default("", true) }}'
     needs:
     - service-scan
     steps:

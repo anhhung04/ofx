@@ -24,8 +24,8 @@ jobs:
   generate:
     name: Generate Reverse Shells
     outputs:
-      shells_file: '{{ steps["gen-shells"].outputs.shells_file }}'
-      shell_count: '{{ steps["gen-shells"].outputs.shell_count }}'
+      shells_file: '{{ steps["gen-shells"].outputs.shells_file | default("", true) }}'
+      shell_count: '{{ steps["gen-shells"].outputs.shell_count | default("", true) }}'
     steps:
     - name: gen-shells
       script: |

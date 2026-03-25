@@ -26,9 +26,9 @@ jobs:
   stage:
     name: Stage Data
     outputs:
-      staged_file: '{{ steps["archive-data"].outputs.staged_file }}'
-      staged_size: '{{ steps["archive-data"].outputs.staged_size }}'
-      original_size: '{{ steps["archive-data"].outputs.original_size }}'
+      staged_file: '{{ steps["archive-data"].outputs.staged_file | default("", true) }}'
+      staged_size: '{{ steps["archive-data"].outputs.staged_size | default("", true) }}'
+      original_size: '{{ steps["archive-data"].outputs.original_size | default("", true) }}'
     steps:
     - name: archive-data
       timeout: 5
@@ -76,8 +76,8 @@ jobs:
     name: Encode for Exfil
     needs: [stage]
     outputs:
-      encoded_file: '{{ steps["encode-data"].outputs.encoded_file }}'
-      chunk_count: '{{ steps["encode-data"].outputs.chunk_count }}'
+      encoded_file: '{{ steps["encode-data"].outputs.encoded_file | default("", true) }}'
+      chunk_count: '{{ steps["encode-data"].outputs.chunk_count | default("", true) }}'
     steps:
     - name: encode-data
       timeout: 5

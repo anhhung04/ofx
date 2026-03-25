@@ -23,8 +23,8 @@ jobs:
   host-discovery:
     name: Host Discovery
     outputs:
-      alive_file: '{{ steps["collect-alive"].outputs.alive_file }}'
-      alive_count: '{{ steps["collect-alive"].outputs.alive_count }}'
+      alive_file: '{{ steps["collect-alive"].outputs.alive_file | default("", true) }}'
+      alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("", true) }}'
     steps:
     - name: fping-sweep
       run: |
@@ -53,9 +53,9 @@ jobs:
   port-scan:
     name: Port Scanning
     outputs:
-      ports_file: '{{ steps["collect-ports"].outputs.ports_file }}'
-      port_count: '{{ steps["collect-ports"].outputs.port_count }}'
-      scan_targets_file: '{{ steps["collect-ports"].outputs.scan_targets_file }}'
+      ports_file: '{{ steps["collect-ports"].outputs.ports_file | default("", true) }}'
+      port_count: '{{ steps["collect-ports"].outputs.port_count | default("", true) }}'
+      scan_targets_file: '{{ steps["collect-ports"].outputs.scan_targets_file | default("", true) }}'
     needs:
     - host-discovery
     steps:
@@ -118,9 +118,9 @@ jobs:
   service-detect:
     name: Service Detection
     outputs:
-      service_count: '{{ steps["collect-services"].outputs.service_count }}'
-      http_urls_file: '{{ steps["collect-services"].outputs.http_urls_file }}'
-      http_count: '{{ steps["collect-services"].outputs.http_count }}'
+      service_count: '{{ steps["collect-services"].outputs.service_count | default("", true) }}'
+      http_urls_file: '{{ steps["collect-services"].outputs.http_urls_file | default("", true) }}'
+      http_count: '{{ steps["collect-services"].outputs.http_count | default("", true) }}'
     needs:
     - port-scan
     steps:
@@ -179,7 +179,7 @@ jobs:
   web-enum:
     name: Web Enumeration
     outputs:
-      web_tech_count: '{{ steps["collect-web"].outputs.web_tech_count }}'
+      web_tech_count: '{{ steps["collect-web"].outputs.web_tech_count | default("", true) }}'
     needs:
     - service-detect
     steps:
@@ -217,9 +217,9 @@ jobs:
   ad-detect:
     name: AD Detection
     outputs:
-      ad_domains_file: '{{ steps["collect-ad-info"].outputs.ad_domains_file }}'
-      dcs_file: '{{ steps["collect-ad-info"].outputs.dcs_file }}'
-      dc_count: '{{ steps["collect-ad-info"].outputs.dc_count }}'
+      ad_domains_file: '{{ steps["collect-ad-info"].outputs.ad_domains_file | default("", true) }}'
+      dcs_file: '{{ steps["collect-ad-info"].outputs.dcs_file | default("", true) }}'
+      dc_count: '{{ steps["collect-ad-info"].outputs.dc_count | default("", true) }}'
     needs:
     - host-discovery
     steps:

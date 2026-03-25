@@ -20,8 +20,8 @@ jobs:
   scan:
     name: SSRF Detection
     outputs:
-      finding_count: '{{ steps["test-ssrf"].outputs.finding_count }}'
-      payloads_tested: '{{ steps["test-ssrf"].outputs.payloads_tested }}'
+      finding_count: '{{ steps["test-ssrf"].outputs.finding_count | default("", true) }}'
+      payloads_tested: '{{ steps["test-ssrf"].outputs.payloads_tested | default("", true) }}'
     steps:
     - name: test-ssrf
       script: |

@@ -35,8 +35,8 @@ jobs:
   collect:
     name: BloodHound Collection
     outputs:
-      output_file: '{{ steps["bh-collect"].outputs.output_file }}'
-      output_dir: '{{ steps["bh-collect"].outputs.output_dir }}'
+      output_file: '{{ steps["bh-collect"].outputs.output_file | default("", true) }}'
+      output_dir: '{{ steps["bh-collect"].outputs.output_dir | default("", true) }}'
     steps:
     - name: bh-collect
       run: |
@@ -96,7 +96,7 @@ jobs:
   analyze:
     name: Quick Analysis
     outputs:
-      object_count: '{{ steps["analyze-data"].outputs.object_count }}'
+      object_count: '{{ steps["analyze-data"].outputs.object_count | default("", true) }}'
     needs: [collect]
     steps:
     - name: analyze-data

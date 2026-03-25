@@ -22,13 +22,13 @@ jobs:
   compare:
     name: Diff Comparison
     outputs:
-      new_count: '{{ steps["compute-diff"].outputs.new_count }}'
-      removed_count: '{{ steps["compute-diff"].outputs.removed_count }}'
-      unchanged_count: '{{ steps["compute-diff"].outputs.unchanged_count }}'
-      new_file: '{{ steps["compute-diff"].outputs.new_file }}'
-      removed_file: '{{ steps["compute-diff"].outputs.removed_file }}'
-      baseline_count: '{{ steps["compute-diff"].outputs.baseline_count }}'
-      current_count: '{{ steps["compute-diff"].outputs.current_count }}'
+      new_count: '{{ steps["compute-diff"].outputs.new_count | default("", true) }}'
+      removed_count: '{{ steps["compute-diff"].outputs.removed_count | default("", true) }}'
+      unchanged_count: '{{ steps["compute-diff"].outputs.unchanged_count | default("", true) }}'
+      new_file: '{{ steps["compute-diff"].outputs.new_file | default("", true) }}'
+      removed_file: '{{ steps["compute-diff"].outputs.removed_file | default("", true) }}'
+      baseline_count: '{{ steps["compute-diff"].outputs.baseline_count | default("", true) }}'
+      current_count: '{{ steps["compute-diff"].outputs.current_count | default("", true) }}'
     steps:
     - name: compute-diff
       script: |

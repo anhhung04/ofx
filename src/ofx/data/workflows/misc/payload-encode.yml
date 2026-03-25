@@ -29,10 +29,10 @@ jobs:
   encode:
     name: Payload Encoding
     outputs:
-      encoded: '{{ steps["generate-payload"].outputs.encoded }}'
-      format: '{{ steps["generate-payload"].outputs.format }}'
-      original_size: '{{ steps["generate-payload"].outputs.original_size }}'
-      encoded_size: '{{ steps["generate-payload"].outputs.encoded_size }}'
+      encoded: '{{ steps["generate-payload"].outputs.encoded | default("", true) }}'
+      format: '{{ steps["generate-payload"].outputs.format | default("", true) }}'
+      original_size: '{{ steps["generate-payload"].outputs.original_size | default("", true) }}'
+      encoded_size: '{{ steps["generate-payload"].outputs.encoded_size | default("", true) }}'
     steps:
     - name: generate-payload
       script: |

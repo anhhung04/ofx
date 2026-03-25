@@ -22,12 +22,12 @@ jobs:
   token-analysis:
     name: JWT Token Analysis
     outputs:
-      jwt_algorithm: '{{ steps["collect-token-info"].outputs.jwt_algorithm }}'
-      jwt_claims: '{{ steps["collect-token-info"].outputs.jwt_claims }}'
-      jwt_claim_count: '{{ steps["collect-token-info"].outputs.jwt_claim_count }}'
-      jwt_subject: '{{ steps["collect-token-info"].outputs.jwt_subject }}'
-      jwt_issuer: '{{ steps["collect-token-info"].outputs.jwt_issuer }}'
-      jwt_expiry: '{{ steps["collect-token-info"].outputs.jwt_expiry }}'
+      jwt_algorithm: '{{ steps["collect-token-info"].outputs.jwt_algorithm | default("", true) }}'
+      jwt_claims: '{{ steps["collect-token-info"].outputs.jwt_claims | default("", true) }}'
+      jwt_claim_count: '{{ steps["collect-token-info"].outputs.jwt_claim_count | default("", true) }}'
+      jwt_subject: '{{ steps["collect-token-info"].outputs.jwt_subject | default("", true) }}'
+      jwt_issuer: '{{ steps["collect-token-info"].outputs.jwt_issuer | default("", true) }}'
+      jwt_expiry: '{{ steps["collect-token-info"].outputs.jwt_expiry | default("", true) }}'
     steps:
     - name: jwt-decode
       run: |
@@ -79,8 +79,8 @@ jobs:
   vuln-scan:
     name: JWT Vulnerability Scan
     outputs:
-      jwt_vuln_count: '{{ steps["collect-vulns"].outputs.jwt_vuln_count }}'
-      jwt_vulns_file: '{{ steps["collect-vulns"].outputs.jwt_vulns_file }}'
+      jwt_vuln_count: '{{ steps["collect-vulns"].outputs.jwt_vuln_count | default("", true) }}'
+      jwt_vulns_file: '{{ steps["collect-vulns"].outputs.jwt_vulns_file | default("", true) }}'
     steps:
     - name: jwt-all-tests
       run: |

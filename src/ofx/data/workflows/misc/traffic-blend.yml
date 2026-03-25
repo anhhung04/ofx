@@ -27,9 +27,9 @@ jobs:
   demonstrate:
     name: Traffic Blending Demo
     outputs:
-      headers_file: '{{ steps["blend-demo"].outputs.headers_file }}'
-      agent_count: '{{ steps["blend-demo"].outputs.agent_count }}'
-      sample_count: '{{ steps["blend-demo"].outputs.sample_count }}'
+      headers_file: '{{ steps["blend-demo"].outputs.headers_file | default("", true) }}'
+      agent_count: '{{ steps["blend-demo"].outputs.agent_count | default("", true) }}'
+      sample_count: '{{ steps["blend-demo"].outputs.sample_count | default("", true) }}'
     steps:
       - name: blend-demo
         timeout: 3

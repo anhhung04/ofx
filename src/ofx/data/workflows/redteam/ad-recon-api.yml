@@ -32,10 +32,10 @@ jobs:
   enumerate:
     name: AD Enumeration Commands
     outputs:
-      bloodhound_cmd: '{{ steps["bloodhound-cmd"].outputs.bloodhound_cmd }}'
-      shares_cmd: '{{ steps["shares-cmd"].outputs.shares_cmd }}'
-      ldap_cmd: '{{ steps["ldap-cmd"].outputs.ldap_cmd }}'
-      commands_file: '{{ steps["collect-enum"].outputs.commands_file }}'
+      bloodhound_cmd: '{{ steps["bloodhound-cmd"].outputs.bloodhound_cmd | default("", true) }}'
+      shares_cmd: '{{ steps["shares-cmd"].outputs.shares_cmd | default("", true) }}'
+      ldap_cmd: '{{ steps["ldap-cmd"].outputs.ldap_cmd | default("", true) }}'
+      commands_file: '{{ steps["collect-enum"].outputs.commands_file | default("", true) }}'
     steps:
     - name: bloodhound-cmd
       timeout: 2
@@ -143,9 +143,9 @@ jobs:
   kerberos:
     name: Kerberos Attack Commands
     outputs:
-      kerberoast_cmd: '{{ steps["kerberoast-cmd"].outputs.kerberoast_cmd }}'
-      asreproast_cmd: '{{ steps["asreproast-cmd"].outputs.asreproast_cmd }}'
-      delegation_cmds: '{{ steps["delegation-cmd"].outputs.delegation_cmds }}'
+      kerberoast_cmd: '{{ steps["kerberoast-cmd"].outputs.kerberoast_cmd | default("", true) }}'
+      asreproast_cmd: '{{ steps["asreproast-cmd"].outputs.asreproast_cmd | default("", true) }}'
+      delegation_cmds: '{{ steps["delegation-cmd"].outputs.delegation_cmds | default("", true) }}'
     steps:
     - name: kerberoast-cmd
       timeout: 2
