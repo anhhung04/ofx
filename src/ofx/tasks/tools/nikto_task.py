@@ -41,7 +41,7 @@ class NiktoTask(Task):
         ),
     }
 
-    input_flag = "-h"
+    input_flag = "-host"
     file_flag = None
     output_flag = "-o"
     extra_flags = ["-Format", "json", "-nointeractive"]
