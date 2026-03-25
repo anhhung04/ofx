@@ -18,8 +18,8 @@ jobs:
   subdomain-enum:
     name: Subdomain Enumeration
     outputs:
-      subs_file: '{{ steps.collect-subdomains.outputs.subs_file }}'
-      sub_count: '{{ steps.collect-subdomains.outputs.sub_count }}'
+      subs_file: '{{ steps["collect-subdomains"].outputs.subs_file }}'
+      sub_count: '{{ steps["collect-subdomains"].outputs.sub_count }}'
     steps:
     - task: subfinder
       timeout: 10
@@ -82,8 +82,8 @@ jobs:
     needs:
     - subdomain-enum
     outputs:
-      verified_file: '{{ steps.export-verified.outputs.verified_file }}'
-      verified_count: '{{ steps.export-verified.outputs.verified_count }}'
+      verified_file: '{{ steps["export-verified"].outputs.verified_file }}'
+      verified_count: '{{ steps["export-verified"].outputs.verified_count }}'
     steps:
     - task: dnsx
       timeout: 10
@@ -122,9 +122,9 @@ jobs:
     needs:
     - dns-resolve
     outputs:
-      ports_file: '{{ steps.export-ports.outputs.ports_file }}'
-      port_count: '{{ steps.export-ports.outputs.port_count }}'
-      port_hosts_file: '{{ steps.export-ports.outputs.port_hosts_file }}'
+      ports_file: '{{ steps["export-ports"].outputs.ports_file }}'
+      port_count: '{{ steps["export-ports"].outputs.port_count }}'
+      port_hosts_file: '{{ steps["export-ports"].outputs.port_hosts_file }}'
     steps:
     - task: naabu
       timeout: 10
@@ -165,8 +165,8 @@ jobs:
     needs:
     - dns-resolve
     outputs:
-      live_urls: '{{ steps.export-live.outputs.live_urls }}'
-      live_count: '{{ steps.export-live.outputs.live_count }}'
+      live_urls: '{{ steps["export-live"].outputs.live_urls }}'
+      live_count: '{{ steps["export-live"].outputs.live_count }}'
     steps:
     - task: httpx
       timeout: 10
@@ -187,8 +187,8 @@ jobs:
     needs:
     - http-probe
     outputs:
-      crawled_file: '{{ steps.collect-urls.outputs.crawled_file }}'
-      crawl_count: '{{ steps.collect-urls.outputs.crawl_count }}'
+      crawled_file: '{{ steps["collect-urls"].outputs.crawled_file }}'
+      crawl_count: '{{ steps["collect-urls"].outputs.crawl_count }}'
     steps:
     - task: katana
       timeout: 15
@@ -243,7 +243,7 @@ jobs:
     needs:
     - dns-resolve
     outputs:
-      takeover_count: '{{ steps.export-takeovers.outputs.takeover_count }}'
+      takeover_count: '{{ steps["export-takeovers"].outputs.takeover_count }}'
     steps:
     - name: subzy-check
       run: |
@@ -291,10 +291,10 @@ jobs:
     - port-scan
     - takeover-check
     outputs:
-      vuln_count: '{{ steps.export-vulns.outputs.vuln_count }}'
-      critical_count: '{{ steps.export-vulns.outputs.critical_count }}'
-      high_count: '{{ steps.export-vulns.outputs.high_count }}'
-      medium_count: '{{ steps.export-vulns.outputs.medium_count }}'
+      vuln_count: '{{ steps["export-vulns"].outputs.vuln_count }}'
+      critical_count: '{{ steps["export-vulns"].outputs.critical_count }}'
+      high_count: '{{ steps["export-vulns"].outputs.high_count }}'
+      medium_count: '{{ steps["export-vulns"].outputs.medium_count }}'
     steps:
     - task: nuclei
       timeout: 20

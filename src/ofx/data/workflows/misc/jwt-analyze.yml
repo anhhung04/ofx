@@ -23,13 +23,13 @@ jobs:
   analyze:
     name: JWT Analysis
     outputs:
-      algorithm: '${{ steps.decode-jwt.outputs.algorithm }}'
-      header: '${{ steps.decode-jwt.outputs.header }}'
-      payload: '${{ steps.decode-jwt.outputs.payload }}'
-      issue_count: '${{ steps.decode-jwt.outputs.issue_count }}'
-      verified: '${{ steps.decode-jwt.outputs.verified }}'
-      expired: '${{ steps.decode-jwt.outputs.expired }}'
-      cracked_secret: '${{ steps.brute-secret.outputs.cracked_secret }}'
+      algorithm: '${{ steps["decode-jwt"].outputs.algorithm }}'
+      header: '${{ steps["decode-jwt"].outputs.header }}'
+      payload: '${{ steps["decode-jwt"].outputs.payload }}'
+      issue_count: '${{ steps["decode-jwt"].outputs.issue_count }}'
+      verified: '${{ steps["decode-jwt"].outputs.verified }}'
+      expired: '${{ steps["decode-jwt"].outputs.expired }}'
+      cracked_secret: '${{ steps["brute-secret"].outputs.cracked_secret }}'
     steps:
     - name: decode-jwt
       script: |

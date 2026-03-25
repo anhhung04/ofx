@@ -19,8 +19,8 @@ jobs:
   subdomain-enum:
     name: Subdomain Enumeration
     outputs:
-      subs_file: '{{ steps.merge-subdomains.outputs.subs_file }}'
-      sub_count: '{{ steps.merge-subdomains.outputs.sub_count }}'
+      subs_file: '{{ steps["merge-subdomains"].outputs.subs_file }}'
+      sub_count: '{{ steps["merge-subdomains"].outputs.sub_count }}'
     steps:
     - task: subfinder
       timeout: 10
@@ -76,8 +76,8 @@ jobs:
     needs:
     - subdomain-enum
     outputs:
-      alive_file: '{{ steps.filter-alive.outputs.alive_file }}'
-      alive_count: '{{ steps.filter-alive.outputs.alive_count }}'
+      alive_file: '{{ steps["filter-alive"].outputs.alive_file }}'
+      alive_count: '{{ steps["filter-alive"].outputs.alive_count }}'
     steps:
     - task: dnsx
       timeout: 10
@@ -110,8 +110,8 @@ jobs:
     needs:
     - dns-verify
     outputs:
-      takeover_count: '{{ steps.collect-takeovers.outputs.takeover_count }}'
-      takeover_findings_file: '{{ steps.collect-takeovers.outputs.takeover_findings_file }}'
+      takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count }}'
+      takeover_findings_file: '{{ steps["collect-takeovers"].outputs.takeover_findings_file }}'
     steps:
     - name: subzy-scan
       run: |
@@ -146,8 +146,8 @@ jobs:
     needs:
     - dns-verify
     outputs:
-      ports_file: '{{ steps.collect-ports.outputs.ports_file }}'
-      port_count: '{{ steps.collect-ports.outputs.port_count }}'
+      ports_file: '{{ steps["collect-ports"].outputs.ports_file }}'
+      port_count: '{{ steps["collect-ports"].outputs.port_count }}'
     steps:
     - task: naabu
       timeout: 10
@@ -183,8 +183,8 @@ jobs:
     needs:
     - dns-verify
     outputs:
-      live_urls: '{{ steps.export-live.outputs.live_urls }}'
-      live_count: '{{ steps.export-live.outputs.live_count }}'
+      live_urls: '{{ steps["export-live"].outputs.live_urls }}'
+      live_count: '{{ steps["export-live"].outputs.live_count }}'
     steps:
     - task: httpx
       timeout: 10
@@ -205,8 +205,8 @@ jobs:
     needs:
     - http-probe
     outputs:
-      crawled_file: '{{ steps.collect-crawled.outputs.crawled_file }}'
-      crawl_count: '{{ steps.collect-crawled.outputs.crawl_count }}'
+      crawled_file: '{{ steps["collect-crawled"].outputs.crawled_file }}'
+      crawl_count: '{{ steps["collect-crawled"].outputs.crawl_count }}'
     steps:
     - task: katana
       timeout: 15
@@ -261,9 +261,9 @@ jobs:
     needs:
     - http-probe
     outputs:
-      param_file: '{{ steps.collect-params.outputs.param_file }}'
-      param_url_count: '{{ steps.collect-params.outputs.param_url_count }}'
-      unique_params: '{{ steps.collect-params.outputs.unique_params }}'
+      param_file: '{{ steps["collect-params"].outputs.param_file }}'
+      param_url_count: '{{ steps["collect-params"].outputs.param_url_count }}'
+      unique_params: '{{ steps["collect-params"].outputs.unique_params }}'
     steps:
     - name: paramspider-mine
       run: |
@@ -312,12 +312,12 @@ jobs:
     - web-crawl
     - param-mine
     outputs:
-      nuclei_count: '{{ steps.collect-vulns.outputs.nuclei_count }}'
-      critical_count: '{{ steps.collect-vulns.outputs.critical_count }}'
-      high_count: '{{ steps.collect-vulns.outputs.high_count }}'
-      medium_count: '{{ steps.collect-vulns.outputs.medium_count }}'
-      xss_count: '{{ steps.collect-vulns.outputs.xss_count }}'
-      crlf_count: '{{ steps.collect-vulns.outputs.crlf_count }}'
+      nuclei_count: '{{ steps["collect-vulns"].outputs.nuclei_count }}'
+      critical_count: '{{ steps["collect-vulns"].outputs.critical_count }}'
+      high_count: '{{ steps["collect-vulns"].outputs.high_count }}'
+      medium_count: '{{ steps["collect-vulns"].outputs.medium_count }}'
+      xss_count: '{{ steps["collect-vulns"].outputs.xss_count }}'
+      crlf_count: '{{ steps["collect-vulns"].outputs.crlf_count }}'
     steps:
     - task: nuclei
       timeout: 20
@@ -372,7 +372,7 @@ jobs:
     needs:
     - web-crawl
     outputs:
-      secrets_count: '{{ steps.collect-secrets.outputs.secrets_count }}'
+      secrets_count: '{{ steps["collect-secrets"].outputs.secrets_count }}'
     steps:
     - task: trufflehog
       timeout: 15

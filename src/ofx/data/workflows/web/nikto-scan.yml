@@ -19,8 +19,8 @@ jobs:
   scan:
     name: Nikto Web Scan
     outputs:
-      nikto_findings_file: '${{ steps.collect-nikto.outputs.nikto_findings_file }}'
-      nikto_count: '${{ steps.collect-nikto.outputs.nikto_count }}'
+      nikto_findings_file: '${{ steps["collect-nikto"].outputs.nikto_findings_file }}'
+      nikto_count: '${{ steps["collect-nikto"].outputs.nikto_count }}'
     steps:
     - name: nikto-scan
       run: |
@@ -51,7 +51,7 @@ jobs:
   nuclei-web:
     name: Nuclei Web Scan
     outputs:
-      nuclei_count: '${{ steps.export-nuclei.outputs.nuclei_count }}'
+      nuclei_count: '${{ steps["export-nuclei"].outputs.nuclei_count }}'
     steps:
     - task: nuclei
       timeout: 20

@@ -24,8 +24,8 @@ jobs:
   url-crawl:
     name: URL Crawling
     outputs:
-      urls_file: '{{ steps.collect-urls.outputs.urls_file }}'
-      url_count: '{{ steps.collect-urls.outputs.url_count }}'
+      urls_file: '{{ steps["collect-urls"].outputs.urls_file }}'
+      url_count: '{{ steps["collect-urls"].outputs.url_count }}'
     steps:
     - task: katana
       timeout: 15

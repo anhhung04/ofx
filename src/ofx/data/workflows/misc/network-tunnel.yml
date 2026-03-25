@@ -27,8 +27,8 @@ jobs:
   generate:
     name: Generate Tunnel Commands
     outputs:
-      tunnels_file: '${{ steps.gen-tunnels.outputs.tunnels_file }}'
-      tunnel_count: '${{ steps.gen-tunnels.outputs.tunnel_count }}'
+      tunnels_file: '${{ steps["gen-tunnels"].outputs.tunnels_file }}'
+      tunnel_count: '${{ steps["gen-tunnels"].outputs.tunnel_count }}'
     steps:
     - name: gen-tunnels
       script: |

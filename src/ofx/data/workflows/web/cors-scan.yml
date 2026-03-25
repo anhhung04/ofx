@@ -15,8 +15,8 @@ jobs:
   scan:
     name: CORS Misconfiguration Scan
     outputs:
-      finding_count: '${{ steps.test-cors.outputs.finding_count }}'
-      urls_tested: '${{ steps.test-cors.outputs.urls_tested }}'
+      finding_count: '${{ steps["test-cors"].outputs.finding_count }}'
+      urls_tested: '${{ steps["test-cors"].outputs.urls_tested }}'
     steps:
     - name: test-cors
       script: |

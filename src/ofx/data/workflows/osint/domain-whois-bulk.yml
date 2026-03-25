@@ -14,8 +14,8 @@ jobs:
   whois:
     name: Bulk WHOIS Lookup
     outputs:
-      results_file: '{{ steps.bulk-whois.outputs.results_file }}'
-      domain_count: '{{ steps.bulk-whois.outputs.domain_count }}'
+      results_file: '{{ steps["bulk-whois"].outputs.results_file }}'
+      domain_count: '{{ steps["bulk-whois"].outputs.domain_count }}'
     steps:
     - name: bulk-whois
       script: |

@@ -22,10 +22,10 @@ jobs:
   identify:
     name: Hash Identification
     outputs:
-      hash_count: '${{ steps.identify-hash.outputs.hash_count }}'
-      hash_file: '${{ steps.identify-hash.outputs.hash_file }}'
-      identified_types: '${{ steps.identify-hash.outputs.identified_types }}'
-      results: '${{ steps.identify-hash.outputs.results }}'
+      hash_count: '${{ steps["identify-hash"].outputs.hash_count }}'
+      hash_file: '${{ steps["identify-hash"].outputs.hash_file }}'
+      identified_types: '${{ steps["identify-hash"].outputs.identified_types }}'
+      results: '${{ steps["identify-hash"].outputs.results }}'
     steps:
     - name: identify-hash
       script: |
@@ -106,7 +106,7 @@ jobs:
     name: Crack Hashes
     needs: [identify]
     outputs:
-      cracked_count: '${{ steps.collect-results.outputs.cracked_count }}'
+      cracked_count: '${{ steps["collect-results"].outputs.cracked_count }}'
     steps:
     - name: try-john
       run: |

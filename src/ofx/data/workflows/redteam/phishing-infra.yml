@@ -23,8 +23,8 @@ jobs:
   generate:
     name: Generate Phishing Assets
     outputs:
-      output_dir: '{{ steps.gen-templates.outputs.output_dir }}'
-      template_count: '{{ steps.gen-templates.outputs.template_count }}'
+      output_dir: '{{ steps["gen-templates"].outputs.output_dir }}'
+      template_count: '{{ steps["gen-templates"].outputs.template_count }}'
     steps:
     - name: gen-templates
       script: |

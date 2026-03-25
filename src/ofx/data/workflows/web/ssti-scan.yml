@@ -19,8 +19,8 @@ jobs:
   param-discovery:
     name: Parameter Discovery
     outputs:
-      param_file: '${{ steps.merge-params.outputs.param_file }}'
-      param_count: '${{ steps.merge-params.outputs.param_count }}'
+      param_file: '${{ steps["merge-params"].outputs.param_file }}'
+      param_count: '${{ steps["merge-params"].outputs.param_count }}'
     steps:
       - task: httpx
         timeout: 10
@@ -92,12 +92,12 @@ jobs:
     needs:
       - param-discovery
     outputs:
-      findings_file: '${{ steps.collect-results.outputs.findings_file }}'
-      vuln_count: '${{ steps.collect-results.outputs.vuln_count }}'
-      critical_count: '${{ steps.collect-results.outputs.critical_count }}'
-      high_count: '${{ steps.collect-results.outputs.high_count }}'
-      tinja_count: '${{ steps.collect-results.outputs.tinja_count }}'
-      nuclei_count: '${{ steps.collect-results.outputs.nuclei_count }}'
+      findings_file: '${{ steps["collect-results"].outputs.findings_file }}'
+      vuln_count: '${{ steps["collect-results"].outputs.vuln_count }}'
+      critical_count: '${{ steps["collect-results"].outputs.critical_count }}'
+      high_count: '${{ steps["collect-results"].outputs.high_count }}'
+      tinja_count: '${{ steps["collect-results"].outputs.tinja_count }}'
+      nuclei_count: '${{ steps["collect-results"].outputs.nuclei_count }}'
     steps:
       - task: tinja
         name: tinja-scan

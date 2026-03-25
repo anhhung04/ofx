@@ -18,8 +18,8 @@ jobs:
   username-hunt:
     name: Username Hunting
     outputs:
-      accounts_found: '{{ steps.export-accounts.outputs.accounts_found }}'
-      profile_urls: '{{ steps.export-accounts.outputs.profile_urls }}'
+      accounts_found: '{{ steps["export-accounts"].outputs.accounts_found }}'
+      profile_urls: '{{ steps["export-accounts"].outputs.profile_urls }}'
     steps:
     - task: maigret
       timeout: 10
@@ -42,7 +42,7 @@ jobs:
   email-breach:
     name: Email Breach Search
     outputs:
-      breaches_found: '{{ steps.export-breaches.outputs.breaches_found }}'
+      breaches_found: '{{ steps["export-breaches"].outputs.breaches_found }}'
     steps:
     - task: h8mail
       timeout: 15

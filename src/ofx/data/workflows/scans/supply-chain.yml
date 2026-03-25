@@ -16,8 +16,8 @@ jobs:
   sbom:
     name: SBOM Generation
     outputs:
-      sbom_file: '{{ steps.generate-sbom.outputs.sbom_file }}'
-      pkg_managers: '{{ steps.generate-sbom.outputs.pkg_managers }}'
+      sbom_file: '{{ steps["generate-sbom"].outputs.sbom_file }}'
+      pkg_managers: '{{ steps["generate-sbom"].outputs.pkg_managers }}'
     steps:
     - name: generate-sbom
       run: |

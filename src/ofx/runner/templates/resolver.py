@@ -12,6 +12,15 @@ from ofx.runner.core.registry_keys import RunnerRegistryKeys
 _resolver_lock = threading.Lock()
 
 
+class _StepAccessor(dict):
+    """Dict that supports both name-based and integer-index access for steps."""
+
+    def __getitem__(self, key: Any) -> Any:
+        if isinstance(key, int):
+            key = str(key)
+        return super().__getitem__(key)
+
+
 class TemplateResolver:
     """Handles template resolution with caching and optimization"""
 
@@ -461,7 +470,7 @@ class TemplateResolver:
         if "registry" in context_vars:
             registry = context_vars["registry"]
             jobs_data: dict[str, Any] = memo.get("jobs_data", {})
-            steps_data: list[dict[str, Any]] = memo.get("steps_data", [])
+            steps_data: dict[str, Any] = memo.get("steps_data", {})
 
             runner = context_vars.get("runner")
             if runner is not None and not jobs_data and not steps_data:
@@ -477,7 +486,7 @@ class TemplateResolver:
             if not steps_data and "current_job_id" in context_vars:
                 job_id = context_vars["current_job_id"]
                 step_results = await registry.get(f"jobs:{job_id}:steps") or {}
-                steps_data = list(step_results.values())
+                steps_data = dict(step_results)
                 memo["steps_data"] = steps_data
 
             support_funcs["jobs"] = jobs_data
@@ -518,26 +527,30 @@ class TemplateResolver:
             outputs = await child.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
             jobs[job_id] = {"outputs": outputs}
 
-    async def _steps_from_runner(self, runner: Any) -> list[dict[str, Any]]:
+    async def _steps_from_runner(self, runner: Any) -> _StepAccessor:
         container = self._find_container_with_child_attr(runner, "step_index")
         if not container:
-            return []
+            return _StepAccessor()
 
-        steps: list[dict[str, Any]] = []
+        steps = _StepAccessor()
         for child in getattr(container, "_runners", {}).values():
             model = getattr(child, "model", None)
             if model is None or not hasattr(model, "step_index"):
                 continue
             outputs = await child.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
-            steps.append(
-                {
-                    "index": getattr(model, "step_index", None),
-                    "name": getattr(model, "name", None),
-                    "outputs": outputs,
-                }
-            )
+            entry = {
+                "index": getattr(model, "step_index", None),
+                "name": getattr(model, "name", None),
+                "outputs": outputs,
+            }
+            name = getattr(model, "name", None)
+            if name:
+                steps[name] = entry
+            # Also allow numeric index access
+            idx = getattr(model, "step_index", None)
+            if idx is not None:
+                steps[str(idx)] = entry
 
-        steps.sort(key=lambda item: item.get("index") or 0)
         return steps
 
     def _find_container_with_child_attr(self, runner: Any, attr: str) -> Any | None:

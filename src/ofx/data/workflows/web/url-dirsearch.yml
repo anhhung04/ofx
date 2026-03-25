@@ -23,7 +23,7 @@ jobs:
     name: Initial HTTP Probe
     outputs:
       typed_outputs: '{{ steps["http-probe"].outputs.typed_outputs }}'
-      live_url: '{{ steps.export-url.outputs.live_url }}'
+      live_url: '{{ steps["export-url"].outputs.live_url }}'
     steps:
     - task: httpx
       timeout: 10
@@ -42,8 +42,8 @@ jobs:
     needs:
     - probe
     outputs:
-      found_file: '${{ steps.collect-dirs.outputs.found_file }}'
-      url_count: '${{ steps.collect-dirs.outputs.url_count }}'
+      found_file: '${{ steps["collect-dirs"].outputs.found_file }}'
+      url_count: '${{ steps["collect-dirs"].outputs.url_count }}'
     steps:
     - task: dirsearch
       timeout: 15

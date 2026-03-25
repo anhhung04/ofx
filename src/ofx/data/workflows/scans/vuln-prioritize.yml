@@ -45,8 +45,8 @@ jobs:
     name: Exploit Availability Check
     needs: [scan]
     outputs:
-      exploitable_count: '{{ steps.check-exploits.outputs.exploitable_count }}'
-      exploitable_data: '{{ steps.check-exploits.outputs.exploitable_data }}'
+      exploitable_count: '{{ steps["check-exploits"].outputs.exploitable_count }}'
+      exploitable_data: '{{ steps["check-exploits"].outputs.exploitable_data }}'
     steps:
     - name: check-exploits
       script: |
@@ -103,10 +103,10 @@ jobs:
     name: Prioritization & Report
     needs: [scan, exploit-check]
     outputs:
-      vuln_count: '{{ steps.generate-report.outputs.vuln_count }}'
-      critical_count: '{{ steps.generate-report.outputs.critical_count }}'
-      high_count: '{{ steps.generate-report.outputs.high_count }}'
-      report_file: '{{ steps.generate-report.outputs.report_file }}'
+      vuln_count: '{{ steps["generate-report"].outputs.vuln_count }}'
+      critical_count: '{{ steps["generate-report"].outputs.critical_count }}'
+      high_count: '{{ steps["generate-report"].outputs.high_count }}'
+      report_file: '{{ steps["generate-report"].outputs.report_file }}'
     steps:
     - name: generate-report
       script: |

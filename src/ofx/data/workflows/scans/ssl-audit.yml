@@ -20,9 +20,9 @@ jobs:
   sslscan-check:
     name: SSLScan Analysis
     outputs:
-      weak_protocols_file: '{{ steps.collect-sslscan.outputs.weak_protocols_file }}'
-      weak_protocol_count: '{{ steps.collect-sslscan.outputs.weak_protocol_count }}'
-      weak_cipher_count: '{{ steps.collect-sslscan.outputs.weak_cipher_count }}'
+      weak_protocols_file: '{{ steps["collect-sslscan"].outputs.weak_protocols_file }}'
+      weak_protocol_count: '{{ steps["collect-sslscan"].outputs.weak_protocol_count }}'
+      weak_cipher_count: '{{ steps["collect-sslscan"].outputs.weak_cipher_count }}'
     steps:
     - name: sslscan-run
       run: |
@@ -68,8 +68,8 @@ jobs:
   testssl-check:
     name: TestSSL Analysis
     outputs:
-      testssl_vulns: '{{ steps.export-testssl.outputs.testssl_vulns }}'
-      cert_issues: '{{ steps.export-testssl.outputs.cert_issues }}'
+      testssl_vulns: '{{ steps["export-testssl"].outputs.testssl_vulns }}'
+      cert_issues: '{{ steps["export-testssl"].outputs.cert_issues }}'
     steps:
     - task: testssl
       timeout: 10

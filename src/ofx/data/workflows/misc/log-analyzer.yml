@@ -20,10 +20,10 @@ jobs:
   analyze:
     name: Log Analysis
     outputs:
-      log_type: '${{ steps.analyze-logs.outputs.log_type }}'
-      line_count: '${{ steps.analyze-logs.outputs.line_count }}'
-      finding_count: '${{ steps.analyze-logs.outputs.finding_count }}'
-      unique_ips: '${{ steps.analyze-logs.outputs.unique_ips }}'
+      log_type: '${{ steps["analyze-logs"].outputs.log_type }}'
+      line_count: '${{ steps["analyze-logs"].outputs.line_count }}'
+      finding_count: '${{ steps["analyze-logs"].outputs.finding_count }}'
+      unique_ips: '${{ steps["analyze-logs"].outputs.unique_ips }}'
     steps:
     - name: analyze-logs
       script: |

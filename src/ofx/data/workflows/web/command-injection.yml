@@ -23,8 +23,8 @@ jobs:
   cmdi-scan:
     name: Command Injection Scan (commix)
     outputs:
-      commix_vuln_count: '${{ steps.collect-commix.outputs.commix_vuln_count }}'
-      commix_vuln_param: '${{ steps.collect-commix.outputs.commix_vuln_param }}'
+      commix_vuln_count: '${{ steps["collect-commix"].outputs.commix_vuln_count }}'
+      commix_vuln_param: '${{ steps["collect-commix"].outputs.commix_vuln_param }}'
     steps:
     - name: commix-scan
       run: |
@@ -60,7 +60,7 @@ jobs:
   nuclei-rce:
     name: Nuclei RCE/Injection Scan
     outputs:
-      nuclei_vuln_count: '${{ steps.collect-nuclei.outputs.nuclei_vuln_count }}'
+      nuclei_vuln_count: '${{ steps["collect-nuclei"].outputs.nuclei_vuln_count }}'
     steps:
     - task: nuclei
       timeout: 20

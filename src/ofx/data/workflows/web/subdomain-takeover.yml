@@ -28,8 +28,8 @@ jobs:
     name: Takeover Detection
     needs: [enumerate]
     outputs:
-      finding_count: '${{ steps.detect-takeover.outputs.finding_count }}'
-      subdomains_checked: '${{ steps.detect-takeover.outputs.subdomains_checked }}'
+      finding_count: '${{ steps["detect-takeover"].outputs.finding_count }}'
+      subdomains_checked: '${{ steps["detect-takeover"].outputs.subdomains_checked }}'
     steps:
     - name: detect-takeover
       script: |

@@ -20,8 +20,8 @@ jobs:
   host-discovery:
     name: Host & Port Discovery
     outputs:
-      live_hosts: '{{ steps.collect-hosts.outputs.live_hosts }}'
-      host_count: '{{ steps.collect-hosts.outputs.host_count }}'
+      live_hosts: '{{ steps["collect-hosts"].outputs.live_hosts }}'
+      host_count: '{{ steps["collect-hosts"].outputs.host_count }}'
     steps:
     - task: mapcidr
       timeout: 5
@@ -89,7 +89,7 @@ jobs:
     name: Service Detection
     outputs:
       typed_outputs: '{{ steps["service-detect"].outputs.typed_outputs + steps["http-probe"].outputs.typed_outputs }}'
-      http_targets: '{{ steps.export-svc.outputs.http_targets }}'
+      http_targets: '{{ steps["export-svc"].outputs.http_targets }}'
     needs:
     - host-discovery
     steps:

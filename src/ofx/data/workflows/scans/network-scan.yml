@@ -22,8 +22,8 @@ jobs:
   network-discovery:
     name: Network Discovery
     outputs:
-      hosts_file: '{{ steps.collect-hosts.outputs.hosts_file }}'
-      host_count: '{{ steps.collect-hosts.outputs.host_count }}'
+      hosts_file: '{{ steps["collect-hosts"].outputs.hosts_file }}'
+      host_count: '{{ steps["collect-hosts"].outputs.host_count }}'
     steps:
     - task: fping
       name: fping-discovery
@@ -84,8 +84,8 @@ jobs:
     needs:
     - network-discovery
     outputs:
-      live_urls: '{{ steps.export-urls.outputs.live_urls }}'
-      open_ports: '{{ steps.service-detect.outputs.open_ports }}'
+      live_urls: '{{ steps["export-urls"].outputs.live_urls }}'
+      open_ports: '{{ steps["service-detect"].outputs.open_ports }}'
     steps:
     - task: nmap
       timeout: 30

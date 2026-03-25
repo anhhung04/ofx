@@ -19,8 +19,8 @@ jobs:
   discover:
     name: Discovery & Probing
     outputs:
-      live_file: '${{ steps.collect-cache-urls.outputs.live_file }}'
-      live_count: '${{ steps.collect-cache-urls.outputs.live_count }}'
+      live_file: '${{ steps["collect-cache-urls"].outputs.live_file }}'
+      live_count: '${{ steps["collect-cache-urls"].outputs.live_count }}'
     steps:
       - task: httpx
         timeout: 10
@@ -56,10 +56,10 @@ jobs:
     needs:
       - discover
     outputs:
-      findings_file: '${{ steps.collect-results.outputs.findings_file }}'
-      nuclei_count: '${{ steps.collect-results.outputs.nuclei_count }}'
-      ffuf_count: '${{ steps.collect-results.outputs.ffuf_count }}'
-      total_count: '${{ steps.collect-results.outputs.total_count }}'
+      findings_file: '${{ steps["collect-results"].outputs.findings_file }}'
+      nuclei_count: '${{ steps["collect-results"].outputs.nuclei_count }}'
+      ffuf_count: '${{ steps["collect-results"].outputs.ffuf_count }}'
+      total_count: '${{ steps["collect-results"].outputs.total_count }}'
     steps:
       - task: nuclei
         timeout: 20

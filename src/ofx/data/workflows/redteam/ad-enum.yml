@@ -33,8 +33,8 @@ jobs:
   smb-enum:
     name: SMB Enumeration
     outputs:
-      smb_users_file: "{{ steps.collect-smb.outputs.smb_users_file }}"
-      smb_user_count: "{{ steps.collect-smb.outputs.smb_user_count }}"
+      smb_users_file: "{{ steps["collect-smb"].outputs.smb_users_file }}"
+      smb_user_count: "{{ steps["collect-smb"].outputs.smb_user_count }}"
     steps:
       - task: netexec
         timeout: 15
@@ -133,10 +133,10 @@ jobs:
   kerberos-enum:
     name: Kerberos Enumeration
     outputs:
-      kerb_users_file: "{{ steps.collect-kerberos.outputs.kerb_users_file }}"
-      kerb_user_count: "{{ steps.collect-kerberos.outputs.kerb_user_count }}"
-      asrep_users_file: "{{ steps.collect-kerberos.outputs.asrep_users_file }}"
-      asrep_count: "{{ steps.collect-kerberos.outputs.asrep_count }}"
+      kerb_users_file: "{{ steps["collect-kerberos"].outputs.kerb_users_file }}"
+      kerb_user_count: "{{ steps["collect-kerberos"].outputs.kerb_user_count }}"
+      asrep_users_file: "{{ steps["collect-kerberos"].outputs.asrep_users_file }}"
+      asrep_count: "{{ steps["collect-kerberos"].outputs.asrep_count }}"
     steps:
       - task: kerbrute
         timeout: 15
@@ -188,8 +188,8 @@ jobs:
   ldap-enum:
     name: LDAP Enumeration
     outputs:
-      ldap_users_file: "{{ steps.collect-ldap.outputs.ldap_users_file }}"
-      ldap_user_count: "{{ steps.collect-ldap.outputs.ldap_user_count }}"
+      ldap_users_file: "{{ steps["collect-ldap"].outputs.ldap_users_file }}"
+      ldap_user_count: "{{ steps["collect-ldap"].outputs.ldap_user_count }}"
     steps:
       - task: netexec
         timeout: 15

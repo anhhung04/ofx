@@ -16,9 +16,9 @@ jobs:
   fingerprint:
     name: Technology Fingerprint
     outputs:
-      tech_stack: "{{ steps.fetch-and-fingerprint.outputs.tech_stack }}"
-      server: "{{ steps.fetch-and-fingerprint.outputs.server }}"
-      waf: "{{ steps.fetch-and-fingerprint.outputs.waf }}"
+      tech_stack: "{{ steps["fetch-and-fingerprint"].outputs.tech_stack }}"
+      server: "{{ steps["fetch-and-fingerprint"].outputs.server }}"
+      waf: "{{ steps["fetch-and-fingerprint"].outputs.waf }}"
     steps:
     - name: fetch-and-fingerprint
       timeout: 3
@@ -61,9 +61,9 @@ jobs:
   security:
     name: Security Headers & Robots
     outputs:
-      security_audit: "{{ steps.audit-headers.outputs.security_audit }}"
-      missing_count: "{{ steps.audit-headers.outputs.missing_count }}"
-      robots_content: "{{ steps.check-robots.outputs.robots_content }}"
+      security_audit: "{{ steps["audit-headers"].outputs.security_audit }}"
+      missing_count: "{{ steps["audit-headers"].outputs.missing_count }}"
+      robots_content: "{{ steps["check-robots"].outputs.robots_content }}"
     steps:
     - name: audit-headers
       timeout: 3

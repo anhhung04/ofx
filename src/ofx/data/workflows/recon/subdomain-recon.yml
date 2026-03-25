@@ -19,8 +19,8 @@ jobs:
   passive-enum:
     name: Passive Subdomain Enumeration
     outputs:
-      subdomain_file: "{{ steps.collect-subdomains.outputs.subdomain_file }}"
-      subdomain_count: "{{ steps.collect-subdomains.outputs.subdomain_count }}"
+      subdomain_file: "{{ steps["collect-subdomains"].outputs.subdomain_file }}"
+      subdomain_count: "{{ steps["collect-subdomains"].outputs.subdomain_count }}"
     steps:
       - task: subfinder
         timeout: 10
@@ -86,7 +86,7 @@ jobs:
   dns-verification:
     name: DNS Verification
     outputs:
-      typed_outputs: "{{ steps.verify-dns.outputs.typed_outputs }}"
+      typed_outputs: "{{ steps["verify-dns"].outputs.typed_outputs }}"
     needs:
       - passive-enum
     steps:
@@ -102,7 +102,7 @@ jobs:
   http-probe:
     name: HTTP Probing
     outputs:
-      live_urls: "{{ steps.export-urls.outputs.live_urls }}"
+      live_urls: "{{ steps["export-urls"].outputs.live_urls }}"
     needs:
       - dns-verification
     steps:
@@ -123,7 +123,7 @@ jobs:
     name: Subdomain Takeover & Vulnerability Check
     outputs:
       typed_outputs: '{{ steps["takeover-scan"].outputs.typed_outputs }}'
-      vuln_count: '{{ steps.summary.outputs.vuln_count }}'
+      vuln_count: "{{ steps.summary.outputs.vuln_count }}"
     needs:
       - http-probe
     steps:

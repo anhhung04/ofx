@@ -36,8 +36,8 @@ jobs:
   enum-signing:
     name: SMB Signing Enumeration
     outputs:
-      relay_target_count: '{{ steps.check-smb-signing.outputs.relay_target_count }}'
-      relay_targets_file: '{{ steps.check-smb-signing.outputs.relay_targets_file }}'
+      relay_target_count: '{{ steps["check-smb-signing"].outputs.relay_target_count }}'
+      relay_targets_file: '{{ steps["check-smb-signing"].outputs.relay_targets_file }}'
     steps:
     - name: check-smb-signing
       run: |
@@ -65,7 +65,7 @@ jobs:
   coercion-check:
     name: Coercion Vector Check
     outputs:
-      coercion_count: '{{ steps.check-coercion.outputs.coercion_count }}'
+      coercion_count: '{{ steps["check-coercion"].outputs.coercion_count }}'
     steps:
     - name: check-coercion
       script: |

@@ -19,7 +19,7 @@ jobs:
   cluster-info:
     name: Cluster Information
     outputs:
-      cluster_reachable: '{{ steps.cluster-overview.outputs.cluster_reachable }}'
+      cluster_reachable: '{{ steps["cluster-overview"].outputs.cluster_reachable }}'
     steps:
     - name: cluster-overview
       script: |
@@ -59,8 +59,8 @@ jobs:
     name: RBAC Audit
     needs: [cluster-info]
     outputs:
-      finding_count: '{{ steps.check-rbac.outputs.finding_count }}'
-      admin_binding_count: '{{ steps.check-rbac.outputs.admin_binding_count }}'
+      finding_count: '{{ steps["check-rbac"].outputs.finding_count }}'
+      admin_binding_count: '{{ steps["check-rbac"].outputs.admin_binding_count }}'
     steps:
     - name: check-rbac
       script: |
@@ -110,9 +110,9 @@ jobs:
     name: Pod Security Audit
     needs: [cluster-info]
     outputs:
-      pod_count: '{{ steps.check-pods.outputs.pod_count }}'
-      privileged_count: '{{ steps.check-pods.outputs.privileged_count }}'
-      finding_count: '{{ steps.check-pods.outputs.finding_count }}'
+      pod_count: '{{ steps["check-pods"].outputs.pod_count }}'
+      privileged_count: '{{ steps["check-pods"].outputs.privileged_count }}'
+      finding_count: '{{ steps["check-pods"].outputs.finding_count }}'
     steps:
     - name: check-pods
       script: |

@@ -24,9 +24,9 @@ jobs:
   setup:
     name: Setup OOB Listener
     outputs:
-      callback_url: "{{ steps.init-listener.outputs.callback_url }}"
-      callback_flag: "{{ steps.init-listener.outputs.callback_flag }}"
-      callback_domain: "{{ steps.init-listener.outputs.callback_domain }}"
+      callback_url: "{{ steps["init-listener"].outputs.callback_url }}"
+      callback_flag: "{{ steps["init-listener"].outputs.callback_flag }}"
+      callback_domain: "{{ steps["init-listener"].outputs.callback_domain }}"
     steps:
     - name: init-listener
       timeout: 3
@@ -55,8 +55,8 @@ jobs:
     name: Inject Payloads
     needs: [setup]
     outputs:
-      injection_count: "{{ steps.send-injections.outputs.injection_count }}"
-      payloads_file: "{{ steps.send-injections.outputs.payloads_file }}"
+      injection_count: "{{ steps["send-injections"].outputs.injection_count }}"
+      payloads_file: "{{ steps["send-injections"].outputs.payloads_file }}"
     steps:
     - name: send-injections
       timeout: 5

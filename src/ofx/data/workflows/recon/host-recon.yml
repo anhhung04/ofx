@@ -20,7 +20,7 @@ jobs:
     name: Port Discovery
     outputs:
       typed_outputs: '{{ steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs }}'
-      open_ports: '{{ steps.export-ports.outputs.open_ports }}'
+      open_ports: '{{ steps["export-ports"].outputs.open_ports }}'
     steps:
     - task: naabu
       timeout: 10
@@ -44,7 +44,7 @@ jobs:
   service-detection:
     name: Service Detection & Analysis
     outputs:
-      http_targets: '{{ steps.extract-targets.outputs.http_targets }}'
+      http_targets: '{{ steps["extract-targets"].outputs.http_targets }}'
     needs:
     - port-discovery
     steps:
@@ -76,7 +76,7 @@ jobs:
     name: HTTP Probe & Exploit Search
     outputs:
       typed_outputs: '{{ steps["probe-http"].outputs.typed_outputs + steps["whatweb-fingerprint"].outputs.typed_outputs }}'
-      live_urls: '{{ steps.export-urls.outputs.live_urls }}'
+      live_urls: '{{ steps["export-urls"].outputs.live_urls }}'
     needs:
     - service-detection
     steps:

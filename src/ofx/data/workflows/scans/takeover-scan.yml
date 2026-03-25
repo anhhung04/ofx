@@ -18,8 +18,8 @@ jobs:
   subdomain-enum:
     name: Subdomain Enumeration
     outputs:
-      subs_file: '{{ steps.merge-subdomains.outputs.subs_file }}'
-      sub_count: '{{ steps.merge-subdomains.outputs.sub_count }}'
+      subs_file: '{{ steps["merge-subdomains"].outputs.subs_file }}'
+      sub_count: '{{ steps["merge-subdomains"].outputs.sub_count }}'
     steps:
     - task: subfinder
       timeout: 10
@@ -65,9 +65,9 @@ jobs:
     needs:
     - subdomain-enum
     outputs:
-      alive_file: '{{ steps.collect-dns.outputs.alive_file }}'
-      alive_count: '{{ steps.collect-dns.outputs.alive_count }}'
-      cname_count: '{{ steps.collect-dns.outputs.cname_count }}'
+      alive_file: '{{ steps["collect-dns"].outputs.alive_file }}'
+      alive_count: '{{ steps["collect-dns"].outputs.alive_count }}'
+      cname_count: '{{ steps["collect-dns"].outputs.cname_count }}'
     steps:
     - task: dnsx
       timeout: 10
@@ -105,8 +105,8 @@ jobs:
     needs:
     - dns-verify
     outputs:
-      takeover_count: '{{ steps.collect-takeovers.outputs.takeover_count }}'
-      takeover_findings_file: '{{ steps.collect-takeovers.outputs.takeover_findings_file }}'
+      takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count }}'
+      takeover_findings_file: '{{ steps["collect-takeovers"].outputs.takeover_findings_file }}'
     steps:
     - name: subzy-scan
       run: |

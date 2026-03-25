@@ -15,18 +15,18 @@ jobs:
   analyze:
     name: File Analysis
     outputs:
-      name: '{{ steps.analyze-file.outputs.name }}'
-      path: '{{ steps.analyze-file.outputs.path }}'
-      size: '{{ steps.analyze-file.outputs.size }}'
-      size_human: '{{ steps.analyze-file.outputs.size_human }}'
-      md5: '{{ steps.analyze-file.outputs.md5 }}'
-      sha1: '{{ steps.analyze-file.outputs.sha1 }}'
-      sha256: '{{ steps.analyze-file.outputs.sha256 }}'
-      file_type: '{{ steps.analyze-file.outputs.file_type }}'
-      mime_type: '{{ steps.analyze-file.outputs.mime_type }}'
-      entropy: '{{ steps.analyze-file.outputs.entropy }}'
-      string_count: '{{ steps.analyze-file.outputs.string_count }}'
-      metadata: '{{ steps.analyze-file.outputs.metadata }}'
+      name: '{{ steps["analyze-file"].outputs.name }}'
+      path: '{{ steps["analyze-file"].outputs.path }}'
+      size: '{{ steps["analyze-file"].outputs.size }}'
+      size_human: '{{ steps["analyze-file"].outputs.size_human }}'
+      md5: '{{ steps["analyze-file"].outputs.md5 }}'
+      sha1: '{{ steps["analyze-file"].outputs.sha1 }}'
+      sha256: '{{ steps["analyze-file"].outputs.sha256 }}'
+      file_type: '{{ steps["analyze-file"].outputs.file_type }}'
+      mime_type: '{{ steps["analyze-file"].outputs.mime_type }}'
+      entropy: '{{ steps["analyze-file"].outputs.entropy }}'
+      string_count: '{{ steps["analyze-file"].outputs.string_count }}'
+      metadata: '{{ steps["analyze-file"].outputs.metadata }}'
     steps:
     - name: analyze-file
       script: |

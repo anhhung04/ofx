@@ -22,8 +22,8 @@ jobs:
   generate:
     name: Generate Reverse Shells
     outputs:
-      shells_file: "{{ steps.build-shells.outputs.shells_file }}"
-      shell_count: "{{ steps.build-shells.outputs.shell_count }}"
+      shells_file: "{{ steps["build-shells"].outputs.shells_file }}"
+      shell_count: "{{ steps["build-shells"].outputs.shell_count }}"
     steps:
     - name: build-shells
       timeout: 3

@@ -21,21 +21,21 @@ jobs:
   ip-info:
     name: IP Information
     outputs:
-      type: '{{ steps.analyze-ip.outputs.type }}'
-      version: '{{ steps.analyze-ip.outputs.version }}'
-      is_private: '{{ steps.analyze-ip.outputs.is_private }}'
-      network: '{{ steps.analyze-ip.outputs.network }}'
-      broadcast: '{{ steps.analyze-ip.outputs.broadcast }}'
-      netmask: '{{ steps.analyze-ip.outputs.netmask }}'
-      prefix: '{{ steps.analyze-ip.outputs.prefix }}'
-      host_count: '{{ steps.analyze-ip.outputs.host_count }}'
-      first_host: '{{ steps.analyze-ip.outputs.first_host }}'
-      last_host: '{{ steps.analyze-ip.outputs.last_host }}'
-      slash24: '{{ steps.analyze-ip.outputs.slash24 }}'
-      resolved_ips: '{{ steps.analyze-ip.outputs.resolved_ips }}'
-      reverse_dns: '{{ steps.analyze-ip.outputs.reverse_dns }}'
-      expanded_file: '{{ steps.analyze-ip.outputs.expanded_file }}'
-      expanded_count: '{{ steps.analyze-ip.outputs.expanded_count }}'
+      type: '{{ steps["analyze-ip"].outputs.type }}'
+      version: '{{ steps["analyze-ip"].outputs.version }}'
+      is_private: '{{ steps["analyze-ip"].outputs.is_private }}'
+      network: '{{ steps["analyze-ip"].outputs.network }}'
+      broadcast: '{{ steps["analyze-ip"].outputs.broadcast }}'
+      netmask: '{{ steps["analyze-ip"].outputs.netmask }}'
+      prefix: '{{ steps["analyze-ip"].outputs.prefix }}'
+      host_count: '{{ steps["analyze-ip"].outputs.host_count }}'
+      first_host: '{{ steps["analyze-ip"].outputs.first_host }}'
+      last_host: '{{ steps["analyze-ip"].outputs.last_host }}'
+      slash24: '{{ steps["analyze-ip"].outputs.slash24 }}'
+      resolved_ips: '{{ steps["analyze-ip"].outputs.resolved_ips }}'
+      reverse_dns: '{{ steps["analyze-ip"].outputs.reverse_dns }}'
+      expanded_file: '{{ steps["analyze-ip"].outputs.expanded_file }}'
+      expanded_count: '{{ steps["analyze-ip"].outputs.expanded_count }}'
     steps:
     - name: analyze-ip
       script: |

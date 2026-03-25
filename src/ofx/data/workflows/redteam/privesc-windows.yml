@@ -24,8 +24,8 @@ jobs:
   enum:
     name: Windows PrivEsc Enumeration
     outputs:
-      enum_file: '{{ steps.privesc-checks.outputs.enum_file }}'
-      finding_count: '{{ steps.privesc-checks.outputs.finding_count }}'
+      enum_file: '{{ steps["privesc-checks"].outputs.enum_file }}'
+      finding_count: '{{ steps["privesc-checks"].outputs.finding_count }}'
     steps:
     - name: privesc-checks
       script: |

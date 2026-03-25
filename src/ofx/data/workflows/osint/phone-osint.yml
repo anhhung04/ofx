@@ -14,16 +14,16 @@ jobs:
   analyze:
     name: Phone Analysis
     outputs:
-      number: '{{ steps.phone-lookup.outputs.number }}'
-      digits: '{{ steps.phone-lookup.outputs.digits }}'
-      country: '{{ steps.phone-lookup.outputs.country }}'
-      country_code: '{{ steps.phone-lookup.outputs.country_code }}'
-      valid: '{{ steps.phone-lookup.outputs.valid }}'
-      location: '{{ steps.phone-lookup.outputs.location }}'
-      carrier: '{{ steps.phone-lookup.outputs.carrier }}'
-      type: '{{ steps.phone-lookup.outputs.type }}'
-      timezones: '{{ steps.phone-lookup.outputs.timezones }}'
-      international: '{{ steps.phone-lookup.outputs.international }}'
+      number: '{{ steps["phone-lookup"].outputs.number }}'
+      digits: '{{ steps["phone-lookup"].outputs.digits }}'
+      country: '{{ steps["phone-lookup"].outputs.country }}'
+      country_code: '{{ steps["phone-lookup"].outputs.country_code }}'
+      valid: '{{ steps["phone-lookup"].outputs.valid }}'
+      location: '{{ steps["phone-lookup"].outputs.location }}'
+      carrier: '{{ steps["phone-lookup"].outputs.carrier }}'
+      type: '{{ steps["phone-lookup"].outputs.type }}'
+      timezones: '{{ steps["phone-lookup"].outputs.timezones }}'
+      international: '{{ steps["phone-lookup"].outputs.international }}'
     steps:
     - name: phone-lookup
       script: |

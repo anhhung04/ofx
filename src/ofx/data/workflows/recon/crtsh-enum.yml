@@ -15,8 +15,8 @@ jobs:
   enumerate:
     name: Subdomain Enumeration
     outputs:
-      subdomains_file: "{{ steps.merge-results.outputs.subdomains_file }}"
-      total_count: "{{ steps.merge-results.outputs.total_count }}"
+      subdomains_file: "{{ steps["merge-results"].outputs.subdomains_file }}"
+      total_count: "{{ steps["merge-results"].outputs.total_count }}"
     steps:
     - name: subfinder-scan
       task: subfinder

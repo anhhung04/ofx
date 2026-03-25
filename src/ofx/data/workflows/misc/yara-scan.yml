@@ -20,8 +20,8 @@ jobs:
   scan:
     name: YARA Scan
     outputs:
-      match_count: '${{ steps.yara-scan.outputs.match_count }}'
-      rules_used: '${{ steps.yara-scan.outputs.rules_used }}'
+      match_count: '${{ steps["yara-scan"].outputs.match_count }}'
+      rules_used: '${{ steps["yara-scan"].outputs.rules_used }}'
     steps:
     - name: yara-scan
       script: |

@@ -19,9 +19,9 @@ jobs:
   iam-audit:
     name: IAM Security Audit
     outputs:
-      account: '{{ steps.check-iam.outputs.account }}'
-      user_count: '{{ steps.check-iam.outputs.user_count }}'
-      no_mfa_count: '{{ steps.check-iam.outputs.no_mfa_count }}'
+      account: '{{ steps["check-iam"].outputs.account }}'
+      user_count: '{{ steps["check-iam"].outputs.user_count }}'
+      no_mfa_count: '{{ steps["check-iam"].outputs.no_mfa_count }}'
     steps:
     - name: check-iam
       script: |
@@ -80,8 +80,8 @@ jobs:
   s3-audit:
     name: S3 Bucket Audit
     outputs:
-      bucket_count: '{{ steps.check-s3.outputs.bucket_count }}'
-      public_bucket_count: '{{ steps.check-s3.outputs.public_bucket_count }}'
+      bucket_count: '{{ steps["check-s3"].outputs.bucket_count }}'
+      public_bucket_count: '{{ steps["check-s3"].outputs.public_bucket_count }}'
     steps:
     - name: check-s3
       script: |
@@ -127,8 +127,8 @@ jobs:
   sg-audit:
     name: Security Group Audit
     outputs:
-      sg_count: '{{ steps.check-security-groups.outputs.sg_count }}'
-      risky_sg_count: '{{ steps.check-security-groups.outputs.risky_sg_count }}'
+      sg_count: '{{ steps["check-security-groups"].outputs.sg_count }}'
+      risky_sg_count: '{{ steps["check-security-groups"].outputs.risky_sg_count }}'
     steps:
     - name: check-security-groups
       script: |

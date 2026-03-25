@@ -27,9 +27,9 @@ jobs:
   pack:
     name: Pack Payload
     outputs:
-      output_dir: "{{ steps.apply-packing.outputs.output_dir }}"
-      variants: "{{ steps.apply-packing.outputs.variants }}"
-      variant_count: "{{ steps.apply-packing.outputs.variant_count }}"
+      output_dir: "{{ steps["apply-packing"].outputs.output_dir }}"
+      variants: "{{ steps["apply-packing"].outputs.variants }}"
+      variant_count: "{{ steps["apply-packing"].outputs.variant_count }}"
     steps:
     - name: apply-packing
       timeout: 5

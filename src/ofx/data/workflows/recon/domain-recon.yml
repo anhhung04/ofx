@@ -26,10 +26,10 @@ jobs:
   osint:
     name: OSINT & Domain Intelligence
     outputs:
-      domain_count: '{{ steps.export-osint.outputs.domain_count }}'
-      email_count: '{{ steps.export-osint.outputs.email_count }}'
-      asn_cidr_count: '{{ steps.export-osint.outputs.asn_cidr_count }}'
-      cidrs_file: '{{ steps.export-osint.outputs.cidrs_file }}'
+      domain_count: '{{ steps["export-osint"].outputs.domain_count }}'
+      email_count: '{{ steps["export-osint"].outputs.email_count }}'
+      asn_cidr_count: '{{ steps["export-osint"].outputs.asn_cidr_count }}'
+      cidrs_file: '{{ steps["export-osint"].outputs.cidrs_file }}'
     steps:
       - task: whois
         timeout: 5
@@ -88,8 +88,8 @@ jobs:
   dns-enum:
     name: DNS Enumeration
     outputs:
-      dns_record_count: '{{ steps.export-dns.outputs.dns_record_count }}'
-      dns_subdomain_count: '{{ steps.export-dns.outputs.dns_subdomain_count }}'
+      dns_record_count: '{{ steps["export-dns"].outputs.dns_record_count }}'
+      dns_subdomain_count: '{{ steps["export-dns"].outputs.dns_subdomain_count }}'
     steps:
       - task: dnsx
         timeout: 10
@@ -129,8 +129,8 @@ jobs:
   subdomain-enum:
     name: Subdomain Discovery
     outputs:
-      subs_file: '{{ steps.collect-subdomains.outputs.subs_file }}'
-      sub_count: '{{ steps.collect-subdomains.outputs.sub_count }}'
+      subs_file: '{{ steps["collect-subdomains"].outputs.subs_file }}'
+      sub_count: '{{ steps["collect-subdomains"].outputs.sub_count }}'
     needs:
       - dns-enum
     steps:
@@ -225,9 +225,9 @@ jobs:
   dns-verify:
     name: DNS Verification
     outputs:
-      verified_file: '{{ steps.merge-verified.outputs.verified_file }}'
-      verified_count: '{{ steps.merge-verified.outputs.verified_count }}'
-      cdn_waf_count: '{{ steps.merge-verified.outputs.cdn_waf_count }}'
+      verified_file: '{{ steps["merge-verified"].outputs.verified_file }}'
+      verified_count: '{{ steps["merge-verified"].outputs.verified_count }}'
+      cdn_waf_count: '{{ steps["merge-verified"].outputs.cdn_waf_count }}'
     needs:
       - subdomain-enum
     steps:
@@ -289,10 +289,10 @@ jobs:
   web-probe:
     name: HTTP Probing & Fingerprinting
     outputs:
-      live_file: '{{ steps.export-live.outputs.live_file }}'
-      live_count: '{{ steps.export-live.outputs.live_count }}'
-      waf_count: '{{ steps.export-live.outputs.waf_count }}'
-      favicon_tech_count: '{{ steps.export-live.outputs.favicon_tech_count }}'
+      live_file: '{{ steps["export-live"].outputs.live_file }}'
+      live_count: '{{ steps["export-live"].outputs.live_count }}'
+      waf_count: '{{ steps["export-live"].outputs.waf_count }}'
+      favicon_tech_count: '{{ steps["export-live"].outputs.favicon_tech_count }}'
     needs:
       - dns-verify
     steps:
@@ -353,8 +353,8 @@ jobs:
   ssl-audit:
     name: SSL/TLS Audit
     outputs:
-      ssl_cert_count: '{{ steps.export-ssl.outputs.ssl_cert_count }}'
-      ssl_vuln_count: '{{ steps.export-ssl.outputs.ssl_vuln_count }}'
+      ssl_cert_count: '{{ steps["export-ssl"].outputs.ssl_cert_count }}'
+      ssl_vuln_count: '{{ steps["export-ssl"].outputs.ssl_vuln_count }}'
     needs:
       - dns-verify
     steps:
@@ -400,10 +400,10 @@ jobs:
   url-collection:
     name: URL Collection & Crawling
     outputs:
-      all_urls_file: '{{ steps.collect-urls.outputs.all_urls_file }}'
-      param_file: '{{ steps.collect-urls.outputs.param_file }}'
-      url_count: '{{ steps.collect-urls.outputs.url_count }}'
-      param_count: '{{ steps.collect-urls.outputs.param_count }}'
+      all_urls_file: '{{ steps["collect-urls"].outputs.all_urls_file }}'
+      param_file: '{{ steps["collect-urls"].outputs.param_file }}'
+      url_count: '{{ steps["collect-urls"].outputs.url_count }}'
+      param_count: '{{ steps["collect-urls"].outputs.param_count }}'
     needs:
       - web-probe
     steps:
@@ -477,9 +477,9 @@ jobs:
   port-scan:
     name: Port Scanning
     outputs:
-      ports_file: '{{ steps.export-ports.outputs.ports_file }}'
-      port_count: '{{ steps.export-ports.outputs.port_count }}'
-      host_count: '{{ steps.export-ports.outputs.host_count }}'
+      ports_file: '{{ steps["export-ports"].outputs.ports_file }}'
+      port_count: '{{ steps["export-ports"].outputs.port_count }}'
+      host_count: '{{ steps["export-ports"].outputs.host_count }}'
     needs:
       - dns-verify
     steps:
@@ -525,7 +525,7 @@ jobs:
   secrets-scan:
     name: Secret & JS Analysis
     outputs:
-      secret_count: '{{ steps.export-secrets.outputs.secret_count }}'
+      secret_count: '{{ steps["export-secrets"].outputs.secret_count }}'
     needs:
       - url-collection
     steps:
@@ -563,7 +563,7 @@ jobs:
   takeover-check:
     name: Takeover Detection
     outputs:
-      takeover_count: '{{ steps.export-takeover.outputs.takeover_count }}'
+      takeover_count: '{{ steps["export-takeover"].outputs.takeover_count }}'
     needs:
       - dns-verify
     steps:
@@ -604,10 +604,10 @@ jobs:
   vuln-scan:
     name: Vulnerability Scanning
     outputs:
-      vuln_count: '{{ steps.export-vulns.outputs.vuln_count }}'
-      critical_count: '{{ steps.export-vulns.outputs.critical_count }}'
-      high_count: '{{ steps.export-vulns.outputs.high_count }}'
-      xss_count: '{{ steps.export-vulns.outputs.xss_count }}'
+      vuln_count: '{{ steps["export-vulns"].outputs.vuln_count }}'
+      critical_count: '{{ steps["export-vulns"].outputs.critical_count }}'
+      high_count: '{{ steps["export-vulns"].outputs.high_count }}'
+      xss_count: '{{ steps["export-vulns"].outputs.xss_count }}'
     needs:
       - url-collection
       - web-probe

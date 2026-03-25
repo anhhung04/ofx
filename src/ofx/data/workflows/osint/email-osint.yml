@@ -16,13 +16,13 @@ jobs:
   investigate:
     name: Email Investigation
     outputs:
-      email: '{{ steps.email-analysis.outputs.email }}'
-      local_part: '{{ steps.email-analysis.outputs.local_part }}'
-      domain: '{{ steps.email-analysis.outputs.domain }}'
-      pattern: '{{ steps.email-analysis.outputs.pattern }}'
-      possible_first: '{{ steps.email-analysis.outputs.possible_first }}'
-      possible_last: '{{ steps.email-analysis.outputs.possible_last }}'
-      mx: '{{ steps.email-analysis.outputs.mx }}'
+      email: '{{ steps["email-analysis"].outputs.email }}'
+      local_part: '{{ steps["email-analysis"].outputs.local_part }}'
+      domain: '{{ steps["email-analysis"].outputs.domain }}'
+      pattern: '{{ steps["email-analysis"].outputs.pattern }}'
+      possible_first: '{{ steps["email-analysis"].outputs.possible_first }}'
+      possible_last: '{{ steps["email-analysis"].outputs.possible_last }}'
+      mx: '{{ steps["email-analysis"].outputs.mx }}'
     steps:
     - task: holehe
       timeout: 10

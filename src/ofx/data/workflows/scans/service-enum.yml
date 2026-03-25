@@ -16,9 +16,9 @@ jobs:
   port-discovery:
     name: Port Discovery
     outputs:
-      port_count: '{{ steps.identify-services.outputs.port_count }}'
-      detected_services: '{{ steps.identify-services.outputs.detected_services }}'
-      open_ports: '{{ steps.identify-services.outputs.open_ports }}'
+      port_count: '{{ steps["identify-services"].outputs.port_count }}'
+      detected_services: '{{ steps["identify-services"].outputs.detected_services }}'
+      open_ports: '{{ steps["identify-services"].outputs.open_ports }}'
     steps:
     - task: naabu
       timeout: 10
@@ -63,8 +63,8 @@ jobs:
     name: Deep Service Enumeration
     needs: [port-discovery]
     outputs:
-      enum_file: '{{ steps.enum-services.outputs.enum_file }}'
-      service_count: '{{ steps.enum-services.outputs.service_count }}'
+      enum_file: '{{ steps["enum-services"].outputs.enum_file }}'
+      service_count: '{{ steps["enum-services"].outputs.service_count }}'
     steps:
     - name: enum-services
       script: |

@@ -19,8 +19,8 @@ jobs:
   portscan:
     name: Port Scan
     outputs:
-      open_ports: "{{ steps.scan-ports.outputs.open_ports }}"
-      port_count: "{{ steps.scan-ports.outputs.port_count }}"
+      open_ports: "{{ steps["scan-ports"].outputs.open_ports }}"
+      port_count: "{{ steps["scan-ports"].outputs.port_count }}"
     steps:
     - name: scan-ports
       timeout: 5
@@ -54,8 +54,8 @@ jobs:
     name: Banner Grab
     needs: [portscan]
     outputs:
-      banners_file: "{{ steps.grab-banners.outputs.banners_file }}"
-      service_count: "{{ steps.grab-banners.outputs.service_count }}"
+      banners_file: "{{ steps["grab-banners"].outputs.banners_file }}"
+      service_count: "{{ steps["grab-banners"].outputs.service_count }}"
     steps:
     - name: grab-banners
       timeout: 10

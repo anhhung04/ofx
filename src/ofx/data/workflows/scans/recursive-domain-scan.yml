@@ -32,8 +32,8 @@ jobs:
   subdomain-discovery:
     name: Subdomain Discovery
     outputs:
-      subs_file: '{{ steps.collect-subdomains.outputs.subs_file }}'
-      subdomain_count: '{{ steps.collect-subdomains.outputs.subdomain_count }}'
+      subs_file: '{{ steps["collect-subdomains"].outputs.subs_file }}'
+      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count }}'
     steps:
     - task: subfinder
       timeout: 10
@@ -93,9 +93,9 @@ jobs:
     name: Bulk Reconnaissance
     needs: [subdomain-discovery]
     outputs:
-      alive_file: '{{ steps.collect-alive.outputs.alive_file }}'
-      live_urls_file: '{{ steps.collect-alive.outputs.live_urls_file }}'
-      alive_count: '{{ steps.collect-alive.outputs.alive_count }}'
+      alive_file: '{{ steps["collect-alive"].outputs.alive_file }}'
+      live_urls_file: '{{ steps["collect-alive"].outputs.live_urls_file }}'
+      alive_count: '{{ steps["collect-alive"].outputs.alive_count }}'
     steps:
     - task: dnsx
       timeout: 10
@@ -197,9 +197,9 @@ jobs:
     needs: [bulk-recon]
     run_if: '{{ inputs.skip_deep != ''true'' }}'
     outputs:
-      scanned_count: '{{ steps.fan-out-domain-scan.outputs.scanned_count }}'
-      success_count: '{{ steps.fan-out-domain-scan.outputs.success_count }}'
-      fail_count: '{{ steps.fan-out-domain-scan.outputs.fail_count }}'
+      scanned_count: '{{ steps["fan-out-domain-scan"].outputs.scanned_count }}'
+      success_count: '{{ steps["fan-out-domain-scan"].outputs.success_count }}'
+      fail_count: '{{ steps["fan-out-domain-scan"].outputs.fail_count }}'
     steps:
     - name: fan-out-domain-scan
       timeout: 120
