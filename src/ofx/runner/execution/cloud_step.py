@@ -426,10 +426,63 @@ class CloudStepRunner(BaseRunner):
                 return []
             task = task_cls()
             results = task.parse_output(stdout=stdout, stderr="")
+
+            # Auto-store credentials if enabled
+            if results and self._should_store_creds():
+                self._store_credentials(results)
+
             return [r.to_dict() for r in results]
         except Exception as e:
             logger.debug("Failed to parse task output for '%s': %s", self.model.task, e)
             return []
+
+    def _should_store_creds(self) -> bool:
+        """Check if credential storage is enabled for this step."""
+        if self.model.store_creds is not None:
+            return self.model.store_creds
+        # Check job defaults
+        if self.parent and hasattr(self.parent, "model"):
+            defaults = getattr(self.parent.model, "defaults", None)
+            if defaults and getattr(defaults, "store_creds", False):
+                return True
+        return settings.auto_store_creds
+
+    def _store_credentials(self, typed_outputs: list) -> None:
+        """Store UserAccount outputs in the credential store."""
+        from ofx.tasks.output_types import UserAccount
+
+        accounts = [o for o in typed_outputs if isinstance(o, UserAccount) and o.username]
+        if not accounts:
+            return
+
+        try:
+            from ofx.api.creds.exegol_history import ExegolHistoryDB
+
+            db = ExegolHistoryDB()
+        except (ImportError, FileNotFoundError) as e:
+            self._log_debug(f"Credential store unavailable: {e}")
+            return
+
+        stored = 0
+        for account in accounts:
+            try:
+                cred = account.to_credential()
+                existing = db.get_credential(cred.username)
+                if existing and existing.password == cred.password and existing.hash == cred.hash and existing.domain == cred.domain:
+                    continue
+                db.add_credential(
+                    username=cred.username,
+                    password=cred.password,
+                    hash_value=cred.hash,
+                    domain=cred.domain,
+                    comment=cred.comment,
+                )
+                stored += 1
+            except Exception as e:
+                self._log_debug(f"Failed to store credential for {account.username}: {e}")
+
+        if stored:
+            self._log_info(f"Stored {stored} credential(s) in credential store")
 
     # ------------------------------------------------------------------
     # Helpers
