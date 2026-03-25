@@ -80,6 +80,12 @@ jobs:
     outputs:
       service_file: '{{ steps["nmap-svc"].outputs.service_file }}'
     steps:
+    - task: nerva
+      timeout: 10
+      name: nerva-fingerprint
+      with:
+        target: "{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
+      continue-on-error: true
     - name: nmap-svc
       run: |
         echo "[+] Service identification..."
@@ -103,9 +109,25 @@ jobs:
       continue-on-error: true
       timeout: 30
 
+  default-cred-check:
+    name: Default Credential Check
+    needs: [port-scan]
+    outputs:
+      cred_count: '{{ steps["brute-defaults"].outputs.cred_count }}'
+    steps:
+    - name: brute-defaults
+      run: |
+        HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
+        if [ -f "$HOSTS_FILE" ]; then
+          naabu -list "$HOSTS_FILE" -p 22,21,23,3306,5432,6379,27017,1433,5900,8080 -silent 2>/dev/null | nerva --json 2>/dev/null | brutus --json 2>/dev/null | tee /tmp/ofx_sweep_creds.jsonl
+          CRED_COUNT=$(wc -l < /tmp/ofx_sweep_creds.jsonl 2>/dev/null || echo 0)
+          echo "cred_count=$CRED_COUNT" >> {{ env.OFX_OUTPUTS }}
+        fi
+      continue-on-error: true
+
   summary:
     name: Network Summary
-    needs: [discovery, port-scan, service-id]
+    needs: [discovery, port-scan, service-id, default-cred-check]
     steps:
     - name: report
       run: |
@@ -115,6 +137,7 @@ jobs:
         echo ""
         echo "  Alive hosts: {{ jobs['discovery'].outputs.alive_count | default('?', true) }}"
         echo "  Open ports: {{ jobs['port-scan'].outputs.port_count | default('?', true) }}"
+        echo "  Default creds: {{ jobs['default-cred-check'].outputs.cred_count | default('0', true) }}"
         echo ""
         echo "  Hosts file: /tmp/ofx_alive_hosts.txt"
         echo "  Service scan: /tmp/ofx_service_scan.txt"

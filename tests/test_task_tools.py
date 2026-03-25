@@ -3172,3 +3172,189 @@ class TestHashidParser:
     def test_hashid_parse_empty(self):
         task = TaskRegistry.create("hashid")
         assert task.parse_output("", "") == []
+
+
+# ── Nerva Parser ──────────────────────────────────────────────────────────
+
+from ofx.tasks.output_types import UserAccount
+
+
+class TestNervaParser:
+    def test_nerva_metadata(self):
+        task = TaskRegistry.create("nerva")
+        assert task.name == "nerva"
+        assert task.cmd == "nerva"
+        assert task.category == "port/fingerprint"
+        assert task.install_cmd
+        assert Port in task.output_types
+        assert Tag in task.output_types
+
+    def test_nerva_parse_line_full(self):
+        task = TaskRegistry.create("nerva")
+        line = json.dumps({
+            "ip": "192.168.1.1",
+            "host": "web.local",
+            "port": 80,
+            "protocol": "tcp",
+            "service": "http",
+            "version": "2.4.51",
+            "product": "Apache",
+            "banner": "Apache/2.4.51 (Ubuntu)",
+            "cpe": "cpe:/a:apache:http_server:2.4.51",
+        })
+        results = task.parse_line(line)
+        ports = [r for r in results if isinstance(r, Port)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(ports) == 1
+        assert ports[0].port == 80
+        assert ports[0].ip == "192.168.1.1"
+        assert ports[0].host == "web.local"
+        assert ports[0].state == "open"
+        assert ports[0].protocol == "tcp"
+        assert "http" in ports[0].service_name
+        assert "2.4.51" in ports[0].service_name
+        assert ports[0].extra_data["version"] == "2.4.51"
+        assert ports[0].extra_data["banner"] == "Apache/2.4.51 (Ubuntu)"
+        assert ports[0].extra_data["product"] == "Apache"
+        assert len(tags) == 1
+        assert tags[0].name == "Apache"
+        assert tags[0].category == "service"
+
+    def test_nerva_parse_line_minimal(self):
+        task = TaskRegistry.create("nerva")
+        line = json.dumps({"ip": "10.0.0.1", "port": 22, "service": "ssh"})
+        results = task.parse_line(line)
+        assert len(results) == 1
+        assert isinstance(results[0], Port)
+        assert results[0].port == 22
+        assert results[0].service_name == "ssh"
+
+    def test_nerva_parse_line_no_tag_without_product(self):
+        task = TaskRegistry.create("nerva")
+        line = json.dumps({"ip": "10.0.0.1", "port": 443, "service": "https"})
+        results = task.parse_line(line)
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert tags == []
+
+    def test_nerva_parse_line_invalid(self):
+        task = TaskRegistry.create("nerva")
+        assert task.parse_line("") == []
+        assert task.parse_line("not json") == []
+        assert task.parse_line("[info] scanning...") == []
+        assert task.parse_line("{}") == []
+
+    def test_nerva_parse_output_stdout(self):
+        task = TaskRegistry.create("nerva")
+        stdout = "\n".join([
+            json.dumps({"ip": "10.0.0.1", "port": 22, "service": "ssh"}),
+            json.dumps({"ip": "10.0.0.1", "port": 80, "service": "http", "product": "nginx"}),
+            "[info] scan complete",
+        ])
+        results = task.parse_output(stdout, "")
+        ports = [r for r in results if isinstance(r, Port)]
+        tags = [r for r in results if isinstance(r, Tag)]
+        assert len(ports) == 2
+        assert len(tags) == 1
+
+    def test_nerva_parse_output_file(self, tmp_path):
+        task = TaskRegistry.create("nerva")
+        f = tmp_path / "out.jsonl"
+        f.write_text(json.dumps({"ip": "10.0.0.1", "port": 3306, "service": "mysql", "product": "MySQL", "version": "8.0"}))
+        results = task.parse_output("", "", output_file=f)
+        assert len(results) == 2  # Port + Tag
+        assert results[0].port == 3306
+        assert results[1].name == "MySQL"
+
+    def test_nerva_parse_empty(self):
+        task = TaskRegistry.create("nerva")
+        assert task.parse_output("", "") == []
+
+    def test_nerva_streaming(self):
+        task = TaskRegistry.create("nerva")
+        assert task.supports_streaming is True
+
+
+# ── Brutus Parser ─────────────────────────────────────────────────────────
+
+
+class TestBrutusParser:
+    def test_brutus_metadata(self):
+        task = TaskRegistry.create("brutus")
+        assert task.name == "brutus"
+        assert task.cmd == "brutus"
+        assert task.category == "brute/credential"
+        assert task.install_cmd
+        assert UserAccount in task.output_types
+
+    def test_brutus_parse_line_full(self):
+        task = TaskRegistry.create("brutus")
+        line = json.dumps({
+            "host": "192.168.1.1",
+            "port": 22,
+            "service": "ssh",
+            "username": "admin",
+            "password": "admin123",
+            "banner": "SSH-2.0-OpenSSH_8.9",
+        })
+        results = task.parse_line(line)
+        assert len(results) == 1
+        ua = results[0]
+        assert isinstance(ua, UserAccount)
+        assert ua.username == "admin"
+        assert ua.password == "admin123"
+        assert ua.host == "192.168.1.1:22"
+        assert ua.source == "brutus/ssh"
+        assert ua.extra_data["service"] == "ssh"
+        assert ua.extra_data["port"] == 22
+        assert ua.extra_data["banner"] == "SSH-2.0-OpenSSH_8.9"
+
+    def test_brutus_parse_line_alt_keys(self):
+        task = TaskRegistry.create("brutus")
+        line = json.dumps({"ip": "10.0.0.5", "login": "root", "pass": "toor", "protocol": "ftp"})
+        results = task.parse_line(line)
+        assert len(results) == 1
+        assert results[0].username == "root"
+        assert results[0].password == "toor"
+        assert results[0].host == "10.0.0.5"
+        assert results[0].source == "brutus/ftp"
+
+    def test_brutus_parse_line_no_username(self):
+        task = TaskRegistry.create("brutus")
+        line = json.dumps({"host": "10.0.0.1", "port": 22, "password": "test"})
+        assert task.parse_line(line) == []
+
+    def test_brutus_parse_line_invalid(self):
+        task = TaskRegistry.create("brutus")
+        assert task.parse_line("") == []
+        assert task.parse_line("not json") == []
+        assert task.parse_line("[info] bruting...") == []
+        assert task.parse_line("{}") == []
+
+    def test_brutus_parse_output_stdout(self):
+        task = TaskRegistry.create("brutus")
+        stdout = "\n".join([
+            json.dumps({"host": "10.0.0.1", "port": 22, "username": "admin", "password": "admin", "service": "ssh"}),
+            json.dumps({"host": "10.0.0.2", "port": 3306, "username": "root", "password": "", "service": "mysql"}),
+            "[info] done",
+        ])
+        results = task.parse_output(stdout, "")
+        assert len(results) == 2
+        assert all(isinstance(r, UserAccount) for r in results)
+        assert results[0].username == "admin"
+        assert results[1].username == "root"
+
+    def test_brutus_parse_output_file(self, tmp_path):
+        task = TaskRegistry.create("brutus")
+        f = tmp_path / "out.jsonl"
+        f.write_text(json.dumps({"host": "10.0.0.1", "port": 5432, "username": "postgres", "password": "postgres", "service": "postgresql"}))
+        results = task.parse_output("", "", output_file=f)
+        assert len(results) == 1
+        assert results[0].username == "postgres"
+
+    def test_brutus_parse_empty(self):
+        task = TaskRegistry.create("brutus")
+        assert task.parse_output("", "") == []
+
+    def test_brutus_streaming(self):
+        task = TaskRegistry.create("brutus")
+        assert task.supports_streaming is True

@@ -129,6 +129,12 @@ jobs:
         cat {{ jobs['host-discovery'].outputs.alive_file }} > /tmp/nmap-hosts.txt
         nmap -sV -iL /tmp/nmap-hosts.txt -oN /tmp/nmap-services.txt 2>/dev/null | tee /tmp/nmap-output.txt
       continue-on-error: true
+    - task: nerva
+      timeout: 10
+      name: nerva-fingerprint
+      with:
+        target: "{{ jobs['host-discovery'].outputs.alive_file }}"
+      continue-on-error: true
     - task: httpx
       timeout: 10
       name: http-probe
@@ -252,12 +258,26 @@ jobs:
 
         print(f"AD domains: {', '.join(domains) if domains else 'none detected'}")
         print(f"Domain controllers: {len(dcs)}")
+  default-cred-check:
+    name: Default Credential Check
+    outputs:
+      cred_count: '{{ steps["brute-defaults"].outputs.cred_count }}'
+    needs:
+    - port-scan
+    steps:
+    - name: brute-defaults
+      run: |
+        naabu -host {{ inputs.target }} -p 22,21,23,3306,5432,6379,27017,1433,3389,5900,8080 -silent 2>/dev/null | nerva --json 2>/dev/null | brutus --json 2>/dev/null | tee /tmp/ofx_intrecon_creds.jsonl
+        CRED_COUNT=$(wc -l < /tmp/ofx_intrecon_creds.jsonl 2>/dev/null || echo 0)
+        echo "cred_count=$CRED_COUNT" >> $OFX_OUTPUTS
+      continue-on-error: true
   summary:
     name: Internal Recon Summary
     needs:
     - service-detect
     - web-enum
     - ad-detect
+    - default-cred-check
     steps:
     - name: report
       run: |
@@ -281,6 +301,9 @@ jobs:
         echo "--- Active Directory ---"
         echo "Domains found: $(cat {{ jobs['ad-detect'].outputs.ad_domains_file }} 2>/dev/null || echo 'none')"
         echo "Domain controllers: {{ jobs['ad-detect'].outputs.dc_count }}"
+        echo ""
+        echo "--- Default Credentials ---"
+        echo "Credentials found: {{ jobs['default-cred-check'].outputs.cred_count | default('0', true) }}"
       log-stdout: true
     - name: export-to-project
       script: |
