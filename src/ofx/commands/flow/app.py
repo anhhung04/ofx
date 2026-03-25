@@ -26,15 +26,12 @@ HELP = "Manage and run workflows in the OFX system"
 
 
 def _complete_workflow_names(incomplete: str) -> list[str]:
-    """Shell completion for workflow names."""
-    from pathlib import Path
-
-    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, BUILTIN_WORKFLOWS_DIR
+    """Shell completion for workflow names (builtin + user + collections)."""
+    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, get_workflow_search_dirs
 
     names: set[str] = set()
-    dirs = [BUILTIN_WORKFLOWS_DIR, Path.home() / ".ofx" / "workflows"]
 
-    for d in dirs:
+    for d in get_workflow_search_dirs():
         if not d.is_dir():
             continue
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
@@ -53,6 +50,30 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
     return sorted(names)
 
 
+def _complete_tag_names(incomplete: str) -> list[str]:
+    """Shell completion for workflow tags."""
+    import yaml
+
+    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, get_workflow_search_dirs
+
+    tags: set[str] = set()
+    for d in get_workflow_search_dirs():
+        if not d.is_dir():
+            continue
+        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            for path in d.rglob(f"*{ext}"):
+                try:
+                    data = yaml.safe_load(path.read_text())
+                    if isinstance(data, dict):
+                        for t in data.get("tags") or []:
+                            t_lower = str(t).lower()
+                            if t_lower.startswith(incomplete):
+                                tags.add(t_lower)
+                except Exception:
+                    pass
+    return sorted(tags)
+
+
 @app.command("list")
 def list_workflows(
     builtin: Annotated[
@@ -65,7 +86,7 @@ def list_workflows(
     ] = "",
     tag: Annotated[
         list[str] | None,
-        typer.Option("--tag", "-t", help="Filter workflows by tag. Can be specified multiple times (OR logic)."),
+        typer.Option("--tag", "-t", help="Filter workflows by tag. Can be specified multiple times (OR logic).", autocompletion=_complete_tag_names),
     ] = None,
     search: Annotated[
         str,
@@ -572,3 +593,140 @@ def tools(
             all_workflows=all_workflows,
         ).run()
     )
+
+
+@app.command()
+def search(
+    query: Annotated[
+        str,
+        typer.Argument(help="Search term — matches against name, description, and tags"),
+    ] = "",
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Filter by tag. Can be repeated (OR logic).", autocompletion=_complete_tag_names),
+    ] = None,
+    show_tags: Annotated[
+        bool,
+        typer.Option("--tags", help="Show tags alongside each result."),
+    ] = False,
+):
+    """Search workflows by keyword, name, description, or tag.
+
+    Searches across built-in workflows, user workflows, and installed collections.
+
+    \b
+    Examples:
+      ofx flow search recon
+      ofx flow search --tag web
+      ofx flow search nmap --tags
+      ofx flow search --tag vuln --tag scan
+    """
+    from pathlib import Path
+
+    import yaml
+    from rich.table import Table
+
+    from ofx.collections import CollectionManager
+    from ofx.commands.ui_helpers import print_warning
+    from ofx.settings import (
+        ALLOWED_WORKFLOW_FILE_EXTENSIONS,
+        BUILTIN_WORKFLOWS_DIR,
+        get_console,
+    )
+
+    console = get_console()
+    filter_tags = {t.lower() for t in tag} if tag else set()
+    search_term = query.lower().strip()
+
+    if not search_term and not filter_tags:
+        print_warning("No Query", "Provide a search term or --tag filter.")
+        raise typer.Exit(code=1)
+
+    # Gather all workflow dirs with source labels
+    sources: list[tuple[Path, str]] = []
+    if BUILTIN_WORKFLOWS_DIR.is_dir():
+        sources.append((BUILTIN_WORKFLOWS_DIR, "builtin"))
+
+    user_dir = Path.home() / ".ofx" / "workflows"
+    if user_dir.is_dir():
+        sources.append((user_dir, "user"))
+
+    manager = CollectionManager()
+    for cname, entry in manager.list_installed().items():
+        cpath = Path(entry.path)
+        if cpath.is_dir():
+            sources.append((cpath, f"collection:{cname}"))
+
+    # Scan and filter
+    results: list[dict] = []
+    seen: set[str] = set()
+
+    for root, source in sources:
+        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            for path in sorted(root.rglob(f"*{ext}")):
+                resolved = str(path.resolve())
+                if resolved in seen:
+                    continue
+                seen.add(resolved)
+
+                try:
+                    data = yaml.safe_load(path.read_text())
+                    if not isinstance(data, dict):
+                        continue
+                except Exception:
+                    continue
+
+                name = str(data.get("name", path.stem))
+                desc = str(data.get("description", "")).strip()
+                tags_list = [str(t).lower() for t in data.get("tags") or [] if t]
+
+                # Tag filter
+                if filter_tags and not filter_tags.intersection(tags_list):
+                    continue
+
+                # Keyword filter
+                if search_term:
+                    searchable = f"{path.stem} {name} {desc} {' '.join(tags_list)}".lower()
+                    if search_term not in searchable:
+                        continue
+
+                try:
+                    category = str(path.relative_to(root).parent)
+                    if category == ".":
+                        category = ""
+                except ValueError:
+                    category = ""
+
+                results.append({
+                    "name": path.stem,
+                    "category": category,
+                    "description": desc.split("\n")[0][:80] if desc else "",
+                    "tags": tags_list,
+                    "source": source,
+                })
+
+    if not results:
+        if search_term and filter_tags:
+            print_warning("No Results", f"No workflows matched '{search_term}' with tags: {', '.join(sorted(filter_tags))}")
+        elif search_term:
+            print_warning("No Results", f"No workflows matched '{search_term}'")
+        else:
+            print_warning("No Results", f"No workflows matched tags: {', '.join(sorted(filter_tags))}")
+        return
+
+    table = Table(title=f"Search Results ({len(results)})", show_lines=False, padding=(0, 1))
+    table.add_column("Workflow", style="cyan bold", no_wrap=True)
+    table.add_column("Description", style="white")
+    if show_tags:
+        table.add_column("Tags", style="dim")
+    table.add_column("Source", style="dim", no_wrap=True)
+
+    for r in sorted(results, key=lambda x: (x["source"], x["category"], x["name"])):
+        wf_name = f"{r['category']}/{r['name']}" if r["category"] else r["name"]
+        row = [wf_name, r["description"]]
+        if show_tags:
+            row.append(", ".join(r["tags"]) if r["tags"] else "")
+        row.append(r["source"])
+        table.add_row(*row)
+
+    console.print(table)
