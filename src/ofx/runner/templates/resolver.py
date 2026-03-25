@@ -1,15 +1,49 @@
 """Template resolver for Jinja2-based workflow templates"""
 
+import json
 import threading
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Template
+from jinja2 import Environment
 from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 
 _resolver_lock = threading.Lock()
+
+
+def _tojson_python(value: Any, indent: int | None = None) -> str:
+    """JSON serialization that outputs Python-compatible literals.
+
+    Replaces JSON ``true``/``false``/``null`` with Python's
+    ``True``/``False``/``None`` so the output can be used directly
+    in inline ``script:`` blocks.
+    """
+    raw = json.dumps(value, indent=indent, default=str)
+    # Replace JSON booleans/null with Python equivalents.
+    # Only replace standalone tokens, not substrings inside strings.
+    # json.dumps quotes string values, so bare true/false/null are safe to replace.
+    raw = raw.replace(": true", ": True")
+    raw = raw.replace(": false", ": False")
+    raw = raw.replace(": null", ": None")
+    raw = raw.replace("[true", "[True")
+    raw = raw.replace("[false", "[False")
+    raw = raw.replace("[null", "[None")
+    raw = raw.replace(", true", ", True")
+    raw = raw.replace(", false", ", False")
+    raw = raw.replace(", null", ", None")
+    return raw
+
+
+def _build_jinja_env() -> Environment:
+    """Create a Jinja2 Environment with Python-safe ``tojson`` filter."""
+    env = Environment(enable_async=True)
+    env.filters["tojson"] = _tojson_python
+    return env
+
+
+_jinja_env = _build_jinja_env()
 
 
 class _StepAccessor(dict):
@@ -87,10 +121,7 @@ class TemplateResolver:
             if len(self._template_cache) >= self._template_cache_max_size:
                 first_key = next(iter(self._template_cache))
                 del self._template_cache[first_key]
-            self._template_cache[value_str] = Template(
-                value_str,
-                enable_async=True,
-            )
+            self._template_cache[value_str] = _jinja_env.from_string(value_str)
 
         template = self._template_cache[value_str]
 
