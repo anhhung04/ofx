@@ -111,6 +111,7 @@ steps:
     retry_delay: 10        # seconds between retries
     timeout: 5             # minutes
     log_stdout: true       # or a file path: log_stdout: "/tmp/scan.log"
+    store-creds: true      # auto-store UserAccount outputs to credential store
     env:
       STEP_VAR: value
     working_directory: /opt
@@ -516,6 +517,12 @@ db = ExegolHistoryDB()
 db.add_credential(username="svc_sql", password="Summer2024!", domain="corp.local")
 db.add_host(ip="10.0.0.1", hostname="dc01", role="Domain Controller")
 ```
+
+### Automatic credential storage from tasks
+Task steps with `store-creds: true` auto-store UserAccount outputs to the credential DB.
+Set at workflow level via `defaults: { store-creds: true }` or per-step.
+Precedence: step > defaults > global `auto_store_creds` setting.
+Tasks producing UserAccount: hydra, netexec, kerbrute, h8mail, enum4linux, brutespray, brutus, holehe, maigret, theharvester.
 
 ### Lateral Movement
 ```python

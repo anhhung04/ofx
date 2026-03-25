@@ -193,6 +193,48 @@ cred = account.to_credential()
 account = UserAccount.from_credential(cred, host="DC01", source="mimikatz")
 ```
 
+### Automatic Credential Storage
+
+Task steps that produce `UserAccount` outputs can automatically store them in the credential store (exegol-history KeePass DB).
+
+**Workflow-level** — enable for all task steps:
+
+```yaml
+defaults:
+  store-creds: true
+
+jobs:
+  brute:
+    steps:
+      - task: hydra          # credentials auto-stored
+        with:
+          target: "{{ inputs.target }}"
+```
+
+**Step-level** — enable or override per step:
+
+```yaml
+steps:
+  - task: hydra
+    store-creds: true         # enable for this step
+    with:
+      target: "{{ inputs.target }}"
+  - task: netexec
+    store-creds: false        # disable even if defaults say true
+    with:
+      target: "{{ inputs.target }}"
+```
+
+**Global** — enable for all workflows via `~/.ofx/config.yml`:
+
+```yaml
+auto_store_creds: true
+```
+
+**Precedence**: step-level `store-creds` > workflow/job `defaults.store-creds` > global `auto_store_creds`.
+
+Duplicate credentials (same username + password + hash + domain) are automatically skipped. The credential store must be available (exegol-history with `~/.exh/DB.kdbx`); if not, the feature silently skips storage.
+
 ---
 
 ## Live Streaming

@@ -68,6 +68,11 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
         for step in job.steps:
             if step.task:
                 result.task_refs.append(step.task)
+            elif step.store_creds is not None:
+                result.warnings.append(
+                    f"Job '{jid}', step '{step.name}': store-creds has no effect "
+                    f"on non-task steps (only applies to 'task:' steps)"
+                )
 
     if not result.has_dispatch and not result.has_call:
         result.warnings.append("No dispatch or call trigger defined")

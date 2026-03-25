@@ -236,3 +236,98 @@ class TestStoreCredsResolution:
         """TaskExecution defaults store_creds to False."""
         model = TaskExecution(task_name="hydra", target="10.0.0.1")
         assert model.store_creds is False
+
+
+class TestDefaultConfigStoreCreds:
+    """Test workflow/job defaults.store-creds field."""
+
+    def test_defaults_store_creds_parses(self):
+        """DefaultConfig accepts store-creds field."""
+        from ofx.models.config import DefaultConfig
+
+        cfg = DefaultConfig.model_validate({"store-creds": True})
+        assert cfg.store_creds is True
+
+    def test_defaults_store_creds_default_false(self):
+        from ofx.models.config import DefaultConfig
+
+        cfg = DefaultConfig()
+        assert cfg.store_creds is False
+
+    def test_workflow_with_defaults_store_creds(self):
+        """Full workflow YAML with defaults.store-creds parses correctly."""
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        data = yaml.safe_load("""
+name: test-creds
+defaults:
+  store-creds: true
+jobs:
+  scan:
+    steps:
+      - task: hydra
+        with:
+          target: "10.0.0.1"
+""")
+        wf = Workflow.model_validate(data)
+        assert wf.defaults.store_creds is True
+
+
+class TestValidateStoreCredsWarning:
+    """Test that validator warns on store-creds for non-task steps."""
+
+    def test_warns_on_store_creds_for_run_step(self, tmp_path):
+        """store-creds on a 'run:' step triggers a warning."""
+        from ofx.commands.flow.validate import _validate_one
+
+        wf = tmp_path / "test.yml"
+        wf.write_text("""
+name: test
+jobs:
+  j1:
+    steps:
+      - name: shell-step
+        run: echo hi
+        store-creds: true
+""")
+        result = _validate_one(wf, check_tasks=False)
+        assert result.valid
+        assert any("store-creds" in w and "non-task" in w for w in result.warnings)
+
+    def test_no_warning_on_store_creds_for_task_step(self, tmp_path):
+        """store-creds on a 'task:' step does NOT trigger a warning."""
+        from ofx.commands.flow.validate import _validate_one
+
+        wf = tmp_path / "test.yml"
+        wf.write_text("""
+name: test
+jobs:
+  j1:
+    steps:
+      - task: hydra
+        store-creds: true
+        with:
+          target: "10.0.0.1"
+""")
+        result = _validate_one(wf, check_tasks=False)
+        assert result.valid
+        assert not any("store-creds" in w for w in result.warnings)
+
+    def test_no_warning_when_store_creds_not_set(self, tmp_path):
+        """No store-creds field → no warning."""
+        from ofx.commands.flow.validate import _validate_one
+
+        wf = tmp_path / "test.yml"
+        wf.write_text("""
+name: test
+jobs:
+  j1:
+    steps:
+      - name: shell-step
+        run: echo hi
+""")
+        result = _validate_one(wf, check_tasks=False)
+        assert result.valid
+        assert not any("store-creds" in w for w in result.warnings)
