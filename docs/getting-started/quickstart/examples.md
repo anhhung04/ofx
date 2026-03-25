@@ -166,7 +166,7 @@ jobs:
       open_ports: "{{ steps['Port scan'].typed_outputs | ports | join(',') }}"
 ```
 
-Available tasks: `nmap`, `nuclei`, `httpx`, `subfinder`, `ffuf`, `feroxbuster`, `katana`, and [many more](../../cli/commands/tasks.md).
+Available tasks: `nmap`, `nuclei`, `httpx`, `subfinder`, `ffuf`, `feroxbuster`, `katana`, and [many more](../../guide/tasks.md).
 
 ---
 
