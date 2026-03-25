@@ -730,3 +730,26 @@ def search(
         table.add_row(*row)
 
     console.print(table)
+
+
+@app.command("diff")
+def diff_cmd(
+    workflow_a: Annotated[
+        str,
+        typer.Argument(help="First workflow name or path", autocompletion=_complete_workflow_names),
+    ],
+    workflow_b: Annotated[
+        str,
+        typer.Argument(help="Second workflow name or path", autocompletion=_complete_workflow_names),
+    ],
+):
+    """Compare two workflows and show structural differences.
+
+    \b
+    Examples:
+      ofx flow diff host-scan port-blitz
+      ofx flow diff recon/subdomain-recon recon/full-recon
+    """
+    from ofx.commands.flow.diff import show_diff
+
+    show_diff(workflow_a, workflow_b)
