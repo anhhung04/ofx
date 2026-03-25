@@ -85,6 +85,9 @@ class WorkflowRunner(BaseRunner[Workflow]):
         # ── Profile resolution ─────────────────────────────────────
         await self._apply_profile()
 
+        # ── CLI time window override ──────────────────────────────
+        self._apply_cli_time_window()
+
         await self.reg_set(
             RunnerRegistryKeys.MODEL, self.model.model_dump(exclude={"jobs", "env"})
         )
@@ -281,6 +284,49 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 ),
             )
             self._time_guard.start()
+
+    def _apply_cli_time_window(self) -> None:
+        """Apply a time window from CLI --time-window flag (HH:MM-HH:MM)."""
+        if self._time_guard or self._is_reused:
+            return  # Profile already set a guard, or this is a reusable workflow
+
+        tw_str = self.ctx.vars.get("_cli_time_window", "")
+        if not tw_str or "-" not in tw_str:
+            return
+
+        parts = tw_str.split("-", 1)
+        if len(parts) != 2:
+            return
+
+        from ofx.profiles.models import TimeWindow
+        from ofx.profiles.time_window import TimeWindowGuard, check_time_window
+
+        window = TimeWindow(
+            enabled=True,
+            start=parts[0].strip(),
+            end=parts[1].strip(),
+            abort_on_expire=True,
+        )
+
+        result = check_time_window(window)
+        if not result["allowed"]:
+            raise RuntimeError(
+                f"Workflow aborted: {result['message']}. "
+                f"CLI --time-window restricts execution to {window.start}–{window.end}."
+            )
+
+        if result["message"]:
+            self._log_warning(result["message"])
+
+        self._time_guard = TimeWindowGuard(
+            window=window,
+            on_warn=lambda msg: self._log_warning(msg),
+            on_abort=lambda msg: self._log_error(
+                f"🛑 {msg} — workflow will be aborted"
+            ),
+        )
+        self._time_guard.start()
+        self._log_info(f"Time window active: {window.start}–{window.end}")
 
     # ── Input processing ───────────────────────────────────────────
 

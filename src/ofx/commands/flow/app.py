@@ -376,6 +376,13 @@ def run(
             help="Show execution plan without running (jobs, stages, inputs, dependencies).",
         ),
     ] = False,
+    time_window: Annotated[
+        str,
+        typer.Option(
+            "--time-window",
+            help="Restrict execution to a time window (HH:MM-HH:MM, e.g. '09:00-17:00').",
+        ),
+    ] = "",
 ):
     if dry_run:
         from ofx.commands.flow.info import show_info
@@ -411,6 +418,7 @@ def run(
             wait_lock=wait_lock,
             project=project,
             events=events,
+            time_window=time_window,
         ).run()
     )
 

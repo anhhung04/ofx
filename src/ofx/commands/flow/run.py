@@ -67,6 +67,7 @@ class FlowRunHandler:
         wait_lock: int = 0,
         project: str = "",
         events: bool = False,
+        time_window: str = "",
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
@@ -82,6 +83,7 @@ class FlowRunHandler:
         self.wait_lock = max(wait_lock, 0)
         self.project_vars: dict[str, str] = {}
         self.events = events
+        self.time_window = time_window
 
         if project:
             self._resolve_project(project)
@@ -151,6 +153,13 @@ class FlowRunHandler:
                 inputs_table(self.input)
 
             durable_overrides = self._durable_overrides()
+
+            # Inject CLI time window into vars for WorkflowRunner
+            run_vars = dict(self.project_vars) if self.project_vars else {}
+            if self.time_window:
+                run_vars["_cli_time_window"] = self.time_window
+                logger.info("Time window: %s", self.time_window)
+
             result = await run_workflow(
                 workflow=self.workflow_name,
                 inputs=self.input,
@@ -159,7 +168,7 @@ class FlowRunHandler:
                 workflow_search_paths=get_workflow_search_dirs(),  # type: ignore
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
-                vars=self.project_vars if self.project_vars else None,
+                vars=run_vars or None,
                 event_sink_path=(self.output / "events.ndjson") if self.events else None,
             )
 

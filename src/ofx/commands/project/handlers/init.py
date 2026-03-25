@@ -33,6 +33,8 @@ ENGAGEMENT_FILE_STRUCTURE = [
     "tools",
     "exploits",
     "post-exploits",
+    "notes",
+    "reports",
 ]
 
 DIRECTORY_STRUCTURE: list[str | tuple[str, list]] = [

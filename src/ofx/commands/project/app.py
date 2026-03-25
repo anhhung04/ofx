@@ -234,6 +234,104 @@ def use(
     settings.active_project = name
     console.print(f"[green]Active project set to:[/] {name} → {resolved}")
 
+@app.command()
+def status(
+    name: Annotated[
+        str,
+        typer.Argument(
+            help="Project name or path (defaults to active project)",
+        ),
+    ] = "",
+):
+    """Show project status and directory summary."""
+    console = get_console()
+    from .project_manager import ProjectManager
+
+    if not name:
+        active = ProjectManager.get_active_path()
+        if not active:
+            print_error(
+                "No Project",
+                "No active project set",
+                details="Use 'ofx project use <name>' or pass a project name",
+            )
+            raise typer.Exit(code=1)
+        project_path = active
+    else:
+        project_path = Path(ProjectManager.resolve_path(name))
+
+    if not project_path.exists():
+        print_error("Not Found", f"Project not found: {project_path}")
+        raise typer.Exit(code=1)
+
+    from rich.panel import Panel
+    from rich.text import Text
+
+    # Count files in key directories
+    dir_stats: list[tuple[str, int]] = []
+    key_dirs = [
+        "hosts", "subdomains", "vulns", "web", "certs", "osint",
+        "evidence", "scans", "scope", "targets", "tools", "exploits",
+        "logs", "post-exploits",
+    ]
+    for d in key_dirs:
+        dp = project_path / d
+        if dp.is_dir():
+            count = sum(1 for f in dp.rglob("*") if f.is_file() and f.name != ".gitkeep")
+            if count > 0:
+                dir_stats.append((d, count))
+
+    # Disk usage
+    total_bytes = sum(f.stat().st_size for f in project_path.rglob("*") if f.is_file())
+    if total_bytes > 1_048_576:
+        size_str = f"{total_bytes / 1_048_576:.1f} MB"
+    elif total_bytes > 1024:
+        size_str = f"{total_bytes / 1024:.1f} KB"
+    else:
+        size_str = f"{total_bytes} B"
+
+    # Git info
+    git_info = ""
+    try:
+        import git as gitlib
+        repo = gitlib.Repo(project_path)
+        branch = repo.active_branch.name
+        dirty = repo.is_dirty()
+        status_str = "[red]dirty[/]" if dirty else "[green]clean[/]"
+        last_commit = ""
+        if repo.head.is_valid():
+            commit = repo.head.commit
+            last_commit = f" — last commit: {commit.committed_datetime.strftime('%Y-%m-%d %H:%M')}"
+        git_info = f"  [dim]Git:[/] {branch} ({status_str}){last_commit}"
+    except Exception:
+        git_info = "  [dim]Git:[/] not initialized"
+
+    # Build display
+    lines = [
+        f"  [bold]Project:[/] {project_path.name}",
+        f"  [dim]Path:[/] {project_path}",
+        f"  [dim]Size:[/] {size_str}",
+        git_info,
+        "",
+    ]
+
+    if dir_stats:
+        lines.append("  [bold cyan]Findings:[/]")
+        for dirname, count in sorted(dir_stats, key=lambda x: -x[1]):
+            bar = "█" * min(count, 30)
+            lines.append(f"    {dirname:<16} {count:>5}  [green]{bar}[/]")
+    else:
+        lines.append("  [dim]No findings yet — run a scan workflow![/]")
+
+    panel = Panel(
+        Text.from_markup("\n".join(lines)),
+        title="[bold]Project Status[/]",
+        border_style="cyan",
+        padding=(1, 2),
+    )
+    console.print(panel)
+
+
 @app.command(hidden=True)
 def encrypt_filter():
     """Git clean filter: Encrypt stdin to stdout (used by git attributes)"""
