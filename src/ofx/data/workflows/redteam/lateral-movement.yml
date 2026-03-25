@@ -31,6 +31,9 @@ dispatch:
       default: smb,ssh,winrm
       description: Comma-separated protocols to test
 
+
+defaults:
+  store-creds: true
 jobs:
   spray-smb:
     name: SMB Access Testing
@@ -42,7 +45,6 @@ jobs:
     if: "{{ 'smb' in inputs.protocols }}"
     steps:
     - task: netexec
-      store-creds: true
       timeout: 15
       name: nxc-smb-test
       with:
@@ -83,7 +85,6 @@ jobs:
     if: "{{ 'winrm' in inputs.protocols }}"
     steps:
     - task: netexec
-      store-creds: true
       timeout: 15
       name: nxc-winrm-test
       with:
@@ -119,7 +120,6 @@ jobs:
     if: "{{ 'ssh' in inputs.protocols }}"
     steps:
     - task: netexec
-      store-creds: true
       timeout: 15
       name: nxc-ssh-test
       with:

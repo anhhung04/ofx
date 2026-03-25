@@ -464,8 +464,13 @@ class StepRunner(BaseRunner[Step]):
     def _resolve_store_creds(self) -> bool:
         """Resolve whether to store credentials from task outputs.
 
-        Step-level ``store-creds`` overrides global ``auto_store_creds``.
+        Precedence: step-level > job/workflow defaults > global setting.
         """
         if self.model.store_creds is not None:
             return self.model.store_creds
+        # Check job/workflow defaults (already merged by JobRunner._pre_run)
+        if self.parent and hasattr(self.parent, "model"):
+            defaults = getattr(self.parent.model, "defaults", None)
+            if defaults and defaults.store_creds:
+                return True
         return settings.auto_store_creds

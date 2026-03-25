@@ -20,6 +20,9 @@ dispatch:
       type: string
       default: ""
       description: Email domain if different from target
+
+defaults:
+  store-creds: true
 jobs:
   domain-intel:
     name: Domain Intelligence
@@ -473,7 +476,6 @@ jobs:
           add_outputs(email_file="/tmp/ofx_extrecon_emails.txt", email_count=len(emails))
           print(f"Harvested {len(emails)} email addresses")
       - task: h8mail
-        store-creds: true
         timeout: 15
         name: breach-search
         with:

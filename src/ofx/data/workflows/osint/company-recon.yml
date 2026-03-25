@@ -16,6 +16,9 @@ dispatch:
       default: ''
       description: Company email domain (auto-detected if empty)
 
+
+defaults:
+  store-creds: true
 jobs:
   domain-intel:
     name: Domain Intelligence
@@ -113,7 +116,6 @@ jobs:
       typed_outputs: '{{ steps["breach-lookup"].outputs.typed_outputs | default("", true) }}'
     steps:
     - task: h8mail
-      store-creds: true
       timeout: 15
       name: breach-lookup
       with:

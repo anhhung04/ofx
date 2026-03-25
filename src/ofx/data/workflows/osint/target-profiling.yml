@@ -20,6 +20,9 @@ dispatch:
       type: string
       default: ""
       description: Specific username to investigate
+
+defaults:
+  store-creds: true
 jobs:
   domain-intel:
     name: Domain Intelligence
@@ -147,7 +150,6 @@ jobs:
       - email-harvest
     steps:
       - task: h8mail
-        store-creds: true
         timeout: 15
         name: h8mail-breach
         with:

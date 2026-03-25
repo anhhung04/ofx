@@ -68,3 +68,12 @@ class DefaultConfig(OFXBaseModel):
             "Provides rate limits, time windows, and tool option overrides."
         ),
     )
+    store_creds: bool = Field(
+        default=False,
+        description=(
+            "Automatically store discovered UserAccount credentials from task "
+            "outputs into the credential store. Can be overridden per-step "
+            "with 'store-creds: true/false'."
+        ),
+        alias="store-creds",
+    )

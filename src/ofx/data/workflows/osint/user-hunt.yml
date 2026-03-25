@@ -13,6 +13,9 @@ dispatch:
       type: string
       description: Username or email address to search
       alias: t
+
+defaults:
+  store-creds: true
 jobs:
   username-hunt:
     name: Username Hunting
@@ -41,7 +44,6 @@ jobs:
       breaches_found: '{{ steps["export-breaches"].outputs.breaches_found | default("", true) }}'
     steps:
     - task: h8mail
-      store-creds: true
       timeout: 15
       name: breach-search
       with:
