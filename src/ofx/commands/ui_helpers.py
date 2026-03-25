@@ -266,7 +266,21 @@ def execution_summary_panel(summary: Any) -> Panel:
             error,
         )
 
-    content = Group(Text.from_markup(f"[bold]Summary:[/bold] {totals}"), table)
+    content_items: list[Any] = [Text.from_markup(f"[bold]Summary:[/bold] {totals}")]
+
+    # Time window info
+    tw = data.get("time_window")
+    if tw:
+        remaining = tw.get("remaining_minutes")
+        tw_label = f"⏰ Time window: {tw['start']}–{tw['end']}"
+        if tw.get("aborted"):
+            tw_label += " [red bold]EXPIRED — aborted[/red bold]"
+        elif remaining is not None:
+            tw_label += f" ({remaining} min remaining)"
+        content_items.append(Text.from_markup(tw_label))
+
+    content_items.append(table)
+    content = Group(*content_items)
     return Panel(
         content,
         title="[bold cyan]Execution Summary[/bold cyan]",

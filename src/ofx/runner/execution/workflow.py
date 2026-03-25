@@ -169,6 +169,20 @@ class WorkflowRunner(BaseRunner[Workflow]):
         reporter = ExecutionSummaryReporter(self)
         summary = await reporter.build()
         unified = await reporter.build_unified()
+
+        # Inject time window metadata if active
+        if self._time_guard:
+            from ofx.profiles.time_window import check_time_window
+
+            tw = self._time_guard._window
+            tw_result = check_time_window(tw)
+            unified["time_window"] = {
+                "start": tw.start,
+                "end": tw.end,
+                "remaining_minutes": tw_result.get("remaining_minutes"),
+                "aborted": self._time_guard.should_abort,
+            }
+
         await self.reg_set(RunnerRegistryKeys.SUMMARY, summary.to_dict())
         await self.reg_set(RunnerRegistryKeys.SUMMARY_UNIFIED, unified)
         # Expose unified summary in outputs for CLI consumption
