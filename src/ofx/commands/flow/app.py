@@ -26,26 +26,55 @@ HELP = "Manage and run workflows in the OFX system"
 
 
 def _complete_workflow_names(incomplete: str) -> list[str]:
-    """Shell completion for workflow names (builtin + user + collections)."""
+    """Shell completion for workflow names, with directory-aware segmented completion.
+
+    Supports ``category/name`` style workflow names by completing one path
+    segment at a time (like file-path completion), which avoids shell
+    issues with ``/`` inside completion values.
+    """
     from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, get_workflow_search_dirs
+
+    # Normalise backslash to forward-slash so Windows paths work too
+    incomplete = incomplete.replace("\\", "/")
+
+    # Split into directory prefix and leaf incomplete part
+    if "/" in incomplete:
+        prefix, _leaf = incomplete.rsplit("/", 1)
+    else:
+        prefix, _leaf = "", incomplete
 
     names: set[str] = set()
 
     for d in get_workflow_search_dirs():
         if not d.is_dir():
             continue
-        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            for path in d.rglob(f"*{ext}"):
-                stem = path.stem
-                if stem.startswith(incomplete):
-                    names.add(stem)
-                # Also suggest category/name
-                try:
-                    rel = str(path.relative_to(d).with_suffix(""))
-                    if rel.startswith(incomplete):
-                        names.add(rel)
-                except ValueError:
-                    pass
+        search_root = d / prefix if prefix else d
+
+        if not search_root.is_dir():
+            continue
+
+        # Offer immediate children: subdirectories (with trailing /)
+        # and workflow files (stem only)
+        for child in search_root.iterdir():
+            if child.name.startswith(".") or child.name.startswith("__"):
+                continue
+            rel_prefix = f"{prefix}/" if prefix else ""
+            if child.is_dir():
+                # Only suggest directories that contain workflow files
+                has_workflows = any(
+                    f.suffix in ALLOWED_WORKFLOW_FILE_EXTENSIONS
+                    for f in child.rglob("*")
+                    if f.is_file()
+                )
+                if not has_workflows:
+                    continue
+                dirname = f"{rel_prefix}{child.name}/"
+                if dirname.startswith(incomplete):
+                    names.add(dirname)
+            elif child.is_file() and child.suffix in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+                wf_name = f"{rel_prefix}{child.stem}"
+                if wf_name.startswith(incomplete):
+                    names.add(wf_name)
 
     return sorted(names)
 
