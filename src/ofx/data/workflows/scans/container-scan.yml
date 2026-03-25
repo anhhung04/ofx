@@ -87,9 +87,7 @@ jobs:
             if by_sev.get(sev):
                 print(f"    {sev}: {by_sev[sev]}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"vuln_count={len(vuln_data)}\n")
-            f.write(f"critical_count={by_sev.get('CRITICAL', 0)}\n")
+        add_outputs(vuln_count=len(vuln_data), critical_count=by_sev.get('CRITICAL', 0))
       log-stdout: true
 
     - name: export-to-project

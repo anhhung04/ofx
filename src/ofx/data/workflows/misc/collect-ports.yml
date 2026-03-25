@@ -42,9 +42,5 @@ jobs:
         svc_lines = [f"{k}\t{v}" for k, v in sorted(services.items())]
         Path(services_path).write_text('\n'.join(svc_lines) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"ports_file={ports_path}\n")
-            f.write(f"services_file={services_path}\n")
-            f.write(f"port_count={len(host_ports)}\n")
-
+        add_outputs(ports_file=ports_path, services_file=services_path, port_count=len(host_ports))
         print(f"Collected {len(host_ports)} unique host:port pairs, {len(services)} with service info")

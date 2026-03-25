@@ -100,8 +100,5 @@ jobs:
           print(f"    proxychains4 -f {conf_file} <command>")
           print(f"    source {env_file} && curl https://check.torproject.org")
 
-          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-              f.write(f"conf_file={conf_file}\n")
-              f.write(f"env_file={env_file}\n")
-              f.write(f"proxy_count={len(proxies)}\n")
+          add_outputs(conf_file=conf_file, env_file=env_file, proxy_count=len(proxies))
         log-stdout: true

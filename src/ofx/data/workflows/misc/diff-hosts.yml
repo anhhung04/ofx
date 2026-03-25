@@ -71,12 +71,5 @@ jobs:
         Path('/tmp/ofx_diff_new.txt').write_text('\n'.join(new_items) + '\n')
         Path('/tmp/ofx_diff_removed.txt').write_text('\n'.join(removed_items) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"new_count={len(new_items)}\n")
-            f.write(f"removed_count={len(removed_items)}\n")
-            f.write(f"unchanged_count={len(unchanged)}\n")
-            f.write(f"new_file=/tmp/ofx_diff_new.txt\n")
-            f.write(f"removed_file=/tmp/ofx_diff_removed.txt\n")
-            f.write(f"baseline_count={len(baseline)}\n")
-            f.write(f"current_count={len(current)}\n")
+        add_outputs(new_count=len(new_items), removed_count=len(removed_items), unchanged_count=len(unchanged), new_file="/tmp/ofx_diff_new.txt", removed_file="/tmp/ofx_diff_removed.txt", baseline_count=len(baseline), current_count=len(current))
       log-stdout: true

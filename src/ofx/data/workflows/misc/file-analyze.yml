@@ -128,10 +128,5 @@ jobs:
         except Exception:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            for k, v in results.items():
-                if isinstance(v, (dict, list)):
-                    f.write(f"{k}={json.dumps(v)}\n")
-                else:
-                    f.write(f"{k}={v}\n")
+        add_outputs(**{k: json.dumps(v) if isinstance(v, (dict, list)) else v for k, v in results.items()})
       log-stdout: true

@@ -54,10 +54,7 @@ jobs:
 
         with open('/tmp/ofx_takeover_subs.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"subs_file=/tmp/ofx_takeover_subs.txt\n")
-            f.write(f"sub_count={len(subs)}\n")
-
+        add_outputs(subs_file="/tmp/ofx_takeover_subs.txt", sub_count=len(subs))
         print(f"Collected {len(subs)} unique subdomains")
   dns-verify:
     name: DNS Resolution & CNAME Check
@@ -93,11 +90,7 @@ jobs:
 
         with open('/tmp/ofx_takeover_alive.txt', 'w') as f:
             f.write('\n'.join(sorted(alive)))
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"alive_file=/tmp/ofx_takeover_alive.txt\n")
-            f.write(f"alive_count={len(alive)}\n")
-            f.write(f"cname_count={len(cname_records)}\n")
-
+        add_outputs(alive_file="/tmp/ofx_takeover_alive.txt", alive_count=len(alive), cname_count=len(cname_records))
         print(f"Alive: {len(alive)}, CNAME records: {len(cname_records)}")
   takeover-check:
     name: Takeover Detection
@@ -143,10 +136,7 @@ jobs:
 
         with open('/tmp/ofx_takeover_findings.txt', 'w') as f:
             f.write('\n'.join(takeovers))
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"takeover_count={len(takeovers)}\n")
-            f.write(f"takeover_findings_file=/tmp/ofx_takeover_findings.txt\n")
-
+        add_outputs(takeover_count=len(takeovers), takeover_findings_file="/tmp/ofx_takeover_findings.txt")
         print(f"Takeover vulnerabilities: {len(takeovers)}")
         for t in takeovers:
             print(f"  [!] {t}")

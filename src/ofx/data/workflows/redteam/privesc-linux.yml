@@ -121,10 +121,7 @@ jobs:
             for name, output in checks.items():
                 f.write(f"=== {name.upper()} ===\n{output}\n\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"enum_file={out_file}\n")
-            f.write(f"finding_count={len(findings)}\n")
-
+        add_outputs(enum_file=out_file, finding_count=len(findings))
         print("=" * 50)
         print(f" PRIVESC ENUM: {{ inputs.target }}")
         print("=" * 50)

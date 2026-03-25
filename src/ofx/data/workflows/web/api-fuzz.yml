@@ -83,9 +83,7 @@ jobs:
                           except Exception:
                               pass
 
-                  with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                      f.write(f"finding_count={len(findings)}\n")
-
+                  add_outputs(finding_count=len(findings))
                   for finding in findings:
                       print(f"\n  {finding}")
               log-stdout: true
@@ -150,9 +148,7 @@ jobs:
                   except Exception as e:
                       print(f"Error: {e}")
 
-                  with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                      f.write(f"header_finding_count={len(findings)}\n")
-
+                  add_outputs(header_finding_count=len(findings))
                   for finding in findings:
                       print(f"  {finding}")
               log-stdout: true

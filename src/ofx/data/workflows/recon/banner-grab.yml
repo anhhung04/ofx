@@ -46,10 +46,7 @@ jobs:
         for p in sorted(open_ports):
             print(f"    {p}/tcp open")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"open_ports={json.dumps(sorted(open_ports))}\n")
-            f.write(f"port_count={len(open_ports)}\n")
-
+        add_outputs(open_ports=json.dumps(sorted(open_ports)), port_count=len(open_ports))
   banners:
     name: Banner Grab
     needs: [portscan]
@@ -70,9 +67,7 @@ jobs:
 
         if not open_ports:
             print("[-] No open ports to banner grab")
-            with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-                f.write("banners_file=\n")
-                f.write("service_count=0\n")
+            add_outputs(banners_file="", service_count="0")
             raise SystemExit(0)
 
         print(f"[*] Grabbing banners for {len(open_ports)} ports on {target}...")
@@ -98,10 +93,7 @@ jobs:
         with open(out_file, "w") as f:
             json.dump(services, f, indent=2)
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"banners_file={out_file}\n")
-            f.write(f"service_count={len(services)}\n")
-
+        add_outputs(banners_file=out_file, service_count=len(services))
   summary:
     name: Service Summary
     needs: [portscan, banners]

@@ -133,10 +133,5 @@ jobs:
                 continue
             print(f"  {key}: {val}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            for key, val in results.items():
-                if isinstance(val, (list, dict)):
-                    f.write(f"{key}={json.dumps(val)}\n")
-                else:
-                    f.write(f"{key}={val}\n")
+        add_outputs(**{k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in results.items()})
       log-stdout: true

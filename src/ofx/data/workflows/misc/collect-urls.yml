@@ -40,8 +40,5 @@ jobs:
         out_path = '/tmp/ofx_collected_urls.txt'
         Path(out_path).write_text('\n'.join(sorted(urls)) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"urls_file={out_path}\n")
-            f.write(f"url_count={len(urls)}\n")
-
+        add_outputs(urls_file=out_path, url_count=len(urls))
         print(f"Collected {len(urls)} unique URLs")

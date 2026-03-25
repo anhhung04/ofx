@@ -57,10 +57,7 @@ jobs:
         if len(raw_list) > 20:
             print(f"    ... ({len(raw_list) - 20} more)")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"raw_file={out_file}\n")
-            f.write(f"raw_count={len(raw_list)}\n")
-
+        add_outputs(raw_file=out_file, raw_count=len(raw_list))
   deduplicate:
     name: Parse & Deduplicate
     needs: [search]
@@ -112,11 +109,7 @@ jobs:
         print(f"[+] Deduplicated: {len(raw_list)} -> {len(deduped)} ({removed} duplicates removed)")
         print(f"    Unique hosts: {len(hosts)}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"dedup_file={dedup_file}\n")
-            f.write(f"dedup_count={len(deduped)}\n")
-            f.write(f"hosts_file={hosts_file}\n")
-
+        add_outputs(dedup_file=dedup_file, dedup_count=len(deduped), hosts_file=hosts_file)
   report:
     name: Summary Report
     needs: [search, deduplicate]

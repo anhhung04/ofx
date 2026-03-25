@@ -46,11 +46,7 @@ jobs:
         print(f"[+] Domain:        {client.domain}")
         print(f"[+] Tracking flag: {flag}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"callback_url={url}\n")
-            f.write(f"callback_flag={flag}\n")
-            f.write(f"callback_domain={client.domain}\n")
-
+        add_outputs(callback_url=url, callback_flag=flag, callback_domain=client.domain)
   inject:
     name: Inject Payloads
     needs: [setup]
@@ -147,10 +143,7 @@ jobs:
         print("[*] Waiting 15s for OOB callbacks to register ...")
         time.sleep(15)
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"injection_count={sent}\n")
-            f.write(f"payloads_file={out_file}\n")
-
+        add_outputs(injection_count=sent, payloads_file=out_file)
   verify:
     name: Verify Callbacks
     needs: [setup, inject]

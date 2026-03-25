@@ -48,11 +48,8 @@ jobs:
         except FileNotFoundError:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"commix_vuln_count={len(vulns)}\n")
-            for v in vulns:
-                f.write(f"commix_vuln_param={v['parameter']}\n")
-
+        for v in vulns:
+        add_outputs(commix_vuln_count=len(vulns), commix_vuln_param=v['parameter'])
         print(f"Commix: {len(vulns)} injectable parameters found")
         for v in vulns:
             print(f"  [!] Parameter: {v['parameter']}")
@@ -74,9 +71,7 @@ jobs:
 
         nuclei_vulns = {{ vulns(steps["nuclei-cmdi"].outputs.typed_outputs) | tojson }}
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"nuclei_vuln_count={len(nuclei_vulns)}\n")
-
+        add_outputs(nuclei_vuln_count=len(nuclei_vulns))
         print(f"Nuclei RCE findings: {len(nuclei_vulns)}")
         for v in nuclei_vulns:
             name = v.get('name', v.get('template_id', 'unknown'))

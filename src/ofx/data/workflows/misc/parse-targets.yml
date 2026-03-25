@@ -50,8 +50,5 @@ jobs:
         out_path = '/tmp/ofx_parsed_targets.txt'
         Path(out_path).write_text('\n'.join(sorted_targets) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"targets_file={out_path}\n")
-            f.write(f"target_count={len(sorted_targets)}\n")
-
+        add_outputs(targets_file=out_path, target_count=len(sorted_targets))
         print(f"Parsed {len(sorted_targets)} unique targets")

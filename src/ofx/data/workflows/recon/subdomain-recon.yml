@@ -80,9 +80,7 @@ jobs:
               f.write('\n'.join(sorted(all_subs)))
 
           print(f"Found {len(all_subs)} unique subdomains")
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"subdomain_file=/tmp/subdomains.txt\n")
-              f.write(f"subdomain_count={len(all_subs)}\n")
+          add_outputs(subdomain_file="/tmp/subdomains.txt", subdomain_count=len(all_subs))
   dns-verification:
     name: DNS Verification
     outputs:
@@ -124,8 +122,7 @@ jobs:
           for item in typed:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   live.append(item['url'])
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+          add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
   takeover-check:
     name: Subdomain Takeover & Vulnerability Check
     outputs:

@@ -38,8 +38,7 @@ jobs:
         typed = {{ steps["probe-url"].outputs.typed_outputs | default([], true) | tojson }}
         live = [item["url"] for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0]
         result = live[0] if live else '{{ inputs.target }}'
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_url=' + result + '\n')
+        add_outputs(live_url="' + result + '")
   param-discovery:
     name: Parameter Discovery
     needs:
@@ -65,10 +64,7 @@ jobs:
             if item.get('_type') == 'tag':
                 params.add(item.get('value', ''))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"found_params={','.join(sorted(params))}\n")
-            f.write(f"param_count={len(params)}\n")
-
+        add_outputs(found_params=','.join(sorted(params)), param_count=len(params))
         print(f"Discovered {len(params)} parameters")
   param-fuzz:
     name: Parameter Value Fuzzing

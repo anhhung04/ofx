@@ -56,10 +56,7 @@ jobs:
         with open('/tmp/ofx_urlcrawl_urls.txt', 'w') as tf:
             tf.write('\n'.join(sorted(urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"crawled_file=/tmp/ofx_urlcrawl_urls.txt\n")
-            f.write(f"url_count={len(urls)}\n")
-
+        add_outputs(crawled_file="/tmp/ofx_urlcrawl_urls.txt", url_count=len(urls))
         print(f"Crawled {len(urls)} unique URLs")
   probe:
     name: HTTP Probe
@@ -85,11 +82,9 @@ jobs:
         for item in typed:
             if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                 live.append(item["url"])
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
         count = sum(1 for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0)
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_count=' + str(count) + '\n')
+        add_outputs(live_count="' + str(count) + '")
   secrets:
     name: Secret Hunting
     needs:

@@ -33,10 +33,7 @@ jobs:
         script: |
           nikto_vulns = {{ vulns(steps["nikto-scan"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"nikto_findings_file=\n")
-              f.write(f"nikto_count={len(nikto_vulns)}\n")
-
+          add_outputs(nikto_findings_file="", nikto_count=len(nikto_vulns))
           print(f"Nikto found {len(nikto_vulns)} items")
   nuclei-web:
     name: Nuclei Web Scan

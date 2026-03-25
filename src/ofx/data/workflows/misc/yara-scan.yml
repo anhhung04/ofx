@@ -137,10 +137,7 @@ jobs:
         except Exception as e:
             print(f"[-] Error: {e}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"match_count={len(findings)}\n")
-            f.write(f"rules_used={rules_found}\n")
-
+        add_outputs(match_count=len(findings), rules_used=rules_found)
         print(f"\n  Matches: {len(findings)}")
         if not findings:
             print("  No matches found")

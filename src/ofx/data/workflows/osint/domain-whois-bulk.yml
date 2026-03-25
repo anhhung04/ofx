@@ -68,7 +68,5 @@ jobs:
         out_file = '/tmp/ofx_whois_bulk.json'
         Path(out_file).write_text(json.dumps(results, indent=2))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"results_file={out_file}\n")
-            f.write(f"domain_count={len(results)}\n")
+        add_outputs(results_file=out_file, domain_count=len(results))
       log-stdout: true

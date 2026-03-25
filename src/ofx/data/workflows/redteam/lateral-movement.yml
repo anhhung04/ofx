@@ -69,12 +69,7 @@ jobs:
         admin_file = '/tmp/ofx_lateral_smb_admin.txt'
         Path(admin_file).write_text('\n'.join(sorted(admin_hosts)) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"smb_accessible={len(accessible)}\n")
-            f.write(f"smb_admin={len(admin_hosts)}\n")
-            f.write(f"smb_file={smb_file}\n")
-            f.write(f"smb_admin_file={admin_file}\n")
-
+        add_outputs(smb_accessible=len(accessible), smb_admin=len(admin_hosts), smb_file=smb_file, smb_admin_file=admin_file)
         print(f"[+] SMB: {len(accessible)} accessible, {len(admin_hosts)} with admin")
         for h in sorted(admin_hosts):
             print(f"    [ADMIN] {h}")
@@ -109,10 +104,7 @@ jobs:
         winrm_file = '/tmp/ofx_lateral_winrm.txt'
         Path(winrm_file).write_text('\n'.join(sorted(accessible)) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"winrm_accessible={len(accessible)}\n")
-            f.write(f"winrm_file={winrm_file}\n")
-
+        add_outputs(winrm_accessible=len(accessible), winrm_file=winrm_file)
         print(f"[+] WinRM: {len(accessible)} accessible hosts")
         for h in sorted(accessible):
             print(f"    {h}")
@@ -146,10 +138,7 @@ jobs:
         ssh_file = '/tmp/ofx_lateral_ssh.txt'
         Path(ssh_file).write_text('\n'.join(sorted(accessible)) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"ssh_accessible={len(accessible)}\n")
-            f.write(f"ssh_file={ssh_file}\n")
-
+        add_outputs(ssh_accessible=len(accessible), ssh_file=ssh_file)
         print(f"[+] SSH: {len(accessible)} accessible hosts")
         for h in sorted(accessible):
             print(f"    {h}")
@@ -204,11 +193,7 @@ jobs:
             for host, info in sorted(pivot_results.items()):
                 f.write(f"{host}\t{info.get('protocol')}\t{info.get('user', '')}\t{info.get('hostname', '')}\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"pivot_count={len(pivot_results)}\n")
-            f.write(f"pivot_file={pivot_file}\n")
-            f.write(f"total_accessible={len(all_hosts)}\n")
-
+        add_outputs(pivot_count=len(pivot_results), pivot_file=pivot_file, total_accessible=len(all_hosts))
         print(f"[+] Pivot enumeration: {len(pivot_results)} hosts tested")
         for host, info in sorted(pivot_results.items()):
             if info.get('protocol') != 'failed':

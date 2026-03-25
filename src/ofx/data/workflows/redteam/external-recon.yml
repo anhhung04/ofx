@@ -49,9 +49,7 @@ jobs:
 
           whois_data = {{ steps["whois-lookup"].outputs.typed_outputs | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"domain_intel=complete\n")
-
+          add_outputs(domain_intel="complete")
           print("Domain intelligence gathering complete")
   subdomain-enum:
     name: Subdomain Enumeration
@@ -106,10 +104,7 @@ jobs:
           with open('/tmp/ofx_ext_subs.txt', 'w') as f:
               f.write(sub_list)
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"subs_file=/tmp/ofx_ext_subs.txt\n")
-              f.write(f"sub_count={len(subs)}\n")
-
+          add_outputs(subs_file="/tmp/ofx_ext_subs.txt", sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains")
   dns-verify:
     name: DNS Verification
@@ -142,10 +137,7 @@ jobs:
           with open('/tmp/ofx_ext_alive.txt', 'w') as f:
               f.write('\n'.join(sorted(alive)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"alive_file=/tmp/ofx_ext_alive.txt\n")
-              f.write(f"alive_count={len(alive)}\n")
-
+          add_outputs(alive_file="/tmp/ofx_ext_alive.txt", alive_count=len(alive))
           print(f"Verified {len(alive)} alive subdomains")
   port-scan:
     name: Port Scanning
@@ -183,13 +175,9 @@ jobs:
                       ports.add(f"{host}:{port}")
                       hosts.add(host)
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              open('/tmp/ofx_extrecon_ports.txt', 'w').write('\n'.join(sorted(ports)))
-              f.write(f"ports_file=/tmp/ofx_extrecon_ports.txt\n")
-              f.write(f"port_count={len(ports)}\n")
-              open('/tmp/ofx_extrecon_porthosts.txt', 'w').write('\n'.join(sorted(hosts)))
-              f.write(f"port_hosts_file=/tmp/ofx_extrecon_porthosts.txt\n")
-
+          open('/tmp/ofx_extrecon_ports.txt', 'w').write('\n'.join(sorted(ports)))
+          open('/tmp/ofx_extrecon_porthosts.txt', 'w').write('\n'.join(sorted(hosts)))
+          add_outputs(ports_file="/tmp/ofx_extrecon_ports.txt", port_count=len(ports), port_hosts_file="/tmp/ofx_extrecon_porthosts.txt")
           print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
   http-probe:
     name: HTTP Probing
@@ -216,11 +204,9 @@ jobs:
           for item in typed:
               if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                   live.append(item["url"])
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+          add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
           count = sum(1 for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0)
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write('live_count=' + str(count) + '\n')
+          add_outputs(live_count="' + str(count) + '")
   web-fingerprint:
     name: Web Fingerprinting
     outputs:
@@ -263,11 +249,8 @@ jobs:
               if item.get('waf') or item.get('name'):
                   waf_names.append(item.get('waf') or item.get('name', 'unknown'))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"tech_count={len(techs)}\n")
-              open('/tmp/ofx_extrecon_waf.txt', 'w').write('\n'.join(waf_names) if waf_names else 'none')
-              f.write(f"waf_detected_file=/tmp/ofx_extrecon_waf.txt\n")
-
+          open('/tmp/ofx_extrecon_waf.txt', 'w').write('\n'.join(waf_names) if waf_names else 'none')
+          add_outputs(tech_count=len(techs), waf_detected_file="/tmp/ofx_extrecon_waf.txt")
           print(f"Technologies: {len(techs)}, WAFs: {len(waf_names)}")
   web-crawl:
     name: Web Crawling
@@ -338,11 +321,8 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              open('/tmp/ofx_extrecon_crawled.txt', 'w').write('\n'.join(sorted(urls)))
-              f.write(f"crawled_file=/tmp/ofx_extrecon_crawled.txt\n")
-              f.write(f"crawl_count={len(urls)}\n")
-
+          open('/tmp/ofx_extrecon_crawled.txt', 'w').write('\n'.join(sorted(urls)))
+          add_outputs(crawled_file="/tmp/ofx_extrecon_crawled.txt", crawl_count=len(urls))
           print(f"Crawled {len(urls)} unique URLs")
   takeover-check:
     name: Subdomain Takeover Check
@@ -368,9 +348,7 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"takeover_count={len(takeovers)}\n")
-
+          add_outputs(takeover_count=len(takeovers))
           print(f"Potential takeovers: {len(takeovers)}")
   secret-hunt:
     name: Secret Hunting
@@ -400,9 +378,7 @@ jobs:
           gl_vulns = {{ vulns(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
           total = len(th_vulns) + len(gl_vulns)
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"secrets_count={total}\n")
-
+          add_outputs(secrets_count=total)
           print(f"Found {total} secrets/leaks")
   vuln-scan:
     name: Vulnerability Scanning
@@ -461,14 +437,7 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"vuln_count={len(nuclei_vulns)}\n")
-              f.write(f"critical_count={len(critical)}\n")
-              f.write(f"high_count={len(high)}\n")
-              f.write(f"medium_count={len(medium)}\n")
-              f.write(f"nikto_count={len(nikto_vulns)}\n")
-              f.write(f"crlf_count={crlf_count}\n")
-
+          add_outputs(vuln_count=len(nuclei_vulns), critical_count=len(critical), high_count=len(high), medium_count=len(medium), nikto_count=len(nikto_vulns), crlf_count=crlf_count)
           print(f"Nuclei: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
           print(f"Nikto: {len(nikto_vulns)}")
           print(f"CRLF injections: {crlf_count}")
@@ -501,10 +470,7 @@ jobs:
           email_list = '\n'.join(sorted(emails))
           open('/tmp/ofx_extrecon_emails.txt', 'w').write(email_list)
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"email_file=/tmp/ofx_extrecon_emails.txt\n")
-              f.write(f"email_count={len(emails)}\n")
-
+          add_outputs(email_file="/tmp/ofx_extrecon_emails.txt", email_count=len(emails))
           print(f"Harvested {len(emails)} email addresses")
       - task: h8mail
         timeout: 15
@@ -518,9 +484,7 @@ jobs:
 
           breach_results = {{ users(steps["breach-search"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"breach_count={len(breach_results)}\n")
-
+          add_outputs(breach_count=len(breach_results))
           print(f"Breach results: {len(breach_results)}")
   summary:
     name: External Recon Summary

@@ -106,12 +106,7 @@ jobs:
             preview = encoded[:80] + '...' if len(encoded) > 80 else encoded
             print(f"  [{name}] {preview}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"encoded={primary}\n")
-            f.write(f"format={fmt}\n")
-            f.write(f"original_size={len(raw)}\n")
-            f.write(f"encoded_size={len(primary)}\n")
-
+        add_outputs(encoded=primary, format=fmt, original_size=len(raw), encoded_size=len(primary))
         # Save all formats
         out_dir = Path('/tmp/ofx_payloads')
         out_dir.mkdir(exist_ok=True)

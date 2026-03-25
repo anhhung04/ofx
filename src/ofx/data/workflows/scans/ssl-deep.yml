@@ -119,11 +119,7 @@ jobs:
                 if version in ('SSLv2', 'SSLv3', 'TLSv1', 'TLSv1.1'):
                     findings.append(f'[HIGH] Outdated protocol: {version}')
 
-            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                f.write(f"version={version}\n")
-                f.write(f"cipher={cipher[0] if cipher else 'unknown'}\n")
-                f.write(f"finding_count={len(findings)}\n")
-
+            add_outputs(version=version, cipher=cipher[0] if cipher else 'unknown', finding_count=len(findings))
         except Exception as e:
             print(f"  Connection error: {e}")
             findings.append(f'[ERROR] Cannot connect: {e}')

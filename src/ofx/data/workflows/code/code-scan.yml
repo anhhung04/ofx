@@ -48,10 +48,7 @@ jobs:
                 seen.add(vid)
                 unique.append(v)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"vuln_count={len(unique)}\n")
-            f.write(f"critical_count={len([v for v in unique if v.get('severity') == 'critical'])}\n")
-
+        add_outputs(vuln_count=len(unique), critical_count=len([v for v in unique if v.get('severity') == 'critical']))
         print(f"Found {len(unique)} unique vulnerabilities")
   secrets-scan:
     name: Secret & Leak Scanning
@@ -79,9 +76,7 @@ jobs:
         th_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
         total = len(gl_vulns) + len(th_vulns)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"secrets_count={total}\n")
-
+        add_outputs(secrets_count=total)
         print(f"Found {total} secrets/leaks")
   summary:
     name: Code Scan Summary

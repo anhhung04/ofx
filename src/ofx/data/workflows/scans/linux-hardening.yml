@@ -134,12 +134,8 @@ jobs:
         print(f"  {services[:500]}")
 
         # Summary
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
-            f.write(f"passed_count={len(passed)}\n")
-            score = max(0, 100 - (len(findings) * 8))
-            f.write(f"score={score}\n")
-
+        score = max(0, 100 - (len(findings) * 8))
+        add_outputs(finding_count=len(findings), passed_count=len(passed), score=score)
         print(f"\n{'=' * 50}")
         print(f" Score: {score}/100 | Passed: {len(passed)} | Findings: {len(findings)}")
         print(f"{'=' * 50}")

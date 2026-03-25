@@ -88,12 +88,7 @@ jobs:
           with open('/tmp/ofx_portblitz_hosts.txt', 'w') as tf:
               tf.write('\n'.join(all_hosts))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"hosts_file=/tmp/ofx_portblitz_hosts.txt\n")
-              f.write(f"merged_ports={port_csv}\n")
-              f.write(f"host_count={len(all_hosts)}\n")
-              f.write(f"port_count={len(all_ports)}\n")
-
+          add_outputs(hosts_file="/tmp/ofx_portblitz_hosts.txt", merged_ports=port_csv, host_count=len(all_hosts), port_count=len(all_ports))
           print(f"Merged {len(all_ports)} unique ports across {len(all_hosts)} hosts")
   service-detect:
     name: Service Fingerprinting
@@ -166,13 +161,7 @@ jobs:
           with open('/tmp/ofx_portblitz_urls.txt', 'w') as tf:
               tf.write('\n'.join(live_urls))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"service_count={len(services)}\n")
-              f.write(f"live_urls_file=/tmp/ofx_portblitz_urls.txt\n")
-              f.write(f"http_count={len(live_urls)}\n")
-              f.write(f"vuln_count={len(nmap_vulns)}\n")
-              f.write(f"exploit_count={len(exploits)}\n")
-
+          add_outputs(service_count=len(services), live_urls_file="/tmp/ofx_portblitz_urls.txt", http_count=len(live_urls), vuln_count=len(nmap_vulns), exploit_count=len(exploits))
           print(f"Services: {len(services)}, HTTP: {len(live_urls)}, Vulns: {len(nmap_vulns)}, Exploits: {len(exploits)}")
   summary:
     name: Port Blitz Summary

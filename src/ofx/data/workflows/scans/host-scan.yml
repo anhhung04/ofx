@@ -90,8 +90,7 @@ jobs:
           for item in typed:
               if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                   live.append(item["url"])
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+          add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
   web-analysis:
     name: Web Analysis
     outputs:

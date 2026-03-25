@@ -50,10 +50,7 @@ jobs:
           sub_count = len(subs)
           records = {{ records(steps["dnsx-resolve"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"sub_count={sub_count}\n")
-              f.write(f"record_count={len(records)}\n")
-
+          add_outputs(sub_count=sub_count, record_count=len(records))
           print(f"Subdomains: {sub_count}, DNS records: {len(records)}")
   email-harvest:
     name: Email Harvesting
@@ -92,10 +89,7 @@ jobs:
           with open('/tmp/harvested-emails.txt', 'w') as f:
               f.write(email_list)
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"emails={email_list}\n")
-              f.write(f"email_count={len(emails)}\n")
-
+          add_outputs(emails=email_list, email_count=len(emails))
           print(f"Harvested {len(emails)} email addresses")
   account-check:
     name: Account Verification
@@ -120,10 +114,7 @@ jobs:
               if a.get('host'):
                   services.add(a['host'])
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"account_count={len(accounts)}\n")
-              f.write(f"services_with_accounts={','.join(sorted(services))}\n")
-
+          add_outputs(account_count=len(accounts), services_with_accounts=','.join(sorted(services)))
           print(f"Email registered on {len(services)} services")
   social-recon:
     name: Social Media & Username Search
@@ -145,10 +136,7 @@ jobs:
               if s.get('host'):
                   platforms.add(s['host'])
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"social_count={len(social)}\n")
-              f.write(f"platforms={','.join(sorted(platforms))}\n")
-
+          add_outputs(social_count=len(social), platforms=','.join(sorted(platforms)))
           print(f"Found {len(social)} social accounts across {len(platforms)} platforms")
   breach-search:
     name: Breach Database Search
@@ -172,10 +160,7 @@ jobs:
               if b.get('username'):
                   breached_emails.add(b['username'])
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"breach_count={len(breach_data)}\n")
-              f.write(f"breached_emails={len(breached_emails)}\n")
-
+          add_outputs(breach_count=len(breach_data), breached_emails=len(breached_emails))
           print(f"Breach entries: {len(breach_data)} for {len(breached_emails)} emails")
   secret-scan:
     name: Secret & Leak Scanning

@@ -85,10 +85,7 @@ jobs:
                 except Exception:
                     pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"exploitable_count={len(exploitable)}\n")
-            f.write(f"exploitable_data={json.dumps(exploitable)}\n")
-
+        add_outputs(exploitable_count=len(exploitable), exploitable_data=json.dumps(exploitable))
         print(f"[+] {len(exploitable)} vulnerabilities have public exploits:\n")
         for e in exploitable:
             print(f"  [{e['severity'].upper()}] {e['cve']} — {e['vuln_name'][:60]}")
@@ -171,11 +168,7 @@ jobs:
             for v in unique:
                 f.write(f"[{v.get('severity', '?').upper()}] {v.get('name', '?')} — {v.get('host', '?')}\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"vuln_count={len(unique)}\n")
-            f.write(f"critical_count={by_severity.get('CRITICAL', 0)}\n")
-            f.write(f"high_count={by_severity.get('HIGH', 0)}\n")
-            f.write(f"report_file={report_file}\n")
+        add_outputs(vuln_count=len(unique), critical_count=by_severity.get('CRITICAL', 0), high_count=by_severity.get('HIGH', 0), report_file=report_file)
       log-stdout: true
     - name: export-to-project
       script: |

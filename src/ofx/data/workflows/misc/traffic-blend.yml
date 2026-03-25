@@ -105,8 +105,5 @@ jobs:
 
           print(f"\n[+] Sample headers saved to {out_file}")
 
-          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-              f.write(f"headers_file={out_file}\n")
-              f.write(f"agent_count={len(agents)}\n")
-              f.write(f"sample_count={count}\n")
+          add_outputs(headers_file=out_file, agent_count=len(agents), sample_count=count)
         log-stdout: true

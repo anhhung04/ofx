@@ -52,9 +52,7 @@ jobs:
             ver = json.loads(proc.stdout)
             print(f"  Server: {ver.get('serverVersion', {}).get('gitVersion', '?')}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write("cluster_reachable=true\n")
-
+        add_outputs(cluster_reachable="true")
   rbac-audit:
     name: RBAC Audit
     needs: [cluster-info]
@@ -98,10 +96,7 @@ jobs:
             sa_with_tokens = [sa for sa in sas if sa.get('secrets')]
             print(f"\n[+] ServiceAccounts: {len(sas)} ({len(sa_with_tokens)} with tokens)")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
-            f.write(f"admin_binding_count={len(admin_bindings) if proc.returncode == 0 else 0}\n")
-
+        add_outputs(finding_count=len(findings), admin_binding_count=len(admin_bindings) if proc.returncode == 0 else 0)
         for finding in findings:
             print(f"  {finding}")
       continue-on-error: true
@@ -170,11 +165,7 @@ jobs:
             non_sa = [s for s in secrets if s.get('type') not in ('kubernetes.io/service-account-token', 'kubernetes.io/dockerconfigjson')]
             print(f"\n[+] Secrets: {len(secrets)} ({len(non_sa)} non-default)")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"pod_count={len(pods) if proc.returncode == 0 else 0}\n")
-            f.write(f"privileged_count={len(privileged)}\n")
-            f.write(f"finding_count={len(findings)}\n")
-
+        add_outputs(pod_count=len(pods) if proc.returncode == 0 else 0, privileged_count=len(privileged), finding_count=len(findings))
         for finding in findings:
             print(f"  {finding}")
       continue-on-error: true

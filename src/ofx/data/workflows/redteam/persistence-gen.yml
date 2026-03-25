@@ -138,8 +138,5 @@ jobs:
                       else:
                           print(f"    {cmds}")
 
-                  with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-                      f.write(f"commands_file={out_file}\n")
-                      f.write(f"command_count={total_cmds}\n")
-                      f.write(f"methods={json.dumps(list(commands.keys()))}\n")
+                  add_outputs(commands_file=out_file, command_count=total_cmds, methods=json.dumps(list(commands.keys())))
               log-stdout: true

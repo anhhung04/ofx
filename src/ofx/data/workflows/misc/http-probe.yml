@@ -87,11 +87,7 @@ jobs:
         alive = [r for r in results if r.get("status", 0) > 0]
         print(f"\n[+] Probed {len(results)} targets, {len(alive)} alive")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"results_file={out_file}\n")
-            f.write(f"total_probed={len(results)}\n")
-            f.write(f"alive_count={len(alive)}\n")
-
+        add_outputs(results_file=out_file, total_probed=len(results), alive_count=len(alive))
   classify:
     name: Classify Responses
     needs: [probe]
@@ -158,9 +154,5 @@ jobs:
 
         print(f"\n  Alive hosts saved to: {alive_file}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"alive_file={alive_file}\n")
-            f.write(f"alive_count={len(alive)}\n")
-            f.write(f"redirect_count={len(redirects)}\n")
-            f.write(f"auth_count={len(auth_required)}\n")
+        add_outputs(alive_file=alive_file, alive_count=len(alive), redirect_count=len(redirects), auth_count=len(auth_required))
       log-stdout: true

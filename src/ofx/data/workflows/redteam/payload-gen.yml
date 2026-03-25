@@ -109,8 +109,5 @@ jobs:
         print(f"\n--- Preview (first 200 chars) ---")
         print(content[:200])
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"payload_file={out_path}\n")
-            f.write(f"payload_type={ptype}\n")
-            f.write(f"payload_size={len(content)}\n")
+        add_outputs(payload_file=out_path, payload_type=ptype, payload_size=len(content))
       log-stdout: true

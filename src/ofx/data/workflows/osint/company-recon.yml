@@ -81,10 +81,7 @@ jobs:
         out = '/tmp/ofx_company_emails.txt'
         Path(out).write_text('\n'.join(sorted(emails)) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"emails_file={out}\n")
-            f.write(f"email_count={len(emails)}\n")
-
+        add_outputs(emails_file=out, email_count=len(emails))
         print(f"[+] Collected {len(emails)} emails")
         for e in sorted(emails)[:20]:
             print(f"    {e}")

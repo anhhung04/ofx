@@ -193,6 +193,13 @@ echo "found_hosts=10.0.0.1,10.0.0.2" >> $OFX_OUTPUTS
 echo "json_data=$(cat results.json | base64 -w0)" >> $OFX_OUTPUTS
 ```
 
+## Output capture (Python script steps)
+
+```python
+# Use the built-in add_outputs() helper
+add_outputs(found_hosts="10.0.0.1,10.0.0.2", count=len(results))
+```
+
 Reference in later steps/jobs:
 ```yaml
 {{ steps.0.outputs.found_hosts }}           # step by index (0-based)
@@ -576,7 +583,7 @@ understand, configure, and use OFX for offensive operations.
 - Jobs: `needs`, `if`, `strategy`, `cloud`, `env`, `outputs`, `defaults`, `steps`
 - Steps: exactly one of `run`, `script`, `script_file`, `uses`, `task`
 - Step fields use underscores: `continue_on_error`, `retry_delay`, `working_directory`, `log_stdout`
-- Output capture: `echo "key=val" >> $OFX_OUTPUTS`; ref as `{{ steps.N.outputs.key }}` or `{{ jobs.id.outputs.key }}`
+- Output capture: shell `echo "key=val" >> $OFX_OUTPUTS`; python `add_outputs(key=val)`; ref as `{{ steps.N.outputs.key }}` or `{{ jobs.id.outputs.key }}`
 
 ### Task system (56 built-in tool wrappers)
 Use `task:` + `with:` for built-in security tools with structured output parsing.

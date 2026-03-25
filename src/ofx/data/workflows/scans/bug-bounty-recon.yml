@@ -66,10 +66,7 @@ jobs:
         with open('/tmp/ofx_bb_subs.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"subs_file=/tmp/ofx_bb_subs.txt\n")
-            f.write(f"sub_count={len(subs)}\n")
-
+        add_outputs(subs_file="/tmp/ofx_bb_subs.txt", sub_count=len(subs))
         print(f"Collected {len(subs)} unique subdomains")
   dns-verify:
     name: DNS Verification
@@ -100,10 +97,7 @@ jobs:
         with open('/tmp/ofx_bb_alive.txt', 'w') as f:
             f.write('\n'.join(sorted(alive)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"alive_file=/tmp/ofx_bb_alive.txt\n")
-            f.write(f"alive_count={len(alive)}\n")
-
+        add_outputs(alive_file="/tmp/ofx_bb_alive.txt", alive_count=len(alive))
         print(f"Verified {len(alive)} alive subdomains")
   takeover-check:
     name: Subdomain Takeover Check
@@ -131,15 +125,11 @@ jobs:
         except FileNotFoundError:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"takeover_count={len(vulnerable)}\n")
-
+        add_outputs(takeover_count=len(vulnerable))
         with open('/tmp/ofx_bb_takeover.txt', 'w') as f:
             f.write('\n'.join(vulnerable))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"takeover_findings_file=/tmp/ofx_bb_takeover.txt\n")
-
+        add_outputs(takeover_findings_file="/tmp/ofx_bb_takeover.txt")
         print(f"Potential takeovers: {len(vulnerable)}")
   port-scan:
     name: Port Scanning
@@ -173,10 +163,7 @@ jobs:
         with open('/tmp/ofx_bb_ports.txt', 'w') as f:
             f.write('\n'.join(sorted(ports)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"ports_file=/tmp/ofx_bb_ports.txt\n")
-            f.write(f"port_count={len(ports)}\n")
-
+        add_outputs(ports_file="/tmp/ofx_bb_ports.txt", port_count=len(ports))
         print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
   http-probe:
     name: HTTP Probing
@@ -203,11 +190,9 @@ jobs:
         for item in typed:
             if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                 live.append(item["url"])
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
         count = sum(1 for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0)
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_count=' + str(count) + '\n')
+        add_outputs(live_count="' + str(count) + '")
   web-crawl:
     name: Web Crawling
     needs:
@@ -259,10 +244,7 @@ jobs:
         with open('/tmp/ofx_bb_crawled.txt', 'w') as f:
             f.write('\n'.join(sorted(urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"crawled_file=/tmp/ofx_bb_crawled.txt\n")
-            f.write(f"crawl_count={len(urls)}\n")
-
+        add_outputs(crawled_file="/tmp/ofx_bb_crawled.txt", crawl_count=len(urls))
         print(f"Crawled {len(urls)} unique URLs")
   param-mine:
     name: Parameter Mining
@@ -308,11 +290,7 @@ jobs:
         except (FileNotFoundError, json.JSONDecodeError):
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"param_file=/tmp/ofx_bb_params.txt\n")
-            f.write(f"param_url_count={len(param_urls)}\n")
-            f.write(f"unique_params={len(params)}\n")
-
+        add_outputs(param_file="/tmp/ofx_bb_params.txt", param_url_count=len(param_urls), unique_params=len(params))
         print(f"Parameterized URLs: {len(param_urls)}, Unique params: {len(params)}")
   vuln-scan:
     name: Vulnerability Scanning
@@ -364,14 +342,7 @@ jobs:
         except FileNotFoundError:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"nuclei_count={len(nuclei_vulns)}\n")
-            f.write(f"critical_count={len(critical)}\n")
-            f.write(f"high_count={len(high)}\n")
-            f.write(f"medium_count={len(medium)}\n")
-            f.write(f"xss_count={len(dalfox_vulns)}\n")
-            f.write(f"crlf_count={crlf_count}\n")
-
+        add_outputs(nuclei_count=len(nuclei_vulns), critical_count=len(critical), high_count=len(high), medium_count=len(medium), xss_count=len(dalfox_vulns), crlf_count=crlf_count)
         print(f"Nuclei: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
         print(f"XSS (dalfox): {len(dalfox_vulns)}")
         print(f"CRLF injection: {crlf_count}")
@@ -401,9 +372,7 @@ jobs:
         gl_vulns = {{ vulns(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
         total = len(th_vulns) + len(gl_vulns)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"secrets_count={total}\n")
-
+        add_outputs(secrets_count=total)
         print(f"Secrets found: {total} (trufflehog: {len(th_vulns)}, gitleaks: {len(gl_vulns)})")
   summary:
     name: Bug Bounty Recon Summary

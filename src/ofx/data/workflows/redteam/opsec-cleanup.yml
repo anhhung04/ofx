@@ -90,10 +90,7 @@ jobs:
             for cmd in commands:
                 f.write(f"{cmd}\n")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"cleanup_file={out_file}\n")
-            f.write(f"command_count={len([c for c in commands if c and not c.startswith('#')])}\n")
-
+        add_outputs(cleanup_file=out_file, command_count=len([c for c in commands if c and not c.startswith('#')]))
   timestomp:
     name: Generate Timestomp Commands
     outputs:
@@ -133,7 +130,5 @@ jobs:
 
         print(f"[+] Generated {len([c for c in commands if not c.startswith('#')])} timestomp commands")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"timestomp_file={out_file}\n")
-            f.write(f"timestomp_count={len([c for c in commands if not c.startswith('#')])}\n")
+        add_outputs(timestomp_file=out_file, timestomp_count=len([c for c in commands if not c.startswith('#')]))
       log-stdout: true

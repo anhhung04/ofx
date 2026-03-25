@@ -62,11 +62,7 @@ jobs:
           critical = [v for v in unique if v.get("severity", "").lower() == "critical"]
           high = [v for v in unique if v.get("severity", "").lower() == "high"]
 
-          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-              f.write(f"vuln_count={len(unique)}\n")
-              f.write(f"critical_count={len(critical)}\n")
-              f.write(f"high_count={len(high)}\n")
-
+          add_outputs(vuln_count=len(unique), critical_count=len(critical), high_count=len(high))
   report:
     name: Audit Report
     needs: [scan]

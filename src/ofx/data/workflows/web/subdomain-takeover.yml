@@ -131,10 +131,7 @@ jobs:
                     else:
                         print(f"  [INFO] {sub} → {cname} ({service}) — active")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
-            f.write(f"subdomains_checked={len(subdomains)}\n")
-
+        add_outputs(finding_count=len(findings), subdomains_checked=len(subdomains))
         print(f"\n=== RESULTS: {len(findings)} vulnerable subdomains ===")
         if not findings:
             print("  No takeover opportunities found")

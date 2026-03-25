@@ -91,10 +91,7 @@ jobs:
                 print("  [✓] No CORS misconfigurations found")
             print()
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
-            f.write(f"urls_tested={len(urls)}\n")
-
+        add_outputs(finding_count=len(findings), urls_tested=len(urls))
         if findings:
             print(f"=== SUMMARY: {len(findings)} CORS issues found ===")
             for finding in findings:

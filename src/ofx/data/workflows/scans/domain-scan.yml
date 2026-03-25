@@ -121,9 +121,7 @@ jobs:
         subs.add('{{ inputs.target }}')
         with open('/tmp/ofx_domscan_hosts.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"hosts_file=/tmp/ofx_domscan_hosts.txt\n")
-            f.write(f"subdomain_count={len(subs)}\n")
+        add_outputs(hosts_file="/tmp/ofx_domscan_hosts.txt", subdomain_count=len(subs))
       continue-on-error: true
     - task: dnsx
       timeout: 10
@@ -157,8 +155,7 @@ jobs:
         for item in typed:
             if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                 live.append(item['url'])
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
   host-recon:
     name: Host Reconnaissance
     needs:

@@ -79,15 +79,10 @@ jobs:
                 schema_file = '/tmp/ofx_graphql_schema.json'
                 Path(schema_file).write_text(json.dumps(data, indent=2))
 
-                with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                    f.write(f"introspection=enabled\n")
-                    f.write(f"type_count={len(user_types)}\n")
-                    f.write(f"schema_file={schema_file}\n")
+                add_outputs(introspection="enabled", type_count=len(user_types), schema_file=schema_file)
             else:
                 print("  [✓] Introspection is disabled")
-                with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                    f.write("introspection=disabled\n")
-
+                add_outputs(introspection="disabled")
         except urllib.error.HTTPError as e:
             if e.code == 400:
                 findings.append('[INFO] Introspection blocked (400)')
@@ -116,9 +111,7 @@ jobs:
             except Exception:
                 print(f"  [{name}] Blocked/Error")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
-
+        add_outputs(finding_count=len(findings))
         print(f"\n--- Findings ({len(findings)}) ---")
         for finding in findings:
             print(f"  {finding}")

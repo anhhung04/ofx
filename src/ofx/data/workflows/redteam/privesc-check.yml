@@ -151,11 +151,7 @@ jobs:
         print(f"[+] Generated {check_count} privesc check commands for: {target_os}")
         print(f"    Output: {out_file}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"commands_file={out_file}\n")
-            f.write(f"check_count={check_count}\n")
-            f.write(f"target_os={target_os}\n")
-
+        add_outputs(commands_file=out_file, check_count=check_count, target_os=target_os)
   report:
     name: Privesc Checklist Report
     needs: [enumerate]

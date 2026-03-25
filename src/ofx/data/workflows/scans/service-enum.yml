@@ -70,11 +70,7 @@ jobs:
             elif port in svc_map:
                 detected.add(svc_map[port])
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"port_count={len(services)}\n")
-            f.write(f"detected_services={','.join(sorted(detected))}\n")
-            f.write(f"open_ports={','.join(str(p) for p in sorted(services.keys()))}\n")
-
+        add_outputs(port_count=len(services), detected_services=','.join(sorted(detected)), open_ports=','.join(str(p) for p in sorted(services.keys())))
         print(f"[+] Open ports: {len(services)}")
         print(f"[+] Services: {', '.join(sorted(detected))}")
 
@@ -162,10 +158,7 @@ jobs:
             for name, output in results.items():
                 f.write(f"=== {name.upper()} ===\n{output}\n\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"enum_file={out_file}\n")
-            f.write(f"service_count={len(services)}\n")
-
+        add_outputs(enum_file=out_file, service_count=len(services))
         print(f"\n[+] Full results: {out_file}")
       log-stdout: true
       timeout: 10
@@ -227,9 +220,7 @@ jobs:
         except FileNotFoundError:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"cred_count={len(creds)}\n")
-
+        add_outputs(cred_count=len(creds))
         if creds:
             print(f"[!] Default credentials found: {len(creds)}")
             for c in creds:

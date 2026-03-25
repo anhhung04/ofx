@@ -73,10 +73,7 @@ jobs:
           with open('/tmp/subs.txt', 'w') as f:
               f.write('\n'.join(sorted(subs)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"subs_file=/tmp/subs.txt\n")
-              f.write(f"sub_count={len(subs)}\n")
-
+          add_outputs(subs_file="/tmp/subs.txt", sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains")
   dns-resolve:
     name: DNS Resolution
@@ -113,10 +110,7 @@ jobs:
           with open('/tmp/ofx_fullrecon_verified.txt', 'w') as f:
               f.write('\n'.join(sorted(verified)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"verified_file=/tmp/ofx_fullrecon_verified.txt\n")
-              f.write(f"verified_count={len(verified)}\n")
-
+          add_outputs(verified_file="/tmp/ofx_fullrecon_verified.txt", verified_count=len(verified))
           print(f"Verified {len(verified)} subdomains via DNS")
   port-scan:
     name: Port Scanning
@@ -155,11 +149,7 @@ jobs:
           with open('/tmp/ofx_fullrecon_porthosts.txt', 'w') as f:
               f.write('\n'.join(sorted(hosts)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"ports_file=/tmp/ofx_fullrecon_ports.txt\n")
-              f.write(f"port_count={len(ports)}\n")
-              f.write(f"port_hosts_file=/tmp/ofx_fullrecon_porthosts.txt\n")
-
+          add_outputs(ports_file="/tmp/ofx_fullrecon_ports.txt", port_count=len(ports), port_hosts_file="/tmp/ofx_fullrecon_porthosts.txt")
           print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
   http-probe:
     name: HTTP Probing
@@ -186,11 +176,9 @@ jobs:
           for item in typed:
               if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                   live.append(item["url"])
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+          add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
           count = sum(1 for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0)
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write('live_count=' + str(count) + '\n')
+          add_outputs(live_count="' + str(count) + '")
   web-crawl:
     name: Web Crawling
     needs:
@@ -242,10 +230,7 @@ jobs:
           with open('/tmp/ofx_fullrecon_crawled.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"crawled_file=/tmp/ofx_fullrecon_crawled.txt\n")
-              f.write(f"crawl_count={len(urls)}\n")
-
+          add_outputs(crawled_file="/tmp/ofx_fullrecon_crawled.txt", crawl_count=len(urls))
           print(f"Crawled {len(urls)} unique URLs")
   takeover-check:
     name: Subdomain Takeover Check
@@ -271,9 +256,7 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"takeover_count={len(takeovers)}\n")
-
+          add_outputs(takeover_count=len(takeovers))
           print(f"Potential takeovers: {len(takeovers)}")
   fingerprint:
     name: Fingerprinting
@@ -333,13 +316,7 @@ jobs:
           high = [v for v in nuclei_vulns if v.get('severity') == 'high']
           medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"vuln_count={len(nuclei_vulns)}\n")
-              f.write(f"critical_count={len(critical)}\n")
-              f.write(f"high_count={len(high)}\n")
-              f.write(f"medium_count={len(medium)}\n")
-              f.write(f"nikto_count={len(nikto_vulns)}\n")
-
+          add_outputs(vuln_count=len(nuclei_vulns), critical_count=len(critical), high_count=len(high), medium_count=len(medium), nikto_count=len(nikto_vulns))
           print(f"Nuclei: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
           print(f"Nikto: {len(nikto_vulns)}")
   summary:

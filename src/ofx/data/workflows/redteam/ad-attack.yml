@@ -95,10 +95,7 @@ jobs:
           with open('/tmp/ad-users.txt', 'w') as f:
               f.write(user_list)
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"users_file=/tmp/ad-users.txt\n")
-              f.write(f"user_count={len(users)}\n")
-
+          add_outputs(users_file="/tmp/ad-users.txt", user_count=len(users))
           print(f"Enumerated {len(users)} AD users")
   kerberoast:
     name: Kerberoasting
@@ -136,10 +133,7 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"spn_count={len(spn_users)}\n")
-              f.write(f"tgs_hashes={hashes}\n")
-
+          add_outputs(spn_count=len(spn_users), tgs_hashes=hashes)
           print(f"Kerberoastable accounts: {len(spn_users)}, TGS hashes: {hashes}")
           for spn in spn_users:
               print(f"  [*] {spn}")
@@ -175,10 +169,7 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"asrep_count={len(asrep_users)}\n")
-              f.write(f"asrep_hashes={hashes}\n")
-
+          add_outputs(asrep_count=len(asrep_users), asrep_hashes=hashes)
           print(f"AS-REP roastable: {len(asrep_users)}, hashes: {hashes}")
           for u in sorted(asrep_users):
               print(f"  [*] {u}")
@@ -232,11 +223,8 @@ jobs:
               if u.get('username'):
                   all_valid.add(u['username'])
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"spray_hits={len(all_valid)}\n")
-              open('/tmp/ofx_adattack_valid.txt', 'w').write('\n'.join(sorted(all_valid)))
-              f.write(f"valid_users_file=/tmp/ofx_adattack_valid.txt\n")
-
+          open('/tmp/ofx_adattack_valid.txt', 'w').write('\n'.join(sorted(all_valid)))
+          add_outputs(spray_hits=len(all_valid), valid_users_file="/tmp/ofx_adattack_valid.txt")
           print(f"Spray hits: {len(all_valid)} valid credentials")
   credential-dump:
     name: Credential Dumping
@@ -290,11 +278,7 @@ jobs:
           sam_creds = {{ users(steps["nxc-sam"].outputs.typed_outputs) | tojson }}
           lsa_creds = {{ users(steps["nxc-lsa"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"hash_count={len(hashes)}\n")
-              f.write(f"sam_count={len(sam_creds)}\n")
-              f.write(f"lsa_count={len(lsa_creds)}\n")
-
+          add_outputs(hash_count=len(hashes), sam_count=len(sam_creds), lsa_count=len(lsa_creds))
           print(f"Secretsdump: {len(hashes)} hashes")
           print(f"SAM: {len(sam_creds)}, LSA: {len(lsa_creds)}")
   relay-detect:
@@ -335,10 +319,7 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"relay_count={len(relay_targets)}\n")
-              f.write(f"webdav_enabled={'yes' if webdav else 'no'}\n")
-
+          add_outputs(relay_count=len(relay_targets), webdav_enabled='yes' if webdav else 'no')
           print(f"SMB signing disabled (relay targets): {len(relay_targets)}")
           print(f"WebDAV enabled: {webdav}")
   summary:

@@ -68,8 +68,5 @@ jobs:
         with open(out_file, "w") as f:
             json.dump(output_data, f, indent=2)
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"open_ports={json.dumps(open_ports)}\n")
-            f.write(f"port_count={len(open_ports)}\n")
-            f.write(f"results_file={out_file}\n")
+        add_outputs(open_ports=json.dumps(open_ports), port_count=len(open_ports), results_file=out_file)
       log-stdout: true

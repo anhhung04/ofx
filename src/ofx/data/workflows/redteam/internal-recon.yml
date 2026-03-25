@@ -45,10 +45,7 @@ jobs:
         with open('/tmp/ofx_alive_hosts.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"alive_file=/tmp/ofx_alive_hosts.txt\n")
-            f.write(f"alive_count={len(hosts)}\n")
-
+        add_outputs(alive_file="/tmp/ofx_alive_hosts.txt", alive_count=len(hosts))
         print(f"Discovered {len(hosts)} alive hosts")
   port-scan:
     name: Port Scanning
@@ -107,13 +104,9 @@ jobs:
             port_str = ','.join(sorted(host_ports, key=int))
             nmap_targets.append(f"{host}:{port_str}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            open('/tmp/ofx_intrecon_ports.txt', 'w').write('\n'.join(sorted(ports)))
-            f.write(f"ports_file=/tmp/ofx_intrecon_ports.txt\n")
-            f.write(f"port_count={len(ports)}\n")
-            open('/tmp/ofx_intrecon_targets.txt', 'w').write('\n'.join(nmap_targets))
-            f.write(f"scan_targets_file=/tmp/ofx_intrecon_targets.txt\n")
-
+        open('/tmp/ofx_intrecon_ports.txt', 'w').write('\n'.join(sorted(ports)))
+        open('/tmp/ofx_intrecon_targets.txt', 'w').write('\n'.join(nmap_targets))
+        add_outputs(ports_file="/tmp/ofx_intrecon_ports.txt", port_count=len(ports), scan_targets_file="/tmp/ofx_intrecon_targets.txt")
         print(f"Found {len(ports)} open ports across {len(hosts_with_ports)} hosts")
   service-detect:
     name: Service Detection
@@ -169,12 +162,8 @@ jobs:
             if url:
                 http_targets.add(url)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"service_count={len(services)}\n")
-            open('/tmp/ofx_intrecon_httpurls.txt', 'w').write('\n'.join(sorted(http_targets)))
-            f.write(f"http_urls_file=/tmp/ofx_intrecon_httpurls.txt\n")
-            f.write(f"http_count={len(http_targets)}\n")
-
+        open('/tmp/ofx_intrecon_httpurls.txt', 'w').write('\n'.join(sorted(http_targets)))
+        add_outputs(service_count=len(services), http_urls_file="/tmp/ofx_intrecon_httpurls.txt", http_count=len(http_targets))
         print(f"Services detected: {len(services)}, HTTP targets: {len(http_targets)}")
   web-enum:
     name: Web Enumeration
@@ -210,9 +199,7 @@ jobs:
         except FileNotFoundError:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"web_tech_count={len(techs)}\n")
-
+        add_outputs(web_tech_count=len(techs))
         print(f"Web technologies detected: {len(techs)}")
   ad-detect:
     name: AD Detection
@@ -249,13 +236,9 @@ jobs:
         except FileNotFoundError:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            open('/tmp/ofx_intrecon_domains.txt', 'w').write('\n'.join(sorted(domains)))
-            f.write(f"ad_domains_file=/tmp/ofx_intrecon_domains.txt\n")
-            open('/tmp/ofx_intrecon_dcs.txt', 'w').write('\n'.join(sorted(dcs)))
-            f.write(f"dcs_file=/tmp/ofx_intrecon_dcs.txt\n")
-            f.write(f"dc_count={len(dcs)}\n")
-
+        open('/tmp/ofx_intrecon_domains.txt', 'w').write('\n'.join(sorted(domains)))
+        open('/tmp/ofx_intrecon_dcs.txt', 'w').write('\n'.join(sorted(dcs)))
+        add_outputs(ad_domains_file="/tmp/ofx_intrecon_domains.txt", dcs_file="/tmp/ofx_intrecon_dcs.txt", dc_count=len(dcs))
         print(f"AD domains: {', '.join(domains) if domains else 'none detected'}")
         print(f"Domain controllers: {len(dcs)}")
   default-cred-check:

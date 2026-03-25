@@ -116,7 +116,5 @@ jobs:
         for esc, desc in esc_attacks.items():
             print(f"  {esc}: {desc}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
-            f.write(f"template_count={len(templates) if isinstance(templates, dict) else 0}\n")
+        add_outputs(finding_count=len(findings), template_count=len(templates) if isinstance(templates, dict) else 0)
       log-stdout: true

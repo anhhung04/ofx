@@ -51,10 +51,7 @@ jobs:
             icon = "[-]" if status == "MISSING" else "[+]"
             print(f"    {icon} {header}: {value}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"headers_json={json.dumps(headers)}\n")
-            f.write(f"audit_json={json.dumps(audit)}\n")
-
+        add_outputs(headers_json=json.dumps(headers), audit_json=json.dumps(audit))
   report:
     name: Security Grade Report
     needs: [audit]
@@ -120,8 +117,5 @@ jobs:
             if h in recs:
                 print(f"    - {recs[h]}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"grade={grade}\n")
-            f.write(f"present_count={present}\n")
-            f.write(f"missing_count={missing}\n")
+        add_outputs(grade=grade, present_count=present, missing_count=missing)
       log-stdout: true

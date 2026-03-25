@@ -43,10 +43,7 @@ jobs:
         with open('/tmp/ofx_nd_alive.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"alive_file=/tmp/ofx_nd_alive.txt\n")
-            f.write(f"alive_count={len(hosts)}\n")
-
+        add_outputs(alive_file="/tmp/ofx_nd_alive.txt", alive_count=len(hosts))
         print(f"Found {len(hosts)} alive hosts")
   port-scan:
     name: Port Scanning
@@ -87,10 +84,7 @@ jobs:
         with open('/tmp/ofx_nd_hosts.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts_with_ports)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"hosts_file=/tmp/ofx_nd_hosts.txt\n")
-            f.write(f"port_count={len(ports_found)}\n")
-
+        add_outputs(hosts_file="/tmp/ofx_nd_hosts.txt", port_count=len(ports_found))
         print(f"Found {len(ports_found)} open ports across {len(hosts_with_ports)} hosts")
   service-detection:
     name: Service Detection
@@ -123,11 +117,9 @@ jobs:
         for item in typed:
             if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                 live.append(item["url"])
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
         count = sum(1 for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0)
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_count=' + str(count) + '\n')
+        add_outputs(live_count="' + str(count) + '")
   summary:
     name: Discovery Summary
     needs:

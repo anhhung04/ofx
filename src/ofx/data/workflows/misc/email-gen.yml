@@ -47,10 +47,7 @@ jobs:
         for email in emails:
             print(f"    {email}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"patterns_file={out_file}\n")
-            f.write(f"pattern_count={len(emails)}\n")
-
+        add_outputs(patterns_file=out_file, pattern_count=len(emails))
   domain-perms:
     name: Generate Domain Permutations
     outputs:
@@ -78,10 +75,7 @@ jobs:
         if len(perms) > 15:
             print(f"      ... ({len(perms) - 15} more)")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"perms_file={out_file}\n")
-            f.write(f"perm_count={len(perms)}\n")
-
+        add_outputs(perms_file=out_file, perm_count=len(perms))
   summary:
     name: Email & Domain Summary
     needs: [email-patterns, domain-perms]

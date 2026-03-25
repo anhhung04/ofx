@@ -124,7 +124,5 @@ jobs:
                     f.write(f"  {key}: {val}\n")
                 f.write("\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"tunnels_file={out}\n")
-            f.write(f"tunnel_count={len(tunnels)}\n")
+        add_outputs(tunnels_file=out, tunnel_count=len(tunnels))
       log-stdout: true

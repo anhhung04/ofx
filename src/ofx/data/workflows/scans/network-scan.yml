@@ -74,10 +74,7 @@ jobs:
 
         with open('/tmp/ofx_netscan_hosts.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts)))
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"hosts_file=/tmp/ofx_netscan_hosts.txt\n")
-            f.write(f"host_count={len(hosts)}\n")
-
+        add_outputs(hosts_file="/tmp/ofx_netscan_hosts.txt", host_count=len(hosts))
         print(f"Discovered {len(hosts)} live hosts")
   host-recon:
     name: Host Reconnaissance
@@ -124,8 +121,7 @@ jobs:
         for item in typed:
             if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                 live.append(item['url'])
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+        add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
   default-cred-check:
     name: Default Credential Check
     needs:
@@ -164,9 +160,7 @@ jobs:
         except FileNotFoundError:
             pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"cred_count={len(creds)}\n")
-
+        add_outputs(cred_count=len(creds))
         if creds:
             print(f"[!] Default credentials found: {len(creds)}")
             for c in creds:

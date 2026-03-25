@@ -66,8 +66,5 @@ jobs:
         out_file = f'/tmp/ofx_{operation}ed.txt'
         Path(out_file).write_text(result)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"result_file={out_file}\n")
-            f.write(f"operation={operation}\n")
-            f.write(f"line_count={len(result.splitlines())}\n")
+        add_outputs(result_file=out_file, operation=operation, line_count=len(result.splitlines()))
       log-stdout: true

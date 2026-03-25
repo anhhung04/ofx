@@ -143,12 +143,7 @@ jobs:
             marker = " ⚠" if count > 100 else ""
             print(f"  {ip}: {count}{marker}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"log_type={log_type}\n")
-            f.write(f"line_count={len(lines)}\n")
-            f.write(f"finding_count={len(findings)}\n")
-            f.write(f"unique_ips={len(ip_counter)}\n")
-
+        add_outputs(log_type=log_type, line_count=len(lines), finding_count=len(findings), unique_ips=len(ip_counter))
         print(f"\n--- Findings ({len(findings)}) ---")
         for finding in findings:
             print(f"  {finding}")

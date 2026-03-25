@@ -96,12 +96,7 @@ jobs:
         hash_file = '/tmp/ofx_hashes.txt'
         Path(hash_file).write_text('\n'.join(hashes) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"hash_count={len(hashes)}\n")
-            f.write(f"hash_file={hash_file}\n")
-            f.write(f"identified_types={results[0]['types'][0] if results and results[0]['types'] else 'unknown'}\n")
-            f.write(f"results={json.dumps(results)}\n")
-
+        add_outputs(hash_count=len(hashes), hash_file=hash_file, identified_types=results[0]['types'][0] if results and results[0]['types'] else 'unknown', results=json.dumps(results))
   crack:
     name: Crack Hashes
     needs: [identify]
@@ -171,9 +166,7 @@ jobs:
                 if line.strip():
                     cracked.append(line.strip())
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"cracked_count={len(cracked)}\n")
-
+        add_outputs(cracked_count=len(cracked))
         print(f"\n[+] Total cracked: {len(cracked)}")
         for c in cracked:
             print(f"    {c}")

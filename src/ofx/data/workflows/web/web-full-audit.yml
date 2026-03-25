@@ -65,8 +65,7 @@ jobs:
           for item in typed:
               if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                   live.append(item["url"])
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write('live_urls=' + '\n'.join(sorted(set(live))) + '\n')
+          add_outputs(live_urls="' + '\n'.join(sorted(set(live))) + '")
   dir-brute:
     name: Directory Brute-Force
     needs:
@@ -116,10 +115,7 @@ jobs:
           with open('/tmp/ofx_webaudit_dirs.txt', 'w') as tf:
               tf.write('\n'.join(sorted(urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"dir_urls_file=/tmp/ofx_webaudit_dirs.txt\n")
-              f.write(f"dir_count={len(urls)}\n")
-
+          add_outputs(dir_urls_file="/tmp/ofx_webaudit_dirs.txt", dir_count=len(urls))
           print(f"Discovered {len(urls)} unique URLs/directories")
   crawl:
     name: Content Discovery
@@ -172,10 +168,7 @@ jobs:
           with open('/tmp/ofx_webaudit_crawled.txt', 'w') as tf:
               tf.write('\n'.join(sorted(urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"crawled_file=/tmp/ofx_webaudit_crawled.txt\n")
-              f.write(f"crawl_count={len(urls)}\n")
-
+          add_outputs(crawled_file="/tmp/ofx_webaudit_crawled.txt", crawl_count=len(urls))
           print(f"Crawled {len(urls)} unique URLs")
   param-fuzz:
     name: Parameter Discovery & Fuzzing
@@ -220,10 +213,7 @@ jobs:
           with open('/tmp/ofx_param_urls.txt', 'w') as f:
               f.write('\n'.join(sorted(param_urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"param_file=/tmp/ofx_param_urls.txt\n")
-              f.write(f"param_count={len(param_urls)}\n")
-
+          add_outputs(param_file="/tmp/ofx_param_urls.txt", param_count=len(param_urls))
           print(f"Discovered {len(param_urls)} parameterized URLs")
   vuln-scan:
     name: Vulnerability Scanning
@@ -294,15 +284,7 @@ jobs:
           critical = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'critical')
           high = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'high')
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"total_vulns={total}\n")
-              f.write(f"critical_count={critical}\n")
-              f.write(f"high_count={high}\n")
-              f.write(f"xss_count={len(xss_v)}\n")
-              f.write(f"sqli_count={len(sqli_v)}\n")
-              f.write(f"cmdi_count={len(cmdi_v)}\n")
-              f.write(f"crlf_count={len(crlf_v)}\n")
-
+          add_outputs(total_vulns=total, critical_count=critical, high_count=high, xss_count=len(xss_v), sqli_count=len(sqli_v), cmdi_count=len(cmdi_v), crlf_count=len(crlf_v))
           print(f"Total: {total} vulns (C:{critical} H:{high})")
           print(f"  XSS: {len(xss_v)}, SQLi: {len(sqli_v)}, CMDi: {len(cmdi_v)}, CRLF: {len(crlf_v)}")
   secrets:

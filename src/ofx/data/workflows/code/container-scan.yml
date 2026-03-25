@@ -60,10 +60,7 @@ jobs:
 
           critical = len([v for v in unique if v.get("severity", "").lower() == "critical"])
 
-          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-              f.write(f"vuln_count={len(unique)}\n")
-              f.write(f"critical_count={critical}\n")
-
+          add_outputs(vuln_count=len(unique), critical_count=critical)
   secrets-scan:
     name: Embedded Secrets Check
     outputs:
@@ -81,9 +78,7 @@ jobs:
         script: |
           results = {{ steps["image-secrets"].outputs.typed_outputs | default([], true) | tojson }}
           count = len(results)
-          with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-              f.write(f"secrets_count={count}\n")
-
+          add_outputs(secrets_count=count)
   summary:
     name: Container Security Report
     needs: [image-vulns, secrets-scan]

@@ -52,9 +52,7 @@ jobs:
         )
         print(f"[+] BloodHound collection:\n    {cmd}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"bloodhound_cmd={cmd}\n")
-
+        add_outputs(bloodhound_cmd=cmd)
     - name: shares-cmd
       timeout: 2
       continue-on-error: true
@@ -70,9 +68,7 @@ jobs:
         )
         print(f"[+] Share enumeration:\n    {cmd}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"shares_cmd={cmd}\n")
-
+        add_outputs(shares_cmd=cmd)
     - name: ldap-cmd
       timeout: 2
       continue-on-error: true
@@ -88,9 +84,7 @@ jobs:
         )
         print(f"[+] LDAP query:\n    {cmd}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"ldap_cmd={cmd}\n")
-
+        add_outputs(ldap_cmd=cmd)
     - name: collect-enum
       timeout: 2
       continue-on-error: true
@@ -137,9 +131,7 @@ jobs:
 
         print(f"[+] Saved {len([c for c in commands if c and not c.startswith('#')])} commands to {out_file}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"commands_file={out_file}\n")
-
+        add_outputs(commands_file=out_file)
   kerberos:
     name: Kerberos Attack Commands
     outputs:
@@ -162,9 +154,7 @@ jobs:
         )
         print(f"[+] Kerberoast:\n    {cmd}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"kerberoast_cmd={cmd}\n")
-
+        add_outputs(kerberoast_cmd=cmd)
     - name: asreproast-cmd
       timeout: 2
       continue-on-error: true
@@ -180,9 +170,7 @@ jobs:
         )
         print(f"[+] AS-REP Roast:\n    {cmd}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"asreproast_cmd={cmd}\n")
-
+        add_outputs(asreproast_cmd=cmd)
     - name: delegation-cmd
       timeout: 2
       continue-on-error: true
@@ -200,9 +188,7 @@ jobs:
         for cmd in cmds:
             print(f"[+] Delegation:\n    {cmd}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"delegation_cmds={json.dumps(cmds)}\n")
-
+        add_outputs(delegation_cmds=json.dumps(cmds))
   summary:
     name: AD Recon Summary
     needs: [enumerate, kerberos]

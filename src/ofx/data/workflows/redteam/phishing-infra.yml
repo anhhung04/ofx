@@ -118,10 +118,7 @@ jobs:
         (out_dir / "landing.html").write_text(landing_page)
         print(f"  [+] Landing page: landing.html")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"output_dir={out_dir}\n")
-            f.write(f"template_count={len(templates)}\n")
-
+        add_outputs(output_dir=out_dir, template_count=len(templates))
         print(f"\n  Output directory: {out_dir}")
         print(f"\n--- OPSEC Reminders ---")
         print(f"  1. Use aged domain (>30 days)")

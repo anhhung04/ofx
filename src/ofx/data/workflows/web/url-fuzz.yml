@@ -58,10 +58,7 @@ jobs:
         with open('/tmp/ofx_urlfuzz_urls.txt', 'w') as tf:
             tf.write('\n'.join(sorted(urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"fuzzed_file=/tmp/ofx_urlfuzz_urls.txt\n")
-            f.write(f"fuzz_count={len(urls)}\n")
-
+        add_outputs(fuzzed_file="/tmp/ofx_urlfuzz_urls.txt", fuzz_count=len(urls))
         print(f"Found {len(urls)} unique URLs via fuzzing")
   probe:
     name: Probe Fuzzed URLs

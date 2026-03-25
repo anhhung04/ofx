@@ -132,8 +132,5 @@ jobs:
             print()
             all_findings.extend(findings)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"urls_tested={len(urls)}\n")
-            f.write(f"finding_count={len(all_findings)}\n")
-            f.write(f"grades={json.dumps(grades)}\n")
+        add_outputs(urls_tested=len(urls), finding_count=len(all_findings), grades=json.dumps(grades))
       log-stdout: true

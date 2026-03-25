@@ -71,10 +71,7 @@ jobs:
         # Check access keys
         proc = subprocess.run(aws_args + ['iam', 'get-credential-report', '--output', 'json'], capture_output=True, text=True, timeout=15)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"account={identity['Account']}\n")
-            f.write(f"user_count={results.get('user_count', 0)}\n")
-            f.write(f"no_mfa_count={len(results.get('no_mfa', []))}\n")
+        add_outputs(account=identity['Account'], user_count=results.get('user_count', 0), no_mfa_count=len(results.get('no_mfa', [])))
       continue-on-error: true
 
   s3-audit:
@@ -119,9 +116,7 @@ jobs:
                     else:
                         print(f"  [✓] {name}: Protected")
 
-            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                f.write(f"bucket_count={len(buckets)}\n")
-                f.write(f"public_bucket_count={len(public_buckets)}\n")
+            add_outputs(bucket_count=len(buckets), public_bucket_count=len(public_buckets))
       continue-on-error: true
 
   sg-audit:
@@ -161,10 +156,7 @@ jobs:
                             risky.append({'sg': sg_id, 'name': name, 'port': port})
                             print(f"  [!] {sg_id} ({name}): 0.0.0.0/0 on port {port}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"sg_count={len(sgs) if proc.returncode == 0 else 0}\n")
-            f.write(f"risky_sg_count={len(risky)}\n")
-
+        add_outputs(sg_count=len(sgs) if proc.returncode == 0 else 0, risky_sg_count=len(risky))
         if not risky:
             print("  [✓] No security groups open to 0.0.0.0/0")
       continue-on-error: true

@@ -93,7 +93,5 @@ jobs:
             f.write(f"{ncat_listener(lport)}\n")
             f.write(f"{rlwrap_listener(lport)}\n")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"shells_file={out_file}\n")
-            f.write(f"shell_count={len(shells)}\n")
+        add_outputs(shells_file=out_file, shell_count=len(shells))
       log-stdout: true

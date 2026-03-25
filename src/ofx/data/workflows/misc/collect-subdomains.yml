@@ -45,8 +45,5 @@ jobs:
         out_path = '/tmp/ofx_collected_subs.txt'
         Path(out_path).write_text('\n'.join(sorted(subs)) + '\n')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"subs_file={out_path}\n")
-            f.write(f"subdomain_count={len(subs)}\n")
-
+        add_outputs(subs_file=out_path, subdomain_count=len(subs))
         print(f"Collected {len(subs)} unique subdomains")

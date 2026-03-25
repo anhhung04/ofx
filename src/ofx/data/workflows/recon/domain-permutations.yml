@@ -39,10 +39,7 @@ jobs:
 
         print(f"[+] Generated {len(perms)} permutations for {domain}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"perms_file={out_file}\n")
-            f.write(f"perm_count={len(perms)}\n")
-
+        add_outputs(perms_file=out_file, perm_count=len(perms))
   resolve:
     name: Resolve Domains
     needs: [generate]
@@ -88,10 +85,7 @@ jobs:
 
         print(f"\n[+] {len(registered)}/{len(domains)} domains resolve (potentially registered)")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"registered_file={out_file}\n")
-            f.write(f"registered_count={len(registered)}\n")
-
+        add_outputs(registered_file=out_file, registered_count=len(registered))
   report:
     name: Typosquatting Report
     needs: [generate, resolve]

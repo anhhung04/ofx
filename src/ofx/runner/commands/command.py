@@ -43,6 +43,23 @@ def exec_script_in_process(
         os.environ["RUNNER_OUTPUTS"] = outputs_file
         os.environ["OFX_OUTPUTS"] = outputs_file
 
+    def _add_outputs(**kwargs):
+        """Write key=value pairs to the OFX_OUTPUTS file.
+
+        Lists and dicts are serialized as JSON. All other values
+        are converted to strings.
+        """
+        if not outputs_file:
+            return
+        import json as _json
+
+        with open(outputs_file, "a") as f:
+            for k, v in kwargs.items():
+                if isinstance(v, (dict, list)):
+                    f.write(f"{k}={_json.dumps(v)}\n")
+                else:
+                    f.write(f"{k}={v}\n")
+
     globals_dict = {
         "__builtins__": builtins.__dict__,
         "__name__": "__main__",
@@ -52,6 +69,7 @@ def exec_script_in_process(
         "__inputs__": inputs,
         "__ctx__": ctx_model,
         "__secrets__": secrets,
+        "add_outputs": _add_outputs,
         "publish": lambda channel, data: store.publish(channel, data),
         "subscribe": lambda channel: store.subscribe(channel),
         "wait_for": lambda channel, condition, timeout=60: store.wait_for(

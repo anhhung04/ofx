@@ -53,11 +53,7 @@ jobs:
         server = fingerprint.get("server", "unknown")
         waf = fingerprint.get("waf_cdn", "none")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"tech_stack={json.dumps(fingerprint)}\n")
-            f.write(f"server={server}\n")
-            f.write(f"waf={waf}\n")
-
+        add_outputs(tech_stack=json.dumps(fingerprint), server=server, waf=waf)
   security:
     name: Security Headers & Robots
     outputs:
@@ -98,10 +94,7 @@ jobs:
         print(f"\n    Present: {len(audit) - len(missing)}/{len(audit)}")
         print(f"    Missing: {len(missing)}/{len(audit)}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"security_audit={json.dumps(audit)}\n")
-            f.write(f"missing_count={len(missing)}\n")
-
+        add_outputs(security_audit=json.dumps(audit), missing_count=len(missing))
     - name: check-robots
       timeout: 3
       continue-on-error: true
@@ -133,9 +126,7 @@ jobs:
             content = ""
             print(f"[-] Failed to fetch robots.txt: {e}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"robots_content={content[:500]}\n")
-
+        add_outputs(robots_content=content[:500])
   report:
     name: Combined Report
     needs: [fingerprint, security]

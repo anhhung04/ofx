@@ -57,11 +57,7 @@ jobs:
         with open('/tmp/ofx_sslaudit_protocols.txt', 'w') as tf:
             tf.write('\n'.join(protocols) if protocols else 'none')
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"weak_protocols_file=/tmp/ofx_sslaudit_protocols.txt\n")
-            f.write(f"weak_protocol_count={len(protocols)}\n")
-            f.write(f"weak_cipher_count={len(weak_ciphers)}\n")
-
+        add_outputs(weak_protocols_file="/tmp/ofx_sslaudit_protocols.txt", weak_protocol_count=len(protocols), weak_cipher_count=len(weak_ciphers))
         print(f"Weak protocols: {len(protocols)}")
         print(f"Weak ciphers: {len(weak_ciphers)}")
   testssl-check:
@@ -92,10 +88,7 @@ jobs:
                 if item.get('issue'):
                     cert_issues += 1
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"testssl_vulns={vuln_count}\n")
-            f.write(f"cert_issues={cert_issues}\n")
-
+        add_outputs(testssl_vulns=vuln_count, cert_issues=cert_issues)
         print(f"TestSSL vulnerabilities: {vuln_count}")
         print(f"Certificate issues: {cert_issues}")
   summary:

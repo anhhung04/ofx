@@ -90,7 +90,5 @@ jobs:
             for name, cmd in shells.items():
                 f.write(f"=== {name} ===\n{cmd}\n\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"shells_file={out}\n")
-            f.write(f"shell_count={len(shells)}\n")
+        add_outputs(shells_file=out, shell_count=len(shells))
       log-stdout: true

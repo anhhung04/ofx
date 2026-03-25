@@ -115,7 +115,5 @@ jobs:
         for d in dorks:
             print(f"  Google: {d}")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            for k, v in results.items():
-                f.write(f"{k}={v}\n")
+        add_outputs(**results)
       log-stdout: true

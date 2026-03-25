@@ -115,10 +115,7 @@ jobs:
             print(f"[-] Unknown operation: {operation}")
             raise SystemExit(1)
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"result={output}\n")
-            f.write(f"operation={operation}\n")
-
+        add_outputs(result=output, operation=operation)
         print(f"=== {operation.upper()} ===")
         print(output)
       log-stdout: true

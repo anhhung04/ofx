@@ -38,10 +38,7 @@ jobs:
         print(f"[+] Callback URL: {url}")
         print(f"[+] Tracking flag: {flag}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"callback_url={url}\n")
-            f.write(f"callback_flag={flag}\n")
-
+        add_outputs(callback_url=url, callback_flag=flag)
   probe:
     name: Send OOB Probes
     needs: [setup]
@@ -98,9 +95,7 @@ jobs:
         print("[*] Waiting 10s for callbacks to register...")
         time.sleep(10)
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"probes_sent={probes}\n")
-
+        add_outputs(probes_sent=probes)
   poll:
     name: Poll for Interactions
     needs: [setup, probe]

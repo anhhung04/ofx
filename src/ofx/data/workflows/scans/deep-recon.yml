@@ -60,10 +60,7 @@ jobs:
           domains = {{ domains(steps["whois-lookup"].outputs.typed_outputs) | tojson }}
           users = {{ users(steps["theharvester-enum"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"osint_domain_count={len(domains)}\n")
-              f.write(f"osint_user_count={len(users)}\n")
-
+          add_outputs(osint_domain_count=len(domains), osint_user_count=len(users))
           print(f"OSINT: {len(domains)} domain records, {len(users)} users/emails found")
 
   passive-enum:
@@ -171,10 +168,7 @@ jobs:
           with open('/tmp/ofx_deeprecon_subs.txt', 'w') as f:
               f.write('\n'.join(sorted(subs)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"subs_file=/tmp/ofx_deeprecon_subs.txt\n")
-              f.write(f"sub_count={len(subs)}\n")
-
+          add_outputs(subs_file="/tmp/ofx_deeprecon_subs.txt", sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains from passive sources")
 
   active-enum:
@@ -280,12 +274,7 @@ jobs:
           with open('/tmp/ofx_deeprecon_verified.txt', 'w') as f:
               f.write('\n'.join(sorted(verified)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"verified_file=/tmp/ofx_deeprecon_verified.txt\n")
-              f.write(f"verified_count={len(verified)}\n")
-              f.write(f"asn_ips_file=/tmp/ofx_deeprecon_asn_ips.txt\n")
-              f.write(f"asn_ip_count={len(asn_ips)}\n")
-
+          add_outputs(verified_file="/tmp/ofx_deeprecon_verified.txt", verified_count=len(verified), asn_ips_file="/tmp/ofx_deeprecon_asn_ips.txt", asn_ip_count=len(asn_ips))
           print(f"Active verification: {len(verified)} resolved subdomains, {len(asn_ips)} ASN IPs/CIDRs")
 
   web-probe:
@@ -348,13 +337,7 @@ jobs:
           cdn_tags = {{ tags(steps["cdn-detect"].outputs.typed_outputs) | tojson }}
           favi_tags = {{ tags(steps["favicon-detect"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"live_file=/tmp/ofx_deeprecon_live.txt\n")
-              f.write(f"live_count={len(urls)}\n")
-              f.write(f"waf_count={len(waf_tags)}\n")
-              f.write(f"cdn_count={len(cdn_tags)}\n")
-              f.write(f"favicon_count={len(favi_tags)}\n")
-
+          add_outputs(live_file="/tmp/ofx_deeprecon_live.txt", live_count=len(urls), waf_count=len(waf_tags), cdn_count=len(cdn_tags), favicon_count=len(favi_tags))
           print(f"Live: {len(urls)} URLs, WAFs: {len(waf_tags)}, CDNs: {len(cdn_tags)}, Favicons: {len(favi_tags)}")
 
   url-collection:
@@ -479,12 +462,7 @@ jobs:
           with open('/tmp/ofx_deeprecon_params.txt', 'w') as f:
               f.write('\n'.join(sorted(param_urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"all_urls_file=/tmp/ofx_deeprecon_allurls.txt\n")
-              f.write(f"param_file=/tmp/ofx_deeprecon_params.txt\n")
-              f.write(f"url_count={len(urls)}\n")
-              f.write(f"param_count={len(param_urls)}\n")
-
+          add_outputs(all_urls_file="/tmp/ofx_deeprecon_allurls.txt", param_file="/tmp/ofx_deeprecon_params.txt", url_count=len(urls), param_count=len(param_urls))
           print(f"URLs: {len(urls)} total, {len(param_urls)} parameterized")
 
   port-scan:
@@ -530,10 +508,7 @@ jobs:
           with open('/tmp/ofx_deeprecon_ports.txt', 'w') as f:
               f.write('\n'.join(sorted(ports)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"ports_file=/tmp/ofx_deeprecon_ports.txt\n")
-              f.write(f"port_count={len(ports)}\n")
-
+          add_outputs(ports_file="/tmp/ofx_deeprecon_ports.txt", port_count=len(ports))
           print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
 
   vuln-scan:
@@ -600,15 +575,7 @@ jobs:
           high = [v for v in all_vulns if v.get('severity') == 'high']
           medium = [v for v in all_vulns if v.get('severity') == 'medium']
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"vuln_count={len(all_vulns)}\n")
-              f.write(f"critical_count={len(critical)}\n")
-              f.write(f"high_count={len(high)}\n")
-              f.write(f"medium_count={len(medium)}\n")
-              f.write(f"xss_count={len(xss_vulns)}\n")
-              f.write(f"takeover_count={len(takeover_vulns)}\n")
-              f.write(f"dnstake_count={len(dnstake_vulns)}\n")
-
+          add_outputs(vuln_count=len(all_vulns), critical_count=len(critical), high_count=len(high), medium_count=len(medium), xss_count=len(xss_vulns), takeover_count=len(takeover_vulns), dnstake_count=len(dnstake_vulns))
           print(f"Vulns: {len(all_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
           print(f"  XSS: {len(xss_vulns)}, Takeover: {len(takeover_vulns)}, DNS Takeover: {len(dnstake_vulns)}")
 

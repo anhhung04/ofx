@@ -45,10 +45,7 @@ jobs:
           with open('/tmp/ofx_cachepoison_live.txt', 'w') as f:
               f.write('\n'.join(sorted(live_urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"live_file=/tmp/ofx_cachepoison_live.txt\n")
-              f.write(f"live_count={len(live_urls)}\n")
-
+          add_outputs(live_file="/tmp/ofx_cachepoison_live.txt", live_count=len(live_urls))
           print(f"Discovered {len(live_urls)} live URLs for cache poison testing")
 
   header-fuzz:
@@ -124,12 +121,7 @@ jobs:
 
           total = len(nuclei_vulns) + len(ffuf_findings)
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"findings_file=/tmp/ofx_cachepoison_findings.txt\n")
-              f.write(f"nuclei_count={len(nuclei_vulns)}\n")
-              f.write(f"ffuf_count={len(ffuf_findings)}\n")
-              f.write(f"total_count={total}\n")
-
+          add_outputs(findings_file="/tmp/ofx_cachepoison_findings.txt", nuclei_count=len(nuclei_vulns), ffuf_count=len(ffuf_findings), total_count=total)
           print(f"Cache poison findings: {total} (nuclei: {len(nuclei_vulns)}, unkeyed headers: {len(ffuf_findings)})")
 
   summary:

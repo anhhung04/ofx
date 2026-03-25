@@ -67,11 +67,7 @@ jobs:
         print(f"    Original: {original_size} bytes")
         print(f"    Compressed: {len(archived)} bytes ({ratio:.1f}%)")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"staged_file={staged_file}\n")
-            f.write(f"staged_size={len(archived)}\n")
-            f.write(f"original_size={original_size}\n")
-
+        add_outputs(staged_file=staged_file, staged_size=len(archived), original_size=original_size)
   encode:
     name: Encode for Exfil
     needs: [stage]
@@ -122,10 +118,7 @@ jobs:
 
         print(f"    Saved to: {encoded_file}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"encoded_file={encoded_file}\n")
-            f.write(f"chunk_count={len(chunks)}\n")
-
+        add_outputs(encoded_file=encoded_file, chunk_count=len(chunks))
   generate:
     name: Generate Exfil Commands
     needs: [stage, encode]
@@ -192,7 +185,5 @@ jobs:
             if len(commands) > 3:
                 print(f"  ... ({len(commands) - 3} more)")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"commands_file={out_file}\n")
-            f.write(f"command_count={len(commands)}\n")
+        add_outputs(commands_file=out_file, command_count=len(commands))
       log-stdout: true

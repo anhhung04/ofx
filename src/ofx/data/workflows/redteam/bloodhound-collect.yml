@@ -144,9 +144,7 @@ jobs:
                 total += count
             print(f"\n  Total objects: {total}")
 
-            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                f.write(f"object_count={total}\n")
-
+            add_outputs(object_count=total)
             print(f"\n[+] Import into BloodHound CE:")
             print(f"    Upload ZIP from: {out_dir}")
       log-stdout: true

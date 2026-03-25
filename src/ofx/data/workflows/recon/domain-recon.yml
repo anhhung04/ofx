@@ -69,19 +69,13 @@ jobs:
           users = {{ users(steps["email-harvest"].outputs.typed_outputs) | tojson }}
           asn_ips = {{ ips(steps["asn-enum"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"domain_count={len(domains)}\n")
-              f.write(f"email_count={len(users)}\n")
-              f.write(f"asn_cidr_count={len(asn_ips)}\n")
-
+          add_outputs(domain_count=len(domains), email_count=len(users), asn_cidr_count=len(asn_ips))
           # Save ASN CIDRs for port scanning
           if asn_ips:
               cidrs = [ip.get('ip', '') for ip in asn_ips if ip.get('ip')]
               with open('/tmp/ofx_domrecon_cidrs.txt', 'w') as f:
                   f.write('\n'.join(cidrs))
-              with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                  f.write(f"cidrs_file=/tmp/ofx_domrecon_cidrs.txt\n")
-
+              add_outputs(cidrs_file="/tmp/ofx_domrecon_cidrs.txt")
           print(f"OSINT: {len(domains)} domain records, {len(users)} emails, {len(asn_ips)} ASN CIDRs")
 
   # ── Stage 1: DNS Enumeration (parallel with OSINT) ─────────────────
@@ -119,10 +113,7 @@ jobs:
           records = {{ records(steps["dns-resolve"].outputs.typed_outputs) | tojson }}
           subs = {{ subdomains(steps["dns-resolve"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"dns_record_count={len(records)}\n")
-              f.write(f"dns_subdomain_count={len(subs)}\n")
-
+          add_outputs(dns_record_count=len(records), dns_subdomain_count=len(subs))
           print(f"DNS: {len(records)} records, {len(subs)} subdomains")
 
   # ── Stage 2: Subdomain Discovery ───────────────────────────────────
@@ -215,10 +206,7 @@ jobs:
           with open('/tmp/ofx_domrecon_subs.txt', 'w') as f:
               f.write('\n'.join(sorted(subs)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"subs_file=/tmp/ofx_domrecon_subs.txt\n")
-              f.write(f"sub_count={len(subs)}\n")
-
+          add_outputs(subs_file="/tmp/ofx_domrecon_subs.txt", sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains")
 
   # ── Stage 3: DNS Verification & Resolution ─────────────────────────
@@ -278,11 +266,7 @@ jobs:
           cdn_tags = {{ tags(steps["cdn-detect"].outputs.typed_outputs) | tojson }}
           cdn_count = len([t for t in cdn_tags if t.get('category') in ('cdn', 'waf')])
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"verified_file=/tmp/ofx_domrecon_verified.txt\n")
-              f.write(f"verified_count={len(verified)}\n")
-              f.write(f"cdn_waf_count={cdn_count}\n")
-
+          add_outputs(verified_file="/tmp/ofx_domrecon_verified.txt", verified_count=len(verified), cdn_waf_count=cdn_count)
           print(f"Verified: {len(verified)} subdomains, CDN/WAF: {cdn_count}")
 
   # ── Stage 4: HTTP Probing & Fingerprinting ─────────────────────────
@@ -341,12 +325,7 @@ jobs:
           waf_tags = {{ tags(steps["waf-detect"].outputs.typed_outputs) | tojson }}
           fav_tags = {{ tags(steps["favicon-detect"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"live_file=/tmp/ofx_domrecon_live.txt\n")
-              f.write(f"live_count={len(urls)}\n")
-              f.write(f"waf_count={len(waf_tags)}\n")
-              f.write(f"favicon_tech_count={len(fav_tags)}\n")
-
+          add_outputs(live_file="/tmp/ofx_domrecon_live.txt", live_count=len(urls), waf_count=len(waf_tags), favicon_tech_count=len(fav_tags))
           print(f"Live: {len(urls)} URLs, WAFs: {len(waf_tags)}, Favicon techs: {len(fav_tags)}")
 
   # ── Stage 4: SSL/TLS Audit (parallel with web-probe) ──────────────
@@ -390,10 +369,7 @@ jobs:
           cert_count = len([c for c in certs if c.get('_type') == 'certificate'])
           vuln_count = len([v for v in {{ vulns(steps["testssl-check"].outputs.typed_outputs) | tojson }}])
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"ssl_cert_count={cert_count}\n")
-              f.write(f"ssl_vuln_count={vuln_count}\n")
-
+          add_outputs(ssl_cert_count=cert_count, ssl_vuln_count=vuln_count)
           print(f"SSL/TLS: {cert_count} certificates, {vuln_count} issues")
 
   # ── Stage 5: URL Collection & Crawling ─────────────────────────────
@@ -465,12 +441,7 @@ jobs:
           with open('/tmp/ofx_domrecon_params.txt', 'w') as f:
               f.write('\n'.join(sorted(param_urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"all_urls_file=/tmp/ofx_domrecon_allurls.txt\n")
-              f.write(f"param_file=/tmp/ofx_domrecon_params.txt\n")
-              f.write(f"url_count={len(urls)}\n")
-              f.write(f"param_count={len(param_urls)}\n")
-
+          add_outputs(all_urls_file="/tmp/ofx_domrecon_allurls.txt", param_file="/tmp/ofx_domrecon_params.txt", url_count=len(urls), param_count=len(param_urls))
           print(f"URLs: {len(urls)} total, {len(param_urls)} parameterized")
 
   # ── Stage 5: Port Scanning (parallel with URL collection) ──────────
@@ -514,11 +485,7 @@ jobs:
           with open('/tmp/ofx_domrecon_ports.txt', 'w') as f:
               f.write('\n'.join(sorted(ports)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"ports_file=/tmp/ofx_domrecon_ports.txt\n")
-              f.write(f"port_count={len(ports)}\n")
-              f.write(f"host_count={len(hosts)}\n")
-
+          add_outputs(ports_file="/tmp/ofx_domrecon_ports.txt", port_count=len(ports), host_count=len(hosts))
           print(f"Ports: {len(ports)} open across {len(hosts)} hosts")
 
   # ── Stage 6: Secret & JS Analysis ──────────────────────────────────
@@ -554,9 +521,7 @@ jobs:
         script: |
           secret_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"secret_count={len(secret_vulns)}\n")
-
+          add_outputs(secret_count=len(secret_vulns))
           print(f"Secrets: {len(secret_vulns)} findings")
 
   # ── Stage 6: Takeover Detection (parallel with secrets) ────────────
@@ -595,9 +560,7 @@ jobs:
           nuclei_vulns = {{ vulns(steps["nuclei-takeover"].outputs.typed_outputs) | tojson }}
           all_takeover = takeover_vulns + nuclei_vulns
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"takeover_count={len(all_takeover)}\n")
-
+          add_outputs(takeover_count=len(all_takeover))
           print(f"Takeover: {len(all_takeover)} potential findings")
 
   # ── Stage 7: Vulnerability Scanning ────────────────────────────────
@@ -645,12 +608,7 @@ jobs:
           critical = [v for v in all_vulns if v.get('severity') == 'critical']
           high = [v for v in all_vulns if v.get('severity') == 'high']
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"vuln_count={len(all_vulns)}\n")
-              f.write(f"critical_count={len(critical)}\n")
-              f.write(f"high_count={len(high)}\n")
-              f.write(f"xss_count={len(xss_vulns)}\n")
-
+          add_outputs(vuln_count=len(all_vulns), critical_count=len(critical), high_count=len(high), xss_count=len(xss_vulns))
           print(f"Vulns: {len(all_vulns)} (C:{len(critical)} H:{len(high)}) XSS:{len(xss_vulns)}")
 
   # ── Stage 8: Summary & Export ──────────────────────────────────────

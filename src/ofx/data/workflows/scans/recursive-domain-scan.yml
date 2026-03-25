@@ -83,10 +83,7 @@ jobs:
         with open('/tmp/ofx_rds_subdomains.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"subs_file=/tmp/ofx_rds_subdomains.txt\n")
-            f.write(f"subdomain_count={len(subs)}\n")
-
+        add_outputs(subs_file="/tmp/ofx_rds_subdomains.txt", subdomain_count=len(subs))
         print(f"Discovered {len(subs)} unique subdomains for {{ inputs.target }}")
 
   bulk-recon:
@@ -141,11 +138,7 @@ jobs:
         with open('/tmp/ofx_rds_live_urls.txt', 'w') as f:
             f.write('\n'.join(sorted(live_urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"alive_file=/tmp/ofx_rds_alive.txt\n")
-            f.write(f"live_urls_file=/tmp/ofx_rds_live_urls.txt\n")
-            f.write(f"alive_count={len(alive)}\n")
-
+        add_outputs(alive_file="/tmp/ofx_rds_alive.txt", live_urls_file="/tmp/ofx_rds_live_urls.txt", alive_count=len(alive))
         print(f"Alive subdomains: {len(alive)}, Live URLs: {len(live_urls)}")
     - task: naabu
       timeout: 10
@@ -257,11 +250,7 @@ jobs:
             if results['fail']:
                 print(f"  Failed targets: {', '.join(results['fail'])}")
 
-            with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-                f.write(f"scanned_count={len(subs)}\n")
-                f.write(f"success_count={len(results['ok'])}\n")
-                f.write(f"fail_count={len(results['fail'])}\n")
-
+            add_outputs(scanned_count=len(subs), success_count=len(results['ok']), fail_count=len(results['fail']))
         asyncio.run(main())
 
   summary:

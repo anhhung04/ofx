@@ -33,10 +33,7 @@ jobs:
         accounts = {{ users(steps["maigret-search"].outputs.typed_outputs) | tojson }}
         urls = {{ urls(steps["maigret-search"].outputs.typed_outputs) | tojson }}
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"accounts_found={len(accounts)}\n")
-            f.write(f"profile_urls={len(urls)}\n")
-
+        add_outputs(accounts_found=len(accounts), profile_urls=len(urls))
         print(f"Found {len(accounts)} accounts, {len(urls)} profile URLs")
   email-breach:
     name: Email Breach Search
@@ -55,9 +52,7 @@ jobs:
 
         users_found = {{ users(steps["breach-search"].outputs.typed_outputs) | tojson }}
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"breaches_found={len(users_found)}\n")
-
+        add_outputs(breaches_found=len(users_found))
         print(f"Found {len(users_found)} breach results")
   summary:
     name: User Hunt Summary

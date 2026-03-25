@@ -129,10 +129,7 @@ jobs:
                 except Exception:
                     pass
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"finding_count={len(findings)}\n")
-            f.write(f"payloads_tested={len(payloads)}\n")
-
+        add_outputs(finding_count=len(findings), payloads_tested=len(payloads))
         print(f"\n=== RESULTS: {len(findings)} findings ===")
         for finding in findings:
             print(f"  {finding}")

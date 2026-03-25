@@ -70,9 +70,7 @@ jobs:
         with open('/tmp/ofx_urlscan_urls.txt', 'w') as tf:
             tf.write('\n'.join(sorted(urls)))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"urls_file=/tmp/ofx_urlscan_urls.txt\n")
-            f.write(f"url_count={len(urls)}\n")
+        add_outputs(urls_file="/tmp/ofx_urlscan_urls.txt", url_count=len(urls))
   url-fuzz:
     name: URL Fuzzing
     needs:

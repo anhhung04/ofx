@@ -41,10 +41,7 @@ jobs:
             print(f"    ... and {len(subs) - 20} more")
 
         import json
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"crtsh_subs={json.dumps(subs)}\n")
-            f.write(f"crtsh_count={len(subs)}\n")
-
+        add_outputs(crtsh_subs=json.dumps(subs), crtsh_count=len(subs))
     - name: merge-results
       script: |
         import json
@@ -81,7 +78,5 @@ jobs:
         if len(filtered) > 30:
             print(f"    ... and {len(filtered) - 30} more")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"subdomains_file={out_file}\n")
-            f.write(f"total_count={len(filtered)}\n")
+        add_outputs(subdomains_file=out_file, total_count=len(filtered))
       log-stdout: true

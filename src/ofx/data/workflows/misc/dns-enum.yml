@@ -71,10 +71,7 @@ jobs:
 
         print(f"\n[+] Found {len(found)} subdomains")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"found_subs={json.dumps(found)}\n")
-            f.write(f"found_count={len(found)}\n")
-
+        add_outputs(found_subs=json.dumps(found), found_count=len(found))
   resolve:
     name: Resolve Subdomains
     needs: [bruteforce]
@@ -94,9 +91,7 @@ jobs:
 
         if not found:
             print("[-] No subdomains to resolve")
-            with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-                f.write("resolved_file=\n")
-                f.write("unique_ips=[]\n")
+            add_outputs(resolved_file="", unique_ips="[]")
             raise SystemExit(0)
 
         resolved = {}
@@ -118,10 +113,7 @@ jobs:
         with open(out_file, "w") as f:
             json.dump(resolved, f, indent=2)
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"resolved_file={out_file}\n")
-            f.write(f"unique_ips={json.dumps(sorted(all_ips))}\n")
-
+        add_outputs(resolved_file=out_file, unique_ips=json.dumps(sorted(all_ips)))
   summary:
     name: DNS Enumeration Summary
     needs: [bruteforce, resolve]

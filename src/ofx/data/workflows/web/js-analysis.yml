@@ -82,12 +82,7 @@ jobs:
           with open('/tmp/ofx_jsanalysis_allurls.txt', 'w') as f:
               f.write('\n'.join(sorted(all_urls)))
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"js_file=/tmp/ofx_jsanalysis_jsurls.txt\n")
-              f.write(f"all_urls_file=/tmp/ofx_jsanalysis_allurls.txt\n")
-              f.write(f"js_count={len(js_urls)}\n")
-              f.write(f"url_count={len(all_urls)}\n")
-
+          add_outputs(js_file="/tmp/ofx_jsanalysis_jsurls.txt", all_urls_file="/tmp/ofx_jsanalysis_allurls.txt", js_count=len(js_urls), url_count=len(all_urls))
           print(f"Found {len(js_urls)} JS files from {len(all_urls)} total URLs")
 
   analyze-js:
@@ -136,12 +131,7 @@ jobs:
           critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
           high = [v for v in nuclei_vulns if v.get('severity') == 'high']
 
-          with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-              f.write(f"secret_count={total_secrets}\n")
-              f.write(f"vuln_count={total_vulns}\n")
-              f.write(f"critical_count={len(critical)}\n")
-              f.write(f"high_count={len(high)}\n")
-
+          add_outputs(secret_count=total_secrets, vuln_count=total_vulns, critical_count=len(critical), high_count=len(high))
           print("=" * 50)
           print(f" JS ANALYSIS COMPLETE: {{ inputs.target }}")
           print("=" * 50)

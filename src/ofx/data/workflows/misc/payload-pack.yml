@@ -97,8 +97,5 @@ jobs:
 
         print(f"\n[+] {len(variants)} variant(s) written to {output_dir}")
 
-        with open("{{ env.OFX_OUTPUTS }}", "a") as f:
-            f.write(f"output_dir={output_dir}\n")
-            f.write(f"variants={json.dumps(variants)}\n")
-            f.write(f"variant_count={len(variants)}\n")
+        add_outputs(output_dir=output_dir, variants=json.dumps(variants), variant_count=len(variants))
       log-stdout: true

@@ -62,17 +62,10 @@ jobs:
         alg = header.get('alg', 'unknown')
         claims = list(payload.keys())
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"jwt_algorithm={alg}\n")
-            f.write(f"jwt_claims={','.join(claims)}\n")
-            f.write(f"jwt_claim_count={len(claims)}\n")
-            if payload.get('sub'):
-                f.write(f"jwt_subject={payload['sub']}\n")
-            if payload.get('iss'):
-                f.write(f"jwt_issuer={payload['iss']}\n")
-            if payload.get('exp'):
-                f.write(f"jwt_expiry={payload['exp']}\n")
-
+        if payload.get('sub'):
+        if payload.get('iss'):
+        if payload.get('exp'):
+        add_outputs(jwt_algorithm=alg, jwt_claims=','.join(claims), jwt_claim_count=len(claims), jwt_subject=payload['sub'], jwt_issuer=payload['iss'], jwt_expiry=payload['exp'])
         print(f"Algorithm: {alg}")
         print(f"Claims: {', '.join(claims)}")
         print(f"Header: {json.dumps(header, indent=2)}")
@@ -102,10 +95,7 @@ jobs:
         with open('/tmp/ofx_jwtaudit_vulns.txt', 'w') as tf:
             tf.write('\n'.join(vulns))
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"jwt_vuln_count={len(vulns)}\n")
-            f.write(f"jwt_vulns_file=/tmp/ofx_jwtaudit_vulns.txt\n")
-
+        add_outputs(jwt_vuln_count=len(vulns), jwt_vulns_file="/tmp/ofx_jwtaudit_vulns.txt")
         print(f"JWT vulnerabilities found: {len(vulns)}")
         for v in vulns:
             print(f"  [!] {v}")

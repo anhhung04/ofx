@@ -133,8 +133,5 @@ jobs:
             for p in sorted(prefixes):
                 f.write(f"  {p}\n")
 
-        with open('{{ env.OFX_OUTPUTS }}', 'a') as f:
-            f.write(f"asn=AS{asn}\n")
-            f.write(f"prefix_count={len(prefixes)}\n")
-            f.write(f"results_file={out_file}\n")
+        add_outputs(asn=f"AS{asn}", prefix_count=len(prefixes), results_file=out_file)
       log-stdout: true
