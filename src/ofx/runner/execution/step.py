@@ -28,6 +28,7 @@ from ofx.runner.execution.execution_results import (
     build_step_execution_result,
 )
 from ofx.runner.logging import get_logger
+from ofx.settings import settings
 
 logger = get_logger()
 
@@ -210,10 +211,21 @@ class StepRunner(BaseRunner[Step]):
                 pass
 
     def _log_output(self, stream: str, content: str) -> None:
-        """Log a stdout/stderr stream to the console."""
+        """Log a stdout/stderr stream to the console, truncating long output."""
         if not content or not isinstance(content, str):
             return
-        self._log_info(f"\n==={stream}===\n{content}\n===========")
+        max_lines = settings.max_display_lines
+        lines = content.splitlines()
+        if len(lines) > max_lines:
+            head = "\n".join(lines[:max_lines])
+            omitted = len(lines) - max_lines
+            display = (
+                f"{head}\n"
+                f"... [{omitted} more lines — full output saved to logs]"
+            )
+        else:
+            display = content
+        self._log_info(f"\n==={stream}===\n{display}\n===========")
 
     def _save_output_file(self, stdout: str, outputs: dict) -> None:
         """Persist full stdout to a log file under output_path/logs/."""

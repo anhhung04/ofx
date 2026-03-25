@@ -248,6 +248,11 @@ class Settings(BaseSettings):
         description="Maximum output size in bytes before truncation",
     )
 
+    max_display_lines: int = Field(
+        default=50,
+        description="Maximum stdout/stderr lines shown in the console. Full output is saved to log files.",
+    )
+
     default_remote_registry: str = Field(
         default="https://github.com",
         description="Default remote registry URL for cloning repositories",
