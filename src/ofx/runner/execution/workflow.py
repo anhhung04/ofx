@@ -173,6 +173,29 @@ class WorkflowRunner(BaseRunner[Workflow]):
         existing["__summary__"] = unified
         await self.reg_set(RunnerRegistryKeys.OUTPUTS, existing)
 
+        # Auto-export findings to project directory
+        await self._auto_export_findings(existing)
+
+    async def _auto_export_findings(self, existing_outputs: dict) -> None:
+        """Export typed findings to the project directory when --project is set."""
+        project_path = self.ctx.vars.get("project_path")
+        if not project_path:
+            return
+
+        try:
+            from ofx.runner.execution.findings_export import auto_export_findings
+
+            summaries = await auto_export_findings(
+                self._runners,
+                project_path,
+                log_fn=self._log_info,
+            )
+            if summaries:
+                existing_outputs["__findings_export__"] = summaries
+                await self.reg_set(RunnerRegistryKeys.OUTPUTS, existing_outputs)
+        except Exception as e:
+            self._log_debug(f"Findings export failed: {e}")
+
     async def _install_tools(self) -> None:
         tools = self.model.tools
         if not tools:

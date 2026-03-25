@@ -227,6 +227,14 @@ class FlowRunHandler:
         console.print()
         console.print(panel)
 
+        # Show findings export summary
+        findings = result.outputs.pop("__findings_export__", None)
+        if findings:
+            console.print("  [bold green]📁 Findings exported:[/]")
+            for line in findings:
+                console.print(f"  {line}")
+            console.print()
+
         # Show output path
         console.print(f"  [dim]Output:[/] {self.output}")
         console.print()
