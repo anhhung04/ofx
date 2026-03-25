@@ -294,17 +294,23 @@ def status(
     git_info = ""
     try:
         import git as gitlib
-        repo = gitlib.Repo(project_path)
-        branch = repo.active_branch.name
-        dirty = repo.is_dirty()
-        status_str = "[red]dirty[/]" if dirty else "[green]clean[/]"
-        last_commit = ""
-        if repo.head.is_valid():
-            commit = repo.head.commit
-            last_commit = f" — last commit: {commit.committed_datetime.strftime('%Y-%m-%d %H:%M')}"
-        git_info = f"  [dim]Git:[/] {branch} ({status_str}){last_commit}"
-    except Exception:
-        git_info = "  [dim]Git:[/] not initialized"
+
+        try:
+            repo = gitlib.Repo(project_path)
+            branch = repo.active_branch.name
+            dirty = repo.is_dirty()
+            status_str = "[red]dirty[/]" if dirty else "[green]clean[/]"
+            last_commit = ""
+            if repo.head.is_valid():
+                commit = repo.head.commit
+                last_commit = f" — last commit: {commit.committed_datetime.strftime('%Y-%m-%d %H:%M')}"
+            git_info = f"  [dim]Git:[/] {branch} ({status_str}){last_commit}"
+        except gitlib.exc.InvalidGitRepositoryError:
+            git_info = "  [dim]Git:[/] not initialized"
+        except Exception:
+            git_info = "  [dim]Git:[/] error reading status"
+    except ImportError:
+        git_info = "  [dim]Git:[/] [yellow]GitPython not installed[/]"
 
     # Build display
     lines = [

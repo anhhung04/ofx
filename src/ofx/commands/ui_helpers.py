@@ -227,9 +227,15 @@ def workflow_start_panel(
 
 def execution_summary_panel(summary: Any) -> Panel:
     data = summary.to_dict() if hasattr(summary, "to_dict") else summary
+    elapsed = data.get("elapsed_seconds")
+    elapsed_str = f" | ⏱ {_format_elapsed(elapsed)}" if elapsed else ""
+    status = data.get("status", "unknown")
+    status_color = _status_color(status)
     totals = (
+        f"[{status_color}]{status.upper()}[/{status_color}] — "
         f"Jobs: {data.get('total_jobs', 0)} (failed: {data.get('failed_jobs', 0)}) | "
         f"Steps: {data.get('total_steps', 0)} (failed: {data.get('failed_steps', 0)})"
+        f"{elapsed_str}"
     )
     table = Table(
         show_header=True,
@@ -336,6 +342,19 @@ def _format_duration_ms(duration_ms: int | None) -> str:
     seconds = seconds % 60
     if minutes < 60:
         return f"{minutes}m {seconds:.0f}s"
+    hours = minutes // 60
+    minutes = minutes % 60
+    return f"{hours}h {minutes}m"
+
+
+def _format_elapsed(seconds: float) -> str:
+    """Format elapsed seconds into a human-readable string."""
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    if minutes < 60:
+        return f"{minutes}m {secs:.0f}s"
     hours = minutes // 60
     minutes = minutes % 60
     return f"{hours}h {minutes}m"
