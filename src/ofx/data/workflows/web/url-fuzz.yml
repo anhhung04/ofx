@@ -22,8 +22,8 @@ jobs:
   fuzz:
     name: Directory Fuzzing
     outputs:
-      fuzzed_file: '${{ steps["collect-urls"].outputs.fuzzed_file }}'
-      fuzz_count: '${{ steps["collect-urls"].outputs.fuzz_count }}'
+      fuzzed_file: '{{ steps["collect-urls"].outputs.fuzzed_file }}'
+      fuzz_count: '{{ steps["collect-urls"].outputs.fuzz_count }}'
     steps:
     - task: ffuf
       timeout: 15

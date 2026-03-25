@@ -16,9 +16,9 @@ jobs:
   audit:
     name: Security Header Audit
     outputs:
-      urls_tested: '${{ steps["check-headers"].outputs.urls_tested }}'
-      finding_count: '${{ steps["check-headers"].outputs.finding_count }}'
-      grades: '${{ steps["check-headers"].outputs.grades }}'
+      urls_tested: '{{ steps["check-headers"].outputs.urls_tested }}'
+      finding_count: '{{ steps["check-headers"].outputs.finding_count }}'
+      grades: '{{ steps["check-headers"].outputs.grades }}'
     steps:
     - name: check-headers
       script: |

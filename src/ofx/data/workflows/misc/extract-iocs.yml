@@ -19,8 +19,8 @@ jobs:
   extract:
     name: Extract IOCs
     outputs:
-      total_iocs: '${{ steps["parse-iocs"].outputs.total_iocs }}'
-      summary: '${{ steps["parse-iocs"].outputs.summary }}'
+      total_iocs: '{{ steps["parse-iocs"].outputs.total_iocs }}'
+      summary: '{{ steps["parse-iocs"].outputs.summary }}'
     steps:
     - name: parse-iocs
       script: |

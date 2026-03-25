@@ -42,8 +42,8 @@ jobs:
     needs:
     - probe
     outputs:
-      found_file: '${{ steps["collect-dirs"].outputs.found_file }}'
-      url_count: '${{ steps["collect-dirs"].outputs.url_count }}'
+      found_file: '{{ steps["collect-dirs"].outputs.found_file }}'
+      url_count: '{{ steps["collect-dirs"].outputs.url_count }}'
     steps:
     - task: dirsearch
       timeout: 15
