@@ -191,7 +191,7 @@ jobs:
       continue-on-error: true
     - name: gowitness-screenshots
       run: |
-        cat {{ jobs['service-detect'].outputs.http_urls_file | default(', true) }} > /tmp/gowitness-targets.txt 2>/dev/null
+        cat {{ jobs['service-detect'].outputs.http_urls_file | default('', true) }} > /tmp/gowitness-targets.txt 2>/dev/null
         gowitness scan file -f /tmp/gowitness-targets.txt --screenshot-path /tmp/gowitness-shots 2>/dev/null || true
       continue-on-error: true
     - name: collect-web
