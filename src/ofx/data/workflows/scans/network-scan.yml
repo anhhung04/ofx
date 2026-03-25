@@ -176,7 +176,7 @@ jobs:
       timeout: 15
       name: crawl-urls
       with:
-        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
         depth: 2
       continue-on-error: true
   vuln-scan:
@@ -189,21 +189,21 @@ jobs:
       timeout: 20
       name: nuclei-scan
       with:
-        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
         severity: critical,high,medium
       continue-on-error: true
     - task: whatweb
       timeout: 10
       name: whatweb-fingerprint
       with:
-        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
         aggression: 3
       continue-on-error: true
     - task: nikto
       timeout: 15
       name: nikto-scan
       with:
-        target: '{{ jobs[''host-recon''].outputs.live_urls | default(inputs.target, true) }}'
+        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
       continue-on-error: true
     - name: final-summary
       script: |

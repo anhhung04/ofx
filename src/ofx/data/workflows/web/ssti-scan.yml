@@ -103,14 +103,14 @@ jobs:
         name: tinja-scan
         timeout: 10
         with:
-          target: '{{ jobs[''param-discovery''].outputs.param_file | default(inputs.target, true) }}'
+          target: "{{ jobs['param-discovery'].outputs.param_file | default(inputs.target, true) }}"
         continue-on-error: true
 
       - task: nuclei
         timeout: 20
         name: nuclei-ssti
         with:
-          target: '{{ jobs[''param-discovery''].outputs.param_file | default(inputs.target, true) }}'
+          target: "{{ jobs['param-discovery'].outputs.param_file | default(inputs.target, true) }}"
           tags: ssti
         continue-on-error: true
 

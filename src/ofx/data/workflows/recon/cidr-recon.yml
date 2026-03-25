@@ -97,14 +97,14 @@ jobs:
       timeout: 30
       name: service-detect
       with:
-        target: '{{ jobs[''host-discovery''].outputs.live_hosts }}'
+        target: "{{ jobs['host-discovery'].outputs.live_hosts }}"
         version_detection: true
       continue-on-error: true
     - task: httpx
       timeout: 10
       name: http-probe
       with:
-        target: '{{ jobs[''host-discovery''].outputs.live_hosts }}'
+        target: "{{ jobs['host-discovery'].outputs.live_hosts }}"
         tech_detect: true
         status_code: true
       continue-on-error: true

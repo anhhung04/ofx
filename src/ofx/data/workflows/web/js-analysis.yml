@@ -104,7 +104,7 @@ jobs:
         timeout: 20
         name: nuclei-exposure
         with:
-          target: '{{ jobs[''discover-js''].outputs.js_file | default(inputs.target, true) }}'
+          target: "{{ jobs['discover-js'].outputs.js_file | default(inputs.target, true) }}"
           tags: exposure,token,secret
         continue-on-error: true
 

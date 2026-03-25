@@ -191,7 +191,7 @@ jobs:
         timeout: 10
         name: dns-resolve
         with:
-          target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
+          target: "{{ jobs['passive-enum'].outputs.subs_file }}"
           a: true
           aaaa: true
           cname: true
@@ -202,7 +202,7 @@ jobs:
         timeout: 5
         name: tlsx-san
         with:
-          target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
+          target: "{{ jobs['passive-enum'].outputs.subs_file }}"
           san: true
         continue-on-error: true
 
@@ -210,7 +210,7 @@ jobs:
         timeout: 10
         name: puredns-resolve
         with:
-          target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
+          target: "{{ jobs['passive-enum'].outputs.subs_file }}"
           resolvers: '{{ inputs.resolvers if inputs.resolvers else "" }}'
         continue-on-error: true
 
@@ -225,7 +225,7 @@ jobs:
         timeout: 10
         name: gotator-permute
         with:
-          target: '{{ jobs[''passive-enum''].outputs.subs_file }}'
+          target: "{{ jobs['passive-enum'].outputs.subs_file }}"
           depth: 1
           fast: true
         continue-on-error: true
@@ -303,7 +303,7 @@ jobs:
         timeout: 10
         name: http-probe
         with:
-          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          target: "{{ jobs['active-enum'].outputs.verified_file }}"
           tech_detect: true
           status_code: true
           title: true
@@ -321,14 +321,14 @@ jobs:
         timeout: 5
         name: cdn-detect
         with:
-          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          target: "{{ jobs['active-enum'].outputs.verified_file }}"
         continue-on-error: true
 
       - task: favirecon
         timeout: 5
         name: favicon-detect
         with:
-          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          target: "{{ jobs['active-enum'].outputs.verified_file }}"
         continue-on-error: true
 
       - name: export-live
@@ -371,7 +371,7 @@ jobs:
         timeout: 15
         name: katana-crawl
         with:
-          target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
+          target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
           depth: 3
           js_crawl: true
         continue-on-error: true
@@ -380,7 +380,7 @@ jobs:
         timeout: 15
         name: gospider-crawl
         with:
-          target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
+          target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
           depth: 2
         continue-on-error: true
 
@@ -410,7 +410,7 @@ jobs:
         timeout: 10
         name: jsluice-scan
         with:
-          target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
+          target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
         continue-on-error: true
 
       - name: collect-urls
@@ -499,7 +499,7 @@ jobs:
         timeout: 10
         name: naabu-scan
         with:
-          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          target: "{{ jobs['active-enum'].outputs.verified_file }}"
           top_ports: '1000'
           rate: 1000
         continue-on-error: true
@@ -508,7 +508,7 @@ jobs:
         timeout: 30
         name: nmap-scan
         with:
-          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          target: "{{ jobs['active-enum'].outputs.verified_file }}"
           version_detection: true
         continue-on-error: true
 
@@ -555,7 +555,7 @@ jobs:
         timeout: 20
         name: nuclei-scan
         with:
-          target: '{{ jobs[''web-probe''].outputs.live_file | default(inputs.target, true) }}'
+          target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
           severity: critical,high,medium
         continue-on-error: true
 
@@ -563,14 +563,14 @@ jobs:
         timeout: 15
         name: xss-scan
         with:
-          target: '{{ jobs[''url-collection''].outputs.param_file | default(inputs.target, true) }}'
+          target: "{{ jobs['url-collection'].outputs.param_file | default(inputs.target, true) }}"
         continue-on-error: true
 
       - task: nuclei
         timeout: 20
         name: takeover-check
         with:
-          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          target: "{{ jobs['active-enum'].outputs.verified_file }}"
           tags: takeover
         continue-on-error: true
 
@@ -583,7 +583,7 @@ jobs:
         timeout: 5
         name: dnstake-scan
         with:
-          target: '{{ jobs[''active-enum''].outputs.verified_file }}'
+          target: "{{ jobs['active-enum'].outputs.verified_file }}"
         continue-on-error: true
 
       - name: export-vulns

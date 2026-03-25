@@ -42,8 +42,8 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: smb
-          username: '{{ inputs.username if inputs.username else ''"'' }}'
-          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          username: "{{ inputs.username if inputs.username else '' }}"
+          password: "{{ inputs.password if inputs.password else '' }}"
           shares: true
         continue-on-error: true
       - task: netexec
@@ -52,8 +52,8 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: smb
-          username: '{{ inputs.username if inputs.username else ''"'' }}'
-          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          username: "{{ inputs.username if inputs.username else '' }}"
+          password: "{{ inputs.password if inputs.password else '' }}"
           users: true
         continue-on-error: true
       - task: netexec
@@ -62,8 +62,8 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: smb
-          username: '{{ inputs.username if inputs.username else ''"'' }}'
-          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          username: "{{ inputs.username if inputs.username else '' }}"
+          password: "{{ inputs.password if inputs.password else '' }}"
           groups: true
         continue-on-error: true
       - task: netexec
@@ -72,8 +72,8 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: smb
-          username: '{{ inputs.username if inputs.username else ''"'' }}'
-          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          username: "{{ inputs.username if inputs.username else '' }}"
+          password: "{{ inputs.password if inputs.password else '' }}"
           sessions: true
         continue-on-error: true
       - task: netexec
@@ -82,8 +82,8 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: smb
-          username: '{{ inputs.username if inputs.username else ''"'' }}'
-          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          username: "{{ inputs.username if inputs.username else '' }}"
+          password: "{{ inputs.password if inputs.password else '' }}"
           pass_pol: true
         continue-on-error: true
       - task: netexec
@@ -92,8 +92,8 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           protocol: smb
-          username: '{{ inputs.username if inputs.username else ''"'' }}'
-          password: '{{ inputs.password if inputs.password else ''"'' }}'
+          username: "{{ inputs.username if inputs.username else '' }}"
+          password: "{{ inputs.password if inputs.password else '' }}"
           rid_brute: true
         continue-on-error: true
       - task: enum4linux

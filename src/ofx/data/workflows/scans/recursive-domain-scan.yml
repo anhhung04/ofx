@@ -101,7 +101,7 @@ jobs:
       timeout: 10
       name: dns-verify
       with:
-        target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
+        target: "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
         a: true
         cname: true
         resp: true
@@ -110,7 +110,7 @@ jobs:
       timeout: 10
       name: http-probe
       with:
-        target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
+        target: "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
         tech_detect: true
         status_code: true
         title: true
@@ -151,8 +151,7 @@ jobs:
       timeout: 10
       name: port-scan
       with:
-        target: '{{ steps["collect-alive"].outputs.alive_file if steps["collect-alive"].outputs is defined else
-          jobs[''subdomain-discovery''].outputs.subs_file }}'
+        target: '{{ steps["collect-alive"].outputs.alive_file if steps["collect-alive"].outputs is defined else jobs["subdomain-discovery"].outputs.subs_file }}'
         top_ports: '1000'
         rate: 1000
       continue-on-error: true
@@ -160,15 +159,14 @@ jobs:
       timeout: 20
       name: quick-vuln-scan
       with:
-        target: '{{ steps["collect-alive"].outputs.live_urls_file if steps["collect-alive"].outputs is defined
-          else jobs[''subdomain-discovery''].outputs.subs_file }}'
+        target: '{{ steps["collect-alive"].outputs.live_urls_file if steps["collect-alive"].outputs is defined else jobs["subdomain-discovery"].outputs.subs_file }}'
         severity: critical,high
       continue-on-error: true
     - task: nuclei
       timeout: 20
       name: takeover-check
       with:
-        target: '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
+        target: "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
         tags: takeover
       continue-on-error: true
     - name: bulk-summary
@@ -195,7 +193,7 @@ jobs:
   per-subdomain-scan:
     name: Per-Subdomain Deep Scan
     needs: [bulk-recon]
-    run_if: '{{ inputs.skip_deep != ''true'' }}'
+    run_if: "{{ inputs.skip_deep != 'true' }}"
     outputs:
       scanned_count: '{{ steps["fan-out-domain-scan"].outputs.scanned_count }}'
       success_count: '{{ steps["fan-out-domain-scan"].outputs.success_count }}'
@@ -209,9 +207,9 @@ jobs:
         import sys
         from pathlib import Path
 
-        subs_file = '{{ jobs[''subdomain-discovery''].outputs.subs_file }}'
-        max_parallel = int('{{ inputs.max_parallel | default(''5'', true) }}')
-        project_flag = '{{ vars.project_path | default('''', true) }}'
+        subs_file = "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
+        max_parallel = int("{{ inputs.max_parallel | default('5', true) }}")
+        project_flag = "{{ vars.project_path | default('', true) }}"
 
         subs = [s.strip() for s in Path(subs_file).read_text().strip().splitlines() if s.strip()]
         print(f"Launching domain-scan for {len(subs)} subdomains (max_parallel={max_parallel})")

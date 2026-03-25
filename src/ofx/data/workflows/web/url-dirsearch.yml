@@ -92,7 +92,7 @@ jobs:
       timeout: 15
       name: crawl-content
       with:
-        target: '{{ jobs[''dir-search''].outputs.found_file | default(inputs.target, true) }}'
+        target: "{{ jobs['dir-search'].outputs.found_file | default(inputs.target, true) }}"
         depth: 2
       continue-on-error: true
     - name: summary

@@ -65,7 +65,7 @@ jobs:
       timeout: 10
       name: naabu-scan
       with:
-        target: '{{ jobs[''host-discovery''].outputs.alive_file | default(inputs.target, true) }}'
+        target: "{{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }}"
         top_ports: '1000'
         rate: 1000
       continue-on-error: true
@@ -105,14 +105,14 @@ jobs:
       timeout: 30
       name: version-detect
       with:
-        target: '{{ jobs[''port-scan''].outputs.hosts_file | default(inputs.target, true) }}'
+        target: "{{ jobs['port-scan'].outputs.hosts_file | default(inputs.target, true) }}"
         version_detection: true
       continue-on-error: true
     - task: httpx
       timeout: 10
       name: http-probe
       with:
-        target: '{{ jobs[''port-scan''].outputs.hosts_file | default(inputs.target, true) }}'
+        target: "{{ jobs['port-scan'].outputs.hosts_file | default(inputs.target, true) }}"
         tech_detect: true
         status_code: true
         title: true

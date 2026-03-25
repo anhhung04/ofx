@@ -73,7 +73,7 @@ jobs:
       timeout: 10
       name: resolve-dns
       with:
-        target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
+        target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
         a: true
         cname: true
         resp: true
@@ -117,7 +117,7 @@ jobs:
       timeout: 20
       name: nuclei-takeover
       with:
-        target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
+        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
         tags: takeover
       continue-on-error: true
     - name: collect-takeovers

@@ -122,7 +122,7 @@ jobs:
       timeout: 10
       name: verify-dns
       with:
-        target: '{{ jobs[''subdomain-enum''].outputs.subs_file }}'
+        target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
         a: true
         cname: true
         resp: true
@@ -159,7 +159,7 @@ jobs:
       timeout: 10
       name: naabu-scan
       with:
-        target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
+        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
         top_ports: '1000'
         rate: 1000
       continue-on-error: true
@@ -202,7 +202,7 @@ jobs:
       timeout: 10
       name: probe-subs
       with:
-        target: '{{ jobs[''dns-verify''].outputs.alive_file }}'
+        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
         tech_detect: true
         status_code: true
         title: true
@@ -272,14 +272,14 @@ jobs:
       timeout: 15
       name: katana-crawl
       with:
-        target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
+        target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
         depth: 3
       continue-on-error: true
     - task: gospider
       timeout: 15
       name: gospider-crawl
       with:
-        target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
+        target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
         depth: 2
       continue-on-error: true
     - task: gau
@@ -413,7 +413,7 @@ jobs:
       timeout: 20
       name: nuclei-scan
       with:
-        target: '{{ jobs[''http-probe''].outputs.live_urls | default(inputs.target, true) }}'
+        target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
         severity: critical,high,medium
       continue-on-error: true
     - name: nikto-scan

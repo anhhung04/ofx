@@ -68,7 +68,7 @@ jobs:
       timeout: 10
       name: naabu-precision
       with:
-        target: '{{ jobs[''host-discovery''].outputs.alive_file }}'
+        target: "{{ jobs['host-discovery'].outputs.alive_file }}"
         top_ports: '1000'
         rate: 1000
       continue-on-error: true
@@ -133,7 +133,7 @@ jobs:
       timeout: 10
       name: http-probe
       with:
-        target: '{{ jobs[''host-discovery''].outputs.alive_file }}'
+        target: "{{ jobs['host-discovery'].outputs.alive_file }}"
         tech_detect: true
         status_code: true
         title: true
