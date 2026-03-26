@@ -358,6 +358,7 @@ class BaseRunner[TModel: BaseModel]:
                 "runner": self,
                 "ctx": self.ctx,
                 "env": context_vars.get("envs", {}),
+                "vars": self.ctx.vars,
             }
         )
         return await self._template_service.resolve(

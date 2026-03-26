@@ -67,6 +67,10 @@ ssh = [
 ai = [
   "openai>=1.0.0",
 ]
+compile = [
+  "cython>=3.0.0",
+  "setuptools>=69.0.0",
+]
 
 [project.scripts]
 ofx = "ofx:main"
