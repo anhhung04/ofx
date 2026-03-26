@@ -87,9 +87,12 @@ class JwtToolTask(Task):
 
             m_vuln = self._VULN_RE.search(line)
             if m_vuln:
+                vuln_name = m_vuln.group(1).strip()
+                if not vuln_name:
+                    continue
                 results.append(
                     Vulnerability(
-                        name=m_vuln.group(1).strip(),
+                        name=vuln_name,
                         severity=Severity.HIGH,
                         provider="jwt_tool",
                     )

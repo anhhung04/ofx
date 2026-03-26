@@ -53,6 +53,9 @@ class MaigretTask(Task):
         if not site_name and not url_user:
             return []
 
+        if not username:
+            return []
+
         return [
             UserAccount(
                 username=username,

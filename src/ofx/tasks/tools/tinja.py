@@ -77,7 +77,7 @@ class TinjaTask(Task):
         if url:
             results.append(Url(url=url))
 
-        if vulnerable:
+        if vulnerable and url:
             results.append(
                 Vulnerability(
                     name="SSTI",

@@ -92,11 +92,14 @@ class DalfoxTask(Task):
 
         result_type = data.get("type", "")
         if result_type == "vuln":
+            matched_at = data.get("inject_url", data.get("url", ""))
+            if not matched_at:
+                return []
             return [
                 Vulnerability(
                     name=data.get("data", "XSS"),
                     id=data.get("cwe", ""),
-                    matched_at=data.get("inject_url", data.get("url", "")),
+                    matched_at=matched_at,
                     severity=Vulnerability.model_fields["severity"].default,
                     provider="dalfox",
                     description=data.get("message", ""),

@@ -97,6 +97,8 @@ class CherrybombTask(Task):
             m_alert = _ALERT_RE.search(line)
             if m_alert:
                 alert_text = m_alert.group(1).strip()
+                if not alert_text:
+                    continue
                 results.append(
                     Vulnerability(
                         name=alert_text,
@@ -111,6 +113,8 @@ class CherrybombTask(Task):
             m_check = _CHECK_RE.search(line)
             if m_check:
                 check_text = m_check.group(1).strip()
+                if not check_text:
+                    continue
                 results.append(
                     Tag(
                         name="check",
