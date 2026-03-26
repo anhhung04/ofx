@@ -159,7 +159,18 @@ def format_typed_outputs(
         for _, header, style, max_w in columns:
             table.add_column(header, style=style, max_width=max_w, no_wrap=max_w is not None)
 
+        # Skip groups where every item has empty data columns
+        data_fields = [f for f, _, _, _ in columns]
+        non_empty_items = [
+            item
+            for item in items
+            if any(_cell_value(item, f) for f in data_fields)
+        ]
+        if not non_empty_items:
+            continue
+
         # Cap rows to avoid flooding the terminal
+        items = non_empty_items
         max_rows = 50
         for item in items[:max_rows]:
             cells = []
@@ -173,6 +184,9 @@ def format_typed_outputs(
             table.add_row(*[f"… +{len(items) - max_rows} more" if i == 0 else "" for i in range(len(columns))])
 
         renderables.append(table)
+
+    if not renderables:
+        return
 
     # Build summary line
     counts = Counter(item.get("_type", "?") for item in typed_outputs)
