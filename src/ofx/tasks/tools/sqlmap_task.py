@@ -120,7 +120,7 @@ class SqlmapTask(Task):
                         results.append(
                             Vulnerability(
                                 name=current_title,
-                                matched_at=target_url,
+                                matched_at=target_url or current_param,
                                 severity=Severity.HIGH,
                                 provider="sqlmap",
                                 description=(
@@ -144,7 +144,7 @@ class SqlmapTask(Task):
             results.append(
                 Vulnerability(
                     name=current_title,
-                    matched_at=target_url,
+                    matched_at=target_url or current_param,
                     severity=Severity.HIGH,
                     provider="sqlmap",
                     description=(
