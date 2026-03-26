@@ -286,6 +286,31 @@ def execution_summary_panel(summary: Any) -> Panel:
         content_items.append(Text.from_markup(tw_label))
 
     content_items.append(table)
+
+    # Failed steps detail section
+    failed_details = _collect_failed_steps(data)
+    if failed_details:
+        content_items.append(Text(""))
+        content_items.append(
+            Text.from_markup(
+                f"[bold red]✗ Failed Steps ({len(failed_details)}):[/bold red]"
+            )
+        )
+        for detail in failed_details:
+            job_name = detail["job"]
+            step_name = detail["step"]
+            error = detail["error"]
+            content_items.append(
+                Text.from_markup(
+                    f"  [bold]{job_name}[/bold] › [yellow]{step_name}[/yellow]"
+                )
+            )
+            if error:
+                for line in error.splitlines()[:5]:
+                    content_items.append(
+                        Text.from_markup(f"    [dim red]{_truncate_text(line, 200)}[/dim red]")
+                    )
+
     content = Group(*content_items)
     return Panel(
         content,
@@ -302,6 +327,23 @@ def _count_failed_steps(job: dict[str, Any]) -> int:
         return len(failed_steps)
     steps = job.get("steps") or []
     return sum(1 for step in steps if step.get("status") == "failed")
+
+
+def _collect_failed_steps(data: dict[str, Any]) -> list[dict[str, str]]:
+    """Collect failed step details from all jobs for display."""
+    failed: list[dict[str, str]] = []
+    for job in data.get("jobs", []):
+        job_name = job.get("name") or job.get("jid") or "unknown"
+        for step in job.get("steps") or []:
+            if step.get("status") == "failed":
+                failed.append(
+                    {
+                        "job": job_name,
+                        "step": step.get("name") or f"step{step.get('step_index', '?')}",
+                        "error": step.get("error") or "",
+                    }
+                )
+    return failed
 
 
 def _count_completed_steps(steps: list[dict[str, Any]]) -> int:
