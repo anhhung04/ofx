@@ -213,6 +213,20 @@ class MatrixJobRunner(BaseRunner[Job]):
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(["strategy"])
+        # After template resolution, matrix values that were template strings
+        # may now be JSON-encoded list strings — parse them into real lists.
+        if self.model.strategy and self.model.strategy.matrix:
+            import json
+
+            for key, val in self.model.strategy.matrix.items():
+                if isinstance(val, str):
+                    try:
+                        parsed = json.loads(val)
+                        if isinstance(parsed, list):
+                            self.model.strategy.matrix[key] = parsed
+                    except (json.JSONDecodeError, ValueError):
+                        # Wrap scalar string as single-element list
+                        self.model.strategy.matrix[key] = [val]
         self._matrix_combinations = self._generate_matrix_combinations()
 
     async def _post_run(self) -> None:

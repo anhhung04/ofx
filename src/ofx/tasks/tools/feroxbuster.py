@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
+from typing import Any
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
@@ -81,6 +83,46 @@ class FeroxbusterTask(Task):
     file_flag = "--stdin"
     output_flag = "-o"
     extra_flags = ["--json", "--silent", "--no-state"]
+
+    def build_command(
+        self, target: str, **kwargs: Any
+    ) -> tuple[str, Path | None]:
+        """Override to pipe file/multi-line targets via stdin.
+
+        feroxbuster's ``--stdin`` reads URLs from stdin (one per line),
+        unlike most tools where the file flag takes a path argument.
+        """
+        target_is_file = (
+            target
+            and not target.startswith("http")
+            and Path(target).is_file()
+        )
+        has_newlines = target and "\n" in target
+
+        if target_is_file or has_newlines:
+            # Write multi-line string to a temp file if needed
+            if has_newlines and not target_is_file:
+                tmp = tempfile.NamedTemporaryFile(
+                    mode="w",
+                    prefix=".ofx_ferox_targets_",
+                    suffix=".txt",
+                    delete=False,
+                )
+                tmp.write(target)
+                tmp.close()
+                file_path = tmp.name
+            else:
+                file_path = target
+
+            # Build command WITHOUT target, then prepend cat pipe
+            saved = self.file_flag
+            self.file_flag = None
+            cmd, output_file = super().build_command("", **kwargs)
+            self.file_flag = saved
+            cmd = f"cat {file_path} | {cmd} --stdin"
+            return cmd, output_file
+
+        return super().build_command(target, **kwargs)
 
     def _output_suffix(self) -> str:
         return ".jsonl"

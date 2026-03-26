@@ -36,9 +36,9 @@ class FleetStrategy(OFXBaseModel):
 class MatrixStrategy(OFXBaseModel):
     """Matrix strategy for running job variations."""
 
-    matrix: dict[str, list[Any]] = Field(
+    matrix: dict[str, list[Any] | str] = Field(
         default_factory=dict,
-        description="Matrix variables with lists of values to create job combinations",
+        description="Matrix variables — lists of values or a template string that resolves to a JSON list at runtime",
     )
     max_parallel: int = Field(
         default=10000000,
