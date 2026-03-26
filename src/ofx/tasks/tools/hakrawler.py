@@ -20,14 +20,16 @@ class HakrawlerTask(Task):
     output_types = [Url]
 
     opts = {
-        "depth": OptDef(flag="-d", type=int, help="Crawl depth"),
-        "scope": OptDef(flag="-s", type=str, help="Scope (strict/subs/fuzzy)"),
+        "depth": OptDef(flag="-d", type=int, help="Crawl depth (default 2)"),
         "insecure": OptDef(flag="-insecure", is_flag=True, help="Skip TLS verification"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
-        "timeout": OptDef(flag="-timeout", type=int, help="Timeout in seconds"),
+        "timeout": OptDef(flag="-timeout", type=int, help="Timeout per URL in seconds"),
         "proxy": OptDef(flag="-proxy", type=str, help="Proxy URL"),
         "subs": OptDef(flag="-subs", is_flag=True, help="Include subdomains"),
         "json": OptDef(flag="-json", is_flag=True, help="JSON output"),
+        "inside": OptDef(flag="-i", is_flag=True, help="Only crawl inside path"),
+        "unique": OptDef(flag="-u", is_flag=True, help="Show only unique URLs"),
+        "size": OptDef(flag="-size", type=int, help="Page size limit in KB"),
     }
 
     input_flag = None

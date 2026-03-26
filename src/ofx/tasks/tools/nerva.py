@@ -16,7 +16,7 @@ class NervaTask(Task):
     cmd = "nerva"
     description = "Service detection and fingerprinting"
     category = "port/fingerprint"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/pry0cc/nerva@latest"
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/praetorian-inc/nerva/cmd/nerva@latest"
     output_types = [Port, Tag]
 
     opts = {
