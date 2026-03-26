@@ -59,6 +59,22 @@ class FeroxbusterTask(Task):
         "collect_words": OptDef(
             flag="--collect-words", is_flag=True, help="Collect discovered words"
         ),
+        "smart": OptDef(
+            flag="--smart", is_flag=True, help="Smart mode: auto-detect extensions and filter 404s"
+        ),
+        "collect_extensions": OptDef(
+            flag="--collect-extensions",
+            is_flag=True,
+            help="Collect discovered extensions for targeted scanning",
+        ),
+        "force_recursion": OptDef(
+            flag="--force-recursion",
+            is_flag=True,
+            help="Force recursion on all found directories",
+        ),
+        "user_agent": OptDef(
+            flag="-a", type=str, help="Custom User-Agent string"
+        ),
     }
 
     input_flag = "-u"

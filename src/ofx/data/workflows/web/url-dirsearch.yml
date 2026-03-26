@@ -1,11 +1,12 @@
 name: url-dirsearch
-description: 'URL directory search — discovers hidden directories and files using dirsearch and ffuf. Probes URLs and crawls discovered directory content.
+description:
+  "URL directory search — discovers hidden directories and files using dirsearch and ffuf. Probes URLs and crawls discovered directory content.
 
-  '
+  "
 tags:
-- http
-- dir
-- secrets
+  - http
+  - dir
+  - secrets
 dispatch:
   inputs:
     target:
@@ -24,102 +25,105 @@ jobs:
       typed_outputs: '{{ steps["http-probe"].outputs.typed_outputs | default("", true) }}'
       live_url: '{{ steps["export-url"].outputs.live_url | default("", true) }}'
     steps:
-    - task: httpx
-      timeout: 10
-      name: http-probe
-      with:
-        target: '{{ inputs.target }}'
-        tech_detect: true
-        status_code: true
-        follow_redirects: true
-      continue-on-error: true
-    - name: export-url
-      script: |
-        typed = {{ steps["http-probe"].outputs.typed_outputs | default([], true) | tojson }}
-        live = [item["url"] for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0]
-        result = live[0] if live else '{{ inputs.target }}'
-        add_outputs(live_url=result)
+      - task: httpx
+        timeout: 10
+        name: http-probe
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+          follow_redirects: true
+        continue-on-error: true
+      - name: export-url
+        script: |
+          typed = {{ steps["http-probe"].outputs.typed_outputs | default([], true) | tojson }}
+          live = [item["url"] for item in typed if item.get("_type") == "url" and item.get("status_code", 0) > 0]
+          result = live[0] if live else '{{ inputs.target }}'
+          add_outputs(live_url=result)
   dir-search:
     name: Directory Discovery
     needs:
-    - probe
+      - probe
     outputs:
       found_file: '{{ steps["collect-dirs"].outputs.found_file | default("", true) }}'
       url_count: '{{ steps["collect-dirs"].outputs.url_count | default("", true) }}'
     steps:
-    - task: dirsearch
-      timeout: 15
-      name: dirsearch-scan
-      with:
-        target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}"
-        wordlist: '{{ inputs.wordlist }}'
-        threads: 30
-        extensions: php,asp,aspx,jsp,html,js,txt,bak,old,conf
-      continue-on-error: true
-    - task: ffuf
-      timeout: 15
-      name: ffuf-dirs
-      with:
-        target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}/FUZZ"
-        wordlist: '{{ inputs.wordlist }}'
-        auto_calibration: true
-        follow_redirect: true
-      continue-on-error: true
-    - name: collect-dirs
-      script: |
-        import json
+      - task: dirsearch
+        timeout: 15
+        name: dirsearch-scan
+        with:
+          target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}"
+          wordlist: "{{ inputs.wordlist }}"
+          threads: 30
+          extensions: php,asp,aspx,jsp,html,js,json,xml,txt,bak,old,conf,env,sql,zip
+          include_status: "200,201,204,301,302,307,401,403,405,500"
+        continue-on-error: true
+      - task: ffuf
+        timeout: 15
+        name: ffuf-dirs
+        with:
+          target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}/FUZZ"
+          wordlist: "{{ inputs.wordlist }}"
+          auto_calibration: true
+          follow_redirects: true
+          match_codes: "200,201,204,301,302,307,401,403,405,500"
+        continue-on-error: true
+      - name: collect-dirs
+        script: |
+          import json
 
-        urls = set()
-        for step_idx in [0, 1]:
-            step_data = {{ steps | tojson }}
-            typed = step_data.get(str(step_idx), {}).get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                if item.get('_type') == 'url':
-                    urls.add(item['url'])
+          urls = set()
+          for step_idx in [0, 1]:
+              step_data = {{ steps | tojson }}
+              typed = step_data.get(str(step_idx), {}).get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url':
+                      urls.add(item['url'])
 
-        with open('/tmp/ofx_dir_urls.txt', 'w') as f:
-            f.write('\n'.join(sorted(urls)))
+          with open('/tmp/ofx_dir_urls.txt', 'w') as f:
+              f.write('\n'.join(sorted(urls)))
 
-        add_outputs(found_file="/tmp/ofx_dir_urls.txt", url_count=len(urls))
-        print(f"Found {len(urls)} URLs")
+          add_outputs(found_file="/tmp/ofx_dir_urls.txt", url_count=len(urls))
+          print(f"Found {len(urls)} URLs")
   crawl-dirs:
     name: Crawl Discovered Directories
     needs:
-    - dir-search
+      - dir-search
     steps:
-    - task: katana
-      timeout: 15
-      name: crawl-content
-      with:
-        target: "{{ jobs['dir-search'].outputs.found_file | default(inputs.target, true) }}"
-        depth: 2
-      continue-on-error: true
-    - name: summary
-      run: |
-        echo "=================================="
-        echo " Dir Search: {{ inputs.target }}"
-        echo "=================================="
-        echo "URLs found: {{ jobs['dir-search'].outputs.url_count }}"
-      log-stdout: true
+      - task: katana
+        timeout: 15
+        name: crawl-content
+        with:
+          target: "{{ jobs['dir-search'].outputs.found_file | default(inputs.target, true) }}"
+          depth: 2
+          js_crawl: true
+        continue-on-error: true
+      - name: summary
+        run: |
+          echo "=================================="
+          echo " Dir Search: {{ inputs.target }}"
+          echo "=================================="
+          echo "URLs found: {{ jobs['dir-search'].outputs.url_count }}"
+        log-stdout: true
 
-    - name: export-to-project
-      script: |
-        from pathlib import Path
+      - name: export-to-project
+        script: |
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            all_typed = []
-            for typed in [
-            {{ jobs['probe'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['dir-search'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['crawl-dirs'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              all_typed = []
+              for typed in [
+              {{ jobs['probe'].outputs.typed_outputs | default([], true) | tojson }},
+              {{ jobs['dir-search'].outputs.typed_outputs | default([], true) | tojson }},
+              {{ jobs['crawl-dirs'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true

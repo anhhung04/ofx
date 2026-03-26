@@ -192,6 +192,8 @@ jobs:
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
           depth: 3
+          js_crawl: true
+          known_files: all
         continue-on-error: true
       - task: gau
         timeout: 10
@@ -261,6 +263,9 @@ jobs:
     name: Fingerprinting
     needs:
       - http-probe
+    outputs:
+      tech_extensions: '{{ steps["detect-tech"].outputs.tech_extensions | default("", true) }}'
+      detected_tech: '{{ steps["detect-tech"].outputs.detected_tech | default("", true) }}'
     steps:
       - name: whatweb-scan
         run: |
@@ -274,10 +279,104 @@ jobs:
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
+      - name: detect-tech
+        script: |
+          import json
+
+          TECH_EXT_MAP = {
+              'php': 'php,phtml,php3,php4,php5,phps,inc',
+              'asp': 'asp,aspx,ashx,asmx,axd,cshtml',
+              'jsp': 'jsp,jspx,do,action,jsf,faces',
+              'python': 'py,pyc',
+              'ruby': 'rb,erb',
+              'perl': 'pl,cgi',
+              'coldfusion': 'cfm,cfc',
+              'node': 'js,json',
+              'java': 'jsp,do,action,jsf',
+              'wordpress': 'php,phtml',
+              'drupal': 'php,module,inc',
+              'joomla': 'php,phtml',
+              'laravel': 'php,blade.php',
+              'django': 'py',
+              'flask': 'py',
+              'rails': 'rb,erb',
+              'nginx': '',
+              'apache': '',
+              'iis': 'asp,aspx,ashx,asmx,config',
+              'tomcat': 'jsp,jspx,do,action',
+          }
+
+          typed = {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }}
+
+          tech_set = set()
+          for item in typed:
+              for t in item.get('tech', []):
+                  tech_set.add(t.lower())
+              ws = item.get('webserver', '').lower()
+              if ws:
+                  tech_set.add(ws)
+
+          # Read whatweb output for additional detection
+          try:
+              with open('/tmp/whatweb-output.txt') as f:
+                  for line in f:
+                      ll = line.lower()
+                      for tech in TECH_EXT_MAP:
+                          if tech in ll:
+                              tech_set.add(tech)
+          except FileNotFoundError:
+              pass
+
+          # Build extension list from detected technologies
+          exts = set()
+          exts.update(['html', 'htm', 'txt', 'js', 'json', 'xml', 'bak', 'old', 'conf', 'env', 'log', 'sql', 'zip'])
+          for tech in tech_set:
+              for key, val in TECH_EXT_MAP.items():
+                  if key in tech and val:
+                      exts.update(val.split(','))
+
+          ext_str = ','.join(sorted(exts))
+          add_outputs(tech_extensions=ext_str, detected_tech=','.join(sorted(tech_set)))
+          print(f"Detected tech: {', '.join(sorted(tech_set)) or 'none'}")
+          print(f"Fuzz extensions: {ext_str}")
+  dir-fuzz:
+    name: Directory Fuzzing
+    needs:
+      - fingerprint
+      - http-probe
+    outputs:
+      fuzz_count: '{{ steps["export-fuzz"].outputs.fuzz_count | default("", true) }}'
+    steps:
+      - task: feroxbuster
+        timeout: 20
+        name: ferox-smart
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+          smart: true
+          extract_links: true
+          insecure: true
+          auto_tune: true
+          depth: 2
+          status_codes: "200,201,204,301,302,307,308,401,403,405,500"
+          extensions: "{{ jobs['fingerprint'].outputs.tech_extensions | default('php,html,txt,js,bak,conf', true) }}"
+        continue-on-error: true
+      - name: export-fuzz
+        script: |
+          typed = {{ steps["ferox-smart"].outputs.typed_outputs | default([], true) | tojson }}
+          interesting = []
+          for item in typed:
+              sc = item.get('status_code', 0)
+              if sc in (200, 201, 204, 301, 302, 401, 403, 405, 500):
+                  interesting.append(item)
+
+          add_outputs(fuzz_count=len(interesting))
+          for item in interesting[:20]:
+              print(f"  [{item.get('status_code', '?')}] {item.get('url', '?')}")
   vuln-scan:
     name: Vulnerability Scanning
     needs:
       - web-crawl
+      - dir-fuzz
       - fingerprint
       - port-scan
       - takeover-check
@@ -333,7 +432,9 @@ jobs:
           echo "DNS verified: {{ jobs['dns-resolve'].outputs.verified_count }}"
           echo "Open ports: {{ jobs['port-scan'].outputs.port_count }}"
           echo "Live HTTP services: {{ jobs['http-probe'].outputs.live_count }}"
+          echo "Detected tech: {{ jobs['fingerprint'].outputs.detected_tech }}"
           echo "URLs crawled: {{ jobs['web-crawl'].outputs.crawl_count }}"
+          echo "Dirs/files found: {{ jobs['dir-fuzz'].outputs.fuzz_count }}"
           echo "Subdomain takeovers: {{ jobs['takeover-check'].outputs.takeover_count }}"
           echo "Vulnerabilities: {{ jobs['vuln-scan'].outputs.vuln_count }}"
           echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"

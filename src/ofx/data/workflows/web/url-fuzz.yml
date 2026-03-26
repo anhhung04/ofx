@@ -1,11 +1,12 @@
 name: url-fuzz
-description: 'URL fuzzing — discovers hidden content and directories using feroxbuster and ffuf with intelligent calibration. Probes and optionally hunts for secrets.
+description:
+  "URL fuzzing — discovers hidden content and directories using feroxbuster and ffuf with intelligent calibration. Probes and optionally hunts for secrets.
 
-  '
+  "
 tags:
-- http
-- fuzz
-- secrets
+  - http
+  - fuzz
+  - secrets
 dispatch:
   inputs:
     target:
@@ -24,94 +25,99 @@ jobs:
       fuzzed_file: '{{ steps["collect-urls"].outputs.fuzzed_file | default("", true) }}'
       fuzz_count: '{{ steps["collect-urls"].outputs.fuzz_count | default("", true) }}'
     steps:
-    - task: ffuf
-      timeout: 15
-      name: ffuf-fuzz
-      with:
-        target: '{{ inputs.target }}/FUZZ'
-        wordlist: '{{ inputs.wordlist }}'
-        threads: 50
-        follow_redirect: true
-        auto_calibration: true
-      continue-on-error: true
-    - task: feroxbuster
-      timeout: 20
-      name: feroxbuster-fuzz
-      with:
-        target: '{{ inputs.target }}'
-        wordlist: '{{ inputs.wordlist }}'
-        depth: 2
-        threads: 50
-      continue-on-error: true
-    - name: collect-urls
-      script: |
-        import json
+      - task: ffuf
+        timeout: 15
+        name: ffuf-fuzz
+        with:
+          target: "{{ inputs.target }}/FUZZ"
+          wordlist: "{{ inputs.wordlist }}"
+          threads: 50
+          follow_redirects: true
+          auto_calibration: true
+          match_codes: "200,201,204,301,302,307,308,401,403,405,500"
+        continue-on-error: true
+      - task: feroxbuster
+        timeout: 20
+        name: feroxbuster-fuzz
+        with:
+          target: "{{ inputs.target }}"
+          wordlist: "{{ inputs.wordlist }}"
+          depth: 2
+          threads: 50
+          smart: true
+          extract_links: true
+          insecure: true
+          status_codes: "200,201,204,301,302,307,308,401,403,405,500"
+        continue-on-error: true
+      - name: collect-urls
+        script: |
+          import json
 
-        urls = set()
-        for step_idx in [0, 1]:
-            step_data = {{ steps | tojson }}
-            typed = step_data.get(str(step_idx), {}).get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                if item.get('_type') == 'url':
-                    urls.add(item['url'])
+          urls = set()
+          for step_idx in [0, 1]:
+              step_data = {{ steps | tojson }}
+              typed = step_data.get(str(step_idx), {}).get('outputs', {}).get('typed_outputs', [])
+              for item in typed:
+                  if item.get('_type') == 'url':
+                      urls.add(item['url'])
 
-        with open('/tmp/ofx_urlfuzz_urls.txt', 'w') as tf:
-            tf.write('\n'.join(sorted(urls)))
+          with open('/tmp/ofx_urlfuzz_urls.txt', 'w') as tf:
+              tf.write('\n'.join(sorted(urls)))
 
-        add_outputs(fuzzed_file="/tmp/ofx_urlfuzz_urls.txt", fuzz_count=len(urls))
-        print(f"Found {len(urls)} unique URLs via fuzzing")
+          add_outputs(fuzzed_file="/tmp/ofx_urlfuzz_urls.txt", fuzz_count=len(urls))
+          print(f"Found {len(urls)} unique URLs via fuzzing")
   probe:
     name: Probe Fuzzed URLs
     needs:
-    - fuzz
+      - fuzz
     steps:
-    - task: httpx
-      timeout: 10
-      name: probe-fuzzed
-      with:
-        target: '{{ jobs.fuzz.outputs.fuzzed_file }}'
-        tech_detect: true
-        status_code: true
-        title: true
-      continue-on-error: true
+      - task: httpx
+        timeout: 10
+        name: probe-fuzzed
+        with:
+          target: "{{ jobs.fuzz.outputs.fuzzed_file }}"
+          tech_detect: true
+          status_code: true
+          title: true
+        continue-on-error: true
   secrets:
     name: Secret Hunting
     needs:
-    - probe
+      - probe
     steps:
-    - task: trufflehog
-      timeout: 15
-      name: hunt-secrets
-      with:
-        target: '{{ inputs.target }}'
-        mode: filesystem
-      continue-on-error: true
-    - name: summary
-      run: |
-        echo "================================="
-        echo " URL Fuzz: {{ inputs.target }}"
-        echo "================================="
-        echo "Fuzzed URLs: {{ jobs.fuzz.outputs.fuzz_count }}"
-      log-stdout: true
+      - task: trufflehog
+        timeout: 15
+        name: hunt-secrets
+        with:
+          target: "{{ inputs.target }}"
+          mode: filesystem
+        continue-on-error: true
+      - name: summary
+        run: |
+          echo "================================="
+          echo " URL Fuzz: {{ inputs.target }}"
+          echo "================================="
+          echo "Fuzzed URLs: {{ jobs.fuzz.outputs.fuzz_count }}"
+        log-stdout: true
 
-    - name: export-to-project
-      script: |
-        from pathlib import Path
+      - name: export-to-project
+        script: |
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            all_typed = []
-            for typed in [
-            {{ jobs['fuzz'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['probe'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['secrets'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              all_typed = []
+              for typed in [
+              {{ jobs['fuzz'].outputs.typed_outputs | default([], true) | tojson }},
+              {{ jobs['probe'].outputs.typed_outputs | default([], true) | tojson }},
+              {{ jobs['secrets'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              summaries = export_typed_outputs(project, all_typed)
+              for s in summaries:
+                  print(s)
 
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              print(f'Project export complete: {project}')
+        continue-on-error: true

@@ -82,7 +82,11 @@ jobs:
           wordlist: "{{ inputs.wordlist }}"
           threads: 50
           depth: 3
-          status_codes: 200,201,204,301,302,307,401,403,405,500
+          smart: true
+          extract_links: true
+          insecure: true
+          auto_tune: true
+          status_codes: 200,201,204,301,302,307,308,401,403,405,500
         continue-on-error: true
       - task: gobuster
         timeout: 10
@@ -131,6 +135,8 @@ jobs:
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           depth: 3
+          js_crawl: true
+          known_files: all
         continue-on-error: true
       - task: hakrawler
         timeout: 10

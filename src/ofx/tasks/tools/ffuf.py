@@ -43,6 +43,9 @@ class FfufTask(Task):
         ),
         "follow_redirects": OptDef(flag="-r", is_flag=True, help="Follow redirects"),
         "extensions": OptDef(flag="-e", type=str, help="File extension list"),
+        "auto_calibration": OptDef(
+            flag="-ac", is_flag=True, help="Automatically calibrate filtering"
+        ),
     }
 
     input_flag = "-u"
