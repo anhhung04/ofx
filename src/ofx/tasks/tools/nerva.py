@@ -16,20 +16,22 @@ class NervaTask(Task):
     cmd = "nerva"
     description = "Service detection and fingerprinting"
     category = "port/fingerprint"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/nerva-project/cmd/nerva@latest"
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/pry0cc/nerva@latest"
     output_types = [Port, Tag]
 
     opts = {
-        "ports": OptDef(flag="-p", type=str, help="Ports to probe (e.g. 22,80,443)"),
-        "threads": OptDef(flag="-c", type=int, help="Concurrency / threads"),
-        "timeout": OptDef(flag="-timeout", type=int, help="Timeout per probe in seconds"),
-        "retries": OptDef(flag="-retries", type=int, help="Number of retries"),
-        "rate": OptDef(flag="-rate", type=int, help="Max rate (probes/sec)"),
-        "skip_waf": OptDef(flag="-skip-waf", is_flag=True, help="Skip WAF detection"),
+        "workers": OptDef(flag="-W", type=int, help="Number of concurrent scan workers"),
+        "timeout": OptDef(flag="-w", type=int, help="Timeout in milliseconds"),
+        "rate_limit": OptDef(flag="-R", type=float, help="Max scans per second (0=unlimited)"),
+        "max_host_conn": OptDef(flag="-H", type=int, help="Max concurrent connections per host IP"),
+        "fast": OptDef(flag="-f", is_flag=True, help="Fast mode"),
+        "udp": OptDef(flag="-U", is_flag=True, help="Run UDP plugins"),
+        "sctp": OptDef(flag="-S", is_flag=True, help="Run SCTP plugins (Linux only)"),
+        "verbose": OptDef(flag="-v", is_flag=True, help="Verbose mode"),
     }
 
-    input_flag = "-host"
-    file_flag = "-list"
+    input_flag = "-t"
+    file_flag = "-l"
     output_flag = "-o"
     extra_flags = ["--json"]
 
