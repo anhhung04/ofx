@@ -99,23 +99,30 @@ class WpscanTask(Task):
         section: str,
     ) -> None:
         """Extract vulnerabilities and tags from a plugin/theme component."""
+        if not key:
+            return
+
         # Detected component tag
         version_info = item.get("version", {})
         version_number = ""
         if isinstance(version_info, dict):
             version_number = version_info.get("number", "")
 
-        results.append(
-            Tag(
-                name=key,
-                value=version_number,
-                match=url,
-                category="wordpress",
+        if version_number:
+            results.append(
+                Tag(
+                    name=key,
+                    value=version_number,
+                    match=url,
+                    category="wordpress",
+                )
             )
-        )
 
         # Vulnerabilities in this component
         for vuln in item.get("vulnerabilities", []):
+            title = vuln.get("title", "")
+            if not title:
+                continue
             refs = vuln.get("references", {})
             cve_list = refs.get("cve", [])
             cve_id = cve_list[0] if cve_list else ""
@@ -123,7 +130,7 @@ class WpscanTask(Task):
 
             results.append(
                 Vulnerability(
-                    name=vuln.get("title", ""),
+                    name=title,
                     id=cve_id,
                     severity=Severity.MEDIUM,
                     matched_at=url,

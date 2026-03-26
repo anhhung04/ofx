@@ -93,6 +93,9 @@ class TestsslTask(Task):
             port = entry.get("port", "")
             target = f"{ip}:{port}" if ip and port else ip
 
+            if not entry_id or not target:
+                continue
+
             severity = _SEVERITY_MAP.get(severity_str, Severity.UNKNOWN)
 
             if entry_id.startswith("cert_"):

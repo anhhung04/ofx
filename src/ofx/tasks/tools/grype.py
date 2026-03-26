@@ -86,10 +86,14 @@ class GrypeTask(Task):
             severity_str = vuln.get("severity", "unknown").lower()
             fix_info = vuln.get("fix", {})
 
+            vuln_id = vuln.get("id", "")
+            if not vuln_id:
+                continue
+
             results.append(
                 Vulnerability(
-                    name=vuln.get("id", ""),
-                    id=vuln.get("id", ""),
+                    name=vuln_id,
+                    id=vuln_id,
                     severity=_SEVERITY_MAP.get(severity_str, Severity.UNKNOWN),
                     matched_at=artifact.get("name", ""),
                     provider="grype",

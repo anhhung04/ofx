@@ -58,6 +58,9 @@ class Wafw00fTask(Task):
                             url = word
                             break
 
+                    if not waf_name:
+                        continue
+
                     results.append(
                         Tag(
                             name=waf_name,

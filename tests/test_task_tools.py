@@ -834,7 +834,7 @@ class TestGitleaksParser:
         results = task.parse_output("", "", output_file=outfile)
         tags = [r for r in results if isinstance(r, Tag)]
         assert len(tags) == 1
-        assert tags[0].name == "secret"
+        assert tags[0].name == "generic-api-key"
         assert tags[0].value == "generic-api-key"
         assert tags[0].match == "config.py"
         assert tags[0].category == "secret"
@@ -1949,6 +1949,7 @@ class TestWhatwebParser:
                     "nginx": {"version": ["1.18.0"]},
                     "PHP": {"version": ["7.4"]},
                     "jQuery": {},
+                    "Country": {"string": ["US"]},
                 },
             }),
         ]
@@ -1959,13 +1960,14 @@ class TestWhatwebParser:
         names = {t.name for t in tags}
         assert "nginx" in names
         assert "PHP" in names
-        assert "jQuery" in names
+        assert "Country" in names
+        assert "jQuery" not in names
         nginx_tag = next(t for t in tags if t.name == "nginx")
         assert nginx_tag.value == "1.18.0"
         assert nginx_tag.match == "https://example.com"
         assert nginx_tag.category == "tech"
-        jquery_tag = next(t for t in tags if t.name == "jQuery")
-        assert jquery_tag.value == ""
+        country_tag = next(t for t in tags if t.name == "Country")
+        assert country_tag.value == "US"
 
     def test_whatweb_parse_empty(self):
         task = TaskRegistry.create("whatweb")

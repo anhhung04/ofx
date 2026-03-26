@@ -153,6 +153,9 @@ class SslscanTask(Task):
                     else []
                 )
 
+                if not subject_cn and not fingerprint:
+                    continue
+
                 results.append(
                     Certificate(
                         host=target_str,

@@ -61,6 +61,9 @@ class SshAuditTask(Task):
 
         # CVEs
         for cve in data.get("cves", []):
+            cve_name = cve.get("name", "")
+            if not cve_name:
+                continue
             cvssv2 = self._safe_float(cve.get("cvssv2", 0.0))
             if cvssv2 >= 9.0:
                 severity = Severity.CRITICAL
@@ -75,8 +78,8 @@ class SshAuditTask(Task):
 
             results.append(
                 Vulnerability(
-                    name=cve.get("name", ""),
-                    id=cve.get("name", ""),
+                    name=cve_name,
+                    id=cve_name,
                     severity=severity,
                     matched_at=target,
                     provider="ssh-audit",
@@ -92,9 +95,12 @@ class SshAuditTask(Task):
                     continue
                 notes = algo.get("notes", {})
                 if notes.get("warn") or notes.get("fail"):
+                    algo_name = algo.get("algorithm", "")
+                    if not algo_name:
+                        continue
                     results.append(
                         Tag(
-                            name=algo.get("algorithm", ""),
+                            name=algo_name,
                             value="weak",
                             match=target,
                             category=category,

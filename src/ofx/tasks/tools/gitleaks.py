@@ -92,10 +92,13 @@ class GitleaksTask(Task):
 
         results: list[Tag] = []
         for item in findings:
+            rule_id = item.get("RuleID", "")
+            if not rule_id:
+                continue
             results.append(
                 Tag(
-                    name="secret",
-                    value=item.get("RuleID", ""),
+                    name=rule_id,
+                    value=item.get("Match", rule_id),
                     match=item.get("File", ""),
                     category="secret",
                     extra_data={

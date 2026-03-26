@@ -114,6 +114,7 @@ class WhatwebTask(Task):
 
             for plugin_name, plugin_data in plugins.items():
                 version = ""
+                string_val = ""
                 if isinstance(plugin_data, dict):
                     versions = plugin_data.get("version", [])
                     if isinstance(versions, list) and versions:
@@ -121,10 +122,20 @@ class WhatwebTask(Task):
                     elif isinstance(versions, str):
                         version = versions
 
+                    strings = plugin_data.get("string", [])
+                    if isinstance(strings, list) and strings:
+                        string_val = ", ".join(str(s) for s in strings)
+                    elif isinstance(strings, str):
+                        string_val = strings
+
+                value = version or string_val
+                if not value:
+                    continue
+
                 results.append(
                     Tag(
                         name=plugin_name,
-                        value=version,
+                        value=value,
                         match=target_url,
                         category="tech",
                     )

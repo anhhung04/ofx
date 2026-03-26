@@ -111,22 +111,28 @@ class TrivyTask(Task):
 
         for result in scan_results:
             target_name = result.get("Target", "")
+            scan_class = result.get("Class", "")
+            scan_type = result.get("Type", "")
 
-            results.append(
-                Tag(
-                    name=result.get("Class", ""),
-                    value=result.get("Type", ""),
-                    match=target_name,
-                    category="scan",
+            if scan_class or scan_type:
+                results.append(
+                    Tag(
+                        name=scan_class or scan_type,
+                        value=scan_type,
+                        match=target_name,
+                        category="scan",
+                    )
                 )
-            )
 
             for vuln in result.get("Vulnerabilities", []):
+                vuln_id = vuln.get("VulnerabilityID", "")
+                if not vuln_id:
+                    continue
                 severity_str = vuln.get("Severity", "unknown").lower()
                 results.append(
                     Vulnerability(
-                        name=vuln.get("VulnerabilityID", ""),
-                        id=vuln.get("VulnerabilityID", ""),
+                        name=vuln_id,
+                        id=vuln_id,
                         severity=_SEVERITY_MAP.get(severity_str, Severity.UNKNOWN),
                         matched_at=vuln.get("PkgName", ""),
                         provider="trivy",
