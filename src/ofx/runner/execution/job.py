@@ -105,7 +105,8 @@ class JobRunner(BaseRunner[Job]):
                 try:
                     resolved_value = await self._resolve_template(value)
                     resolved_outputs[key] = resolved_value
-                except Exception:
+                except Exception as e:
+                    self._log_warning(f"Failed to resolve output '{key}': {e}")
                     resolved_outputs[key] = ""
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
 

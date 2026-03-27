@@ -72,6 +72,7 @@ class WorkflowExecutionManager:
             job_id: asyncio.create_task(stage_runners[job_id].run())
             for job_id in job_ids
         }
+        task_to_job = {t: jid for jid, t in tasks.items()}
         failed_jobs: list[str] = []
         try:
             while tasks:
@@ -79,10 +80,12 @@ class WorkflowExecutionManager:
                     tasks.values(), timeout=0.01, return_when=asyncio.FIRST_COMPLETED
                 )
                 for task in done:
-                    job_id = next(jid for jid, t in tasks.items() if t is task)
+                    job_id = task_to_job[task]
                     runner = stage_runners[job_id]
                     try:
                         task.result()
+                    except (asyncio.CancelledError, KeyboardInterrupt):
+                        raise
                     except Exception:
                         pass  # Error is captured in runner._error
                     if runner.is_failed:

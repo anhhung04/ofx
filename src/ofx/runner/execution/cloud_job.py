@@ -73,11 +73,12 @@ class CloudJobRunner(BaseRunner[Job]):
         self._work_dir: str | None = None
         self._is_fleet_child: bool = False  # Set by CloudFleetRunner for fleet children
         self._cached_python: str | None = None  # Cached across steps on same VPS
+        self._failure_cleanup_done: bool = False
 
     async def run(self, *args, **kwargs):
         """Override to salvage outputs and prompt before VPS destruction on failure."""
         result = await super().run(*args, **kwargs)
-        if result.status == RunnerStatus.FAILED:
+        if result.status == RunnerStatus.FAILED and not self._failure_cleanup_done:
             # Fleet children defer the destroy prompt to CloudMatrixJobRunner,
             # which handles all surviving instances in a single batch.
             await self._handle_failure(prompt_destroy=not self._is_fleet_child)
@@ -154,7 +155,12 @@ class CloudJobRunner(BaseRunner[Job]):
             f"Provisioning cloud instance for '{self.model.name or self.model.jid}' "
             f"(provider={resolved.provider})"
         )
-        await self._provision_instance(resolved)
+        try:
+            await self._provision_instance(resolved)
+        except Exception:
+            # Emergency cleanup: destroy partially-provisioned instance
+            await self._emergency_deprovision()
+            raise
 
         # Store metadata in registry
         await self.reg_set(
@@ -408,6 +414,43 @@ class CloudJobRunner(BaseRunner[Job]):
         except Exception as e:
             self._log_warning(f"Instance destroy failed: {e}")
 
+    async def _emergency_deprovision(self) -> None:
+        """Best-effort cleanup of a partially-provisioned instance.
+
+        Called when ``_provision_instance()`` raises *before* the normal
+        lifecycle reaches ``_post_run``.  Tries to destroy the VPS if one
+        was created and close any SSH/WinRM transport.
+        """
+        if self._provider and self._instance:
+            is_static = (
+                self._cloud_config
+                and (self._cloud_config.provider or "static") == "static"
+            )
+            if not is_static:
+                try:
+                    self._log_warning(
+                        f"Emergency cleanup: destroying partially-provisioned "
+                        f"instance {self._instance.instance_id}"
+                    )
+                    await self._provider.destroy_instance(
+                        self._instance.instance_id
+                    )
+                except Exception as e:
+                    self._log_warning(
+                        f"Emergency instance destroy failed "
+                        f"(may require manual cleanup): {e}"
+                    )
+        if self._remote_runner and hasattr(self._remote_runner, "cleanup"):
+            try:
+                await asyncio.to_thread(self._remote_runner.cleanup)
+            except Exception:
+                pass
+
+    async def _on_failure_cleanup(self) -> None:
+        """Handle failure: salvage outputs, prompt for VPS destruction."""
+        self._failure_cleanup_done = True
+        await self._handle_failure(prompt_destroy=not self._is_fleet_child)
+
     async def _cleanup_remote(self) -> None:
         """Clean up remote working directory and runner resources."""
         if not self._remote_runner:
@@ -457,7 +500,7 @@ class CloudJobRunner(BaseRunner[Job]):
         try:
             await self._download_outputs()
         except Exception as e:
-            self._log_debug(f"Output salvage on failure failed: {e}")
+            self._log_warning(f"Output salvage on failure failed: {e}")
 
         if not prompt_destroy:
             # Caller will handle destroy prompt — just clean transport.

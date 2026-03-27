@@ -144,6 +144,7 @@ class BaseRunner[TModel: BaseModel]:
             self._emit_event("runner_resume")
             return await self.get_result()
         await self._write_checkpoint("running")
+        pre_run_ok = False
         try:
             await self.reg_set(
                 "metadata",
@@ -159,6 +160,7 @@ class BaseRunner[TModel: BaseModel]:
 
             # Execute lifecycle
             await self._pre_run()
+            pre_run_ok = True
             self._state_machine.transition(RunnerStatus.RUNNING)
             await self._do_run()
             self._state_machine.transition(RunnerStatus.FINISHED)
@@ -172,6 +174,14 @@ class BaseRunner[TModel: BaseModel]:
                 RunnerStatus.CANCELED,
             ]:
                 self._state_machine.transition(RunnerStatus.FAILED)
+            # Run _post_run for cleanup when _pre_run succeeded but
+            # _do_run or _post_run itself failed. This ensures resources
+            # allocated in _pre_run (temp files, connections) are released.
+            if pre_run_ok:
+                try:
+                    await self._on_failure_cleanup()
+                except Exception as cleanup_exc:
+                    self._log_debug(f"Cleanup after failure failed: {cleanup_exc}")
         finally:
             self._mark_finish()
             self._emit_event("runner_finish", {"status": self.status.value, "error": self._error})
@@ -193,6 +203,15 @@ class BaseRunner[TModel: BaseModel]:
             except Exception as cleanup_err:
                 self._log_warning(f"registry cleanup failed: {cleanup_err}")
         return await self.get_result()
+
+    async def _on_failure_cleanup(self) -> None:
+        """Hook for subclasses to perform cleanup when execution fails.
+
+        Called only when ``_pre_run`` succeeded but ``_do_run`` or
+        ``_post_run`` raised an exception.  Override this instead of
+        relying on ``_post_run`` for cleanup — ``_post_run`` is only
+        called on the success path.
+        """
 
     def _event_sink_path(self) -> Path | None:
         path = getattr(self.ctx, "event_sink_path", None)

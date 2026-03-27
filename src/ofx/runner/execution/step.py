@@ -110,6 +110,14 @@ class StepRunner(BaseRunner[Step]):
         if "timeout" not in explicitly_set and "timeout" in policy:
             self.model.timeout = int(policy["timeout"])
 
+    async def _on_failure_cleanup(self) -> None:
+        """Ensure temp outputs file is removed on failure."""
+        if self._outputs_file and self._outputs_file.exists():
+            try:
+                self._outputs_file.unlink()
+            except Exception:
+                pass
+
     async def _do_run(self) -> None:
         """
         Execute the step's action with retry logic, timeout handling.
