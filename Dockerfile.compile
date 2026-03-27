@@ -1,0 +1,36 @@
+# Multi-stage Dockerfile for building compiled OFX wheels with Cython.
+#
+# Produces a platform-tagged wheel with .so extensions and stripped .py sources.
+# Data directory (workflows, assets) is preserved.
+#
+# Usage:
+#   # Build for current platform (default Python 3.12)
+#   docker buildx build -f Dockerfile.compile --target=export --output type=local,dest=dist .
+#
+#   # Build for specific platform and Python version
+#   docker buildx build -f Dockerfile.compile --build-arg PYTHON_VERSION=3.13 --platform linux/amd64 --target=export --output type=local,dest=dist .
+#   docker buildx build -f Dockerfile.compile --build-arg PYTHON_VERSION=3.14 --platform linux/arm64 --target=export --output type=local,dest=dist .
+
+ARG PYTHON_VERSION=3.12
+FROM python:${PYTHON_VERSION}-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /build
+COPY . .
+
+# Install dependencies including Cython
+RUN uv sync --extra compile --no-dev --python "python${PYTHON_VERSION}"
+
+# Compile and build wheel
+RUN uv run --extra compile ./scripts/build_compiled.sh
+
+# Export stage — only the wheel
+FROM scratch AS export
+COPY --from=builder /build/dist/*.whl /

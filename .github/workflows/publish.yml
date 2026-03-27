@@ -6,11 +6,57 @@ on:
       - "v*"
   workflow_dispatch: # Allow manual trigger
 
+env:
+  PYTHON_VERSION: "3.12"
+
 jobs:
   test:
     uses: ./.github/workflows/tests.yml
 
-  build-and-publish:
+  # Build compiled platform-specific wheels
+  build-compiled:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+        python: ["3.12", "3.13", "3.14"]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: https://github.com/actions/checkout@v4
+
+      - name: Set up QEMU (for ARM64 emulation)
+        if: matrix.arch == 'arm64'
+        uses: https://github.com/docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: https://github.com/docker/setup-buildx-action@v3
+
+      - name: Build compiled wheel
+        run: |
+          docker buildx build \
+            -f Dockerfile.compile \
+            --build-arg PYTHON_VERSION=${{ matrix.python }} \
+            --platform linux/${{ matrix.arch }} \
+            --target=export \
+            --output type=local,dest=dist \
+            .
+
+      - name: List built wheels
+        run: ls -la dist/
+
+      - name: Upload compiled wheel
+        uses: https://github.com/actions/upload-artifact@v4
+        with:
+          name: compiled-wheel-py${{ matrix.python }}-${{ matrix.arch }}
+          path: dist/*.whl
+
+  # Build pure Python wheel (fallback for unsupported platforms)
+  build-pure:
     runs-on: ubuntu-latest
     needs: [test]
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -29,33 +75,47 @@ jobs:
       - name: Set up Python
         uses: https://github.com/actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install twine for publishing
-        run: |
-          uv tool install twine
+      - name: Build pure wheel + sdist
+        run: uv build --out-dir dist
 
-      - name: Build package
+      - name: Upload pure wheel
+        uses: https://github.com/actions/upload-artifact@v4
+        with:
+          name: pure-wheel
+          path: dist/*
+
+  # Publish all wheels to Gitea Package Registry
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build-compiled, build-pure]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Install twine
+        run: pip install twine
+
+      - name: Download all wheels
+        uses: https://github.com/actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect all packages
         run: |
-          uv build --out-dir dist
-        env:
-          UV_COMPILE_BYTECODE: "1"
-          OFX_COMPILE: "1"
+          mkdir -p dist
+          find artifacts -type f \( -name "*.whl" -o -name "*.tar.gz" \) -exec cp {} dist/ \;
+          echo "Packages to publish:"
+          ls -la dist/
 
       - name: Publish to Gitea Package Registry
         env:
           TWINE_USERNAME: ${{ secrets.PKG_USER }}
           TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
-          OFX_COMPILE: "1"
         run: |
-          uvx twine upload \
+          twine upload \
             --repository-url ${{ secrets.PKG_URL }} \
             --verbose \
+            --skip-existing \
             dist/*
-
-      - name: Upload artifacts
-        uses: https://github.com/actions/upload-artifact@v4
-        with:
-          name: python-package
-          path: dist/

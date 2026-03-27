@@ -95,28 +95,67 @@ jobs:
           path: dist/*.exe
 
   # ===========================================================================
-  # Build Python Wheel (universal)
+  # Build Python Wheel (pure + compiled)
   # ===========================================================================
   build-wheel:
     runs-on: ubuntu-latest
-    
+    strategy:
+      matrix:
+        include:
+          - type: pure
+            platform: ""
+            python: "3.12"
+          - type: compiled
+            platform: linux/amd64
+            python: "3.12"
+          - type: compiled
+            platform: linux/amd64
+            python: "3.13"
+          - type: compiled
+            platform: linux/amd64
+            python: "3.14"
+          - type: compiled
+            platform: linux/arm64
+            python: "3.12"
+          - type: compiled
+            platform: linux/arm64
+            python: "3.13"
+          - type: compiled
+            platform: linux/arm64
+            python: "3.14"
+
     steps:
       - uses: https://github.com/actions/checkout@v4
-      
-      - name: Set up Python
-        uses: https://github.com/actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      
-      - name: Build wheel
+
+      - name: Build pure wheel
+        if: matrix.type == 'pure'
         run: |
           pip install build
           python -m build --wheel
-      
+
+      - name: Set up QEMU (for ARM64)
+        if: matrix.type == 'compiled' && matrix.platform == 'linux/arm64'
+        uses: https://github.com/docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: matrix.type == 'compiled'
+        uses: https://github.com/docker/setup-buildx-action@v3
+
+      - name: Build compiled wheel
+        if: matrix.type == 'compiled'
+        run: |
+          docker buildx build \
+            -f Dockerfile.compile \
+            --build-arg PYTHON_VERSION=${{ matrix.python }} \
+            --platform ${{ matrix.platform }} \
+            --target=export \
+            --output type=local,dest=dist \
+            .
+
       - name: Upload wheel
         uses: https://github.com/actions/upload-artifact@v4
         with:
-          name: python-wheel
+          name: python-wheel-${{ matrix.type }}-py${{ matrix.python }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || matrix.platform == 'linux/amd64' && 'amd64' || 'pure' }}
           path: dist/*.whl
 
   # ===========================================================================
