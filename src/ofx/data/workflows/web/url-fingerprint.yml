@@ -43,25 +43,22 @@ jobs:
       tech_list_file: '{{ steps["collect-tech"].outputs.tech_list_file | default("", true) }}'
       tech_count: '{{ steps["collect-tech"].outputs.tech_count | default("", true) }}'
     steps:
-    - name: whatweb-scan
-      run: |
-        whatweb -a 3 {{ inputs.target }} --color=never 2>/dev/null | tee /tmp/whatweb-output.txt
+    - task: whatweb
+      timeout: 10
+      name: whatweb-scan
+      with:
+        target: '{{ inputs.target }}'
+        aggression: 3
       continue-on-error: true
     - name: collect-tech
       script: |
+        whatweb_out = {{ tags(steps["whatweb-scan"].outputs.typed_outputs) | default([], true) | tojson }}
+
         techs = set()
-        try:
-            with open('/tmp/whatweb-output.txt') as f:
-                content = f.read()
-            # Extract technology identifiers from WhatWeb output
-            import re
-            matches = re.findall(r'\[([^\]]+)\]', content)
-            for m in matches:
-                m = m.strip()
-                if m and not m.startswith('http'):
-                    techs.add(m)
-        except FileNotFoundError:
-            pass
+        for item in whatweb_out:
+            name = item.get('name', '')
+            if name:
+                techs.add(name)
 
         with open('/tmp/ofx_urlfingerprint_techs.txt', 'w') as tf:
             tf.write('\n'.join(sorted(techs)))

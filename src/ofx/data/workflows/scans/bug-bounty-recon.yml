@@ -29,17 +29,23 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       continue-on-error: true
-    - name: amass-passive
-      run: |
-        amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
+    - task: amass
+      timeout: 10
+      name: amass-passive
+      with:
+        target: '{{ inputs.target }}'
       continue-on-error: true
-    - name: assetfinder-enum
-      run: |
-        assetfinder --subs-only {{ inputs.target }} 2>/dev/null | tee /tmp/assetfinder-subs.txt
+    - task: assetfinder
+      timeout: 10
+      name: assetfinder-enum
+      with:
+        target: '{{ inputs.target }}'
       continue-on-error: true
-    - name: findomain-enum
-      run: |
-        findomain -t {{ inputs.target }} -q 2>/dev/null | tee /tmp/findomain-subs.txt
+    - task: findomain
+      timeout: 10
+      name: findomain-enum
+      with:
+        target: '{{ inputs.target }}'
       continue-on-error: true
     - name: merge-subdomains
       script: |
@@ -52,16 +58,23 @@ jobs:
             if item.get('_type') == 'subdomain':
                 subs.add(item['host'])
 
-        # From amass, assetfinder, findomain
-        for path in ['/tmp/amass-subs.txt', '/tmp/assetfinder-subs.txt', '/tmp/findomain-subs.txt']:
-            try:
-                with open(path) as f:
-                    for line in f:
-                        sub = line.strip()
-                        if sub and '{{ inputs.target }}' in sub:
-                            subs.add(sub)
-            except FileNotFoundError:
-                pass
+        # From amass
+        for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = item.get('host', '')
+            if host and '{{ inputs.target }}' in host:
+                subs.add(host)
+
+        # From assetfinder
+        for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = item.get('host', '')
+            if host and '{{ inputs.target }}' in host:
+                subs.add(host)
+
+        # From findomain
+        for item in {{ subdomains(steps["findomain-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = item.get('host', '')
+            if host and '{{ inputs.target }}' in host:
+                subs.add(host)
 
         with open('/tmp/ofx_bb_subs.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
@@ -107,23 +120,25 @@ jobs:
       takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count | default("", true) }}'
       takeover_findings_file: '{{ steps["collect-takeovers"].outputs.takeover_findings_file | default("", true) }}'
     steps:
-    - name: subzy-scan
-      run: |
-        cat {{ jobs['dns-verify'].outputs.alive_file }} > /tmp/takeover-targets.txt
-        subzy run --targets /tmp/takeover-targets.txt 2>/dev/null | tee /tmp/subzy-output.txt
+    - task: subzy
+      timeout: 10
+      name: subzy-scan
+      with:
+        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
       continue-on-error: true
     - name: collect-takeovers
       script: |
-        import re
+        subzy_out = {{ steps["subzy-scan"].outputs.typed_outputs | default([], true) | tojson }}
 
         vulnerable = []
-        try:
-            with open('/tmp/subzy-output.txt') as f:
-                for line in f:
-                    if 'VULNERABLE' in line.upper() or '[+]' in line:
-                        vulnerable.append(line.strip())
-        except FileNotFoundError:
-            pass
+        for item in subzy_out:
+            t = item.get('_type', '')
+            if t == 'vulnerability':
+                host = item.get('host', item.get('matched_at', ''))
+                name = item.get('name', 'takeover')
+                vulnerable.append(f"[subzy] {name}: {host}")
+            elif t == 'subdomain' and item.get('vulnerable'):
+                vulnerable.append(f"[subzy] {item.get('host', 'unknown')}")
 
         add_outputs(takeover_count=len(vulnerable))
         with open('/tmp/ofx_bb_takeover.txt', 'w') as f:
@@ -255,9 +270,11 @@ jobs:
       param_url_count: '{{ steps["collect-params"].outputs.param_url_count | default("", true) }}'
       unique_params: '{{ steps["collect-params"].outputs.unique_params | default("", true) }}'
     steps:
-    - name: paramspider-mine
-      run: |
-        paramspider -d {{ inputs.target }} --output /tmp/paramspider-output.txt 2>/dev/null || true
+    - task: paramspider
+      timeout: 10
+      name: paramspider-mine
+      with:
+        target: '{{ inputs.target }}'
       continue-on-error: true
     - name: arjun-discover
       run: |
@@ -272,14 +289,11 @@ jobs:
         params = set()
         param_urls = set()
 
-        try:
-            with open('/tmp/paramspider-output.txt') as f:
-                for line in f:
-                    url = line.strip()
-                    if url and '=' in url:
-                        param_urls.add(url)
-        except FileNotFoundError:
-            pass
+        # From paramspider
+        for item in {{ urls(steps["paramspider-mine"].outputs.typed_outputs) | default([], true) | tojson }}:
+            url = item.get('url', '')
+            if url and '=' in url:
+                param_urls.add(url)
 
         try:
             with open('/tmp/arjun-params.json') as f:
@@ -289,6 +303,9 @@ jobs:
                     params.add(p)
         except (FileNotFoundError, json.JSONDecodeError):
             pass
+
+        with open('/tmp/ofx_bb_params.txt', 'w') as f:
+            f.write('\n'.join(sorted(param_urls)))
 
         add_outputs(param_file="/tmp/ofx_bb_params.txt", param_url_count=len(param_urls), unique_params=len(params))
         print(f"Parameterized URLs: {len(param_urls)}, Unique params: {len(params)}")

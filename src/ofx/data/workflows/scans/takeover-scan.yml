@@ -27,9 +27,11 @@ jobs:
         target: '{{ inputs.target }}'
         all: true
       continue-on-error: true
-    - name: amass-passive
-      run: |
-        amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
+    - task: amass
+      timeout: 10
+      name: amass-passive
+      with:
+        target: '{{ inputs.target }}'
       continue-on-error: true
     - name: merge-subdomains
       script: |
@@ -43,14 +45,10 @@ jobs:
                 subs.add(item['host'])
 
         # From amass
-        try:
-            with open('/tmp/amass-subs.txt') as f:
-                for line in f:
-                    sub = line.strip()
-                    if sub and '{{ inputs.target }}' in sub:
-                        subs.add(sub)
-        except FileNotFoundError:
-            pass
+        for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = item.get('host', '')
+            if host and '{{ inputs.target }}' in host:
+                subs.add(host)
 
         with open('/tmp/ofx_takeover_subs.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
@@ -100,10 +98,11 @@ jobs:
       takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count | default("", true) }}'
       takeover_findings_file: '{{ steps["collect-takeovers"].outputs.takeover_findings_file | default("", true) }}'
     steps:
-    - name: subzy-scan
-      run: |
-        cat {{ jobs['dns-verify'].outputs.alive_file }} > /tmp/takeover-targets.txt
-        subzy run --targets /tmp/takeover-targets.txt 2>/dev/null | tee /tmp/subzy-output.txt
+    - task: subzy
+      timeout: 10
+      name: subzy-scan
+      with:
+        target: "{{ jobs['dns-verify'].outputs.alive_file }}"
       continue-on-error: true
     - task: nuclei
       timeout: 20
@@ -114,18 +113,18 @@ jobs:
       continue-on-error: true
     - name: collect-takeovers
       script: |
-        import re
-
         takeovers = []
 
-        # Parse subzy results
-        try:
-            with open('/tmp/subzy-output.txt') as f:
-                for line in f:
-                    if 'VULNERABLE' in line.upper() or '[+]' in line:
-                        takeovers.append(line.strip())
-        except FileNotFoundError:
-            pass
+        # Parse subzy results from typed_outputs
+        subzy_out = {{ steps["subzy-scan"].outputs.typed_outputs | default([], true) | tojson }}
+        for item in subzy_out:
+            t = item.get('_type', '')
+            if t == 'vulnerability':
+                host = item.get('host', item.get('matched_at', ''))
+                name = item.get('name', 'takeover')
+                takeovers.append(f"[subzy] {name}: {host}")
+            elif t == 'subdomain' and item.get('vulnerable'):
+                takeovers.append(f"[subzy] {item.get('host', 'unknown')}")
 
         # Parse nuclei takeover results
         nuclei_vulns = {{ vulns(steps["nuclei-takeover"].outputs.typed_outputs) | tojson }}

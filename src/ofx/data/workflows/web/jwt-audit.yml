@@ -29,9 +29,11 @@ jobs:
       jwt_issuer: '{{ steps["collect-token-info"].outputs.jwt_issuer | default("", true) }}'
       jwt_expiry: '{{ steps["collect-token-info"].outputs.jwt_expiry | default("", true) }}'
     steps:
-    - name: jwt-decode
-      run: |
-        jwt_tool '{{ inputs.token }}' 2>/dev/null | tee /tmp/jwt-decode.txt
+    - task: jwt_tool
+      timeout: 10
+      name: jwt-decode
+      with:
+        target: '{{ inputs.token }}'
       continue-on-error: true
     - name: collect-token-info
       script: |
@@ -75,30 +77,28 @@ jobs:
       jwt_vuln_count: '{{ steps["collect-vulns"].outputs.jwt_vuln_count | default("", true) }}'
       jwt_vulns_file: '{{ steps["collect-vulns"].outputs.jwt_vulns_file | default("", true) }}'
     steps:
-    - name: jwt-all-tests
-      run: |
-        jwt_tool '{{ inputs.token }}' -M at {{ '-t ' + inputs.target_url if inputs.target_url else '' }} 2>/dev/null | tee /tmp/jwt-vulns.txt
+    - task: jwt_tool
+      timeout: 15
+      name: jwt-all-tests
+      with:
+        target: '{{ inputs.token }}'
+        mode: at
+        target_url: '{{ inputs.target_url }}'
       continue-on-error: true
     - name: collect-vulns
       script: |
-        import re
-
-        vulns = []
-        try:
-            with open('/tmp/jwt-vulns.txt') as f:
-                for line in f:
-                    if '[+]' in line or 'VULNERABLE' in line.upper():
-                        vulns.append(line.strip())
-        except FileNotFoundError:
-            pass
+        jwt_vulns = {{ vulns(steps["jwt-all-tests"].outputs.typed_outputs) | default([], true) | tojson }}
 
         with open('/tmp/ofx_jwtaudit_vulns.txt', 'w') as tf:
-            tf.write('\n'.join(vulns))
+            findings = []
+            for v in jwt_vulns:
+                findings.append(v.get('name', 'unknown'))
+            tf.write('\n'.join(findings))
 
-        add_outputs(jwt_vuln_count=len(vulns), jwt_vulns_file="/tmp/ofx_jwtaudit_vulns.txt")
-        print(f"JWT vulnerabilities found: {len(vulns)}")
-        for v in vulns:
-            print(f"  [!] {v}")
+        add_outputs(jwt_vuln_count=len(jwt_vulns), jwt_vulns_file="/tmp/ofx_jwtaudit_vulns.txt")
+        print(f"JWT vulnerabilities found: {len(jwt_vulns)}")
+        for v in jwt_vulns:
+            print(f"  [!] {v.get('name', 'unknown')}")
   summary:
     name: JWT Audit Summary
     needs:

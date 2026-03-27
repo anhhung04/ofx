@@ -23,42 +23,36 @@ jobs:
       weak_protocol_count: '{{ steps["collect-sslscan"].outputs.weak_protocol_count | default("", true) }}'
       weak_cipher_count: '{{ steps["collect-sslscan"].outputs.weak_cipher_count | default("", true) }}'
     steps:
-    - name: sslscan-run
-      run: |
-        sslscan --no-colour {{ inputs.target }} 2>/dev/null | tee /tmp/sslscan-output.txt
+    - task: sslscan
+      timeout: 10
+      name: sslscan-run
+      with:
+        target: '{{ inputs.target }}'
       continue-on-error: true
     - name: collect-sslscan
       script: |
-        import re
+        sslscan_out = {{ steps["sslscan-run"].outputs.typed_outputs | default([], true) | tojson }}
 
+        weak_protocols = []
         weak_ciphers = []
-        protocols = []
-        cert_info = []
+        deprecated = {'SSLv2', 'SSLv3', 'TLSv1.0', 'TLSv1.1'}
 
-        try:
-            with open('/tmp/sslscan-output.txt') as f:
-                content = f.read()
-
-            # Extract weak/deprecated protocols
-            for proto in ['SSLv2', 'SSLv3', 'TLSv1.0', 'TLSv1.1']:
-                if re.search(rf'{proto}\s+enabled', content, re.IGNORECASE):
-                    protocols.append(proto)
-
-            # Extract weak ciphers
-            for line in content.split('\n'):
-                if 'NULL' in line or 'RC4' in line or 'DES' in line or 'EXPORT' in line:
-                    cipher = line.strip()
-                    if cipher:
-                        weak_ciphers.append(cipher)
-
-        except FileNotFoundError:
-            pass
+        for item in sslscan_out:
+            t = item.get('_type', '')
+            if t == 'tag':
+                name = item.get('name', '')
+                if any(p in name for p in deprecated):
+                    weak_protocols.append(name)
+                if any(kw in name for kw in ['NULL', 'RC4', 'DES', 'EXPORT']):
+                    weak_ciphers.append(name)
+            elif t == 'vulnerability':
+                weak_ciphers.append(item.get('name', 'unknown'))
 
         with open('/tmp/ofx_sslaudit_protocols.txt', 'w') as tf:
-            tf.write('\n'.join(protocols) if protocols else 'none')
+            tf.write('\n'.join(weak_protocols) if weak_protocols else 'none')
 
-        add_outputs(weak_protocols_file="/tmp/ofx_sslaudit_protocols.txt", weak_protocol_count=len(protocols), weak_cipher_count=len(weak_ciphers))
-        print(f"Weak protocols: {len(protocols)}")
+        add_outputs(weak_protocols_file="/tmp/ofx_sslaudit_protocols.txt", weak_protocol_count=len(weak_protocols), weak_cipher_count=len(weak_ciphers))
+        print(f"Weak protocols: {len(weak_protocols)}")
         print(f"Weak ciphers: {len(weak_ciphers)}")
   testssl-check:
     name: TestSSL Analysis
@@ -118,6 +112,7 @@ jobs:
         else:
             all_typed = []
             for typed in [
+            {{ jobs['sslscan-check'].outputs.typed_outputs | default([], true) | tojson }},
             {{ jobs['testssl-check'].outputs.typed_outputs | default([], true) | tojson }},
             ]:
                 all_typed.extend(typed)

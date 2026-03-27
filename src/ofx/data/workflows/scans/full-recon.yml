@@ -33,13 +33,17 @@ jobs:
           target: "{{ inputs.target }}"
           all: true
         continue-on-error: true
-      - name: amass-passive
-        run: |
-          amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/amass-subs.txt
+      - task: amass
+        timeout: 10
+        name: amass-passive
+        with:
+          target: "{{ inputs.target }}"
         continue-on-error: true
-      - name: assetfinder-enum
-        run: |
-          assetfinder --subs-only {{ inputs.target }} 2>/dev/null | tee /tmp/assetfinder-subs.txt
+      - task: assetfinder
+        timeout: 10
+        name: assetfinder-enum
+        with:
+          target: "{{ inputs.target }}"
         continue-on-error: true
       - name: collect-subdomains
         script: |
@@ -51,15 +55,17 @@ jobs:
               if item.get('_type') == 'subdomain':
                   subs.add(item['host'])
 
-          for path in ['/tmp/amass-subs.txt', '/tmp/assetfinder-subs.txt']:
-              try:
-                  with open(path) as f:
-                      for line in f:
-                          sub = line.strip()
-                          if sub and '{{ inputs.target }}' in sub:
-                              subs.add(sub)
-              except FileNotFoundError:
-                  pass
+          # From amass
+          for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
+              host = item.get('host', '')
+              if host and '{{ inputs.target }}' in host:
+                  subs.add(host)
+
+          # From assetfinder
+          for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              host = item.get('host', '')
+              if host and '{{ inputs.target }}' in host:
+                  subs.add(host)
 
           from pathlib import Path
           Path('/tmp/subs.txt').write_text('\n'.join(sorted(subs)))
@@ -171,20 +177,24 @@ jobs:
     outputs:
       takeover_count: '{{ steps["export-takeovers"].outputs.takeover_count | default("0", true) }}'
     steps:
-      - name: subzy-check
-        run: |
-          subzy run --targets {{ jobs['dns-resolve'].outputs.verified_file }} --hide_fails 2>/dev/null | tee /tmp/subzy-output.txt
+      - task: subzy
+        timeout: 10
+        name: subzy-check
+        with:
+          target: "{{ jobs['dns-resolve'].outputs.verified_file }}"
         continue-on-error: true
       - name: export-takeovers
         script: |
+          subzy_out = {{ steps["subzy-check"].outputs.typed_outputs | default([], true) | tojson }}
+
           takeovers = []
-          try:
-              with open('/tmp/subzy-output.txt') as f:
-                  for line in f:
-                      if 'VULNERABLE' in line.upper():
-                          takeovers.append(line.strip())
-          except FileNotFoundError:
-              pass
+          for item in subzy_out:
+              t = item.get('_type', '')
+              if t == 'vulnerability':
+                  host = item.get('host', item.get('matched_at', ''))
+                  takeovers.append(f"VULNERABLE: {host}")
+              elif t == 'subdomain' and item.get('vulnerable'):
+                  takeovers.append(f"VULNERABLE: {item.get('host', 'unknown')}")
           add_outputs(takeover_count=len(takeovers))
           print(f"Potential takeovers: {len(takeovers)}")
 

@@ -31,36 +31,29 @@ jobs:
       finding_count: '{{ steps["collect-findings"].outputs.finding_count | default("", true) }}'
       db_count: '{{ steps["collect-findings"].outputs.db_count | default("", true) }}'
     steps:
-    - name: sqlmap-scan
-      run: |
-        sqlmap -u "{{ inputs.target }}" --batch --level={{ inputs.level }} --risk={{ inputs.risk }} --threads=5 --output-dir=/tmp/sqlmap-output --no-color 2>&1 | tee /tmp/sqlmap-results.txt
+    - task: sqlmap
+      timeout: 15
+      name: sqlmap-scan
+      with:
+        target: '{{ inputs.target }}'
+        level: '{{ inputs.level }}'
+        risk: '{{ inputs.risk }}'
+        threads: 5
+      continue-on-error: true
     - name: collect-findings
       script: |
-        import re
+        sqlmap_vulns = {{ vulns(steps["sqlmap-scan"].outputs.typed_outputs) | default([], true) | tojson }}
 
+        vulnerable = len(sqlmap_vulns) > 0
         findings = []
-        vulnerable = False
-        try:
-            with open('/tmp/sqlmap-results.txt') as f:
-                content = f.read()
-
-            if 'is vulnerable' in content or 'injectable' in content:
-                vulnerable = True
-
-            # Extract injection types found
-            types = re.findall(r'Type: (.+)', content)
-            findings.extend(types)
-
-            # Extract database info if found
-            dbs = re.findall(r'available databases \[(\d+)\]', content)
-            db_count = dbs[0] if dbs else '0'
-        except FileNotFoundError:
-            db_count = '0'
+        for v in sqlmap_vulns:
+            name = v.get('name', v.get('matched_at', 'unknown'))
+            findings.append(name)
 
         with open('/tmp/ofx_sqli_types.txt', 'w') as tf:
             tf.write('\n'.join(findings))
 
-        add_outputs(vulnerable='true' if vulnerable else 'false', injection_types_file="/tmp/ofx_sqli_types.txt", finding_count=len(findings), db_count=db_count)
+        add_outputs(vulnerable='true' if vulnerable else 'false', injection_types_file="/tmp/ofx_sqli_types.txt", finding_count=len(findings), db_count=len(sqlmap_vulns))
         status = "VULNERABLE" if vulnerable else "Not vulnerable"
         print(f"Target is: {status}")
         print(f"Injection types found: {len(findings)}")

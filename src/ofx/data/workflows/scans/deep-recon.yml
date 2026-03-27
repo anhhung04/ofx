@@ -84,19 +84,25 @@ jobs:
           target: '{{ inputs.target }}'
         continue-on-error: true
 
-      - name: amass-enum
-        run: |
-          amass enum -passive -d {{ inputs.target }} 2>/dev/null | tee /tmp/ofx_deeprecon_amass.txt
+      - task: amass
+        timeout: 10
+        name: amass-enum
+        with:
+          target: '{{ inputs.target }}'
         continue-on-error: true
 
-      - name: assetfinder-enum
-        run: |
-          assetfinder --subs-only {{ inputs.target }} 2>/dev/null | tee /tmp/ofx_deeprecon_assetfinder.txt
+      - task: assetfinder
+        timeout: 10
+        name: assetfinder-enum
+        with:
+          target: '{{ inputs.target }}'
         continue-on-error: true
 
-      - name: findomain-enum
-        run: |
-          findomain -t {{ inputs.target }} -q 2>/dev/null | tee /tmp/ofx_deeprecon_findomain.txt
+      - task: findomain
+        timeout: 10
+        name: findomain-enum
+        with:
+          target: '{{ inputs.target }}'
         continue-on-error: true
 
       - task: urlfinder
@@ -139,15 +145,22 @@ jobs:
                       subs.add(host)
 
           # From amass
-          for path in ['/tmp/ofx_deeprecon_amass.txt', '/tmp/ofx_deeprecon_assetfinder.txt', '/tmp/ofx_deeprecon_findomain.txt']:
-              try:
-                  with open(path) as f:
-                      for line in f:
-                          sub = line.strip()
-                          if sub and '{{ inputs.target }}' in sub:
-                              subs.add(sub)
-              except FileNotFoundError:
-                  pass
+          for item in {{ subdomains(steps["amass-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              host = item.get('host', '')
+              if host and '{{ inputs.target }}' in host:
+                  subs.add(host)
+
+          # From assetfinder
+          for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              host = item.get('host', '')
+              if host and '{{ inputs.target }}' in host:
+                  subs.add(host)
+
+          # From findomain
+          for item in {{ subdomains(steps["findomain-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              host = item.get('host', '')
+              if host and '{{ inputs.target }}' in host:
+                  subs.add(host)
 
           # From urlfinder — extract hosts
           uf_outputs = {{ steps["urlfinder-passive"].outputs.typed_outputs | tojson }}

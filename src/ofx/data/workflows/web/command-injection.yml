@@ -25,34 +25,27 @@ jobs:
       commix_vuln_count: '{{ steps["collect-commix"].outputs.commix_vuln_count | default("", true) }}'
       commix_vuln_param: '{{ steps["collect-commix"].outputs.commix_vuln_param | default("", true) }}'
     steps:
-    - name: commix-scan
-      run: |
-        commix --url='{{ inputs.target }}' --batch --level={{ inputs.level }} --output-dir=/tmp/commix-results 2>/dev/null | tee /tmp/commix-output.txt
+    - task: commix
+      timeout: 15
+      name: commix-scan
+      with:
+        target: '{{ inputs.target }}'
+        level: '{{ inputs.level }}'
       continue-on-error: true
     - name: collect-commix
       script: |
-        import re
+        commix_vulns = {{ vulns(steps["commix-scan"].outputs.typed_outputs) | default([], true) | tojson }}
 
-        vulns = []
-        try:
-            with open('/tmp/commix-output.txt') as f:
-                content = f.read()
-            # Detect vulnerable parameters
-            params = re.findall(r'The (?:GET|POST) parameter \'(\S+)\' (?:appears to be|is) injectable', content)
-            techniques = re.findall(r'via (\S+) technique', content)
-            for param in params:
-                vulns.append({
-                    'parameter': param,
-                    'techniques': techniques,
-                })
-        except FileNotFoundError:
-            pass
+        vuln_param = ''
+        for v in commix_vulns:
+            p = v.get('parameter', v.get('name', ''))
+            if p and not vuln_param:
+                vuln_param = p
 
-        for v in vulns:
-        add_outputs(commix_vuln_count=len(vulns), commix_vuln_param=v['parameter'])
-        print(f"Commix: {len(vulns)} injectable parameters found")
-        for v in vulns:
-            print(f"  [!] Parameter: {v['parameter']}")
+        add_outputs(commix_vuln_count=len(commix_vulns), commix_vuln_param=vuln_param)
+        print(f"Commix: {len(commix_vulns)} injectable parameters found")
+        for v in commix_vulns:
+            print(f"  [!] {v.get('name', v.get('parameter', 'unknown'))}")
   nuclei-rce:
     name: Nuclei RCE/Injection Scan
     outputs:
