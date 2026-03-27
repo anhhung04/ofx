@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from ofx.models.command import Command
+from ofx.runner.commands.command import CommandRunner
 from ofx.runner.commands.command_executor import CommandExecutionResult, CommandExecutor
 from ofx.runner.core import BaseRunner, RunContext, RunnerRegistryKeys
+from ofx.settings import TOOLS_BIN_DIR
 from ofx.tasks.base import Task
 from ofx.tasks.output_types import OutputType
 from ofx.tasks.registry import TaskRegistry
@@ -81,13 +84,16 @@ class TaskRunner(BaseRunner[TaskExecution]):
             )
         self._task = task_cls()
 
-        # Pre-flight binary check with actionable install hint
+        # Pre-flight binary check — auto-install if possible
         if not self._task.check_installed():
-            install_hint = self._task.get_install_command()
-            msg = f"Task '{self.model.task_name}' requires '{self._task.cmd}' but it is not installed."
-            if install_hint:
-                msg += f" Install with: {install_hint}"
-            self._log_warning(msg)
+            install_cmd = self._task.get_install_command()
+            if install_cmd:
+                await self._auto_install_tool(self._task.cmd, install_cmd)
+            else:
+                self._log_warning(
+                    f"Task '{self.model.task_name}' requires '{self._task.cmd}' "
+                    f"but it is not installed and no install command is defined."
+                )
 
         # Apply profile task_options overrides (low priority, user opts win)
         self._apply_profile_task_options()
@@ -199,6 +205,40 @@ class TaskRunner(BaseRunner[TaskExecution]):
             f"Applied profile task_options for '{self.model.task_name}': "
             f"{list(overrides.keys())}"
         )
+
+    # ── Auto-install ──────────────────────────────────────────────
+
+    async def _auto_install_tool(self, tool_bin: str, install_cmd: str) -> None:
+        """Attempt to install a missing tool binary using its install_cmd.
+
+        Checks both ``$PATH`` and ``~/Tools/bin`` after install to confirm
+        success.  On failure the task continues (the command itself will
+        produce a clearer error).
+        """
+        self._log_info(
+            f"Tool '{tool_bin}' not found — auto-installing with: {install_cmd}"
+        )
+        try:
+            cmd_model = Command(cmd=install_cmd)
+            runner = CommandRunner(cmd_model, RunContext(envs=self.ctx.envs))
+            result = await runner.run()
+
+            if result.status.value != "completed":
+                self._log_warning(
+                    f"Auto-install of '{tool_bin}' failed: {result.error}"
+                )
+                return
+
+            # Verify it's now reachable
+            tool_path = TOOLS_BIN_DIR / tool_bin
+            if shutil.which(tool_bin) or tool_path.exists():
+                self._log_info(f"Tool '{tool_bin}' installed successfully")
+            else:
+                self._log_warning(
+                    f"Install command succeeded but '{tool_bin}' still not found on PATH"
+                )
+        except Exception as e:
+            self._log_warning(f"Auto-install of '{tool_bin}' error: {e}")
 
     # ── Live streaming ─────────────────────────────────────────────
 
