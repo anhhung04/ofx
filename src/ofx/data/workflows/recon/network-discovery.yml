@@ -22,23 +22,20 @@ jobs:
       alive_file: '{{ steps["collect-alive"].outputs.alive_file | default("", true) }}'
       alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("", true) }}'
     steps:
-    - name: ping-sweep
-      run: |
-        fping -a -g {{ inputs.target }} 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | tee /tmp/alive-hosts.txt
-        echo "alive_hosts=$(cat /tmp/alive-hosts.txt | tr '\n' '\n')" >> $OFX_OUTPUTS
-        echo "alive_count=$(wc -l < /tmp/alive-hosts.txt | tr -d ' ')" >> $OFX_OUTPUTS
+    - task: fping
+      timeout: 5
+      name: ping-sweep
+      with:
+        target: '{{ inputs.target }}'
+        generate: true
       continue-on-error: true
     - name: collect-alive
       script: |
-        import os
-
         hosts = set()
-        if os.path.exists('/tmp/alive-hosts.txt'):
-            with open('/tmp/alive-hosts.txt') as f:
-                for line in f:
-                    ip = line.strip()
-                    if ip:
-                        hosts.add(ip)
+        for item in {{ ips(steps["ping-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
+            ip = item.get('ip', '')
+            if ip:
+                hosts.add(ip)
 
         with open('/tmp/ofx_nd_alive.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts)))
@@ -53,9 +50,13 @@ jobs:
     needs:
     - host-discovery
     steps:
-    - name: masscan-sweep
-      run: |
-        masscan -iL {{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }} --top-ports 100 --rate 1000 -oL /tmp/masscan-results.txt 2>/dev/null || true
+    - task: masscan
+      timeout: 10
+      name: masscan-sweep
+      with:
+        target: "{{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }}"
+        top_ports: '100'
+        rate: 1000
       continue-on-error: true
     - task: naabu
       timeout: 10

@@ -39,6 +39,13 @@ class NetexecTask(Task):
         "ntds": OptDef(flag="--ntds", is_flag=True, help="Dump NTDS.dit"),
         "exec_method": OptDef(flag="--exec-method", type=str, help="Execution method"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
+        "module": OptDef(flag="-M", type=str, help="Module to run"),
+        "module_option": OptDef(flag="-o", type=str, help="Module option (KEY=VALUE)"),
+        "gen_relay_list": OptDef(flag="--gen-relay-list", type=str, help="Output file for SMB relay targets"),
+        "asreproast": OptDef(flag="--asreproast", type=str, help="Output file for AS-REP roast hashes"),
+        "gmsa": OptDef(flag="--gmsa", is_flag=True, help="Dump gMSA passwords"),
+        "dpapi": OptDef(flag="--dpapi", is_flag=True, help="Dump DPAPI credentials"),
+        "kerberoasting": OptDef(flag="--kerberoasting", type=str, help="Output file for Kerberoast hashes"),
     }
 
     input_flag = None

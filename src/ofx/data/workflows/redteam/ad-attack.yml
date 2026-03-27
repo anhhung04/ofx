@@ -292,14 +292,24 @@ jobs:
     needs:
       - enum
     steps:
-      - name: smb-signing
-        run: |
-          netexec smb {{ inputs.target }} --gen-relay-list /tmp/relay-targets.txt 2>/dev/null | tee /tmp/smb-signing.txt
+      - task: netexec
+        timeout: 10
+        name: smb-signing
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          gen_relay_list: /tmp/relay-targets.txt
         continue-on-error: true
-      - name: webdav-check
-        run: |
-          netexec smb {{ inputs.target }} -u {{ inputs.username }} -p '{{ inputs.password }}' \
-            -d {{ inputs.domain }} -M webdav 2>/dev/null | tee /tmp/webdav-output.txt
+      - task: netexec
+        timeout: 10
+        name: webdav-check
+        with:
+          target: "{{ inputs.target }}"
+          protocol: smb
+          username: "{{ inputs.username }}"
+          password: "{{ inputs.password }}"
+          domain: "{{ inputs.domain }}"
+          module: webdav
         continue-on-error: true
       - name: collect-relay
         script: |
@@ -313,14 +323,8 @@ jobs:
           except FileNotFoundError:
               pass
 
-          webdav = False
-          try:
-              with open('/tmp/webdav-output.txt') as f:
-                  content = f.read()
-                  if 'WebClient' in content and 'Enabled' in content:
-                      webdav = True
-          except FileNotFoundError:
-              pass
+          webdav_out = '''{{ steps["webdav-check"].outputs.stdout | default("", true) }}'''
+          webdav = 'WebClient' in webdav_out and 'Enabled' in webdav_out
 
           add_outputs(relay_count=len(relay_targets), webdav_enabled='yes' if webdav else 'no')
           print(f"SMB signing disabled (relay targets): {len(relay_targets)}")

