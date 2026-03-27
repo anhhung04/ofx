@@ -237,3 +237,5 @@ __marimo__/
 .worktrees
 
 plans/recon
+# Cython build cache
+build/.cython_cache.json

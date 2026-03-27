@@ -12,7 +12,7 @@ help:
 	@echo "  make clean           - Remove build artifacts"
 	@echo "  make docs            - Build documentation"
 	@echo ""
-	@echo "Compilation:"
+	@echo "Compilation (requires standard CPython, not free-threaded):"
 	@echo "  make compile         - Compile .py → .so with Cython (in-place)"
 	@echo "  make dist-compiled   - Build compiled wheel (stripped .py sources)"
 	@echo ""
