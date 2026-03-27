@@ -155,14 +155,18 @@ jobs:
           all: true
         continue-on-error: true
 
-      - name: amass-enum
-        run: |
-          amass enum -passive -d {{ inputs.target }} 2>/dev/null || true
+      - task: amass
+        timeout: 10
+        name: amass-enum
+        with:
+          target: '{{ inputs.target }}'
         continue-on-error: true
 
-      - name: assetfinder-enum
-        run: |
-          assetfinder --subs-only {{ inputs.target }} 2>/dev/null || true
+      - task: assetfinder
+        timeout: 10
+        name: assetfinder-enum
+        with:
+          target: '{{ inputs.target }}'
         continue-on-error: true
 
       - name: collect-subdomains
@@ -190,13 +194,13 @@ jobs:
               if host and '{{ inputs.target }}' in host:
                   subs.add(host)
 
-          # From amass/assetfinder stdout
-          for step_idx in [4, 5]:
-              raw = '''{{ steps[step_idx].outputs.stdout | default('', true) }}'''.strip()
-              for line in raw.splitlines():
-                  sub = line.strip()
-                  if sub and '{{ inputs.target }}' in sub:
-                      subs.add(sub)
+          # From amass
+          for item in {{ subdomains(steps["amass-enum"].outputs.typed_outputs) | tojson }}:
+              subs.add(item['host'])
+
+          # From assetfinder
+          for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | tojson }}:
+              subs.add(item['host'])
 
           # From DNS stage
           for item in {{ jobs['dns-enum'].outputs.typed_outputs | default([], true) | tojson }}:
