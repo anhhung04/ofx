@@ -211,6 +211,12 @@ def main():
         ),
         packages=find_packages(where="src"),
         package_dir={"": "src"},
+        package_data={
+            "ofx": [
+                "data/**/*",
+                "data/**/**/*",
+            ],
+        },
         zip_safe=False,
     )
 

@@ -86,15 +86,26 @@ mkdir -p "$STAGING_DIR/src"
 # Copy the entire src/ofx tree
 cp -a "$SRC_DIR/ofx" "$STAGING_DIR/src/ofx"
 
+# Verify data directory survived copy
+if [ ! -d "$STAGING_DIR/src/ofx/data" ]; then
+    err "Data directory missing from staging — build would be incomplete"
+    exit 1
+fi
+DATA_COUNT=$(find "$STAGING_DIR/src/ofx/data" -type f | wc -l)
+info "Data directory: $DATA_COUNT files (workflows, assets)"
+
 if [ "$KEEP_SOURCE" -eq 0 ]; then
     info "Stripping .py source files where .so exists..."
     # Only remove .py files that have a compiled .so counterpart.
     # Files that Cython couldn't compile (match/case, PEP 695, Pydantic, etc.)
     # MUST be kept as .py — they are the only copy.
+    # Data directory (YAML workflows, static assets) is never touched.
     REMOVED=0
     while IFS= read -r -d '' so_file; do
         # .so name: module.cpython-3XX-ARCH.so → derive the .py basename
         base_dir="$(dirname "$so_file")"
+        # Skip data directory — it contains no .so files anyway but be explicit
+        case "$base_dir" in */data/*) continue ;; esac
         # Extract module name: everything before .cpython-
         so_name="$(basename "$so_file")"
         py_name="${so_name%%.*}.py"
@@ -107,8 +118,9 @@ if [ "$KEEP_SOURCE" -eq 0 ]; then
 
     KEPT_PY=$(find "$STAGING_DIR/src/ofx" -name "*.py" | wc -l)
     EXTENSIONS=$(find "$STAGING_DIR/src/ofx" \( -name "*.so" -o -name "*.pyd" \) | wc -l)
+    DATA_FILES=$(find "$STAGING_DIR/src/ofx/data" -type f 2>/dev/null | wc -l)
     info "Removed $REMOVED .py files with .so counterparts"
-    info "Retained: $KEPT_PY .py files (init/incompatible), $EXTENSIONS compiled extensions"
+    info "Retained: $KEPT_PY .py files (init/incompatible), $EXTENSIONS compiled extensions, $DATA_FILES data files"
 fi
 
 # Remove .c intermediates from staging
