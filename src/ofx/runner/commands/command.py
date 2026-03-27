@@ -60,6 +60,8 @@ def exec_script_in_process(
                 else:
                     f.write(f"{k}={v}\n")
 
+    from ofx.runner.execution.findings_export import export_typed_outputs
+
     globals_dict = {
         "__builtins__": builtins.__dict__,
         "__name__": "__main__",
@@ -75,6 +77,7 @@ def exec_script_in_process(
         "wait_for": lambda channel, condition, timeout=60: store.wait_for(
             channel, condition, timeout=timeout
         ),
+        "export_typed_outputs": export_typed_outputs,
     }
 
     stdout_capture = io.StringIO()
