@@ -28,7 +28,7 @@ class SubzyTask(Task):
     input_flag = "--target"
     file_flag = "--targets"
     output_flag = None
-    extra_flags = ["--hide_fails", "--vuln"]
+    extra_flags = ["run", "--hide_fails", "--vuln"]
 
     def _output_suffix(self) -> str:
         return ".txt"
