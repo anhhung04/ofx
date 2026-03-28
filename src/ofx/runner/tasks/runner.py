@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -175,6 +176,12 @@ class TaskRunner(BaseRunner[TaskExecution]):
                         f"Stored {stored} credential(s) in credential store"
                     )
 
+            # Export output file to output_path with target in filename
+            exported_path = self._export_output_file()
+            if exported_path:
+                outputs["output_file"] = str(exported_path)
+                await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
+
             # Clean up temp output file
             self._cleanup_output_file()
 
@@ -323,6 +330,65 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 self._output_file.unlink()
             except OSError:
                 pass
+
+    def _export_output_file(self) -> Path | None:
+        """Copy task output file to output_path with target in the filename.
+
+        Creates ``<output_path>/scans/<task>_<target>.<ext>`` so results are
+        organized by tool and target.  Returns the exported path, or None
+        if there is nothing to export.
+        """
+        if not self._output_file or not self._output_file.exists():
+            return None
+        if not self.ctx.output_path:
+            return None
+        # Skip empty output files
+        try:
+            if self._output_file.stat().st_size == 0:
+                return None
+        except OSError:
+            return None
+
+        task_name = self.model.task_name
+        target_slug = self._sanitize_target(self.model.target)
+        suffix = self._output_file.suffix or ".txt"
+
+        if target_slug:
+            filename = f"{task_name}_{target_slug}{suffix}"
+        else:
+            filename = f"{task_name}{suffix}"
+
+        scans_dir = self.ctx.output_path / "scans"
+        scans_dir.mkdir(parents=True, exist_ok=True)
+        dest = scans_dir / filename
+
+        try:
+            shutil.copy2(str(self._output_file), str(dest))
+            self._log_debug(f"Exported output to {dest}")
+            return dest
+        except OSError as e:
+            self._log_debug(f"Failed to export output file: {e}")
+            return None
+
+    @staticmethod
+    def _sanitize_target(target: str) -> str:
+        """Sanitize a target string for safe use in filenames.
+
+        ``https://example.com:8443/path`` → ``example.com_8443``
+        ``192.168.1.0/24``                → ``192.168.1.0_24``
+        """
+        if not target:
+            return ""
+        slug = target
+        # Strip protocol and path for URLs
+        if re.match(r"^https?://", slug):
+            slug = re.sub(r"^https?://", "", slug)
+            slug = slug.split("/")[0]  # keep host:port only
+        # Replace unsafe chars (/ becomes _ to preserve CIDR notation)
+        slug = re.sub(r"[^A-Za-z0-9._-]", "_", slug)
+        # Collapse multiple underscores
+        slug = re.sub(r"_+", "_", slug).strip("_")
+        return slug[:120]  # cap length
 
     def _store_credentials(self, typed_outputs: list[OutputType]) -> int:
         """Store UserAccount typed outputs in the credential store.
