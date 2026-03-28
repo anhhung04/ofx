@@ -204,7 +204,9 @@ jobs:
         workflow1 = find_workflow(str(workflow_file), workflow_dirs)
         workflow2 = find_workflow(str(workflow_file), workflow_dirs)
 
-        assert workflow1 is workflow2
+        assert workflow1 is not workflow2  # deep copies, not same object
+        assert workflow1.name == workflow2.name
+        assert workflow1.workflow_path == workflow2.workflow_path
 
     def test_find_workflow_different_dirs_different_cache(self, tmp_path):
         """Test that different search dirs create different cache entries"""

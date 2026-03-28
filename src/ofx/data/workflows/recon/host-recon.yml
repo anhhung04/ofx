@@ -12,11 +12,70 @@ dispatch:
     target:
       required: true
       type: string
-      description: Target host, IP, or CIDR range
+      description: Target host, IP, URL, or CIDR range
       alias: t
 jobs:
+  target-resolve:
+    name: Target Resolution
+    outputs:
+      hostname: '{{ steps["resolve"].outputs.hostname | default("", true) }}'
+      ip: '{{ steps["resolve"].outputs.ip | default("", true) }}'
+      is_multi_ip: '{{ steps["resolve"].outputs.is_multi_ip | default("false", true) }}'
+    steps:
+      - name: resolve
+        script: |
+          import socket
+          from urllib.parse import urlparse
+
+          raw_target = '{{ inputs.target }}'.strip()
+          hostname = raw_target
+
+          # Extract hostname from URL
+          if '://' in raw_target:
+              parsed = urlparse(raw_target)
+              hostname = parsed.hostname or parsed.netloc.split(':')[0]
+          elif '/' in raw_target and not raw_target.startswith(('10.', '172.', '192.')):
+              hostname = raw_target.split('/')[0]
+          if ':' in hostname and not hostname.startswith('['):
+              hostname = hostname.rsplit(':', 1)[0]
+
+          # Check if already an IP or CIDR
+          is_ip = False
+          check = hostname.split('/')[0] if '/' in hostname else hostname
+          try:
+              socket.inet_pton(socket.AF_INET, check)
+              is_ip = True
+          except OSError:
+              pass
+
+          if is_ip or '/' in hostname:
+              add_outputs(hostname=hostname, ip=hostname, is_multi_ip='false')
+              print(f"Target: {hostname}")
+          else:
+              try:
+                  results = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
+                  ips = sorted(set(r[4][0] for r in results))
+              except socket.gaierror:
+                  ips = []
+                  print(f"WARNING: Cannot resolve {hostname}")
+
+              if len(ips) <= 1:
+                  ip = ips[0] if ips else hostname
+                  add_outputs(hostname=hostname, ip=ip, is_multi_ip='false')
+                  print(f"Resolved: {hostname} → {ip}")
+              else:
+                  add_outputs(hostname=hostname, ip=ips[0], is_multi_ip='true')
+                  print(f"⚠ {hostname} → {len(ips)} IPs (CDN/proxy/LB likely): {', '.join(ips)}")
+      - task: cdncheck
+        timeout: 5
+        name: cdn-detect
+        run_if: "{{ steps['resolve'].outputs.is_multi_ip == 'true' }}"
+        with:
+          input: "{{ steps['resolve'].outputs.hostname }}"
+        continue-on-error: true
   port-discovery:
     name: Port Discovery
+    needs: [target-resolve]
     outputs:
       typed_outputs: '{{ steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs | default("", true) }}'
       open_ports: '{{ steps["export-ports"].outputs.open_ports | default("", true) }}'
@@ -25,7 +84,7 @@ jobs:
       timeout: 10
       name: fast-port-scan
       with:
-        target: '{{ inputs.target }}'
+        target: '{{ jobs["target-resolve"].outputs.hostname }}'
         top_ports: '1000'
         rate: 1000
       continue-on-error: true
@@ -33,7 +92,7 @@ jobs:
       timeout: 10
       name: masscan-scan
       with:
-        target: '{{ inputs.target }}'
+        target: '{{ jobs["target-resolve"].outputs.hostname }}'
         top_ports: '100'
         rate: 1000
       continue-on-error: true
@@ -55,7 +114,7 @@ jobs:
       timeout: 30
       name: service-scan
       with:
-        target: '{{ inputs.target }}'
+        target: '{{ jobs["target-resolve"].outputs.hostname }}'
         ports: "{{ jobs['port-discovery'].outputs.open_ports | default('', true) }}"
         version_detection: true
       continue-on-error: true
@@ -80,12 +139,12 @@ jobs:
       timeout: 10
       name: audit-ssh
       with:
-        target: '{{ inputs.target }}'
+        target: '{{ jobs["target-resolve"].outputs.hostname }}'
       continue-on-error: true
   http-probe:
     name: HTTP Probe & Exploit Search
     outputs:
-      typed_outputs: '{{ steps["probe-http"].outputs.typed_outputs | default([], true) + steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true) }}'
+      typed_outputs: '{{ (steps["probe-http"].outputs.typed_outputs | default([], true)) + (steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true)) }}'
       live_urls: '{{ steps["export-urls"].outputs.live_urls | default("", true) }}'
     needs:
     - service-detection
@@ -94,7 +153,7 @@ jobs:
       timeout: 10
       name: probe-http
       with:
-        target: "{{ jobs['service-detection'].outputs.http_targets | default(inputs.target, true) }}"
+        target: "{{ jobs['service-detection'].outputs.http_targets | default(jobs['target-resolve'].outputs.hostname, true) }}"
         tech_detect: true
         status_code: true
         title: true
@@ -103,13 +162,13 @@ jobs:
       timeout: 5
       name: search-exploits
       with:
-        target: '{{ inputs.target }}'
+        target: '{{ jobs["target-resolve"].outputs.hostname }}'
       continue-on-error: true
     - task: whatweb
       timeout: 10
       name: whatweb-fingerprint
       with:
-        target: "{{ jobs['service-detection'].outputs.http_targets | default(inputs.target, true) }}"
+        target: "{{ jobs['service-detection'].outputs.http_targets | default(jobs['target-resolve'].outputs.hostname, true) }}"
         aggression: 3
       continue-on-error: true
     - name: export-urls
@@ -124,7 +183,7 @@ jobs:
   vuln-scan:
     name: Vulnerability Scan
     outputs:
-      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ (steps["nuclei-scan"].outputs.typed_outputs | default([], true)) + (steps["nikto-scan"].outputs.typed_outputs | default([], true)) }}'
       vuln_count: '{{ steps.summary.outputs.vuln_count }}'
     needs:
     - http-probe
@@ -133,19 +192,19 @@ jobs:
       timeout: 20
       name: nuclei-scan
       with:
-        target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+        target: "{{ jobs['http-probe'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
         severity: critical,high,medium
       continue-on-error: true
     - task: nikto
       timeout: 15
       name: nikto-scan
       with:
-        target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
+        target: "{{ jobs['http-probe'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
       continue-on-error: true
     - name: summary
       run: |
         echo "=============================="
-        echo " Host Recon: {{ inputs.target }}"
+        echo " Host Recon: {{ jobs['target-resolve'].outputs.hostname }}"
         echo "=============================="
         echo 'Vulnerabilities: {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}'
         echo 'vuln_count={{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}' >> $OFX_OUTPUTS

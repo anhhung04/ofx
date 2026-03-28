@@ -17,11 +17,97 @@ dispatch:
     target:
       required: true
       type: string
-      description: Target host or IP address
+      description: Target host, IP address, or URL
       alias: t
 jobs:
+  # ── Phase 0: Resolve target ──────────────────────────────────────
+  target-resolve:
+    name: Target Resolution
+    outputs:
+      hostname: '{{ steps["resolve"].outputs.hostname | default("", true) }}'
+      ip: '{{ steps["resolve"].outputs.ip | default("", true) }}'
+      all_ips: '{{ steps["resolve"].outputs.all_ips | default("", true) }}'
+      ip_count: '{{ steps["resolve"].outputs.ip_count | default("1", true) }}'
+      is_multi_ip: '{{ steps["resolve"].outputs.is_multi_ip | default("false", true) }}'
+      original_target: '{{ steps["resolve"].outputs.original_target | default("", true) }}'
+    steps:
+      - name: resolve
+        script: |
+          import socket
+          from urllib.parse import urlparse
+
+          raw_target = '{{ inputs.target }}'.strip()
+          hostname = raw_target
+          original_target = raw_target
+
+          # Extract hostname from URL
+          if '://' in raw_target:
+              parsed = urlparse(raw_target)
+              hostname = parsed.hostname or parsed.netloc.split(':')[0]
+          elif '/' in raw_target:
+              hostname = raw_target.split('/')[0]
+          # Strip port if present
+          if ':' in hostname and not hostname.startswith('['):
+              hostname = hostname.rsplit(':', 1)[0]
+
+          # Check if already an IP address
+          is_ip = False
+          try:
+              socket.inet_pton(socket.AF_INET, hostname)
+              is_ip = True
+          except OSError:
+              try:
+                  socket.inet_pton(socket.AF_INET6, hostname)
+                  is_ip = True
+              except OSError:
+                  pass
+
+          if is_ip:
+              print(f"Target is an IP address: {hostname}")
+              add_outputs(
+                  hostname=hostname, ip=hostname, all_ips=hostname,
+                  ip_count=1, is_multi_ip='false', original_target=original_target,
+              )
+          else:
+              # Resolve domain to IPs
+              try:
+                  results = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
+                  ips = sorted(set(r[4][0] for r in results))
+              except socket.gaierror:
+                  print(f"WARNING: Cannot resolve {hostname} — using as-is")
+                  ips = []
+
+              if not ips:
+                  add_outputs(
+                      hostname=hostname, ip=hostname, all_ips='',
+                      ip_count=0, is_multi_ip='false', original_target=original_target,
+                  )
+              elif len(ips) == 1:
+                  print(f"Resolved: {hostname} → {ips[0]}")
+                  add_outputs(
+                      hostname=hostname, ip=ips[0], all_ips=ips[0],
+                      ip_count=1, is_multi_ip='false', original_target=original_target,
+                  )
+              else:
+                  print(f"⚠ {hostname} resolves to {len(ips)} IPs — likely behind CDN/proxy/load balancer:")
+                  for ip in ips:
+                      print(f"  {ip}")
+                  add_outputs(
+                      hostname=hostname, ip=ips[0], all_ips=','.join(ips),
+                      ip_count=len(ips), is_multi_ip='true', original_target=original_target,
+                  )
+      - task: cdncheck
+        timeout: 5
+        name: cdn-detect
+        run_if: "{{ steps['resolve'].outputs.is_multi_ip == 'true' }}"
+        with:
+          input: "{{ steps['resolve'].outputs.hostname }}"
+        continue-on-error: true
+
+  # ── Phase 1: Host Reconnaissance ─────────────────────────────────
   host-recon:
     name: Host Reconnaissance
+    needs: [target-resolve]
     outputs:
       live_urls: '{{ steps["export-data"].outputs.live_urls | default("", true) }}'
     steps:
@@ -29,7 +115,7 @@ jobs:
         timeout: 10
         name: rustscan-fast
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
           range: 1-65535
           batch_size: 4500
         continue-on-error: true
@@ -37,7 +123,7 @@ jobs:
         timeout: 10
         name: port-discovery
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
           top_ports: "1000"
           rate: 1000
         continue-on-error: true
@@ -45,7 +131,7 @@ jobs:
         timeout: 10
         name: masscan-scan
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
           top_ports: "100"
           rate: 1000
         continue-on-error: true
@@ -53,26 +139,26 @@ jobs:
         timeout: 30
         name: service-detect
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
           version_detection: true
         continue-on-error: true
       - task: nerva
         timeout: 10
         name: nerva-fingerprint
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
         continue-on-error: true
       - task: ssh-audit
         timeout: 10
         name: ssh-audit
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
         continue-on-error: true
       - task: httpx
         timeout: 10
         name: http-probe
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
           tech_detect: true
           status_code: true
           follow_redirects: true
@@ -81,7 +167,7 @@ jobs:
         timeout: 5
         name: exploit-search
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
         continue-on-error: true
       - name: export-data
         script: |
@@ -102,14 +188,14 @@ jobs:
         name: whatweb-fingerprint
         timeout: 10
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
           aggression: 3
         continue-on-error: true
       - task: nikto
         timeout: 15
         name: nikto-scan
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['target-resolve'].outputs.hostname }}"
         continue-on-error: true
   url-crawl:
     name: URL Crawling
@@ -122,14 +208,14 @@ jobs:
         timeout: 15
         name: crawl
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
           depth: 3
         continue-on-error: true
       - task: gospider
         timeout: 15
         name: spider
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
           depth: 2
         continue-on-error: true
   vuln-scan:
@@ -144,14 +230,14 @@ jobs:
         timeout: 20
         name: nuclei-scan
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
         timeout: 15
         name: xss-scan
         with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
         continue-on-error: true
       - name: final-summary
         script: |
@@ -162,8 +248,16 @@ jobs:
           critical = [v for v in all_vulns if v.get('severity') == 'critical']
           high = [v for v in all_vulns if v.get('severity') == 'high']
 
+          hostname = '{{ jobs["target-resolve"].outputs.hostname }}'
+          ip = '{{ jobs["target-resolve"].outputs.ip }}'
+          is_multi = '{{ jobs["target-resolve"].outputs.is_multi_ip }}' == 'true'
+
           print("=" * 50)
-          print(f" HOST SCAN COMPLETE: {{ inputs.target }}")
+          print(f" HOST SCAN COMPLETE: {hostname}")
+          if ip and ip != hostname:
+              print(f" IP: {ip}")
+          if is_multi:
+              print(f" ⚠ CDN/Proxy detected ({hostname} has multiple IPs)")
           print("=" * 50)
           print(f"Total vulnerabilities: {len(all_vulns)}")
           print(f"  Critical: {len(critical)}")
