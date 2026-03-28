@@ -27,20 +27,20 @@ jobs:
       sub_count: '{{ steps["merge-recursive"].outputs.sub_count | default("", true) }}'
     steps:
       - task: subfinder
-        timeout: 10
+        timeout: 15
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
           all: true
         continue-on-error: true
       - task: amass
-        timeout: 10
+        timeout: 30
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
-        timeout: 10
+        timeout: 15
         name: assetfinder-enum
         with:
           target: "{{ inputs.target }}"
@@ -73,7 +73,7 @@ jobs:
           print(f"Collected {len(subs)} unique subdomains")
       # Recursive pass: run subfinder again on the entire subs list
       - task: subfinder
-        timeout: 10
+        timeout: 15
         name: recursive-subfinder
         with:
           target: "/tmp/subs.txt"
@@ -112,7 +112,7 @@ jobs:
       verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
     steps:
       - task: dnsx
-        timeout: 10
+        timeout: 15
         name: dns-verify
         with:
           target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
@@ -142,7 +142,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
     steps:
       - task: httpx
-        timeout: 10
+        timeout: 15
         name: probe-subs
         with:
           target: "{{ jobs['dns-resolve'].outputs.verified_file | default(jobs['subdomain-enum'].outputs.subs_file, true) }}"
@@ -178,7 +178,7 @@ jobs:
       takeover_count: '{{ steps["export-takeovers"].outputs.takeover_count | default("0", true) }}'
     steps:
       - task: subzy
-        timeout: 10
+        timeout: 15
         name: subzy-check
         with:
           target: "{{ jobs['dns-resolve'].outputs.verified_file }}"

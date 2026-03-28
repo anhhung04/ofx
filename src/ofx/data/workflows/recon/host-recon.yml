@@ -81,7 +81,7 @@ jobs:
       open_ports: '{{ steps["export-ports"].outputs.open_ports | default("", true) }}'
     steps:
     - task: naabu
-      timeout: 10
+      timeout: 15
       name: fast-port-scan
       with:
         target: '{{ jobs["target-resolve"].outputs.hostname }}'
@@ -89,7 +89,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: masscan
-      timeout: 10
+      timeout: 15
       name: masscan-scan
       with:
         target: '{{ jobs["target-resolve"].outputs.hostname }}'
@@ -150,7 +150,7 @@ jobs:
     - service-detection
     steps:
     - task: httpx
-      timeout: 10
+      timeout: 15
       name: probe-http
       with:
         target: "{{ jobs['service-detection'].outputs.http_targets | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -165,7 +165,7 @@ jobs:
         target: '{{ jobs["target-resolve"].outputs.hostname }}'
       continue-on-error: true
     - task: whatweb
-      timeout: 10
+      timeout: 15
       name: whatweb-fingerprint
       with:
         target: "{{ jobs['service-detection'].outputs.http_targets | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -189,14 +189,14 @@ jobs:
     - http-probe
     steps:
     - task: nuclei
-      timeout: 20
+      timeout: 30
       name: nuclei-scan
       with:
         target: "{{ jobs['http-probe'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
         severity: critical,high,medium
       continue-on-error: true
     - task: nikto
-      timeout: 15
+      timeout: 20
       name: nikto-scan
       with:
         target: "{{ jobs['http-probe'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"

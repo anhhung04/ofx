@@ -112,7 +112,7 @@ jobs:
       live_urls: '{{ steps["export-data"].outputs.live_urls | default("", true) }}'
     steps:
       - task: rustscan
-        timeout: 10
+        timeout: 15
         name: rustscan-fast
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -120,7 +120,7 @@ jobs:
           batch_size: 4500
         continue-on-error: true
       - task: naabu
-        timeout: 10
+        timeout: 15
         name: port-discovery
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -128,7 +128,7 @@ jobs:
           rate: 1000
         continue-on-error: true
       - task: masscan
-        timeout: 10
+        timeout: 15
         name: masscan-scan
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -155,7 +155,7 @@ jobs:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
         continue-on-error: true
       - task: httpx
-        timeout: 10
+        timeout: 15
         name: http-probe
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -186,13 +186,13 @@ jobs:
     steps:
       - task: whatweb
         name: whatweb-fingerprint
-        timeout: 10
+        timeout: 15
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
           aggression: 3
         continue-on-error: true
       - task: nikto
-        timeout: 15
+        timeout: 20
         name: nikto-scan
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -205,14 +205,14 @@ jobs:
       - host-recon
     steps:
       - task: katana
-        timeout: 15
+        timeout: 20
         name: crawl
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
           depth: 3
         continue-on-error: true
       - task: gospider
-        timeout: 15
+        timeout: 20
         name: spider
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -227,14 +227,14 @@ jobs:
       - web-analysis
     steps:
       - task: nuclei
-        timeout: 20
+        timeout: 30
         name: nuclei-scan
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
-        timeout: 15
+        timeout: 20
         name: xss-scan
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
