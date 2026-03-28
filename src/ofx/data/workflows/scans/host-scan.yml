@@ -94,7 +94,7 @@ jobs:
   web-analysis:
     name: Web Analysis
     outputs:
-      typed_outputs: '{{ steps["whatweb-fingerprint"].outputs.typed_outputs + steps["nikto-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ (steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true)) + (steps["nikto-scan"].outputs.typed_outputs | default([], true)) }}'
     needs:
       - host-recon
     steps:
@@ -102,19 +102,19 @@ jobs:
         name: whatweb-fingerprint
         timeout: 10
         with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          target: "{{ inputs.target }}"
           aggression: 3
         continue-on-error: true
       - task: nikto
         timeout: 15
         name: nikto-scan
         with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          target: "{{ inputs.target }}"
         continue-on-error: true
   url-crawl:
     name: URL Crawling
     outputs:
-      typed_outputs: "{{ steps.crawl.outputs.typed_outputs + steps.spider.outputs.typed_outputs }}"
+      typed_outputs: "{{ (steps.crawl.outputs.typed_outputs | default([], true)) + (steps.spider.outputs.typed_outputs | default([], true)) }}"
     needs:
       - host-recon
     steps:
@@ -122,20 +122,20 @@ jobs:
         timeout: 15
         name: crawl
         with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          target: "{{ inputs.target }}"
           depth: 3
         continue-on-error: true
       - task: gospider
         timeout: 15
         name: spider
         with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          target: "{{ inputs.target }}"
           depth: 2
         continue-on-error: true
   vuln-scan:
     name: Vulnerability Scanning
     outputs:
-      typed_outputs: '{{ steps["nuclei-scan"].outputs.typed_outputs + steps["xss-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ (steps["nuclei-scan"].outputs.typed_outputs | default([], true)) + (steps["xss-scan"].outputs.typed_outputs | default([], true)) }}'
     needs:
       - url-crawl
       - web-analysis
@@ -144,14 +144,14 @@ jobs:
         timeout: 20
         name: nuclei-scan
         with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          target: "{{ inputs.target }}"
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
         timeout: 15
         name: xss-scan
         with:
-          target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+          target: "{{ inputs.target }}"
         continue-on-error: true
       - name: final-summary
         script: |
