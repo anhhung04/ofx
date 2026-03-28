@@ -31,7 +31,6 @@ def add_workflow_dir(workflow_dirs: list[Path], path: Path | str) -> list[Path]:
     return workflow_dirs
 
 
-@lru_cache(maxsize=32)
 def find_workflow(
     workflow_name: str,
     search_dirs_tuple: tuple[Path, ...],
@@ -39,16 +38,30 @@ def find_workflow(
 ) -> Workflow:
     """Find and load a workflow from local directories, file path, URL, or git repository.
 
+    Each call returns an independent deep copy so callers can safely mutate
+    the model (e.g. template resolution) without corrupting the cache.
+
     Args:
         workflow_name: Name or path of the workflow to find
         search_dirs_tuple: Tuple of directories to search (tuple for hashability)
 
     Returns:
-        Loaded Workflow object
+        Loaded Workflow object (deep copy — safe to mutate)
 
     Raises:
         RuntimeError: If workflow cannot be found or loaded
     """
+    cached = _find_workflow_cached(workflow_name, search_dirs_tuple, flow_registry_url)
+    return cached.model_copy(deep=True)
+
+
+@lru_cache(maxsize=32)
+def _find_workflow_cached(
+    workflow_name: str,
+    search_dirs_tuple: tuple[Path, ...],
+    flow_registry_url: str = "https://github.com",
+) -> Workflow:
+    """Internal cached loader — returns a shared reference. Do NOT mutate."""
     logger.debug(f"Searching for workflow: {workflow_name} in {search_dirs_tuple}")
     workflow_name = workflow_name.strip()
 

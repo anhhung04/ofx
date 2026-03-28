@@ -27,8 +27,11 @@ class MemoryJobRegistry(RegistryAdapter):
         self._log_debug(f"Set key '{key}' in MemoryJobRegistry")
 
     async def _get(self, key: str) -> Any | None:
-        """Retrieve data from memory"""
-        return self._registry.get(key)
+        """Retrieve data from memory (returns a copy to prevent shared mutation)"""
+        value = self._registry.get(key)
+        if isinstance(value, dict):
+            return value.copy()
+        return value
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""

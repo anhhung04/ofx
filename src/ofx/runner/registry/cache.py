@@ -52,7 +52,8 @@ class CachedRegistryAdapter(RegistryAdapter):
         async with self._lock:
             cached = self._cache.get(key)
             if cached and self._is_fresh(cached[0]):
-                return cached[1]
+                value = cached[1]
+                return value.copy() if isinstance(value, dict) else value
 
         value = await self._backend.get(key)
         async with self._lock:
@@ -89,14 +90,14 @@ class CachedRegistryAdapter(RegistryAdapter):
     async def _get_all(self) -> dict[str, Any]:
         async with self._lock:
             if self._cache_all and self._is_fresh(self._cache_all[0]):
-                return self._cache_all[1]
+                return self._cache_all[1].copy()
 
         data = await self._backend.get_all()
         async with self._lock:
             for entry_key, entry_value in data.items():
                 self._remember(entry_key, entry_value)
             self._cache_all = (time.monotonic(), data)
-        return data
+        return data.copy()
 
     async def _clear(self) -> None:
         await self._backend.clear()

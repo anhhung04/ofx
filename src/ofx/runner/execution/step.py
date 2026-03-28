@@ -299,7 +299,7 @@ class StepRunner(BaseRunner[Step]):
                 self.model.uses or "",
                 tuple(workflow_dirs),
                 self.parent.model.defaults.flow_registry_url,  # type: ignore
-            ).model_copy(deep=True)
+            )
 
             return WorkflowRunner(
                 workflow,

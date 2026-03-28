@@ -98,9 +98,12 @@ class FileRegistry(RegistryAdapter):
         self._log_debug(f"Set key '{key}' in FileJobRegistry")
 
     async def _get(self, key: str) -> Any | None:
-        """Retrieve data from file"""
+        """Retrieve data from file (returns a copy to prevent shared mutation)"""
         registry = await self._read_registry()
-        return registry.get(key)
+        value = registry.get(key)
+        if isinstance(value, dict):
+            return value.copy()
+        return value
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
@@ -129,8 +132,9 @@ class FileRegistry(RegistryAdapter):
         return key in registry
 
     async def _get_all(self) -> dict[str, Any]:
-        """Get all entries from file"""
-        return await self._read_registry()
+        """Get all entries from file (returns a copy to prevent shared mutation)"""
+        registry = await self._read_registry()
+        return registry.copy()
 
     async def _clear(self) -> None:
         """Clear all entries from file"""
