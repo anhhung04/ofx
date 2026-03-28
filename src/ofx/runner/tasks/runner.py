@@ -149,13 +149,22 @@ class TaskRunner(BaseRunner[TaskExecution]):
             # Parse structured output (combines streamed + file-based)
             typed_outputs = self._parse_outputs(result)
 
+            # Tag each typed output with the task target for per-target grouping
+            target_tag = self.model.target
+            typed_dicts = []
+            for o in typed_outputs:
+                d = o.to_dict()
+                if target_tag:
+                    d["_target"] = target_tag
+                typed_dicts.append(d)
+
             # Store regular outputs
             outputs.update(
                 {
                     "exit_code": result.exit_code,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
-                    "typed_outputs": [o.to_dict() for o in typed_outputs],
+                    "typed_outputs": typed_dicts,
                 }
             )
             outputs.update(result.outputs)

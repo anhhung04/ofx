@@ -2,13 +2,31 @@
 
 Collects typed outputs (subdomains, URLs, ports, vulns, etc.) from all
 job runners after workflow completion and writes them to organized
-project subdirectories.
+project subdirectories — grouped by target when ``_target`` metadata
+is present on the items.
+
+Directory layout::
+
+    <project>/
+        subdomains/
+            subdomains.txt          ← master (all targets merged)
+            example.com/
+                subdomains.txt      ← per-target
+            other.net/
+                subdomains.txt
+        hosts/
+            ports.txt               ← master
+            10.10.10.5/
+                ports.txt           ← per-target
+        web/
+            urls.txt                ← master
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -51,9 +69,9 @@ def export_typed_outputs(
 ) -> list[str]:
     """Export typed outputs to the correct project subdirectories.
 
-    Merges new findings into existing master files (deduplicated) and writes
-    a timestamped snapshot containing only newly discovered items so each
-    run's contributions are preserved.
+    Items that carry a ``_target`` field are additionally written into
+    a per-target subdirectory (e.g. ``subdomains/example.com/subdomains.txt``).
+    Master files (all targets merged) are always written for compatibility.
 
     Args:
         project_path: Root project directory.
@@ -69,15 +87,25 @@ def export_typed_outputs(
         return []
 
     p = Path(project_path)
+
+    # Bucket by (type, target) — target="" means "master only"
     buckets: dict[str, list[dict]] = {}
+    target_buckets: dict[tuple[str, str], list[dict]] = {}
+
     for item in all_typed_outputs:
         if not isinstance(item, dict):
             continue
         t = item.get("_type", "")
-        if t:
-            buckets.setdefault(t, []).append(item)
+        if not t:
+            continue
+        buckets.setdefault(t, []).append(item)
+        target = item.get("_target", "")
+        if target:
+            target_buckets.setdefault((t, target), []).append(item)
 
     summaries: list[str] = []
+
+    # Write master files (all targets merged) — same as before
     for type_name, items in sorted(buckets.items()):
         subdir = OUTPUT_TYPE_DIR_MAP.get(type_name, "scans")
         filename = OUTPUT_TYPE_FILE_MAP.get(type_name, f"{type_name}.txt")
@@ -89,54 +117,97 @@ def export_typed_outputs(
         dest.mkdir(parents=True, exist_ok=True)
         fpath = dest / filename
 
-        new_count = 0
-
-        if filename.endswith(".jsonl"):
-            safe_lines = []
-            for i in items:
-                try:
-                    safe_lines.append(json.dumps(i, default=str))
-                except (TypeError, ValueError):
-                    continue
-            existing = set()
-            if fpath.exists():
-                existing = set(fpath.read_text().strip().splitlines())
-            new_lines = [ln for ln in safe_lines if ln not in existing]
-            new_count = len(new_lines)
-            if new_lines:
-                with open(fpath, "a") as f:
-                    f.write("\n".join(new_lines) + "\n")
-            # Timestamped snapshot with new items only
-            if run_timestamp and new_lines:
-                _write_timestamped(fpath, run_timestamp, "\n".join(new_lines) + "\n")
-        else:
-            values = set()
-            for i in items:
-                key = type_display_key(type_name, i)
-                if key:
-                    values.add(key)
-            existing_lines: set[str] = set()
-            if fpath.exists():
-                existing_lines = {
-                    ln for ln in fpath.read_text().strip().splitlines() if ln
-                }
-            new_values = values - existing_lines
-            new_count = len(new_values)
-            merged = values | existing_lines
-            if merged:
-                fpath.write_text("\n".join(sorted(merged)) + "\n")
-            # Timestamped snapshot with new items only
-            if run_timestamp and new_values:
-                _write_timestamped(
-                    fpath, run_timestamp, "\n".join(sorted(new_values)) + "\n"
-                )
+        new_count = _write_findings_file(fpath, type_name, items, run_timestamp)
 
         label = f"{len(items)} items"
         if new_count < len(items):
             label += f", {new_count} new"
         summaries.append(f"  [+] {subdir}/{filename} ({label})")
 
+    # Write per-target files
+    for (type_name, target), items in sorted(target_buckets.items()):
+        subdir = OUTPUT_TYPE_DIR_MAP.get(type_name, "scans")
+        filename = OUTPUT_TYPE_FILE_MAP.get(type_name, f"{type_name}.txt")
+        if prefix:
+            stem, ext = (filename.rsplit(".", 1) + [""])[:2]
+            filename = f"{prefix}-{stem}.{ext}" if ext else f"{prefix}-{stem}"
+
+        target_slug = _sanitize_target(target)
+        if not target_slug:
+            continue
+
+        dest = p / subdir / target_slug
+        dest.mkdir(parents=True, exist_ok=True)
+        fpath = dest / filename
+
+        new_count = _write_findings_file(fpath, type_name, items, run_timestamp)
+
+        label = f"{len(items)} items"
+        if new_count < len(items):
+            label += f", {new_count} new"
+        summaries.append(f"  [+] {subdir}/{target_slug}/{filename} ({label})")
+
     return summaries
+
+
+def _write_findings_file(
+    fpath: Path, type_name: str, items: list[dict], run_timestamp: str
+) -> int:
+    """Write findings to a file, returning the count of new items."""
+    new_count = 0
+
+    if str(fpath).endswith(".jsonl"):
+        safe_lines = []
+        for i in items:
+            try:
+                safe_lines.append(json.dumps(i, default=str))
+            except (TypeError, ValueError):
+                continue
+        existing = set()
+        if fpath.exists():
+            existing = set(fpath.read_text().strip().splitlines())
+        new_lines = [ln for ln in safe_lines if ln not in existing]
+        new_count = len(new_lines)
+        if new_lines:
+            with open(fpath, "a") as f:
+                f.write("\n".join(new_lines) + "\n")
+        if run_timestamp and new_lines:
+            _write_timestamped(fpath, run_timestamp, "\n".join(new_lines) + "\n")
+    else:
+        values = set()
+        for i in items:
+            key = type_display_key(type_name, i)
+            if key:
+                values.add(key)
+        existing_lines: set[str] = set()
+        if fpath.exists():
+            existing_lines = {
+                ln for ln in fpath.read_text().strip().splitlines() if ln
+            }
+        new_values = values - existing_lines
+        new_count = len(new_values)
+        merged = values | existing_lines
+        if merged:
+            fpath.write_text("\n".join(sorted(merged)) + "\n")
+        if run_timestamp and new_values:
+            _write_timestamped(
+                fpath, run_timestamp, "\n".join(sorted(new_values)) + "\n"
+            )
+
+    return new_count
+
+
+def _sanitize_target(target: str) -> str:
+    """Sanitize a target string for safe use as a directory name."""
+    if not target:
+        return ""
+    slug = target
+    if re.match(r"^https?://", slug):
+        slug = re.sub(r"^https?://", "", slug)
+        slug = slug.split("/")[0]
+    slug = re.sub(r"[^A-Za-z0-9._-]", "_", slug)
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    return slug[:120]
 
 
 def _write_timestamped(master_path: Path, timestamp: str, content: str) -> None:
