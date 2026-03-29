@@ -331,6 +331,76 @@ class TemplateResolver:
         def _users(items: list) -> list:
             return _of_type(items, "user_account")
 
+        # ── ASM integration helpers ────────────────────────────────
+        def _asm_targets(scope: str = "", effective: bool = True, target_type: str = "") -> list[str]:
+            """Pull target values from an ASM scope.
+
+            Returns a list of target strings (domains, IPs, etc.) ready
+            for use in workflow inputs or matrix variables.
+            """
+            try:
+                from ofx.asm.config import get_asm_client
+                client = get_asm_client()
+            except Exception:
+                return []
+            try:
+                scope_id = _asm_resolve_scope(client, scope)
+                if effective:
+                    raw = client.effective_targets(scope_id)
+                    return [
+                        t.value for t in raw
+                        if not t.excluded and (not target_type or t.target_type == target_type)
+                    ]
+                else:
+                    raw_t = client.list_targets(scope_id)
+                    return [
+                        t.value for t in raw_t
+                        if t.enabled and (not target_type or t.target_type == target_type)
+                    ]
+            except Exception:
+                return []
+
+        def _asm_push(items: list, scope: str = "", source: str = "ofx") -> int:
+            """Push typed output dicts to an ASM scope. Returns count of imported assets."""
+            try:
+                from ofx.asm.config import get_asm_client
+                from ofx.asm.export import batch_convert
+                client = get_asm_client()
+            except Exception:
+                return 0
+            try:
+                scope_id = _asm_resolve_scope(client, scope)
+                assets, _ = batch_convert(items, source=source)
+                if not assets:
+                    return 0
+                result = client.import_generic(scope_id, assets)
+                return result.get("imported", 0)
+            except Exception:
+                return 0
+
+        def _asm_scopes() -> list[dict]:
+            """List ASM scopes as dicts with id/name/scope_type/group."""
+            try:
+                from ofx.asm.config import get_asm_client
+                client = get_asm_client()
+                return [s.model_dump() for s in client.list_scopes()]
+            except Exception:
+                return []
+
+        def _asm_resolve_scope(client, scope_ref: str) -> str:
+            """Resolve scope by name or ID, falling back to default."""
+            if not scope_ref:
+                from ofx.asm.config import get_asm_config
+                scope_ref = get_asm_config().default_scope
+            if not scope_ref:
+                raise ValueError("No ASM scope specified")
+            if len(scope_ref) >= 32 and "-" in scope_ref:
+                return scope_ref
+            found = client.find_scope(scope_ref)
+            if found:
+                return found.id
+            raise ValueError(f"ASM scope '{scope_ref}' not found")
+
         if self._support_funcs_cache is None:
             from ofx.runner.execution.findings_export import export_typed_outputs
             shell_exports = get_shell_exports()
@@ -399,6 +469,10 @@ class TemplateResolver:
                 "domains": _domains,
                 "users": _users,
                 "export_typed_outputs": export_typed_outputs,
+                # ASM integration
+                "asm_targets": _asm_targets,
+                "asm_push": _asm_push,
+                "asm_scopes": _asm_scopes,
             }
 
         support_funcs = self._support_funcs_cache.copy()

@@ -7,6 +7,7 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False, inv
 from ofx.commands import (  # noqa: E402
     ai,
     api,
+    asm,
     cloud,
     doctor,
     flow,
@@ -131,6 +132,7 @@ def _register_commands():
     add_app(api)
     add_app(secret)
     add_app(ai)
+    add_app(asm)
     add_aliases()
 
 def _clean_up():
