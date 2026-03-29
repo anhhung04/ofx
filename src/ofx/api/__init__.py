@@ -2,6 +2,7 @@
 
 from . import (
     ad,
+    asm,
     bundle,
     c2,
     creds,
@@ -32,6 +33,7 @@ from . import (
 
 __all__ = [
     "ad",
+    "asm",
     "bundle",
     "c2",
     "creds",
