@@ -68,6 +68,7 @@ class FlowRunHandler:
         project: str = "",
         events: bool = False,
         time_window: str = "",
+        load_targets: bool = False,
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
@@ -84,6 +85,7 @@ class FlowRunHandler:
         self.project_vars: dict[str, str] = {}
         self.events = events
         self.time_window = time_window
+        self.load_targets = load_targets
 
         if project:
             self._resolve_project(project)
@@ -299,12 +301,18 @@ class FlowRunHandler:
         # Expand @file references: target=@targets.txt reads file lines
         self._expand_file_refs()
 
-        # Auto-load targets from project targets/ folder when no target is provided
-        if "target" not in self.input and self.project_vars:
+        # Load targets from project targets/ folder (requires -T / --load-targets)
+        if self.load_targets and self.project_vars:
             targets_dir = Path(self.project_vars.get("project_targets", ""))
             if targets_dir.is_dir():
                 targets = self._load_targets_dir(targets_dir)
                 if targets:
+                    if "target" in self.input:
+                        logger.warning(
+                            "Overriding input 'target' with %d target(s) from %s",
+                            len(targets),
+                            targets_dir,
+                        )
                     self.input["target"] = targets[0] if len(targets) == 1 else targets
                     logger.info(
                         "Loaded %d target(s) from %s",

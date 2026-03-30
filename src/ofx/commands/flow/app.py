@@ -412,6 +412,14 @@ def run(
             help="Restrict execution to a time window (HH:MM-HH:MM, e.g. '09:00-17:00').",
         ),
     ] = "",
+    load_targets: Annotated[
+        bool,
+        typer.Option(
+            "-T",
+            "--load-targets",
+            help="Load targets from project targets/ folder and expand as matrix input.",
+        ),
+    ] = False,
 ):
     if dry_run:
         from ofx.commands.flow.info import show_info
@@ -448,6 +456,7 @@ def run(
             project=project,
             events=events,
             time_window=time_window,
+            load_targets=load_targets,
         ).run()
     )
 
