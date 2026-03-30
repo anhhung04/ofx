@@ -443,6 +443,11 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 f"Auto-expanding input '{key}' ({len(values)} values) as matrix"
             )
             for job in self.model.jobs.values():
+                # Only inject matrix on jobs that reference the input key in
+                # their step definitions (run/script/with fields).  Downstream
+                # jobs that depend on earlier results should not be expanded.
+                if not self._job_references_input(job, key):
+                    continue
                 if not job.strategy:
                     job.strategy = MatrixStrategy(matrix={key: values})
                 elif key not in job.strategy.matrix:
@@ -454,6 +459,20 @@ class WorkflowRunner(BaseRunner[Workflow]):
         # Remove list values from inputs — they live in matrix now.
         for key in matrix_inputs:
             del self.ctx.inputs[key]
+
+    @staticmethod
+    def _job_references_input(job, key: str) -> bool:
+        """Check if a job's steps reference ``inputs.<key>`` in any template field."""
+        needle = f"inputs.{key}"
+        for step in job.steps:
+            for field in (step.run, step.script, step.script_file):
+                if field and needle in str(field):
+                    return True
+            if step.run_with:
+                for v in step.run_with.values():
+                    if needle in str(v):
+                        return True
+        return False
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
