@@ -30,7 +30,7 @@ class RustscanTask(Task):
     }
 
     input_flag = "-a"
-    file_flag = None
+    file_flag = "-iL"
     output_flag = None
     extra_flags = ["--greppable", "--accessible"]
 

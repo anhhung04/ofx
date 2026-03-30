@@ -113,33 +113,32 @@ class Task(ABC):
             )
             parts.extend([self.output_flag, str(output_file)])
 
-        # Target handling — auto-detect file paths and use file_flag.
-        # When target is a comma-separated list and the tool supports file
-        # input, write targets to a temp file for reliable multi-target handling.
+        # Target handling — auto-detect file paths, multi-target lists,
+        # and choose the safest CLI flag for the tool.
         target_is_file = (
             self.file_flag
             and target
             and not target.startswith("http")
             and Path(target).is_file()
         )
-        target_is_multi = (
-            self.file_flag
-            and target
-            and "," in target
-            and not Path(target).is_file()
-        )
+        is_multi = "," in target and not Path(target).is_file() if target else False
+
         if target_is_file:
             parts.extend([self.file_flag, target])
-        elif target_is_multi:
-            tf = tempfile.NamedTemporaryFile(
-                mode="w",
-                prefix=f".ofx_targets_{self.name}_",
-                suffix=".txt",
-                delete=False,
-            )
-            tf.write("\n".join(t.strip() for t in target.split(",") if t.strip()))
-            tf.close()
-            parts.extend([self.file_flag, tf.name])
+        elif is_multi and self.file_flag:
+            # Tool supports file input — write comma-separated targets to a
+            # temp file so each target is on its own line.
+            parts.extend([self.file_flag, self._write_target_file(target)])
+        elif is_multi and not self.file_flag:
+            # Tool has NO file_flag — write targets to a temp file and pipe
+            # via stdin so tools that read stdin still work.  Tools that only
+            # accept a single positional/flag target will receive the file
+            # path instead, which is safer than a mangled comma string.
+            tfile = self._write_target_file(target)
+            if self.input_flag:
+                parts.extend([self.input_flag, tfile])
+            else:
+                parts.append(tfile)
         elif self.input_flag:
             parts.extend([self.input_flag, target])
         else:
@@ -189,6 +188,21 @@ class Task(ABC):
         The default implementation returns ``[]`` (no streaming support).
         """
         return []
+
+    def _write_target_file(self, target: str) -> str:
+        """Write comma-separated targets to a temp file, one per line.
+
+        Returns the path to the temp file.
+        """
+        tf = tempfile.NamedTemporaryFile(
+            mode="w",
+            prefix=f".ofx_targets_{self.name}_",
+            suffix=".txt",
+            delete=False,
+        )
+        tf.write("\n".join(t.strip() for t in target.split(",") if t.strip()))
+        tf.close()
+        return tf.name
 
     def _output_suffix(self) -> str:
         """File suffix for the structured output file."""
