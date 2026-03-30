@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import os
+import signal
 import sys
 import tempfile
 from collections.abc import Callable
@@ -25,6 +27,44 @@ class CommandExecutionResult:
     stdout: str
     stderr: str
     outputs: dict[str, Any]
+
+
+def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
+    """Send SIGTERM to the process group, then SIGKILL if still alive.
+
+    When subprocesses are launched with ``start_new_session=True`` the
+    child becomes the session leader.  Sending a signal to the negative
+    PID targets the entire process group so that grandchildren (e.g.
+    nmap spawned by bash) are also cleaned up.
+    """
+    pid = proc.pid
+    if pid is None:
+        return
+    try:
+        pgid = os.getpgid(pid)
+    except (OSError, ProcessLookupError):
+        return
+
+    # SIGTERM the group first for graceful shutdown
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        pass
+
+    # Give children 2 seconds to exit, then force-kill
+    import time
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        try:
+            os.killpg(pgid, 0)  # probe
+        except (OSError, ProcessLookupError):
+            return  # all dead
+        time.sleep(0.1)
+
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (OSError, ProcessLookupError):
+        pass
 
 
 class CommandExecutor:
@@ -75,6 +115,7 @@ class CommandExecutor:
             env=self._envs,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
 
         stdout_lines: list[str] = []
@@ -106,7 +147,7 @@ class CommandExecutor:
                 self._command.timeout_minutes * 60,
             )
         except TimeoutError:
-            proc.kill()
+            _kill_process_tree(proc)
             await proc.wait()
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
@@ -147,13 +188,14 @@ class CommandExecutor:
             stdin=sys.stdin,
             stdout=sys.stdout,
             stderr=sys.stderr,
+            start_new_session=True,
         )
         try:
             exit_code = await asyncio.wait_for(
                 proc.wait(), self._command.timeout_minutes * 60
             )
         except TimeoutError:
-            proc.kill()
+            _kill_process_tree(proc)
             await proc.wait()
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
@@ -180,6 +222,7 @@ class CommandExecutor:
             env=self._envs,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
         )
         try:
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
@@ -187,7 +230,7 @@ class CommandExecutor:
             )
             exit_code = proc.returncode
         except TimeoutError:
-            proc.kill()
+            _kill_process_tree(proc)
             await proc.wait()
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
@@ -258,6 +301,17 @@ class CommandExecutor:
 
     @staticmethod
     def _close_process(proc: asyncio.subprocess.Process) -> None:
+        """Close process transport and ensure the process tree is reaped."""
+        # First try to kill any remaining children in the process group
+        pid = proc.pid
+        if pid is not None:
+            try:
+                pgid = os.getpgid(pid)
+                # Send SIGTERM to remaining orphans in the group
+                os.killpg(pgid, signal.SIGTERM)
+            except (OSError, ProcessLookupError):
+                pass
+
         transport = getattr(proc, "_transport", None)
         if transport is None:
             return
@@ -265,7 +319,6 @@ class CommandExecutor:
             transport.close()
         except Exception as e:
             logger.debug("Failed to close process transport: %s", e)
-            pass
 
     async def capture_outputs_file(self, runner, key: str, log_fn) -> None:
         if not self._outputs_file or not self._outputs_file.exists():

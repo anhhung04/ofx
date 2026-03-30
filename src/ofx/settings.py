@@ -262,6 +262,24 @@ class Settings(BaseSettings):
         ),
     )
 
+    max_parallel_jobs: int = Field(
+        default=8,
+        description=(
+            "Maximum number of jobs that can run concurrently across all stages. "
+            "Prevents RAM overload when many jobs are in the same dependency stage. "
+            "Set via OFX_MAX_PARALLEL_JOBS env var."
+        ),
+    )
+
+    memory_limit_percent: int = Field(
+        default=90,
+        description=(
+            "Pause launching new jobs when system memory usage exceeds this percentage. "
+            "Set to 0 to disable memory-pressure checks. "
+            "Set via OFX_MEMORY_LIMIT_PERCENT env var."
+        ),
+    )
+
     default_remote_registry: str = Field(
         default="https://github.com",
         description="Default remote registry URL for cloning repositories",

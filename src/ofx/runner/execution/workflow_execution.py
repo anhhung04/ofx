@@ -4,10 +4,40 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import logging
+import os
+import signal
 from dataclasses import dataclass, field
 
 from ofx.runner.core import BaseRunner
 from ofx.runner.execution.runner_factory import create_job_runner
+from ofx.settings import settings
+
+logger = logging.getLogger(settings.app_branding)
+
+
+def _memory_usage_percent() -> float:
+    """Return system memory usage as a percentage (0-100).
+
+    Uses ``/proc/meminfo`` on Linux for a zero-dependency check.
+    Falls back to 0.0 (disabled) on unsupported platforms.
+    """
+    try:
+        with open("/proc/meminfo") as f:
+            info: dict[str, int] = {}
+            for line in f:
+                parts = line.split()
+                if parts[0] in ("MemTotal:", "MemAvailable:"):
+                    info[parts[0].rstrip(":")] = int(parts[1])
+                    if len(info) == 2:
+                        break
+            total = info.get("MemTotal", 0)
+            available = info.get("MemAvailable", 0)
+            if total > 0:
+                return (1 - available / total) * 100
+    except (OSError, KeyError, ValueError, ZeroDivisionError):
+        pass
+    return 0.0
 
 
 @dataclass
@@ -17,10 +47,19 @@ class ExecutionResult:
 
 
 class WorkflowExecutionManager:
-    """Executes workflow stages and aggregates errors."""
+    """Executes workflow stages and aggregates errors.
+
+    Enforces a global concurrency cap via an ``asyncio.Semaphore`` so
+    that at most ``settings.max_parallel_jobs`` jobs run at the same time
+    across all stages.  When ``settings.memory_limit_percent > 0``, new
+    job launches are delayed if system RAM usage exceeds the threshold.
+    """
 
     def __init__(self, parent_runner):
         self._parent = parent_runner
+        max_j = settings.max_parallel_jobs
+        self._job_semaphore = asyncio.Semaphore(max_j)
+        self._mem_limit = settings.memory_limit_percent
 
     async def run(self, schedule: list[list[str]], staged_jobs: dict):
         result = ExecutionResult()
@@ -59,17 +98,57 @@ class WorkflowExecutionManager:
             self._parent._runners[job_id] = runner
         return stage_runners
 
+    # ------------------------------------------------------------------
+    # Memory-pressure backpressure
+    # ------------------------------------------------------------------
+
+    async def _wait_for_memory(self) -> None:
+        """Block until system memory usage drops below the configured limit.
+
+        Checks every 5 seconds and logs a warning on first detection.
+        """
+        if self._mem_limit <= 0:
+            return
+        warned = False
+        while True:
+            usage = _memory_usage_percent()
+            if usage <= 0 or usage < self._mem_limit:
+                return
+            if not warned:
+                logger.warning(
+                    "Memory usage %.0f%% exceeds limit %d%% — "
+                    "waiting before launching next job",
+                    usage,
+                    self._mem_limit,
+                )
+                warned = True
+            await asyncio.sleep(5)
+
+    # ------------------------------------------------------------------
+    # Stage execution with semaphore
+    # ------------------------------------------------------------------
+
     async def _run_stage(
         self,
         stage_index: int,
         stage_runners: dict[str, BaseRunner],
     ) -> list[str]:
+        n_jobs = len(stage_runners)
+        max_j = self._job_semaphore._value  # type: ignore[attr-defined]
         self._parent._log_info(
-            f"Starting stage {stage_index + 1} with jobs: {list(stage_runners.keys())}"
+            f"Starting stage {stage_index + 1} with {n_jobs} job(s) "
+            f"(concurrency limit: {max_j})"
         )
         job_ids = list(stage_runners.keys())
+
+        async def _guarded_run(job_id: str) -> None:
+            """Acquire semaphore, wait for memory, then run the job."""
+            async with self._job_semaphore:
+                await self._wait_for_memory()
+                await stage_runners[job_id].run()
+
         tasks = {
-            job_id: asyncio.create_task(stage_runners[job_id].run())
+            job_id: asyncio.create_task(_guarded_run(job_id))
             for job_id in job_ids
         }
         task_to_job = {t: jid for jid, t in tasks.items()}

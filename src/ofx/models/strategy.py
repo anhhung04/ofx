@@ -41,8 +41,8 @@ class MatrixStrategy(OFXBaseModel):
         description="Matrix variables — lists of values or a template string that resolves to a JSON list at runtime",
     )
     max_parallel: int = Field(
-        default=10000000,
-        description="Maximum number of matrix jobs to run in parallel per stage (default: unlimited)",
+        default=4,
+        description="Maximum number of matrix jobs to run in parallel per stage",
     )
     fail_fast: bool = Field(
         default=True,
