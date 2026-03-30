@@ -388,7 +388,14 @@ class StepRunner(BaseRunner[Step]):
 
             # Extract target from run_with; remaining keys are task options
             task_opts = dict(self.model.run_with)
-            target = str(task_opts.pop("target", task_opts.pop("targets", "")))
+            raw_target = task_opts.pop("target", task_opts.pop("targets", ""))
+            # If target is a list (e.g. from unresolved matrix input), join
+            # with commas so CLI tools receive a valid argument instead of a
+            # Python list repr like "['url1', 'url2']".
+            if isinstance(raw_target, list):
+                target = ",".join(str(t) for t in raw_target)
+            else:
+                target = str(raw_target)
 
             if not target:
                 self._log_warning(

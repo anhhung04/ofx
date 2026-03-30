@@ -113,15 +113,33 @@ class Task(ABC):
             )
             parts.extend([self.output_flag, str(output_file)])
 
-        # Target handling — auto-detect file paths and use file_flag
+        # Target handling — auto-detect file paths and use file_flag.
+        # When target is a comma-separated list and the tool supports file
+        # input, write targets to a temp file for reliable multi-target handling.
         target_is_file = (
             self.file_flag
             and target
             and not target.startswith("http")
             and Path(target).is_file()
         )
+        target_is_multi = (
+            self.file_flag
+            and target
+            and "," in target
+            and not Path(target).is_file()
+        )
         if target_is_file:
             parts.extend([self.file_flag, target])
+        elif target_is_multi:
+            tf = tempfile.NamedTemporaryFile(
+                mode="w",
+                prefix=f".ofx_targets_{self.name}_",
+                suffix=".txt",
+                delete=False,
+            )
+            tf.write("\n".join(t.strip() for t in target.split(",") if t.strip()))
+            tf.close()
+            parts.extend([self.file_flag, tf.name])
         elif self.input_flag:
             parts.extend([self.input_flag, target])
         else:
