@@ -21,7 +21,7 @@ jobs:
     name: CI/CD Pipeline Scan
     outputs:
       finding_count: '{{ steps["poutine-scan"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["poutine-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["poutine-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: poutine
         timeout: 20
@@ -35,7 +35,7 @@ jobs:
     name: SCM Posture Check
     outputs:
       finding_count: '{{ steps["legitify-scan"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["legitify-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["legitify-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: legitify
         timeout: 20

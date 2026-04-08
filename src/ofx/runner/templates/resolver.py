@@ -560,7 +560,8 @@ class TemplateResolver:
             model = getattr(child, "model", None)
             if model is None or not hasattr(model, "step_index"):
                 continue
-            outputs = await child.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
+            raw = await child.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
+            outputs = {"typed_outputs": [], **raw}
             entry = {
                 "index": getattr(model, "step_index", None),
                 "name": getattr(model, "name", None),

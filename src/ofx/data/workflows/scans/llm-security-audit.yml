@@ -23,7 +23,7 @@ jobs:
     name: Garak LLM Security Scan
     outputs:
       finding_count: '{{ steps["garak-test"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["garak-test"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["garak-test"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: garak
         timeout: 60

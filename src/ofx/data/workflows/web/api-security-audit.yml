@@ -25,7 +25,7 @@ jobs:
     name: GraphQL Fingerprint
     outputs:
       finding_count: '{{ steps["graphql-detect"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["graphql-detect"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["graphql-detect"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: graphw00f
         timeout: 5
@@ -39,7 +39,7 @@ jobs:
     run_if: "{{ inputs.wordlist }}"
     outputs:
       finding_count: '{{ steps["brute-endpoints"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["brute-endpoints"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["brute-endpoints"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: kiterunner
         timeout: 20
@@ -55,7 +55,7 @@ jobs:
     run_if: "{{ inputs.schema }}"
     outputs:
       finding_count: '{{ steps["schema-fuzz"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["schema-fuzz"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["schema-fuzz"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: schemathesis
         timeout: 30
@@ -73,7 +73,7 @@ jobs:
     run_if: "{{ inputs.schema }}"
     outputs:
       finding_count: '{{ steps["cherrybomb-scan"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["cherrybomb-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["cherrybomb-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: cherrybomb
         timeout: 15

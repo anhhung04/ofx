@@ -29,7 +29,7 @@ jobs:
     name: Prowler Cloud Audit
     outputs:
       finding_count: '{{ steps["prowler-audit"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["prowler-audit"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["prowler-audit"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: prowler
         timeout: 60
@@ -47,7 +47,7 @@ jobs:
     run_if: "{{ inputs.provider == 'aws' }}"
     outputs:
       finding_count: '{{ steps["cloudfox-scan"].outputs.finding_count | default("", true) }}'
-      typed_outputs: '{{ steps["cloudfox-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["cloudfox-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: cloudfox
         timeout: 30

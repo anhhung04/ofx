@@ -22,7 +22,7 @@ jobs:
   probe:
     name: Initial Probe
     outputs:
-      typed_outputs: '{{ steps["probe-url"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["probe-url"].outputs.typed_outputs | default([], true) }}'
       live_url: '{{ steps["export-url"].outputs.live_url | default("", true) }}'
     steps:
     - task: httpx

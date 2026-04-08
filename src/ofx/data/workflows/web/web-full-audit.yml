@@ -296,7 +296,7 @@ jobs:
   secrets:
     name: Secret Hunting
     outputs:
-      typed_outputs: '{{ steps["trufflehog-scan"].outputs.typed_outputs + steps["gitleaks-scan"].outputs.typed_outputs | default("", true) }}'
+      typed_outputs: '{{ steps["trufflehog-scan"].outputs.typed_outputs + steps["gitleaks-scan"].outputs.typed_outputs | default([], true) }}'
     needs:
       - crawl
     steps:
