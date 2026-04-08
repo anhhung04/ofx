@@ -128,6 +128,31 @@ steps:
 
 ---
 
+## Temp directory: `OFX_RUN_DIR`
+
+Each workflow run gets a unique temp directory exposed as `$OFX_RUN_DIR`. Use it instead of hardcoded `/tmp` paths to avoid collisions when running workflows in parallel.
+
+### Shell steps
+```yaml
+- run: |
+    nmap -oG ${OFX_RUN_DIR:-/tmp}/ofx_scan.gnmap {{ inputs.target }}
+    echo "scan_file=${OFX_RUN_DIR:-/tmp}/ofx_scan.gnmap" >> $OFX_OUTPUTS
+```
+
+### Python script steps
+```yaml
+- script: |
+    import os
+    run_dir = os.environ.get("OFX_RUN_DIR", "/tmp")
+    out_file = f"{run_dir}/ofx_results.txt"
+    Path(out_file).write_text(data)
+    add_outputs(result_file=out_file)
+```
+
+The directory is cleaned up automatically after the workflow finishes.
+
+---
+
 ## Stdout display truncation
 
 By default, OFX shows the first **50 lines** of stdout/stderr in the console. Longer output is truncated with a notice:

@@ -39,3 +39,14 @@ PATH=/job
 
 - `run_if` is evaluated **after** template resolution for the step/job.
 - For reusable workflows, `inputs` and `secrets` are mapped from the call site into the child context before execution.
+
+## Auto-injected environment variables
+
+| Variable | Description |
+|---|---|
+| `OFX_OUTPUTS` | Path to the step outputs file (write `key=value` lines) |
+| `OFX_RUN_DIR` | Per-run unique temp directory (cleaned up after workflow) |
+| `OFX_RATE_LIMIT` | Profile rate limit (when a profile is active) |
+| `OFX_THREADS` | Profile thread count |
+| `OFX_PROXY` | Profile proxy URL |
+| `OFX_USER_AGENT` | Profile User-Agent string |
