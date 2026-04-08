@@ -365,26 +365,20 @@ jobs:
     needs:
       - web-crawl
     steps:
-      - task: trufflehog
+      - task: nuclei
         timeout: 15
-        name: trufflehog-scan
+        name: nuclei-secrets
         with:
-          target: "{{ inputs.target }}"
-          mode: filesystem
-        continue-on-error: true
-      - task: gitleaks
-        timeout: 15
-        name: gitleaks-scan
-        with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['web-crawl'].outputs.crawled_file | default(inputs.target, true) }}"
+          tags: exposure,token,secret
         continue-on-error: true
       - name: export-secrets
         script: |
           import json
 
-          th_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
-          gl_vulns = {{ vulns(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
-          total = len(th_vulns) + len(gl_vulns)
+          vulns = {{ vulns(steps["nuclei-secrets"].outputs.typed_outputs) | tojson }}
+          tags = {{ tags(steps["nuclei-secrets"].outputs.typed_outputs) | tojson }}
+          total = len(vulns) + len(tags)
 
           add_outputs(secrets_count=total)
           print(f"Found {total} secrets/leaks")

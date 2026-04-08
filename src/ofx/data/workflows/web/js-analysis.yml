@@ -103,29 +103,14 @@ jobs:
           tags: exposure,token,secret
         continue-on-error: true
 
-      - task: trufflehog
-        timeout: 15
-        name: trufflehog-scan
-        with:
-          target: '{{ inputs.target }}'
-        continue-on-error: true
-
-      - task: gitleaks
-        timeout: 15
-        name: gitleaks-scan
-        with:
-          target: '{{ inputs.target }}'
-        continue-on-error: true
-
       - name: js-summary
         script: |
           import json
 
           nuclei_vulns = {{ vulns(steps["nuclei-exposure"].outputs.typed_outputs) | tojson }}
-          trufflehog_tags = {{ tags(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
-          gitleaks_tags = {{ tags(steps["gitleaks-scan"].outputs.typed_outputs) | tojson }}
+          nuclei_tags = {{ tags(steps["nuclei-exposure"].outputs.typed_outputs) | tojson }}
 
-          total_secrets = len(trufflehog_tags) + len(gitleaks_tags)
+          total_secrets = len(nuclei_tags)
           total_vulns = len(nuclei_vulns)
 
           critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
@@ -136,9 +121,7 @@ jobs:
           print(f" JS ANALYSIS COMPLETE: {{ inputs.target }}")
           print("=" * 50)
           print(f"JS files analyzed: {{ jobs['discover-js'].outputs.js_count }}")
-          print(f"Secrets found: {total_secrets}")
-          print(f"  TruffleHog: {len(trufflehog_tags)}")
-          print(f"  Gitleaks: {len(gitleaks_tags)}")
+          print(f"Secrets/exposures found: {total_secrets}")
           print(f"Vulnerabilities: {total_vulns}")
           print(f"  Critical: {len(critical)}")
           print(f"  High: {len(high)}")
