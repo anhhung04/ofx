@@ -122,7 +122,7 @@ jobs:
 
         # Write to files
         for ioc_type, items in all_iocs.items():
-            out = Path(ff'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_iocs_{ioc_type}.txt')
+            out = Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_iocs_{ioc_type}.txt')
             out.write_text('\n'.join(items) + '\n')
 
         add_outputs(total_iocs=total)

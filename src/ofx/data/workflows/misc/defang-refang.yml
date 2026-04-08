@@ -63,7 +63,7 @@ jobs:
         print(f"=== {operation.upper()} ===")
         print(result)
 
-        out_file = ff'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_{operation}ed.txt'
+        out_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_{operation}ed.txt'
         Path(out_file).write_text(result)
 
         add_outputs(result_file=out_file, operation=operation, line_count=len(result.splitlines()))
