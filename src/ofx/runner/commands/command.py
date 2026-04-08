@@ -360,10 +360,9 @@ class ScriptRunner(BaseRunner[Script]):
                         self._log_debug(f"Failed to parse RUNNER_OUTPUTS: {e}")
                     finally:
                         try:
-                            outputs_file.unlink()
+                            outputs_file.unlink(missing_ok=True)
                         except Exception as e:
                             self._log_debug(f"Failed to remove outputs file: {e}")
-                            pass
 
             await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
             status = (

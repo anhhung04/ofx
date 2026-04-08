@@ -118,11 +118,8 @@ class StepRunner(BaseRunner[Step]):
 
     async def _on_failure_cleanup(self) -> None:
         """Ensure temp outputs file is removed on failure."""
-        if self._outputs_file and self._outputs_file.exists():
-            try:
-                self._outputs_file.unlink()
-            except Exception as e:
-                logger.debug("Failed to remove temp outputs file: %s", e)
+        if self._outputs_file:
+            self._outputs_file.unlink(missing_ok=True)
 
     async def _do_run(self) -> None:
         """
@@ -217,12 +214,8 @@ class StepRunner(BaseRunner[Step]):
         await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
 
         # Cleanup outputs file if it still exists
-        if self._outputs_file and self._outputs_file.exists():
-            try:
-                self._outputs_file.unlink()
-            except Exception as e:
-                logger.debug("Failed to remove outputs file: %s", e)
-                pass
+        if self._outputs_file:
+            self._outputs_file.unlink(missing_ok=True)
 
     def _log_output(self, stream: str, content: str) -> None:
         """Log a stdout/stderr stream to the console, truncating long output."""

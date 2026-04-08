@@ -470,13 +470,11 @@ class CloudJobRunner(BaseRunner[Job]):
                     )
             except Exception as e:
                 self._log_debug(f"Failed to clean remote work dir: {e}")
-                pass
         if hasattr(self._remote_runner, "cleanup"):
             try:
                 await asyncio.to_thread(self._remote_runner.cleanup)
             except Exception as e:
                 self._log_debug(f"Remote runner cleanup failed: {e}")
-                pass
 
     async def _handle_failure(self, *, prompt_destroy: bool = True) -> None:
         """Salvage outputs from the remote VPS, then ask user about destruction.

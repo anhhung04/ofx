@@ -400,7 +400,6 @@ class CloudStepRunner(BaseRunner):
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
                 logger.debug("Failed to remove remote script %s: %s", remote_script, e)
-                pass
 
     async def _run_remote_script_file(
         self, script_file: str, timeout: int | None = None
@@ -461,7 +460,6 @@ class CloudStepRunner(BaseRunner):
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
                 logger.debug("Failed to remove remote file %s: %s", remote_path, e)
-                pass
 
     # ------------------------------------------------------------------
     # Task execution (remote)

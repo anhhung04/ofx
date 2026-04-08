@@ -162,8 +162,9 @@ class WorkflowExecutionManager:
                         task.result()
                     except (asyncio.CancelledError, KeyboardInterrupt):
                         raise
-                    except Exception:
-                        pass  # Error is captured in runner._error
+                    except Exception as exc:
+                        # Error is captured in runner._error; log for traceability
+                        logger.debug("Job '%s' raised: %s", job_id, exc)
                     if runner.is_failed:
                         failed_jobs.append(job_id)
                     del tasks[job_id]
