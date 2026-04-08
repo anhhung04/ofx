@@ -22,13 +22,13 @@ jobs:
 ---
 
 ## Step Fields
-- `name`: (optional) Description of the step
+- `name`: (optional) Description of the step. **Must be unique within a job** — duplicate names cause a validation error.
 - `run` / `script` / `script_file` / `uses` / `task`: **Exactly one** action per step
 - `env`: (optional) Environment variables
-- `timeout`: (optional) Max time in minutes (default: 1440)
+- `timeout`: (optional) Max time in minutes (default: 1440). Supports Jinja2 expressions for dynamic scaling (see below).
 - `retry`: (optional) Retry attempts on failure
-- `retry_delay`: (optional) Seconds between retries (alias: `retry-delay`)
-- `continue_on_error`: (optional) Continue even if this step fails (alias: `continue-on-error`)
+- `retry_delay`: (optional) Seconds between retries (alias: `retry-delay`). Uses exponential backoff with jitter.
+- `continue_on_error`: (optional) Continue even if this step fails (alias: `continue-on-error`). Outputs from the failed step are still accessible to later steps.
 - `run_if`: (optional) Conditional execution (alias: `if`)
 - `shell`: (optional) Shell for `run`/`script`
 - `working_directory`: (optional) Execution directory (alias: `working-directory`)
@@ -36,6 +36,22 @@ jobs:
 - `interactive`: (optional) Interactive mode (ignored for `uses`)
 - `with`: (optional) Inputs for `uses` or options/target for `task` (model field: `run_with`)
 - `secrets`: (optional) Secrets for `uses` (`inherit` to pass parent secrets)
+
+### Dynamic Timeout
+
+The `timeout` field accepts Jinja2 template expressions, enabling timeout scaling based on inputs or matrix values:
+
+```yaml
+steps:
+  - name: scan-targets
+    task: nmap
+    with:
+      target: "{{ inputs.targets_file }}"
+    # Scale timeout: 15 min base + 1 min per 50 targets
+    timeout: "{{ (inputs.target_count | int / 50) | int * 1 + 15 }}"
+```
+
+If the expression resolves to an invalid value, a default of 60 minutes is used with a warning.
 
 ---
 

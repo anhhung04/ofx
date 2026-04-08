@@ -48,6 +48,24 @@ Reference job outputs from dependents:
 run: echo "Scan: {{ jobs.scan.outputs.scan_result }}"
 ```
 
+### Outputs from Failed Steps
+
+When a step has `continue-on-error: true` and fails, its outputs (stdout, stderr, and any `OFX_OUTPUTS` written before failure) are still saved to the registry. Later steps can reference them normally:
+
+```yaml
+steps:
+  - name: optional-check
+    run: |
+      echo "result=partial" >> $OFX_OUTPUTS
+      exit 1  # fails, but output is preserved
+    continue-on-error: true
+
+  - name: use-result
+    run: echo "Got {{ steps['optional-check'].outputs.result }}"
+```
+
+Without `continue-on-error`, failed step outputs are **not** preserved.
+
 ---
 
 ## Dynamic outputs with `OFX_OUTPUTS`

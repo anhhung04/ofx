@@ -274,6 +274,33 @@ Duplicate credentials (same username + password + hash + domain) are automatical
 
 ---
 
+## Success Codes
+
+Some security tools use non-zero exit codes to indicate **findings** rather than errors. For example, `ssh-audit` exits with code 3 when it detects weak algorithms, and `wpscan` exits with 5 when it finds vulnerabilities.
+
+OFX tasks declare `success_codes` — a set of exit codes that should be treated as successful execution. By default, only exit code `0` is considered successful.
+
+### Tools with Custom Success Codes
+
+| Tool | Success Codes | Meaning |
+|------|--------------|---------|
+| `ssh-audit` | 0, 1, 2, 3 | 1=warnings, 2=errors reported, 3=both |
+| `wpscan` | 0, 5 | 5=vulnerabilities found |
+| `fping` | 0, 1 | 1=some hosts unreachable |
+| `testssl` | 0, 1, 2 | Non-zero indicates findings |
+| `nikto` | 0, 1 | 1=findings detected |
+| `sslscan` | 0, 1 | 1=issues found |
+
+When a task exits with a code in its `success_codes` set, OFX parses the output normally and produces typed outputs. Any exit code **not** in the set is treated as a command failure.
+
+You can inspect a task's success codes with:
+
+```bash
+ofx flow tasks info ssh-audit
+```
+
+---
+
 ## Live Streaming
 
 Tasks that output JSONL or line-delimited results support **live streaming** — items are parsed and published to channels as each line arrives, rather than waiting for the entire command to finish.
