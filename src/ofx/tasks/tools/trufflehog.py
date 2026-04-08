@@ -44,8 +44,12 @@ class TrufflehogTask(Task):
     extra_flags = ["--json", "--no-update"]
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
-        """Prepend 'git' subcommand before flags and target."""
-        parts: list[str] = [self.cmd, "git", *self.extra_flags]
+        """Prepend scan mode subcommand before flags and target.
+
+        Use ``mode`` kwarg to select git (default), filesystem, s3, etc.
+        """
+        mode = kwargs.pop("mode", "git")
+        parts: list[str] = [self.cmd, mode, *self.extra_flags]
 
         for key, value in kwargs.items():
             if key.startswith("_"):

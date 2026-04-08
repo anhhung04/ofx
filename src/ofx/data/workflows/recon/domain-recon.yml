@@ -47,13 +47,6 @@ jobs:
           limit: 500
         continue-on-error: true
 
-      - task: gitleaks
-        timeout: 15
-        name: gitleaks-scan
-        with:
-          target: '{{ inputs.target }}'
-        continue-on-error: true
-
       - task: asnmap
         timeout: 5
         name: asn-enum
@@ -85,11 +78,14 @@ jobs:
       dns_record_count: '{{ steps["export-dns"].outputs.dns_record_count | default("", true) }}'
       dns_subdomain_count: '{{ steps["export-dns"].outputs.dns_subdomain_count | default("", true) }}'
     steps:
+      - name: write-target
+        run: echo '{{ inputs.target }}' > /tmp/ofx_domrecon_target.txt
+
       - task: dnsx
         timeout: 10
         name: dns-resolve
         with:
-          target: '{{ inputs.target }}'
+          target: /tmp/ofx_domrecon_target.txt
           a: true
           aaaa: true
           cname: true
@@ -345,8 +341,7 @@ jobs:
         timeout: 10
         name: testssl-check
         with:
-          target: '{{ inputs.target }}'
-          server_defaults: true
+          target: '{{ inputs.target }}:443'
         continue-on-error: true
 
       - task: sslscan
@@ -363,8 +358,6 @@ jobs:
         with:
           target: '{{ inputs.target }}'
           san: true
-          expired: true
-          self_signed: true
         continue-on-error: true
 
       - name: export-ssl
@@ -500,20 +493,6 @@ jobs:
     needs:
       - url-collection
     steps:
-      - task: trufflehog
-        timeout: 15
-        name: trufflehog-scan
-        with:
-          target: '{{ inputs.target }}'
-        continue-on-error: true
-
-      - task: gitleaks
-        timeout: 15
-        name: gitleaks-deep
-        with:
-          target: '{{ inputs.target }}'
-        continue-on-error: true
-
       - name: jsluice-extract
         run: |
           cat {{ jobs['url-collection'].outputs.all_urls_file | default('/dev/null', true) }} | grep -iE '\.js($|\?)' | head -500 | while read url; do
@@ -523,10 +502,15 @@ jobs:
 
       - name: export-secrets
         script: |
-          secret_vulns = {{ vulns(steps["trufflehog-scan"].outputs.typed_outputs) | tojson }}
+          import os
+          js_count = 0
+          js_file = '/tmp/ofx_domrecon_jsurls.txt'
+          if os.path.isfile(js_file):
+              with open(js_file) as f:
+                  js_count = sum(1 for line in f if line.strip())
 
-          add_outputs(secret_count=len(secret_vulns))
-          print(f"Secrets: {len(secret_vulns)} findings")
+          add_outputs(secret_count=js_count)
+          print(f"JS analysis: {js_count} extracted URLs")
 
   # ── Stage 6: Takeover Detection (parallel with secrets) ────────────
   takeover-check:
@@ -548,7 +532,8 @@ jobs:
         name: nuclei-takeover
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
-          tags: takeover
+          templates: dns/
+          tags: dns,takeover
         continue-on-error: true
 
       - task: subzy

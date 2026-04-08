@@ -28,7 +28,7 @@ class DnstakeTask(Task):
     }
 
     input_flag = "-t"
-    file_flag = "-f"
+    file_flag = "-l"
     output_flag = "-o"
     extra_flags = ["-silent"]
 

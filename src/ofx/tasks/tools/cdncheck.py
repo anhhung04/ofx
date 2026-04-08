@@ -22,7 +22,6 @@ class CdncheckTask(Task):
     output_types = [Tag, Ip]
 
     opts = {
-        "input": OptDef(flag="-i", type=str, help="Single input to check"),
         "resolver": OptDef(flag="-r", type=str, help="DNS resolver to use"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "exclude": OptDef(
@@ -39,7 +38,7 @@ class CdncheckTask(Task):
         ),
     }
 
-    input_flag = None  # stdin
+    input_flag = "-i"  # single input
     file_flag = "-list"
     output_flag = "-o"
     extra_flags = ["-json", "-silent"]
