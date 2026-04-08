@@ -54,8 +54,8 @@ class FailoverRegistryAdapter(RegistryAdapter):
                     return result
                 except asyncio.CancelledError:
                     raise
-                except Exception:
-                    pass  # Still down, stay on fallback
+                except Exception as exc:
+                    logger.debug("Primary registry still unavailable: %s", exc)
 
             target = self._fallback if self._use_fallback else self._primary
 

@@ -201,14 +201,14 @@ class PostSSH(PostRunnerBase):
         if self._sftp:
             try:
                 self._sftp.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("SFTP close error: %s", e)
             self._sftp = None
         if self._client:
             try:
                 self._client.close()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("SSH client close error: %s", e)
             self._client = None
 
     def _get_sftp(self) -> paramiko.SFTPClient:
@@ -454,8 +454,8 @@ class PostSSH(PostRunnerBase):
             Path(local_tmp).unlink(missing_ok=True)
             try:
                 self._run_direct(f"rm -f {remote_out}", timeout=10)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to remove remote output file: %s", e)
 
         return output
 
@@ -606,8 +606,8 @@ class PostSSH(PostRunnerBase):
             try:
                 files = " ".join(self._remote_temp_files)
                 self._run_direct(f"rm -f {files}", timeout=10)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to clean remote temp files: %s", e)
             self._remote_temp_files.clear()
 
         self._close_client()

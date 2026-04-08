@@ -507,7 +507,8 @@ class SessionManager:
                     await provider.destroy_instance(instance.instance_id)
                 except Exception as destroy_err:
                     logger.warning("Failed to destroy orphaned instance %s: %s", instance.instance_id, destroy_err)
-            session = self._save_session(session, {"status": SessionStatus.FAILED, "error": str(instance)})
+            error_msg = str(instance) if instance else "Instance creation failed"
+            session = self._save_session(session, {"status": SessionStatus.FAILED, "error": error_msg})
             raise
 
         session = self._save_session(session, {"instance_id": instance.instance_id, "instance_ip": instance.ip})

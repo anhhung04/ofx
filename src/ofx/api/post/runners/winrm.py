@@ -291,8 +291,8 @@ class PostWinRM(BaseRunner):
                 self.run_ps(
                     f'Remove-Item -Force "{remote_tmp}" -ErrorAction SilentlyContinue'
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to remove remote temp file %s: %s", remote_tmp, e)
             if remote_tmp in self._remote_temp_files:
                 self._remote_temp_files.remove(remote_tmp)
 
@@ -412,6 +412,6 @@ class PostWinRM(BaseRunner):
         for f in self._remote_temp_files:
             try:
                 self.run_ps(f'Remove-Item -Force "{f}" -ErrorAction SilentlyContinue')
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to remove remote temp file %s: %s", f, e)
         self._remote_temp_files.clear()
