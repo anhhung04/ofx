@@ -134,7 +134,6 @@ class CommandExecutor:
                         on_line(line)
                     except Exception as e:
                         logger.debug("on_line callback failed: %s", e)
-                        pass
 
         async def _read_stderr():
             nonlocal stderr_bytes
@@ -338,8 +337,4 @@ class CommandExecutor:
         except Exception as e:
             log_fn(f"Failed to parse RUNNER_OUTPUTS: {e}")
         finally:
-            try:
-                self._outputs_file.unlink()
-            except Exception as e:
-                logger.debug("Failed to remove outputs file: %s", e)
-                pass
+            self._outputs_file.unlink(missing_ok=True)

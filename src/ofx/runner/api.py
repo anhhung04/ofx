@@ -78,7 +78,6 @@ def _cleanup_run(output_dir: Path) -> None:
         close_channel_store()
     except Exception as e:
         logger.debug("Failed to close channel store: %s", e)
-        pass
 
     # 2. Remove empty output subdirectories (bottom-up)
     if output_dir and output_dir.exists():
@@ -90,7 +89,6 @@ def _cleanup_run(output_dir: Path) -> None:
             _remove_empty_dirs(TEMP_DIR)
     except Exception as e:
         logger.debug("Failed to clean temp dir: %s", e)
-        pass
 
 
 def _remove_empty_dirs(root: Path) -> None:

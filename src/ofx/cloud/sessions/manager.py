@@ -970,7 +970,6 @@ class SessionManager:
                         )
                     except Exception as e:
                         logger.debug("Failed to download remote log: %s", e)
-                        pass
                     return
 
             # Unencrypted fallback — download individual files
@@ -997,7 +996,6 @@ class SessionManager:
                 remote.download(session.remote_log_file, str(results / "output.log"))
             except Exception as e:
                 logger.debug("Failed to download remote log: %s", e)
-                pass
         finally:
             _cleanup_remote(remote)
 
@@ -1172,7 +1170,6 @@ class SessionManager:
                             tf.add(project_path / "logs", arcname="project_logs")
                     except Exception as e:
                         logger.debug("Failed to add project logs to bundle: %s", e)
-                        pass
         finally:
             manifest_path.unlink(missing_ok=True)
 
@@ -1198,8 +1195,8 @@ class SessionManager:
                     dest = project_path / "evidence" / "sessions" / session.id
                     dest.mkdir(parents=True, exist_ok=True)
                     return dest
-            except Exception:
-                pass  # fall back to default
+            except Exception as e:
+                logger.debug("Project evidence path resolution failed: %s", e)
         return self.store.results_dir(session.id)
 
     def _resolve_session_steps(

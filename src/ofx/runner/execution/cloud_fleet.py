@@ -273,7 +273,6 @@ class CloudFleetRunner(BaseRunner[Job]):
                     f.unlink()
             except Exception as e:
                 logger.debug("Failed to remove chunk file %s: %s", f, e)
-                pass
         if parent_dir:
             try:
                 parent_dir.rmdir()

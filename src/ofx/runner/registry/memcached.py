@@ -122,7 +122,6 @@ class MemcachedJobRegistry(RegistryAdapter):
                         logger.warning("Failed to serialize index after removing key '%s': %s", key, exc)
         except Exception as e:
             logger.warning("Memcached delete failed for key removal: %s", e)
-            pass
 
     async def _set(self, key: str, value: Any) -> None:
         """Store data in Memcached"""
@@ -222,7 +221,6 @@ class MemcachedJobRegistry(RegistryAdapter):
                 await client.delete(index_key.encode())
         except Exception as e:
             logger.warning("Memcached clear failed: %s", e)
-            pass
 
         self._log_debug("Cleared MemcachedJobRegistry")
 

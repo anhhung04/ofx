@@ -177,9 +177,10 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
         post_result = await post_runner.run()
 
         if post_result.status.value == "completed":
-            if post_result.outputs.get("stdout"):
+            stdout = post_result.outputs.get("stdout")
+            if stdout:
                 self._log_info(
-                    f"Post-install output for '{tool_bin}': {post_result.outputs['stdout']}"
+                    f"Post-install output for '{tool_bin}': {stdout}"
                 )
         else:
             self._log_warning(
