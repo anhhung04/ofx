@@ -443,8 +443,8 @@ class CloudJobRunner(BaseRunner[Job]):
         if self._remote_runner and hasattr(self._remote_runner, "cleanup"):
             try:
                 await asyncio.to_thread(self._remote_runner.cleanup)
-            except Exception:
-                pass
+            except Exception as e:
+                self._log_debug(f"Remote runner cleanup failed: {e}")
 
     async def _on_failure_cleanup(self) -> None:
         """Handle failure: salvage outputs, prompt for VPS destruction."""

@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import itertools
 import logging
-import os
-import signal
 from dataclasses import dataclass, field
 
 from ofx.runner.core import BaseRunner

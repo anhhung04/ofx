@@ -135,8 +135,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 if isinstance(runner, (JobRunner, MatrixJobRunner, CloudJobRunner)):
                     try:
                         await runner._post_run()
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug("post_run cleanup failed for %s: %s", runner.model.jid, e)
             await self._store_summaries()
 
             # Build concise error: one line per failed job with root cause

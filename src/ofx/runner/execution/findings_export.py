@@ -247,8 +247,8 @@ async def collect_typed_outputs(runners: dict[str, BaseRunner]) -> list[dict]:
                     typed = outputs.get("typed_outputs", [])
                     if isinstance(typed, list):
                         all_typed.extend(typed)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to collect typed outputs from %s: %s", _job_id, e)
 
     return all_typed
 
@@ -263,7 +263,8 @@ async def _collect_from_job(job_runner: Any) -> list[dict]:
                 step_typed = outputs.get("typed_outputs", [])
                 if isinstance(step_typed, list):
                     typed.extend(step_typed)
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to collect typed outputs from step %s: %s", _step_id, e)
             continue
     return typed
 

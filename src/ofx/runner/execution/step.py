@@ -115,8 +115,8 @@ class StepRunner(BaseRunner[Step]):
         if self._outputs_file and self._outputs_file.exists():
             try:
                 self._outputs_file.unlink()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to remove temp outputs file: %s", e)
 
     async def _do_run(self) -> None:
         """

@@ -385,8 +385,8 @@ class TaskRunner(BaseRunner[TaskExecution]):
         if self._output_file and self._output_file.exists():
             try:
                 self._output_file.unlink()
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("Failed to remove task output file %s: %s", self._output_file, e)
 
     def _export_output_file(self) -> Path | None:
         """Copy task output file to output_path with target in the filename.

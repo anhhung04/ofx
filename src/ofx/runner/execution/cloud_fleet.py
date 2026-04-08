@@ -277,6 +277,6 @@ class CloudFleetRunner(BaseRunner[Job]):
         if parent_dir:
             try:
                 parent_dir.rmdir()
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("Failed to remove chunk dir %s: %s", parent_dir, e)
         self._chunk_files.clear()
