@@ -85,12 +85,12 @@ jobs:
     needs:
       - probe
     steps:
-      - task: trufflehog
+      - task: nuclei
         timeout: 15
         name: hunt-secrets
         with:
           target: "{{ inputs.target }}"
-          mode: filesystem
+          tags: exposure,token,secret
         continue-on-error: true
       - name: summary
         run: |

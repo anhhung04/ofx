@@ -126,12 +126,12 @@ jobs:
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
       continue-on-error: true
-    - task: trufflehog
+    - task: nuclei
       timeout: 15
       name: secret-scan
       with:
         target: '{{ inputs.target }}'
-        mode: filesystem
+        tags: exposure,token,secret
       continue-on-error: true
     - task: cariddi
       timeout: 10

@@ -168,18 +168,12 @@ jobs:
   secret-scan:
     name: Secret & Leak Scanning
     steps:
-      - task: gitleaks
+      - task: nuclei
         timeout: 15
-        name: gitleaks-org
+        name: nuclei-secrets
         with:
           target: "{{ inputs.target }}"
-        continue-on-error: true
-      - task: trufflehog
-        timeout: 15
-        name: trufflehog-org
-        with:
-          target: "{{ inputs.target }}"
-          mode: filesystem
+          tags: exposure,token,secret
         continue-on-error: true
   summary:
     name: OSINT Profile Summary

@@ -296,22 +296,16 @@ jobs:
   secrets:
     name: Secret Hunting
     outputs:
-      typed_outputs: '{{ steps["trufflehog-scan"].outputs.typed_outputs + steps["gitleaks-scan"].outputs.typed_outputs | default([], true) }}'
+      typed_outputs: '{{ steps["nuclei-secrets"].outputs.typed_outputs | default([], true) }}'
     needs:
       - crawl
     steps:
-      - task: trufflehog
+      - task: nuclei
         timeout: 15
-        name: trufflehog-scan
+        name: nuclei-secrets
         with:
-          target: "{{ inputs.target }}"
-          mode: filesystem
-        continue-on-error: true
-      - task: gitleaks
-        timeout: 15
-        name: gitleaks-scan
-        with:
-          target: "{{ inputs.target }}"
+          target: "{{ jobs['crawl'].outputs.crawled_file | default(inputs.target, true) }}"
+          tags: exposure,token,secret
         continue-on-error: true
   summary:
     name: Web Audit Summary
