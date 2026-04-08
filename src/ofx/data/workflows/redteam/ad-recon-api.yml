@@ -122,7 +122,7 @@ jobs:
             ),
         ]
 
-        out_file = "/tmp/ofx_ad_enum_commands.sh"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_ad_enum_commands.sh"
         with open(out_file, "w") as f:
             f.write("#!/bin/bash\n")
             f.write(f"# AD Enumeration Commands — {{ inputs.domain }}\n\n")

@@ -29,15 +29,15 @@ jobs:
 
         # Fast ping sweep
         if command -v nmap &>/dev/null; then
-          nmap -sn -PE -PP -PS21,22,80,443,445,3389,8080 -PA80,443 -T4 {{ inputs.target }} -oG /tmp/ofx_hosts.gnmap 2>/dev/null
+          nmap -sn -PE -PP -PS21,22,80,443,445,3389,8080 -PA80,443 -T4 {{ inputs.target }} -oG ${OFX_RUN_DIR:-/tmp}/ofx_hosts.gnmap 2>/dev/null
 
-          grep "Up" /tmp/ofx_hosts.gnmap | awk '{print $2}' > /tmp/ofx_alive_hosts.txt
-          COUNT=$(wc -l < /tmp/ofx_alive_hosts.txt)
+          grep "Up" ${OFX_RUN_DIR:-/tmp}/ofx_hosts.gnmap | awk '{print $2}' > ${OFX_RUN_DIR:-/tmp}/ofx_alive_hosts.txt
+          COUNT=$(wc -l < ${OFX_RUN_DIR:-/tmp}/ofx_alive_hosts.txt)
           echo "[+] Alive hosts: $COUNT"
-          cat /tmp/ofx_alive_hosts.txt
+          cat ${OFX_RUN_DIR:-/tmp}/ofx_alive_hosts.txt
 
           echo "alive_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
-          echo "hosts_file=/tmp/ofx_alive_hosts.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "hosts_file=${OFX_RUN_DIR:-/tmp}/ofx_alive_hosts.txt" >> {{ env.OFX_OUTPUTS }}
         fi
       continue-on-error: true
 
@@ -58,19 +58,19 @@ jobs:
         fi
 
         {% if inputs.speed == 'fast' %}
-        naabu -list "$HOSTS_FILE" -top-ports 100 -rate 5000 -o /tmp/ofx_ports.txt 2>/dev/null
+        naabu -list "$HOSTS_FILE" -top-ports 100 -rate 5000 -o ${OFX_RUN_DIR:-/tmp}/ofx_ports.txt 2>/dev/null
         {% elif inputs.speed == 'thorough' %}
-        naabu -list "$HOSTS_FILE" -top-ports 1000 -rate 1000 -o /tmp/ofx_ports.txt 2>/dev/null
+        naabu -list "$HOSTS_FILE" -top-ports 1000 -rate 1000 -o ${OFX_RUN_DIR:-/tmp}/ofx_ports.txt 2>/dev/null
         {% else %}
-        naabu -list "$HOSTS_FILE" -top-ports 500 -rate 2000 -o /tmp/ofx_ports.txt 2>/dev/null
+        naabu -list "$HOSTS_FILE" -top-ports 500 -rate 2000 -o ${OFX_RUN_DIR:-/tmp}/ofx_ports.txt 2>/dev/null
         {% endif %}
 
-        if [ -f /tmp/ofx_ports.txt ]; then
-          COUNT=$(wc -l < /tmp/ofx_ports.txt)
+        if [ -f ${OFX_RUN_DIR:-/tmp}/ofx_ports.txt ]; then
+          COUNT=$(wc -l < ${OFX_RUN_DIR:-/tmp}/ofx_ports.txt)
           echo "port_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
-          echo "ports_file=/tmp/ofx_ports.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "ports_file=${OFX_RUN_DIR:-/tmp}/ofx_ports.txt" >> {{ env.OFX_OUTPUTS }}
           echo "[+] Found $COUNT open ports"
-          cat /tmp/ofx_ports.txt
+          cat ${OFX_RUN_DIR:-/tmp}/ofx_ports.txt
         fi
       continue-on-error: true
 
@@ -93,7 +93,7 @@ jobs:
         HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
         if [ -f "$HOSTS_FILE" ]; then
           nmap -sV -sC --version-intensity 5 -iL "$HOSTS_FILE" \
-            -oN /tmp/ofx_service_scan.txt -oX /tmp/ofx_service_scan.xml \
+            -oN ${OFX_RUN_DIR:-/tmp}/ofx_service_scan.txt -oX ${OFX_RUN_DIR:-/tmp}/ofx_service_scan.xml \
             {% if inputs.speed == 'fast' %}
             --top-ports 100 -T4 \
             {% elif inputs.speed == 'thorough' %}
@@ -103,8 +103,8 @@ jobs:
             {% endif %}
             2>/dev/null
 
-          echo "service_file=/tmp/ofx_service_scan.txt" >> {{ env.OFX_OUTPUTS }}
-          echo "[+] Results: /tmp/ofx_service_scan.txt"
+          echo "service_file=${OFX_RUN_DIR:-/tmp}/ofx_service_scan.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "[+] Results: ${OFX_RUN_DIR:-/tmp}/ofx_service_scan.txt"
         fi
       continue-on-error: true
       timeout: 30
@@ -119,8 +119,8 @@ jobs:
       run: |
         HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
         if [ -f "$HOSTS_FILE" ]; then
-          naabu -list "$HOSTS_FILE" -p 22,21,23,3306,5432,6379,27017,1433,5900,8080 -silent 2>/dev/null | nerva --json 2>/dev/null | brutus --json 2>/dev/null | tee /tmp/ofx_sweep_creds.jsonl
-          CRED_COUNT=$(wc -l < /tmp/ofx_sweep_creds.jsonl 2>/dev/null || echo 0)
+          naabu -list "$HOSTS_FILE" -p 22,21,23,3306,5432,6379,27017,1433,5900,8080 -silent 2>/dev/null | nerva --json 2>/dev/null | brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_sweep_creds.jsonl
+          CRED_COUNT=$(wc -l < ${OFX_RUN_DIR:-/tmp}/ofx_sweep_creds.jsonl 2>/dev/null || echo 0)
           echo "cred_count=$CRED_COUNT" >> {{ env.OFX_OUTPUTS }}
         fi
       continue-on-error: true
@@ -139,6 +139,6 @@ jobs:
         echo "  Open ports: {{ jobs['port-scan'].outputs.port_count | default('?', true) }}"
         echo "  Default creds: {{ jobs['default-cred-check'].outputs.cred_count | default('0', true) }}"
         echo ""
-        echo "  Hosts file: /tmp/ofx_alive_hosts.txt"
-        echo "  Service scan: /tmp/ofx_service_scan.txt"
+        echo "  Hosts file: ${OFX_RUN_DIR:-/tmp}/ofx_alive_hosts.txt"
+        echo "  Service scan: ${OFX_RUN_DIR:-/tmp}/ofx_service_scan.txt"
       log-stdout: true

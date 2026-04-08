@@ -109,7 +109,7 @@ jobs:
                 resolved[sub] = [entry.get("ip", "unresolved")]
                 print(f"    {sub} -> {entry.get('ip', 'error')} (fallback)")
 
-        out_file = "/tmp/ofx_dns_resolved.json"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_dns_resolved.json"
         with open(out_file, "w") as f:
             json.dump(resolved, f, indent=2)
 

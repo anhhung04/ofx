@@ -119,7 +119,7 @@ jobs:
             net = ipaddress.ip_network(target, strict=False)
             hosts = [str(ip) for ip in net.hosts()]
             from pathlib import Path
-            out = '/tmp/ofx_cidr_expanded.txt'
+            out = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cidr_expanded.txt'
             Path(out).write_text('\n'.join(hosts) + '\n')
             results['expanded_file'] = out
             results['expanded_count'] = len(hosts)

@@ -108,7 +108,7 @@ jobs:
         </div>
         </body></html>"""
 
-        out_dir = Path('/tmp/ofx_phishing')
+        out_dir = Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_phishing')
         out_dir.mkdir(exist_ok=True)
 
         for name, content in templates.items():

@@ -118,9 +118,9 @@ jobs:
                         subs.add(host)
 
         subs.add('{{ inputs.target }}')
-        with open('/tmp/ofx_domscan_hosts.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domscan_hosts.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
-        add_outputs(hosts_file="/tmp/ofx_domscan_hosts.txt", subdomain_count=len(subs))
+        add_outputs(hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domscan_hosts.txt", subdomain_count=len(subs))
       continue-on-error: true
     - task: dnsx
       timeout: 10

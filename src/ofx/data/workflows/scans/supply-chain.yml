@@ -27,12 +27,12 @@ jobs:
 
         # Try syft first
         if command -v syft &>/dev/null; then
-          syft dir:. -o spdx-json > /tmp/ofx_sbom.json 2>/dev/null
-          echo "sbom_file=/tmp/ofx_sbom.json" >> {{ env.OFX_OUTPUTS }}
+          syft dir:. -o spdx-json > ${OFX_RUN_DIR:-/tmp}/ofx_sbom.json 2>/dev/null
+          echo "sbom_file=${OFX_RUN_DIR:-/tmp}/ofx_sbom.json" >> {{ env.OFX_OUTPUTS }}
           echo "[+] SBOM generated (syft → SPDX)"
         elif command -v cyclonedx-py &>/dev/null; then
-          cyclonedx-py environment -o /tmp/ofx_sbom.json 2>/dev/null
-          echo "sbom_file=/tmp/ofx_sbom.json" >> {{ env.OFX_OUTPUTS }}
+          cyclonedx-py environment -o ${OFX_RUN_DIR:-/tmp}/ofx_sbom.json 2>/dev/null
+          echo "sbom_file=${OFX_RUN_DIR:-/tmp}/ofx_sbom.json" >> {{ env.OFX_OUTPUTS }}
           echo "[+] SBOM generated (cyclonedx-py)"
         else
           echo "[-] No SBOM tool found (install syft or cyclonedx-py)"

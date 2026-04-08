@@ -78,10 +78,10 @@ jobs:
                   if url:
                       param_urls.add(url)
 
-          with open('/tmp/ofx_ssti_params.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_ssti_params.txt', 'w') as f:
               f.write('\n'.join(sorted(param_urls)))
 
-          add_outputs(param_file="/tmp/ofx_ssti_params.txt", param_count=len(param_urls))
+          add_outputs(param_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_ssti_params.txt", param_count=len(param_urls))
           print(f"Merged {len(param_urls)} parameterized URLs for SSTI testing")
 
   ssti-test:
@@ -122,14 +122,14 @@ jobs:
           critical = [v for v in all_vulns if v.get('severity') == 'critical']
           high = [v for v in all_vulns if v.get('severity') == 'high']
 
-          with open('/tmp/ofx_ssti_findings.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_ssti_findings.txt', 'w') as f:
               for v in all_vulns:
                   name = v.get('name', 'unknown')
                   url = v.get('url', v.get('host', ''))
                   sev = v.get('severity', 'info')
                   f.write(f"[{sev}] {name} - {url}\n")
 
-          add_outputs(findings_file="/tmp/ofx_ssti_findings.txt", vuln_count=len(all_vulns), critical_count=len(critical), high_count=len(high), tinja_count=len(tinja_vulns), nuclei_count=len(nuclei_vulns))
+          add_outputs(findings_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_ssti_findings.txt", vuln_count=len(all_vulns), critical_count=len(critical), high_count=len(high), tinja_count=len(tinja_vulns), nuclei_count=len(nuclei_vulns))
           print(f"SSTI findings: {len(all_vulns)} (C:{len(critical)} H:{len(high)})")
           print(f"  Tinja: {len(tinja_vulns)}, Nuclei: {len(nuclei_vulns)}")
 

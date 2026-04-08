@@ -50,10 +50,10 @@ jobs:
             name = v.get('name', v.get('matched_at', 'unknown'))
             findings.append(name)
 
-        with open('/tmp/ofx_sqli_types.txt', 'w') as tf:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_sqli_types.txt', 'w') as tf:
             tf.write('\n'.join(findings))
 
-        add_outputs(vulnerable='true' if vulnerable else 'false', injection_types_file="/tmp/ofx_sqli_types.txt", finding_count=len(findings), db_count=len(sqlmap_vulns))
+        add_outputs(vulnerable='true' if vulnerable else 'false', injection_types_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_sqli_types.txt", finding_count=len(findings), db_count=len(sqlmap_vulns))
         status = "VULNERABLE" if vulnerable else "Not vulnerable"
         print(f"Target is: {status}")
         print(f"Injection types found: {len(findings)}")

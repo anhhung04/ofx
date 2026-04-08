@@ -67,7 +67,7 @@ jobs:
         # Filter to in-scope subdomains
         filtered = sorted(s for s in all_subs if s.endswith(f".{domain}") or s == domain)
 
-        out_file = "/tmp/ofx_subdomains.txt"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subdomains.txt"
         with open(out_file, "w") as f:
             for sub in filtered:
                 f.write(f"{sub}\n")

@@ -62,7 +62,7 @@ jobs:
               proxy_dns=proxy_dns,
           )
 
-          output_dir = Path("/tmp/ofx_proxy")
+          output_dir = Path(f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_proxy")
           output_dir.mkdir(parents=True, exist_ok=True)
 
           conf_file = output_dir / "proxychains4.conf"

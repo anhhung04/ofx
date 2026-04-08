@@ -116,7 +116,7 @@ jobs:
         if checks.get('ssh_keys', ''):
             findings.append('[MEDIUM] SSH private keys found')
 
-        out_file = '/tmp/ofx_privesc_linux.txt'
+        out_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_privesc_linux.txt'
         with open(out_file, 'w') as f:
             for name, output in checks.items():
                 f.write(f"=== {name.upper()} ===\n{output}\n\n")

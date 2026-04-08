@@ -229,7 +229,7 @@ jobs:
                 results[name] = f'Error: {e}'
 
         from pathlib import Path
-        enum_file = '/tmp/ofx_webshell_enum.txt'
+        enum_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_webshell_enum.txt'
         with open(enum_file, 'w') as f:
             for name, output in results.items():
                 f.write(f"=== {name.upper()} ===\n{output}\n\n")

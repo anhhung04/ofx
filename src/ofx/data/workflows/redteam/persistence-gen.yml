@@ -75,7 +75,7 @@ jobs:
                       if method in ("ssh_key", "all"):
                           commands["ssh_key_info"] = [
                               "# Generate key pair first, then install public key:",
-                              "ssh-keygen -t ed25519 -f /tmp/ofx_persist -N ''",
+                              "ssh-keygen -t ed25519 -f ${OFX_RUN_DIR:-/tmp}/ofx_persist -N ''",
                               "# Then use ssh_authorized_key() with the public key",
                           ]
 
@@ -102,7 +102,7 @@ jobs:
                       print("    Windows methods: schtask, service, registry, all")
                       raise SystemExit(1)
 
-                  out_file = f"/tmp/ofx_persistence_{target_os}.sh"
+                  out_file = ff"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_persistence_{target_os}.sh"
                   with open(out_file, "w") as f:
                       if target_os == "linux":
                           f.write("#!/bin/bash\n")

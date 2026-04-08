@@ -45,7 +45,7 @@ jobs:
         ptype = "{{ inputs.payload_type }}"
         obfuscate = "{{ inputs.obfuscate }}" == "true"
 
-        output_dir = Path("/tmp/ofx_payloads")
+        output_dir = Path(f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_payloads")
         output_dir.mkdir(parents=True, exist_ok=True)
 
         content = ""

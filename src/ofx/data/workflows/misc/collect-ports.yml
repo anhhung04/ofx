@@ -35,10 +35,10 @@ jobs:
                 if svc:
                     services[f"{host}:{port}"] = svc
 
-        ports_path = '/tmp/ofx_collected_ports.txt'
+        ports_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_collected_ports.txt'
         Path(ports_path).write_text('\n'.join(sorted(host_ports)) + '\n')
 
-        services_path = '/tmp/ofx_collected_services.txt'
+        services_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_collected_services.txt'
         svc_lines = [f"{k}\t{v}" for k, v in sorted(services.items())]
         Path(services_path).write_text('\n'.join(svc_lines) + '\n')
 

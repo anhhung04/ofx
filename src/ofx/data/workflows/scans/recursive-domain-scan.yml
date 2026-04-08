@@ -80,10 +80,10 @@ jobs:
         # always include root domain
         subs.add('{{ inputs.target }}')
 
-        with open('/tmp/ofx_rds_subdomains.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_rds_subdomains.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
 
-        add_outputs(subs_file="/tmp/ofx_rds_subdomains.txt", subdomain_count=len(subs))
+        add_outputs(subs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_rds_subdomains.txt", subdomain_count=len(subs))
         print(f"Discovered {len(subs)} unique subdomains for {{ inputs.target }}")
 
   bulk-recon:
@@ -132,13 +132,13 @@ jobs:
                 if url:
                     live_urls.add(url)
 
-        with open('/tmp/ofx_rds_alive.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_rds_alive.txt', 'w') as f:
             f.write('\n'.join(sorted(alive)))
 
-        with open('/tmp/ofx_rds_live_urls.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_rds_live_urls.txt', 'w') as f:
             f.write('\n'.join(sorted(live_urls)))
 
-        add_outputs(alive_file="/tmp/ofx_rds_alive.txt", live_urls_file="/tmp/ofx_rds_live_urls.txt", alive_count=len(alive))
+        add_outputs(alive_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_rds_alive.txt", live_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_rds_live_urls.txt", alive_count=len(alive))
         print(f"Alive subdomains: {len(alive)}, Live URLs: {len(live_urls)}")
     - task: naabu
       timeout: 10

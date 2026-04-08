@@ -116,10 +116,10 @@ jobs:
                   if item.get('_type') == 'url' and item.get('url'):
                       urls.add(item['url'])
 
-          with open('/tmp/ofx_webaudit_dirs.txt', 'w') as tf:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_webaudit_dirs.txt', 'w') as tf:
               tf.write('\n'.join(sorted(urls)))
 
-          add_outputs(dir_urls_file="/tmp/ofx_webaudit_dirs.txt", dir_count=len(urls))
+          add_outputs(dir_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_webaudit_dirs.txt", dir_count=len(urls))
           print(f"Discovered {len(urls)} unique URLs/directories")
   crawl:
     name: Content Discovery
@@ -171,10 +171,10 @@ jobs:
                   if url:
                       urls.add(url)
 
-          with open('/tmp/ofx_webaudit_crawled.txt', 'w') as tf:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_webaudit_crawled.txt', 'w') as tf:
               tf.write('\n'.join(sorted(urls)))
 
-          add_outputs(crawled_file="/tmp/ofx_webaudit_crawled.txt", crawl_count=len(urls))
+          add_outputs(crawled_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_webaudit_crawled.txt", crawl_count=len(urls))
           print(f"Crawled {len(urls)} unique URLs")
   param-fuzz:
     name: Parameter Discovery & Fuzzing
@@ -216,10 +216,10 @@ jobs:
                   if url and ('=' in url or '?' in url):
                       param_urls.add(url)
 
-          with open('/tmp/ofx_param_urls.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_param_urls.txt', 'w') as f:
               f.write('\n'.join(sorted(param_urls)))
 
-          add_outputs(param_file="/tmp/ofx_param_urls.txt", param_count=len(param_urls))
+          add_outputs(param_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_param_urls.txt", param_count=len(param_urls))
           print(f"Discovered {len(param_urls)} parameterized URLs")
   vuln-scan:
     name: Vulnerability Scanning

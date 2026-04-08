@@ -171,10 +171,10 @@ jobs:
                   if host and '{{ inputs.target }}' in host:
                       subs.add(host)
 
-          with open('/tmp/ofx_deeprecon_subs.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_subs.txt', 'w') as f:
               f.write('\n'.join(sorted(subs)))
 
-          add_outputs(subs_file="/tmp/ofx_deeprecon_subs.txt", sub_count=len(subs))
+          add_outputs(subs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_deeprecon_subs.txt", sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains from passive sources")
 
   active-enum:
@@ -266,7 +266,7 @@ jobs:
                   if ip_val:
                       asn_ips.add(ip_val)
 
-          with open('/tmp/ofx_deeprecon_asn_ips.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_asn_ips.txt', 'w') as f:
               f.write('\n'.join(sorted(asn_ips)))
 
           # From gotator — permuted subdomains added as candidates
@@ -277,10 +277,10 @@ jobs:
                   if host and '{{ inputs.target }}' in host:
                       verified.add(host)
 
-          with open('/tmp/ofx_deeprecon_verified.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_verified.txt', 'w') as f:
               f.write('\n'.join(sorted(verified)))
 
-          add_outputs(verified_file="/tmp/ofx_deeprecon_verified.txt", verified_count=len(verified), asn_ips_file="/tmp/ofx_deeprecon_asn_ips.txt", asn_ip_count=len(asn_ips))
+          add_outputs(verified_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_deeprecon_verified.txt", verified_count=len(verified), asn_ips_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_deeprecon_asn_ips.txt", asn_ip_count=len(asn_ips))
           print(f"Active verification: {len(verified)} resolved subdomains, {len(asn_ips)} ASN IPs/CIDRs")
 
   web-probe:
@@ -336,14 +336,14 @@ jobs:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   urls.add(item['url'])
 
-          with open('/tmp/ofx_deeprecon_live.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_live.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))
 
           waf_tags = {{ tags(steps["waf-detect"].outputs.typed_outputs) | tojson }}
           cdn_tags = {{ tags(steps["cdn-detect"].outputs.typed_outputs) | tojson }}
           favi_tags = {{ tags(steps["favicon-detect"].outputs.typed_outputs) | tojson }}
 
-          add_outputs(live_file="/tmp/ofx_deeprecon_live.txt", live_count=len(urls), waf_count=len(waf_tags), cdn_count=len(cdn_tags), favicon_count=len(favi_tags))
+          add_outputs(live_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_deeprecon_live.txt", live_count=len(urls), waf_count=len(waf_tags), cdn_count=len(cdn_tags), favicon_count=len(favi_tags))
           print(f"Live: {len(urls)} URLs, WAFs: {len(waf_tags)}, CDNs: {len(cdn_tags)}, Favicons: {len(favi_tags)}")
 
   url-collection:
@@ -375,7 +375,7 @@ jobs:
 
       - name: hakrawler-crawl
         run: |
-          echo "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}" | hakrawler -d 2 -subs 2>/dev/null | tee /tmp/ofx_deeprecon_hakrawler.txt
+          echo "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}" | hakrawler -d 2 -subs 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_deeprecon_hakrawler.txt
         continue-on-error: true
 
       - task: paramspider
@@ -387,11 +387,11 @@ jobs:
 
       - name: jsluice-extract
         run: |
-          cat "{{ jobs['web-probe'].outputs.live_file | default('/dev/null', true) }}" | grep -iE '\.js(\?|$)' > /tmp/ofx_deeprecon_jsurls.txt 2>/dev/null || true
-          if [ -s /tmp/ofx_deeprecon_jsurls.txt ]; then
-            cat /tmp/ofx_deeprecon_jsurls.txt | xargs -I{} curl -s {} 2>/dev/null | jsluice urls 2>/dev/null | tee /tmp/ofx_deeprecon_jsluice.txt
+          cat "{{ jobs['web-probe'].outputs.live_file | default('/dev/null', true) }}" | grep -iE '\.js(\?|$)' > ${OFX_RUN_DIR:-/tmp}/ofx_deeprecon_jsurls.txt 2>/dev/null || true
+          if [ -s ${OFX_RUN_DIR:-/tmp}/ofx_deeprecon_jsurls.txt ]; then
+            cat ${OFX_RUN_DIR:-/tmp}/ofx_deeprecon_jsurls.txt | xargs -I{} curl -s {} 2>/dev/null | jsluice urls 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_deeprecon_jsluice.txt
           else
-            touch /tmp/ofx_deeprecon_jsluice.txt
+            touch ${OFX_RUN_DIR:-/tmp}/ofx_deeprecon_jsluice.txt
           fi
         continue-on-error: true
 
@@ -422,7 +422,7 @@ jobs:
 
           # From hakrawler
           try:
-              with open('/tmp/ofx_deeprecon_hakrawler.txt') as f:
+              with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_hakrawler.txt') as f:
                   for line in f:
                       u = line.strip()
                       if u and u.startswith('http'):
@@ -443,7 +443,7 @@ jobs:
 
           # From jsluice raw output
           try:
-              with open('/tmp/ofx_deeprecon_jsluice.txt') as f:
+              with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_jsluice.txt') as f:
                   for line in f:
                       u = line.strip()
                       if u and u.startswith('http'):
@@ -463,12 +463,12 @@ jobs:
                       if '=' in url or '?' in url:
                           param_urls.add(url)
 
-          with open('/tmp/ofx_deeprecon_allurls.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_allurls.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))
-          with open('/tmp/ofx_deeprecon_params.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_params.txt', 'w') as f:
               f.write('\n'.join(sorted(param_urls)))
 
-          add_outputs(all_urls_file="/tmp/ofx_deeprecon_allurls.txt", param_file="/tmp/ofx_deeprecon_params.txt", url_count=len(urls), param_count=len(param_urls))
+          add_outputs(all_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_deeprecon_allurls.txt", param_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_deeprecon_params.txt", url_count=len(urls), param_count=len(param_urls))
           print(f"URLs: {len(urls)} total, {len(param_urls)} parameterized")
 
   port-scan:
@@ -511,10 +511,10 @@ jobs:
                       ports.add(f"{host}:{port}")
                       hosts.add(host)
 
-          with open('/tmp/ofx_deeprecon_ports.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_deeprecon_ports.txt', 'w') as f:
               f.write('\n'.join(sorted(ports)))
 
-          add_outputs(ports_file="/tmp/ofx_deeprecon_ports.txt", port_count=len(ports))
+          add_outputs(ports_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_deeprecon_ports.txt", port_count=len(ports))
           print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
 
   vuln-scan:
@@ -557,7 +557,7 @@ jobs:
 
       - name: crlfuzz-scan
         run: |
-          echo "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}" | crlfuzz -s 2>/dev/null | tee /tmp/ofx_deeprecon_crlf.txt
+          echo "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}" | crlfuzz -s 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_deeprecon_crlf.txt
         continue-on-error: true
 
       - task: dnstake

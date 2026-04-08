@@ -89,7 +89,7 @@ jobs:
                 services.append({"port": port, "banner": "", "tls": False, "protocol": f"error: {e}"})
                 print(f"    {port}/tcp  error: {e}")
 
-        out_file = "/tmp/ofx_banners.json"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_banners.json"
         with open(out_file, "w") as f:
             json.dump(services, f, indent=2)
 

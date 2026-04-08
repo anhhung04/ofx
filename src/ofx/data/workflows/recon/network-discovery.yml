@@ -37,10 +37,10 @@ jobs:
             if ip:
                 hosts.add(ip)
 
-        with open('/tmp/ofx_nd_alive.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_nd_alive.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts)))
 
-        add_outputs(alive_file="/tmp/ofx_nd_alive.txt", alive_count=len(hosts))
+        add_outputs(alive_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_nd_alive.txt", alive_count=len(hosts))
         print(f"Found {len(hosts)} alive hosts")
   port-scan:
     name: Port Scanning
@@ -82,10 +82,10 @@ jobs:
                     ports_found.add(f"{host}:{port}")
                     hosts_with_ports.add(host)
 
-        with open('/tmp/ofx_nd_hosts.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_nd_hosts.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts_with_ports)))
 
-        add_outputs(hosts_file="/tmp/ofx_nd_hosts.txt", port_count=len(ports_found))
+        add_outputs(hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_nd_hosts.txt", port_count=len(ports_found))
         print(f"Found {len(ports_found)} open ports across {len(hosts_with_ports)} hosts")
   service-detection:
     name: Service Detection

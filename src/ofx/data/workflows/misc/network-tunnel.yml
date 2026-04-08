@@ -116,7 +116,7 @@ jobs:
         print(proxychains_conf)
 
         from pathlib import Path
-        out = '/tmp/ofx_tunnels.txt'
+        out = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_tunnels.txt'
         with open(out, 'w') as f:
             for name, info in tunnels.items():
                 f.write(f"=== {name} ===\n")

@@ -60,10 +60,10 @@ jobs:
             if name:
                 techs.add(name)
 
-        with open('/tmp/ofx_urlfingerprint_techs.txt', 'w') as tf:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_urlfingerprint_techs.txt', 'w') as tf:
             tf.write('\n'.join(sorted(techs)))
 
-        add_outputs(tech_list_file="/tmp/ofx_urlfingerprint_techs.txt", tech_count=len(techs))
+        add_outputs(tech_list_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_urlfingerprint_techs.txt", tech_count=len(techs))
         print(f"Detected {len(techs)} technologies")
   waf-detect:
     name: WAF Detection
@@ -87,10 +87,10 @@ jobs:
             if item.get('waf') or item.get('name'):
                 waf_names.append(item.get('waf') or item.get('name', 'unknown'))
 
-        with open('/tmp/ofx_urlfingerprint_waf.txt', 'w') as tf:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_urlfingerprint_waf.txt', 'w') as tf:
             tf.write('\n'.join(waf_names) if waf_names else 'none')
 
-        add_outputs(waf_detected_file="/tmp/ofx_urlfingerprint_waf.txt", waf_count=len(waf_names))
+        add_outputs(waf_detected_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_urlfingerprint_waf.txt", waf_count=len(waf_names))
         print(f"WAF detected: {', '.join(waf_names) if waf_names else 'None'}")
   summary:
     name: Fingerprint Summary

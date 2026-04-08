@@ -105,10 +105,10 @@ jobs:
                   subs.add(item['host'])
 
           sub_list = '\n'.join(sorted(subs))
-          with open('/tmp/ofx_ext_subs.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_ext_subs.txt', 'w') as f:
               f.write(sub_list)
 
-          add_outputs(subs_file="/tmp/ofx_ext_subs.txt", sub_count=len(subs))
+          add_outputs(subs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_ext_subs.txt", sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains")
   dns-verify:
     name: DNS Verification
@@ -138,10 +138,10 @@ jobs:
               if host:
                   alive.add(host)
 
-          with open('/tmp/ofx_ext_alive.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_ext_alive.txt', 'w') as f:
               f.write('\n'.join(sorted(alive)))
 
-          add_outputs(alive_file="/tmp/ofx_ext_alive.txt", alive_count=len(alive))
+          add_outputs(alive_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_ext_alive.txt", alive_count=len(alive))
           print(f"Verified {len(alive)} alive subdomains")
   port-scan:
     name: Port Scanning
@@ -182,9 +182,9 @@ jobs:
                       ports.add(f"{host}:{port}")
                       hosts.add(host)
 
-          open('/tmp/ofx_extrecon_ports.txt', 'w').write('\n'.join(sorted(ports)))
-          open('/tmp/ofx_extrecon_porthosts.txt', 'w').write('\n'.join(sorted(hosts)))
-          add_outputs(ports_file="/tmp/ofx_extrecon_ports.txt", port_count=len(ports), port_hosts_file="/tmp/ofx_extrecon_porthosts.txt")
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_ports.txt', 'w').write('\n'.join(sorted(ports)))
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_porthosts.txt', 'w').write('\n'.join(sorted(hosts)))
+          add_outputs(ports_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_extrecon_ports.txt", port_count=len(ports), port_hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_extrecon_porthosts.txt")
           print(f"Found {len(ports)} open ports across {len(hosts)} hosts")
   http-probe:
     name: HTTP Probing
@@ -256,8 +256,8 @@ jobs:
               if item.get('waf') or item.get('name'):
                   waf_names.append(item.get('waf') or item.get('name', 'unknown'))
 
-          open('/tmp/ofx_extrecon_waf.txt', 'w').write('\n'.join(waf_names) if waf_names else 'none')
-          add_outputs(tech_count=len(techs), waf_detected_file="/tmp/ofx_extrecon_waf.txt")
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_waf.txt', 'w').write('\n'.join(waf_names) if waf_names else 'none')
+          add_outputs(tech_count=len(techs), waf_detected_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_extrecon_waf.txt")
           print(f"Technologies: {len(techs)}, WAFs: {len(waf_names)}")
   web-crawl:
     name: Web Crawling
@@ -327,8 +327,8 @@ jobs:
               if u and u.startswith('http'):
                   urls.add(u)
 
-          open('/tmp/ofx_extrecon_crawled.txt', 'w').write('\n'.join(sorted(urls)))
-          add_outputs(crawled_file="/tmp/ofx_extrecon_crawled.txt", crawl_count=len(urls))
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_crawled.txt', 'w').write('\n'.join(sorted(urls)))
+          add_outputs(crawled_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_extrecon_crawled.txt", crawl_count=len(urls))
           print(f"Crawled {len(urls)} unique URLs")
   takeover-check:
     name: Subdomain Takeover Check
@@ -471,9 +471,9 @@ jobs:
               pass
 
           email_list = '\n'.join(sorted(emails))
-          open('/tmp/ofx_extrecon_emails.txt', 'w').write(email_list)
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_emails.txt', 'w').write(email_list)
 
-          add_outputs(email_file="/tmp/ofx_extrecon_emails.txt", email_count=len(emails))
+          add_outputs(email_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_extrecon_emails.txt", email_count=len(emails))
           print(f"Harvested {len(emails)} email addresses")
       - task: h8mail
         timeout: 15

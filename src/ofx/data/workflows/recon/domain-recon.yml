@@ -66,9 +66,9 @@ jobs:
           # Save ASN CIDRs for port scanning
           if asn_ips:
               cidrs = [ip.get('ip', '') for ip in asn_ips if ip.get('ip')]
-              with open('/tmp/ofx_domrecon_cidrs.txt', 'w') as f:
+              with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_cidrs.txt', 'w') as f:
                   f.write('\n'.join(cidrs))
-              add_outputs(cidrs_file="/tmp/ofx_domrecon_cidrs.txt")
+              add_outputs(cidrs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domrecon_cidrs.txt")
           print(f"OSINT: {len(domains)} domain records, {len(users)} emails, {len(asn_ips)} ASN CIDRs")
 
   # ── Stage 1: DNS Enumeration (parallel with OSINT) ─────────────────
@@ -79,13 +79,13 @@ jobs:
       dns_subdomain_count: '{{ steps["export-dns"].outputs.dns_subdomain_count | default("", true) }}'
     steps:
       - name: write-target
-        run: echo '{{ inputs.target }}' > /tmp/ofx_domrecon_target.txt
+        run: echo '{{ inputs.target }}' > ${OFX_RUN_DIR:-/tmp}/ofx_domrecon_target.txt
 
       - task: dnsx
         timeout: 10
         name: dns-resolve
         with:
-          target: /tmp/ofx_domrecon_target.txt
+          target: ${OFX_RUN_DIR:-/tmp}/ofx_domrecon_target.txt
           a: true
           aaaa: true
           cname: true
@@ -203,10 +203,10 @@ jobs:
               if item.get('_type') == 'subdomain':
                   subs.add(item['host'])
 
-          with open('/tmp/ofx_domrecon_subs.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_subs.txt', 'w') as f:
               f.write('\n'.join(sorted(subs)))
 
-          add_outputs(subs_file="/tmp/ofx_domrecon_subs.txt", sub_count=len(subs))
+          add_outputs(subs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domrecon_subs.txt", sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains")
 
   # ── Stage 3: DNS Verification & Resolution ─────────────────────────
@@ -260,13 +260,13 @@ jobs:
               if host and '{{ inputs.target }}' in host:
                   verified.add(host)
 
-          with open('/tmp/ofx_domrecon_verified.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_verified.txt', 'w') as f:
               f.write('\n'.join(sorted(verified)))
 
           cdn_tags = {{ tags(steps["cdn-detect"].outputs.typed_outputs) | tojson }}
           cdn_count = len([t for t in cdn_tags if t.get('category') in ('cdn', 'waf')])
 
-          add_outputs(verified_file="/tmp/ofx_domrecon_verified.txt", verified_count=len(verified), cdn_waf_count=cdn_count)
+          add_outputs(verified_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domrecon_verified.txt", verified_count=len(verified), cdn_waf_count=cdn_count)
           print(f"Verified: {len(verified)} subdomains, CDN/WAF: {cdn_count}")
 
   # ── Stage 4: HTTP Probing & Fingerprinting ─────────────────────────
@@ -319,13 +319,13 @@ jobs:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   urls.add(item['url'])
 
-          with open('/tmp/ofx_domrecon_live.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_live.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))
 
           waf_tags = {{ tags(steps["waf-detect"].outputs.typed_outputs) | tojson }}
           fav_tags = {{ tags(steps["favicon-detect"].outputs.typed_outputs) | tojson }}
 
-          add_outputs(live_file="/tmp/ofx_domrecon_live.txt", live_count=len(urls), waf_count=len(waf_tags), favicon_tech_count=len(fav_tags))
+          add_outputs(live_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domrecon_live.txt", live_count=len(urls), waf_count=len(waf_tags), favicon_tech_count=len(fav_tags))
           print(f"Live: {len(urls)} URLs, WAFs: {len(waf_tags)}, Favicon techs: {len(fav_tags)}")
 
   # ── Stage 4: SSL/TLS Audit (parallel with web-probe) ──────────────
@@ -433,12 +433,12 @@ jobs:
                       urls.add(url)
                       param_urls.add(url)
 
-          with open('/tmp/ofx_domrecon_allurls.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_allurls.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))
-          with open('/tmp/ofx_domrecon_params.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_params.txt', 'w') as f:
               f.write('\n'.join(sorted(param_urls)))
 
-          add_outputs(all_urls_file="/tmp/ofx_domrecon_allurls.txt", param_file="/tmp/ofx_domrecon_params.txt", url_count=len(urls), param_count=len(param_urls))
+          add_outputs(all_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domrecon_allurls.txt", param_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domrecon_params.txt", url_count=len(urls), param_count=len(param_urls))
           print(f"URLs: {len(urls)} total, {len(param_urls)} parameterized")
 
   # ── Stage 5: Port Scanning (parallel with URL collection) ──────────
@@ -479,10 +479,10 @@ jobs:
                   ports.add(f"{host}:{port}")
                   hosts.add(host)
 
-          with open('/tmp/ofx_domrecon_ports.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_ports.txt', 'w') as f:
               f.write('\n'.join(sorted(ports)))
 
-          add_outputs(ports_file="/tmp/ofx_domrecon_ports.txt", port_count=len(ports), host_count=len(hosts))
+          add_outputs(ports_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domrecon_ports.txt", port_count=len(ports), host_count=len(hosts))
           print(f"Ports: {len(ports)} open across {len(hosts)} hosts")
 
   # ── Stage 6: Secret & JS Analysis ──────────────────────────────────
@@ -497,14 +497,14 @@ jobs:
         run: |
           cat {{ jobs['url-collection'].outputs.all_urls_file | default('/dev/null', true) }} | grep -iE '\.js($|\?)' | head -500 | while read url; do
             curl -sSL --max-time 10 "$url" 2>/dev/null | jsluice urls 2>/dev/null
-          done | sort -u | tee /tmp/ofx_domrecon_jsurls.txt
+          done | sort -u | tee ${OFX_RUN_DIR:-/tmp}/ofx_domrecon_jsurls.txt
         continue-on-error: true
 
       - name: export-secrets
         script: |
           import os
           js_count = 0
-          js_file = '/tmp/ofx_domrecon_jsurls.txt'
+          js_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domrecon_jsurls.txt'
           if os.path.isfile(js_file):
               with open(js_file) as f:
                   js_count = sum(1 for line in f if line.strip())

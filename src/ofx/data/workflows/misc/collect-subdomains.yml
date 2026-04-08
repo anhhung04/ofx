@@ -42,7 +42,7 @@ jobs:
                         continue
                     subs.add(host)
 
-        out_path = '/tmp/ofx_collected_subs.txt'
+        out_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_collected_subs.txt'
         Path(out_path).write_text('\n'.join(sorted(subs)) + '\n')
 
         add_outputs(subs_file=out_path, subdomain_count=len(subs))

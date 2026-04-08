@@ -101,7 +101,7 @@ jobs:
                 any of them
         }
         '''
-            rules_found = '/tmp/ofx_yara_rules.yar'
+            rules_found = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_yara_rules.yar'
             Path(rules_found).write_text(basic_rules)
             print(f"  Using built-in rules (no external rules found)")
 

@@ -93,7 +93,7 @@ jobs:
             print(f"    Types: {', '.join(info['types'][:5]) or 'Unknown'}")
             print()
 
-        hash_file = '/tmp/ofx_hashes.txt'
+        hash_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_hashes.txt'
         Path(hash_file).write_text('\n'.join(hashes) + '\n')
 
         add_outputs(hash_count=len(hashes), hash_file=hash_file, identified_types=results[0]['types'][0] if results and results[0]['types'] else 'unknown', results=json.dumps(results))
@@ -125,15 +125,15 @@ jobs:
         WORDLIST="{{ inputs.wordlist }}"
         RULES="{{ inputs.rules }}"
         if command -v hashcat &>/dev/null && [ -f "$WORDLIST" ]; then
-          ARGS="-a 0 --potfile-path /tmp/ofx_hashcat.pot -o /tmp/ofx_cracked.txt"
+          ARGS="-a 0 --potfile-path ${OFX_RUN_DIR:-/tmp}/ofx_hashcat.pot -o ${OFX_RUN_DIR:-/tmp}/ofx_cracked.txt"
           if [ -n "$RULES" ] && [ -f "$RULES" ]; then
             ARGS="$ARGS -r $RULES"
           fi
           hashcat $ARGS "$HASH_FILE" "$WORDLIST" 2>/dev/null || true
           echo ""
-          if [ -f /tmp/ofx_cracked.txt ]; then
+          if [ -f ${OFX_RUN_DIR:-/tmp}/ofx_cracked.txt ]; then
             echo "=== CRACKED ==="
-            cat /tmp/ofx_cracked.txt
+            cat ${OFX_RUN_DIR:-/tmp}/ofx_cracked.txt
           fi
         else
           echo "[-] hashcat not available or wordlist missing"
@@ -160,7 +160,7 @@ jobs:
             pass
 
         # From hashcat potfile
-        pot = Path('/tmp/ofx_cracked.txt')
+        pot = Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cracked.txt')
         if pot.is_file():
             for line in pot.read_text().splitlines():
                 if line.strip():

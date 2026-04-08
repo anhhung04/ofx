@@ -129,8 +129,8 @@ jobs:
                   verified.add(h)
 
           from pathlib import Path
-          Path('/tmp/ofx_fullrecon_verified.txt').write_text('\n'.join(sorted(verified)))
-          add_outputs(verified_file="/tmp/ofx_fullrecon_verified.txt", verified_count=len(verified))
+          Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_fullrecon_verified.txt').write_text('\n'.join(sorted(verified)))
+          add_outputs(verified_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fullrecon_verified.txt", verified_count=len(verified))
           print(f"Verified {len(verified)} subdomains via DNS")
 
   http-probe:
@@ -160,10 +160,10 @@ jobs:
           live = sorted({item["url"] for item in typed
                          if item.get("_type") == "url" and item.get("status_code", 0) > 0})
 
-          Path('/tmp/ofx_fullrecon_live.txt').write_text('\n'.join(live))
+          Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_fullrecon_live.txt').write_text('\n'.join(live))
 
           add_outputs(
-              live_urls_file="/tmp/ofx_fullrecon_live.txt",
+              live_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fullrecon_live.txt",
               live_urls_json=json.dumps(live),
               live_count=len(live),
           )

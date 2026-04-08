@@ -32,7 +32,7 @@ jobs:
         domain = "{{ inputs.target }}"
         perms = domain_permutations(domain)
 
-        out_file = "/tmp/ofx_domain_perms.txt"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domain_perms.txt"
         with open(out_file, "w") as f:
             for p in perms:
                 f.write(f"{p}\n")
@@ -78,7 +78,7 @@ jobs:
             if (i + 1) % 50 == 0:
                 print(f"  ... checked {i + 1}/{len(domains)}")
 
-        out_file = "/tmp/ofx_registered_domains.txt"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_registered_domains.txt"
         with open(out_file, "w") as f:
             for entry in registered:
                 f.write(f"{entry['domain']}\t{','.join(entry['ips'])}\n")

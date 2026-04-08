@@ -45,7 +45,7 @@ jobs:
         echo "    Method: {{ inputs.method }}"
         echo ""
 
-        OUT_DIR="/tmp/ofx_bloodhound_$(date +%s)"
+        OUT_DIR=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_bloodhound_$(date +%s)"
         mkdir -p "$OUT_DIR"
 
         if command -v bloodhound-python &>/dev/null; then

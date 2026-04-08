@@ -127,8 +127,8 @@ jobs:
               if item.get('username'):
                   users.add(item['username'])
 
-          open('/tmp/ofx_adenum_smb_users.txt', 'w').write('\n'.join(sorted(users)))
-          add_outputs(smb_users_file="/tmp/ofx_adenum_smb_users.txt", smb_user_count=len(users))
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_adenum_smb_users.txt', 'w').write('\n'.join(sorted(users)))
+          add_outputs(smb_users_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_adenum_smb_users.txt", smb_user_count=len(users))
           print(f"SMB enum: {len(users)} users discovered")
   kerberos-enum:
     name: Kerberos Enumeration
@@ -182,9 +182,9 @@ jobs:
           except FileNotFoundError:
               pass
 
-          open('/tmp/ofx_adenum_kerb_users.txt', 'w').write('\n'.join(sorted(kerb_users)))
-          open('/tmp/ofx_adenum_asrep_users.txt', 'w').write('\n'.join(sorted(asrep_users)))
-          add_outputs(kerb_users_file="/tmp/ofx_adenum_kerb_users.txt", kerb_user_count=len(kerb_users), asrep_users_file="/tmp/ofx_adenum_asrep_users.txt", asrep_count=len(asrep_users))
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_adenum_kerb_users.txt', 'w').write('\n'.join(sorted(kerb_users)))
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_adenum_asrep_users.txt', 'w').write('\n'.join(sorted(asrep_users)))
+          add_outputs(kerb_users_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_adenum_kerb_users.txt", kerb_user_count=len(kerb_users), asrep_users_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_adenum_asrep_users.txt", asrep_count=len(asrep_users))
           print(f"Kerberos: {len(kerb_users)} valid users, {len(asrep_users)} AS-REP roastable")
   ldap-enum:
     name: LDAP Enumeration
@@ -224,8 +224,8 @@ jobs:
               if item.get('username'):
                   ldap_users.add(item['username'])
 
-          open('/tmp/ofx_adenum_ldap_users.txt', 'w').write('\n'.join(sorted(ldap_users)))
-          add_outputs(ldap_users_file="/tmp/ofx_adenum_ldap_users.txt", ldap_user_count=len(ldap_users))
+          open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_adenum_ldap_users.txt', 'w').write('\n'.join(sorted(ldap_users)))
+          add_outputs(ldap_users_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_adenum_ldap_users.txt", ldap_user_count=len(ldap_users))
           print(f"LDAP enum: {len(ldap_users)} users")
   summary:
     name: AD Enumeration Summary

@@ -76,7 +76,7 @@ jobs:
                     for m in mut_names[:20]:
                         print(f"  {m}")
 
-                schema_file = '/tmp/ofx_graphql_schema.json'
+                schema_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_graphql_schema.json'
                 Path(schema_file).write_text(json.dumps(data, indent=2))
 
                 add_outputs(introspection="enabled", type_count=len(user_types), schema_file=schema_file)

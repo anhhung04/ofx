@@ -47,7 +47,7 @@ jobs:
         results = client.search(dork, pages=pages)
 
         raw_list = sorted(results)
-        out_file = "/tmp/ofx_fofa_raw.json"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fofa_raw.json"
         with open(out_file, "w") as f:
             json.dump(raw_list, f, indent=2)
 
@@ -95,12 +95,12 @@ jobs:
                     pass
 
         # Save deduplicated results
-        dedup_file = "/tmp/ofx_fofa_dedup.txt"
+        dedup_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fofa_dedup.txt"
         with open(dedup_file, "w") as f:
             for url in deduped:
                 f.write(f"{url}\n")
 
-        hosts_file = "/tmp/ofx_fofa_hosts.txt"
+        hosts_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fofa_hosts.txt"
         with open(hosts_file, "w") as f:
             for h in sorted(hosts):
                 f.write(f"{h}\n")

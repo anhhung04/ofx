@@ -42,10 +42,10 @@ jobs:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   live_urls.add(item['url'])
 
-          with open('/tmp/ofx_cachepoison_live.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cachepoison_live.txt', 'w') as f:
               f.write('\n'.join(sorted(live_urls)))
 
-          add_outputs(live_file="/tmp/ofx_cachepoison_live.txt", live_count=len(live_urls))
+          add_outputs(live_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cachepoison_live.txt", live_count=len(live_urls))
           print(f"Discovered {len(live_urls)} live URLs for cache poison testing")
 
   header-fuzz:
@@ -70,7 +70,7 @@ jobs:
         run: |
           TARGETS="{{ jobs.discover.outputs.live_file | default(inputs.target, true) }}"
           HEADERS="X-Forwarded-Host X-Original-URL X-Rewrite-URL X-Forwarded-Scheme X-Forwarded-Proto X-Host X-Forwarded-Server X-HTTP-Method-Override X-Amz-Website-Redirect-Location"
-          OUTFILE="/tmp/ofx_cachepoison_ffuf.txt"
+          OUTFILE=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cachepoison_ffuf.txt"
           > "$OUTFILE"
           if [ -f "$TARGETS" ]; then
             while IFS= read -r url; do
@@ -102,7 +102,7 @@ jobs:
 
           ffuf_findings = []
           try:
-              with open('/tmp/ofx_cachepoison_ffuf.txt') as f:
+              with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cachepoison_ffuf.txt') as f:
                   for line in f:
                       line = line.strip()
                       if line:
@@ -110,7 +110,7 @@ jobs:
           except FileNotFoundError:
               pass
 
-          with open('/tmp/ofx_cachepoison_findings.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cachepoison_findings.txt', 'w') as f:
               for v in nuclei_vulns:
                   name = v.get('name', 'unknown')
                   url = v.get('url', v.get('host', ''))
@@ -121,7 +121,7 @@ jobs:
 
           total = len(nuclei_vulns) + len(ffuf_findings)
 
-          add_outputs(findings_file="/tmp/ofx_cachepoison_findings.txt", nuclei_count=len(nuclei_vulns), ffuf_count=len(ffuf_findings), total_count=total)
+          add_outputs(findings_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cachepoison_findings.txt", nuclei_count=len(nuclei_vulns), ffuf_count=len(ffuf_findings), total_count=total)
           print(f"Cache poison findings: {total} (nuclei: {len(nuclei_vulns)}, unkeyed headers: {len(ffuf_findings)})")
 
   summary:

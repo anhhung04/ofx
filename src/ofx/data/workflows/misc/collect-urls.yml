@@ -37,7 +37,7 @@ jobs:
                 continue
             urls.add(url)
 
-        out_path = '/tmp/ofx_collected_urls.txt'
+        out_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_collected_urls.txt'
         Path(out_path).write_text('\n'.join(sorted(urls)) + '\n')
 
         add_outputs(urls_file=out_path, url_count=len(urls))

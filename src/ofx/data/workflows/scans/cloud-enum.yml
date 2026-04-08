@@ -59,10 +59,10 @@ jobs:
                           names.add(candidate.lower())
 
           names_list = sorted(names)
-          with open('/tmp/ofx_cloudenum_names.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cloudenum_names.txt', 'w') as f:
               f.write('\n'.join(names_list))
 
-          add_outputs(names_file="/tmp/ofx_cloudenum_names.txt", name_count=len(names_list))
+          add_outputs(names_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cloudenum_names.txt", name_count=len(names_list))
           print(f"Generated {len(names_list)} bucket name permutations from '{target}'")
 
   scan-buckets:
@@ -106,14 +106,14 @@ jobs:
               if name:
                   buckets_found.add(name)
 
-          with open('/tmp/ofx_cloudenum_buckets.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cloudenum_buckets.txt', 'w') as f:
               for v in all_vulns:
                   name = v.get('name', 'unknown')
                   host = v.get('host', v.get('url', ''))
                   sev = v.get('severity', 'info')
                   f.write(f"[{sev}] {name} - {host}\n")
 
-          add_outputs(results_file="/tmp/ofx_cloudenum_buckets.txt", vuln_count=len(all_vulns), bucket_count=len(buckets_found), s3_vuln_count=len(s3_vulns), nuclei_vuln_count=len(nuclei_vulns))
+          add_outputs(results_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cloudenum_buckets.txt", vuln_count=len(all_vulns), bucket_count=len(buckets_found), s3_vuln_count=len(s3_vulns), nuclei_vuln_count=len(nuclei_vulns))
           print(f"Cloud enum: {len(all_vulns)} findings, {len(buckets_found)} buckets identified")
 
   summary:

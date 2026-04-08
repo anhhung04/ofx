@@ -57,14 +57,14 @@ jobs:
           exit 1
         fi
 
-        $TOOL find -u "$AUTH_ARGS" -dc-ip {{ inputs.target }} $EXTRA_ARGS -json -stdout 2>/dev/null | tee /tmp/ofx_adcs_enum.json
+        $TOOL find -u "$AUTH_ARGS" -dc-ip {{ inputs.target }} $EXTRA_ARGS -json -stdout 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_adcs_enum.json
 
         echo ""
         echo "[+] Checking for vulnerable templates..."
-        $TOOL find -u "$AUTH_ARGS" -dc-ip {{ inputs.target }} $EXTRA_ARGS -vulnerable -json -stdout 2>/dev/null | tee /tmp/ofx_adcs_vuln.json
+        $TOOL find -u "$AUTH_ARGS" -dc-ip {{ inputs.target }} $EXTRA_ARGS -vulnerable -json -stdout 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_adcs_vuln.json
 
-        echo "enum_file=/tmp/ofx_adcs_enum.json" >> {{ env.OFX_OUTPUTS }}
-        echo "vuln_file=/tmp/ofx_adcs_vuln.json" >> {{ env.OFX_OUTPUTS }}
+        echo "enum_file=${OFX_RUN_DIR:-/tmp}/ofx_adcs_enum.json" >> {{ env.OFX_OUTPUTS }}
+        echo "vuln_file=${OFX_RUN_DIR:-/tmp}/ofx_adcs_vuln.json" >> {{ env.OFX_OUTPUTS }}
       continue-on-error: true
 
   analyze:

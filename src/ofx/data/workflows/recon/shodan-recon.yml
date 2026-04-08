@@ -106,7 +106,7 @@ jobs:
         for port, count in port_counts.most_common(15):
             print(f"    :{port} -> {count} hosts")
 
-        out_file = "/tmp/ofx_shodan_services.json"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_shodan_services.json"
         with open(out_file, "w") as f:
             json.dump({"ips": sorted_ips, "ports": sorted_ports, "services": services}, f, indent=2)
 

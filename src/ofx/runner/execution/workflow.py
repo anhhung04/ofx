@@ -1,6 +1,9 @@
 """Workflow runner for parallel job execution and workflow orchestration"""
 
 import logging
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from ofx.models.workflow import Workflow
@@ -42,6 +45,10 @@ class WorkflowRunner(BaseRunner[Workflow]):
         output_path = self.ctx.output_path
         if output_path:
             output_path.mkdir(parents=True, exist_ok=True)
+
+        # Create a per-run temp directory so workflows don't collide on /tmp paths
+        self._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
+        self.ctx.envs["OFX_RUN_DIR"] = str(self._run_dir)
         self.ctx.vars["working_directory"] = self.model.defaults.run.working_directory
         self.ctx = RunnerContextBuilder(self.ctx).with_update(
             {"workflow_dir": self.model.workflow_path.parent}
@@ -125,6 +132,14 @@ class WorkflowRunner(BaseRunner[Workflow]):
         await self.reg_set_global("jobs:results", job_results)
         await self._store_summaries()
         self._log_debug(f"result: {await self.get_result()}")
+
+        # Clean up per-run temp directory
+        run_dir = getattr(self, "_run_dir", None)
+        if run_dir and run_dir.exists():
+            try:
+                shutil.rmtree(run_dir)
+            except Exception as e:
+                logger.debug("Failed to clean up run dir %s: %s", run_dir, e)
 
     async def _run_workflow(self) -> None:
         execution = WorkflowExecutionManager(self)

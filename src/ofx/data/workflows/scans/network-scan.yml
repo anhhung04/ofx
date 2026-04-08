@@ -72,9 +72,9 @@ jobs:
                     if item.get('alive', False):
                         hosts.add(item['ip'])
 
-        with open('/tmp/ofx_netscan_hosts.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_netscan_hosts.txt', 'w') as f:
             f.write('\n'.join(sorted(hosts)))
-        add_outputs(hosts_file="/tmp/ofx_netscan_hosts.txt", host_count=len(hosts))
+        add_outputs(hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_netscan_hosts.txt", host_count=len(hosts))
         print(f"Discovered {len(hosts)} live hosts")
   host-recon:
     name: Host Reconnaissance
@@ -133,7 +133,7 @@ jobs:
       run: |
         naabu -list {{ jobs['network-discovery'].outputs.hosts_file }} -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
           nerva --json 2>/dev/null | \
-          brutus --json 2>/dev/null | tee /tmp/ofx_netscan_brutus.jsonl
+          brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_netscan_brutus.jsonl
       timeout: 20
       continue-on-error: true
     - name: parse-brutus
@@ -141,7 +141,7 @@ jobs:
         import json
         creds = []
         try:
-            with open('/tmp/ofx_netscan_brutus.jsonl') as f:
+            with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_netscan_brutus.jsonl') as f:
                 for line in f:
                     line = line.strip()
                     if not line or not line.startswith('{'):

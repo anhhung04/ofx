@@ -81,7 +81,7 @@ jobs:
                     emails.add(email.lower())
 
         from pathlib import Path
-        out = '/tmp/ofx_company_emails.txt'
+        out = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_company_emails.txt'
         Path(out).write_text('\n'.join(sorted(emails)) + '\n')
 
         add_outputs(emails_file=out, email_count=len(emails))

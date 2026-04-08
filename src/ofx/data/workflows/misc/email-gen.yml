@@ -38,7 +38,7 @@ jobs:
 
         emails = email_patterns(first, last, domain)
 
-        out_file = "/tmp/ofx_email_patterns.txt"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_email_patterns.txt"
         with open(out_file, "w") as f:
             for email in emails:
                 f.write(f"{email}\n")
@@ -63,7 +63,7 @@ jobs:
         domain = "{{ inputs.domain }}"
         perms = domain_permutations(domain)
 
-        out_file = "/tmp/ofx_domain_permutations.txt"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domain_permutations.txt"
         with open(out_file, "w") as f:
             for p in perms:
                 f.write(f"{p}\n")

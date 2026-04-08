@@ -161,7 +161,7 @@ jobs:
             print(f"  ... and {len(unique) - 30} more")
 
         # Save report
-        report_file = '/tmp/ofx_vuln_report.txt'
+        report_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_vuln_report.txt'
         with open(report_file, 'w') as f:
             f.write(f"VULNERABILITY REPORT: {{ inputs.target }}\n")
             f.write(f"Total: {len(unique)} | Exploitable: {exploitable_count}\n\n")
@@ -181,7 +181,7 @@ jobs:
         else:
             vulns_dir = Path(project) / 'vulns'
             vulns_dir.mkdir(parents=True, exist_ok=True)
-            report = '/tmp/ofx_vuln_report.txt'
+            report = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_vuln_report.txt'
             if Path(report).is_file():
                 target_safe = '{{ inputs.target }}'.replace('.', '_').replace('/', '_')
                 shutil.copy2(report, vulns_dir / f'{target_safe}-vulns.txt')

@@ -153,7 +153,7 @@ jobs:
                     print(f"  Error: {e}")
 
         from pathlib import Path
-        out_file = '/tmp/ofx_service_enum.txt'
+        out_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_service_enum.txt'
         with open(out_file, 'w') as f:
             for name, output in results.items():
                 f.write(f"=== {name.upper()} ===\n{output}\n\n")
@@ -193,7 +193,7 @@ jobs:
       run: |
         naabu -host {{ inputs.target }} -p {{ jobs['port-discovery'].outputs.open_ports | default('22,21,3306,5432,6379', true) }} -silent 2>/dev/null | \
           nerva --json 2>/dev/null | \
-          brutus --json 2>/dev/null | tee /tmp/ofx_svc_brutus.jsonl
+          brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_svc_brutus.jsonl
       timeout: 15
       continue-on-error: true
     - name: parse-results
@@ -201,7 +201,7 @@ jobs:
         import json
         creds = []
         try:
-            with open('/tmp/ofx_svc_brutus.jsonl') as f:
+            with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_svc_brutus.jsonl') as f:
                 for line in f:
                     line = line.strip()
                     if not line or not line.startswith('{'):

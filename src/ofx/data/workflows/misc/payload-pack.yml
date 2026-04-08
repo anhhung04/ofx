@@ -53,7 +53,7 @@ jobs:
         data = src.read_bytes()
         print(f"[+] Read {len(data)} bytes from {input_file}")
 
-        output_dir = Path("/tmp/ofx_packed")
+        output_dir = Path(f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_packed")
         output_dir.mkdir(parents=True, exist_ok=True)
         variants = {}
 

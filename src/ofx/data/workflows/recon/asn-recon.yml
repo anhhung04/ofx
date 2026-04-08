@@ -125,7 +125,7 @@ jobs:
                 pass
 
         # Save
-        out_file = '/tmp/ofx_asn_recon.txt'
+        out_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_asn_recon.txt'
         with open(out_file, 'w') as f:
             f.write(f"ASN: AS{asn}\n")
             f.write(f"Holder: {results.get('holder', '?')}\n\n")

@@ -143,10 +143,10 @@ jobs:
           with open('/tmp/alive-subs.txt', 'w') as f:
               f.write('\n'.join(sorted(alive)))
 
-          with open('/tmp/ofx_subtakeover_dangling.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subtakeover_dangling.txt', 'w') as f:
               f.write('\n'.join(dangling))
 
-          add_outputs(alive_file="/tmp/alive-subs.txt", alive_count=len(alive), cname_count=len(cnames), dangling_count=len(dangling), dangling_file="/tmp/ofx_subtakeover_dangling.txt")
+          add_outputs(alive_file="/tmp/alive-subs.txt", alive_count=len(alive), cname_count=len(cnames), dangling_count=len(dangling), dangling_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subtakeover_dangling.txt")
           print(f"Alive: {len(alive)}, CNAMEs: {len(cnames)}, Potentially dangling: {len(dangling)}")
           for d in dangling:
               print(f"  [!] {d}")
@@ -184,10 +184,10 @@ jobs:
               takeovers.append(f"{host}: {name}")
 
           add_outputs(takeover_count=len(takeovers))
-          with open('/tmp/ofx_subtakeover_details.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subtakeover_details.txt', 'w') as f:
               f.write('\n'.join(takeovers))
 
-          add_outputs(takeover_details_file="/tmp/ofx_subtakeover_details.txt")
+          add_outputs(takeover_details_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subtakeover_details.txt")
           print(f"Confirmed takeover vulnerabilities: {len(takeovers)}")
           for t in takeovers:
               print(f"  [!] {t}")

@@ -67,9 +67,9 @@ jobs:
                     admin_hosts.add(host)
 
         from pathlib import Path
-        smb_file = '/tmp/ofx_lateral_smb.txt'
+        smb_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_smb.txt'
         Path(smb_file).write_text('\n'.join(sorted(accessible)) + '\n')
-        admin_file = '/tmp/ofx_lateral_smb_admin.txt'
+        admin_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_smb_admin.txt'
         Path(admin_file).write_text('\n'.join(sorted(admin_hosts)) + '\n')
 
         add_outputs(smb_accessible=len(accessible), smb_admin=len(admin_hosts), smb_file=smb_file, smb_admin_file=admin_file)
@@ -104,7 +104,7 @@ jobs:
                 accessible.add(host)
 
         from pathlib import Path
-        winrm_file = '/tmp/ofx_lateral_winrm.txt'
+        winrm_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_winrm.txt'
         Path(winrm_file).write_text('\n'.join(sorted(accessible)) + '\n')
 
         add_outputs(winrm_accessible=len(accessible), winrm_file=winrm_file)
@@ -138,7 +138,7 @@ jobs:
                 accessible.add(host)
 
         from pathlib import Path
-        ssh_file = '/tmp/ofx_lateral_ssh.txt'
+        ssh_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_ssh.txt'
         Path(ssh_file).write_text('\n'.join(sorted(accessible)) + '\n')
 
         add_outputs(ssh_accessible=len(accessible), ssh_file=ssh_file)
@@ -167,7 +167,7 @@ jobs:
         all_hosts = set()
         pivot_results = {}
 
-        for proto_file in ['/tmp/ofx_lateral_smb_admin.txt', '/tmp/ofx_lateral_winrm.txt', '/tmp/ofx_lateral_ssh.txt']:
+        for proto_file in [f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_smb_admin.txt', f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_winrm.txt', f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_ssh.txt']:
             try:
                 hosts = Path(proto_file).read_text().strip().splitlines()
                 all_hosts.update(h for h in hosts if h.strip())
@@ -191,7 +191,7 @@ jobs:
             except Exception as e:
                 pivot_results[host] = {'protocol': 'failed', 'error': str(e)}
 
-        pivot_file = '/tmp/ofx_lateral_pivots.txt'
+        pivot_file = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_pivots.txt'
         with open(pivot_file, 'w') as f:
             for host, info in sorted(pivot_results.items()):
                 f.write(f"{host}\t{info.get('protocol')}\t{info.get('user', '')}\t{info.get('hostname', '')}\n")
@@ -240,7 +240,7 @@ jobs:
             # Export accessible hosts
             hosts_dir = Path(project) / 'hosts'
             hosts_dir.mkdir(parents=True, exist_ok=True)
-            for f in ['/tmp/ofx_lateral_smb.txt', '/tmp/ofx_lateral_winrm.txt', '/tmp/ofx_lateral_ssh.txt']:
+            for f in [f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_smb.txt', f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_winrm.txt', f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_lateral_ssh.txt']:
                 if Path(f).is_file() and Path(f).stat().st_size > 0:
                     name = Path(f).name.replace('ofx_lateral_', 'accessible-')
                     shutil.copy2(f, hosts_dir / name)

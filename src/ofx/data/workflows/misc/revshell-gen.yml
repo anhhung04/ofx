@@ -85,7 +85,7 @@ jobs:
         print(f"  rlwrap: rlwrap nc -lvnp {lport}")
 
         from pathlib import Path
-        out = '/tmp/ofx_revshells.txt'
+        out = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_revshells.txt'
         with open(out, 'w') as f:
             for name, cmd in shells.items():
                 f.write(f"=== {name} ===\n{cmd}\n\n")

@@ -95,7 +95,7 @@ jobs:
           print(f'      extensions={{"sni_hostname": "{front_domain}"}})')
 
           # Save sample headers
-          out_file = "/tmp/ofx_blend_headers.json"
+          out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_blend_headers.json"
           with open(out_file, "w") as f:
               json.dump({
                   "blend_headers": all_headers,

@@ -48,10 +48,10 @@ jobs:
             elif t == 'vulnerability':
                 weak_ciphers.append(item.get('name', 'unknown'))
 
-        with open('/tmp/ofx_sslaudit_protocols.txt', 'w') as tf:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_sslaudit_protocols.txt', 'w') as tf:
             tf.write('\n'.join(weak_protocols) if weak_protocols else 'none')
 
-        add_outputs(weak_protocols_file="/tmp/ofx_sslaudit_protocols.txt", weak_protocol_count=len(weak_protocols), weak_cipher_count=len(weak_ciphers))
+        add_outputs(weak_protocols_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_sslaudit_protocols.txt", weak_protocol_count=len(weak_protocols), weak_cipher_count=len(weak_ciphers))
         print(f"Weak protocols: {len(weak_protocols)}")
         print(f"Weak ciphers: {len(weak_ciphers)}")
   testssl-check:

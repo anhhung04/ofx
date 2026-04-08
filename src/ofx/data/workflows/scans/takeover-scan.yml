@@ -50,9 +50,9 @@ jobs:
             if host and '{{ inputs.target }}' in host:
                 subs.add(host)
 
-        with open('/tmp/ofx_takeover_subs.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_takeover_subs.txt', 'w') as f:
             f.write('\n'.join(sorted(subs)))
-        add_outputs(subs_file="/tmp/ofx_takeover_subs.txt", sub_count=len(subs))
+        add_outputs(subs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_takeover_subs.txt", sub_count=len(subs))
         print(f"Collected {len(subs)} unique subdomains")
   dns-verify:
     name: DNS Resolution & CNAME Check
@@ -86,9 +86,9 @@ jobs:
             if host and cname:
                 cname_records[host] = cname
 
-        with open('/tmp/ofx_takeover_alive.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_takeover_alive.txt', 'w') as f:
             f.write('\n'.join(sorted(alive)))
-        add_outputs(alive_file="/tmp/ofx_takeover_alive.txt", alive_count=len(alive), cname_count=len(cname_records))
+        add_outputs(alive_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_takeover_alive.txt", alive_count=len(alive), cname_count=len(cname_records))
         print(f"Alive: {len(alive)}, CNAME records: {len(cname_records)}")
   takeover-check:
     name: Takeover Detection
@@ -133,9 +133,9 @@ jobs:
             host = v.get('host', v.get('matched_at', ''))
             takeovers.append(f"[nuclei] {name}: {host}")
 
-        with open('/tmp/ofx_takeover_findings.txt', 'w') as f:
+        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_takeover_findings.txt', 'w') as f:
             f.write('\n'.join(takeovers))
-        add_outputs(takeover_count=len(takeovers), takeover_findings_file="/tmp/ofx_takeover_findings.txt")
+        add_outputs(takeover_count=len(takeovers), takeover_findings_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_takeover_findings.txt")
         print(f"Takeover vulnerabilities: {len(takeovers)}")
         for t in takeovers:
             print(f"  [!] {t}")
