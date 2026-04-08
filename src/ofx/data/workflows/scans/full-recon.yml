@@ -68,23 +68,27 @@ jobs:
                   subs.add(host)
 
           from pathlib import Path
-          Path('/tmp/subs.txt').write_text('\n'.join(sorted(subs)))
-          add_outputs(subs_file="/tmp/subs.txt", sub_count=len(subs))
+          import os
+          subs_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_fullrecon_subs.txt'
+          Path(subs_path).write_text('\n'.join(sorted(subs)))
+          add_outputs(subs_file=subs_path, sub_count=len(subs))
           print(f"Collected {len(subs)} unique subdomains")
       # Recursive pass: run subfinder again on the entire subs list
       - task: subfinder
         timeout: "{{ (steps['collect-subdomains'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: recursive-subfinder
         with:
-          target: "/tmp/subs.txt"
+          target: "{{ steps['collect-subdomains'].outputs.subs_file }}"
           all: true
         continue-on-error: true
       - name: merge-recursive
         script: |
           from pathlib import Path
+          import os
 
           base = '{{ inputs.target }}'
-          initial = {l.strip() for l in Path('/tmp/subs.txt').read_text().splitlines() if l.strip()}
+          subs_path = '{{ steps["collect-subdomains"].outputs.subs_file }}'
+          initial = {l.strip() for l in Path(subs_path).read_text().splitlines() if l.strip()}
 
           new_subs = set()
           for item in {{ steps["recursive-subfinder"].outputs.typed_outputs | default([], true) | tojson }}:
@@ -94,8 +98,8 @@ jobs:
                       new_subs.add(h)
 
           all_subs = initial | new_subs
-          Path('/tmp/subs.txt').write_text('\n'.join(sorted(all_subs)))
-          add_outputs(subs_file="/tmp/subs.txt", sub_count=len(all_subs))
+          Path(subs_path).write_text('\n'.join(sorted(all_subs)))
+          add_outputs(subs_file=subs_path, sub_count=len(all_subs))
           if new_subs:
               print(f"Recursive: {len(initial)} initial + {len(new_subs)} new = {len(all_subs)} total")
               for s in sorted(new_subs)[:20]:

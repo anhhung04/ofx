@@ -78,9 +78,9 @@ jobs:
         if aggressive:
             print("    Mode: AGGRESSIVE (includes wtmp/btmp/lastlog)")
 
-        out_file = ff"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cleanup_{target_os}.sh"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cleanup_{target_os}.sh"
         ext = ".ps1" if target_os == "windows" else ".sh"
-        out_file = ff"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cleanup_{target_os}{ext}"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cleanup_{target_os}{ext}"
 
         with open(out_file, "w") as f:
             if target_os == "linux":
@@ -121,7 +121,7 @@ jobs:
         else:
             print("[*] No files specified for timestomping, skipping")
 
-        out_file = ff"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_timestomp_{target_os}.sh"
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_timestomp_{target_os}.sh"
         with open(out_file, "w") as f:
             f.write("#!/bin/bash\n" if target_os == "linux" else "")
             f.write("# OFX Timestomp Commands\n\n")

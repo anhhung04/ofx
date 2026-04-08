@@ -102,7 +102,7 @@ jobs:
                       print("    Windows methods: schtask, service, registry, all")
                       raise SystemExit(1)
 
-                  out_file = ff"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_persistence_{target_os}.sh"
+                  out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_persistence_{target_os}.sh"
                   with open(out_file, "w") as f:
                       if target_os == "linux":
                           f.write("#!/bin/bash\n")

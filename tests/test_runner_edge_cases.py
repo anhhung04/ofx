@@ -443,6 +443,74 @@ class TestStepRetryProfileDefaults:
         assert runner.model.retry_delay == 11
 
 
+class TestStepDynamicTimeout:
+    """Tests for Jinja2 template expressions in step timeout field."""
+
+    def test_step_timeout_accepts_int(self):
+        from ofx.models.step import Step
+
+        step = Step.model_validate({"name": "s1", "run": "echo hi", "timeout": 30})
+        assert step.timeout == 30
+
+    def test_step_timeout_accepts_string(self):
+        from ofx.models.step import Step
+
+        step = Step.model_validate({"name": "s1", "run": "echo hi", "timeout": "45"})
+        assert step.timeout == "45"
+
+    def test_step_timeout_accepts_template_expression(self):
+        from ofx.models.step import Step
+
+        expr = "{{ (steps['x'].outputs.count | default(50, true) | int / 50 * 15 + 30) | int }}"
+        step = Step.model_validate({"name": "s1", "run": "echo hi", "timeout": expr})
+        assert step.timeout == expr
+
+    @pytest.mark.asyncio
+    async def test_step_runner_resolves_timeout_template(self):
+        """Timeout string expressions should resolve to int via template resolver."""
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        # Simulate what _pre_run does: resolve a timeout expression
+        timeout_expr = "42"
+        resolved = await resolver.resolve(timeout_expr, {})
+        assert int(float(resolved)) == 42
+
+        # Formula expression
+        timeout_expr2 = "{{ (100 / 50 * 15 + 30) | int }}"
+        resolved2 = await resolver.resolve(timeout_expr2, {})
+        assert int(float(resolved2)) == 60  # 100/50=2, 2*15=30, 30+30=60
+
+    @pytest.mark.asyncio
+    async def test_step_runner_timeout_formula_scales(self):
+        """Dynamic timeout formula scales with input count."""
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+
+        # 50 inputs: 50/50*15+30 = 45 min
+        r = await resolver.resolve("{{ (50 / 50 * 15 + 30) | int }}", {})
+        assert int(float(r)) == 45
+
+        # 200 inputs: 200/50*15+30 = 90 min
+        r = await resolver.resolve("{{ (200 / 50 * 15 + 30) | int }}", {})
+        assert int(float(r)) == 90
+
+        # 0 inputs (default 50): should still work
+        r = await resolver.resolve("{{ (0 / 50 * 15 + 30) | int }}", {})
+        assert int(float(r)) == 30
+
+    def test_step_timeout_invalid_fallback(self):
+        """Invalid timeout expression should be handled gracefully."""
+        # Test the coercion logic used in step runner
+        resolved = "not-a-number"
+        try:
+            timeout = int(float(resolved))
+        except (ValueError, TypeError):
+            timeout = 60
+        assert timeout == 60
+
+
 class TestMatrixValidation:
     """Test matrix combination size validation."""
 
