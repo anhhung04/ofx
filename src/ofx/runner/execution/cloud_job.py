@@ -106,7 +106,10 @@ class CloudJobRunner(BaseRunner[Job]):
 
             cfg = parse_cloud_field(cfg)
         if cfg is None:
-            raise RuntimeError("Cloud config is required for CloudJobRunner")
+            raise RuntimeError(
+                f"Cloud config is required for job '{self.model.jid}'. "
+                "Set 'cloud:' on the job or use a cloud profile."
+            )
 
         mgr = get_cloud_profile_manager()
         resolved = mgr.resolve(cfg)
@@ -204,7 +207,11 @@ class CloudJobRunner(BaseRunner[Job]):
                 self._instance = refreshed
 
         if not self._instance or not self._instance.ip:
-            raise RuntimeError("Instance has no IP address")
+            iid = self._instance.instance_id if self._instance else "none"
+            raise RuntimeError(
+                f"Instance has no IP address (provider={cfg.provider}, "
+                f"instance_id={iid}, job={self.model.jid})"
+            )
 
         is_windows = cfg.connection_type == "winrm"
         self._log_info(
@@ -263,7 +270,9 @@ class CloudJobRunner(BaseRunner[Job]):
         from ofx.cloud.runtime import create_remote_runner
 
         if not self._instance:
-            raise RuntimeError("Cannot create remote runner without instance info")
+            raise RuntimeError(
+                f"Cannot create remote runner: no instance provisioned for job '{self.model.jid}'"
+            )
         ip = self._instance.ip
         is_log_commands = cfg.log_commands or False
         log_path = None

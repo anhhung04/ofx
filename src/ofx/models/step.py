@@ -108,7 +108,12 @@ class Step(OFXBaseModel):
 
     @model_validator(mode="after")
     def check_run_type(self):
-        """Ensure that exactly one of 'run', 'script', 'uses', 'script_file', or 'task' is defined."""
+        """Validate step configuration.
+
+        - Exactly one of 'run', 'script', 'uses', 'script_file', or 'task'.
+        - timeout must be positive (when numeric).
+        - retry/retry_delay must be non-negative.
+        """
         defined_fields = sum(
             1
             for field in ["run", "script", "uses", "script_file", "task"]
@@ -117,6 +122,19 @@ class Step(OFXBaseModel):
         if defined_fields != 1:
             raise ValueError(
                 f"Step '{self.name}' must have exactly one of 'run', 'script', 'script_file', 'uses', or 'task' defined."
+            )
+
+        if isinstance(self.timeout, int) and self.timeout <= 0:
+            raise ValueError(
+                f"Step '{self.name}' timeout must be positive, got {self.timeout}"
+            )
+        if self.retry < 0:
+            raise ValueError(
+                f"Step '{self.name}' retry must be non-negative, got {self.retry}"
+            )
+        if self.retry_delay < 0:
+            raise ValueError(
+                f"Step '{self.name}' retry_delay must be non-negative, got {self.retry_delay}"
             )
         return self
 
