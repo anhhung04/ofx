@@ -225,7 +225,7 @@ jobs:
       continue-on-error: true
     - name: hakrawler-crawl
       run: |
-        echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | hakrawler -d 2 2>/dev/null | tee /tmp/hakrawler-urls.txt
+        echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | hakrawler -d 2 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_hakrawler_urls.txt
       continue-on-error: true
     - task: gau
       timeout: 10
@@ -248,7 +248,7 @@ jobs:
 
         # From hakrawler
         try:
-            with open('/tmp/hakrawler-urls.txt') as f:
+            with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_hakrawler_urls.txt') as f:
                 for line in f:
                     url = line.strip()
                     if url and url.startswith('http'):
@@ -279,7 +279,7 @@ jobs:
     - name: arjun-discover
       run: |
         echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | head -20 | while read url; do
-          arjun -u "$url" --output /tmp/arjun-params.json 2>/dev/null || true
+          arjun -u "$url" --output ${OFX_RUN_DIR:-/tmp}/ofx_arjun_params.json 2>/dev/null || true
         done
       continue-on-error: true
     - name: collect-params
@@ -296,7 +296,7 @@ jobs:
                 param_urls.add(url)
 
         try:
-            with open('/tmp/arjun-params.json') as f:
+            with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_arjun_params.json') as f:
                 data = json.load(f)
             for url, url_params in data.items():
                 for p in url_params:
@@ -337,7 +337,7 @@ jobs:
       continue-on-error: true
     - name: crlfuzz-scan
       run: |
-        echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | crlfuzz 2>/dev/null | tee /tmp/crlfuzz-output.txt
+        echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | crlfuzz 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_crlfuzz_output.txt
       continue-on-error: true
     - name: collect-vulns
       script: |
@@ -352,7 +352,7 @@ jobs:
 
         crlf_count = 0
         try:
-            with open('/tmp/crlfuzz-output.txt') as f:
+            with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_crlfuzz_output.txt') as f:
                 for line in f:
                     if line.strip():
                         crlf_count += 1

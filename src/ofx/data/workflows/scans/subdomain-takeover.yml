@@ -70,10 +70,10 @@ jobs:
                       if match and '{{ inputs.target }}' in match.group(1):
                           subs.add(match.group(1))
 
-          with open('/tmp/all-subs.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_all_subs.txt', 'w') as f:
               f.write('\n'.join(sorted(subs)))
 
-          add_outputs(subs_file="/tmp/all-subs.txt", sub_count=len(subs))
+          add_outputs(subs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_all_subs.txt", sub_count=len(subs))
           print(f"Enumerated {len(subs)} unique subdomains from 5 sources")
   dns-verify:
     name: DNS Verification & CNAME Check
@@ -140,13 +140,13 @@ jobs:
                       dangling.append(f"{name} -> {target}")
                       break
 
-          with open('/tmp/alive-subs.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_alive_subs.txt', 'w') as f:
               f.write('\n'.join(sorted(alive)))
 
           with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subtakeover_dangling.txt', 'w') as f:
               f.write('\n'.join(dangling))
 
-          add_outputs(alive_file="/tmp/alive-subs.txt", alive_count=len(alive), cname_count=len(cnames), dangling_count=len(dangling), dangling_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subtakeover_dangling.txt")
+          add_outputs(alive_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_alive_subs.txt", alive_count=len(alive), cname_count=len(cnames), dangling_count=len(dangling), dangling_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subtakeover_dangling.txt")
           print(f"Alive: {len(alive)}, CNAMEs: {len(cnames)}, Potentially dangling: {len(dangling)}")
           for d in dangling:
               print(f"  [!] {d}")
@@ -162,7 +162,7 @@ jobs:
         name: subzy-check
         timeout: 5
         with:
-          target: /tmp/alive-subs.txt
+          target: ${OFX_RUN_DIR:-/tmp}/ofx_alive_subs.txt
           concurrency: 20
         continue-on-error: true
       - task: nuclei

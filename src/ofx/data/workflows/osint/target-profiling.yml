@@ -89,7 +89,7 @@ jobs:
           emails.update(found)
 
           email_list = '\n'.join(sorted(emails))
-          with open('/tmp/harvested-emails.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_harvested_emails.txt', 'w') as f:
               f.write(email_list)
 
           add_outputs(emails=email_list, email_count=len(emails))

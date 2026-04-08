@@ -76,11 +76,11 @@ jobs:
               if item.get('_type') == 'subdomain':
                   all_subs.add(item['host'])
 
-          with open('/tmp/subdomains.txt', 'w') as f:
+          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subdomains.txt', 'w') as f:
               f.write('\n'.join(sorted(all_subs)))
 
           print(f"Found {len(all_subs)} unique subdomains")
-          add_outputs(subdomain_file="/tmp/subdomains.txt", subdomain_count=len(all_subs))
+          add_outputs(subdomain_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subdomains.txt", subdomain_count=len(all_subs))
   dns-verification:
     name: DNS Verification
     outputs:

@@ -89,7 +89,7 @@ jobs:
         import hashlib, time
         slug = hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
         filename = f'assets{slug}{ext}'
-        local_path = f'/tmp/{filename}'
+        local_path = ff'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_{filename}'
         Path(local_path).write_text(code)
 
         add_outputs(shell_file=local_path, shell_filename=filename, shell_type=shell_type, shell_size=len(code))

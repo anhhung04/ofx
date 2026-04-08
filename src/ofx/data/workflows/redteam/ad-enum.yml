@@ -156,7 +156,7 @@ jobs:
           protocol: ldap
           username: "{{ inputs.username if inputs.username else '\"\"' }}"
           password: "{{ inputs.password if inputs.password else '\"\"' }}"
-          asreproast: /tmp/asrep-hashes.txt
+          asreproast: ${OFX_RUN_DIR:-/tmp}/ofx_asrep_hashes.txt
         continue-on-error: true
       - name: collect-kerberos
         script: |
@@ -173,7 +173,7 @@ jobs:
 
           # Parse AS-REP roastable users
           try:
-              with open('/tmp/asrep-hashes.txt') as f:
+              with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_asrep_hashes.txt') as f:
                   for line in f:
                       if line.startswith('$krb5asrep$'):
                           match = re.search(r'\$krb5asrep\$23?\$(.+?)@', line)

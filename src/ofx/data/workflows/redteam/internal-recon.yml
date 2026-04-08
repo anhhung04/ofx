@@ -187,14 +187,14 @@ jobs:
       run: |
         cat {{ jobs['service-detect'].outputs.http_urls_file | default('', true) }} 2>/dev/null | head -50 | while read url; do
           whatweb -a 3 "$url" --color=never 2>/dev/null
-        done | tee /tmp/whatweb-output.txt
+        done | tee ${OFX_RUN_DIR:-/tmp}/ofx_whatweb_output.txt
       continue-on-error: true
     - task: gowitness
       timeout: 10
       name: gowitness-screenshots
       with:
         target: "{{ jobs['service-detect'].outputs.http_urls_file | default('', true) }}"
-        screenshot_path: /tmp/gowitness-shots
+        screenshot_path: ${OFX_RUN_DIR:-/tmp}/ofx_gowitness_shots
       continue-on-error: true
     - name: collect-web
       script: |
@@ -202,7 +202,7 @@ jobs:
 
         techs = set()
         try:
-            with open('/tmp/whatweb-output.txt') as f:
+            with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_whatweb_output.txt') as f:
                 content = f.read()
             matches = re.findall(r'\[([^\]]+)\]', content)
             for m in matches:
