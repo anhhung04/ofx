@@ -3,11 +3,92 @@
 Registered as a sub-app under ``ofx flow tasks``.
 """
 
+import asyncio
 from typing import Annotated
 
 import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
+
+
+@app.command("run")
+def run_task(
+    task_name: Annotated[
+        str, typer.Argument(help="Name of the registered task to run (e.g. nmap, httpx, nuclei)")
+    ],
+    target: Annotated[
+        str, typer.Argument(help="Target for the task (IP, domain, URL, or file path)")
+    ],
+    opt: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--opt",
+            "-o",
+            help="Task option as key=value or key (boolean flag). Repeatable.",
+        ),
+    ] = None,
+    profile: Annotated[
+        str,
+        typer.Option(
+            "--profile",
+            help="Execution profile name (applies proxy, threads, rate_limit, etc.).",
+        ),
+    ] = "",
+    timeout: Annotated[
+        int,
+        typer.Option(
+            "--timeout",
+            help="Timeout in minutes.",
+        ),
+    ] = 60,
+    output: Annotated[
+        str,
+        typer.Option(
+            "--output",
+            help="Directory to store output files.",
+        ),
+    ] = "",
+    store_creds: Annotated[
+        bool,
+        typer.Option(
+            "--store-creds",
+            help="Store discovered credentials in the credential store.",
+        ),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Output results as JSON.",
+        ),
+    ] = False,
+):
+    """Run a single task directly without a workflow YAML.
+
+    \b
+    Examples:
+      ofx flow tasks run nmap 10.10.10.5 --opt timing=T4
+      ofx flow tasks run httpx targets.txt --opt threads=50
+      ofx flow tasks run nuclei https://example.com --profile stealth
+      ofx flow tasks run subfinder example.com --json
+    """
+    from ofx.commands.flow.run_task import TaskRunHandler, parse_opt_args
+
+    opts = parse_opt_args(opt or [])
+    exit_code = asyncio.run(
+        TaskRunHandler(
+            task_name=task_name,
+            target=target,
+            opts=opts,
+            profile=profile,
+            timeout=timeout,
+            output=output,
+            store_creds=store_creds,
+            json_output=json_output,
+        ).run()
+    )
+    if exit_code:
+        raise typer.Exit(exit_code)
 
 @app.command("list")
 def list_tasks(

@@ -208,15 +208,55 @@ class TaskRunner(BaseRunner[TaskExecution]):
     # ── Profile integration ────────────────────────────────────────
 
     def _apply_profile_task_options(self) -> None:
-        """Merge profile task_options into the execution opts.
+        """Merge profile settings into the execution opts.
 
-        Profile options are applied as defaults — explicit user options
-        from the workflow ``with:`` block always take precedence.
+        Two layers of injection (both use user opts as highest priority):
+
+        1. **Common metadata** — profile-level ``proxy``, ``threads``,
+           ``rate_limit``, ``delay``, and ``user_agent`` are auto-mapped to
+           matching task opt names when the task declares a compatible opt.
+        2. **Per-task overrides** — ``profile.task_options[task_name]`` dict
+           provides task-specific defaults.
         """
         profile = self.ctx.vars.get("profile")
         if not profile:
             return
 
+        # Layer 1: auto-map common profile fields to task opt names
+        if self._task is not None:
+            task_opts = self._task.opts  # declared opts for this tool
+
+            _COMMON_MAPPING: list[tuple[str, list[str]]] = [
+                ("proxy", ["proxy", "proxy_url", "http_proxy"]),
+                ("threads", ["threads", "concurrency", "workers"]),
+                ("rate_limit", ["rate_limit", "rate"]),
+                ("delay", ["delay"]),
+                ("user_agent", ["user_agent"]),
+            ]
+
+            injected: list[str] = []
+            for profile_attr, candidate_names in _COMMON_MAPPING:
+                value = getattr(profile, profile_attr, None)
+                if value is None:
+                    continue
+                # Skip zero/empty values
+                if isinstance(value, (int, float)) and value == 0:
+                    continue
+                if isinstance(value, str) and not value:
+                    continue
+
+                for opt_name in candidate_names:
+                    if opt_name in task_opts and opt_name not in self.model.opts:
+                        self.model.opts[opt_name] = value
+                        injected.append(f"{opt_name}={value}")
+                        break  # first matching opt wins
+
+            if injected:
+                self._log_debug(
+                    f"Injected profile common opts: {', '.join(injected)}"
+                )
+
+        # Layer 2: per-task overrides from profile.task_options
         task_options = getattr(profile, "task_options", None) or {}
         overrides = task_options.get(self.model.task_name, {})
         if not overrides:
