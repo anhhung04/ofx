@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import itertools
 import logging
 from dataclasses import dataclass, field
 
@@ -178,32 +177,13 @@ class WorkflowExecutionManager:
         return failed_jobs
 
     def _matrix_combo_count(self, runner) -> int:
+        from ofx.runner.core.matrix_utils import estimate_matrix_count
+
         strategy = runner.model.strategy
         if not strategy or not strategy.matrix:
             return 1
-        matrix_keys = list(strategy.matrix.keys())
-        matrix_values = [strategy.matrix[key] for key in matrix_keys]
-        base_combos = [
-            dict(zip(matrix_keys, combination, strict=True))
-            for combination in itertools.product(*matrix_values)
-        ]
-
-        def _matches_matrix_filter(
-            combo: dict, filters: list[dict[str, object]]
-        ) -> bool:
-            for filter_dict in filters:
-                if all(combo.get(key) == value for key, value in filter_dict.items()):
-                    return True
-            return False
-
-        if strategy.exclude:
-            base_combos = [
-                combo
-                for combo in base_combos
-                if not _matches_matrix_filter(combo, strategy.exclude)
-            ]
-        if strategy.include:
-            for include_combo in strategy.include:
-                if include_combo not in base_combos:
-                    base_combos.append(include_combo)
-        return max(len(base_combos), 1)
+        return estimate_matrix_count(
+            strategy.matrix,
+            include=strategy.include,
+            exclude=strategy.exclude,
+        )

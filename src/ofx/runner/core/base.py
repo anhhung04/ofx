@@ -350,6 +350,25 @@ class BaseRunner[TModel: BaseModel]:
         """Post-run - must be implemented by subclasses"""
         raise NotImplementedError("Subclasses should implement _post_run method.")
 
+    async def _resolve_job_outputs(self) -> dict[str, Any]:
+        """Resolve template expressions in ``model.outputs``.
+
+        Used by both ``JobRunner`` and ``CloudJobRunner`` post-run to
+        expand Jinja2 expressions in declared job outputs.  Returns
+        the resolved dict (empty if the model has no outputs).
+        """
+        outputs = getattr(self.model, "outputs", None)
+        if not outputs:
+            return {}
+        resolved: dict[str, Any] = {}
+        for key, value in outputs.items():
+            try:
+                resolved[key] = await self._resolve_template(value)
+            except Exception as e:
+                self._log_warning(f"Failed to resolve output '{key}': {e}")
+                resolved[key] = ""
+        return resolved
+
     @property
     def _template_resolver(self) -> TemplateResolver:
         """Lazily import and cache the TemplateResolver.

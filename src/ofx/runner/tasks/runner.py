@@ -457,44 +457,11 @@ class TaskRunner(BaseRunner[TaskExecution]):
         Returns the number of credentials successfully stored.
         Gracefully handles missing pykeepass or DB file.
         """
-        from ofx.tasks.output_types import UserAccount
+        from ofx.runner.core.credential_store import store_from_typed_outputs
 
-        accounts = [o for o in typed_outputs if isinstance(o, UserAccount)]
-        if not accounts:
-            return 0
-
-        try:
-            from ofx.api.creds.exegol_history import ExegolHistoryDB
-
-            db = ExegolHistoryDB()
-        except (ImportError, FileNotFoundError) as e:
-            self._log_debug(f"Credential store unavailable: {e}")
-            return 0
-
-        stored = 0
-        for account in accounts:
-            if not account.username:
-                continue
-            try:
-                cred = account.to_credential()
-                # Skip if an identical credential already exists
-                existing = db.get_credential(cred.username)
-                if existing and existing.password == cred.password and existing.hash == cred.hash and existing.domain == cred.domain:
-                    self._log_debug(
-                        f"Credential already exists: {cred.username}"
-                    )
-                    continue
-                db.add_credential(
-                    username=cred.username,
-                    password=cred.password,
-                    hash_value=cred.hash,
-                    domain=cred.domain,
-                    comment=cred.comment,
-                )
-                stored += 1
-            except Exception as e:
-                self._log_debug(f"Failed to store credential for {account.username}: {e}")
-        return stored
+        return store_from_typed_outputs(
+            typed_outputs, log_fn=self._log_debug
+        )
 
 
 def _extract_item_target(item: dict[str, Any]) -> str:

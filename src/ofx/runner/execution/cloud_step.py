@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import os
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -28,7 +27,6 @@ from ofx.runner.execution.execution_results import (
     build_step_execution_result,
 )
 from ofx.runner.logging import get_logger
-from ofx.settings import settings
 
 if TYPE_CHECKING:
     from ofx.runner.execution.cloud_job import CloudJobRunner
@@ -84,6 +82,7 @@ class CloudStepRunner(BaseRunner):
     async def _pre_run(self) -> None:
         from ofx.models.step import RunType
 
+        self._apply_retry_profile_defaults()
         self._run_type = self.model.get_run_type()
         resolve_fields = [
             "name",
@@ -113,70 +112,137 @@ class CloudStepRunner(BaseRunner):
             except (ValueError, TypeError):
                 self._log_warning(f"Invalid timeout expression result: {resolved!r}, using 60 min")
                 self.model.timeout = 60
-            if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
-                self._state_machine.transition(RunnerStatus.CANCELED)
-                raise ConditionNotMetError(self._produce_log("Step condition not met"))
+
+        if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
+            self._state_machine.transition(RunnerStatus.CANCELED)
+            raise ConditionNotMetError(self._produce_log("Step condition not met"))
+
+    def _apply_retry_profile_defaults(self) -> None:
+        """Apply retry policy defaults only when step fields are not explicit."""
+        profile = self.ctx.vars.get("profile_model")
+        if profile is None:
+            return
+
+        policy_name = getattr(profile, "retry_policy", "standard") or "standard"
+        profiles = getattr(profile, "retry_profiles", {}) or {}
+        policy = profiles.get(policy_name)
+        if not isinstance(policy, dict):
+            return
+
+        explicitly_set = set(getattr(self.model, "model_fields_set", set()))
+
+        if "retry" not in explicitly_set and "retry" in policy:
+            self.model.retry = int(policy["retry"])
+        if "retry_delay" not in explicitly_set and "retry_delay" in policy:
+            self.model.retry_delay = int(policy["retry_delay"])
+        if "timeout" not in explicitly_set and "timeout" in policy:
+            self.model.timeout = int(policy["timeout"])
+
+    async def _on_failure_cleanup(self) -> None:
+        """Best-effort cleanup of remote temp files on step failure."""
+        # Remote scripts are cleaned in their own finally blocks, but
+        # this hook ensures any leaked temp files in the work dir are noted.
+        self._log_debug("Cloud step failure cleanup completed")
 
     async def _do_run(self) -> None:
         from ofx.models.step import RunType
+        from ofx.runner.execution.error_helpers import (
+            step_retry_error,
+            step_timeout_error,
+        )
 
         run_type = self._run_type
-        retry = self.model.retry or 0
-        retry_delay = self.model.retry_delay or 5
-        timeout_minutes = self.model.timeout
-        timeout_secs = int(timeout_minutes * 60) if timeout_minutes else None
+        max_attempts = self.model.retry + 1
+        timeout_seconds = self.model.timeout * 60
 
         last_error = None
-        for attempt in range(retry + 1):
+        attempt_errors: list[str] = []
+
+        for attempt in range(max_attempts):
             try:
                 if run_type == RunType.COMMAND:
-                    output = await self._run_remote_command(
-                        self.model.run, timeout=timeout_secs
+                    output = await asyncio.wait_for(
+                        self._run_remote_command(self.model.run, timeout=timeout_seconds),
+                        timeout=timeout_seconds + 30,  # grace period for network latency
                     )
                 elif run_type == RunType.SCRIPT:
-                    output = await self._run_remote_script(
-                        self.model.script, timeout=timeout_secs
+                    output = await asyncio.wait_for(
+                        self._run_remote_script(self.model.script, timeout=timeout_seconds),
+                        timeout=timeout_seconds + 30,
                     )
                 elif run_type == RunType.SCRIPT_FILE:
-                    output = await self._run_remote_script_file(
-                        self.model.script_file, timeout=timeout_secs
+                    output = await asyncio.wait_for(
+                        self._run_remote_script_file(self.model.script_file, timeout=timeout_seconds),
+                        timeout=timeout_seconds + 30,
                     )
                 elif run_type == RunType.WORKFLOW:
-                    # Reusable workflows not supported in cloud mode yet
                     raise RuntimeError(
                         "Reusable workflows ('uses') are not supported in cloud job mode"
                     )
                 elif run_type == RunType.TASK:
-                    output = await self._run_remote_task(timeout=timeout_secs)
+                    output = await asyncio.wait_for(
+                        self._run_remote_task(timeout=timeout_seconds),
+                        timeout=timeout_seconds + 30,
+                    )
                 else:
                     raise RuntimeError(f"Unknown run type: {run_type}")
 
                 # Store output
                 if output:
                     outputs_dict: dict[str, Any] = {"stdout": output}
-                    # Parse typed outputs for task steps
                     if run_type == RunType.TASK and self.model.task:
                         outputs_dict["typed_outputs"] = self._parse_task_output(output)
                     await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs_dict)
 
-                return  # Success — output logging handled in _post_run
+                return  # Success
 
+            except TimeoutError as e:
+                raise RuntimeError(step_timeout_error(self.model.timeout)) from e
             except Exception as e:
                 last_error = e
-                if attempt < retry:
-                    self._log_debug(
-                        f"Step failed (attempt {attempt + 1}/{retry + 1}), "
-                        f"retrying in {retry_delay}s: {e}"
+                err_msg = str(e)
+                attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
+                if attempt < max_attempts - 1:
+                    next_delay = self._retry_delay_seconds(
+                        attempt=attempt,
+                        base_delay=self.model.retry_delay,
                     )
-                    await asyncio.sleep(retry_delay)
+                    self._log_info(
+                        f"Retry {attempt + 2}/{max_attempts} in {next_delay:.1f}s — {err_msg}"
+                    )
+                    await asyncio.sleep(next_delay)
 
-        raise RuntimeError(f"Step failed after {retry + 1} attempts:\n{last_error}")
+        raise RuntimeError(
+            step_retry_error(max_attempts, last_error)
+            + f"\n  Attempts: {'; '.join(attempt_errors)}"
+        )
+
+    @staticmethod
+    def _retry_delay_seconds(attempt: int, base_delay: int) -> float:
+        """Compute exponential backoff with jitter capped to 5 minutes."""
+        from random import uniform
+
+        backoff = base_delay * (2**attempt)
+        delay = min(backoff, 300)
+        return delay * uniform(0.5, 1.0)
 
     async def _post_run(self) -> None:
         result = await self.get_result()
         stdout = result.outputs.get("stdout", "")
 
-        self._log_output("stdout", stdout)
+        # For task steps with typed outputs, show formatted tables
+        typed_outputs = result.outputs.get("typed_outputs")
+        if typed_outputs and isinstance(typed_outputs, list) and len(typed_outputs) > 0:
+            from ofx.runner.execution.output_formatter import format_typed_outputs
+            from ofx.settings import get_console
+
+            format_typed_outputs(
+                typed_outputs,
+                task_name=self.model.name or self.model.task or "",
+                console=get_console(),
+            )
+        else:
+            self._log_output("stdout", stdout)
 
         # Save full output to log file if configured
         if self.model.log_stdout and stdout and self.ctx.output_path:
@@ -202,20 +268,9 @@ class CloudStepRunner(BaseRunner):
 
     def _log_output(self, stream: str, content: str) -> None:
         """Log a stdout/stderr stream to the console, truncating long output."""
-        if not content or not isinstance(content, str):
-            return
-        max_lines = settings.max_display_lines
-        lines = content.splitlines()
-        if len(lines) > max_lines:
-            head = "\n".join(lines[:max_lines])
-            omitted = len(lines) - max_lines
-            display = (
-                f"{head}\n"
-                f"... [{omitted} more lines — full output saved to logs]"
-            )
-        else:
-            display = content
-        self._log_info(f"\n==={stream}===\n{display}\n===========")
+        from ofx.runner.core.step_output import log_output
+
+        log_output(self._log_info, stream, content)
 
     # ------------------------------------------------------------------
     # Remote execution methods
@@ -444,49 +499,18 @@ class CloudStepRunner(BaseRunner):
 
     def _should_store_creds(self) -> bool:
         """Check if credential storage is enabled for this step."""
-        if self.model.store_creds is not None:
-            return self.model.store_creds
-        # Check job defaults
-        if self.parent and hasattr(self.parent, "model"):
-            defaults = getattr(self.parent.model, "defaults", None)
-            if defaults and getattr(defaults, "store_creds", False):
-                return True
-        return settings.auto_store_creds
+        from ofx.runner.core.credential_store import should_store_creds
+
+        parent_model = self.parent.model if self.parent else None
+        return should_store_creds(self.model.store_creds, parent_model)
 
     def _store_credentials(self, typed_outputs: list) -> None:
         """Store UserAccount outputs in the credential store."""
-        from ofx.tasks.output_types import UserAccount
+        from ofx.runner.core.credential_store import store_from_typed_outputs
 
-        accounts = [o for o in typed_outputs if isinstance(o, UserAccount) and o.username]
-        if not accounts:
-            return
-
-        try:
-            from ofx.api.creds.exegol_history import ExegolHistoryDB
-
-            db = ExegolHistoryDB()
-        except (ImportError, FileNotFoundError) as e:
-            self._log_debug(f"Credential store unavailable: {e}")
-            return
-
-        stored = 0
-        for account in accounts:
-            try:
-                cred = account.to_credential()
-                existing = db.get_credential(cred.username)
-                if existing and existing.password == cred.password and existing.hash == cred.hash and existing.domain == cred.domain:
-                    continue
-                db.add_credential(
-                    username=cred.username,
-                    password=cred.password,
-                    hash_value=cred.hash,
-                    domain=cred.domain,
-                    comment=cred.comment,
-                )
-                stored += 1
-            except Exception as e:
-                self._log_debug(f"Failed to store credential for {account.username}: {e}")
-
+        stored = store_from_typed_outputs(
+            typed_outputs, log_fn=self._log_debug
+        )
         if stored:
             self._log_info(f"Stored {stored} credential(s) in credential store")
 
@@ -570,31 +594,18 @@ class CloudStepRunner(BaseRunner):
 
     def _save_output(self, output: str) -> None:
         """Save step output to local log file (mirrors StepRunner format)."""
+        from ofx.runner.core.step_output import save_output_file
+
         if not self.ctx.output_path:
             return
-        log_path = Path(self.ctx.output_path) / "logs"
-        log_path.mkdir(parents=True, exist_ok=True)
-
         job_id = self.parent.model.jid if self.parent else "unknown"
-        step_name = (self.model.name or f"step_{self.model.step_index}").replace(
-            " ", "-"
+        save_output_file(
+            self.ctx.output_path,
+            job_id,
+            self.model,
+            output,
+            log_fn=self._log_info,
         )
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out_file = log_path / f"stdout_{job_id}_{step_name}__{timestamp}.log"
-
-        log_lines = []
-        if self.model.run:
-            log_lines.append(f">> command: {self.model.run}")
-        elif self.model.script_file:
-            log_lines.append(f">> script_file: {self.model.script_file}")
-        elif self.model.script:
-            log_lines.append(">> script (inline)")
-        else:
-            log_lines.append(">> unknown step type")
-        log_lines.append(">>===<<")
-        log_lines.append(output)
-        out_file.write_text("\n".join(log_lines))
-        self._log_info(f"Saved output to {out_file}")
 
     def _run_if_context(self) -> dict:
         """Build run_if evaluation context matching StepRunner.

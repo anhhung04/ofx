@@ -341,11 +341,8 @@ class CloudJobRunner(BaseRunner[Job]):
     # ------------------------------------------------------------------
 
     async def _post_run(self) -> None:
-        if self.model.outputs:
-            resolved_outputs = {}
-            for key, value in self.model.outputs.items():
-                resolved_value = await self._resolve_template(value)
-                resolved_outputs[key] = resolved_value
+        resolved_outputs = await self._resolve_job_outputs()
+        if resolved_outputs:
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
 
         job_exec = build_job_execution_result(self, self._runners)

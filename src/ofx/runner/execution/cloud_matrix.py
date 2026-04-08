@@ -7,7 +7,6 @@ Extends ``CloudJobRunner`` to inherit VPS provisioning. Overrides
 from __future__ import annotations
 
 import asyncio
-import itertools
 from typing import Any
 
 from ofx.models.cloud import CloudConfig
@@ -123,38 +122,16 @@ class CloudMatrixJobRunner(CloudJobRunner):
             raise RuntimeError("; ".join(errors))
 
     def _generate_matrix_combinations(self) -> list[dict[str, Any]]:
-        """Generate all matrix combinations with include/exclude rules"""
+        """Generate all matrix combinations with include/exclude rules."""
+        from ofx.runner.core.matrix_utils import generate_matrix_combinations
+
         strategy = self.model.strategy
         if not strategy or not strategy.matrix:
             return []
 
-        matrix_keys = list(strategy.matrix.keys())
-        matrix_values = [strategy.matrix[key] for key in matrix_keys]
-
-        base_combinations = [
-            dict(zip(matrix_keys, combination, strict=True))
-            for combination in itertools.product(*matrix_values)
-        ]
-
-        def _matches_matrix_filter(
-            combo: dict[str, Any], filters: list[dict[str, Any]]
-        ) -> bool:
-            """Check if a combination matches any filter"""
-            for filter_dict in filters:
-                if all(combo.get(key) == value for key, value in filter_dict.items()):
-                    return True
-            return False
-
-        if strategy.exclude:
-            base_combinations = [
-                combo
-                for combo in base_combinations
-                if not _matches_matrix_filter(combo, strategy.exclude)
-            ]
-
-        if strategy.include:
-            for include_combo in strategy.include:
-                if include_combo not in base_combinations:
-                    base_combinations.append(include_combo)
-
-        return base_combinations
+        return generate_matrix_combinations(
+            strategy.matrix,
+            include=strategy.include,
+            exclude=strategy.exclude,
+            enforce_limit=True,
+        )

@@ -1,7 +1,6 @@
 """Job runner for orchestrating step execution"""
 
 import asyncio
-import itertools
 import logging
 from typing import Any
 
@@ -99,15 +98,8 @@ class JobRunner(BaseRunner[Job]):
                 )
 
     async def _post_run(self) -> None:
-        if self.model.outputs:
-            resolved_outputs = {}
-            for key, value in self.model.outputs.items():
-                try:
-                    resolved_value = await self._resolve_template(value)
-                    resolved_outputs[key] = resolved_value
-                except Exception as e:
-                    self._log_warning(f"Failed to resolve output '{key}': {e}")
-                    resolved_outputs[key] = ""
+        resolved_outputs = await self._resolve_job_outputs()
+        if resolved_outputs:
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
 
         job_exec = build_job_execution_result(self, self._runners)
@@ -234,56 +226,23 @@ class MatrixJobRunner(BaseRunner[Job]):
         pass
 
     def _generate_matrix_combinations(self) -> list[dict[str, Any]]:
-        """Generate all matrix combinations with include/exclude rules"""
+        """Generate all matrix combinations with include/exclude rules."""
+        from ofx.runner.core.matrix_utils import generate_matrix_combinations
+
         strategy = self.model.strategy
         if not strategy or not strategy.matrix:
             return []
 
-        MAX_MATRIX_COMBINATIONS = 10_000
+        combos = generate_matrix_combinations(
+            strategy.matrix,
+            include=strategy.include,
+            exclude=strategy.exclude,
+            enforce_limit=True,
+        )
 
-        matrix_keys = list(strategy.matrix.keys())
-        matrix_values = [strategy.matrix[key] for key in matrix_keys]
-
-        # Pre-check: estimate combination count without materializing
-        estimated = 1
-        for vals in matrix_values:
-            estimated *= len(vals) if isinstance(vals, list) else 1
-            if estimated > MAX_MATRIX_COMBINATIONS:
-                raise ValueError(
-                    f"Matrix would produce ~{estimated} combinations "
-                    f"(limit: {MAX_MATRIX_COMBINATIONS}). "
-                    f"Reduce matrix values or add exclude rules."
-                )
-
-        base_combinations = [
-            dict(zip(matrix_keys, combination, strict=True))
-            for combination in itertools.product(*matrix_values)
-        ]
-
-        def _matches_matrix_filter(
-            combo: dict[str, Any], filters: list[dict[str, Any]]
-        ) -> bool:
-            """Check if a combination matches any filter"""
-            for filter_dict in filters:
-                if all(combo.get(key) == value for key, value in filter_dict.items()):
-                    return True
-            return False
-
-        if strategy.exclude:
-            base_combinations = [
-                combo
-                for combo in base_combinations
-                if not _matches_matrix_filter(combo, strategy.exclude)
-            ]
-
-        if strategy.include:
-            for include_combo in strategy.include:
-                if include_combo not in base_combinations:
-                    base_combinations.append(include_combo)
-
-        if not base_combinations:
+        if not combos:
             self._log_warning(
                 "Matrix produced 0 combinations after include/exclude filtering"
             )
 
-        return base_combinations
+        return combos

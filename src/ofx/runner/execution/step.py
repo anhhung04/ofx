@@ -1,9 +1,7 @@
 "Step runner for executing workflow steps"
 
 import asyncio
-import base64
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from random import uniform
 from typing import Any
@@ -28,7 +26,6 @@ from ofx.runner.execution.execution_results import (
     build_step_execution_result,
 )
 from ofx.runner.logging import get_logger
-from ofx.settings import settings
 
 logger = get_logger()
 
@@ -229,62 +226,27 @@ class StepRunner(BaseRunner[Step]):
 
     def _log_output(self, stream: str, content: str) -> None:
         """Log a stdout/stderr stream to the console, truncating long output."""
-        if not content or not isinstance(content, str):
-            return
-        max_lines = settings.max_display_lines
-        lines = content.splitlines()
-        if len(lines) > max_lines:
-            head = "\n".join(lines[:max_lines])
-            omitted = len(lines) - max_lines
-            display = (
-                f"{head}\n"
-                f"... [{omitted} more lines — full output saved to logs]"
-            )
-        else:
-            display = content
-        self._log_info(f"\n==={stream}===\n{display}\n===========")
+        from ofx.runner.core.step_output import log_output
+
+        log_output(self._log_info, stream, content)
 
     def _save_output_file(self, stdout: str, outputs: dict) -> None:
         """Persist full stdout to a log file under output_path/logs/."""
+        from ofx.runner.core.step_output import save_output_file
+
         if not self.ctx.output_path:
             self._log_warning("No output_path configured, skipping log file save.")
             return
-        log_path = self.ctx.output_path / "logs"
-        log_path.mkdir(parents=True, exist_ok=True)
         if not self.parent:
             return
-        step_name = (self.model.name or f"step_{self.model.step_index}").replace(
-            " ", "-"
+        save_output_file(
+            self.ctx.output_path,
+            self.parent.model.jid,
+            self.model,
+            stdout,
+            outputs,
+            log_fn=self._log_info,
         )
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        out_file = (
-            log_path / f"stdout_{self.parent.model.jid}_{step_name}__{timestamp}.log"
-        )
-
-        header = []
-        if self.model.run:
-            header.append(f">> command: {self.model.run}")
-        elif self.model.uses:
-            header.append(f">> workflow: {self.model.uses}")
-        elif self.model.script_file:
-            header.append(f">> script_file: {self.model.script_file}")
-        elif self.model.script:
-            header.append(
-                f">> script (base64): {base64.b64encode(self.model.script.encode()).decode()}"
-            )
-        elif self.model.task:
-            header.append(f">> task: {self.model.task}")
-        else:
-            header.append(">> unknown step type")
-        if outputs.get("binary_output"):
-            header.append("[BINARY OUTPUT]")
-        if outputs.get("output_truncated"):
-            header.append("[OUTPUT TRUNCATED]")
-        if outputs.get("stderr_truncated"):
-            header.append("[STDERR TRUNCATED]")
-        header.append(">>===<<")
-        out_file.write_text("\n".join(header) + "\n" + stdout)
-        self._log_info(f"Saved output to {out_file}")
 
     def _create_runner(self) -> BaseRunner:
         """Creates the appropriate runner instance based on the step's run type."""
@@ -490,11 +452,7 @@ class StepRunner(BaseRunner[Step]):
 
         Precedence: step-level > job/workflow defaults > global setting.
         """
-        if self.model.store_creds is not None:
-            return self.model.store_creds
-        # Check job/workflow defaults (already merged by JobRunner._pre_run)
-        if self.parent and hasattr(self.parent, "model"):
-            defaults = getattr(self.parent.model, "defaults", None)
-            if defaults and defaults.store_creds:
-                return True
-        return settings.auto_store_creds
+        from ofx.runner.core.credential_store import should_store_creds
+
+        parent_model = self.parent.model if self.parent else None
+        return should_store_creds(self.model.store_creds, parent_model)
