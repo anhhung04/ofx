@@ -105,8 +105,14 @@ class CloudStepRunner(BaseRunner):
         self.ctx.vars["remote_work_dir"] = self._resolve_remote_work_dir()
         await self._resolve_template_fields(resolve_fields)
 
-        # Check run_if
-        if self.model.run_if is not None and self.model.run_if is not True:
+        # Resolve timeout (may be a Jinja2 expression for dynamic scaling)
+        if isinstance(self.model.timeout, str):
+            resolved = await self._resolve_template(self.model.timeout)
+            try:
+                self.model.timeout = int(float(resolved))
+            except (ValueError, TypeError):
+                self._log_warning(f"Invalid timeout expression result: {resolved!r}, using 60 min")
+                self.model.timeout = 60
             if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
                 self._state_machine.transition(RunnerStatus.CANCELED)
                 raise ConditionNotMetError(self._produce_log("Step condition not met"))

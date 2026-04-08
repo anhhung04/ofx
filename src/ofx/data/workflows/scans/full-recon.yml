@@ -73,7 +73,7 @@ jobs:
           print(f"Collected {len(subs)} unique subdomains")
       # Recursive pass: run subfinder again on the entire subs list
       - task: subfinder
-        timeout: 15
+        timeout: "{{ (steps['collect-subdomains'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: recursive-subfinder
         with:
           target: "/tmp/subs.txt"
@@ -112,7 +112,7 @@ jobs:
       verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
     steps:
       - task: dnsx
-        timeout: 15
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: dns-verify
         with:
           target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
@@ -142,7 +142,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
     steps:
       - task: httpx
-        timeout: 15
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: probe-subs
         with:
           target: "{{ jobs['dns-resolve'].outputs.verified_file | default(jobs['subdomain-enum'].outputs.subs_file, true) }}"

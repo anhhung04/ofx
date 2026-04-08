@@ -95,6 +95,32 @@ class TestTaskBase:
         assert Task._safe_float("3.14") == 3.14
         assert Task._safe_float("bad") == 0.0
 
+    def test_success_codes_default(self):
+        t = DummyTask()
+        assert t.success_codes == [0]
+
+    def test_success_codes_custom(self):
+        class CustomExitTask(DummyTask):
+            success_codes = [0, 1, 3]
+
+        t = CustomExitTask()
+        assert t.success_codes == [0, 1, 3]
+
+    def test_success_codes_isolated_per_subclass(self):
+        """success_codes should not leak between subclasses."""
+
+        class TaskA(DummyTask):
+            success_codes = [0, 42]
+
+        class TaskB(DummyTask):
+            pass  # inherits default [0]
+
+        assert TaskA().success_codes == [0, 42]
+        assert TaskB().success_codes == [0]
+        # Mutating TaskA's list must not affect TaskB
+        TaskA.success_codes.append(99)
+        assert 99 not in TaskB().success_codes
+
 
 # ── Task Registry ─────────────────────────────────────────────────────────
 

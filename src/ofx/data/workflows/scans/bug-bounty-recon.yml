@@ -90,7 +90,7 @@ jobs:
       alive_count: '{{ steps["filter-alive"].outputs.alive_count | default("", true) }}'
     steps:
     - task: dnsx
-      timeout: 10
+      timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
       name: verify-dns
       with:
         target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
@@ -121,7 +121,7 @@ jobs:
       takeover_findings_file: '{{ steps["collect-takeovers"].outputs.takeover_findings_file | default("", true) }}'
     steps:
     - task: subzy
-      timeout: 10
+      timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
       name: subzy-scan
       with:
         target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -155,7 +155,7 @@ jobs:
       port_count: '{{ steps["collect-ports"].outputs.port_count | default("", true) }}'
     steps:
     - task: naabu
-      timeout: 10
+      timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
       name: naabu-scan
       with:
         target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -189,7 +189,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("", true) }}'
     steps:
     - task: httpx
-      timeout: 10
+      timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
       name: probe-http
       with:
         target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -330,7 +330,7 @@ jobs:
         severity: critical,high,medium
       continue-on-error: true
     - task: dalfox
-      timeout: 15
+      timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
       name: dalfox-xss
       with:
         target: "{{ jobs['param-mine'].outputs.param_file | default(jobs['http-probe'].outputs.live_urls, true) }}"

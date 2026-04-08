@@ -220,7 +220,7 @@ jobs:
       - subdomain-enum
     steps:
       - task: dnsx
-        timeout: 10
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: dns-resolve-all
         with:
           target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
@@ -230,7 +230,7 @@ jobs:
         continue-on-error: true
 
       - task: tlsx
-        timeout: 5
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: tls-san-discovery
         with:
           target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
@@ -238,7 +238,7 @@ jobs:
         continue-on-error: true
 
       - task: cdncheck
-        timeout: 5
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: cdn-detect
         with:
           target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
@@ -281,7 +281,7 @@ jobs:
       - dns-verify
     steps:
       - task: httpx
-        timeout: 10
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: http-probe
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -306,7 +306,7 @@ jobs:
         continue-on-error: true
 
       - task: favirecon
-        timeout: 5
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: favicon-detect
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -381,7 +381,7 @@ jobs:
       - web-probe
     steps:
       - task: katana
-        timeout: 15
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: katana-crawl
         with:
           target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
@@ -390,7 +390,7 @@ jobs:
         continue-on-error: true
 
       - task: gospider
-        timeout: 15
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: gospider-crawl
         with:
           target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
@@ -452,7 +452,7 @@ jobs:
       - dns-verify
     steps:
       - task: naabu
-        timeout: 10
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: naabu-scan
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -522,13 +522,13 @@ jobs:
     steps:
       - task: dnstake
         name: dnstake-scan
-        timeout: 5
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
         continue-on-error: true
 
       - task: nuclei
-        timeout: 20
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: nuclei-takeover
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -536,7 +536,7 @@ jobs:
         continue-on-error: true
 
       - task: subzy
-        timeout: 5
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: subzy-scan
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -565,7 +565,7 @@ jobs:
       - port-scan
     steps:
       - task: nuclei
-        timeout: 20
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: nuclei-scan
         with:
           target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
@@ -573,7 +573,7 @@ jobs:
         continue-on-error: true
 
       - task: dalfox
-        timeout: 15
+        timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: xss-scan
         with:
           target: "{{ jobs['url-collection'].outputs.param_file | default(inputs.target, true) }}"

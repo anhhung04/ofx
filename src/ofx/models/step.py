@@ -38,8 +38,9 @@ class Step(OFXBaseModel):
         description="Continue execution even if the step fails",
         alias="continue-on-error",
     )
-    timeout: int = Field(
-        default=60 * 24, description="Timeout in minutes for the step execution"
+    timeout: int | str = Field(
+        default=60 * 24,
+        description="Timeout in minutes for the step execution. Supports Jinja2 templates for dynamic values.",
     )
     retry: int = Field(
         default=0,

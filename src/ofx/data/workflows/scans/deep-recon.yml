@@ -188,7 +188,7 @@ jobs:
       asn_ip_count: '{{ steps["merge-active"].outputs.asn_ip_count | default("", true) }}'
     steps:
       - task: dnsx
-        timeout: 10
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: dns-resolve
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
@@ -199,7 +199,7 @@ jobs:
         continue-on-error: true
 
       - task: tlsx
-        timeout: 5
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: tlsx-san
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
@@ -207,7 +207,7 @@ jobs:
         continue-on-error: true
 
       - task: puredns
-        timeout: 10
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: puredns-resolve
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
@@ -222,7 +222,7 @@ jobs:
         continue-on-error: true
 
       - task: gotator
-        timeout: 10
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: gotator-permute
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
@@ -295,7 +295,7 @@ jobs:
       favicon_count: '{{ steps["export-live"].outputs.favicon_count | default("", true) }}'
     steps:
       - task: httpx
-        timeout: 10
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: http-probe
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
@@ -313,14 +313,14 @@ jobs:
         continue-on-error: true
 
       - task: cdncheck
-        timeout: 5
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: cdn-detect
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
         continue-on-error: true
 
       - task: favirecon
-        timeout: 5
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: favicon-detect
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
@@ -357,7 +357,7 @@ jobs:
       param_count: '{{ steps["collect-urls"].outputs.param_count | default("", true) }}'
     steps:
       - task: katana
-        timeout: 15
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: katana-crawl
         with:
           target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
@@ -366,7 +366,7 @@ jobs:
         continue-on-error: true
 
       - task: gospider
-        timeout: 15
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: gospider-crawl
         with:
           target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
@@ -396,7 +396,7 @@ jobs:
         continue-on-error: true
 
       - task: jsluice
-        timeout: 10
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: jsluice-scan
         with:
           target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
@@ -480,7 +480,7 @@ jobs:
       port_count: '{{ steps["export-ports"].outputs.port_count | default("", true) }}'
     steps:
       - task: naabu
-        timeout: 10
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: naabu-scan
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
@@ -489,7 +489,7 @@ jobs:
         continue-on-error: true
 
       - task: nmap
-        timeout: 30
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: nmap-scan
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
@@ -533,7 +533,7 @@ jobs:
       dnstake_count: '{{ steps["export-vulns"].outputs.dnstake_count | default("", true) }}'
     steps:
       - task: nuclei
-        timeout: 20
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: nuclei-scan
         with:
           target: "{{ jobs['web-probe'].outputs.live_file | default(inputs.target, true) }}"
@@ -541,14 +541,14 @@ jobs:
         continue-on-error: true
 
       - task: dalfox
-        timeout: 15
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: xss-scan
         with:
           target: "{{ jobs['url-collection'].outputs.param_file | default(inputs.target, true) }}"
         continue-on-error: true
 
       - task: nuclei
-        timeout: 20
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: takeover-check
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
@@ -561,7 +561,7 @@ jobs:
         continue-on-error: true
 
       - task: dnstake
-        timeout: 5
+        timeout: "{{ (jobs['passive-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         name: dnstake-scan
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
