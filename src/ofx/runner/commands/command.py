@@ -184,6 +184,7 @@ def exec_script_in_process(
     globals_dict = {
         "__builtins__": builtins.__dict__,
         "__name__": "__main__",
+        "os": os,
         "__job__": job_model,
         "__step__": step_model,
         "__workflow__": workflow_model,
