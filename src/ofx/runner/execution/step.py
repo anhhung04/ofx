@@ -117,7 +117,25 @@ class StepRunner(BaseRunner[Step]):
             self.model.timeout = int(policy["timeout"])
 
     async def _on_failure_cleanup(self) -> None:
-        """Ensure temp outputs file is removed on failure."""
+        """Save execution data and clean up temp outputs file on failure.
+
+        This ensures that steps with ``continue_on_error: true`` still have
+        their outputs accessible to later steps via the registry.
+        """
+        try:
+            result = await self.get_result()
+            execution = build_step_execution_result(
+                step_index=self.model.step_index,
+                name=self.model.name,
+                run_type=self._run_type.value,
+                status=RunnerStatus.FAILED.value,
+                error=result.error or self._error,
+                outputs=result.outputs,
+                duration_ms=self.duration_ms(),
+            )
+            await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
+        except Exception as e:
+            self._log_debug(f"Failed to save step execution on failure: {e}")
         if self._outputs_file:
             self._outputs_file.unlink(missing_ok=True)
 

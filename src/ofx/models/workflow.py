@@ -105,10 +105,17 @@ class Workflow(BaseModel):
                     )
 
             self.jobs[job_id].jid = job_id
+            step_names: set[str] = set()
             for idx, step in enumerate(job.steps):
                 step.step_index = idx
                 if not step.name or step.name == "<should_be_replaced>":
                     step.name = f"{job_id}-step-{idx}"
+                if step.name in step_names:
+                    raise ValueError(
+                        f"Job '{job_id}' has duplicate step name '{step.name}'. "
+                        "Step names must be unique within a job."
+                    )
+                step_names.add(step.name)
 
         graph = {job_id: set(job.needs) for job_id, job in self.jobs.items()}
         path = set()

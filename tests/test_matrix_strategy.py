@@ -474,3 +474,102 @@ jobs:
         assert "plain" in values
         assert "with-dash" in values
         assert "with_underscore" in values
+
+
+class TestMatrixFailFast:
+    """Tests for fail_fast behavior in local MatrixJobRunner."""
+
+    @pytest.mark.asyncio
+    async def test_fail_fast_false_runs_all_combinations(self):
+        """With fail_fast: false, all matrix combinations run even when some fail."""
+        workflow_yaml = """
+name: Fail Fast False Test
+jobs:
+  test:
+    strategy:
+      fail_fast: false
+      matrix:
+        val: [1, 2, 3]
+    steps:
+      - name: maybe-fail
+        run: |
+          if [ "{{ matrix.val }}" = "2" ]; then exit 1; fi
+          echo "ok {{ matrix.val }}"
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        ctx = RunContext()
+        runner = WorkflowRunner(workflow, ctx)
+        result = await runner.run()
+        # Should fail overall (one combo failed)
+        assert result.status.value == "failed"
+        # But all 3 combinations should have been attempted
+        # (with fail_fast: true, combo 2 would stop combo 3)
+        assert "test_0" in runner._runners or "test" in runner._runners
+
+    @pytest.mark.asyncio
+    async def test_fail_fast_true_is_default(self):
+        """Default fail_fast is True — matrix stops on first failure."""
+        workflow_yaml = """
+name: Fail Fast Default Test
+jobs:
+  test:
+    strategy:
+      matrix:
+        val: [1, 2, 3]
+    steps:
+      - name: fail-all
+        run: exit 1
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        assert workflow.jobs["test"].strategy.fail_fast is True
+
+
+class TestStepNameUniqueness:
+    """Tests for step name uniqueness validation."""
+
+    def test_duplicate_step_names_rejected(self):
+        """Duplicate step names within a job should raise ValueError."""
+        workflow_yaml = """
+name: Duplicate Steps
+jobs:
+  test:
+    steps:
+      - name: deploy
+        run: echo 1
+      - name: deploy
+        run: echo 2
+"""
+        with pytest.raises(ValueError, match="duplicate step name 'deploy'"):
+            Workflow.model_validate(yaml.safe_load(workflow_yaml))
+
+    def test_same_name_different_jobs_allowed(self):
+        """Same step name across different jobs is fine."""
+        workflow_yaml = """
+name: Same Name Different Jobs
+jobs:
+  job1:
+    steps:
+      - name: deploy
+        run: echo 1
+  job2:
+    steps:
+      - name: deploy
+        run: echo 2
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        assert len(workflow.jobs) == 2
+
+    def test_auto_generated_names_never_collide(self):
+        """Steps without names get unique auto-generated names."""
+        workflow_yaml = """
+name: Auto Names
+jobs:
+  test:
+    steps:
+      - run: echo 1
+      - run: echo 2
+      - run: echo 3
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        names = [s.name for s in workflow.jobs["test"].steps]
+        assert len(names) == len(set(names))

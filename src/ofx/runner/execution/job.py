@@ -145,12 +145,23 @@ class MatrixJobRunner(BaseRunner[Job]):
         max_parallel = (
             strategy.max_parallel if strategy else len(self._matrix_combinations)
         )
+        fail_fast = strategy.fail_fast if strategy else True
 
         semaphore = asyncio.Semaphore(max_parallel)
+        failed_event = asyncio.Event()
 
         async def run_instance(matrix_idx: int, matrix_values: dict[str, Any]):
+            if fail_fast and failed_event.is_set():
+                return None
             async with semaphore:
-                return await self._run_single_job(matrix_idx, matrix_values)
+                if fail_fast and failed_event.is_set():
+                    return None
+                try:
+                    return await self._run_single_job(matrix_idx, matrix_values)
+                except Exception:
+                    if fail_fast:
+                        failed_event.set()
+                    raise
 
         tasks = [
             asyncio.create_task(run_instance(idx, combo))
@@ -158,20 +169,21 @@ class MatrixJobRunner(BaseRunner[Job]):
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        failed = False
         errors = []
         for i, result in enumerate(results):
+            combo = self._matrix_combinations[i]
+            combo_label = ", ".join(f"{k}={v}" for k, v in combo.items())
             if isinstance(result, Exception):
-                failed = True
-                errors.append(f"Matrix combination {i}: {result}")
+                errors.append(f"Combination {i} ({combo_label}): {result}")
             elif (
                 isinstance(result, RunResult)
                 and result.status != RunnerStatus.COMPLETED
             ):
-                failed = True
-                errors.append(f"Matrix combination {i}: {result.error or 'Failed'}")
+                errors.append(
+                    f"Combination {i} ({combo_label}): {result.error or 'Failed'}"
+                )
 
-        if failed:
+        if errors:
             raise RuntimeError("; ".join(errors))
 
     async def _run_single_job(self, matrix_idx: int, matrix_values: dict[str, Any]):
