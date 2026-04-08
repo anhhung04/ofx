@@ -233,6 +233,7 @@ jobs:
       name: nikto-scan
       with:
         target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
+        maxtime: 900
       continue-on-error: true
     - task: whatweb
       timeout: 10

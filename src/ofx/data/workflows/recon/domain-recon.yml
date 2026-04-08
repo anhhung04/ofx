@@ -584,6 +584,7 @@ jobs:
         name: nikto-scan
         with:
           target: '{{ inputs.target }}'
+          maxtime: 900
         continue-on-error: true
 
       - name: export-vulns

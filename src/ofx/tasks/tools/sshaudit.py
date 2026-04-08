@@ -19,6 +19,10 @@ class SshAuditTask(Task):
     install_cmd = "uv tool install ssh-audit"
     output_types = [Vulnerability, Tag]
 
+    # ssh-audit exit codes: 0=pass, 1=connection error, 2=unknown error, 3=one or more warnings/failures
+    # Exit code 3 is expected — it means weak algorithms were detected (useful audit output).
+    success_codes = [0, 3]
+
     opts = {
         "port": OptDef(flag="-p", type=int, help="Port number"),
         "timeout": OptDef(flag="-T", type=int, help="Connection timeout in seconds"),

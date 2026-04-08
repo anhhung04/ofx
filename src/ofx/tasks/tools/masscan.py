@@ -81,9 +81,40 @@ class MasscanTask(Task):
             )
             parts.extend([self.output_flag, str(output_file)])
 
-        parts.append(target)
+        # masscan only accepts IPs/CIDRs — resolve hostnames automatically
+        resolved = self._resolve_to_ip(target)
+        parts.append(resolved)
 
         return " ".join(parts), output_file
+
+    @staticmethod
+    def _resolve_to_ip(target: str) -> str:
+        """Resolve a hostname to IP if needed — masscan only accepts IPs/CIDRs."""
+        import socket
+
+        target = target.strip()
+
+        # Already an IP or CIDR — pass through
+        base = target.split("/")[0]
+        try:
+            socket.inet_pton(socket.AF_INET, base)
+            return target
+        except OSError:
+            pass
+
+        # File path — pass through
+        if Path(target).is_file():
+            return target
+
+        # Hostname — resolve
+        try:
+            info = socket.getaddrinfo(base, None, socket.AF_INET, socket.SOCK_STREAM)
+            if info:
+                return info[0][4][0]
+        except socket.gaierror:
+            pass
+
+        return target
 
     def parse_output(
         self,

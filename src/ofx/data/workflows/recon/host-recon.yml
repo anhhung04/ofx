@@ -92,7 +92,7 @@ jobs:
       timeout: 15
       name: masscan-scan
       with:
-        target: '{{ jobs["target-resolve"].outputs.hostname }}'
+        target: '{{ jobs["target-resolve"].outputs.ip }}'
         top_ports: '100'
         rate: 1000
       continue-on-error: true
@@ -133,7 +133,8 @@ jobs:
     outputs:
       typed_outputs: '{{ steps["audit-ssh"].outputs.typed_outputs | default([], true) }}'
     needs:
-    - service-detection
+    - port-discovery
+    if: '{{ "22" in (jobs["port-discovery"].outputs.open_ports | default("", true)) }}'
     steps:
     - task: ssh-audit
       timeout: 10
@@ -200,6 +201,7 @@ jobs:
       name: nikto-scan
       with:
         target: "{{ jobs['http-probe'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
+        maxtime: 900
       continue-on-error: true
     - name: summary
       run: |

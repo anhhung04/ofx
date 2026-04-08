@@ -130,7 +130,11 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 )
             else:
                 result = await executor.execute()
-            executor.raise_for_status(result.exit_code, result.stderr)
+            # Honour task-specific success codes (e.g. ssh-audit returns 3 for warnings)
+            exit_code = result.exit_code
+            if exit_code is not None and exit_code not in self._task.success_codes:
+                stderr = result.stderr or f"Command failed with exit code {exit_code}"
+                raise RuntimeError(f"Command failed: {stderr}")
         except TimeoutError:
             raise RuntimeError(
                 f"Task '{self.model.task_name}' timed out after "

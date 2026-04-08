@@ -155,6 +155,7 @@ jobs:
       name: nikto-scan
       with:
         target: '{{ inputs.target }}'
+        maxtime: 900
       continue-on-error: true
     - task: gobuster
       timeout: 10

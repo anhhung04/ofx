@@ -205,6 +205,7 @@ jobs:
       name: nikto-scan
       with:
         target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
+        maxtime: 900
       continue-on-error: true
     - name: final-summary
       script: |

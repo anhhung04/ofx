@@ -408,6 +408,7 @@ jobs:
         timeout: 15
         with:
           target: "{{ inputs.target }}"
+          maxtime: 900
         continue-on-error: true
       - name: crlfuzz-scan
         run: |

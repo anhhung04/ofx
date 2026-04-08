@@ -131,7 +131,7 @@ jobs:
         timeout: 15
         name: masscan-scan
         with:
-          target: "{{ jobs['target-resolve'].outputs.hostname }}"
+          target: "{{ jobs['target-resolve'].outputs.ip }}"
           top_ports: "100"
           rate: 1000
         continue-on-error: true
@@ -196,6 +196,7 @@ jobs:
         name: nikto-scan
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
+          maxtime: 900
         continue-on-error: true
   url-crawl:
     name: URL Crawling

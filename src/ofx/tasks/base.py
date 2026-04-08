@@ -60,6 +60,11 @@ class Task(ABC):
     # Flags prepended right after the command binary (e.g. ``["-json", "-silent"]``).
     extra_flags: list[str] = []
 
+    # ── Exit code handling ─────────────────────────────────────────
+    # Exit codes considered successful.  Override in subclasses for tools
+    # that return non-zero on "warnings found" or similar expected states.
+    success_codes: list[int] = [0]
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Ensure mutable class attributes are copied per-subclass.
 
@@ -68,7 +73,7 @@ class Task(ABC):
         mutable object, risking cross-class mutation.
         """
         super().__init_subclass__(**kwargs)
-        for attr in ("opts", "extra_flags", "output_types"):
+        for attr in ("opts", "extra_flags", "output_types", "success_codes"):
             value = cls.__dict__.get(attr)
             if value is None:
                 # Subclass didn't define it — copy from parent
