@@ -58,6 +58,13 @@ jobs:
         top_ports: '100'
         rate: 2000
       continue-on-error: true
+    - task: gogo
+      timeout: 15
+      name: gogo-scan
+      with:
+        target: '{{ inputs.target }}'
+        ports: 'top2,win,db'
+      continue-on-error: true
     - name: collect-hosts
       script: |
         import json
@@ -67,8 +74,9 @@ jobs:
         nmap_out = {{ steps["ping-sweep"].outputs.typed_outputs | tojson }}
         naabu_out = {{ steps["port-scan"].outputs.typed_outputs | tojson }}
         masscan_out = {{ steps["masscan-scan"].outputs.typed_outputs | tojson }}
+        gogo_out = {{ steps["gogo-scan"].outputs.typed_outputs | tojson }}
 
-        for item in nmap_out + naabu_out + masscan_out:
+        for item in nmap_out + naabu_out + masscan_out + gogo_out:
             if item.get('_type') == 'port':
                 host = item.get('host') or item.get('ip', '')
                 if host:

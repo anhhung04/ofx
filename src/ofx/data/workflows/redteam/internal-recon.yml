@@ -51,6 +51,7 @@ jobs:
       ports_file: '{{ steps["collect-ports"].outputs.ports_file | default("", true) }}'
       port_count: '{{ steps["collect-ports"].outputs.port_count | default("", true) }}'
       scan_targets_file: '{{ steps["collect-ports"].outputs.scan_targets_file | default("", true) }}'
+      gogo_file: '{{ steps["gogo-scan"].outputs.output_file | default("", true) }}'
     needs:
     - host-discovery
     steps:
@@ -69,6 +70,13 @@ jobs:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
         top_ports: '1000'
         rate: 1000
+      continue-on-error: true
+    - task: gogo
+      timeout: 15
+      name: gogo-scan
+      with:
+        target: "{{ jobs['host-discovery'].outputs.alive_file }}"
+        ports: 'top2,win,db'
       continue-on-error: true
     - name: collect-ports
       script: |
@@ -89,6 +97,14 @@ jobs:
 
         # Parse rustscan results
         for item in {{ ports(steps["rustscan-fast"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = item.get('host') or item.get('ip', '')
+            port = item.get('port', '')
+            if host and port:
+                ports.add(f"{host}:{port}")
+                hosts_with_ports.setdefault(host, set()).add(str(port))
+
+        # Parse gogo results (ports + fingerprinted services)
+        for item in {{ ports(steps["gogo-scan"].outputs.typed_outputs) | default([], true) | tojson }}:
             host = item.get('host') or item.get('ip', '')
             port = item.get('port', '')
             if host and port:
@@ -248,16 +264,29 @@ jobs:
   default-cred-check:
     name: Default Credential Check
     outputs:
-      cred_count: '{{ steps["brute-defaults"].outputs.cred_count }}'
+      cred_count: '{{ steps["cred-summary"].outputs.cred_count | default("0", true) }}'
     needs:
     - port-scan
     steps:
-    - name: brute-defaults
-      run: |
-        naabu -host {{ inputs.target }} -p 22,21,23,3306,5432,6379,27017,1433,3389,5900,8080 -silent 2>/dev/null | nerva --json 2>/dev/null | brutus --json 2>/dev/null | tee /tmp/ofx_intrecon_creds.jsonl
-        CRED_COUNT=$(wc -l < /tmp/ofx_intrecon_creds.jsonl 2>/dev/null || echo 0)
-        echo "cred_count=$CRED_COUNT" >> $OFX_OUTPUTS
+    - task: zombie
+      timeout: 30
+      name: zombie-brute
+      with:
+        gogo: '{{ jobs["port-scan"].outputs.gogo_file }}'
+        target: '{{ inputs.target }}'
+        threads: 50
+      store-creds: true
       continue-on-error: true
+    - name: cred-summary
+      script: |
+        accounts = {{ users(steps["zombie-brute"].outputs.typed_outputs) | default([], true) | tojson }}
+        add_outputs(cred_count=len(accounts))
+        if accounts:
+            print(f"Found {len(accounts)} valid credential(s):")
+            for a in accounts:
+                print(f"  {a.get('username','')}@{a.get('host','')} ({a.get('comment','')})")
+        else:
+            print("No default credentials found")
   summary:
     name: Internal Recon Summary
     needs:
