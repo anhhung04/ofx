@@ -532,8 +532,7 @@ jobs:
         name: nuclei-takeover
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
-          templates: dns/
-          tags: dns,takeover
+          tags: subdomain-takeover
         continue-on-error: true
 
       - task: subzy

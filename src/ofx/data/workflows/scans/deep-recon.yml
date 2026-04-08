@@ -559,7 +559,7 @@ jobs:
         name: takeover-check
         with:
           target: "{{ jobs['active-enum'].outputs.verified_file }}"
-          tags: takeover
+          tags: subdomain-takeover
         continue-on-error: true
 
       - name: crlfuzz-scan

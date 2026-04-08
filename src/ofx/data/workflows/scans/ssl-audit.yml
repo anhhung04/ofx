@@ -64,8 +64,7 @@ jobs:
       timeout: 10
       name: testssl-scan
       with:
-        target: '{{ inputs.target }}'
-        server_defaults: true
+        target: '{{ inputs.target }}:443'
       continue-on-error: true
     - name: export-testssl
       script: |

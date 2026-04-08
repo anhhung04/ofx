@@ -37,6 +37,9 @@ class TestsslTask(Task):
         "vulnerabilities": OptDef(
             flag="-U", is_flag=True, help="Check vulnerabilities"
         ),
+        "server_defaults": OptDef(
+            flag="-S", is_flag=True, help="Display server default picks and certificate info"
+        ),
         "headers": OptDef(flag="-h", is_flag=True, help="Check HTTP headers"),
         "starttls": OptDef(
             flag="--starttls",

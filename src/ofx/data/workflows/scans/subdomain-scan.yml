@@ -169,7 +169,7 @@ jobs:
       name: takeover-check
       with:
         target: "{{ jobs['subdomain-recon'].outputs.hosts_file }}"
-        tags: takeover
+        tags: subdomain-takeover
       continue-on-error: true
     - name: final-summary
       script: |

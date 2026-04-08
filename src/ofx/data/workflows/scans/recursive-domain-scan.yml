@@ -160,7 +160,7 @@ jobs:
       name: takeover-check
       with:
         target: "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
-        tags: takeover
+        tags: subdomain-takeover
       continue-on-error: true
     - name: bulk-summary
       script: |

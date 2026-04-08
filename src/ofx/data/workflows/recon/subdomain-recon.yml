@@ -136,7 +136,7 @@ jobs:
         name: takeover-scan
         with:
           target: "{{ jobs['passive-enum'].outputs.subdomain_file }}"
-          tags: takeover
+          tags: subdomain-takeover
         continue-on-error: true
       - name: summary
         run: |
