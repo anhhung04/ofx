@@ -149,12 +149,20 @@ class TaskRunner(BaseRunner[TaskExecution]):
             # Parse structured output (combines streamed + file-based)
             typed_outputs = self._parse_outputs(result)
 
-            # Tag each typed output with the task target for per-target grouping
+            # Tag each typed output with the task target for per-target grouping.
+            # When the target is a file path (list of hosts), derive the
+            # per-item target from the item's own fields instead of using the
+            # file path which would create meaningless per-target directories.
             target_tag = self.model.target
+            target_is_file = target_tag and Path(target_tag).is_file()
             typed_dicts = []
             for o in typed_outputs:
                 d = o.to_dict()
-                if target_tag:
+                if target_is_file:
+                    item_target = _extract_item_target(d)
+                    if item_target:
+                        d["_target"] = item_target
+                elif target_tag:
                     d["_target"] = target_tag
                 typed_dicts.append(d)
 
@@ -443,3 +451,25 @@ class TaskRunner(BaseRunner[TaskExecution]):
             except Exception as e:
                 self._log_debug(f"Failed to store credential for {account.username}: {e}")
         return stored
+
+
+def _extract_item_target(item: dict[str, Any]) -> str:
+    """Derive a meaningful per-item target from the item's own fields.
+
+    Used when the task target is a file path (list of hosts) so we avoid
+    creating per-target directories named after temp files.
+    """
+    for key in ("domain", "host", "ip"):
+        val = item.get(key, "")
+        if val:
+            return val
+    url = item.get("url", "")
+    if url:
+        # Extract hostname from URL
+        from urllib.parse import urlparse
+
+        try:
+            return urlparse(url).hostname or ""
+        except Exception:
+            return ""
+    return ""
