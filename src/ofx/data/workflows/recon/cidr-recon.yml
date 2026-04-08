@@ -84,7 +84,7 @@ jobs:
   service-scan:
     name: Service Detection
     outputs:
-      typed_outputs: '{{ steps["service-detect"].outputs.typed_outputs + steps["http-probe"].outputs.typed_outputs | default([], true) }}'
+      typed_outputs: '{{ (steps["service-detect"].outputs.typed_outputs | default([], true)) + (steps["http-probe"].outputs.typed_outputs | default([], true)) }}'
       http_targets: '{{ steps["export-svc"].outputs.http_targets | default("", true) }}'
     needs:
     - host-discovery

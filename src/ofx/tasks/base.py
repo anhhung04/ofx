@@ -88,6 +88,9 @@ class Task(ABC):
         Subclasses that only need to add extra fixed flags should set
         :attr:`extra_flags` instead of overriding this method.
         """
+        if not target:
+            raise ValueError(f"Task '{self.name}' requires a non-empty target")
+
         parts: list[str] = [self.cmd, *self.extra_flags]
         output_file: Path | None = None
 

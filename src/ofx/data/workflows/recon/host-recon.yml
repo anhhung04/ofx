@@ -77,7 +77,7 @@ jobs:
     name: Port Discovery
     needs: [target-resolve]
     outputs:
-      typed_outputs: '{{ steps["fast-port-scan"].outputs.typed_outputs + steps["masscan-scan"].outputs.typed_outputs | default([], true) }}'
+      typed_outputs: '{{ (steps["fast-port-scan"].outputs.typed_outputs | default([], true)) + (steps["masscan-scan"].outputs.typed_outputs | default([], true)) }}'
       open_ports: '{{ steps["export-ports"].outputs.open_ports | default("", true) }}'
     steps:
     - task: naabu

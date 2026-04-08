@@ -41,7 +41,7 @@ jobs:
     needs:
       - probe
     outputs:
-      typed_outputs: '{{ steps["wpscan-full"].outputs.typed_outputs + steps["nuclei-wordpress"].outputs.typed_outputs | default([], true) }}'
+      typed_outputs: '{{ (steps["wpscan-full"].outputs.typed_outputs | default([], true)) + (steps["nuclei-wordpress"].outputs.typed_outputs | default([], true)) }}'
     steps:
       - task: wpscan
         timeout: 15
