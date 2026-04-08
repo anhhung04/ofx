@@ -206,6 +206,7 @@ nav:
                                       - History: cli/commands/history.md
                                       - Validate: cli/commands/validate.md
                                       - Visualize: cli/commands/visualize.md
+                                      - Tasks: cli/commands/tasks.md
                                       - Tools: cli/commands/tools.md
                                       - Schema: cli/commands/schema.md
                                       - Collection: cli/commands/collection.md

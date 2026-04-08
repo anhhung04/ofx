@@ -16,7 +16,7 @@ OFX ships with **35 built-in workflows** inspired by [secator](https://github.co
 
 | Workflow | Description | Tools |
 |----------|-------------|-------|
-| `domain-recon` | Domain info: WHOIS, DNS, HTTP, TLS, WAF | whois, dnsx, httpx, testssl, wafw00f |
+| `domain-recon` | Full domain recon: WHOIS, DNS, subdomains, HTTP, TLS, WAF, crawling, vulns | whois, dnsx, dnsrecon, subfinder, amass, assetfinder, gau, httpx, testssl, sslscan, tlsx, cdncheck, wafw00f, whatweb, katana, gospider, naabu, nmap, nuclei, dalfox, nikto, subzy, dnstake |
 | `host-recon` | Port discovery, service detection, SSH audit, vulns | naabu, nmap, ssh-audit, httpx, searchsploit, nuclei |
 | `subdomain-recon` | Passive enum, DNS verification, takeover check | subfinder, amass, assetfinder, gau, dnsx, httpx, nuclei |
 | `cidr-recon` | CIDR host discovery, port scan, service detection | nmap, naabu, httpx, searchsploit |
@@ -86,41 +86,58 @@ Multi-phase assessments with data chaining between jobs:
 
 ```bash
 # Run a built-in workflow
-uv run ofx flow run domain-recon --input target=example.com
+ofx flow run domain-recon --input target=example.com
 
 # Run a comprehensive scan
-uv run ofx flow run domain-scan --input target=example.com
+ofx flow run domain-scan --input target=example.com
 
 # Run with output directory
-uv run ofx flow run host-scan --input target=10.10.10.10 -o ./results/
+ofx flow run host-scan --input target=10.10.10.10 -o ./results/
 ```
+
+### Running Individual Tasks
+
+Run any registered task directly without a workflow file:
+
+```bash
+# Quick port scan
+ofx flow tasks run nmap 10.10.10.5 --opt ports=1-1000 --opt timing=T4
+
+# HTTP probing
+ofx flow tasks run httpx targets.txt --opt threads=50
+
+# Vulnerability scan with stealth profile
+ofx flow tasks run nuclei https://example.com --profile stealth
+```
+
+See [Tasks CLI Reference](../cli/commands/tasks.md) for full options.
 
 ### Cloud Execution
 
 ```bash
 # 1. Set up cloud profile
-uv run ofx cloud profile add do-nyc \
+ofx cloud profile add do-nyc \
   --provider digitalocean --region nyc3 \
   --size s-2vcpu-4gb --image ubuntu-24-04-x64 \
   --ssh-key ~/.ssh/id_ed25519
 
 # 2. Provision VPS with all tools
-uv run ofx flow run cloud-setup --cloud do-nyc
+ofx flow run cloud-setup --cloud do-nyc
 
 # 3. Run scans on cloud
-uv run ofx flow run domain-scan --input target=example.com --cloud do-nyc
+ofx flow run domain-scan --input target=example.com --cloud do-nyc
 ```
 
 ### With Profiles
 
 ```bash
 # Create an opsec profile
-uv run ofx flow profile add stealthy \
+ofx flow profile add stealthy \
   --rate-limit 10 --delay 2 --jitter 1 \
   --time-window '{"start": "09:00", "end": "17:00"}'
 
 # Run with profile
-uv run ofx flow run subdomain-recon --input target=example.com --profile stealthy
+ofx flow run subdomain-recon --input target=example.com --profile stealthy
 ```
 
 ---
@@ -140,13 +157,15 @@ setup-runtime ──┬── install-apt-tools    (nmap, whois, exploitdb, nikt
 ```
 
 ```bash
-uv run ofx flow run cloud-setup --cloud do-nyc
-uv run ofx flow run cloud-setup --cloud do-nyc --input skip_apt=true
+ofx flow run cloud-setup --cloud do-nyc
+ofx flow run cloud-setup --cloud do-nyc --input skip_apt=true
 ```
 
 ---
 
 ## Secator Equivalence
+
+### Workflows
 
 | Secator Command | OFX Equivalent |
 |----------------|----------------|
@@ -183,6 +202,17 @@ uv run ofx flow run cloud-setup --cloud do-nyc --input skip_apt=true
 | — | `ofx flow run bug-bounty-recon` |
 | — | `ofx flow run takeover-scan` |
 | — | `ofx flow run pentest-external` |
+
+### Individual Tasks
+
+| Secator Command | OFX Equivalent |
+|----------------|----------------|
+| `secator x nmap <target>` | `ofx flow tasks run nmap <target>` |
+| `secator x httpx <target>` | `ofx flow tasks run httpx <target>` |
+| `secator x nuclei <target>` | `ofx flow tasks run nuclei <target>` |
+| `secator x subfinder <target>` | `ofx flow tasks run subfinder <target>` |
+| `secator x ffuf <target>` | `ofx flow tasks run ffuf <target>` |
+| `secator x <tool> <target> -opt val` | `ofx flow tasks run <tool> <target> --opt opt=val` |
 
 ### Key Advantages over Secator
 

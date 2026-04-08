@@ -9,6 +9,7 @@ Complete reference for all OFX command-line interface commands.
 - **[flow list](list.md)** - List available workflows from user, built-in, and collections
 - **[flow validate](validate.md)** - Validate workflow syntax
 - **[flow visualize](visualize.md)** - Visualize workflow dependencies
+- **[flow tasks](tasks.md)** - List, inspect, and run registered tasks
 - **[flow tools](tools.md)** - Manage workflow tools
 - **[flow schema](schema.md)** - Inspect workflow/job/step model schemas
 - **[flow collection](collection.md)** - Install and manage workflow collections
@@ -126,6 +127,9 @@ ofx secret list
 | `ofx flow list` | List available workflows from all sources |
 | `ofx flow validate` | Validate workflow syntax |
 | `ofx flow visualize` | Visualize workflow dependency graph |
+| `ofx flow tasks list` | List registered task wrappers |
+| `ofx flow tasks info` | Inspect a task's options and output types |
+| `ofx flow tasks run` | Run a single task directly from the CLI |
 | `ofx flow tools` | Install and manage workflow tools |
 | `ofx flow schema` | Inspect workflow/job/step model schemas |
 | `ofx flow collection` | Manage workflow collections |

@@ -79,6 +79,43 @@ ofx flow tasks list -c url/
 ofx flow tasks list -c vuln/
 ```
 
+### Running Tasks from the CLI
+
+You can run any task directly from the command line without writing a YAML workflow:
+
+```bash
+ofx flow tasks run <task_name> <target> [--opt key=value]...
+```
+
+**Examples:**
+
+```bash
+# Port scan
+ofx flow tasks run nmap 10.10.10.5 --opt ports=1-1000 --opt timing=T4
+
+# HTTP probing with custom threads
+ofx flow tasks run httpx targets.txt --opt threads=50 --opt tech_detect
+
+# Vulnerability scan with a profile
+ofx flow tasks run nuclei https://example.com --profile stealth
+
+# Subdomain enum with JSON output
+ofx flow tasks run subfinder example.com --json
+```
+
+Options:
+
+| Flag | Description |
+|------|-------------|
+| `-o, --opt key=value` | Task option (repeatable). Use `key` alone for boolean flags. |
+| `--profile <name>` | Apply an execution profile (auto-injects proxy, threads, rate_limit, etc.) |
+| `--timeout <min>` | Timeout in minutes (default: 60) |
+| `--output <dir>` | Directory for output files |
+| `--store-creds` | Store discovered credentials |
+| `--json` | Output as JSON |
+
+See the [CLI reference](../cli/commands/tasks.md) for full details.
+
 ### Built-in Tasks
 
 | Task | Category | Description | Output Types |
@@ -695,8 +732,53 @@ The task is automatically discovered if placed in `src/ofx/tasks/tools/`.
 
 ---
 
+## Profile Integration
+
+When a profile is active (via `defaults.profile` in a workflow or `--profile` on the CLI), OFX automatically maps profile-level settings to matching task options. This means you don't need to manually pass `threads`, `proxy`, or `rate_limit` to every task — the profile handles it.
+
+### Automatic Mapping
+
+| Profile Field | Mapped Task Opts (first match wins) |
+|--------------|-------------------------------------|
+| `proxy` | `proxy`, `proxy_url`, `http_proxy` |
+| `threads` | `threads`, `concurrency`, `workers` |
+| `rate_limit` | `rate_limit`, `rate` |
+| `delay` | `delay` |
+| `user_agent` | `user_agent` |
+
+**How it works:**
+
+1. For each profile field with a non-zero/non-empty value, OFX checks if the task declares a matching opt name
+2. If a match is found and the user hasn't explicitly set that opt, the profile value is injected
+3. Explicit user options (from `with:` in YAML or `--opt` on CLI) always take precedence
+
+**Example:** A profile with `threads: 5` and `proxy: socks5://127.0.0.1:9050` will automatically set those options on any task that declares `threads` and `proxy` opts — which includes httpx, nuclei, naabu, ffuf, subfinder, and many more.
+
+### Per-Task Overrides
+
+For fine-grained control, use `task_options` in the profile to override specific tools:
+
+```yaml
+profiles:
+  stealth:
+    threads: 2          # auto-injected into all tasks with a "threads" opt
+    rate_limit: 30      # auto-injected into all tasks with a "rate_limit" opt
+    proxy: "socks5://127.0.0.1:9050"
+    task_options:
+      nmap:
+        timing: "T2"    # nmap-specific override
+      nuclei:
+        rate_limit: 10  # override the global rate_limit for nuclei only
+```
+
+See [Profiles](profiles.md) for full documentation.
+
+---
+
 ## See Also
 
 - [Steps](jobs-steps/steps.md)
 - [Workflows](workflows.md)
+- [Profiles](profiles.md)
 - [Cloud Execution](cloud-runners.md)
+- [CLI Reference: Tasks](../cli/commands/tasks.md)

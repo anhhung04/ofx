@@ -160,10 +160,17 @@ jobs:
         task: nmap
         with:
           target: "{{ inputs.target }}"
-          opts: "-sV --top-ports 100"
+          top_ports: 100
+          version_detection: true
         timeout: 10
     outputs:
-      open_ports: "{{ steps['Port scan'].typed_outputs | ports | join(',') }}"
+      open_ports: "{{ ports(steps['Port scan'].outputs.typed_outputs) | map(attribute='port') | join(',') }}"
+```
+
+You can also run tasks directly from the CLI without a workflow:
+
+```bash
+ofx flow tasks run nmap 10.10.10.5 --opt top_ports=100 --opt version_detection
 ```
 
 Available tasks: `nmap`, `nuclei`, `httpx`, `subfinder`, `ffuf`, `feroxbuster`, `katana`, and [many more](../../guide/tasks.md).

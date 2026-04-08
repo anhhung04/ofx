@@ -21,7 +21,10 @@ ofx task run <workflow_name> [OPTIONS]   # Another alias
 | `-i, --input key=value` | Set input variables (repeatable). Values are JSON-decoded when possible. |
 | `-o, --output <dir>` | Output directory for artifacts (default: temp dir under `~/.ofx/tmp`) |
 | `-p, --project <name>` | Run for a specific project. Sets output to `<project>/logs` and exposes project vars. |
-| `--profile` | Enable performance profiling and output timing information |
+| `--profile <name>` | Apply an execution profile (rate limits, stealth, time windows). See [Profiles](../../guide/profiles.md). |
+| `--dry-run` | Show execution plan without running (jobs, stages, inputs, dependencies) |
+| `-T, --load-targets` | Load targets from project `targets/` folder and expand as matrix input |
+| `--time-window HH:MM-HH:MM` | Restrict execution to a time window (e.g. `09:00-17:00`) |
 | `--quiet` | Suppress interactive console output (cron/headless mode) |
 | `--lock <path>` | Lock file path to prevent overlapping runs (cron-safe) |
 | `--wait-lock <seconds>` | Seconds to wait for lock acquisition before failing (default: 0) |

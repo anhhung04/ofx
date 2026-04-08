@@ -114,6 +114,41 @@ profiles:
         rate_limit: 20
 ```
 
+### Automatic Task Option Injection
+
+In addition to per-task overrides, profile-level settings are **automatically mapped** to matching task option names. This eliminates the need to repeat common settings like `proxy` or `threads` for every tool.
+
+| Profile Field | Task Opts Checked (first match wins) |
+|--------------|--------------------------------------|
+| `proxy` | `proxy`, `proxy_url`, `http_proxy` |
+| `threads` | `threads`, `concurrency`, `workers` |
+| `rate_limit` | `rate_limit`, `rate` |
+| `delay` | `delay` |
+| `user_agent` | `user_agent` |
+
+**Rules:**
+
+- Only non-zero/non-empty profile values are injected
+- The task must declare the opt in its `opts` dict (checked via `ofx flow tasks info <name>`)
+- Explicit user options (from `with:` or `--opt`) always take precedence
+- Per-task `task_options` overrides are applied after auto-injection
+
+**Example:** With this profile, every task that has a `threads` opt gets `threads=2`, and every task with a `proxy` opt gets the Tor proxy — without needing `task_options` entries for each tool:
+
+```yaml
+stealth:
+  threads: 2
+  proxy: "socks5://127.0.0.1:9050"
+  rate_limit: 30
+```
+
+This also works when running tasks directly from the CLI:
+
+```bash
+ofx flow tasks run httpx example.com --profile stealth
+# → httpx runs with -threads 2 -proxy socks5://127.0.0.1:9050 -rate-limit 30
+```
+
 ### Environment Variables
 
 Inject env vars into all jobs:
