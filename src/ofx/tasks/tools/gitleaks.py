@@ -21,6 +21,9 @@ class GitleaksTask(Task):
     install_cmd = "GOBIN=~/Tools/bin go install -v github.com/gitleaks/gitleaks/v8@latest"
     output_types = [Tag]
 
+    # gitleaks returns exit code 1 when secrets/leaks are found — that's expected.
+    success_codes = [0, 1]
+
     opts = {
         "source": OptDef(flag="--source", type=str, help="Path or URL to scan"),
         "verbose": OptDef(flag="-v", is_flag=True, help="Verbose output"),

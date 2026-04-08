@@ -134,7 +134,7 @@ jobs:
       typed_outputs: '{{ steps["audit-ssh"].outputs.typed_outputs | default([], true) }}'
     needs:
     - port-discovery
-    if: '{{ "22" in (jobs["port-discovery"].outputs.open_ports | default("", true)) }}'
+    if: '{{ "22" in (jobs["port-discovery"].outputs.open_ports | default("", true)).split(",") }}'
     steps:
     - task: ssh-audit
       timeout: 10

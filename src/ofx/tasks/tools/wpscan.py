@@ -19,6 +19,9 @@ class WpscanTask(Task):
     install_cmd = "GEM_HOME=~/Tools gem install wpscan"
     output_types = [Vulnerability, Tag]
 
+    # wpscan: exit 5 = vulnerabilities found — that's expected useful output.
+    success_codes = [0, 5]
+
     opts = {
         "enumerate": OptDef(
             flag="-e",

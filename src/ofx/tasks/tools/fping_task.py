@@ -20,6 +20,9 @@ class FpingTask(Task):
     install_cmd = "apt install -y fping"
     output_types = [Ip]
 
+    # fping returns 1 when some hosts are unreachable — normal in network recon.
+    success_codes = [0, 1]
+
     opts = {
         "count": OptDef(flag="-c", type=int, help="Number of pings per target"),
         "timeout": OptDef(flag="-t", type=int, help="Timeout in ms"),
