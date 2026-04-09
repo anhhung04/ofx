@@ -70,7 +70,10 @@ _source_host_cache: str = ""
 
 
 def _source_host() -> str:
-    """Return ``hostname (local_ip)`` matching oops-logger format."""
+    """Return ``hostname (public_ip)`` matching oops-logger format.
+
+    Tries public IP first (via HTTP), falls back to local route IP.
+    """
     global _source_host_cache
     if _source_host_cache:
         return _source_host_cache
@@ -79,8 +82,23 @@ def _source_host() -> str:
     ip = os.environ.get("OOPS_SOURCE_IP", "")
 
     if not ip:
+        # Try public IP first (matching oops-logger behavior)
+        import urllib.request
+
+        for url in ("https://ifconfig.me", "https://api.ipify.org", "https://icanhazip.com"):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
+                with urllib.request.urlopen(req, timeout=2) as resp:
+                    candidate = resp.read().decode().strip()
+                    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", candidate):
+                        ip = candidate
+                        break
+            except Exception:
+                continue
+
+    if not ip:
+        # Fall back to local route source address
         try:
-            # Connect to a public IP to find the default route source address
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.settimeout(1)
             s.connect(("1.1.1.1", 80))
@@ -156,11 +174,15 @@ def log_step(
     duration_ms: int | None,
     exit_code: int | str | None = None,
     tags: str = "",
+    source_host: str = "",
 ) -> None:
     """Append a step execution record to the oops-logger engagement CSV.
 
     Uses the project name as engagement when available, falls back to
     ``$OOPS_ENGAGEMENT`` or ``"default"``.
+
+    *source_host* overrides the auto-detected local host — use this for
+    cloud/remote steps where the command runs on a VPS.
     """
     project_name = ctx_vars.get("project_name", "")
     csv_path = _resolve_oops_csv(project_name)
@@ -190,7 +212,7 @@ def log_step(
             command,
             tool_name,
             datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            _source_host(),
+            source_host or _source_host(),
             resolved_target,
             all_tags,
         ])

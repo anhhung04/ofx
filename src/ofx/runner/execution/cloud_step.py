@@ -299,7 +299,7 @@ class CloudStepRunner(BaseRunner):
         elif rt == RunType.WORKFLOW:
             command = f"uses:{self.model.uses or ''}"
 
-        # Tag cloud execution with host info
+        # Get VPS host/IP as source — this is where commands actually run
         cloud_host = ""
         from ofx.runner.execution.cloud_job import CloudJobRunner
         if isinstance(self.parent, CloudJobRunner) and hasattr(self.parent, "_cloud_config"):
@@ -307,7 +307,7 @@ class CloudStepRunner(BaseRunner):
             if cfg:
                 cloud_host = getattr(cfg, "host", "") or ""
 
-        tags = f"cloud:{cloud_host}" if cloud_host else "cloud"
+        tags = "cloud"
 
         log_step(
             ctx_vars=self.ctx.vars,
@@ -320,6 +320,7 @@ class CloudStepRunner(BaseRunner):
             duration_ms=self.duration_ms(),
             exit_code=result.outputs.get("exit_code"),
             tags=tags,
+            source_host=cloud_host,
         )
 
     # ------------------------------------------------------------------
