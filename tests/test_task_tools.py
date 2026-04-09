@@ -892,9 +892,10 @@ class TestTrufflehogParser:
         cmd, _ = task.build_command("https://github.com/org/repo", verified_only=True)
         assert "trufflehog" in cmd
         assert "git" in cmd.split()
-        assert "--json" in cmd
+        assert "--no-update" in cmd
         assert "--only-verified" in cmd
         assert "https://github.com/org/repo" in cmd
+        assert task.json_flag == "--json"
 
     def test_registration(self):
         task = TaskRegistry.create("trufflehog")

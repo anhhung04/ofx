@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
 from ofx.tasks.registry import TaskRegistry
@@ -44,7 +42,7 @@ class UrlfinderTask(Task):
     input_flag = "-d"
     file_flag = "-dL"
     output_flag = "-o"
-    extra_flags = ["-silent"]
+    silent_flag = "-silent"
 
     def _output_suffix(self) -> str:
         return ".txt"
@@ -59,21 +57,3 @@ class UrlfinderTask(Task):
 
         return []
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Url]:
-        results: list[Url] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

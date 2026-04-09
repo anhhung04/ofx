@@ -37,7 +37,7 @@ class SshAuditTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags = ["-j"]
+    json_flag = "-j"
 
     def parse_output(
         self,

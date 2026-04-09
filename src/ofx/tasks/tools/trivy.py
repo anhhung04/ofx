@@ -53,11 +53,16 @@ class TrivyTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags = ["-f", "json", "--quiet"]
+    extra_flags = ["-f", "json"]
+    silent_flag = "--quiet"
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Prepend 'image' subcommand before flags and target."""
         parts: list[str] = [self.cmd, "image", *self.extra_flags]
+        if self.json_flag:
+            parts.append(self.json_flag)
+        if self.silent_flag:
+            parts.append(self.silent_flag)
 
         for key, value in kwargs.items():
             if key.startswith("_"):

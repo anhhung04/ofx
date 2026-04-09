@@ -94,21 +94,3 @@ class JsluiceTask(Task):
 
         return results
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Url | Tag]:
-        results: list[Url | Tag] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

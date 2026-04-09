@@ -26,7 +26,8 @@ class HashidTask(Task):
     input_flag = None
     file_flag = "-f"
     output_flag = None
-    extra_flags = ["-j", "-m"]
+    json_flag = "-j"
+    extra_flags = ["-m"]
 
     def _output_suffix(self) -> str:
         return ".txt"

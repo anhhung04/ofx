@@ -51,7 +51,8 @@ class FfufTask(Task):
     input_flag = "-u"
     file_flag = None
     output_flag = "-o"
-    extra_flags = ["-noninteractive", "-of", "json", "-s"]
+    silent_flag = "-s"
+    extra_flags = ["-noninteractive", "-of", "json"]
 
     def _output_suffix(self) -> str:
         return ".json"

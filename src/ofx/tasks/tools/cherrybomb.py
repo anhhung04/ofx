@@ -44,11 +44,13 @@ class CherrybombTask(Task):
     input_flag = None
     file_flag = "--file"
     output_flag = None
-    extra_flags = ["--quiet"]
+    silent_flag = "--quiet"
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Use ``oas`` subcommand with ``--file`` for the spec file."""
-        parts: list[str] = [self.cmd, "oas", "--file", target, "--quiet"]
+        parts: list[str] = [self.cmd, "oas", "--file", target]
+        if self.silent_flag:
+            parts.append(self.silent_flag)
 
         for key, value in kwargs.items():
             if key.startswith("_"):

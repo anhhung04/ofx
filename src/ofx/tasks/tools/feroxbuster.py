@@ -83,7 +83,9 @@ class FeroxbusterTask(Task):
     input_flag = "-u"
     file_flag = "--stdin"
     output_flag = "-o"
-    extra_flags = ["--json", "--silent", "--no-state"]
+    json_flag = "--json"
+    silent_flag = "--silent"
+    extra_flags = ["--no-state"]
 
     def build_command(
         self, target: str, **kwargs: Any
@@ -158,21 +160,3 @@ class FeroxbusterTask(Task):
             )
         ]
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Url]:
-        results: list[Url] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

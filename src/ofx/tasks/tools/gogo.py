@@ -43,7 +43,8 @@ class GogoTask(Task):
     input_flag = "-i"
     file_flag = "-l"
     output_flag = "-f"
-    extra_flags = ["-q", "-C", "-O", "jsonlines"]
+    silent_flag = "-q"
+    extra_flags = ["-C", "-O", "jsonlines"]
 
     def _output_suffix(self) -> str:
         return ".jsonl"
@@ -191,21 +192,3 @@ class GogoTask(Task):
 
         return results
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Port | Url | Tag | Vulnerability]:
-        results: list[Port | Url | Tag | Vulnerability] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

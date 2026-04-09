@@ -3,6 +3,7 @@
 A *Task* wraps an external CLI tool with:
 - Declarative option mapping (Python kwargs → CLI flags)
 - Structured output parsing (raw stdout/file → list[OutputType])
+- Auto-optimized flags (json, silent, quiet) injected automatically
 - Install / health-check logic
 - Metadata (name, description, category, output_types)
 """
@@ -39,7 +40,7 @@ class Task(ABC):
     """Abstract base class for all security tool wrappers.
 
     Subclass this, set the class attributes, and implement
-    ``parse_output`` to integrate a new tool.
+    ``parse_output`` (or just ``parse_line``) to integrate a new tool.
     """
 
     # ── Metadata (override in subclasses) ──────────────────────────
@@ -57,8 +58,15 @@ class Task(ABC):
     output_flag: str | None = None
 
     # ── Extra flags (override in subclasses) ─────────────────────
-    # Flags prepended right after the command binary (e.g. ``["-json", "-silent"]``).
+    # Flags prepended right after the command binary.
     extra_flags: list[str] = []
+
+    # ── Auto-optimized flags ───────────────────────────────────────
+    # Set these to auto-inject machine-friendly output flags.
+    # They are appended to the command automatically.  Set to ``""``
+    # to disable a particular auto-flag.
+    json_flag: str = ""      # e.g. "-json", "--json", "-jsonl"
+    silent_flag: str = ""    # e.g. "-silent", "--silent", "-s"
 
     # ── Exit code handling ─────────────────────────────────────────
     # Exit codes considered successful.  Override in subclasses for tools
@@ -68,22 +76,15 @@ class Task(ABC):
     # ── Output export control ──────────────────────────────────────
     # Set to ``False`` for tools whose output is intermediate data
     # (e.g. permutation generators) that should not be persisted in
-    # ``<output_path>/scans/``.  The temp file is kept alive for
-    # subsequent steps but not exported.
+    # ``<output_path>/scans/``.
     export_output: bool = True
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Ensure mutable class attributes are copied per-subclass.
-
-        Without this, a subclass that doesn't explicitly set ``opts``,
-        ``extra_flags``, or ``output_types`` would share the parent's
-        mutable object, risking cross-class mutation.
-        """
+        """Ensure mutable class attributes are copied per-subclass."""
         super().__init_subclass__(**kwargs)
         for attr in ("opts", "extra_flags", "output_types", "success_codes"):
             value = cls.__dict__.get(attr)
             if value is None:
-                # Subclass didn't define it — copy from parent
                 inherited = getattr(cls, attr)
                 if isinstance(inherited, dict):
                     setattr(cls, attr, dict(inherited))
@@ -105,6 +106,12 @@ class Task(ABC):
 
         parts: list[str] = [self.cmd, *self.extra_flags]
         output_file: Path | None = None
+
+        # Auto-inject optimized flags
+        if self.json_flag:
+            parts.append(self.json_flag)
+        if self.silent_flag:
+            parts.append(self.silent_flag)
 
         # Map keyword arguments to CLI flags
         for key, value in kwargs.items():
@@ -128,8 +135,7 @@ class Task(ABC):
             )
             parts.extend([self.output_flag, str(output_file)])
 
-        # Target handling — auto-detect file paths, multi-target lists,
-        # and choose the safest CLI flag for the tool.
+        # Target handling — auto-detect file paths, multi-target lists
         target_is_file = (
             self.file_flag
             and target
@@ -141,14 +147,8 @@ class Task(ABC):
         if target_is_file:
             parts.extend([self.file_flag, target])
         elif is_multi and self.file_flag:
-            # Tool supports file input — write comma-separated targets to a
-            # temp file so each target is on its own line.
             parts.extend([self.file_flag, self._write_target_file(target)])
         elif is_multi and not self.file_flag:
-            # Tool has NO file_flag — write targets to a temp file and pipe
-            # via stdin so tools that read stdin still work.  Tools that only
-            # accept a single positional/flag target will receive the file
-            # path instead, which is safer than a mangled comma string.
             tfile = self._write_target_file(target)
             if self.input_flag:
                 parts.extend([self.input_flag, tfile])
@@ -161,7 +161,6 @@ class Task(ABC):
 
         return " ".join(parts), output_file
 
-    @abstractmethod
     def parse_output(
         self,
         stdout: str,
@@ -170,9 +169,22 @@ class Task(ABC):
     ) -> list[OutputType]:
         """Parse raw tool output into structured ``OutputType`` objects.
 
-        Override this in every task subclass.
+        Default implementation reads lines from output_file (or stdout)
+        and delegates to :meth:`parse_line`.  Tasks with custom parsing
+        (XML, full JSON, etc.) should override this method.
         """
-        ...
+        results: list[OutputType] = []
+        lines: list[str] = []
+
+        if output_file and output_file.exists():
+            lines = self._read_output_file(output_file).strip().splitlines()
+        elif stdout:
+            lines = stdout.strip().splitlines()
+
+        for line in lines:
+            results.extend(self.parse_line(line))
+
+        return results
 
     def check_installed(self) -> bool:
         """Return ``True`` if the tool binary is on ``$PATH``."""
@@ -188,9 +200,7 @@ class Task(ABC):
     def supports_streaming(self) -> bool:
         """Whether the task supports line-by-line live streaming.
 
-        Tasks that output JSONL or one-result-per-line can override this
-        to return ``True``.  The default is ``True`` for tasks that define
-        :meth:`parse_line`.
+        Auto-detected: ``True`` when a subclass overrides :meth:`parse_line`.
         """
         return type(self).parse_line is not Task.parse_line
 
@@ -199,16 +209,11 @@ class Task(ABC):
 
         Override in subclasses whose tool emits JSONL or line-delimited
         output.  Return an empty list for non-parseable lines.
-
-        The default implementation returns ``[]`` (no streaming support).
         """
         return []
 
     def _write_target_file(self, target: str) -> str:
-        """Write comma-separated targets to a temp file, one per line.
-
-        Returns the path to the temp file.
-        """
+        """Write comma-separated targets to a temp file, one per line."""
         tf = tempfile.NamedTemporaryFile(
             mode="w",
             prefix=f".ofx_targets_{self.name}_",
@@ -225,10 +230,7 @@ class Task(ABC):
 
     @staticmethod
     def _read_output_file(path: Path) -> str:
-        """Read an output file with error handling.
-
-        Returns empty string on any read failure (permission, encoding, etc.).
-        """
+        """Read an output file, returns empty string on failure."""
         try:
             return path.read_text(errors="replace")
         except OSError:

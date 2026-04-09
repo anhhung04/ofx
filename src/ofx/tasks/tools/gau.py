@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from urllib.parse import urlparse
 
 from ofx.tasks.base import OptDef, Task
@@ -37,7 +36,7 @@ class GauTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags = ["--json"]
+    json_flag = "--json"
 
     def _output_suffix(self) -> str:
         return ".jsonl"
@@ -77,21 +76,3 @@ class GauTask(Task):
 
         return results
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Url | Subdomain]:
-        results: list[Url | Subdomain] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

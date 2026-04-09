@@ -54,7 +54,8 @@ class GrypeTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags = ["-o", "json", "--quiet"]
+    extra_flags = ["-o", "json"]
+    silent_flag = "--quiet"
 
     def parse_output(
         self,

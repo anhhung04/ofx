@@ -29,7 +29,7 @@ class TinjaTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags = ["-json"]
+    json_flag = "-json"
 
     def _output_suffix(self) -> str:
         return ".jsonl"
@@ -44,6 +44,11 @@ class TinjaTask(Task):
             parts.extend(["url", "-u", target])
 
         parts.extend(self.extra_flags)
+
+        if self.json_flag:
+            parts.append(self.json_flag)
+        if self.silent_flag:
+            parts.append(self.silent_flag)
 
         for key, value in kwargs.items():
             if key.startswith("_"):
@@ -91,21 +96,3 @@ class TinjaTask(Task):
 
         return results
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Vulnerability | Url]:
-        results: list[Vulnerability | Url] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

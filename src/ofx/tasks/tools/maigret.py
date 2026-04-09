@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
@@ -32,7 +31,7 @@ class MaigretTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags = ["--json", "ndjson"]
+    json_flag = "--json ndjson"
 
     def _output_suffix(self) -> str:
         return ".jsonl"
@@ -64,21 +63,3 @@ class MaigretTask(Task):
             )
         ]
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[UserAccount]:
-        results: list[UserAccount] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

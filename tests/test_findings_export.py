@@ -235,73 +235,22 @@ class TestExportTypedOutputs:
 
 
 class TestTimestampedExport:
-    def test_txt_creates_timestamped_snapshot(self, tmp_path):
+    def test_only_master_file_created(self, tmp_path):
+        """No timestamped snapshots — only master files."""
         items = [{"_type": "subdomain", "host": "a.example.com"}]
-        export_typed_outputs(str(tmp_path), items, run_timestamp="20260325-120000")
-        master = tmp_path / "subdomains" / "subdomains.txt"
-        ts_file = tmp_path / "subdomains" / "subdomains_20260325-120000.txt"
-        assert master.exists()
-        assert ts_file.exists()
-        assert "a.example.com" in ts_file.read_text()
-
-    def test_jsonl_creates_timestamped_snapshot(self, tmp_path):
-        items = [{"_type": "user_account", "username": "admin", "site": "ssh"}]
-        export_typed_outputs(str(tmp_path), items, run_timestamp="20260325-120000")
-        master = tmp_path / "evidence" / "creds" / "accounts.jsonl"
-        ts_file = tmp_path / "evidence" / "creds" / "accounts_20260325-120000.jsonl"
-        assert master.exists()
-        assert ts_file.exists()
-        assert "admin" in ts_file.read_text()
-
-    def test_no_timestamp_when_empty_string(self, tmp_path):
-        items = [{"_type": "subdomain", "host": "a.example.com"}]
-        export_typed_outputs(str(tmp_path), items, run_timestamp="")
-        # Only master file, no timestamped
+        export_typed_outputs(str(tmp_path), items)
         files = list((tmp_path / "subdomains").iterdir())
         assert len(files) == 1
         assert files[0].name == "subdomains.txt"
 
-    def test_timestamp_contains_only_new_items_txt(self, tmp_path):
-        """Timestamped snapshot should contain only new items, not existing."""
-        items1 = [{"_type": "subdomain", "host": "old.example.com"}]
-        export_typed_outputs(str(tmp_path), items1)  # No timestamp for first run
-
-        items2 = [
-            {"_type": "subdomain", "host": "old.example.com"},
-            {"_type": "subdomain", "host": "new.example.com"},
-        ]
-        export_typed_outputs(str(tmp_path), items2, run_timestamp="20260325-130000")
-
-        ts_file = tmp_path / "subdomains" / "subdomains_20260325-130000.txt"
-        assert ts_file.exists()
-        ts_content = ts_file.read_text()
-        assert "new.example.com" in ts_content
-        assert "old.example.com" not in ts_content
-
-    def test_timestamp_contains_only_new_items_jsonl(self, tmp_path):
-        items1 = [{"_type": "user_account", "username": "admin", "site": "ssh"}]
-        export_typed_outputs(str(tmp_path), items1)
-
-        items2 = [
-            {"_type": "user_account", "username": "admin", "site": "ssh"},
-            {"_type": "user_account", "username": "root", "site": "ssh"},
-        ]
-        export_typed_outputs(str(tmp_path), items2, run_timestamp="20260325-130000")
-
-        ts_file = tmp_path / "evidence" / "creds" / "accounts_20260325-130000.jsonl"
-        assert ts_file.exists()
-        ts_content = ts_file.read_text()
-        assert "root" in ts_content
-        assert "admin" not in ts_content
-
-    def test_no_timestamp_file_when_all_duplicates(self, tmp_path):
-        """No timestamped file created when all items already exist."""
-        items = [{"_type": "subdomain", "host": "a.example.com"}]
+    def test_only_master_jsonl_created(self, tmp_path):
+        items = [{"_type": "user_account", "username": "admin", "site": "ssh"}]
         export_typed_outputs(str(tmp_path), items)
-        export_typed_outputs(str(tmp_path), items, run_timestamp="20260325-140000")
-
-        ts_file = tmp_path / "subdomains" / "subdomains_20260325-140000.txt"
-        assert not ts_file.exists()
+        master = tmp_path / "evidence" / "creds" / "accounts.jsonl"
+        assert master.exists()
+        # No timestamped file
+        files = list((tmp_path / "evidence" / "creds").iterdir())
+        assert len(files) == 1
 
     def test_summary_shows_new_count(self, tmp_path):
         items1 = [{"_type": "subdomain", "host": "a.example.com"}]
@@ -311,7 +260,7 @@ class TestTimestampedExport:
             {"_type": "subdomain", "host": "a.example.com"},
             {"_type": "subdomain", "host": "b.example.com"},
         ]
-        summaries = export_typed_outputs(str(tmp_path), items2, run_timestamp="20260325-150000")
+        summaries = export_typed_outputs(str(tmp_path), items2)
         assert len(summaries) == 1
         assert "2 items" in summaries[0]
         assert "1 new" in summaries[0]
@@ -326,8 +275,8 @@ class TestTimestampedExport:
         """Master file should contain all items from all runs."""
         items1 = [{"_type": "ip", "ip": "1.1.1.1"}]
         items2 = [{"_type": "ip", "ip": "2.2.2.2"}]
-        export_typed_outputs(str(tmp_path), items1, run_timestamp="20260325-100000")
-        export_typed_outputs(str(tmp_path), items2, run_timestamp="20260325-110000")
+        export_typed_outputs(str(tmp_path), items1)
+        export_typed_outputs(str(tmp_path), items2)
 
         master = tmp_path / "hosts" / "ips.txt"
         content = master.read_text().strip().splitlines()

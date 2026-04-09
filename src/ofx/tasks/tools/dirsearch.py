@@ -54,7 +54,8 @@ class DirsearchTask(Task):
     input_flag = "-u"
     file_flag = "-l"
     output_flag = "-o"
-    extra_flags = ["--format", "json", "-q"]
+    silent_flag = "-q"
+    extra_flags = ["--format", "json"]
 
     def _output_suffix(self) -> str:
         return ".json"

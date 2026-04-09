@@ -65,7 +65,6 @@ def export_typed_outputs(
     project_path: str,
     all_typed_outputs: list,
     prefix: str = "",
-    run_timestamp: str = "",
 ) -> list[str]:
     """Export typed outputs to the correct project subdirectories.
 
@@ -77,8 +76,6 @@ def export_typed_outputs(
         project_path: Root project directory.
         all_typed_outputs: Flat list of typed output dicts.
         prefix: Optional filename prefix (e.g. workflow or job name).
-        run_timestamp: Timestamp string (``YYYYMMDD-HHMMSS``) for the
-            per-run snapshot.  When empty, no snapshot is written.
 
     Returns:
         List of summary strings describing what was written.
@@ -117,7 +114,7 @@ def export_typed_outputs(
         dest.mkdir(parents=True, exist_ok=True)
         fpath = dest / filename
 
-        new_count = _write_findings_file(fpath, type_name, items, run_timestamp)
+        new_count = _write_findings_file(fpath, type_name, items)
 
         label = f"{len(items)} items"
         if new_count < len(items):
@@ -140,7 +137,7 @@ def export_typed_outputs(
         dest.mkdir(parents=True, exist_ok=True)
         fpath = dest / filename
 
-        new_count = _write_findings_file(fpath, type_name, items, run_timestamp)
+        new_count = _write_findings_file(fpath, type_name, items)
 
         label = f"{len(items)} items"
         if new_count < len(items):
@@ -151,7 +148,7 @@ def export_typed_outputs(
 
 
 def _write_findings_file(
-    fpath: Path, type_name: str, items: list[dict], run_timestamp: str
+    fpath: Path, type_name: str, items: list[dict]
 ) -> int:
     """Write findings to a file, returning the count of new items."""
     new_count = 0
@@ -171,8 +168,6 @@ def _write_findings_file(
         if new_lines:
             with open(fpath, "a") as f:
                 f.write("\n".join(new_lines) + "\n")
-        if run_timestamp and new_lines:
-            _write_timestamped(fpath, run_timestamp, "\n".join(new_lines) + "\n")
     else:
         values = set()
         for i in items:
@@ -189,10 +184,6 @@ def _write_findings_file(
         merged = values | existing_lines
         if merged:
             fpath.write_text("\n".join(sorted(merged)) + "\n")
-        if run_timestamp and new_values:
-            _write_timestamped(
-                fpath, run_timestamp, "\n".join(sorted(new_values)) + "\n"
-            )
 
     return new_count
 
@@ -208,17 +199,6 @@ def _sanitize_target(target: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9._-]", "_", slug)
     slug = re.sub(r"_+", "_", slug).strip("_")
     return slug[:120]
-
-
-def _write_timestamped(master_path: Path, timestamp: str, content: str) -> None:
-    """Write a timestamped snapshot file next to the master file.
-
-    ``subdomains.txt`` → ``subdomains_20260325-120500.txt``
-    """
-    stem = master_path.stem
-    suffix = master_path.suffix
-    ts_path = master_path.with_name(f"{stem}_{timestamp}{suffix}")
-    ts_path.write_text(content)
 
 
 async def collect_typed_outputs(runners: dict[str, BaseRunner]) -> list[dict]:
@@ -290,11 +270,7 @@ async def auto_export_findings(
     if not all_typed:
         return []
 
-    from datetime import UTC, datetime
-
-    run_ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-
-    summaries = export_typed_outputs(project_path, all_typed, run_timestamp=run_ts)
+    summaries = export_typed_outputs(project_path, all_typed)
 
     if summaries and log_fn:
         log_fn("Findings exported to project:")

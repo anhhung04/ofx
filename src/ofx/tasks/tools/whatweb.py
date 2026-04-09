@@ -40,7 +40,8 @@ class WhatwebTask(Task):
     input_flag = None  # positional
     file_flag = "-i"
     output_flag = "--log-json"
-    extra_flags = ["-q", "--color=never"]
+    silent_flag = "-q"
+    extra_flags = ["--color=never"]
 
     def _output_suffix(self) -> str:
         return ".json"
@@ -48,6 +49,10 @@ class WhatwebTask(Task):
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Override to place positional target after flags and output file."""
         parts: list[str] = [self.cmd, *self.extra_flags]
+        if self.json_flag:
+            parts.append(self.json_flag)
+        if self.silent_flag:
+            parts.append(self.silent_flag)
 
         for key, value in kwargs.items():
             if key.startswith("_"):

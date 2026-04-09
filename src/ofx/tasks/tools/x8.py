@@ -44,7 +44,7 @@ class X8Task(Task):
     input_flag = "-u"
     file_flag = None
     output_flag = "-o"
-    extra_flags = ["--json"]
+    json_flag = "--json"
 
     def _output_suffix(self) -> str:
         return ".json"

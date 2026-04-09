@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -81,8 +80,7 @@ def save_output_file(
         getattr(step_model, "name", None)
         or f"step_{getattr(step_model, 'step_index', 0)}"
     ).replace(" ", "-")
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_file = log_path / f"stdout_{job_id}_{step_name}__{timestamp}.log"
+    out_file = log_path / f"stdout_{job_id}_{step_name}.log"
 
     header = _build_header(step_model, outputs or {})
     out_file.write_text("\n".join(header) + "\n" + stdout)

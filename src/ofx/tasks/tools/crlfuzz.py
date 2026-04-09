@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Vulnerability
 from ofx.tasks.registry import TaskRegistry
@@ -29,7 +27,7 @@ class CrlfuzzTask(Task):
     input_flag = "-u"
     file_flag = "-l"
     output_flag = "-o"
-    extra_flags = ["-s"]
+    silent_flag = "-s"
 
     def _output_suffix(self) -> str:
         return ".txt"
@@ -49,21 +47,3 @@ class CrlfuzzTask(Task):
             ]
         return []
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Vulnerability]:
-        results: list[Vulnerability] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results

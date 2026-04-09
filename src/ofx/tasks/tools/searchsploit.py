@@ -34,7 +34,7 @@ class SearchsploitTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags = ["--json"]
+    json_flag = "--json"
 
     def _output_suffix(self) -> str:
         return ".json"

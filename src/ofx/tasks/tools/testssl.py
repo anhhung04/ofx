@@ -55,7 +55,8 @@ class TestsslTask(Task):
     input_flag = None  # positional host:port
     file_flag = "--file"
     output_flag = "--jsonfile"
-    extra_flags = ["--quiet", "--color", "0"]
+    extra_flags = ["--color", "0"]
+    silent_flag = "--quiet"
 
     def _output_suffix(self) -> str:
         return ".json"

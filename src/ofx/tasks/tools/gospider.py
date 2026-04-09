@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from urllib.parse import urlparse
 
 from ofx.tasks.base import OptDef, Task
@@ -38,7 +37,8 @@ class GospiderTask(Task):
     input_flag = "-s"
     file_flag = "-S"
     output_flag = None
-    extra_flags = ["--json", "-q"]
+    json_flag = "--json"
+    silent_flag = "-q"
 
     def _output_suffix(self) -> str:
         return ".jsonl"
@@ -64,21 +64,3 @@ class GospiderTask(Task):
 
         return [Url(url=url, host=host)]
 
-    def parse_output(
-        self,
-        stdout: str,
-        stderr: str,
-        output_file: Path | None = None,
-    ) -> list[Url]:
-        results: list[Url] = []
-        lines: list[str] = []
-
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
-        for line in lines:
-            results.extend(self.parse_line(line))
-
-        return results
