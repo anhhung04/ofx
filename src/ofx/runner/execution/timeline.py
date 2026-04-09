@@ -65,6 +65,38 @@ def _hostname() -> str:
         return "unknown"
 
 
+# Cache source host string (hostname + IP) to avoid repeated lookups
+_source_host_cache: str = ""
+
+
+def _source_host() -> str:
+    """Return ``hostname (local_ip)`` matching oops-logger format."""
+    global _source_host_cache
+    if _source_host_cache:
+        return _source_host_cache
+
+    host = os.environ.get("OOPS_SOURCE_HOST") or _hostname()
+    ip = os.environ.get("OOPS_SOURCE_IP", "")
+
+    if not ip:
+        try:
+            # Connect to a public IP to find the default route source address
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.settimeout(1)
+            s.connect(("1.1.1.1", 80))
+            ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            ip = ""
+
+    if ip and ip != host:
+        _source_host_cache = f"{host} ({ip})"
+    else:
+        _source_host_cache = host
+
+    return _source_host_cache
+
+
 def _csv_row(values: list[str]) -> str:
     """Produce a single CSV row string (handles quoting/escaping)."""
     buf = io.StringIO()
@@ -158,7 +190,7 @@ def log_step(
             command,
             tool_name,
             datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            _hostname(),
+            _source_host(),
             resolved_target,
             all_tags,
         ])
