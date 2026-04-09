@@ -229,6 +229,13 @@ class MatrixJobRunner(BaseRunner[Job]):
                         parsed = json.loads(val)
                         if isinstance(parsed, list):
                             self.model.strategy.matrix[key] = parsed
+                            logger.debug(
+                                self._produce_log(
+                                    f"Matrix key '{key}' resolved to {len(parsed)} item(s)"
+                                )
+                            )
+                        else:
+                            self.model.strategy.matrix[key] = [parsed]
                     except (json.JSONDecodeError, ValueError):
                         # Wrap scalar string as single-element list
                         self.model.strategy.matrix[key] = [val]
@@ -243,6 +250,15 @@ class MatrixJobRunner(BaseRunner[Job]):
 
         strategy = self.model.strategy
         if not strategy or not strategy.matrix:
+            return []
+
+        # Detect empty source lists before expansion so the warning is accurate.
+        empty_keys = [k for k, v in strategy.matrix.items() if isinstance(v, list) and len(v) == 0]
+        if empty_keys:
+            self._log_warning(
+                f"Matrix produced 0 combinations: key(s) {empty_keys} resolved to an empty list. "
+                "Check that upstream job outputs are non-empty."
+            )
             return []
 
         combos = generate_matrix_combinations(

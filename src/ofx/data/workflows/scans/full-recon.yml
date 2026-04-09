@@ -114,6 +114,7 @@ jobs:
     outputs:
       verified_file: '{{ steps["export-verified"].outputs.verified_file | default("", true) }}'
       verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
+      verified_hosts_json: '{{ steps["export-verified"].outputs.verified_hosts_json | default("[]", true) }}'
     steps:
       - task: dnsx
         timeout: "{{ (jobs['subdomain-enum'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
@@ -126,6 +127,7 @@ jobs:
         continue-on-error: true
       - name: export-verified
         script: |
+          import json
           verified = set()
           for item in {{ steps["dns-verify"].outputs.typed_outputs | tojson }}:
               h = item.get('host', '')
@@ -133,9 +135,14 @@ jobs:
                   verified.add(h)
 
           from pathlib import Path
-          Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_fullrecon_verified.txt').write_text('\n'.join(sorted(verified)))
-          add_outputs(verified_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fullrecon_verified.txt", verified_count=len(verified))
-          print(f"Verified {len(verified)} subdomains via DNS")
+          verified_list = sorted(verified)
+          Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_fullrecon_verified.txt').write_text('\n'.join(verified_list))
+          add_outputs(
+              verified_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fullrecon_verified.txt",
+              verified_count=len(verified_list),
+              verified_hosts_json=json.dumps(verified_list),
+          )
+          print(f"Verified {len(verified_list)} subdomains via DNS")
 
   http-probe:
     name: HTTP Probing
@@ -159,10 +166,24 @@ jobs:
         script: |
           import json
           from pathlib import Path
+          from urllib.parse import urlparse
 
           typed = {{ steps["probe-subs"].outputs.typed_outputs | default([], true) | tojson }}
-          live = sorted({item["url"] for item in typed
-                         if item.get("_type") == "url" and item.get("status_code", 0) > 0})
+
+          # Collect all live URLs first
+          all_live = [item.get("url", "") for item in typed
+                      if item.get("_type") == "url" and item.get("status_code", 0) > 0
+                      and item.get("url", "")]
+
+          # Deduplicate by hostname — host-scan accepts URLs but operates on the
+          # extracted hostname, so http://x.com and https://x.com would scan the
+          # same host twice. Keep the first (preferred) URL per hostname.
+          seen_hosts = {}
+          for url in all_live:
+              host = urlparse(url).hostname or url
+              if host not in seen_hosts:
+                  seen_hosts[host] = url
+          live = sorted(seen_hosts.values())
 
           Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_fullrecon_live.txt').write_text('\n'.join(live))
 
@@ -171,7 +192,7 @@ jobs:
               live_urls_json=json.dumps(live),
               live_count=len(live),
           )
-          print(f"Live HTTP services: {len(live)}")
+          print(f"Live HTTP services: {len(live)} unique host(s)")
           for u in live:
               print(f"  {u}")
 
@@ -205,10 +226,10 @@ jobs:
   # ── Phase 3: Per-subdomain full scan via host-scan ───────────────
   per-host-recon:
     name: "Recon: {{ matrix.target }}"
-    needs: [http-probe]
+    needs: [dns-resolve]
     strategy:
       matrix:
-        target: "{{ jobs['http-probe'].outputs.live_urls_json }}"
+        target: "{{ jobs['dns-resolve'].outputs.verified_hosts_json }}"
       max_parallel: 5
       fail_fast: false
     steps:
@@ -223,6 +244,7 @@ jobs:
     needs:
       - per-host-recon
       - takeover-check
+      - http-probe
     steps:
       - name: report
         run: |
@@ -237,7 +259,7 @@ jobs:
           echo "Subdomain takeovers: {{ jobs['takeover-check'].outputs.takeover_count }}"
           echo ""
           echo "--- Per-host scanning ---"
-          echo "Hosts scanned (host-scan): {{ jobs['http-probe'].outputs.live_count }}"
+          echo "Hosts scanned (host-scan): {{ jobs['dns-resolve'].outputs.verified_count }}"
           echo "(Each host received: port scan, fingerprint, crawl, vuln scan)"
         log-stdout: true
       - name: export-to-project
