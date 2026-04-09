@@ -1,16 +1,18 @@
 name: domain-scan
 description: |
-  Comprehensive domain security assessment — combines domain reconnaissance, subdomain discovery, host scanning, URL crawling, and vulnerability scanning.
+  Comprehensive domain security assessment — DNS record enumeration, subdomain
+  discovery (passive + cert-based), service discovery, web fingerprinting,
+  SSL/TLS audit, and vulnerability scanning.
 tags:
-- recon
-- dns
-- ssl
-- network
-- http
-- crawl
-- takeovers
-- vuln
-- secrets
+  - recon
+  - dns
+  - ssl
+  - network
+  - http
+  - crawl
+  - takeovers
+  - vuln
+  - secrets
 dispatch:
   inputs:
     target:
@@ -18,288 +20,355 @@ dispatch:
       type: string
       description: Target domain (e.g. example.com)
       alias: t
+defaults:
+  store-creds: true
 jobs:
-  domain-recon:
-    name: Domain Reconnaissance
+  # ── Phase 1a: Full DNS Record Enumeration ─────────────────────────
+  dns-enum:
+    name: DNS Enumeration
     steps:
-    - task: whois
-      timeout: 5
-      name: whois-lookup
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - task: dnsx
-      timeout: 10
-      name: dns-resolve
-      with:
-        target: '{{ inputs.target }}'
-        a: true
-        aaaa: true
-        cname: true
-        mx: true
-        ns: true
-      continue-on-error: true
-    - task: httpx
-      timeout: 10
-      name: domain-probe
-      with:
-        target: '{{ inputs.target }}'
-        tech_detect: true
-        status_code: true
-        follow_redirects: true
-      continue-on-error: true
-    - task: testssl
-      timeout: 10
-      name: tls-check
-      with:
-        target: '{{ inputs.target }}:443'
-      continue-on-error: true
-    - task: sslscan
-      timeout: 5
-      name: sslscan-check
-      with:
-        target: '{{ inputs.target }}'
-        show_certificate: true
-      continue-on-error: true
-    - task: wafw00f
-      timeout: 10
-      name: waf-detect
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-  subdomain-recon:
+      - task: dnsx
+        name: dns-records
+        timeout: 10
+        with:
+          target: "{{ inputs.target }}"
+          a: true
+          aaaa: true
+          cname: true
+          mx: true
+          ns: true
+          txt: true
+          soa: true
+          resp: true
+        continue-on-error: true
+      - task: dnsrecon
+        name: dnsrecon-scan
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+          type: std,srv,axfr
+        continue-on-error: true
+      - name: report-dns
+        script: |
+          records = {{ steps["dns-records"].outputs.typed_outputs | default([], true) | tojson }}
+          by_type = {}
+          for r in records:
+              t = r.get('record_type', r.get('type', 'A'))
+              by_type.setdefault(t, []).append(r.get('value', r.get('ip', r.get('host', ''))))
+          for t, vals in sorted(by_type.items()):
+              for v in vals:
+                  if v:
+                      print(f"  {t:6} {v}")
+
+  # ── Phase 1b: Subdomain Discovery (parallel) ─────────────────────
+  subdomain-discovery:
     name: Subdomain Discovery
     outputs:
-      hosts_file: '{{ steps["collect-subdomains"].outputs.hosts_file | default("", true) }}'
-      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count | default("0", true) }}'
-      live_urls: '{{ steps["export-urls"].outputs.live_urls | default("", true) }}'
+      subs_file: '{{ steps["merge-subs"].outputs.subs_file | default("", true) }}'
+      sub_count: '{{ steps["merge-subs"].outputs.sub_count | default("0", true) }}'
     steps:
-    - task: subfinder
-      timeout: 10
-      name: subfinder-enum
-      with:
-        target: '{{ inputs.target }}'
-        all: true
-      continue-on-error: true
-    - task: gau
-      name: gau-passive
-      timeout: 10
-      with:
-        target: '{{ inputs.target }}'
-        subs: true
-      continue-on-error: true
-    - task: amass
-      timeout: 20
-      name: amass-enum
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - task: assetfinder
-      timeout: 10
-      name: assetfinder-enum
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - name: collect-subdomains
-      script: |
-        import json
+      - task: subfinder
+        name: subfinder-enum
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+        continue-on-error: true
+      - task: amass
+        name: amass-passive
+        timeout: 30
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: assetfinder
+        name: assetfinder-enum
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      # CT log enumeration
+      - task: tlsx
+        name: tls-san-enum
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+          san: true
+          port: "443,8443"
+        continue-on-error: true
+      - task: subfinder
+        name: crtsh-enum
+        timeout: 10
+        with:
+          target: "{{ inputs.target }}"
+          sources: "crtsh,certspotter"
+        continue-on-error: true
+      - name: merge-subs
+        script: |
+          from pathlib import Path
 
-        subs = set()
-        step_data = {{ steps | tojson }}
-        for idx in ["0", "1", "2", "3"]:
-            entry = step_data.get(idx, {})
-            typed = entry.get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                if item.get('_type') == 'subdomain':
-                    subs.add(item['host'])
-                elif item.get('_type') == 'url':
-                    host = item.get('host', '')
-                    if host and '{{ inputs.target }}' in host:
-                        subs.add(host)
+          base = '{{ inputs.target }}'
+          subs = {base}
 
-        subs.add('{{ inputs.target }}')
-        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domscan_hosts.txt', 'w') as f:
-            f.write('\n'.join(sorted(subs)))
-        add_outputs(hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_domscan_hosts.txt", subdomain_count=len(subs))
-      continue-on-error: true
-    - task: dnsx
-      timeout: 10
-      name: verify-subdomains
-      with:
-        target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
-        a: true
-        resp: true
-      continue-on-error: true
-    - task: dnsrecon
-      timeout: 10
-      name: dnsrecon-scan
-      with:
-        target: '{{ inputs.target }}'
-        type: std,srv
-      continue-on-error: true
-    - task: httpx
-      timeout: 10
-      name: probe-subdomains
-      with:
-        target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
-        tech_detect: true
-        status_code: true
-        follow_redirects: true
-      continue-on-error: true
-    - name: export-urls
-      continue-on-error: true
-      script: |
-        typed = {{ steps["probe-subdomains"].outputs.typed_outputs | default([], true) | tojson }}
-        live = []
-        for item in typed:
-            if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
-                live.append(item['url'])
-        add_outputs(live_urls='\n'.join(sorted(set(live))))
-  host-recon:
-    name: Host Reconnaissance
-    needs:
-    - subdomain-recon
+          for item in {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+          for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+          for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+          for item in {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+          for item in {{ subdomains(steps["crtsh-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+
+          subs_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domscan_subs.txt'
+          Path(subs_path).write_text('\n'.join(sorted(subs)))
+          add_outputs(subs_file=subs_path, sub_count=len(subs))
+          print(f"Discovered: {len(subs)} unique subdomains")
+
+  # ── Phase 2: DNS Verification ─────────────────────────────────────
+  dns-verify:
+    name: DNS Verification
+    needs: [dns-enum, subdomain-discovery]
     outputs:
-      open_ports: '{{ steps["port-scan"].outputs.open_ports | default("", true) }}'
+      verified_file: '{{ steps["export-verified"].outputs.verified_file | default("", true) }}'
+      verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
     steps:
-    - task: naabu
-      timeout: 10
-      name: port-scan
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.hosts_file }}"
-        top_ports: '1000'
-        rate: 1000
-      continue-on-error: true
-    - task: nmap
-      timeout: 30
-      name: service-detect
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.hosts_file }}"
-        version_detection: true
-      continue-on-error: true
-    - task: searchsploit
-      timeout: 5
-      name: exploit-search
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-  url-crawl:
-    name: URL Crawling
-    needs:
-    - subdomain-recon
+      - task: dnsx
+        name: verify-subs
+        timeout: "{{ (jobs['subdomain-discovery'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
+        with:
+          target: "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
+          a: true
+          cname: true
+          resp: true
+          wildcard: true
+          wildcard_domain: "{{ inputs.target }}"
+        continue-on-error: true
+      - name: export-verified
+        script: |
+          from pathlib import Path
+
+          verified = set()
+          for item in {{ subdomains(steps["verify-subs"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('host'):
+                  verified.add(item['host'])
+
+          verified_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domscan_verified.txt'
+          Path(verified_path).write_text('\n'.join(sorted(verified)))
+          add_outputs(verified_file=verified_path, verified_count=len(verified))
+          print(f"Verified: {len(verified)} live hosts")
+
+  # ── Phase 3a: Port & Service Discovery (parallel) ─────────────────
+  port-scan:
+    name: Port & Service Scanning
+    needs: [dns-verify]
+    outputs:
+      open_ports_json: '{{ steps["collect-ports"].outputs.open_ports_json | default("[]", true) }}'
+      port_count: '{{ steps["collect-ports"].outputs.port_count | default("0", true) }}'
     steps:
-    - task: katana
-      timeout: 15
-      name: crawl-urls
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        depth: 3
-      continue-on-error: true
-    - task: gospider
-      timeout: 15
-      name: spider-urls
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        depth: 2
-      continue-on-error: true
+      - task: naabu
+        name: naabu-scan
+        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int / 10 * 15 + 20) | int }}"
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          top_ports: "1000"
+          rate: 1000
+        continue-on-error: true
+      - task: masscan
+        name: masscan-sweep
+        timeout: 20
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          top_ports: 100
+          rate: 1000
+        continue-on-error: true
+      - task: nmap
+        name: service-detect
+        timeout: 30
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          version_detection: true
+        continue-on-error: true
+      - name: collect-ports
+        script: |
+          import json
+
+          port_set = set()
+          for item in {{ ports(steps["naabu-scan"].outputs.typed_outputs) | default([], true) | tojson }}:
+              h = item.get('host') or item.get('ip', '')
+              p = item.get('port', '')
+              if h and p:
+                  port_set.add(f"{h}:{p}")
+          for item in {{ ports(steps["masscan-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
+              h = item.get('host') or item.get('ip', '')
+              p = item.get('port', '')
+              if h and p:
+                  port_set.add(f"{h}:{p}")
+          for item in {{ ports(steps["service-detect"].outputs.typed_outputs) | default([], true) | tojson }}:
+              h = item.get('host') or item.get('ip', '')
+              p = item.get('port', '')
+              svc = item.get('service', '')
+              ver = item.get('version', '')
+              if h and p:
+                  port_set.add(f"{h}:{p}")
+                  if svc:
+                      print(f"  {h}:{p} ({svc} {ver})".strip())
+
+          add_outputs(open_ports_json=json.dumps(sorted(port_set)), port_count=len(port_set))
+          print(f"Open ports: {len(port_set)}")
+
+  # ── Phase 3b: HTTP Probing + SSL Audit (parallel) ─────────────────
+  http-probe:
+    name: HTTP Probing & SSL Audit
+    needs: [dns-verify]
+    outputs:
+      live_urls_file: '{{ steps["export-live"].outputs.live_urls_file | default("", true) }}'
+      live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
+    steps:
+      - task: httpx
+        name: probe-hosts
+        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+          ports: "80,443,8080,8443"
+        continue-on-error: true
+      - task: testssl
+        name: ssl-audit
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}:443"
+        continue-on-error: true
+      - task: wafw00f
+        name: waf-detect
+        timeout: 10
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: whatweb
+        name: tech-fingerprint
+        timeout: 10
+        with:
+          target: "{{ inputs.target }}"
+          aggression: 3
+        continue-on-error: true
+      - name: export-live
+        script: |
+          import json
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          live_urls = [
+              item.get('url', '') for item in
+              {{ urls(steps["probe-hosts"].outputs.typed_outputs) | default([], true) | tojson }}
+              if item.get('status_code', 0) > 0 and item.get('url', '')
+          ]
+          seen = {}
+          for url in live_urls:
+              host = urlparse(url).hostname or url
+              if host not in seen:
+                  seen[host] = url
+          live = sorted(seen.values())
+
+          live_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_domscan_live.txt'
+          Path(live_path).write_text('\n'.join(live))
+          add_outputs(live_urls_file=live_path, live_count=len(live))
+          print(f"Live HTTP: {len(live)} services")
+          for u in live:
+              print(f"  {u}")
+
+  # ── Phase 4: Vulnerability Scanning ──────────────────────────────
   vuln-scan:
     name: Vulnerability Scanning
-    needs:
-    - host-recon
-    - url-crawl
+    needs: [port-scan, http-probe]
     steps:
-    - task: nuclei
-      timeout: 20
-      name: nuclei-scan
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        severity: critical,high,medium
-      continue-on-error: true
-    - task: dalfox
-      timeout: 15
-      name: xss-scan
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-      continue-on-error: true
-    - task: nuclei
-      timeout: 20
-      name: takeover-check
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.hosts_file }}"
-        tags: subdomain-takeover
-      continue-on-error: true
-    - task: nikto
-      timeout: 15
-      name: nikto-scan
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        maxtime: 900
-      continue-on-error: true
-    - task: whatweb
-      timeout: 10
-      name: whatweb-fingerprint
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        aggression: 3
-      continue-on-error: true
-    - name: final-summary
-      script: |
-        import json
+      - task: nuclei
+        name: nuclei-scan
+        timeout: 30
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+          severity: critical,high,medium
+        continue-on-error: true
+      - task: nuclei
+        name: takeover-check
+        timeout: 20
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          tags: "subdomain-takeover,dns"
+        continue-on-error: true
+      - name: vuln-summary
+        script: |
+          all_vulns = (
+              {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | default([], true) | tojson }} +
+              {{ vulns(steps["takeover-check"].outputs.typed_outputs) | default([], true) | tojson }}
+          )
+          by_sev = {}
+          for v in all_vulns:
+              s = v.get('severity', 'unknown')
+              by_sev.setdefault(s, []).append(v)
+          print(f"Vulnerabilities: {len(all_vulns)}")
+          for sev in ['critical', 'high', 'medium', 'low']:
+              cnt = len(by_sev.get(sev, []))
+              if cnt:
+                  print(f"  {sev.upper()}: {cnt}")
+                  for v in by_sev[sev][:5]:
+                      print(f"    [{v.get('host','')}] {v.get('name','')}")
+        log-stdout: true
 
-        all_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps["xss-scan"].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps["takeover-check"].outputs.typed_outputs) | tojson }}
+  # ── Phase 5: Summary ─────────────────────────────────────────────
+  summary:
+    name: Domain Scan Summary
+    needs: [vuln-scan]
+    steps:
+      - name: report
+        run: |
+          echo "=================================================="
+          echo " DOMAIN SCAN COMPLETE: {{ inputs.target }}"
+          echo "=================================================="
+          echo ""
+          echo "--- Discovery ---"
+          echo "Subdomains found:    {{ jobs['subdomain-discovery'].outputs.sub_count }}"
+          echo "DNS-verified hosts:  {{ jobs['dns-verify'].outputs.verified_count }}"
+          echo "Open ports:          {{ jobs['port-scan'].outputs.port_count | default(0) }}"
+          echo "Live HTTP services:  {{ jobs['http-probe'].outputs.live_count }}"
+        log-stdout: true
+      - name: export-to-project
+        script: |
+          import shutil
+          from pathlib import Path
 
-        critical = [v for v in all_vulns if v.get('severity') == 'critical']
-        high = [v for v in all_vulns if v.get('severity') == 'high']
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              d = Path('{{ vars.project_subdomains }}')
+              d.mkdir(parents=True, exist_ok=True)
+              for label, src_str in [
+                  ('subdomains.txt', '{{ jobs["subdomain-discovery"].outputs.subs_file | default("", true) }}'),
+                  ('verified.txt',   '{{ jobs["dns-verify"].outputs.verified_file | default("", true) }}'),
+              ]:
+                  if src_str and Path(src_str).is_file():
+                      shutil.copy2(src_str, d / label)
+                      print(f'  [+] subdomains/{label}')
 
-        print("=" * 50)
-        print(f" DOMAIN SCAN COMPLETE: {{ inputs.target }}")
-        print("=" * 50)
-        print(f"Subdomains: {{ jobs['subdomain-recon'].outputs.subdomain_count }}")
-        print(f"Total vulnerabilities: {len(all_vulns)}")
-        print(f"  Critical: {len(critical)}")
-        print(f"  High: {len(high)}")
-      log-stdout: true
-    - name: export-to-project
-      script: |-
-        import shutil
-        from pathlib import Path
-
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-
-            # subdomains
-            d = '{{ vars.project_subdomains }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['subdomain-recon'].outputs.hosts_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'subdomains.txt')
-                print('  [+] subdomains/subdomains.txt')
-
-            # ports
-            d = '{{ vars.project_hosts }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            data = '''{{ jobs['host-recon'].outputs.open_ports | default('', true) }}'''.strip()
-            if data:
-                (Path(d) / 'ports.txt').write_text(data)
-                print(f'  [+] hosts/ports.txt ({len(data.splitlines())} lines)')
-
-            # Auto-export typed outputs
-            all_typed = []
-            for typed in [
-                {{ jobs['domain-recon'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['subdomain-recon'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['host-recon'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['url-crawl'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
-
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              all_typed = []
+              for typed in [
+                  {{ jobs['subdomain-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['dns-verify'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['port-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              for s in export_typed_outputs(project, all_typed):
+                  print(s)
+              print(f'Project export complete: {project}')
+        continue-on-error: true

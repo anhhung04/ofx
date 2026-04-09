@@ -1,16 +1,18 @@
 name: subdomain-scan
 description: |
-  Complete subdomain assessment — discovers subdomains, performs host recon, crawls web applications, and scans for vulnerabilities.
+  Complete subdomain attack surface mapping — passive + active + cert-based
+  enumeration, DNS verification, permutation bruteforcing, HTTP probing,
+  screenshot capture, takeover detection, web crawling, and vuln scanning.
 tags:
-- recon
-- dns
-- network
-- http
-- crawl
-- ssl
-- takeovers
-- vuln
-- secrets
+  - recon
+  - dns
+  - network
+  - http
+  - crawl
+  - ssl
+  - takeovers
+  - vuln
+  - secrets
 dispatch:
   inputs:
     target:
@@ -18,216 +20,439 @@ dispatch:
       type: string
       description: Target domain (e.g. example.com)
       alias: t
+defaults:
+  store-creds: true
 jobs:
-  subdomain-recon:
-    name: Subdomain Enumeration
+  # ── Phase 1: Passive Subdomain Enumeration ────────────────────────
+  passive-enum:
+    name: Passive Subdomain Enumeration
     outputs:
-      hosts_file: '{{ steps["collect-subdomains"].outputs.hosts_file | default("", true) }}'
-      subdomain_count: '{{ steps["collect-subdomains"].outputs.subdomain_count | default("", true) }}'
-      live_urls: '{{ steps["export-data"].outputs.live_urls | default("", true) }}'
+      subs_file: '{{ steps["merge-passive"].outputs.subs_file | default("", true) }}'
+      sub_count: '{{ steps["merge-passive"].outputs.sub_count | default("0", true) }}'
     steps:
-    - task: subfinder
-      timeout: 10
-      name: subfinder-enum
-      with:
-        target: '{{ inputs.target }}'
-        all: true
-      continue-on-error: true
-    - task: gau
-      name: gau-passive
-      timeout: 10
-      with:
-        target: '{{ inputs.target }}'
-        subs: true
-      continue-on-error: true
-    - task: amass
-      timeout: 20
-      name: amass-enum
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - task: assetfinder
-      timeout: 10
-      name: assetfinder-enum
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - name: collect-subdomains
-      script: |
-        import json
+      - task: subfinder
+        name: subfinder-enum
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+        continue-on-error: true
+      - task: amass
+        name: amass-passive
+        timeout: 30
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: assetfinder
+        name: assetfinder-enum
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: theharvester
+        name: harvester-enum
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - name: merge-passive
+        script: |
+          from pathlib import Path
 
-        subs = set()
-        for idx in ["0", "1", "2", "3"]:
-            step_data = {{ steps | tojson }}
-            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                if item.get('_type') == 'subdomain':
-                    subs.add(item['host'])
-                elif item.get('_type') == 'url':
-                    host = item.get('host', '')
-                    if host and '{{ inputs.target }}' in host:
-                        subs.add(host)
+          base = '{{ inputs.target }}'
+          subs = {base}
 
-        subs.add('{{ inputs.target }}')
-        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_hosts.txt', 'w') as f:
-            f.write('\n'.join(sorted(subs)))
-        add_outputs(hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subscan_hosts.txt", subdomain_count=len(subs))
-    - task: dnsx
-      timeout: 10
-      name: verify-dns
-      with:
-        target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
-        a: true
-        resp: true
-      continue-on-error: true
-    - task: httpx
-      timeout: 10
-      name: probe-subdomains
-      with:
-        target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
-        tech_detect: true
-        status_code: true
-        follow_redirects: true
-      continue-on-error: true
-    - task: whatweb
-      timeout: 10
-      name: whatweb-fingerprint
-      with:
-        target: '{{ steps["collect-subdomains"].outputs.hosts_file if steps["collect-subdomains"].outputs is defined else inputs.target }}'
-        aggression: 3
-      continue-on-error: true
-    - name: export-data
-      script: |
-        typed = {{ steps["probe-subdomains"].outputs.typed_outputs | default([], true) | tojson }}
-        live = []
-        for item in typed:
-            if item.get("_type") == "url" and item.get("status_code", 0) > 0:
-                live.append(item["url"])
-        add_outputs(live_urls='\n'.join(sorted(set(live))))
-  host-recon:
-    name: Host Reconnaissance
-    needs:
-    - subdomain-recon
+          for item in {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+          for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+          for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+          for item in {{ subdomains(steps["harvester-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  subs.add(item['host'])
+
+          subs_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_passive.txt'
+          Path(subs_path).write_text('\n'.join(sorted(subs)))
+          add_outputs(subs_file=subs_path, sub_count=len(subs))
+          print(f"Passive: {len(subs)} unique subdomains")
+
+  # ── Phase 2a: TLS Certificate / CT Log Enumeration (parallel) ────
+  cert-enum:
+    name: Certificate & CT Enumeration
+    needs: [passive-enum]
     outputs:
-      alive_subs: '{{ steps["port-scan"].outputs.alive_subs | default("", true) }}'
+      cert_subs_file: '{{ steps["merge-cert"].outputs.cert_subs_file | default("", true) }}'
+      cert_sub_count: '{{ steps["merge-cert"].outputs.cert_sub_count | default("0", true) }}'
     steps:
-    - task: naabu
-      timeout: 10
-      name: port-scan
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.hosts_file }}"
-        top_ports: '1000'
-        rate: 1000
-      continue-on-error: true
-    - task: nmap
-      timeout: 30
-      name: service-detect
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.hosts_file }}"
-        version_detection: true
-      continue-on-error: true
-  url-crawl:
-    name: URL Crawling
-    needs:
-    - subdomain-recon
+      - task: tlsx
+        name: tls-san-enum
+        timeout: 20
+        with:
+          target: "{{ jobs['passive-enum'].outputs.subs_file }}"
+          san: true
+          port: "443,8443"
+        continue-on-error: true
+      - task: subfinder
+        name: crtsh-enum
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+          sources: "crtsh,certspotter,digitorus"
+        continue-on-error: true
+      - name: merge-cert
+        script: |
+          from pathlib import Path
+
+          base = '{{ inputs.target }}'
+          cert_subs = set()
+          for item in {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  cert_subs.add(item['host'])
+          for item in {{ subdomains(steps["crtsh-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if base in item.get('host', ''):
+                  cert_subs.add(item['host'])
+
+          cert_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_certsubs.txt'
+          Path(cert_path).write_text('\n'.join(sorted(cert_subs)))
+          add_outputs(cert_subs_file=cert_path, cert_sub_count=len(cert_subs))
+          print(f"Cert/TLS: {len(cert_subs)} subdomains from certificates")
+
+  # ── Phase 2b: Permutation Bruteforce (parallel) ──────────────────
+  permutation-enum:
+    name: Permutation Bruteforce
+    needs: [passive-enum]
+    outputs:
+      perm_subs_file: '{{ steps["resolve-perms"].outputs.subs_file | default("", true) }}'
+      perm_sub_count: '{{ steps["resolve-perms"].outputs.sub_count | default("0", true) }}'
     steps:
-    - task: katana
-      timeout: 15
-      name: crawl
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        depth: 3
-      continue-on-error: true
-    - task: gospider
-      timeout: 15
-      name: spider
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        depth: 2
-      continue-on-error: true
+      - task: gotator
+        name: generate-perms
+        timeout: 10
+        with:
+          target: "{{ jobs['passive-enum'].outputs.subs_file }}"
+        continue-on-error: true
+      - task: puredns
+        name: resolve-perms
+        timeout: 20
+        with:
+          target: "{{ steps['generate-perms'].outputs.subs_file | default('', true) }}"
+        continue-on-error: true
+
+  # ── Phase 3: DNS Verification (merge all sources) ─────────────────
+  dns-verify:
+    name: DNS Verification
+    needs: [passive-enum, cert-enum, permutation-enum]
+    outputs:
+      verified_file: '{{ steps["export-verified"].outputs.verified_file | default("", true) }}'
+      verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
+      verified_hosts_json: '{{ steps["export-verified"].outputs.verified_hosts_json | default("[]", true) }}'
+    steps:
+      - name: merge-all-sources
+        script: |
+          from pathlib import Path
+
+          base = '{{ inputs.target }}'
+          all_subs = {base}
+          for path_str in [
+              '{{ jobs["passive-enum"].outputs.subs_file | default("", true) }}',
+              '{{ jobs["cert-enum"].outputs.cert_subs_file | default("", true) }}',
+              '{{ jobs["permutation-enum"].outputs.perm_subs_file | default("", true) }}',
+          ]:
+              if path_str and Path(path_str).is_file():
+                  for line in Path(path_str).read_text().splitlines():
+                      h = line.strip()
+                      if h and base in h:
+                          all_subs.add(h)
+
+          merged_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_all.txt'
+          Path(merged_path).write_text('\n'.join(sorted(all_subs)))
+          add_outputs(merged_file=merged_path, total_count=len(all_subs))
+          print(f"Merged: {len(all_subs)} unique subdomains across all sources")
+      - task: dnsx
+        name: dns-resolve
+        timeout: "{{ (steps['merge-all-sources'].outputs.total_count | default(50, true) | int / 50 * 15 + 30) | int }}"
+        with:
+          target: "{{ steps['merge-all-sources'].outputs.merged_file }}"
+          a: true
+          aaaa: true
+          cname: true
+          mx: true
+          txt: true
+          resp: true
+          wildcard: true
+          wildcard_domain: "{{ inputs.target }}"
+        continue-on-error: true
+      - name: export-verified
+        script: |
+          import json
+          from pathlib import Path
+
+          verified = set()
+          for item in {{ subdomains(steps["dns-resolve"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('host'):
+                  verified.add(item['host'])
+
+          verified_list = sorted(verified)
+          verified_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_verified.txt'
+          Path(verified_path).write_text('\n'.join(verified_list))
+          add_outputs(
+              verified_file=verified_path,
+              verified_count=len(verified_list),
+              verified_hosts_json=json.dumps(verified_list),
+          )
+          print(f"DNS-verified: {len(verified_list)} live hosts")
+
+  # ── Phase 4a: HTTP Probing + Screenshots (parallel) ───────────────
+  http-probe:
+    name: HTTP Probing & Visual Recon
+    needs: [dns-verify]
+    outputs:
+      live_urls_file: '{{ steps["export-live"].outputs.live_urls_file | default("", true) }}'
+      live_urls_json: '{{ steps["export-live"].outputs.live_urls_json | default("[]", true) }}'
+      live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
+    steps:
+      - task: httpx
+        name: probe-hosts
+        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          tech_detect: true
+          status_code: true
+          title: true
+          follow_redirects: true
+          ports: "80,443,8080,8443,8000,8888"
+        continue-on-error: true
+      - name: export-live
+        script: |
+          import json
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          live_urls = [
+              item.get('url', '') for item in
+              {{ urls(steps["probe-hosts"].outputs.typed_outputs) | default([], true) | tojson }}
+              if item.get('status_code', 0) > 0 and item.get('url', '')
+          ]
+          # One URL per hostname to avoid duplicates (http + https same host)
+          seen = {}
+          for url in live_urls:
+              host = urlparse(url).hostname or url
+              if host not in seen:
+                  seen[host] = url
+          live = sorted(seen.values())
+
+          live_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_live.txt'
+          Path(live_path).write_text('\n'.join(live))
+          add_outputs(live_urls_file=live_path, live_urls_json=json.dumps(live), live_count=len(live))
+          print(f"Live HTTP: {len(live)} services")
+          for u in live[:20]:
+              print(f"  {u}")
+      - task: gowitness
+        name: screenshots
+        timeout: 20
+        with:
+          target: "{{ steps['export-live'].outputs.live_urls_file }}"
+          screenshot_path: "{{ env('OFX_RUN_DIR', '/tmp') }}/ofx_subscan_shots"
+        continue-on-error: true
+      - task: csprecon
+        name: csp-enum
+        timeout: 10
+        with:
+          target: "{{ steps['export-live'].outputs.live_urls_file }}"
+          domain: "{{ inputs.target }}"
+        continue-on-error: true
+
+  # ── Phase 4b: Takeover Detection (parallel) ──────────────────────
+  takeover-check:
+    name: Subdomain Takeover Detection
+    needs: [dns-verify]
+    outputs:
+      takeover_count: '{{ steps["report-takeovers"].outputs.takeover_count | default("0", true) }}'
+    steps:
+      - task: subzy
+        name: subzy-check
+        timeout: 15
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+        continue-on-error: true
+      - task: nuclei
+        name: nuclei-takeover
+        timeout: 20
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          tags: "subdomain-takeover,takeover,dns"
+        continue-on-error: true
+      - name: report-takeovers
+        script: |
+          takeovers = []
+          for item in {{ vulns(steps["nuclei-takeover"].outputs.typed_outputs) | default([], true) | tojson }}:
+              takeovers.append(f"{item.get('severity','').upper()} {item.get('host','')} — {item.get('name','')}")
+          for item in {{ steps["subzy-check"].outputs.typed_outputs | default([], true) | tojson }}:
+              if item.get('_type') == 'vulnerability' or item.get('vulnerable'):
+                  takeovers.append(f"TAKEOVER {item.get('host', item.get('matched_at', ''))}")
+          add_outputs(takeover_count=len(takeovers))
+          if takeovers:
+              print(f"⚠  {len(takeovers)} potential takeover(s):")
+              for t in takeovers:
+                  print(f"  {t}")
+          else:
+              print("No takeovers detected")
+
+  # ── Phase 5: URL Discovery (waymore + crawl) ─────────────────────
+  url-discovery:
+    name: URL Discovery & Crawling
+    needs: [http-probe]
+    outputs:
+      urls_file: '{{ steps["merge-urls"].outputs.urls_file | default("", true) }}'
+      url_count: '{{ steps["merge-urls"].outputs.url_count | default("0", true) }}'
+    steps:
+      # Historical URLs from archives
+      - task: waymore
+        name: waymore-hist
+        timeout: 20
+        with:
+          target: "{{ inputs.target }}"
+          mode: U
+        continue-on-error: true
+      - task: gau
+        name: gau-hist
+        timeout: 15
+        with:
+          target: "{{ inputs.target }}"
+          subs: true
+        continue-on-error: true
+      # Active crawling of live services
+      - task: katana
+        name: katana-crawl
+        timeout: 20
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+          depth: 3
+        continue-on-error: true
+      - task: gospider
+        name: gospider-crawl
+        timeout: 20
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+          depth: 2
+        continue-on-error: true
+      - name: merge-urls
+        script: |
+          import json
+          from pathlib import Path
+
+          base = '{{ inputs.target }}'
+          all_urls = set()
+          for item in {{ urls(steps["waymore-hist"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('url'):
+                  all_urls.add(item['url'])
+          for item in {{ urls(steps["gau-hist"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('url'):
+                  all_urls.add(item['url'])
+          for item in {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('url'):
+                  all_urls.add(item['url'])
+          for item in {{ urls(steps["gospider-crawl"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('url'):
+                  all_urls.add(item['url'])
+
+          urls_list = sorted(all_urls)
+          urls_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_urls.txt'
+          Path(urls_path).write_text('\n'.join(urls_list))
+          add_outputs(urls_file=urls_path, url_count=len(urls_list))
+          print(f"URL discovery: {len(urls_list)} unique URLs")
+
+  # ── Phase 6: Vulnerability Scanning ──────────────────────────────
   vuln-scan:
     name: Vulnerability Scanning
-    needs:
-    - host-recon
-    - url-crawl
+    needs: [url-discovery, takeover-check]
     steps:
-    - task: nuclei
-      timeout: 20
-      name: nuclei-scan
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        severity: critical,high,medium
-      continue-on-error: true
-    - task: dalfox
-      timeout: 15
-      name: xss-scan
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.live_urls | default(inputs.target, true) }}"
-      continue-on-error: true
-    - task: nuclei
-      timeout: 20
-      name: takeover-check
-      with:
-        target: "{{ jobs['subdomain-recon'].outputs.hosts_file }}"
-        tags: subdomain-takeover
-      continue-on-error: true
-    - name: final-summary
-      script: |
-        import json
+      - task: nuclei
+        name: nuclei-scan
+        timeout: 30
+        with:
+          target: "{{ jobs['url-discovery'].outputs.urls_file | default(jobs['http-probe'].outputs.live_urls_file, true) }}"
+          severity: critical,high,medium
+        continue-on-error: true
+      - task: dalfox
+        name: xss-scan
+        timeout: 20
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+        continue-on-error: true
+      - name: vuln-summary
+        script: |
+          all_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | default([], true) | tojson }}
+          xss_vulns = {{ vulns(steps["xss-scan"].outputs.typed_outputs) | default([], true) | tojson }}
+          all_vulns += xss_vulns
 
-        all_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps["xss-scan"].outputs.typed_outputs) | tojson }} + \
-                    {{ vulns(steps["takeover-check"].outputs.typed_outputs) | tojson }}
+          by_sev = {}
+          for v in all_vulns:
+              s = v.get('severity', 'unknown')
+              by_sev.setdefault(s, []).append(v)
 
-        critical = [v for v in all_vulns if v.get('severity') == 'critical']
-        high = [v for v in all_vulns if v.get('severity') == 'high']
+          print(f"\nVulnerabilities: {len(all_vulns)}")
+          for sev in ['critical', 'high', 'medium', 'low', 'info']:
+              cnt = len(by_sev.get(sev, []))
+              if cnt:
+                  print(f"  {sev.upper()}: {cnt}")
+        log-stdout: true
 
-        print("=" * 50)
-        print(f" SUBDOMAIN SCAN COMPLETE: {{ inputs.target }}")
-        print("=" * 50)
-        print(f"Subdomains: {{ jobs['subdomain-recon'].outputs.subdomain_count }}")
-        print(f"Total vulnerabilities: {len(all_vulns)}")
-        print(f"  Critical: {len(critical)}")
-        print(f"  High: {len(high)}")
-      log-stdout: true
-    - name: export-to-project
-      script: |-
-        import shutil
-        from pathlib import Path
+  # ── Phase 7: Summary ─────────────────────────────────────────────
+  summary:
+    name: Subdomain Scan Summary
+    needs: [vuln-scan]
+    steps:
+      - name: report
+        run: |
+          echo "=================================================="
+          echo " SUBDOMAIN SCAN COMPLETE: {{ inputs.target }}"
+          echo "=================================================="
+          echo ""
+          echo "--- Discovery ---"
+          echo "Passive subdomains:  {{ jobs['passive-enum'].outputs.sub_count }}"
+          echo "Cert/TLS subs:       {{ jobs['cert-enum'].outputs.cert_sub_count | default(0) }}"
+          echo "Permutation subs:    {{ jobs['permutation-enum'].outputs.perm_sub_count | default(0) }}"
+          echo "DNS-verified:        {{ jobs['dns-verify'].outputs.verified_count }}"
+          echo "Live HTTP services:  {{ jobs['http-probe'].outputs.live_count }}"
+          echo "URLs discovered:     {{ jobs['url-discovery'].outputs.url_count | default(0) }}"
+          echo ""
+          echo "--- Threats ---"
+          echo "Takeover candidates: {{ jobs['takeover-check'].outputs.takeover_count }}"
+        log-stdout: true
+      - name: export-to-project
+        script: |
+          import shutil
+          from pathlib import Path
 
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              d = Path('{{ vars.project_subdomains }}')
+              d.mkdir(parents=True, exist_ok=True)
+              for label, src_str in [
+                  ('subdomains.txt', '{{ jobs["passive-enum"].outputs.subs_file | default("", true) }}'),
+                  ('verified.txt',   '{{ jobs["dns-verify"].outputs.verified_file | default("", true) }}'),
+              ]:
+                  if src_str and Path(src_str).is_file():
+                      shutil.copy2(src_str, d / label)
+                      print(f'  [+] subdomains/{label}')
 
-            # subdomains
-            d = '{{ vars.project_subdomains }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['subdomain-recon'].outputs.hosts_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'subdomains.txt')
-                print('  [+] subdomains/subdomains.txt')
-
-            # alive subs
-            d = '{{ vars.project_hosts }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            data = '''{{ jobs['host-recon'].outputs.alive_subs | default('', true) }}'''.strip()
-            if data:
-                (Path(d) / 'alive-subs.txt').write_text(data)
-                print(f'  [+] hosts/alive-subs.txt ({len(data.splitlines())} lines)')
-
-            # Auto-export typed outputs
-            all_typed = []
-            for typed in [
-                {{ jobs['subdomain-recon'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['host-recon'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['url-crawl'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
-
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+              all_typed = []
+              for typed in [
+                  {{ jobs['passive-enum'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['dns-verify'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['url-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
+              ]:
+                  all_typed.extend(typed)
+              for s in export_typed_outputs(project, all_typed):
+                  print(s)
+              print(f'Project export complete: {project}')
+        continue-on-error: true
