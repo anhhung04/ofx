@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
@@ -44,29 +43,11 @@ class KiterunnerTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
+    subcommand = "scan"
     json_flag = "--json"
-    extra_flags = ["scan"]
 
     def _output_suffix(self) -> str:
         return ".jsonl"
-
-    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
-        """Place target after ``scan`` subcommand, then append flags."""
-        parts: list[str] = [self.cmd, "scan", target, "--json"]
-
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
-
-        return " ".join(parts), None
 
     def parse_line(self, line: str) -> list[Url | Tag]:
         line = line.strip()

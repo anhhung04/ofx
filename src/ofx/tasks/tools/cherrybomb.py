@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
@@ -41,30 +39,11 @@ class CherrybombTask(Task):
         "no_color": OptDef(flag="--no-color", is_flag=True, help="Disable colours"),
     }
 
-    input_flag = None
-    file_flag = "--file"
+    input_flag = "--file"
+    file_flag = None
     output_flag = None
+    subcommand = "oas"
     silent_flag = "--quiet"
-
-    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
-        """Use ``oas`` subcommand with ``--file`` for the spec file."""
-        parts: list[str] = [self.cmd, "oas", "--file", target]
-        if self.silent_flag:
-            parts.append(self.silent_flag)
-
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
-
-        return " ".join(parts), None
 
     def parse_output(
         self,

@@ -57,8 +57,13 @@ class Task(ABC):
     file_flag: str | None = None
     output_flag: str | None = None
 
+    # ── Subcommand ────────────────────────────────────────────────
+    # Inserted after the command binary, before extra_flags.
+    # e.g. ``subcommand = "image"`` → ``trivy image -f json …``
+    subcommand: str = ""
+
     # ── Extra flags (override in subclasses) ─────────────────────
-    # Flags prepended right after the command binary.
+    # Flags prepended right after the command binary (and subcommand).
     extra_flags: list[str] = []
 
     # ── Auto-optimized flags ───────────────────────────────────────
@@ -104,7 +109,10 @@ class Task(ABC):
         if not target:
             raise ValueError(f"Task '{self.name}' requires a non-empty target")
 
-        parts: list[str] = [self.cmd, *self.extra_flags]
+        parts: list[str] = [self.cmd]
+        if self.subcommand:
+            parts.append(self.subcommand)
+        parts.extend(self.extra_flags)
         output_file: Path | None = None
 
         # Auto-inject optimized flags

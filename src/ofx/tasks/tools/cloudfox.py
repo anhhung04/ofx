@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
@@ -40,31 +38,10 @@ class CloudfoxTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
-    extra_flags: list[str] = []
+    subcommand = "aws"
 
     def _output_suffix(self) -> str:
         return ".txt"
-
-    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
-        """``cloudfox aws <subcommand>`` — target is the subcommand."""
-        parts: list[str] = [self.cmd, "aws"]
-
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
-
-        if target:
-            parts.append(target)
-
-        return " ".join(parts), None
 
     def parse_output(
         self,

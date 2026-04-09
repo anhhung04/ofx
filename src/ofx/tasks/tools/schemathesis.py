@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Url, Vulnerability
 from ofx.tasks.registry import TaskRegistry
@@ -61,24 +59,6 @@ class SchemathesisTask(Task):
     file_flag = None
     output_flag = None
     extra_flags = ["run", "--dry-run=never"]
-
-    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
-        """Place schema URL/file after ``run`` subcommand."""
-        parts: list[str] = [self.cmd, "run", target, "--dry-run=never"]
-
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
-
-        return " ".join(parts), None
 
     def parse_output(
         self,

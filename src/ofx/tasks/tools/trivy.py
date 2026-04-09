@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
-from typing import Any
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
@@ -53,42 +51,9 @@ class TrivyTask(Task):
     input_flag = None
     file_flag = None
     output_flag = None
+    subcommand = "image"
     extra_flags = ["-f", "json"]
     silent_flag = "--quiet"
-
-    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
-        """Prepend 'image' subcommand before flags and target."""
-        parts: list[str] = [self.cmd, "image", *self.extra_flags]
-        if self.json_flag:
-            parts.append(self.json_flag)
-        if self.silent_flag:
-            parts.append(self.silent_flag)
-
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
-
-        output_file: Path | None = None
-        if self.output_flag:
-            output_file = Path(
-                tempfile.mkstemp(
-                    prefix=f".ofx_task_{self.name}_",
-                    suffix=self._output_suffix(),
-                )[1]
-            )
-            parts.extend([self.output_flag, str(output_file)])
-
-        parts.append(target)
-
-        return " ".join(parts), output_file
 
     def parse_output(
         self,
