@@ -173,7 +173,7 @@ jobs:
       - task: puredns
         name: resolve-perms
         timeout: 20
-        run-if: "{{ steps['generate-perms'].outputs.output_file | default('', true) | length > 0 }}"
+        if: "{{ steps['generate-perms'].outputs.output_file | default('', true) | length > 0 }}"
         with:
           target: "{{ steps['generate-perms'].outputs.output_file | default('', true) }}"
         continue-on-error: true
