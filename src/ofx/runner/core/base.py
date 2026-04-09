@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import UTC, datetime
@@ -389,13 +390,16 @@ class BaseRunner[TModel: BaseModel]:
         """
         context_vars = self.ctx.vars.copy()
         context_vars.update(self.ctx.model_dump(exclude={"vars"}))
+        _envs = context_vars.get("envs", {})
         context_vars.update(
             {
                 "self": self.model,
                 "registry": self._registry,
                 "runner": self,
                 "ctx": self.ctx,
-                "env": context_vars.get("envs", {}),
+                "env": lambda key, default="": _envs.get(
+                    key, os.environ.get(key, default)
+                ),
                 "vars": self.ctx.vars,
             }
         )

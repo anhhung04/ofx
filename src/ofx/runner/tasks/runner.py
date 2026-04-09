@@ -198,13 +198,18 @@ class TaskRunner(BaseRunner[TaskExecution]):
                     )
 
             # Export output file to output_path with target in filename
-            exported_path = self._export_output_file()
-            if exported_path:
-                outputs["output_file"] = str(exported_path)
-                await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
-
-            # Clean up temp output file
-            self._cleanup_output_file()
+            if self._task.export_output:
+                exported_path = self._export_output_file()
+                if exported_path:
+                    outputs["output_file"] = str(exported_path)
+                    await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
+                # Clean up temp output file (exported copy lives in scans/)
+                self._cleanup_output_file()
+            else:
+                # Intermediate output — keep temp file for subsequent steps
+                if self._output_file and self._output_file.exists():
+                    outputs["output_file"] = str(self._output_file)
+                    await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
 
     async def _post_run(self) -> None:
         pass

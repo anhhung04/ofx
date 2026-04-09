@@ -65,6 +65,13 @@ class Task(ABC):
     # that return non-zero on "warnings found" or similar expected states.
     success_codes: list[int] = [0]
 
+    # ── Output export control ──────────────────────────────────────
+    # Set to ``False`` for tools whose output is intermediate data
+    # (e.g. permutation generators) that should not be persisted in
+    # ``<output_path>/scans/``.  The temp file is kept alive for
+    # subsequent steps but not exported.
+    export_output: bool = True
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Ensure mutable class attributes are copied per-subclass.
 

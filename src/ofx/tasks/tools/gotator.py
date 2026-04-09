@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,7 @@ class GotatorTask(Task):
     file_flag = "-sub"
     output_flag = None
     extra_flags = ["-depth", "1", "-numbers", "3", "-mindup", "-adv", "-md"]
+    export_output = False
 
     def _output_suffix(self) -> str:
         return ".txt"
@@ -75,7 +77,11 @@ class GotatorTask(Task):
         elif target:
             parts.extend(["-sub", target])
 
-        return " ".join(parts), None
+        _, path = tempfile.mkstemp(
+            prefix=".ofx_task_gotator_", suffix=self._output_suffix()
+        )
+        output_file = Path(path)
+        return f"{' '.join(parts)} > {output_file}", output_file
 
     def parse_line(self, line: str) -> list[Subdomain]:
         host = line.strip()

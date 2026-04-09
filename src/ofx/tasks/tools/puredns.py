@@ -40,7 +40,7 @@ class PurednsTask(Task):
     # puredns resolve <file> — positional file, no flags
     input_flag = None
     file_flag = None
-    output_flag = None
+    output_flag = "-w"
     extra_flags = ["resolve", "--quiet"]
 
     def _output_suffix(self) -> str:
@@ -49,7 +49,7 @@ class PurednsTask(Task):
     def build_command(
         self, target: str, **kwargs: object
     ) -> tuple[str, Path | None]:
-        """Build: puredns resolve <input_file> [flags]."""
+        """Build: puredns resolve [flags] <input_file> -w <output_file>."""
         parts = [self.cmd, *self.extra_flags]
 
         for key, val in kwargs.items():
@@ -61,10 +61,20 @@ class PurednsTask(Task):
                 else:
                     parts.extend([opt.flag, str(val)])
 
+        output_file: Path | None = None
+        if self.output_flag:
+            import tempfile as _tf
+
+            _, path = _tf.mkstemp(
+                prefix=".ofx_task_puredns_", suffix=self._output_suffix()
+            )
+            output_file = Path(path)
+            parts.extend([self.output_flag, str(output_file)])
+
         if target:
             parts.append(target)
 
-        return " ".join(parts), None
+        return " ".join(parts), output_file
 
     def parse_line(self, line: str) -> list[Subdomain]:
         host = line.strip()

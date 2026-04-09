@@ -105,6 +105,25 @@ class JobRunner(BaseRunner[Job]):
         job_exec = build_job_execution_result(self, self._runners)
         await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
 
+        # Clean up non-exported task temp files that were kept for
+        # subsequent steps (export_output=False tasks).
+        await self._cleanup_temp_task_files()
+
+    async def _cleanup_temp_task_files(self) -> None:
+        """Remove temp output files from non-exported tasks after all steps finish."""
+        from pathlib import Path
+
+        for step_runner in self._runners.values():
+            try:
+                result = await step_runner.get_result()
+                output_file = result.outputs.get("output_file", "")
+                if output_file and ".ofx_task_" in output_file:
+                    p = Path(output_file)
+                    if p.exists():
+                        p.unlink(missing_ok=True)
+            except Exception:
+                pass
+
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
         msg = f"'{self.model.jid}' › {message_str}"

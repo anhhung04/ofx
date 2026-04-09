@@ -43,9 +43,6 @@ class DnsxTask(Task):
         "wildcard_domain": OptDef(
             flag="-wd", type=str, help="Domain for wildcard filtering"
         ),
-        "wildcard": OptDef(
-            flag="-wildcard", is_flag=True, help="Enable wildcard filtering"
-        ),
         "trace": OptDef(flag="-trace", is_flag=True, help="Perform DNS trace"),
         "wordlist": OptDef(flag="-w", type=str, help="Wordlist for DNS bruteforcing"),
     }

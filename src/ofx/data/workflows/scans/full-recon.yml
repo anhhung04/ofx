@@ -159,13 +159,13 @@ jobs:
     name: Permutation Bruteforce
     needs: [passive-enum]
     outputs:
-      perm_subs_file: '{{ steps["resolve-perms"].outputs.subs_file | default("", true) }}'
-      perm_sub_count: '{{ steps["resolve-perms"].outputs.sub_count | default("0", true) }}'
+      perm_subs_file: '{{ steps["resolve-perms"].outputs.output_file | default("", true) }}'
+      perm_sub_count: '{{ steps["resolve-perms"].outputs.typed_outputs | default([], true) | length }}'
     steps:
       # Generate permutations from known subs
       - task: gotator
         name: generate-perms
-        timeout: 10
+        timeout: 30
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
         continue-on-error: true
@@ -173,8 +173,9 @@ jobs:
       - task: puredns
         name: resolve-perms
         timeout: 20
+        run-if: "{{ steps['generate-perms'].outputs.output_file | default('', true) | length > 0 }}"
         with:
-          target: "{{ steps['generate-perms'].outputs.subs_file | default('', true) }}"
+          target: "{{ steps['generate-perms'].outputs.output_file | default('', true) }}"
         continue-on-error: true
 
   # ── Phase 3: DNS Verification (merge all sources) ─────────────────
@@ -219,7 +220,6 @@ jobs:
           mx: true
           txt: true
           resp: true
-          wildcard: true
           wildcard_domain: "{{ inputs.target }}"
         continue-on-error: true
       - name: export-verified
