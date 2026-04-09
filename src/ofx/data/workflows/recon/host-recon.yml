@@ -1,12 +1,14 @@
 name: host-recon
-description: 'Host reconnaissance — discovers open ports and services, detects versions, searches for known vulnerabilities, audits SSH, and probes HTTP services.
-
-  '
+description: |
+  Host reconnaissance — target resolution, CDN detection, port scanning
+  (rustscan + naabu + masscan + nmap), service detection, SSH audit,
+  HTTP probing, web analysis, URL crawling, and vulnerability scanning.
+  Delegates to host-scan.
 tags:
-- recon
-- network
-- http
-- vuln
+  - recon
+  - network
+  - http
+  - vuln
 dispatch:
   inputs:
     target:
@@ -15,228 +17,10 @@ dispatch:
       description: Target host, IP, URL, or CIDR range
       alias: t
 jobs:
-  target-resolve:
-    name: Target Resolution
-    outputs:
-      hostname: '{{ steps["resolve"].outputs.hostname | default("", true) }}'
-      ip: '{{ steps["resolve"].outputs.ip | default("", true) }}'
-      is_multi_ip: '{{ steps["resolve"].outputs.is_multi_ip | default("false", true) }}'
+  run:
+    name: Host Recon
     steps:
-      - name: resolve
-        script: |
-          import socket
-          from urllib.parse import urlparse
-
-          raw_target = '{{ inputs.target }}'.strip()
-          hostname = raw_target
-
-          # Extract hostname from URL
-          if '://' in raw_target:
-              parsed = urlparse(raw_target)
-              hostname = parsed.hostname or parsed.netloc.split(':')[0]
-          elif '/' in raw_target and not raw_target.startswith(('10.', '172.', '192.')):
-              hostname = raw_target.split('/')[0]
-          if ':' in hostname and not hostname.startswith('['):
-              hostname = hostname.rsplit(':', 1)[0]
-
-          # Check if already an IP or CIDR
-          is_ip = False
-          check = hostname.split('/')[0] if '/' in hostname else hostname
-          try:
-              socket.inet_pton(socket.AF_INET, check)
-              is_ip = True
-          except OSError:
-              pass
-
-          if is_ip or '/' in hostname:
-              add_outputs(hostname=hostname, ip=hostname, is_multi_ip='false')
-              print(f"Target: {hostname}")
-          else:
-              try:
-                  results = socket.getaddrinfo(hostname, None, socket.AF_INET, socket.SOCK_STREAM)
-                  ips = sorted(set(r[4][0] for r in results))
-              except socket.gaierror:
-                  ips = []
-                  print(f"WARNING: Cannot resolve {hostname}")
-
-              if len(ips) <= 1:
-                  ip = ips[0] if ips else hostname
-                  add_outputs(hostname=hostname, ip=ip, is_multi_ip='false')
-                  print(f"Resolved: {hostname} → {ip}")
-              else:
-                  add_outputs(hostname=hostname, ip=ips[0], is_multi_ip='true')
-                  print(f"⚠ {hostname} → {len(ips)} IPs (CDN/proxy/LB likely): {', '.join(ips)}")
-      - task: cdncheck
-        timeout: 5
-        name: cdn-detect
-        run_if: "{{ steps['resolve'].outputs.is_multi_ip == 'true' }}"
+      - name: host-scan
+        uses: host-scan
         with:
-          input: "{{ steps['resolve'].outputs.hostname }}"
-        continue-on-error: true
-  port-discovery:
-    name: Port Discovery
-    needs: [target-resolve]
-    outputs:
-      typed_outputs: '{{ (steps["fast-port-scan"].outputs.typed_outputs | default([], true)) + (steps["masscan-scan"].outputs.typed_outputs | default([], true)) }}'
-      open_ports: '{{ steps["export-ports"].outputs.open_ports | default("", true) }}'
-    steps:
-    - task: naabu
-      timeout: 15
-      name: fast-port-scan
-      with:
-        target: '{{ jobs["target-resolve"].outputs.hostname }}'
-        top_ports: '1000'
-        rate: 1000
-      continue-on-error: true
-    - task: masscan
-      timeout: 15
-      name: masscan-scan
-      with:
-        target: '{{ jobs["target-resolve"].outputs.ip }}'
-        top_ports: '100'
-        rate: 1000
-      continue-on-error: true
-    - name: export-ports
-      continue-on-error: true
-      script: |
-        typed_a = {{ steps["fast-port-scan"].outputs.typed_outputs | default([], true) | tojson }}
-        typed_b = {{ steps["masscan-scan"].outputs.typed_outputs | default([], true) | tojson }}
-        ports = sorted(set(str(item.get('port', '')) for item in typed_a + typed_b if item.get('_type') == 'port'))
-        add_outputs(open_ports=','.join(p for p in ports if p))
-  service-detection:
-    name: Service Detection & Analysis
-    outputs:
-      http_targets: '{{ steps["extract-targets"].outputs.http_targets | default("", true) }}'
-    needs:
-    - port-discovery
-    steps:
-    - task: nmap
-      timeout: 30
-      name: service-scan
-      with:
-        target: '{{ jobs["target-resolve"].outputs.hostname }}'
-        ports: "{{ jobs['port-discovery'].outputs.open_ports | default('', true) }}"
-        version_detection: true
-      continue-on-error: true
-    - name: extract-targets
-      continue-on-error: true
-      script: |
-        typed = {{ steps["service-scan"].outputs.typed_outputs | default([], true) | tojson }}
-        targets = []
-        for item in typed:
-            hp = item.get('host_port', '')
-            if hp and hp not in targets:
-                targets.append(hp)
-        add_outputs(http_targets='\n'.join(targets))
-  ssh-audit:
-    name: SSH Audit
-    outputs:
-      typed_outputs: '{{ steps["audit-ssh"].outputs.typed_outputs | default([], true) }}'
-    needs:
-    - port-discovery
-    if: '{{ "22" in (jobs["port-discovery"].outputs.open_ports | default("", true)).split(",") }}'
-    steps:
-    - task: ssh-audit
-      timeout: 10
-      name: audit-ssh
-      with:
-        target: '{{ jobs["target-resolve"].outputs.hostname }}'
-      continue-on-error: true
-  http-probe:
-    name: HTTP Probe & Exploit Search
-    outputs:
-      typed_outputs: '{{ (steps["probe-http"].outputs.typed_outputs | default([], true)) + (steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true)) }}'
-      live_urls: '{{ steps["export-urls"].outputs.live_urls | default("", true) }}'
-    needs:
-    - service-detection
-    steps:
-    - task: httpx
-      timeout: 15
-      name: probe-http
-      with:
-        target: "{{ jobs['service-detection'].outputs.http_targets | default(jobs['target-resolve'].outputs.hostname, true) }}"
-        tech_detect: true
-        status_code: true
-        title: true
-      continue-on-error: true
-    - task: searchsploit
-      timeout: 5
-      name: search-exploits
-      with:
-        target: '{{ jobs["target-resolve"].outputs.hostname }}'
-      continue-on-error: true
-    - task: whatweb
-      timeout: 15
-      name: whatweb-fingerprint
-      with:
-        target: "{{ jobs['service-detection'].outputs.http_targets | default(jobs['target-resolve'].outputs.hostname, true) }}"
-        aggression: 3
-      continue-on-error: true
-    - name: export-urls
-      continue-on-error: true
-      script: |
-        typed = {{ steps["probe-http"].outputs.typed_outputs | default([], true) | tojson }}
-        live = []
-        for item in typed:
-            if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
-                live.append(item['url'])
-        add_outputs(live_urls='\n'.join(sorted(set(live))))
-  vuln-scan:
-    name: Vulnerability Scan
-    outputs:
-      typed_outputs: '{{ (steps["nuclei-scan"].outputs.typed_outputs | default([], true)) + (steps["nikto-scan"].outputs.typed_outputs | default([], true)) }}'
-      vuln_count: '{{ steps.summary.outputs.vuln_count }}'
-    needs:
-    - http-probe
-    steps:
-    - task: nuclei
-      timeout: 30
-      name: nuclei-scan
-      with:
-        target: "{{ jobs['http-probe'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
-        severity: critical,high,medium
-      continue-on-error: true
-    - task: nikto
-      timeout: 20
-      name: nikto-scan
-      with:
-        target: "{{ jobs['http-probe'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
-        maxtime: 900
-      continue-on-error: true
-    - name: summary
-      run: |
-        echo "=============================="
-        echo " Host Recon: {{ jobs['target-resolve'].outputs.hostname }}"
-        echo "=============================="
-        echo 'Vulnerabilities: {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}'
-        echo 'vuln_count={{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | length }}' >> $OFX_OUTPUTS
-      log-stdout: true
-  summary:
-    name: Summary
-    needs:
-    - vuln-scan
-    - ssh-audit
-    steps:
-    - name: export-to-project
-      script: |
-        from pathlib import Path
-
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-            all_typed = []
-            for typed in [
-            {{ jobs['port-discovery'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['service-detection'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['ssh-audit'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
-
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+          target: "{{ inputs.target }}"

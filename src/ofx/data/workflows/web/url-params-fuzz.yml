@@ -58,8 +58,7 @@ jobs:
         import json
 
         params = set()
-        step_data = {{ steps | tojson }}
-        typed = step_data.get("0", {}).get('outputs', {}).get('typed_outputs', [])
+        typed = {{ steps["find-params"].outputs.typed_outputs | default([], true) | tojson }}
         for item in typed:
             if item.get('_type') == 'tag':
                 params.add(item.get('value', ''))

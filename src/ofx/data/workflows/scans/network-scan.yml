@@ -1,16 +1,18 @@
 name: network-scan
 description: |
-  Internal network scan — discovers live hosts in a CIDR range, scans services, and performs web application testing on discovered hosts.
+  Internal network scan — discovers live hosts in a CIDR range, checks default
+  credentials via naabu/nerva/brutus pipeline, then deep-scans each live host
+  via host-scan matrix (port scan, service detect, web fingerprint, crawl, vuln scan).
 tags:
-- recon
-- cidr
-- dns
-- network
-- internal
-- http
-- crawl
-- ssl
-- vuln
+  - recon
+  - cidr
+  - dns
+  - network
+  - internal
+  - http
+  - crawl
+  - ssl
+  - vuln
 dispatch:
   inputs:
     target:
@@ -18,250 +20,178 @@ dispatch:
       type: string
       description: CIDR range (e.g. 192.168.1.0/24)
       alias: t
+defaults:
+  store-creds: true
 jobs:
+  # ── Phase 1: Host Discovery ────────────────────────────────────────
   network-discovery:
     name: Network Discovery
     outputs:
       hosts_file: '{{ steps["collect-hosts"].outputs.hosts_file | default("", true) }}'
-      host_count: '{{ steps["collect-hosts"].outputs.host_count | default("", true) }}'
+      host_count: '{{ steps["collect-hosts"].outputs.host_count | default("0", true) }}'
+      live_hosts_json: '{{ steps["collect-hosts"].outputs.live_hosts_json | default("[]", true) }}'
     steps:
-    - task: fping
-      name: fping-discovery
-      timeout: 5
-      with:
-        target: '{{ inputs.target }}'
-        generate: true
-      continue-on-error: true
-    - task: nmap
-      timeout: 30
-      name: host-discovery
-      with:
-        target: '{{ inputs.target }}'
-        timing: 4
-      continue-on-error: true
-    - task: naabu
-      timeout: 10
-      name: port-scan
-      with:
-        target: '{{ inputs.target }}'
-        top_ports: '1000'
-        rate: 2000
-      continue-on-error: true
-    - task: masscan
-      timeout: 10
-      name: masscan-scan
-      with:
-        target: '{{ inputs.target }}'
-        top_ports: '100'
-        rate: 2000
-      continue-on-error: true
-    - name: collect-hosts
-      script: |
-        import json
+      - task: fping
+        name: fping-discovery
+        timeout: 5
+        with:
+          target: "{{ inputs.target }}"
+          generate: true
+        continue-on-error: true
+      - task: nmap
+        name: host-discovery
+        timeout: 30
+        with:
+          target: "{{ inputs.target }}"
+          timing: 4
+        continue-on-error: true
+      - task: naabu
+        name: port-sweep
+        timeout: 10
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "1000"
+          rate: 2000
+        continue-on-error: true
+      - task: masscan
+        name: masscan-sweep
+        timeout: 10
+        with:
+          target: "{{ inputs.target }}"
+          top_ports: "100"
+          rate: 2000
+        continue-on-error: true
+      - name: collect-hosts
+        script: |
+          import json
+          from pathlib import Path
 
-        hosts = set()
-        for idx in ["1", "2", "3"]:
-            step_data = {{ steps | tojson }}
-            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
-            for item in typed:
-                if item.get('_type') == 'port':
-                    host = item.get('host') or item.get('ip', '')
-                    if host:
-                        hosts.add(host)
-                elif item.get('_type') == 'ip':
-                    if item.get('alive', False):
-                        hosts.add(item['ip'])
+          hosts = set()
 
-        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_netscan_hosts.txt', 'w') as f:
-            f.write('\n'.join(sorted(hosts)))
-        add_outputs(hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_netscan_hosts.txt", host_count=len(hosts))
-        print(f"Discovered {len(hosts)} live hosts")
-  host-recon:
-    name: Host Reconnaissance
-    needs:
-    - network-discovery
-    outputs:
-      live_urls: '{{ steps["export-urls"].outputs.live_urls | default("", true) }}'
-      open_ports: '{{ steps["service-detect"].outputs.open_ports | default("", true) }}'
-    steps:
-    - task: nerva
-      timeout: 15
-      name: nerva-fingerprint
-      with:
-        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
-      continue-on-error: true
-    - task: nmap
-      timeout: 30
-      name: service-detect
-      with:
-        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
-        version_detection: true
-      continue-on-error: true
-    - task: httpx
-      timeout: 10
-      name: http-probe
-      with:
-        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
-        tech_detect: true
-        status_code: true
-        follow_redirects: true
-      continue-on-error: true
-    - task: whatweb
-      timeout: 10
-      name: whatweb-fingerprint
-      with:
-        target: '{{ jobs["network-discovery"].outputs.hosts_file }}'
-        aggression: 3
-      continue-on-error: true
-    - name: export-urls
-      continue-on-error: true
-      script: |
-        typed = {{ steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true) | tojson }}
-        live = []
-        for item in typed:
-            if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
-                live.append(item['url'])
-        add_outputs(live_urls='\n'.join(sorted(set(live))))
+          for item in {{ ips(steps["fping-discovery"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('alive'):
+                  hosts.add(item.get('ip', ''))
+
+          for item in {{ ips(steps["host-discovery"].outputs.typed_outputs) | default([], true) | tojson }}:
+              if item.get('alive') or item.get('ip'):
+                  hosts.add(item.get('ip', ''))
+
+          for item in {{ ports(steps["port-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
+              h = item.get('host') or item.get('ip', '')
+              if h:
+                  hosts.add(h)
+
+          for item in {{ ports(steps["masscan-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
+              h = item.get('host') or item.get('ip', '')
+              if h:
+                  hosts.add(h)
+
+          hosts.discard('')
+          hosts_list = sorted(hosts)
+          hosts_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_netscan_hosts.txt'
+          Path(hosts_path).write_text('\n'.join(hosts_list))
+          add_outputs(
+              hosts_file=hosts_path,
+              host_count=len(hosts_list),
+              live_hosts_json=json.dumps(hosts_list),
+          )
+          print(f"Discovered {len(hosts_list)} live hosts")
+
+  # ── Phase 2a: Default Cred Check (parallel) ────────────────────────
   default-cred-check:
     name: Default Credential Check
-    needs:
-    - network-discovery
+    needs: [network-discovery]
     outputs:
-      cred_count: '{{ steps["parse-brutus"].outputs.cred_count | default("", true) }}'
+      cred_count: '{{ steps["parse-brutus"].outputs.cred_count | default("0", true) }}'
     steps:
-    - name: run-pipeline
-      run: |
-        naabu -list {{ jobs['network-discovery'].outputs.hosts_file }} -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
-          nerva --json 2>/dev/null | \
-          brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_netscan_brutus.jsonl
-      timeout: 20
-      continue-on-error: true
-    - name: parse-brutus
-      script: |
-        import json
-        creds = []
-        try:
-            with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_netscan_brutus.jsonl') as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or not line.startswith('{'):
-                        continue
-                    try:
-                        data = json.loads(line)
-                        username = data.get('username', data.get('login', ''))
-                        password = data.get('password', data.get('pass', ''))
-                        host = data.get('host', data.get('ip', ''))
-                        port = data.get('port', '')
-                        service = data.get('service', '')
-                        if username:
-                            creds.append({'user': username, 'pass': password, 'host': f"{host}:{port}", 'service': service})
-                    except json.JSONDecodeError:
-                        continue
-        except FileNotFoundError:
-            pass
+      - name: run-pipeline
+        run: |
+          naabu -list {{ jobs['network-discovery'].outputs.hosts_file }} \
+            -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
+            nerva --json 2>/dev/null | \
+            brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_netscan_brutus.jsonl
+        timeout: 20
+        continue-on-error: true
+      - name: parse-brutus
+        script: |
+          import json
+          from pathlib import Path
 
-        add_outputs(cred_count=len(creds))
-        if creds:
-            print(f"[!] Default credentials found: {len(creds)}")
-            for c in creds:
-                print(f"  [+] {c['host']} ({c['service']}): {c['user']}:{c['pass']}")
-        else:
-            print("[*] No default credentials found")
-      log-stdout: true
-  url-crawl:
-    name: URL Crawling
-    needs:
-    - host-recon
+          creds = []
+          brutus_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_netscan_brutus.jsonl'
+          try:
+              for line in Path(brutus_path).read_text().splitlines():
+                  line = line.strip()
+                  if not line or not line.startswith('{'):
+                      continue
+                  try:
+                      data = json.loads(line)
+                      username = data.get('username', data.get('login', ''))
+                      password = data.get('password', data.get('pass', ''))
+                      host = data.get('host', data.get('ip', ''))
+                      port = str(data.get('port', ''))
+                      service = data.get('service', '')
+                      if username:
+                          creds.append({'user': username, 'pass': password,
+                                        'host': f"{host}:{port}", 'service': service})
+                  except json.JSONDecodeError:
+                      continue
+          except FileNotFoundError:
+              pass
+
+          add_outputs(cred_count=len(creds))
+          if creds:
+              print(f"[!] Default credentials found: {len(creds)}")
+              for c in creds:
+                  print(f"  [+] {c['host']} ({c['service']}): {c['user']}:{c['pass']}")
+          else:
+              print("[*] No default credentials found")
+        log-stdout: true
+
+  # ── Phase 2b: Per-host Deep Scan via host-scan (parallel) ──────────
+  per-host-scan:
+    name: "Host scan: {{ matrix.target }}"
+    needs: [network-discovery]
+    strategy:
+      matrix:
+        target: "{{ jobs['network-discovery'].outputs.live_hosts_json }}"
+      max_parallel: 8
+      fail_fast: false
     steps:
-    - task: katana
-      timeout: 15
-      name: crawl-urls
-      with:
-        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        depth: 2
-      continue-on-error: true
-  vuln-scan:
-    name: Vulnerability Scanning
-    needs:
-    - url-crawl
-    - default-cred-check
+      - name: scan-host
+        uses: host-scan
+        with:
+          target: "{{ matrix.target }}"
+
+  # ── Phase 3: Summary ──────────────────────────────────────────────
+  summary:
+    name: Network Scan Summary
+    needs: [per-host-scan, default-cred-check]
     steps:
-    - task: nuclei
-      timeout: 20
-      name: nuclei-scan
-      with:
-        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        severity: critical,high,medium
-      continue-on-error: true
-    - task: whatweb
-      timeout: 10
-      name: whatweb-fingerprint
-      with:
-        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        aggression: 3
-      continue-on-error: true
-    - task: nikto
-      timeout: 15
-      name: nikto-scan
-      with:
-        target: "{{ jobs['host-recon'].outputs.live_urls | default(inputs.target, true) }}"
-        maxtime: 900
-      continue-on-error: true
-    - name: final-summary
-      script: |
-        import json
+      - name: report
+        run: |
+          echo "======================================================"
+          echo " NETWORK SCAN COMPLETE: {{ inputs.target }}"
+          echo "======================================================"
+          echo "Live hosts:       {{ jobs['network-discovery'].outputs.host_count }}"
+          echo "Default creds:    {{ jobs['default-cred-check'].outputs.cred_count }}"
+          echo "Hosts deep-scanned: {{ jobs['network-discovery'].outputs.host_count }}"
+          echo "(Each host: port scan, service detect, web fingerprint, crawl, vuln scan)"
+        log-stdout: true
+      - name: export-to-project
+        script: |
+          import shutil
+          from pathlib import Path
 
-        vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }}
-        critical = [v for v in vulns if v.get('severity') == 'critical']
-        high = [v for v in vulns if v.get('severity') == 'high']
-
-        print("=" * 50)
-        print(f" NETWORK SCAN COMPLETE: {{ inputs.target }}")
-        print("=" * 50)
-        print(f"Live hosts: {{ jobs['network-discovery'].outputs.host_count }}")
-        print(f"Default creds: {{ jobs['default-cred-check'].outputs.cred_count | default('0', true) }}")
-        print(f"Total vulnerabilities: {len(vulns)}")
-        print(f"  Critical: {len(critical)}")
-        print(f"  High: {len(high)}")
-      log-stdout: true
-    - name: export-to-project
-      script: |-
-        import shutil
-        from pathlib import Path
-
-        project = '{{ vars.project_path | default("", true) }}'
-        if not project:
-            print('No --project set, skipping file export')
-        else:
-
-            # alive hosts
-            d = '{{ vars.project_hosts }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            src = '''{{ jobs['network-discovery'].outputs.hosts_file | default('', true) }}'''
-            if src and Path(src).is_file():
-                shutil.copy2(src, Path(d) / 'alive-hosts.txt')
-                print('  [+] hosts/alive-hosts.txt')
-
-            # open ports
-            d = '{{ vars.project_hosts }}'
-            Path(d).mkdir(parents=True, exist_ok=True)
-            data = '''{{ jobs['host-recon'].outputs.open_ports | default('', true) }}'''.strip()
-            if data:
-                (Path(d) / 'open-ports.txt').write_text(data)
-                print(f'  [+] hosts/open-ports.txt ({len(data.splitlines())} lines)')
-
-            # Auto-export typed outputs
-            all_typed = []
-            for typed in [
-                {{ jobs['network-discovery'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['host-recon'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['url-crawl'].outputs.typed_outputs | default([], true) | tojson }},
-                {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
-            summaries = export_typed_outputs(project, all_typed)
-            for s in summaries:
-                print(s)
-
-            print(f'Project export complete: {project}')
-      continue-on-error: true
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+              print('No --project set, skipping file export')
+          else:
+              src = '{{ jobs["network-discovery"].outputs.hosts_file | default("", true) }}'
+              if src and Path(src).is_file():
+                  d = Path('{{ vars.project_hosts }}')
+                  d.mkdir(parents=True, exist_ok=True)
+                  shutil.copy2(src, d / 'alive-hosts.txt')
+                  print('  [+] hosts/alive-hosts.txt')
+              print(f'Project export complete: {project}')
+        continue-on-error: true
