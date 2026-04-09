@@ -235,6 +235,9 @@ class StepRunner(BaseRunner[Step]):
         if self._outputs_file:
             self._outputs_file.unlink(missing_ok=True)
 
+        # Log to project timeline CSV
+        self._log_timeline(result, status_value)
+
     def _log_output(self, stream: str, content: str) -> None:
         """Log a stdout/stderr stream to the console, truncating long output."""
         from ofx.runner.core.step_output import log_output
@@ -447,6 +450,41 @@ class StepRunner(BaseRunner[Step]):
         backoff = base_delay * (2**attempt)
         delay = min(backoff, 300)
         return delay * uniform(0.5, 1.0)
+
+    def _log_timeline(self, result: RunResult, status: str) -> None:
+        """Write a timeline entry for this step execution."""
+        from ofx.runner.execution.timeline import log_step
+
+        # Determine command/tool/target from run type
+        command = ""
+        tool = ""
+        target = ""
+
+        if self._run_type == RunType.COMMAND:
+            command = self.model.run or ""
+        elif self._run_type == RunType.TASK:
+            task_name = self.model.task or ""
+            tool = task_name
+            target = str(self.model.run_with.get("target", self.model.run_with.get("targets", "")))
+            command = result.outputs.get("command", f"task:{task_name}")
+        elif self._run_type == RunType.SCRIPT:
+            command = f"script:{self.model.name or 'inline'}"
+        elif self._run_type == RunType.SCRIPT_FILE:
+            command = f"script_file:{self.model.script_file or ''}"
+        elif self._run_type == RunType.WORKFLOW:
+            command = f"uses:{self.model.uses or ''}"
+
+        log_step(
+            ctx_vars=self.ctx.vars,
+            output_path=self.ctx.output_path,
+            step_name=self.model.name or f"step{self.model.step_index}",
+            command=command,
+            tool=tool,
+            target=target,
+            status=status,
+            duration_ms=self.duration_ms(),
+            exit_code=result.outputs.get("exit_code"),
+        )
 
     def _resolve_working_dir(self) -> Path:
         step = self.model

@@ -266,11 +266,61 @@ class CloudStepRunner(BaseRunner):
         )
         await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
 
+        # Log to project timeline CSV
+        self._log_timeline(result, status_value)
+
     def _log_output(self, stream: str, content: str) -> None:
         """Log a stdout/stderr stream to the console, truncating long output."""
         from ofx.runner.core.step_output import log_output
 
         log_output(self._log_info, stream, content)
+
+    def _log_timeline(self, result, status: str) -> None:
+        """Write a timeline entry for this cloud step execution."""
+        from ofx.models.step import RunType
+        from ofx.runner.execution.timeline import log_step
+
+        command = ""
+        tool = ""
+        target = ""
+
+        rt = self._run_type or self.model.get_run_type()
+        if rt == RunType.COMMAND:
+            command = self.model.run or ""
+        elif rt == RunType.TASK:
+            task_name = self.model.task or ""
+            tool = task_name
+            target = str(self.model.run_with.get("target", self.model.run_with.get("targets", "")))
+            command = result.outputs.get("command", f"task:{task_name}")
+        elif rt == RunType.SCRIPT:
+            command = f"script:{self.model.name or 'inline'}"
+        elif rt == RunType.SCRIPT_FILE:
+            command = f"script_file:{self.model.script_file or ''}"
+        elif rt == RunType.WORKFLOW:
+            command = f"uses:{self.model.uses or ''}"
+
+        # Tag cloud execution with host info
+        cloud_host = ""
+        from ofx.runner.execution.cloud_job import CloudJobRunner
+        if isinstance(self.parent, CloudJobRunner) and hasattr(self.parent, "_cloud_config"):
+            cfg = self.parent._cloud_config
+            if cfg:
+                cloud_host = getattr(cfg, "host", "") or ""
+
+        tags = f"cloud:{cloud_host}" if cloud_host else "cloud"
+
+        log_step(
+            ctx_vars=self.ctx.vars,
+            output_path=self.ctx.output_path,
+            step_name=self.model.name or f"step{self.model.step_index}",
+            command=command,
+            tool=tool,
+            target=target,
+            status=status,
+            duration_ms=self.duration_ms(),
+            exit_code=result.outputs.get("exit_code"),
+            tags=tags,
+        )
 
     # ------------------------------------------------------------------
     # Remote execution methods

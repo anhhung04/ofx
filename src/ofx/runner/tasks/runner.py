@@ -176,6 +176,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
                     "exit_code": result.exit_code,
                     "stdout": result.stdout,
                     "stderr": result.stderr,
+                    "command": cmd_str,
                     "typed_outputs": typed_dicts,
                 }
             )
