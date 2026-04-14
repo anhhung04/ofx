@@ -46,13 +46,55 @@ def _build_jinja_env() -> Environment:
 _jinja_env = _build_jinja_env()
 
 
+class _EmptyStep:
+    """Safe proxy returned for missing steps so ``| default()`` works."""
+
+    def __getattr__(self, name: str) -> Any:
+        return _EmptyStep()
+
+    def __getitem__(self, key: Any) -> Any:
+        return _EmptyStep()
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __str__(self) -> str:
+        return ""
+
+    def __iter__(self):
+        return iter([])
+
+    def __add__(self, other: Any) -> Any:
+        return other
+
+    def __radd__(self, other: Any) -> Any:
+        return other
+
+
+_EMPTY_STEP = _EmptyStep()
+
+
 class _StepAccessor(dict):
-    """Dict that supports both name-based and integer-index access for steps."""
+    """Dict that supports both name-based and integer-index access for steps.
+
+    Returns a safe empty proxy for missing keys so that Jinja2 expressions
+    like ``steps["missing-step"].outputs.typed_outputs | default([], true)``
+    evaluate gracefully instead of raising.
+    """
 
     def __getitem__(self, key: Any) -> Any:
         if isinstance(key, int):
             key = str(key)
-        return super().__getitem__(key)
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            return _EMPTY_STEP
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return self[name]
+        except KeyError:
+            return _EMPTY_STEP
 
 
 class TemplateResolver:
