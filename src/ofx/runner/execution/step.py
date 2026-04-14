@@ -1,6 +1,7 @@
 "Step runner for executing workflow steps"
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 from random import uniform
@@ -47,9 +48,9 @@ class StepRunner(BaseRunner[Step]):
 
         # Create outputs file early so {{ env.OFX_OUTPUTS }} resolves in templates
         if self._run_type in (RunType.COMMAND, RunType.SCRIPT, RunType.SCRIPT_FILE):
-            self._outputs_file = Path(
-                tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")[1]
-            )
+            fd, tmp_path = tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")
+            os.close(fd)
+            self._outputs_file = Path(tmp_path)
             self.ctx.envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
             self.ctx.envs["OFX_OUTPUTS"] = str(self._outputs_file)
 

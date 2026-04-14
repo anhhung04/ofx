@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -77,9 +78,10 @@ class GotatorTask(Task):
         elif target:
             parts.extend(["-sub", target])
 
-        _, path = tempfile.mkstemp(
+        _fd, path = tempfile.mkstemp(
             prefix=".ofx_task_gotator_", suffix=self._output_suffix()
         )
+        os.close(_fd)
         output_file = Path(path)
         return f"{' '.join(parts)} > {output_file}", output_file
 

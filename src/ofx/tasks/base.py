@@ -10,6 +10,7 @@ A *Task* wraps an external CLI tool with:
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 from abc import ABC, abstractmethod
@@ -136,11 +137,11 @@ class Task(ABC):
 
         # Output file for tools that write structured output to a file
         if self.output_flag:
-            output_file = Path(
-                tempfile.mkstemp(
-                    prefix=f".ofx_task_{self.name}_", suffix=self._output_suffix()
-                )[1]
+            fd, tmp_path = tempfile.mkstemp(
+                prefix=f".ofx_task_{self.name}_", suffix=self._output_suffix()
             )
+            os.close(fd)
+            output_file = Path(tmp_path)
             parts.extend([self.output_flag, str(output_file)])
 
         # Target handling — auto-detect file paths, multi-target lists

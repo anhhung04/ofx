@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -73,12 +74,12 @@ class MasscanTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            output_file = Path(
-                tempfile.mkstemp(
-                    prefix=f".ofx_task_{self.name}_",
-                    suffix=self._output_suffix(),
-                )[1]
+            _fd, _path = tempfile.mkstemp(
+                prefix=f".ofx_task_{self.name}_",
+                suffix=self._output_suffix(),
             )
+            os.close(_fd)
+            output_file = Path(_path)
             parts.extend([self.output_flag, str(output_file)])
 
         # masscan only accepts IPs/CIDRs — resolve hostnames automatically

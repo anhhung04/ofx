@@ -91,9 +91,9 @@ class CommandExecutor:
             if existing:
                 self._outputs_file = Path(existing)
             else:
-                self._outputs_file = Path(
-                    tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")[1]
-                )
+                fd, tmp_path = tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")
+                os.close(fd)
+                self._outputs_file = Path(tmp_path)
                 self._envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
 
     async def execute_streaming(
