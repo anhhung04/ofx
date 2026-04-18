@@ -356,6 +356,7 @@ class Settings(BaseSettings):
         nested_model_default_partial_update=True,
         secrets_dir=SECRETS_DIR.absolute(),
         yaml_file=CONFIG_YAML,
+        extra="ignore",
     )
 
     @classmethod
