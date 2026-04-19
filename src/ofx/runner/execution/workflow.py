@@ -29,6 +29,14 @@ class WorkflowRunner(BaseRunner[Workflow]):
         parent: BaseRunner | None = None,
         registry: RegistryAdapter | None = None,
     ):
+        """Initialise a workflow runner.
+
+        Args:
+            workflow: Parsed workflow model.
+            ctx: Execution context (inputs, secrets, env, output path).
+            parent: Parent runner when this is a reusable (nested) workflow.
+            registry: Optional shared registry adapter for job/step data.
+        """
         super().__init__(workflow, ctx, parent, registry)
         self._is_reused = self.parent is not None
         if not self._is_reused:

@@ -285,10 +285,36 @@ def _asm_helpers() -> dict[str, Any]:
             _logger.debug("asm_scopes() failed", exc_info=True)
             return []
 
+    def _asm_scope_assets(scope: str = "", asset_type: str = "", limit: int = 1000) -> list[dict]:
+        """List assets from an ASM scope."""
+        try:
+            from ofx.asm.config import get_asm_client
+            client = get_asm_client()
+            scope_id = _asm_resolve_scope(client, scope)
+            assets, _ = client.list_assets(scope_id, limit=limit, asset_type=asset_type)
+            return [a.model_dump() for a in assets]
+        except Exception:
+            _logger.debug("asm_scope_assets() failed", exc_info=True)
+            return []
+
+    def _asm_add_targets(targets: list[str], scope: str = "") -> int:
+        """Add targets to an ASM scope (auto-detect types)."""
+        try:
+            from ofx.asm.config import get_asm_client
+            client = get_asm_client()
+            scope_id = _asm_resolve_scope(client, scope)
+            result = client.bulk_import_targets(scope_id, targets, auto_detect=True)
+            return result.imported
+        except Exception:
+            _logger.debug("asm_add_targets() failed", exc_info=True)
+            return 0
+
     return {
         "asm_targets": _asm_targets,
         "asm_push": _asm_push,
         "asm_scopes": _asm_scopes,
+        "asm_scope_assets": _asm_scope_assets,
+        "asm_add_targets": _asm_add_targets,
     }
 
 
