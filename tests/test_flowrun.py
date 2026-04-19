@@ -47,3 +47,255 @@ class TestFlowRun:
         assert event_file.exists()
         lines = [ln for ln in event_file.read_text().splitlines() if ln.strip()]
         assert lines, "expected structured events"
+
+    # ── new integration tests ──────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_parallel_jobs(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-parallel
+jobs:
+  job1:
+    steps:
+      - run: echo "job1"
+  job2:
+    steps:
+      - run: echo "job2"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_job_dependencies(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-deps
+jobs:
+  setup:
+    steps:
+      - run: echo "setup done"
+  main:
+    needs: [setup]
+    steps:
+      - run: echo "main done"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_step_failure_stops_job(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-failure
+jobs:
+  failing:
+    steps:
+      - run: exit 1
+      - run: echo "should not reach"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.FAILED
+
+    @pytest.mark.asyncio
+    async def test_continue_on_error(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-continue
+jobs:
+  resilient:
+    steps:
+      - run: exit 1
+        continue-on-error: true
+      - run: echo "continued"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_step_outputs(self, tmp_path, caplog):
+        import logging
+
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-outputs
+jobs:
+  outputs_job:
+    steps:
+      - name: produce
+        run: echo "greeting=hello" >> "$OFX_OUTPUTS"
+      - name: consume
+        run: echo "Got {{ steps.0.outputs.greeting }}"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        with caplog.at_level(logging.DEBUG):
+            result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+        assert "Got hello" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_matrix_expansion(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-matrix
+jobs:
+  scan:
+    strategy:
+      matrix:
+        target: [a, b, c]
+    steps:
+      - run: echo "target={{ matrix.target }}"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_env_vars(self, tmp_path, caplog):
+        import logging
+
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-env
+env:
+  MY_VAR: hello_world
+jobs:
+  check_env:
+    steps:
+      - run: echo "$MY_VAR"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        with caplog.at_level(logging.DEBUG):
+            result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+        assert "hello_world" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_run_if_false_skips(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-runif
+jobs:
+  conditional:
+    steps:
+      - run: echo "always runs"
+      - run: echo "skipped"
+        run_if: "False"
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_inline_python_script(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-script
+jobs:
+  script_job:
+    steps:
+      - script: |
+          print("hello from python")
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
+
+    @pytest.mark.asyncio
+    async def test_working_directory(self, tmp_path):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+
+        workflow = Workflow.model_validate(
+            yaml.safe_load(
+                """\
+name: test-workdir
+jobs:
+  wd_job:
+    steps:
+      - run: pwd
+        working-directory: /tmp
+"""
+            )
+        )
+        ctx = RunContext(output_path=tmp_path)
+        runner = WorkflowRunner(workflow=workflow, ctx=ctx)
+        result = await runner.run()
+        assert result.status == RunnerStatus.COMPLETED
