@@ -11,6 +11,8 @@ from ofx.utils.scheduling import find_parallel_schedule
 
 @dataclass(frozen=True)
 class WorkflowSchedule:
+    """Topologically sorted execution plan for workflow jobs."""
+
     staged_jobs: dict[str, Job]
     schedule: list[list[str]]
 
@@ -22,6 +24,7 @@ class WorkflowScheduler:
         self._jobs = jobs
 
     def plan(self) -> WorkflowSchedule:
+        """Build the parallel execution schedule from job dependency graph."""
         dependencies = [
             (dep, job_id)
             for job_id, job in self._jobs.items()
@@ -33,10 +36,12 @@ class WorkflowScheduler:
 
     @staticmethod
     def dependencies(jobs: dict[str, Job]) -> list[tuple[str, str]]:
+        """Return ``(dependency, job_id)`` pairs for topological sorting."""
         return [
             (dep, job_id) for job_id, job in jobs.items() for dep in job.needs if dep
         ]
 
     @staticmethod
     def job_ids(jobs: dict[str, Job]) -> Iterable[str]:
+        """Return all job identifiers from the workflow."""
         return jobs.keys()

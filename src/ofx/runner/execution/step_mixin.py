@@ -12,6 +12,12 @@ from typing import Any
 
 from ofx.runner.core import RunnerStatus
 
+# Retry backoff constants
+_MAX_BACKOFF_SECONDS = 300  # 5 minutes
+_JITTER_MIN = 0.5
+_JITTER_MAX = 1.0
+_DEFAULT_TIMEOUT_MINUTES = 60
+
 
 class StepRunnerMixin:
     """Mixin providing methods shared by StepRunner and CloudStepRunner."""
@@ -45,8 +51,8 @@ class StepRunnerMixin:
     def _retry_delay_seconds(attempt: int, base_delay: int) -> float:
         """Compute exponential backoff with jitter capped to 5 minutes."""
         backoff = base_delay * (2**attempt)
-        delay = min(backoff, 300)
-        return delay * uniform(0.5, 1.0)
+        delay = min(backoff, _MAX_BACKOFF_SECONDS)
+        return delay * uniform(_JITTER_MIN, _JITTER_MAX)
 
     # ------------------------------------------------------------------
     # Template / timeout resolution
@@ -62,7 +68,7 @@ class StepRunnerMixin:
                 self._log_warning(  # type: ignore[attr-defined]
                     f"Invalid timeout expression result: {resolved!r}, using 60 min"
                 )
-                self.model.timeout = 60  # type: ignore[attr-defined]
+                self.model.timeout = _DEFAULT_TIMEOUT_MINUTES  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Output helpers

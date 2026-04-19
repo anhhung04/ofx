@@ -12,6 +12,9 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
+# How often (seconds) to recheck memory when usage exceeds the limit.
+_MEMORY_POLL_INTERVAL = 5
+
 
 def _memory_usage_percent() -> float:
     """Return system memory usage as a percentage (0-100).
@@ -39,6 +42,8 @@ def _memory_usage_percent() -> float:
 
 @dataclass
 class ExecutionResult:
+    """Aggregated results from all workflow stages."""
+
     failed_job_ids: list[str] = field(default_factory=list)
     failed_stage_indices: list[int] = field(default_factory=list)
 
@@ -59,6 +64,7 @@ class WorkflowExecutionManager:
         self._mem_limit = settings.memory_limit_percent
 
     async def run(self, schedule: list[list[str]], staged_jobs: dict):
+        """Execute all stages in order, collecting failures."""
         result = ExecutionResult()
         for stage_index, stage in enumerate(schedule):
             # Check time window guard between stages
@@ -84,6 +90,7 @@ class WorkflowExecutionManager:
     def _build_stage_runners(
         self, stage: list[str], staged_jobs: dict
     ) -> dict[str, BaseRunner]:
+        """Create runner instances for each job in a stage."""
         stage_runners: dict[str, BaseRunner] = {}
         for job_id in stage:
             job = staged_jobs[job_id]
@@ -119,7 +126,7 @@ class WorkflowExecutionManager:
                     self._mem_limit,
                 )
                 warned = True
-            await asyncio.sleep(5)
+            await asyncio.sleep(_MEMORY_POLL_INTERVAL)
 
     # ------------------------------------------------------------------
     # Stage execution with semaphore
@@ -178,6 +185,7 @@ class WorkflowExecutionManager:
         return failed_jobs
 
     def _matrix_combo_count(self, runner) -> int:
+        """Estimate the number of matrix combinations for a runner."""
         from ofx.runner.core.matrix_utils import estimate_matrix_count
 
         strategy = runner.model.strategy

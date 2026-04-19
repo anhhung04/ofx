@@ -33,6 +33,10 @@ from ofx.utils.shell import bash_dquote_escape
 if TYPE_CHECKING:
     from ofx.runner.execution.cloud_job import CloudJobRunner
 
+# Grace period (seconds) added to the configured timeout to account for
+# network latency when executing commands on a remote host.
+_NETWORK_GRACE_SECONDS = 30
+
 
 class CloudStepRunner(StepRunnerMixin, BaseRunner):
     """Runs a step remotely via PostSSH or PostWinRM.
@@ -119,17 +123,17 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                 if run_type == RunType.COMMAND:
                     output = await asyncio.wait_for(
                         self._run_remote_command(self.model.run, timeout=timeout_seconds),
-                        timeout=timeout_seconds + 30,  # grace period for network latency
+                        timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,  # grace period for network latency
                     )
                 elif run_type == RunType.SCRIPT:
                     output = await asyncio.wait_for(
                         self._run_remote_script(self.model.script, timeout=timeout_seconds),
-                        timeout=timeout_seconds + 30,
+                        timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
                     )
                 elif run_type == RunType.SCRIPT_FILE:
                     output = await asyncio.wait_for(
                         self._run_remote_script_file(self.model.script_file, timeout=timeout_seconds),
-                        timeout=timeout_seconds + 30,
+                        timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
                     )
                 elif run_type == RunType.WORKFLOW:
                     raise RuntimeError(
@@ -138,7 +142,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                 elif run_type == RunType.TASK:
                     output = await asyncio.wait_for(
                         self._run_remote_task(timeout=timeout_seconds),
-                        timeout=timeout_seconds + 30,
+                        timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
                     )
                 else:
                     raise RuntimeError(f"Unknown run type: {run_type}")
