@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import sys
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from ofx.models.cloud import CloudConfig
@@ -221,7 +222,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
             self._work_dir = f"/tmp/.run-{self.run_id[:8]}"
             try:
                 await asyncio.to_thread(
-                    self._remote_runner.run, f"mkdir -p {self._work_dir}"
+                    self._remote_runner.run, f"mkdir -p {shlex.quote(self._work_dir)}"
                 )
             except Exception as e:
                 self._log_warning(f"Work dir creation failed, using /tmp: {e}")
@@ -350,7 +351,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
             else:
                 files_output = await asyncio.to_thread(
                     self._remote_runner.run,
-                    f"ls -1 {self._work_dir}/output 2>/dev/null || true",
+                    f"ls -1 {shlex.quote(self._work_dir + '/output')} 2>/dev/null || true",
                 )
 
             files = [f.strip() for f in files_output.strip().split("\n") if f.strip()]
@@ -361,11 +362,15 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
             local_out.mkdir(parents=True, exist_ok=True)
 
             for fname in files:
+                # Sanitize filename to prevent path traversal
+                safe_name = PureWindowsPath(fname).name if is_windows else PurePosixPath(fname).name
+                if not safe_name or safe_name in (".", ".."):
+                    continue
                 if is_windows:
-                    remote = f"{self._work_dir}\\output\\{fname}"
+                    remote = f"{self._work_dir}\\output\\{safe_name}"
                 else:
-                    remote = f"{self._work_dir}/output/{fname}"
-                local = str(local_out / fname)
+                    remote = f"{self._work_dir}/output/{safe_name}"
+                local = str(local_out / safe_name)
                 try:
                     await asyncio.to_thread(self._remote_runner.download, remote, local)
                 except Exception as e:
@@ -447,7 +452,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                     )
                 else:
                     await asyncio.to_thread(
-                        self._remote_runner.run, f"rm -rf {self._work_dir}", 15
+                        self._remote_runner.run, f"rm -rf {shlex.quote(self._work_dir)}", 15
                     )
             except Exception as e:
                 self._log_debug(f"Failed to clean remote work dir: {e}")

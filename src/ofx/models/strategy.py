@@ -2,7 +2,7 @@
 
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from ofx.models.base import OFXBaseModel
 
@@ -42,6 +42,7 @@ class MatrixStrategy(OFXBaseModel):
     )
     max_parallel: int = Field(
         default=4,
+        ge=1,
         description="Maximum number of matrix jobs to run in parallel per stage",
     )
     fail_fast: bool = Field(
@@ -60,3 +61,17 @@ class MatrixStrategy(OFXBaseModel):
         default=None,
         description="Fleet distribution strategy for cloud-based parallel execution",
     )
+
+    @field_validator("matrix")
+    @classmethod
+    def _validate_matrix_keys(cls, v: dict[str, list[Any] | str]) -> dict[str, list[Any] | str]:
+        """Ensure matrix keys are valid identifiers (used as template variables)."""
+        import re
+
+        for key in v:
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                raise ValueError(
+                    f"Matrix key '{key}' is not a valid identifier. "
+                    f"Use letters, digits, and underscores only (e.g. 'my_var')."
+                )
+        return v

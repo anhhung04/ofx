@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -256,14 +257,14 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             parts = []
             if env_prefix:
                 parts.append(env_prefix)
-            parts.append(f"cd /d {work_dir}")
+            parts.append(f'cd /d "{work_dir}"')
             parts.append(command)
             full_cmd = " && ".join(parts)
         else:
             full_cmd = ""
             if env_prefix:
                 full_cmd += env_prefix + " "
-            full_cmd += f"cd {work_dir} && {command}"
+            full_cmd += f"cd {shlex.quote(work_dir)} && {command}"
 
         return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
 
@@ -348,19 +349,19 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             env_prefix = self._build_env_prefix()
             work_dir = self._resolve_remote_work_dir()
             if self._is_windows:
-                parts = [p for p in [env_prefix, f"cd /d {work_dir}"] if p]
+                parts = [p for p in [env_prefix, f'cd /d "{work_dir}"'] if p]
                 parts.append(f"{python_bin} {remote_script}")
                 full_cmd = " && ".join(parts)
             else:
-                full_cmd = f"cd {work_dir} && "
+                full_cmd = f"cd {shlex.quote(work_dir)} && "
                 if env_prefix:
                     full_cmd += env_prefix + " "
-                full_cmd += f"{python_bin} {remote_script}"
+                full_cmd += f"{python_bin} {shlex.quote(remote_script)}"
             return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
         finally:
             # Cleanup remote script
             try:
-                rm_cmd = f"del /f {remote_script}" if self._is_windows else f"rm -f {remote_script}"
+                rm_cmd = f'del /f "{remote_script}"' if self._is_windows else f"rm -f {shlex.quote(remote_script)}"
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
                 logger.debug("Failed to remove remote script %s: %s", remote_script, e)
@@ -406,21 +407,21 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             work_dir = self._resolve_remote_work_dir()
             env_prefix = self._build_env_prefix()
             if self._is_windows:
-                parts = [p for p in [env_prefix, f"cd /d {work_dir}"] if p]
+                parts = [p for p in [env_prefix, f'cd /d "{work_dir}"'] if p]
                 parts.append(f"{python_bin} {remote_path}")
                 exec_cmd = " && ".join(parts)
             else:
-                exec_cmd = f"cd {work_dir} && "
+                exec_cmd = f"cd {shlex.quote(work_dir)} && "
                 if env_prefix:
                     exec_cmd += env_prefix + " "
-                exec_cmd += f"{python_bin} {remote_path}"
+                exec_cmd += f"{python_bin} {shlex.quote(remote_path)}"
             return await asyncio.to_thread(self._remote.run, exec_cmd, timeout)
         finally:
             # Clean up temporary local file.
             Path(local_tmp).unlink(missing_ok=True)
             # Clean up remote file.
             try:
-                rm_cmd = f"del /f {remote_path}" if self._is_windows else f"rm -f {remote_path}"
+                rm_cmd = f'del /f "{remote_path}"' if self._is_windows else f"rm -f {shlex.quote(remote_path)}"
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
                 logger.debug("Failed to remove remote file %s: %s", remote_path, e)
