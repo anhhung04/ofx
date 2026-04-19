@@ -42,7 +42,6 @@ USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 SESSIONS_DIR = BASE_DATA_DIR / "sessions"
 COLLECTIONS_DIR = BASE_DATA_DIR / "collections"
-SCRIPT_COMMUNICATION_REGISTRY = TEMP_DIR / "script_channels.json"
 CHANNELS_DIR = TEMP_DIR / "channels"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
@@ -239,10 +238,6 @@ class Settings(BaseSettings):
     )
 
     debug: bool = Field(default=False, description="Enable debug mode")
-    timeout: int = Field(
-        default=24 * 60 * 60,
-        description="Timeout for running flows in seconds",
-    )
     max_output_size: int = Field(
         default=10 * 1024 * 1024,  # 10MB
         description="Maximum output size in bytes before truncation",
@@ -285,20 +280,12 @@ class Settings(BaseSettings):
         description="Default remote registry URL for cloning repositories",
     )
 
-    # Collection / Index Settings
+    # GitHub token
     github_token: SecretStr = Field(
         default=SecretStr(""),
         description=(
             "GitHub personal access token for private collection repos and index. "
             "Set via OFX_GITHUB_TOKEN env var."
-        ),
-    )
-    collection_index_url: str = Field(
-        default="",
-        description=(
-            "Override the default community index URL. "
-            "Set via OFX_COLLECTION_INDEX_URL env var. "
-            "Defaults to the ofx-workflows/index repo on GitHub."
         ),
     )
 
@@ -310,10 +297,6 @@ class Settings(BaseSettings):
     registry_file_path: str | None = Field(
         default=None,
         description="File path for file-based registry (defaults to ~/.ofx/job_registry.json)",
-    )
-    script_communication_registry_path: str = Field(
-        default=str(SCRIPT_COMMUNICATION_REGISTRY),
-        description="File path for script inter-job communication registry",
     )
     channels_dir: str = Field(
         default=str(CHANNELS_DIR),
@@ -389,7 +372,6 @@ _CONFIG_EXCLUDE_FIELDS = frozenset({
     "app_name",
     "app_branding",
     "active_project",
-    "script_communication_registry_path",
     "channels_dir",
 })
 

@@ -109,14 +109,7 @@ def update(
 # list
 # ------------------------------------------------------------------
 @app.command("list")
-def list_collections(
-    outdated: Annotated[
-        bool,
-        typer.Option(
-            "--outdated", help="Show only collections with newer remote versions."
-        ),
-    ] = False,
-):
+def list_collections():
     """List installed collections."""
     mgr = _mgr()
     console = get_console()

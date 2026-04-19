@@ -84,9 +84,6 @@ def instance_create(
     provider: Annotated[
         str, typer.Option("--provider", "-p", help="Cloud provider")
     ] = "",
-    name: Annotated[
-        str, typer.Option("--name", "-n", help="Instance name")
-    ] = "ofx-manual",
     region: Annotated[str, typer.Option("--region", "-r", help="Region")] = "",
     size: Annotated[str, typer.Option("--size", "-s", help="Instance size")] = "",
     image: Annotated[str, typer.Option("--image", "-i", help="OS image")] = "",

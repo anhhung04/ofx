@@ -136,7 +136,7 @@ class TaskRunHandler:
                 )
             )
         else:
-            _display_results(console, typed_outputs, stdout, exit_code)
+            _display_results(console, typed_outputs, stdout)
 
         return 0
 
@@ -145,7 +145,6 @@ def _display_results(
     console: Any,
     typed_outputs: list[dict],
     stdout: str,
-    exit_code: int | None,
 ) -> None:
     """Display task results using Rich tables."""
     from rich.table import Table
