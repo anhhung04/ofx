@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -252,6 +252,43 @@ class Task(ABC):
     def _output_suffix(self) -> str:
         """File suffix for the structured output file."""
         return ".xml"
+
+    @staticmethod
+    def _parse_json_line(line: str) -> dict | None:
+        """Parse a single JSONL line, returning the dict or ``None``."""
+        import json
+
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return None
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            return None
+
+    def _read_json_output(
+        self, stdout: str, output_file: Path | None = None
+    ) -> Any | None:
+        """Read and parse JSON from *output_file* or *stdout*.
+
+        Returns the parsed object or ``None`` on failure.
+        """
+        import json
+
+        raw = ""
+        if output_file and output_file.exists():
+            raw = self._read_output_file(output_file)
+        elif stdout:
+            raw = stdout
+
+        raw = raw.strip()
+        if not raw:
+            return None
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
 
     @staticmethod
     def _read_output_file(path: Path) -> str:

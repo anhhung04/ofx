@@ -69,9 +69,8 @@ class PurednsTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            import tempfile as _tf
-
             import os
+            import tempfile as _tf
 
             _fd, path = _tf.mkstemp(
                 prefix=".ofx_task_puredns_", suffix=self._output_suffix()

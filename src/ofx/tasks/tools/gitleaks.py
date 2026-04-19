@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
@@ -76,26 +75,15 @@ class GitleaksTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
-        try:
-            findings = json.loads(raw)
-        except json.JSONDecodeError:
-            return []
-
-        if not isinstance(findings, list):
+        if not isinstance(data, list):
             return []
 
         results: list[Tag] = []
-        for item in findings:
+        for item in data:
             rule_id = item.get("RuleID", "")
             if not rule_id:
                 continue

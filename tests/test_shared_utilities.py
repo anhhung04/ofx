@@ -294,7 +294,7 @@ class TestCloudRetryBackoff:
         for attempt in range(5):
             # Can't compare exact values due to jitter, but verify ranges match
             for _ in range(20):
-                local = StepRunner._retry_delay_seconds(None, attempt, 10)
+                local = StepRunner._retry_delay_seconds(attempt, 10)
                 cloud = CloudStepRunner._retry_delay_seconds(attempt, 10)
                 # Both capped at 300, both use uniform(0.5, 1.0) jitter
                 cap = min(10 * (2**attempt), 300)

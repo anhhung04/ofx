@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
@@ -64,21 +63,8 @@ class FfufTask(Task):
         output_file: Path | None = None,
     ) -> list[Url]:
         results: list[Url] = []
-        raw = None
-
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-            if not raw:
-                return []
-        elif stdout:
-            raw = stdout
-
-        if not raw:
-            return results
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return results
 
         entries = data.get("results", [])

@@ -463,24 +463,25 @@ class PostSSH(PostRunnerBase):
     # File Transfer (SFTP)
     # -------------------------------------------------------------------------
 
-    def upload(
-        self, local_path: str, remote_path: str, timeout: int | None = None
+    def _sftp_with_retry(
+        self, operation: str, sftp_fn: str, src: str, dst: str
     ) -> None:
-        """Upload a file via SFTP with retry logic.
+        """Execute an SFTP operation with retry logic.
 
         Args:
-            local_path: Local file path.
-            remote_path: Remote destination path.
-            timeout: Ignored (SFTP doesn't have per-op timeout). Kept for compat.
+            operation: Human-readable label (``"UPLOAD"`` or ``"DOWNLOAD"``).
+            sftp_fn: SFTP method name (``"put"`` or ``"get"``).
+            src: Source path (first arg to the SFTP method).
+            dst: Destination path (second arg to the SFTP method).
         """
         last_error: Exception | None = None
 
         for attempt in range(self.max_retries):
             try:
                 sftp = self._get_sftp()
-                sftp.put(local_path, remote_path)
+                getattr(sftp, sftp_fn)(src, dst)
                 self._log_command(
-                    f"[SFTP UPLOAD] {local_path} -> {remote_path}",
+                    f"[SFTP {operation}] {src} -> {dst}",
                     "OK",
                     "",
                     0,
@@ -493,7 +494,16 @@ class PostSSH(PostRunnerBase):
                 self._sftp = None
                 self._close_client()
                 if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
+                    delay = min(2**attempt, 30) * uniform(0.5, 1.5)
+                    logger.debug(
+                        "SFTP %s error, retrying in %.1fs (attempt %d/%d): %s",
+                        operation.lower(),
+                        delay,
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                    )
+                    time.sleep(delay)
             except Exception as e:
                 last_error = e
                 self._sftp = None
@@ -501,8 +511,20 @@ class PostSSH(PostRunnerBase):
                     time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
 
         raise RuntimeError(
-            f"SFTP upload failed after {self.max_retries} attempts: {last_error}"
+            f"SFTP {operation.lower()} failed after {self.max_retries} attempts: {last_error}"
         )
+
+    def upload(
+        self, local_path: str, remote_path: str, timeout: int | None = None
+    ) -> None:
+        """Upload a file via SFTP with retry logic.
+
+        Args:
+            local_path: Local file path.
+            remote_path: Remote destination path.
+            timeout: Ignored (SFTP doesn't have per-op timeout). Kept for compat.
+        """
+        self._sftp_with_retry("UPLOAD", "put", local_path, remote_path)
 
     def download(
         self, remote_path: str, local_path: str, timeout: int | None = None
@@ -514,36 +536,7 @@ class PostSSH(PostRunnerBase):
             local_path: Local destination path.
             timeout: Ignored (SFTP doesn't have per-op timeout). Kept for compat.
         """
-        last_error: Exception | None = None
-
-        for attempt in range(self.max_retries):
-            try:
-                sftp = self._get_sftp()
-                sftp.get(remote_path, local_path)
-                self._log_command(
-                    f"[SFTP DOWNLOAD] {remote_path} -> {local_path}",
-                    "OK",
-                    "",
-                    0,
-                )
-                return
-            except paramiko.AuthenticationException as e:
-                raise SSHAuthError(f"SFTP auth failed: {e}") from e
-            except (paramiko.SSHException, OSError, EOFError) as e:
-                last_error = e
-                self._sftp = None
-                self._close_client()
-                if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
-            except Exception as e:
-                last_error = e
-                self._sftp = None
-                if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
-
-        raise RuntimeError(
-            f"SFTP download failed after {self.max_retries} attempts: {last_error}"
-        )
+        self._sftp_with_retry("DOWNLOAD", "get", remote_path, local_path)
 
     # -------------------------------------------------------------------------
     # Interactive Shell

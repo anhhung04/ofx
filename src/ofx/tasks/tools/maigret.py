@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
@@ -37,12 +35,8 @@ class MaigretTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[UserAccount]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         site_name = data.get("siteName", data.get("site_name", ""))

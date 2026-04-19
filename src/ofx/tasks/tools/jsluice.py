@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -58,12 +57,8 @@ class JsluiceTask(Task):
         return " ".join(parts), None
 
     def parse_line(self, line: str) -> list[Url | Tag]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         kind = data.get("kind", "")

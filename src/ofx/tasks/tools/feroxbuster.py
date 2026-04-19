@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -131,12 +130,8 @@ class FeroxbusterTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[Url]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         # feroxbuster JSON has type field; we only want "response" entries

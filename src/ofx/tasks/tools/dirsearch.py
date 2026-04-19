@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -66,19 +65,8 @@ class DirsearchTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Url]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         results: list[Url] = []

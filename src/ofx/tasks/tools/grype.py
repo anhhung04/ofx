@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
@@ -63,19 +62,8 @@ class GrypeTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         matches = data.get("matches", [])

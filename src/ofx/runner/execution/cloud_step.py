@@ -26,6 +26,7 @@ from ofx.runner.core import (
 from ofx.runner.execution.execution_results import (
     build_step_execution_result,
 )
+from ofx.runner.execution.step_mixin import StepRunnerMixin
 from ofx.runner.logging import get_logger
 
 if TYPE_CHECKING:
@@ -50,7 +51,7 @@ def _shell_escape(value: str) -> str:
     )
 
 
-class CloudStepRunner(BaseRunner):
+class CloudStepRunner(StepRunnerMixin, BaseRunner):
     """Runs a step remotely via PostSSH or PostWinRM.
 
     Instead of using local subprocess (like the normal StepRunner),
@@ -104,39 +105,11 @@ class CloudStepRunner(BaseRunner):
         self.ctx.vars["remote_work_dir"] = self._resolve_remote_work_dir()
         await self._resolve_template_fields(resolve_fields)
 
-        # Resolve timeout (may be a Jinja2 expression for dynamic scaling)
-        if isinstance(self.model.timeout, str):
-            resolved = await self._resolve_template(self.model.timeout)
-            try:
-                self.model.timeout = int(float(resolved))
-            except (ValueError, TypeError):
-                self._log_warning(f"Invalid timeout expression result: {resolved!r}, using 60 min")
-                self.model.timeout = 60
+        await self._resolve_timeout_field()
 
         if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
             self._state_machine.transition(RunnerStatus.CANCELED)
             raise ConditionNotMetError(self._produce_log("Step condition not met"))
-
-    def _apply_retry_profile_defaults(self) -> None:
-        """Apply retry policy defaults only when step fields are not explicit."""
-        profile = self.ctx.vars.get("profile_model")
-        if profile is None:
-            return
-
-        policy_name = getattr(profile, "retry_policy", "standard") or "standard"
-        profiles = getattr(profile, "retry_profiles", {}) or {}
-        policy = profiles.get(policy_name)
-        if not isinstance(policy, dict):
-            return
-
-        explicitly_set = set(getattr(self.model, "model_fields_set", set()))
-
-        if "retry" not in explicitly_set and "retry" in policy:
-            self.model.retry = int(policy["retry"])
-        if "retry_delay" not in explicitly_set and "retry_delay" in policy:
-            self.model.retry_delay = int(policy["retry_delay"])
-        if "timeout" not in explicitly_set and "timeout" in policy:
-            self.model.timeout = int(policy["timeout"])
 
     async def _on_failure_cleanup(self) -> None:
         """Best-effort cleanup of remote temp files on step failure."""
@@ -217,31 +190,12 @@ class CloudStepRunner(BaseRunner):
             + f"\n  Attempts: {'; '.join(attempt_errors)}"
         )
 
-    @staticmethod
-    def _retry_delay_seconds(attempt: int, base_delay: int) -> float:
-        """Compute exponential backoff with jitter capped to 5 minutes."""
-        from random import uniform
-
-        backoff = base_delay * (2**attempt)
-        delay = min(backoff, 300)
-        return delay * uniform(0.5, 1.0)
-
     async def _post_run(self) -> None:
         result = await self.get_result()
         stdout = result.outputs.get("stdout", "")
 
         # For task steps with typed outputs, show formatted tables
-        typed_outputs = result.outputs.get("typed_outputs")
-        if typed_outputs and isinstance(typed_outputs, list) and len(typed_outputs) > 0:
-            from ofx.runner.execution.output_formatter import format_typed_outputs
-            from ofx.settings import get_console
-
-            format_typed_outputs(
-                typed_outputs,
-                task_name=self.model.name or self.model.task or "",
-                console=get_console(),
-            )
-        else:
+        if not self._format_typed_outputs(result):
             self._log_output("stdout", stdout)
 
         # Save full output to log file if configured
@@ -269,35 +223,11 @@ class CloudStepRunner(BaseRunner):
         # Log to project timeline CSV
         self._log_timeline(result, status_value)
 
-    def _log_output(self, stream: str, content: str) -> None:
-        """Log a stdout/stderr stream to the console, truncating long output."""
-        from ofx.runner.core.step_output import log_output
-
-        log_output(self._log_info, stream, content)
-
     def _log_timeline(self, result, status: str) -> None:
         """Write a timeline entry for this cloud step execution."""
-        from ofx.models.step import RunType
         from ofx.runner.execution.timeline import log_step
 
-        command = ""
-        tool = ""
-        target = ""
-
-        rt = self._run_type or self.model.get_run_type()
-        if rt == RunType.COMMAND:
-            command = self.model.run or ""
-        elif rt == RunType.TASK:
-            task_name = self.model.task or ""
-            tool = task_name
-            target = str(self.model.run_with.get("target", self.model.run_with.get("targets", "")))
-            command = result.outputs.get("command", f"task:{task_name}")
-        elif rt == RunType.SCRIPT:
-            command = f"script:{self.model.name or 'inline'}"
-        elif rt == RunType.SCRIPT_FILE:
-            command = f"script_file:{self.model.script_file or ''}"
-        elif rt == RunType.WORKFLOW:
-            command = f"uses:{self.model.uses or ''}"
+        params = self._build_timeline_params(result)
 
         # Get VPS host/IP as source — this is where commands actually run
         cloud_host = ""
@@ -313,14 +243,12 @@ class CloudStepRunner(BaseRunner):
             ctx_vars=self.ctx.vars,
             output_path=self.ctx.output_path,
             step_name=self.model.name or f"step{self.model.step_index}",
-            command=command,
-            tool=tool,
-            target=target,
             status=status,
             duration_ms=self.duration_ms(),
             exit_code=result.outputs.get("exit_code"),
             tags=tags,
             source_host=cloud_host,
+            **params,
         )
 
     # ------------------------------------------------------------------
@@ -655,33 +583,6 @@ class CloudStepRunner(BaseRunner):
             output,
             log_fn=self._log_info,
         )
-
-    def _run_if_context(self) -> dict:
-        """Build run_if evaluation context matching StepRunner.
-
-        Provides ``success()``, ``failure()``, ``canceled()``, and ``always()``
-        helpers that inspect the previous step's status, enabling conditional
-        step execution such as ``run_if: failure()`` in cloud jobs.
-        """
-        prev_runner = None
-        if self.parent and self.model.step_index > 0:
-            prev_key = str(self.model.step_index - 1)
-            prev_runner = getattr(self.parent, "_runners", {}).get(prev_key)
-
-        if prev_runner is None:
-            return {
-                "success": lambda: True,
-                "failure": lambda: False,
-                "canceled": lambda: False,
-                "always": lambda: True,
-            }
-
-        return {
-            "success": lambda: prev_runner.is_success,
-            "failure": lambda: prev_runner.is_failed,
-            "canceled": lambda: prev_runner.status == RunnerStatus.CANCELED,
-            "always": lambda: True,
-        }
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
@@ -54,12 +52,8 @@ class HttpxTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[Url | Tag]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         url = data.get("url", data.get("input", ""))

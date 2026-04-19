@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -100,12 +99,8 @@ class GogoTask(Task):
         return " ".join(parts), output_file
 
     def parse_line(self, line: str) -> list[Port | Url | Tag | Vulnerability]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         return self._parse_entry(data)
