@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import time
+from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any
 
@@ -132,7 +133,7 @@ class ChannelStore:
         """Read the latest value of *channel* (shared lock + mtime cache)."""
         return self._read(channel)
 
-    def subscribe(self, channel: str, poll_interval: float = 0.05):
+    def subscribe(self, channel: str, poll_interval: float = 0.05) -> Generator[Any]:
         """Yield new values from *channel* as they appear.
 
         This is a **blocking generator** intended for use in Python ``script:``
@@ -151,10 +152,10 @@ class ChannelStore:
     def wait_for(
         self,
         channel: str,
-        condition,
+        condition: Callable[[Any], bool],
         timeout: int = 60,
         poll_interval: float = 0.05,
-    ):
+    ) -> Any:
         """Block until *condition(data)* is truthy or *timeout* expires.
 
         Returns the matching data value.  Raises ``TimeoutError`` on timeout.

@@ -225,6 +225,7 @@ class PostSSH(PostRunnerBase):
                 self._sftp.stat(".")
                 return self._sftp
             except Exception:
+                logger.debug("SFTP session stale, reconnecting")
                 self._sftp = None
         client = self._connect()
         self._sftp = client.open_sftp()

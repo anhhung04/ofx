@@ -317,7 +317,7 @@ class TemplateResolver:
             current = getattr(current, "parent", None)
         return None
 
-    def clear_cache(self):
+    def clear_cache(self) -> None:
         """Clear the template cache"""
         self._template_cache.clear()
         if self._support_funcs_cache:
