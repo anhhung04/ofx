@@ -195,6 +195,19 @@ def task_info(
     if task.install_cmd:
         console.print(f"\n[bold]Install:[/bold] [dim]{task.install_cmd}[/dim]")
 
+    # Capabilities
+    caps: list[str] = []
+    if task.supports_streaming:
+        caps.append("[green]streaming[/green]")
+    if task.export_output:
+        caps.append("export")
+    if task.extra_flags:
+        caps.append(f"extra_flags: {' '.join(task.extra_flags)}")
+    if task.success_codes != [0]:
+        caps.append(f"success_codes: {task.success_codes}")
+    if caps:
+        console.print(f"\n[bold]Capabilities:[/bold] {', '.join(caps)}")
+
     # Example YAML
     example_opts = []
     for opt_name, opt_def in list(task.opts.items())[:3]:

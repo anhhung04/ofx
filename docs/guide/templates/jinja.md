@@ -143,7 +143,7 @@ run: |
   echo "Critical vulns: {{ critical | length }}"
 ```
 
-Available helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `of_type(items, "type_name")`.
+Available helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `certs()`, `exploits()`, `of_type(items, "type_name")`.
 
 ---
 

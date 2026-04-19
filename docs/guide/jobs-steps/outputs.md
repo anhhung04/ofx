@@ -228,7 +228,7 @@ vuln_count: "{{ vulns(steps['nuclei-scan'].outputs.typed_outputs) | length }}"
 subs: "{{ subdomains(steps['subfinder'].outputs.typed_outputs) | map(attribute='host') | list }}"
 ```
 
-Available filter functions: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `of_type(items, type_name)`.
+Available filter functions: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tags()`, `records()`, `domains()`, `users()`, `certs()`, `exploits()`, `of_type(items, type_name)`.
 
 ### Passing typed outputs between jobs
 

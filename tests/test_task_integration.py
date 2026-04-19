@@ -20,6 +20,9 @@ class TestTemplateHelpers:
             {"_type": "tag", "name": "nginx", "category": "technology"},
             {"_type": "record", "name": "mx.example.com", "type": "MX"},
             {"_type": "domain", "domain": "example.com"},
+            {"_type": "certificate", "host": "example.com:443", "subject_cn": "example.com"},
+            {"_type": "exploit", "name": "EDB-12345", "title": "Buffer Overflow"},
+            {"_type": "user_account", "username": "admin"},
         ]
 
     @staticmethod
@@ -57,6 +60,15 @@ class TestTemplateHelpers:
     def test_domains(self, sample_outputs):
         assert len(self._of_type(sample_outputs, "domain")) == 1
 
+    def test_certs(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "certificate")) == 1
+
+    def test_exploits(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "exploit")) == 1
+
+    def test_users(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "user_account")) == 1
+
     def test_of_type_with_non_list(self):
         assert self._of_type("not a list", "port") == []
         assert self._of_type(None, "port") == []
@@ -71,7 +83,8 @@ class TestTemplateHelpers:
         resolver = TemplateResolver()
         funcs = resolver.get_support_functions()
         for name in ("of_type", "ports", "urls", "vulns", "subdomains",
-                      "ips", "tags", "records", "domains"):
+                      "ips", "tags", "records", "domains", "users",
+                      "certs", "exploits"):
             assert name in funcs, f"Helper '{name}' not in support functions"
 
 
@@ -95,6 +108,63 @@ class TestUsersTemplateHelper:
         assert len(result) == 2
         assert result[0]["username"] == "admin"
         assert result[1]["username"] == "guest"
+
+
+# ── Template Helpers: certs() and exploits() ───────────────────────────
+
+
+class TestCertsTemplateHelper:
+    def test_certs_filter(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        certs_fn = funcs["certs"]
+
+        items = [
+            {"_type": "certificate", "host": "example.com:443", "subject_cn": "example.com"},
+            {"_type": "port", "port": 443},
+            {"_type": "certificate", "host": "api.example.com:443", "subject_cn": "api.example.com"},
+        ]
+        result = certs_fn(items)
+        assert len(result) == 2
+        assert result[0]["subject_cn"] == "example.com"
+        assert result[1]["host"] == "api.example.com:443"
+
+    def test_certs_empty(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        assert funcs["certs"]([]) == []
+        assert funcs["certs"]([{"_type": "port", "port": 80}]) == []
+
+
+class TestExploitsTemplateHelper:
+    def test_exploits_filter(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        exploits_fn = funcs["exploits"]
+
+        items = [
+            {"_type": "exploit", "name": "EDB-12345", "title": "Buffer Overflow"},
+            {"_type": "vulnerability", "name": "XSS"},
+            {"_type": "exploit", "name": "EDB-67890", "title": "SQL Injection"},
+        ]
+        result = exploits_fn(items)
+        assert len(result) == 2
+        assert result[0]["name"] == "EDB-12345"
+        assert result[1]["title"] == "SQL Injection"
+
+    def test_exploits_empty(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        assert funcs["exploits"]([]) == []
+        assert funcs["exploits"]([{"_type": "url", "url": "http://x.com"}]) == []
 
 
 # ── Profile System ─────────────────────────────────────────────────────

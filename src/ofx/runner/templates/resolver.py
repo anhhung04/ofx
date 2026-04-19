@@ -373,6 +373,12 @@ class TemplateResolver:
         def _users(items: list) -> list:
             return _of_type(items, "user_account")
 
+        def _certs(items: list) -> list:
+            return _of_type(items, "certificate")
+
+        def _exploits(items: list) -> list:
+            return _of_type(items, "exploit")
+
         # ── ASM integration helpers ────────────────────────────────
         def _asm_targets(scope: str = "", effective: bool = True, target_type: str = "") -> list[str]:
             """Pull target values from an ASM scope.
@@ -510,6 +516,8 @@ class TemplateResolver:
                 "records": _records,
                 "domains": _domains,
                 "users": _users,
+                "certs": _certs,
+                "exploits": _exploits,
                 "export_typed_outputs": export_typed_outputs,
                 # ASM integration
                 "asm_targets": _asm_targets,
