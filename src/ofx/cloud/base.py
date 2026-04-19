@@ -127,6 +127,40 @@ class CloudProvider(ABC):
         """Clean up any resources (HTTP sessions, etc.)."""
         pass
 
+    # ── Shared helpers for subclasses ─────────────────────────────
+
+    @staticmethod
+    async def _check_port_open(host: str, port: int = 22, timeout: float = 5) -> bool:
+        """Check whether a TCP port is reachable.
+
+        Shared connectivity probe used by all providers during
+        ``wait_until_ready`` polling.
+        """
+        import asyncio as _aio
+
+        try:
+            _, writer = await _aio.wait_for(
+                _aio.open_connection(host, port), timeout=timeout
+            )
+            writer.close()
+            await writer.wait_closed()
+            return True
+        except (TimeoutError, OSError):
+            return False
+
+    @staticmethod
+    def _linux_password_userdata(password: str) -> str:
+        """Generate cloud-init user data to enable root password auth on Linux."""
+        return (
+            "#!/bin/bash\n"
+            f'echo "root:{password}" | chpasswd\n'
+            'sed -i "s/.*PasswordAuthentication.*/PasswordAuthentication yes/" '
+            "/etc/ssh/sshd_config\n"
+            'sed -i "s/.*PermitRootLogin.*/PermitRootLogin yes/" '
+            "/etc/ssh/sshd_config\n"
+            "systemctl restart sshd\n"
+        )
+
 
 class CloudProviderRegistry:
     """Registry for cloud provider implementations.

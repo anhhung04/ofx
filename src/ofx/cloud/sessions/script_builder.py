@@ -11,6 +11,7 @@ import re
 
 from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.models.step import RunType, Step
+from ofx.utils.shell import bash_dquote_escape
 
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -75,12 +76,12 @@ def _build_bash(
     env: dict[str, str],
     encrypt_at_rest: bool = False,
 ) -> str:
-    scope = _bash_escape(job_name or "full-workflow")
-    workflow = _bash_escape(workflow_name or "")
+    scope = bash_dquote_escape(job_name or "full-workflow")
+    workflow = bash_dquote_escape(workflow_name or "")
     lines: list[str] = [
         "#!/bin/bash",
-        f'export SESSION_ID="{_bash_escape(session_id)}"',
-        f'WORK_DIR="{_bash_escape(work_dir)}"',
+        f'export SESSION_ID="{bash_dquote_escape(session_id)}"',
+        f'WORK_DIR="{bash_dquote_escape(work_dir)}"',
         'LOG_FILE="$WORK_DIR/output.log"',
         'mkdir -p "$WORK_DIR/output"',
         'cd "$WORK_DIR"',
@@ -92,7 +93,7 @@ def _build_bash(
         _validate_env_key(key)
         if key in ("PATH", "HOME", "USER", "SHELL"):
             continue
-        lines.append(f'export {key}="{_bash_escape(str(value))}"')
+        lines.append(f'export {key}="{bash_dquote_escape(str(value))}"')
     if env:
         lines.append("")
 
@@ -107,7 +108,7 @@ def _build_bash(
 
     # Each step wrapped with error handling
     for idx, step in enumerate(steps):
-        step_desc = _bash_escape(_step_log_descriptor(step, idx))
+        step_desc = bash_dquote_escape(_step_log_descriptor(step, idx))
         lines.append(f'_log ">>> Step {idx}: {step_desc}"')
 
         cmd = _step_command_bash(step, idx, work_dir)
@@ -169,7 +170,7 @@ def _step_command_bash(step: Step, step_index: int, work_dir: str) -> str:  # no
 
     if run_type == RunType.SCRIPT:
         script_name = _python_step_filename(step_index)
-        escaped_name = _bash_escape(script_name)
+        escaped_name = bash_dquote_escape(script_name)
         return (
             'cd "$WORK_DIR" 2>/dev/null; '
             "__OFX_PY_BIN=$(command -v python3 || command -v python); "
@@ -179,7 +180,7 @@ def _step_command_bash(step: Step, step_index: int, work_dir: str) -> str:  # no
 
     if run_type == RunType.SCRIPT_FILE:
         script_name = _python_step_filename(step_index)
-        escaped_name = _bash_escape(script_name)
+        escaped_name = bash_dquote_escape(script_name)
         return (
             'cd "$WORK_DIR" 2>/dev/null; '
             "__OFX_PY_BIN=$(command -v python3 || command -v python); "
@@ -191,11 +192,6 @@ def _step_command_bash(step: Step, step_index: int, work_dir: str) -> str:  # no
         return f'cd "$WORK_DIR" 2>/dev/null; {build_task_command_from_step(step)}'
 
     return f'echo "Unsupported run type: {run_type}"'
-
-
-def _bash_escape(s: str) -> str:
-    """Escape double-quotes and backslashes for bash."""
-    return s.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$")
 
 
 def _python_step_filename(step_index: int) -> str:

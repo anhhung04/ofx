@@ -14,17 +14,13 @@ from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.core import (
     BaseRunner,
-    ConditionNotMetError,
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
 )
 from ofx.runner.execution.cloud_step import CloudStepRunner
 from ofx.runner.execution.error_helpers import job_step_failed
-from ofx.runner.execution.execution_results import (
-    build_job_execution_result,
-    build_run_if_context,
-)
+from ofx.runner.execution.job_mixin import JobRunnerMixin
 
 # logger will be injected via CloudJobRunner instance
 
@@ -48,7 +44,7 @@ async def _prompt_destroy_instance(instance_info: str) -> bool:
         return False
 
 
-class CloudJobRunner(BaseRunner[Job]):
+class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
     """Runs a job on a cloud VPS (or static remote host).
 
     Lifecycle:
@@ -131,27 +127,8 @@ class CloudJobRunner(BaseRunner[Job]):
         # Register collected secrets (duplicates are ignored by the service).
         SecretRedactor.register(_cred_vals)
 
-        # Check run_if conditions (same as JobRunner)
-        if isinstance(self.model.needs, str):
-            self.model.needs = [self.model.needs]
-
-        runners: dict[str, BaseRunner] = self.parent.runners  # type: ignore
-        dep_runners = []
-        for job_id in self.model.needs:
-            runner = runners.get(job_id)
-            if not runner:
-                raise RuntimeError(
-                    f"Job dependency '{job_id}' is missing from workflow runners."
-                )
-            dep_runners.append(runner)
-
-        run_if_expr = self.model.run_if
-        if run_if_expr is True and dep_runners:
-            run_if_expr = "success()"
-
-        if not self._evaluate_run_if(run_if_expr, build_run_if_context(dep_runners)):
-            self._state_machine.transition(RunnerStatus.CANCELED)
-            raise ConditionNotMetError(self._produce_log("Job condition is not met"))
+        # Check run_if conditions (shared with JobRunner via mixin)
+        self._check_dependencies_and_run_if()
 
         # Provision VPS or connect to static host
         self._log_info(
@@ -350,12 +327,7 @@ class CloudJobRunner(BaseRunner[Job]):
     # ------------------------------------------------------------------
 
     async def _post_run(self) -> None:
-        resolved_outputs = await self._resolve_job_outputs()
-        if resolved_outputs:
-            await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
-
-        job_exec = build_job_execution_result(self, self._runners)
-        await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
+        await self._save_job_results()
 
         await self._download_outputs()
         await self._destroy_instance()
@@ -606,10 +578,6 @@ class CloudJobRunner(BaseRunner[Job]):
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
-
-    @property
-    def total_steps(self) -> int:
-        return len(self.model.steps)
 
     @property
     def remote_work_dir(self) -> str | None:

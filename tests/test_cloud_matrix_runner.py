@@ -392,18 +392,18 @@ class TestCloudStepRunnerEnvPrefix:
 
     def test_shell_escape_prevents_injection(self):
         """Values with $, backticks, and double-quotes are escaped."""
-        from ofx.runner.execution.cloud_step import _shell_escape
+        from ofx.utils.shell import bash_dquote_escape
 
-        assert _shell_escape("$(id)") == "\\$(id)"
-        assert _shell_escape("`whoami`") == "\\`whoami\\`"
-        assert _shell_escape('say "hi"') == 'say \\"hi\\"'
-        assert _shell_escape("a\\b") == "a\\\\b"
+        assert bash_dquote_escape("$(id)") == "\\$(id)"
+        assert bash_dquote_escape("`whoami`") == "\\`whoami\\`"
+        assert bash_dquote_escape('say "hi"') == 'say \\"hi\\"'
+        assert bash_dquote_escape("a\\b") == "a\\\\b"
 
     def test_shell_escape_plain_path(self):
         """Normal file paths are unchanged by escaping."""
-        from ofx.runner.execution.cloud_step import _shell_escape
+        from ofx.utils.shell import bash_dquote_escape
 
-        assert _shell_escape("/tmp/.run-abc/fleet_targets.txt") == "/tmp/.run-abc/fleet_targets.txt"
+        assert bash_dquote_escape("/tmp/.run-abc/fleet_targets.txt") == "/tmp/.run-abc/fleet_targets.txt"
 
 
 class TestCloudMatrixFailFast:

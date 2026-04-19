@@ -28,27 +28,12 @@ from ofx.runner.execution.execution_results import (
 )
 from ofx.runner.execution.step_mixin import StepRunnerMixin
 from ofx.runner.logging import get_logger
+from ofx.utils.shell import bash_dquote_escape
 
 if TYPE_CHECKING:
     from ofx.runner.execution.cloud_job import CloudJobRunner
 
 logger = get_logger()
-
-
-def _shell_escape(value: str) -> str:
-    """Escape a string for safe embedding inside bash double-quoted assignment.
-
-    Escapes backslashes, double-quotes, backticks, and ``$`` so that the
-    resulting value is interpreted literally by the shell rather than being
-    subject to command substitution or variable expansion.
-    """
-    return (
-        value
-        .replace("\\", "\\\\")
-        .replace('"', '\\"')
-        .replace("`", "\\`")
-        .replace("$", "\\$")
-    )
 
 
 class CloudStepRunner(StepRunnerMixin, BaseRunner):
@@ -565,7 +550,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             return f"{exports} &&" if exports else ""
 
         exports = " ".join(
-            f'{k}="{_shell_escape(str(v))}"' for k, v in env_vars.items()
+            f'{k}="{bash_dquote_escape(str(v))}"' for k, v in env_vars.items()
         )
         return f"export {exports} &&" if exports else ""
 

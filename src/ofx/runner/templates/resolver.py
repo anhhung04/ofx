@@ -259,15 +259,11 @@ class TemplateResolver:
         def _hex_decode(s: str) -> str:
             return bytes.fromhex(s).decode()
 
-        # Hash functions
-        def _md5(s: str) -> str:
-            return hashlib.md5(s.encode()).hexdigest()
-
-        def _sha1(s: str) -> str:
-            return hashlib.sha1(s.encode()).hexdigest()
-
-        def _sha256(s: str) -> str:
-            return hashlib.sha256(s.encode()).hexdigest()
+        # Hash functions (data-driven to avoid repetition)
+        def _make_hasher(algo: str):
+            def _hash(s: str) -> str:
+                return hashlib.new(algo, s.encode()).hexdigest()
+            return _hash
 
         # Random generators
         def _random_string(length: int = 8, charset: str = "alphanumeric") -> str:
@@ -350,38 +346,24 @@ class TemplateResolver:
                 return []
             return [i for i in items if isinstance(i, dict) and i.get("_type") == type_name]
 
-        def _ports(items: list) -> list:
-            return _of_type(items, "port")
+        _TYPE_FILTER_MAP = {
+            "ports": "port",
+            "urls": "url",
+            "vulns": "vulnerability",
+            "subdomains": "subdomain",
+            "ips": "ip",
+            "tags": "tag",
+            "records": "record",
+            "domains": "domain",
+            "users": "user_account",
+            "certs": "certificate",
+            "exploits": "exploit",
+        }
 
-        def _urls(items: list) -> list:
-            return _of_type(items, "url")
-
-        def _vulns(items: list) -> list:
-            return _of_type(items, "vulnerability")
-
-        def _subdomains(items: list) -> list:
-            return _of_type(items, "subdomain")
-
-        def _ips(items: list) -> list:
-            return _of_type(items, "ip")
-
-        def _tags(items: list) -> list:
-            return _of_type(items, "tag")
-
-        def _records(items: list) -> list:
-            return _of_type(items, "record")
-
-        def _domains(items: list) -> list:
-            return _of_type(items, "domain")
-
-        def _users(items: list) -> list:
-            return _of_type(items, "user_account")
-
-        def _certs(items: list) -> list:
-            return _of_type(items, "certificate")
-
-        def _exploits(items: list) -> list:
-            return _of_type(items, "exploit")
+        def _make_type_filter(type_name: str):
+            def _filter(items: list) -> list:
+                return _of_type(items, type_name)
+            return _filter
 
         # ── ASM integration helpers ────────────────────────────────
         def _asm_targets(scope: str = "", effective: bool = True, target_type: str = "") -> list[str]:
@@ -491,9 +473,9 @@ class TemplateResolver:
                 "hex_encode": _hex_encode,
                 "hex_decode": _hex_decode,
                 # Hash functions
-                "md5": _md5,
-                "sha1": _sha1,
-                "sha256": _sha256,
+                "md5": _make_hasher("md5"),
+                "sha1": _make_hasher("sha1"),
+                "sha256": _make_hasher("sha256"),
                 # Random generators
                 "random_string": _random_string,
                 "random_int": _random_int,
@@ -516,17 +498,7 @@ class TemplateResolver:
                 "regex_sub": lambda pattern, repl, s: re.sub(pattern, repl, s),
                 # Task output helpers
                 "of_type": _of_type,
-                "ports": _ports,
-                "urls": _urls,
-                "vulns": _vulns,
-                "subdomains": _subdomains,
-                "ips": _ips,
-                "tags": _tags,
-                "records": _records,
-                "domains": _domains,
-                "users": _users,
-                "certs": _certs,
-                "exploits": _exploits,
+                **{name: _make_type_filter(type_name) for name, type_name in _TYPE_FILTER_MAP.items()},
                 "export_typed_outputs": export_typed_outputs,
                 # ASM integration
                 "asm_targets": _asm_targets,
