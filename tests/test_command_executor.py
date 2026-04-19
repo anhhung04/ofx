@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import os
 import tempfile
@@ -14,7 +13,6 @@ import pytest
 
 from ofx.models.command import Command
 from ofx.runner.commands.command_executor import CommandExecutionResult, CommandExecutor
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -259,7 +257,7 @@ class TestExecuteStreaming:
     async def test_lines_passed_to_callback(self):
         received: list[str] = []
         executor = _make_executor(cmd='echo "alpha"; echo "beta"; echo "gamma"')
-        result = await executor.execute_streaming(on_line=received.append)
+        await executor.execute_streaming(on_line=received.append)
         assert "alpha" in received
         assert "beta" in received
         assert "gamma" in received
