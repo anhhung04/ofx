@@ -122,7 +122,12 @@ class JobRunner(BaseRunner[Job]):
                     if p.exists():
                         p.unlink(missing_ok=True)
             except Exception:
-                pass
+                # Best-effort cleanup; log failures at debug level so they
+                # don't obscure the real job output.
+                logger.debug(
+                    "Job '%s': failed to clean up temp task file", self.model.jid,
+                    exc_info=True,
+                )
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)

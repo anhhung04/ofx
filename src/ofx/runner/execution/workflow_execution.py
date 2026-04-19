@@ -33,7 +33,7 @@ def _memory_usage_percent() -> float:
             if total > 0:
                 return (1 - available / total) * 100
     except (OSError, KeyError, ValueError, ZeroDivisionError):
-        pass
+        logger.debug("Memory usage check unavailable, defaulting to 0%%", exc_info=True)
     return 0.0
 
 

@@ -126,7 +126,8 @@ class CollectionManager:
         try:
             raw = json.loads(self.installed_file.read_text())
             return {k: InstalledCollection.model_validate(v) for k, v in raw.items()}
-        except (json.JSONDecodeError, Exception):
+        except (json.JSONDecodeError, KeyError, ValueError) as exc:
+            logger.warning("Failed to load installed collections from %s: %s", self.installed_file, exc)
             return {}
 
     def _save_installed(self) -> None:
@@ -282,7 +283,8 @@ class CollectionManager:
             return 0
         try:
             raw = json.loads(assets_file.read_text())
-        except (json.JSONDecodeError, Exception):
+        except (json.JSONDecodeError, KeyError, ValueError) as exc:
+            logger.warning("Failed to parse legacy assets file %s: %s", assets_file, exc)
             return 0
 
         count = 0
@@ -324,7 +326,7 @@ class CollectionManager:
         try:
             repo = git.Repo(repo_path)
             return str(repo.head.commit)[:12]
-        except Exception as e:
+        except (git.InvalidGitRepositoryError, git.GitCommandError, ValueError) as e:
             logger.debug("Failed to get git ref for %s: %s", repo_path, e)
             return ""
 
