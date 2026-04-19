@@ -77,14 +77,26 @@ class CommandExecutor:
 
     @property
     def outputs_file(self) -> Path | None:
+        """Path to the temporary outputs file, or ``None`` if not prepared."""
         return self._outputs_file
 
     async def execute(self) -> CommandExecutionResult:
+        """Run the command and return captured output.
+
+        Delegates to an interactive or non-interactive subprocess depending
+        on the command model's ``interactive`` flag.
+        """
         if self._command.interactive:
             return await self._run_interactive()
         return await self._run_non_interactive()
 
     def prepare_outputs_file(self) -> None:
+        """Create (or reuse) a temporary file for step output capture.
+
+        Sets ``RUNNER_OUTPUTS`` in the environment so shell commands can
+        write ``key=value`` lines that are later parsed by
+        :meth:`capture_outputs_file`.
+        """
         if not self._command.interactive:
             # Reuse outputs file if already created by StepRunner
             existing = self._envs.get("RUNNER_OUTPUTS")
@@ -289,6 +301,7 @@ class CommandExecutor:
         return stdout, stderr, outputs
 
     def raise_for_status(self, exit_code: int | None, stderr: str) -> None:
+        """Raise :class:`RuntimeError` if the exit code indicates failure."""
         if self._command.interactive:
             if exit_code not in (0, 130, 127):
                 stderr = stderr or f"Command failed with exit code {exit_code}"
@@ -320,6 +333,10 @@ class CommandExecutor:
             logger.debug("Failed to close process transport: %s", e)
 
     async def capture_outputs_file(self, runner, key: str, log_fn) -> None:
+        """Parse ``key=value`` lines from the outputs file into the registry.
+
+        The file is deleted after parsing regardless of success or failure.
+        """
         if not self._outputs_file or not self._outputs_file.exists():
             return
         try:
