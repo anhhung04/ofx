@@ -49,6 +49,17 @@ class RunContext(BaseModel):
         description="Optional NDJSON path for structured runner lifecycle events",
     )
 
+    def __repr__(self) -> str:
+        secret_keys = list(self.secrets.keys()) if self.secrets else []
+        return (
+            f"RunContext(inputs={list(self.inputs.keys())}, "
+            f"secrets=[{len(secret_keys)} key(s)], "
+            f"output_path={self.output_path!r})"
+        )
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
 
 class RunResult(BaseModel):
     """Result of a runner execution"""
@@ -58,6 +69,13 @@ class RunResult(BaseModel):
     status: RunnerStatus
     error: str | None = None
     outputs: dict[str, Any] = Field(default_factory=dict)
+
+    def __repr__(self) -> str:
+        err = f", error={self.error!r}" if self.error else ""
+        return f"RunResult({self.name!r}, status={self.status.value}{err})"
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 class ConditionNotMetError(RuntimeError):
