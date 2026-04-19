@@ -74,6 +74,7 @@ class SecretStore:
             temp_instance._get_cipher().decrypt(store_path.read_bytes())
             return False
         except Exception:
+            logger.debug("Secret store encryption check failed, assuming encrypted", exc_info=True)
             return True
 
     @classmethod

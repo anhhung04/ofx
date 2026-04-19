@@ -25,7 +25,7 @@ def parse_key_value_pairs(inputs: list[str] | None, keep_string = False) -> dict
     for inp in inputs or []:
         try:
             key, value = inp.split("=", 1)
-        except Exception:
+        except ValueError:
             raise ValueError(
                 f"Invalid input format: {inp}. Expected key=value."
             ) from None

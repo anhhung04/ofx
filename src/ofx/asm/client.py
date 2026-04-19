@@ -83,6 +83,7 @@ class ASMClient:
                 body = resp.json()
                 msg = body.get("error", resp.text)
             except Exception:
+                logger.debug("Failed to parse ASM error response as JSON", exc_info=True)
                 msg = resp.text
             raise ASMError(msg, status_code=resp.status_code)
         return resp.json()
@@ -114,6 +115,7 @@ class ASMClient:
             self._get("/health")
             return True
         except Exception:
+            logger.debug("ASM health check failed", exc_info=True)
             return False
 
     # ------------------------------------------------------------------

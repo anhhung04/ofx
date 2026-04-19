@@ -7,6 +7,7 @@ and utility helpers that can be used in workflow commands.
 Supports both Bash (Linux/macOS) and PowerShell (Windows).
 """
 
+import logging
 import os
 import shutil
 import sys
@@ -21,6 +22,8 @@ from ofx.settings import (
     settings,
 )
 
+_logger = logging.getLogger("ofx.shell_functions")
+
 
 def _is_admin() -> bool:
     """Check if running with admin/root privileges."""
@@ -30,6 +33,7 @@ def _is_admin() -> bool:
 
             return ctypes.windll.shell32.IsUserAnAdmin() != 0  # type: ignore
         except Exception:
+            _logger.debug("Windows admin check failed", exc_info=True)
             return False
     else:
         return os.geteuid() == 0

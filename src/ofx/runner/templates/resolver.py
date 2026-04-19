@@ -1,6 +1,7 @@
 """Template resolver for Jinja2-based workflow templates"""
 
 import json
+import logging
 import threading
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 
+_logger = logging.getLogger("ofx.templates")
 _resolver_lock = threading.Lock()
 
 
@@ -294,6 +296,7 @@ class TemplateResolver:
                 s.close()
                 return ip
             except Exception:
+                _logger.debug("local_ip() socket probe failed", exc_info=True)
                 return "127.0.0.1"
 
         def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
@@ -304,6 +307,7 @@ class TemplateResolver:
                 s.close()
                 return result == 0
             except Exception:
+                _logger.debug("is_port_open(%s, %s) failed", host, port, exc_info=True)
                 return False
 
         # Date/time utilities
@@ -390,6 +394,7 @@ class TemplateResolver:
                 from ofx.asm.config import get_asm_client
                 client = get_asm_client()
             except Exception:
+                _logger.debug("ASM client unavailable for asm_targets()", exc_info=True)
                 return []
             try:
                 scope_id = _asm_resolve_scope(client, scope)
@@ -406,6 +411,7 @@ class TemplateResolver:
                         if t.enabled and (not target_type or t.target_type == target_type)
                     ]
             except Exception:
+                _logger.debug("asm_targets() query failed", exc_info=True)
                 return []
 
         def _asm_push(items: list, scope: str = "", source: str = "ofx") -> int:
@@ -415,6 +421,7 @@ class TemplateResolver:
                 from ofx.asm.export import batch_convert
                 client = get_asm_client()
             except Exception:
+                _logger.debug("ASM client unavailable for asm_push()", exc_info=True)
                 return 0
             try:
                 scope_id = _asm_resolve_scope(client, scope)
@@ -424,6 +431,7 @@ class TemplateResolver:
                 result = client.import_generic(scope_id, assets)
                 return result.get("imported", 0)
             except Exception:
+                _logger.debug("asm_push() failed", exc_info=True)
                 return 0
 
         def _asm_scopes() -> list[dict]:
@@ -433,6 +441,7 @@ class TemplateResolver:
                 client = get_asm_client()
                 return [s.model_dump() for s in client.list_scopes()]
             except Exception:
+                _logger.debug("asm_scopes() failed", exc_info=True)
                 return []
 
         def _asm_resolve_scope(client, scope_ref: str) -> str:

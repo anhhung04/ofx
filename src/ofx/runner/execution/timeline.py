@@ -62,6 +62,7 @@ def _hostname() -> str:
     try:
         return socket.gethostname().split(".")[0]
     except Exception:
+        logger.debug("Failed to resolve hostname", exc_info=True)
         return "unknown"
 
 
@@ -94,6 +95,7 @@ def _source_host() -> str:
                         ip = candidate
                         break
             except Exception:
+                logger.debug("Public IP lookup failed for %s", url, exc_info=True)
                 continue
 
     if not ip:
@@ -105,6 +107,7 @@ def _source_host() -> str:
             ip = s.getsockname()[0]
             s.close()
         except Exception:
+            logger.debug("Local IP detection via socket failed", exc_info=True)
             ip = ""
 
     if ip and ip != host:

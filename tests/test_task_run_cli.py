@@ -281,3 +281,105 @@ class TestProfileCommonOptInjection:
         assert runner.model.opts.get("proxy") == "socks5://127.0.0.1:9050"
         # Per-task override
         assert runner.model.opts.get("insecure") is True
+
+
+# ── Task CLI: list_tasks & task_info ─────────────────────────────────────
+
+
+class TestListTasks:
+    """Verify the ``ofx flow tasks list`` command logic."""
+
+    def test_list_returns_all_registered(self):
+        from ofx.tasks import TaskRegistry
+
+        names = TaskRegistry.list_tasks()
+        assert len(names) > 20, "Expected many registered tasks"
+        assert "nmap" in names
+        assert "httpx" in names
+
+    def test_get_by_category_filters(self):
+        from ofx.tasks import TaskRegistry
+
+        port_tasks = TaskRegistry.get_by_category("port/")
+        names = [n for n, _ in port_tasks]
+        assert "nmap" in names
+        # Should not include tasks from other categories
+        for name, cls in port_tasks:
+            assert cls is not None
+            assert cls().category.startswith("port/")
+
+    def test_get_by_category_empty(self):
+        from ofx.tasks import TaskRegistry
+
+        results = TaskRegistry.get_by_category("nonexistent_category_xyz/")
+        assert results == []
+
+
+class TestTaskInfo:
+    """Verify task info display data for key tasks."""
+
+    def test_nmap_basic_info(self):
+        from ofx.tasks import TaskRegistry
+
+        cls = TaskRegistry.get("nmap")
+        assert cls is not None
+        task = cls()
+        assert task.name == "nmap"
+        assert task.cmd == "nmap"
+        assert task.category.startswith("port/")
+        assert len(task.opts) > 0
+        assert len(task.output_types) > 0
+
+    def test_httpx_has_streaming(self):
+        from ofx.tasks import TaskRegistry
+
+        cls = TaskRegistry.get("httpx")
+        assert cls is not None
+        task = cls()
+        assert task.supports_streaming is True
+
+    def test_nmap_no_streaming(self):
+        from ofx.tasks import TaskRegistry
+
+        cls = TaskRegistry.get("nmap")
+        assert cls is not None
+        task = cls()
+        assert task.supports_streaming is False
+
+    def test_task_capabilities_section_data(self):
+        """Verify the data that powers the capabilities section in task_info CLI."""
+        from ofx.tasks import TaskRegistry
+
+        cls = TaskRegistry.get("nuclei")
+        assert cls is not None
+        task = cls()
+        # nuclei supports streaming (has parse_line)
+        assert task.supports_streaming is True
+        # Should have output types
+        assert len(task.output_types) > 0
+        # success_codes should be a list
+        assert isinstance(task.success_codes, list)
+
+    def test_unknown_task_returns_none(self):
+        from ofx.tasks import TaskRegistry
+
+        cls = TaskRegistry.get("nonexistent_tool_xyz_abc")
+        assert cls is None
+
+    def test_task_extra_flags(self):
+        """Tasks with extra_flags should expose them for CLI display."""
+        from ofx.tasks import TaskRegistry
+
+        # Find any task that has extra_flags set
+        for name in TaskRegistry.list_tasks():
+            cls = TaskRegistry.get(name)
+            if cls is not None:
+                task = cls()
+                if task.extra_flags:
+                    assert isinstance(task.extra_flags, list)
+                    assert all(isinstance(f, str) for f in task.extra_flags)
+                    return
+        # If no task has extra_flags, that's fine — just verify the attribute exists
+        cls = TaskRegistry.get("nmap")
+        task = cls()
+        assert hasattr(task, "extra_flags")
