@@ -66,7 +66,7 @@ If the expression resolves to an invalid value, a default of 60 minutes is used 
 
 ## Task Steps
 
-Task steps run pre-built tool wrappers that handle option mapping, execution, and output parsing automatically. The `with:` block must include `target` plus any tool-specific options:
+Task steps run pre-built tool wrappers that handle option mapping, execution, and output parsing automatically. The `with:` block must include `target` (or `targets`) plus any tool-specific options:
 
 ```yaml
 steps:
@@ -85,7 +85,27 @@ steps:
       tags: "cve"
 ```
 
-Task outputs include raw `stdout` and structured `typed_outputs` (Port, Url, Vulnerability, etc.) accessible via template helpers:
+**Multiple targets** — Use `targets` (plural) or a comma-separated string:
+
+```yaml
+  - task: httpx
+    with:
+      targets: "a.com,b.com,c.com"       # comma-separated
+  - task: httpx
+    with:
+      targets: "{{ inputs.target_list }}"  # from workflow input
+```
+
+**Credential storage** — Task steps producing `UserAccount` outputs can auto-store them:
+
+```yaml
+  - task: maigret
+    store-creds: true
+    with:
+      target: "username"
+```
+
+Task outputs include raw `stdout` and structured `typed_outputs` (Port, Url, Vulnerability, Certificate, Exploit, UserAccount, etc.) accessible via template helpers:
 
 ```yaml
   - run: |

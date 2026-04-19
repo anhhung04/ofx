@@ -106,6 +106,41 @@ You can use these helper functions inside any template expression (`{{ ... }}`).
 | `regex_findall(pattern, s)` | Returns all occurrences of `pattern` in `s`. |
 | `regex_sub(pattern, repl, s)` | Returns a string substituting `pattern` with `repl` inside `s`. |
 
+### Typed Output Helpers
+
+Filter task typed outputs by type. These accept a list of typed output dicts and return only items matching the specified type:
+
+| Function | Filters for `_type` |
+|---|---|
+| `ports(items)` | `port` |
+| `urls(items)` | `url` |
+| `vulns(items)` | `vulnerability` |
+| `subdomains(items)` | `subdomain` |
+| `ips(items)` | `ip` |
+| `tags(items)` | `tag` |
+| `records(items)` | `record` |
+| `domains(items)` | `domain` |
+| `users(items)` | `user_account` |
+| `certs(items)` | `certificate` |
+| `exploits(items)` | `exploit` |
+| `of_type(items, "type_name")` | Any custom type |
+
+### Findings Export
+
+| Function | Description |
+|---|---|
+| `export_typed_outputs(project_path, items, prefix)` | Export typed output dicts to organized project directories (master files + per-target subdirectories). |
+
+### ASM Integration
+
+These functions integrate with the OFX Attack Surface Management module. They degrade gracefully (returning empty results) when ASM is not configured:
+
+| Function | Description |
+|---|---|
+| `asm_targets(scope, effective, target_type)` | Retrieve target values from an ASM scope. Returns a list of strings (domains, IPs, etc.). |
+| `asm_push(items, scope, source)` | Push typed output dicts to an ASM scope. Returns the count of imported assets. |
+| `asm_scopes()` | List available ASM scopes as dicts with `id`, `name`, `scope_type`, and `group` fields. |
+
 ---
 
 ## Shell Helper Functions
