@@ -172,7 +172,11 @@ class MatrixJobRunner(BaseRunner[Job]):
                 )
 
         if errors:
-            raise RuntimeError("; ".join(errors))
+            detail = "\n  ".join(errors[:10])
+            suffix = f"\n  ... and {len(errors) - 10} more" if len(errors) > 10 else ""
+            raise RuntimeError(
+                f"Matrix job '{self.model.jid}' failed ({len(errors)} combination(s)):\n  {detail}{suffix}"
+            )
 
     async def _run_single_job(self, matrix_idx: int, matrix_values: dict[str, Any]):
         """Run a single job instance with specific matrix values"""

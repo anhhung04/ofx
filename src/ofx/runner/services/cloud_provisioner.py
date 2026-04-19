@@ -54,7 +54,10 @@ class CloudProvisioner:
                 instance = refreshed
 
         if not instance or not instance.ip:
-            raise RuntimeError("Instance has no IP address")
+            raise RuntimeError(
+                f"Cloud instance has no IP address "
+                f"(provider={provider_name}, instance_id={getattr(instance, 'instance_id', 'unknown')})"
+            )
 
         is_windows = cfg.connection_type == "winrm"
         await wait_for_connectivity(

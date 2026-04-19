@@ -115,6 +115,7 @@ class PostSSH(PostRunnerBase):
         # Paramiko client — lazy-connected
         self._client: paramiko.SSHClient | None = None
         self._sftp: paramiko.SFTPClient | None = None
+        self._jump_client: paramiko.SSHClient | None = None
 
         # Command log
         self._log_file: Path | None = None
@@ -197,7 +198,7 @@ class PostSSH(PostRunnerBase):
         return client
 
     def _close_client(self) -> None:
-        """Close paramiko client and SFTP."""
+        """Close paramiko client, SFTP, and jump host connection."""
         if self._sftp:
             try:
                 self._sftp.close()
@@ -210,6 +211,12 @@ class PostSSH(PostRunnerBase):
             except Exception as e:
                 logger.debug("SSH client close error: %s", e)
             self._client = None
+        if self._jump_client:
+            try:
+                self._jump_client.close()
+            except Exception as e:
+                logger.debug("Jump host close error: %s", e)
+            self._jump_client = None
 
     def _get_sftp(self) -> paramiko.SFTPClient:
         """Get or open an SFTP session."""
@@ -280,17 +287,25 @@ class PostSSH(PostRunnerBase):
                     jump_kwargs["pkey"] = self._load_key(self.identity_file)
                 except Exception as e:
                     logger.debug("Failed to load key for jump host: %s", e)
-            jump_client.connect(**jump_kwargs)
-            transport = jump_client.get_transport()
-            if not transport or not transport.is_active():
-                raise SSHConnectionError(
-                    f"Failed to connect to jump host {jump_host}:{jump_port}"
+            try:
+                jump_client.connect(**jump_kwargs)
+                transport = jump_client.get_transport()
+                if not transport or not transport.is_active():
+                    raise SSHConnectionError(
+                        f"Failed to connect to jump host {jump_host}:{jump_port}"
+                    )
+                self._jump_client = jump_client
+                return transport.open_channel(
+                    "direct-tcpip",
+                    (self.host, self.port),
+                    ("127.0.0.1", 0),
                 )
-            return transport.open_channel(
-                "direct-tcpip",
-                (self.host, self.port),
-                ("127.0.0.1", 0),
-            )
+            except Exception:
+                try:
+                    jump_client.close()
+                except Exception:
+                    pass
+                raise
 
         return None
 
@@ -536,7 +551,17 @@ class PostSSH(PostRunnerBase):
             local_path: Local destination path.
             timeout: Ignored (SFTP doesn't have per-op timeout). Kept for compat.
         """
-        self._sftp_with_retry("DOWNLOAD", "get", remote_path, local_path)
+        try:
+            self._sftp_with_retry("DOWNLOAD", "get", remote_path, local_path)
+        except Exception:
+            # Remove partial file left by a failed transfer
+            local = Path(local_path)
+            if local.exists():
+                try:
+                    local.unlink()
+                except OSError:
+                    pass
+            raise
 
     # -------------------------------------------------------------------------
     # Interactive Shell

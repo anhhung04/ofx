@@ -354,7 +354,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                     f"ls -1 {shlex.quote(self._work_dir + '/output')} 2>/dev/null || true",
                 )
 
-            files = [f.strip() for f in files_output.strip().split("\n") if f.strip()]
+            files = [f.strip() for f in files_output.strip().splitlines() if f.strip()]
             if not files:
                 return
 

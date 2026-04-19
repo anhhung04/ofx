@@ -121,8 +121,11 @@ class WorkflowRunner(BaseRunner[Workflow]):
         if self._is_reused:
             job_runners = self._runners.values()
             if any(runner.is_failed for runner in job_runners):
+                failed_ids = [r.model.jid for r in job_runners if r.is_failed]
                 raise RuntimeError(
-                    f"Reusable workflow '{self.model.name}' has failed jobs. Cannot retrieve outputs."
+                    f"Reusable workflow '{self.model.name}': "
+                    f"{len(failed_ids)}/{len(list(job_runners))} job(s) failed "
+                    f"({', '.join(failed_ids)}). Cannot retrieve outputs."
                 )
             # Handle call outputs for reusable workflows
             if self.model.call and self.model.call.outputs:
