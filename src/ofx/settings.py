@@ -300,7 +300,7 @@ class Settings(BaseSettings):
     )
     channels_dir: str = Field(
         default=str(CHANNELS_DIR),
-        description="Directory for per-channel files used by inter-job communication",
+        description="Directory for inter-job channel files (env: OFX_CHANNELS_DIR)",
     )
     registry_redis: RedisRegistrySettings | None = Field(
         default=None,
@@ -316,19 +316,19 @@ class Settings(BaseSettings):
     )
     registry_cache_enabled: bool = Field(
         default=True,
-        description="Enable in-process caching layer for registry reads/writes.",
+        description="Enable in-process caching layer for registry reads (env: OFX_REGISTRY_CACHE_ENABLED)",
     )
     registry_cache_ttl: float = Field(
         default=0.25,
-        description="Cache TTL (seconds) for registry entries inside a process.",
+        description="Cache TTL in seconds for registry entries (env: OFX_REGISTRY_CACHE_TTL)",
     )
     registry_cache_max_entries: int = Field(
         default=1024,
-        description="Maximum number of registry entries cached per process.",
+        description="Maximum cached registry entries per process (env: OFX_REGISTRY_CACHE_MAX_ENTRIES)",
     )
     registry_failover_enabled: bool = Field(
         default=True,
-        description="Switch to in-memory registry if the configured backend errors.",
+        description="Fall back to in-memory registry on backend errors (env: OFX_REGISTRY_FAILOVER_ENABLED)",
     )
 
     model_config = SettingsConfigDict(
