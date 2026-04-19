@@ -274,13 +274,14 @@ class TestTimeWindow:
         assert result["allowed"] is True
 
     def test_check_within_window(self):
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        # Create a window that covers the current time
-        now = datetime.now()
+        # Build a window around the current UTC time (check_time_window
+        # defaults to UTC) so the assertion is timezone-independent.
+        now = datetime.now(UTC)
         start = f"{max(0, now.hour - 1):02d}:00"
         end = f"{min(23, now.hour + 1):02d}:59"
         day = now.strftime("%A").lower()
@@ -300,12 +301,12 @@ class TestTimeWindow:
         assert "outside the allowed days" in result["message"]
 
     def test_check_outside_window_time(self):
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        now = datetime.now()
+        now = datetime.now(UTC)
         # Set window to an hour that's definitely not now
         if now.hour < 12:
             start, end = "18:00", "19:00"
@@ -350,12 +351,12 @@ class TestTimeWindow:
         assert guard._task is None
 
     def test_warn_message_near_end(self):
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        now = datetime.now()
+        now = datetime.now(UTC)
         day = now.strftime("%A").lower()
         # Window that ends in 5 minutes
         end_min = (now.minute + 5) % 60
