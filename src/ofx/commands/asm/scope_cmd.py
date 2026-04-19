@@ -103,7 +103,7 @@ def scope_create(
     if set_default:
         cfg = get_asm_config()
         cfg.default_scope = s.id
-        console.print(f"[dim]Set as default scope.[/dim]")
+        console.print("[dim]Set as default scope.[/dim]")
 
 
 # ------------------------------------------------------------------

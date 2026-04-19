@@ -6,7 +6,7 @@ assets/findings between OFX workflows and the ASM platform.
 """
 
 from ofx.asm.client import ASMClient
-from ofx.asm.config import get_asm_config, get_asm_client
+from ofx.asm.config import get_asm_client, get_asm_config
 from ofx.asm.models import Asset, ExcludeRule, Finding, Scope, Target
 
 __all__ = [

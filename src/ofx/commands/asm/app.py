@@ -173,9 +173,6 @@ def asm_sync(
     # Push phase
     console.print("[bold]Phase 1: Push results → ASM[/bold]")
     try:
-        # Reuse push logic
-        import sys
-        sys.argv  # just to avoid unused import
         asm_push.callback(scope=scope_id, output_dir=output_dir, source=source)
     except SystemExit:
         pass
