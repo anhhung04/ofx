@@ -28,13 +28,10 @@ from ofx.runner.execution.execution_results import (
     build_step_execution_result,
 )
 from ofx.runner.execution.step_mixin import StepRunnerMixin
-from ofx.runner.logging import get_logger
 from ofx.utils.shell import bash_dquote_escape
 
 if TYPE_CHECKING:
     from ofx.runner.execution.cloud_job import CloudJobRunner
-
-logger = get_logger()
 
 
 class CloudStepRunner(StepRunnerMixin, BaseRunner):
@@ -304,7 +301,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                         parent_job._cached_python = candidate
                     return candidate
             except Exception as e:
-                logger.debug("Python candidate %s failed: %s", candidate, e)
+                self._log_debug(f"Python candidate {candidate} failed: {e}")
                 continue
 
         raise RuntimeError(
@@ -364,7 +361,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                 rm_cmd = f'del /f "{remote_script}"' if self._is_windows else f"rm -f {shlex.quote(remote_script)}"
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
-                logger.debug("Failed to remove remote script %s: %s", remote_script, e)
+                self._log_debug(f"Failed to remove remote script {remote_script}: {e}")
 
     async def _run_remote_script_file(
         self, script_file: str, timeout: int | None = None
@@ -424,7 +421,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                 rm_cmd = f'del /f "{remote_path}"' if self._is_windows else f"rm -f {shlex.quote(remote_path)}"
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
-                logger.debug("Failed to remove remote file %s: %s", remote_path, e)
+                self._log_debug(f"Failed to remove remote file {remote_path}: {e}")
 
     # ------------------------------------------------------------------
     # Task execution (remote)
@@ -457,7 +454,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
 
             return [r.to_dict() for r in results]
         except Exception as e:
-            logger.debug("Failed to parse task output for '%s': %s", self.model.task, e)
+            self._log_debug(f"Failed to parse task output for '{self.model.task}': {e}")
             return []
 
     def _should_store_creds(self) -> bool:

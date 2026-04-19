@@ -18,9 +18,6 @@ from ofx.runner.core import (
 from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.runner.execution.job_mixin import JobRunnerMixin
 from ofx.runner.execution.step import StepRunner
-from ofx.settings import settings
-
-logger = logging.getLogger(settings.app_branding)
 
 
 class JobRunner(JobRunnerMixin, BaseRunner[Job]):
@@ -96,9 +93,8 @@ class JobRunner(JobRunnerMixin, BaseRunner[Job]):
             except Exception:
                 # Best-effort cleanup; log failures at debug level so they
                 # don't obscure the real job output.
-                logger.debug(
-                    "Job '%s': failed to clean up temp task file", self.model.jid,
-                    exc_info=True,
+                self._log_debug(
+                    f"Job '{self.model.jid}': failed to clean up temp task file"
                 )
 
     def _produce_log(self, message: Any) -> str:
@@ -221,10 +217,8 @@ class MatrixJobRunner(BaseRunner[Job]):
                         parsed = json.loads(val)
                         if isinstance(parsed, list):
                             self.model.strategy.matrix[key] = parsed
-                            logger.debug(
-                                self._produce_log(
-                                    f"Matrix key '{key}' resolved to {len(parsed)} item(s)"
-                                )
+                            self._log_debug(
+                                f"Matrix key '{key}' resolved to {len(parsed)} item(s)"
                             )
                         else:
                             self.model.strategy.matrix[key] = [parsed]

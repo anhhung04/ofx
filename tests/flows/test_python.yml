@@ -1,7 +1,0 @@
-name: Test Python
-
-jobs:
-  test:
-    steps:
-      - name: Test step
-        run: "echo {{python}}"

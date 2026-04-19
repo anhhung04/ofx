@@ -488,6 +488,7 @@ class TestDiscoverPythonCache:
         step_runner._remote = _FakeRemote()
         step_runner._work_dir = "/tmp"
         step_runner._log_info = lambda msg: None  # avoid BaseRunner slot access
+        step_runner._log_debug = lambda msg: None
         return step_runner, parent_job
 
     @pytest.mark.asyncio
