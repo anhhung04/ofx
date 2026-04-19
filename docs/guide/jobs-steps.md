@@ -33,7 +33,7 @@ jobs:
 | `cloud`          | str/object| Cloud VPS config — profile name or `CloudConfig` |
 
 > [!TIP]
-> See [Job model code](https://github.com/anhhung04/ofx/blob/main/src/ofx/models/job.py) for job model code.
+> See the [Jobs Overview](#jobs-overview) above for all available options.
 
 ---
 

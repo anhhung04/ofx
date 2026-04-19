@@ -293,7 +293,7 @@ jobs:
 View expanded matrix jobs in logs:
 
 ```bash
-ofx flow run my-workflow --debug
+OFX_DEBUG=1 ofx flow run my-workflow
 ```
 
 The logs will show each expanded job ID and its matrix values:

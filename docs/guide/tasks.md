@@ -118,7 +118,7 @@ See the [CLI reference](../cli/commands/tasks.md) for full details.
 
 ### Built-in Tasks
 
-OFX ships with **90 task wrappers** across 15+ categories. The table below groups them by function.
+OFX ships with **105 task wrappers** across 20+ categories. The table below groups them by function.
 
 #### Port Scanning & Host Discovery
 
@@ -240,6 +240,13 @@ OFX ships with **90 task wrappers** across 15+ categories. The table below group
 | `brutus` | Automated credential brute-forcing for discovered services | UserAccount |
 | `zombie` | Lightweight service credential brute-forcer with gogo integration | UserAccount |
 
+#### Password Cracking
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `hashcat` | GPU-accelerated password and hash cracking | UserAccount |
+| `john` | John the Ripper CPU-based password cracker | UserAccount |
+
 #### Active Directory & Windows
 
 | Task | Description | Output Types |
@@ -247,6 +254,24 @@ OFX ships with **90 task wrappers** across 15+ categories. The table below group
 | `netexec` | Network service pentesting (CrackMapExec successor) | UserAccount, Tag |
 | `kerbrute` | Kerberos brute force and user enumeration | UserAccount |
 | `enum4linux` | SMB/AD enumeration tool | UserAccount, Tag |
+| `secretsdump` | Dump credentials from SAM, LSA secrets, and NTDS.dit (impacket) | UserAccount |
+| `getuserspns` | Kerberoasting — request TGS tickets for service accounts (impacket) | UserAccount |
+| `getnpusers` | AS-REP Roasting — find accounts without pre-authentication (impacket) | UserAccount |
+| `gettgt` | Request a Kerberos Ticket Granting Ticket (impacket) | Tag |
+| `getst` | Request Kerberos Service Ticket via S4U2Self/S4U2Proxy (impacket) | Tag |
+| `certipy` | ADCS enumeration and exploitation (ESC1–ESC8) | Vulnerability, Tag |
+| `bloodhound-python` | Collect AD relationship data for BloodHound analysis | Tag |
+| `ldeep` | LDAP Active Directory deep enumeration | UserAccount, Tag |
+| `ldapdomaindump` | Dump LDAP domain information (users, groups, computers) | UserAccount, Tag |
+| `responder` | LLMNR/NBT-NS/mDNS poisoner for credential capture | UserAccount |
+| `coercer` | Windows authentication coercion scanner (PetitPotam, PrinterBug, DFSCoerce) | Vulnerability, Tag |
+
+#### Privilege Escalation
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `linpeas` | Linux privilege escalation enumeration (PEASS-ng) | Vulnerability, Tag |
+| `winpeas` | Windows privilege escalation enumeration (PEASS-ng) | Vulnerability, Tag |
 
 #### OSINT & Reconnaissance
 
@@ -256,7 +281,7 @@ OFX ships with **90 task wrappers** across 15+ categories. The table below group
 | `maigret` | Collect user accounts from social networks | UserAccount |
 | `h8mail` | Email OSINT and password breach hunting | UserAccount |
 | `holehe` | Email OSINT account existence checker | UserAccount |
-| `theHarvester` | Email and subdomain harvesting from public sources | Subdomain, UserAccount |
+| `theharvester` | Email and subdomain harvesting from public sources | Subdomain, UserAccount |
 | `whois` | Domain WHOIS registration lookup | Domain |
 | `porch-pirate` | Scan Postman for API leaks and exposed endpoints | Url, Tag |
 
@@ -764,7 +789,7 @@ You can add your own tool wrappers by subclassing `Task`, implementing `parse_ou
 ### Minimal Example
 
 ```python
-# src/ofx/tasks/tools/mytool.py
+# mytool.py — place in the ofx/tasks/tools/ package
 from __future__ import annotations
 
 import json
@@ -873,7 +898,7 @@ steps:
       verbose: true
 ```
 
-The task is automatically discovered if placed in `src/ofx/tasks/tools/`.
+The task is automatically discovered when placed in the `ofx/tasks/tools/` package.
 
 ---
 

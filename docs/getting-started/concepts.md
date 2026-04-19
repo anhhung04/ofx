@@ -190,7 +190,7 @@ Set environment variables at different scopes:
 
 ### Workflow Level
 ```yaml
-envs:
+env:
   GLOBAL_VAR: "value"
 
 jobs:
