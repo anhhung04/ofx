@@ -121,6 +121,52 @@ class TestTaskBase:
         TaskA.success_codes.append(99)
         assert 99 not in TaskB().success_codes
 
+    def test_write_target_file_tracks_temp_files(self):
+        """_write_target_file should track files for later cleanup."""
+        t = DummyTask()
+        path = t._write_target_file("a.com,b.com,c.com")
+        assert Path(path).exists()
+        contents = Path(path).read_text()
+        assert "a.com" in contents
+        assert "b.com" in contents
+        assert "c.com" in contents
+        assert len(t._temp_target_files) == 1
+        assert t._temp_target_files[0] == path
+
+    def test_cleanup_target_files_removes_tracked_files(self):
+        """cleanup_target_files should remove all tracked temp files."""
+        t = DummyTask()
+        p1 = t._write_target_file("a.com,b.com")
+        p2 = t._write_target_file("c.com,d.com")
+        assert Path(p1).exists()
+        assert Path(p2).exists()
+        t.cleanup_target_files()
+        assert not Path(p1).exists()
+        assert not Path(p2).exists()
+        assert t._temp_target_files == []
+
+    def test_cleanup_target_files_handles_already_removed(self):
+        """cleanup_target_files should not raise if files are already gone."""
+        t = DummyTask()
+        path = t._write_target_file("x.com,y.com")
+        Path(path).unlink()  # remove before cleanup
+        t.cleanup_target_files()  # should not raise
+        assert t._temp_target_files == []
+
+    def test_build_command_multi_target_creates_temp_file(self):
+        """build_command with comma-separated targets should create a tracked temp file."""
+
+        class FileTask(DummyTask):
+            file_flag = "-iL"
+
+        t = FileTask()
+        cmd, _ = t.build_command("a.com,b.com,c.com")
+        assert "-iL" in cmd
+        assert len(t._temp_target_files) == 1
+        assert Path(t._temp_target_files[0]).exists()
+        t.cleanup_target_files()
+        assert not Path(t._temp_target_files[0]).exists() if t._temp_target_files else True
+
 
 # ── Task Registry ─────────────────────────────────────────────────────────
 

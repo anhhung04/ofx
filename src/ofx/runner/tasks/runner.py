@@ -213,7 +213,8 @@ class TaskRunner(BaseRunner[TaskExecution]):
                     await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
 
     async def _post_run(self) -> None:
-        pass
+        if self._task is not None:
+            self._task.cleanup_target_files()
 
     # ── Profile integration ────────────────────────────────────────
 

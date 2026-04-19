@@ -85,6 +85,9 @@ class Task(ABC):
     # ``<output_path>/scans/``.
     export_output: bool = True
 
+    # ── Instance state (set during build_command) ────────────────
+    _temp_target_files: list[str]
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Ensure mutable class attributes are copied per-subclass."""
         super().__init_subclass__(**kwargs)
@@ -96,6 +99,9 @@ class Task(ABC):
                     setattr(cls, attr, dict(inherited))
                 elif isinstance(inherited, list):
                     setattr(cls, attr, list(inherited))
+
+    def __init__(self) -> None:
+        self._temp_target_files: list[str] = []
 
     # ── Public API ─────────────────────────────────────────────────
 
@@ -231,7 +237,17 @@ class Task(ABC):
         )
         tf.write("\n".join(t.strip() for t in target.split(",") if t.strip()))
         tf.close()
+        self._temp_target_files.append(tf.name)
         return tf.name
+
+    def cleanup_target_files(self) -> None:
+        """Remove temporary target files created by :meth:`build_command`."""
+        for path in self._temp_target_files:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        self._temp_target_files.clear()
 
     def _output_suffix(self) -> str:
         """File suffix for the structured output file."""
