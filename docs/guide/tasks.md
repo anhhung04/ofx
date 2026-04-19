@@ -118,64 +118,182 @@ See the [CLI reference](../cli/commands/tasks.md) for full details.
 
 ### Built-in Tasks
 
-| Task | Category | Description | Output Types |
-|------|----------|-------------|-------------|
-| `nmap` | port/scan | Network port scanner and service detector | Port, Vulnerability |
-| `naabu` | port/scan | Fast port scanner written in Go | Port |
-| `httpx` | url/probe | Fast and multi-purpose HTTP toolkit | Url, Tag |
-| `ffuf` | url/fuzz | Fast web fuzzer written in Go | Url |
-| `feroxbuster` | url/fuzz | Fast content discovery tool written in Rust | Url |
-| `dirsearch` | url/fuzz | Advanced web path brute-forcer | Url |
-| `arjun` | url/fuzz/params | HTTP parameter discovery suite | Url, Tag |
-| `dalfox` | url/fuzz | Powerful XSS scanning tool | Vulnerability, Url |
-| `katana` | url/crawl | Next-generation crawling and spidering framework | Url |
-| `gospider` | url/crawl | Fast web spider written in Go | Url |
-| `gau` | url/recon | Fetch known URLs from OTX, Wayback, Common Crawl | Url, Subdomain |
-| `subfinder` | dns/recon | Fast passive subdomain enumeration tool | Subdomain |
-| `dnsx` | dns/resolve | Fast and multi-purpose DNS toolkit | Subdomain, Ip, Record |
-| `nuclei` | vuln/scan | Fast template-based vulnerability scanner | Vulnerability, Tag |
-| `grype` | vuln/scan | Vulnerability scanner for container images | Vulnerability |
-| `trivy` | vuln/scan | Comprehensive security scanner | Vulnerability, Tag |
-| `wpscan` | vuln/scan/wordpress | WordPress security scanner | Vulnerability, Tag |
-| `testssl` | dns/recon/tls | SSL/TLS security scanner | Certificate, Vulnerability, Tag |
-| `ssh-audit` | ssh/audit | SSH server security auditing | Vulnerability, Tag |
-| `gitleaks` | secret/scan | Secret detection in git repositories | Tag |
-| `trufflehog` | secret/scan | Secret detection in repos and filesystems | Tag |
-| `searchsploit` | exploit/recon | ExploitDB search tool | Exploit |
-| `maigret` | user/recon | Username OSINT across social networks | UserAccount |
-| `h8mail` | user/recon/email | Email/password breach lookup | UserAccount |
-| `whois` | domain/info | Domain WHOIS lookup | Domain |
-| `wafw00f` | waf/detect | Web Application Firewall detection tool | Tag |
-| `gobuster` | url/fuzz | Directory/file, DNS, and vhost brute-forcer written in Go | Url |
-| `amass` | dns/recon | In-depth attack surface mapping and asset discovery | Subdomain |
-| `masscan` | port/scan | Massively parallel TCP port scanner | Port, Ip |
-| `assetfinder` | dns/recon | Find domains and subdomains related to a given domain | Subdomain |
-| `findomain` | dns/recon | Fast subdomain enumeration using certificate transparency | Subdomain |
-| `mapcidr` | ip/util | CIDR/IP manipulation and range expansion utility | Ip |
-| `fping` | ip/recon | Fast ping sweep for host discovery | Ip |
-| `cariddi` | url/crawl | Crawler focused on endpoint and secret discovery | Url, Tag |
-| `nikto` | vuln/scan/web | Web server scanner for dangerous files and outdated software | Vulnerability |
-| `whatweb` | url/fingerprint | Web technology fingerprinting tool | Tag |
-| `sqlmap` | vuln/scan/sqli | Automatic SQL injection detection and exploitation tool | Vulnerability |
-| `x8` | url/fuzz/params | Hidden parameter discovery tool written in Rust | Tag |
-| `dnsrecon` | dns/recon | DNS enumeration and zone transfer tool | Record, Subdomain |
-| `theHarvester` | osint/recon | Email, subdomain, and name harvester from public sources | Subdomain, UserAccount |
-| `holehe` | user/recon/email | Check if an email is registered on various websites | UserAccount |
-| `sslscan` | ssl/scan | SSL/TLS cipher suite and certificate scanner | Certificate, Vulnerability |
-| `netexec` | ad/enum | Network service pentesting (CrackMapExec successor) | UserAccount, Tag |
-| `kerbrute` | ad/brute | Kerberos user enum and password spraying | UserAccount |
-| `hydra` | brute/login | Network login brute forcer | UserAccount |
-| `enum4linux` | ad/enum | SMB/AD enumeration | UserAccount, Tag |
-| `paramspider` | url/recon/params | URL parameter mining from web archives | Url |
-| `hakrawler` | url/crawl | Fast web crawler | Url |
-| `subzy` | vuln/takeover | Subdomain takeover checker | Vulnerability |
-| `crlfuzz` | vuln/injection | CRLF injection scanner | Vulnerability |
-| `commix` | vuln/injection | Command injection scanner | Vulnerability |
-| `rustscan` | port/scan | Ultra-fast port scanner | Port |
-| `gowitness` | url/screenshot | Web screenshotting | Url, Tag |
-| `jwt_tool` | vuln/jwt | JWT vulnerability testing | Vulnerability, Tag |
-| `name-that-hash` | crypto/identify | Hash identification | Tag |
-| `hashid` | crypto/identify | Hash identifier | Tag |
+OFX ships with **90 task wrappers** across 15+ categories. The table below groups them by function.
+
+#### Port Scanning & Host Discovery
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `nmap` | Network port scanner and service detector | Port, Vulnerability |
+| `naabu` | Fast port scanner written in Go | Port |
+| `masscan` | Ultra-fast internet port scanner | Port, Ip |
+| `rustscan` | Ultra-fast port scanner written in Rust | Port |
+| `gogo` | Fast port scanner with fingerprinting and nuclei integration | Port, Url, Tag, Vulnerability |
+| `fping` | ICMP ping sweep for host discovery | Ip |
+| `nerva` | Service detection and fingerprinting | Port, Tag |
+| `mapcidr` | CIDR expansion and IP manipulation utility | Ip |
+| `asnmap` | ASN to CIDR mapping tool | Ip |
+| `cdncheck` | Identify CDN/WAF/cloud providers for IPs and domains | Tag, Ip |
+
+#### Web Probing & Fingerprinting
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `httpx` | Fast and multi-purpose HTTP toolkit | Url, Tag |
+| `whatweb` | Web fingerprinting and technology identification | Tag |
+| `gowitness` | Web screenshotting tool | Url, Tag |
+| `wafw00f` | Web Application Firewall detection | Tag |
+| `favirecon` | Favicon hash technology detection | Tag, Url |
+
+#### Web Fuzzing & Content Discovery
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `ffuf` | Fast web fuzzer written in Go | Url |
+| `feroxbuster` | Fast content discovery tool written in Rust | Url |
+| `dirsearch` | Web path scanner / content discovery tool | Url |
+| `gobuster` | Directory/DNS/vhost brute-forcing tool | Url |
+| `arjun` | HTTP parameter discovery suite | Url, Tag |
+| `x8` | Hidden parameter discovery tool | Tag |
+| `kiterunner` | API endpoint brute-force discovery | Url, Tag |
+| `shortscan` | IIS shortname vulnerability scanner | Url, Vulnerability |
+
+#### URL Crawling & Collection
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `katana` | Next-generation crawling and spidering framework | Url |
+| `gospider` | Fast web spider written in Go | Url |
+| `gau` | Fetch known URLs from OTX, Wayback, Common Crawl | Url, Subdomain |
+| `hakrawler` | Fast web crawler for discovering URLs and endpoints | Url |
+| `cariddi` | Crawl URLs for secrets, endpoints, and errors | Url, Tag |
+| `paramspider` | URL parameter mining from web archives | Url |
+| `waymore` | Comprehensive passive URL collection from web archives | Url |
+| `urlfinder` | Passive URL extraction from web archives and sources | Url |
+| `jsluice` | JavaScript secret and endpoint extraction | Url, Tag |
+
+#### Subdomain Enumeration
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `subfinder` | Fast passive subdomain enumeration tool | Subdomain |
+| `amass` | OWASP subdomain enumeration engine | Subdomain |
+| `assetfinder` | Simple subdomain finder using various sources | Subdomain |
+| `findomain` | Fast cross-platform subdomain enumerator | Subdomain |
+| `puredns` | Fast DNS bruteforcing and resolution with massdns | Subdomain |
+| `gotator` | Subdomain permutation generator | Subdomain |
+| `csprecon` | CSP header subdomain discovery | Subdomain |
+
+#### DNS & Records
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `dnsx` | Fast and multi-purpose DNS toolkit | Subdomain, Ip, Record |
+| `dnsrecon` | DNS enumeration and reconnaissance tool | Record, Subdomain |
+| `dnstake` | DNS takeover detection tool | Vulnerability, Subdomain |
+
+#### Vulnerability Scanning
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `nuclei` | Fast template-based vulnerability scanner | Vulnerability, Tag |
+| `nikto` | Web server vulnerability scanner | Vulnerability |
+| `wpscan` | WordPress security scanner | Vulnerability, Tag |
+| `sqlmap` | Automatic SQL injection detection and exploitation | Vulnerability |
+| `dalfox` | Powerful XSS scanner | Vulnerability, Url |
+| `commix` | Automated command injection exploitation tool | Vulnerability |
+| `crlfuzz` | CRLF injection vulnerability scanner | Vulnerability |
+| `subzy` | Subdomain takeover vulnerability checker | Vulnerability |
+| `ssrfmap` | SSRF exploitation tool | Vulnerability, Url |
+| `tinja` | Server-Side Template Injection scanner | Vulnerability, Url |
+| `tplmap` | Server-Side Template Injection exploitation tool | Vulnerability |
+
+#### SSL/TLS & Certificates
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `testssl` | TLS/SSL configuration and vulnerability scanner | Certificate, Vulnerability, Tag |
+| `sslscan` | SSL/TLS configuration and cipher scanner | Certificate, Vulnerability |
+| `ssh-audit` | SSH server and client configuration auditor | Vulnerability, Tag |
+| `tlsx` | TLS/SSL certificate analysis and subdomain discovery | Certificate, Subdomain |
+
+#### Secret & Credential Scanning
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `gitleaks` | Detect secrets in source code and git repos | Tag |
+| `trufflehog` | Find leaked credentials in repos, filesystems, and more | Tag |
+
+#### Container & Supply Chain
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `grype` | Vulnerability scanner for container images and filesystems | Vulnerability |
+| `trivy` | Comprehensive vulnerability and misconfiguration scanner | Vulnerability, Tag |
+
+#### Brute Force & Credential Testing
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `hydra` | Network login brute forcer | UserAccount |
+| `brutespray` | Automated service password spraying from scan output | UserAccount, Port |
+| `brutus` | Automated credential brute-forcing for discovered services | UserAccount |
+| `zombie` | Lightweight service credential brute-forcer with gogo integration | UserAccount |
+
+#### Active Directory & Windows
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `netexec` | Network service pentesting (CrackMapExec successor) | UserAccount, Tag |
+| `kerbrute` | Kerberos brute force and user enumeration | UserAccount |
+| `enum4linux` | SMB/AD enumeration tool | UserAccount, Tag |
+
+#### OSINT & Reconnaissance
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `searchsploit` | Search Exploit-DB from the command line | Exploit |
+| `maigret` | Collect user accounts from social networks | UserAccount |
+| `h8mail` | Email OSINT and password breach hunting | UserAccount |
+| `holehe` | Email OSINT account existence checker | UserAccount |
+| `theHarvester` | Email and subdomain harvesting from public sources | Subdomain, UserAccount |
+| `whois` | Domain WHOIS registration lookup | Domain |
+| `porch-pirate` | Scan Postman for API leaks and exposed endpoints | Url, Tag |
+
+#### Crypto & JWT
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `name-that-hash` | Hash identification tool | Tag |
+| `hashid` | Hash identifier tool | Tag |
+| `jwt_tool` | JWT vulnerability testing and exploitation | Vulnerability, Tag |
+
+#### Cloud Security
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `cloudfox` | AWS/Azure/GCP cloud enumeration tool | Tag, Vulnerability |
+| `prowler` | Cloud security assessment tool (AWS/Azure/GCP) | Vulnerability, Tag |
+| `scoutsuite` | Multi-cloud security auditing tool | Vulnerability, Tag |
+| `pacu` | AWS exploitation framework | Vulnerability, Tag |
+| `s3scanner` | S3/cloud bucket misconfiguration scanner | Vulnerability, Tag |
+
+#### API & GraphQL
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `cherrybomb` | API security scanner for OpenAPI specifications | Vulnerability, Tag |
+| `graphw00f` | GraphQL engine fingerprinting tool | Tag, Url |
+| `schemathesis` | OpenAPI / GraphQL property-based API testing | Vulnerability, Url |
+
+#### CI/CD & LLM Security
+
+| Task | Description | Output Types |
+|------|-------------|-------------|
+| `legitify` | GitHub/GitLab security posture scanner | Vulnerability, Tag |
+| `poutine` | CI/CD pipeline security scanner | Vulnerability, Tag |
+| `garak` | LLM vulnerability scanner | Vulnerability, Tag |
+| `promptfoo` | LLM red teaming and evaluation framework | Vulnerability, Tag |
 
 ---
 

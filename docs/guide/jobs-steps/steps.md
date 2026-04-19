@@ -64,6 +64,39 @@ If the expression resolves to an invalid value, a default of 60 minutes is used 
 
 ---
 
+## Task Steps
+
+Task steps run pre-built tool wrappers that handle option mapping, execution, and output parsing automatically. The `with:` block must include `target` plus any tool-specific options:
+
+```yaml
+steps:
+  - task: nmap
+    name: port-scan
+    with:
+      target: "{{ inputs.target }}"
+      ports: "80,443,8080"
+      version_detection: true
+
+  - task: nuclei
+    name: vuln-scan
+    with:
+      target: "{{ inputs.target }}"
+      severity: "critical,high"
+      tags: "cve"
+```
+
+Task outputs include raw `stdout` and structured `typed_outputs` (Port, Url, Vulnerability, etc.) accessible via template helpers:
+
+```yaml
+  - run: |
+      echo "Ports: {{ ports(steps['port-scan'].outputs.typed_outputs) | map(attribute='host_port') | join(', ') }}"
+      echo "Vulns: {{ vulns(steps['vuln-scan'].outputs.typed_outputs) | length }}"
+```
+
+For the full list of available tasks and options, see the [Tasks guide](../tasks.md).
+
+---
+
 ## Python Scripts and Inter-Job Communication
 
 Steps can execute inline Python code using the `script` field. Python scripts have access to workflow context, environment variables, and special functions for inter-job communication.

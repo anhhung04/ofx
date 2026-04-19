@@ -25,13 +25,12 @@ jobs:
 | `name`           | str       | Job display name                                 |
 | `steps`          | list      | **Required.** Steps to execute                   |
 | `needs`          | list/str  | Job dependencies (for ordering)                  |
-| `run_if`         | bool/str  | Conditional execution (alias: `if`)              |
+| `if`             | bool/str  | Conditional execution (alias: `run_if`)          |
 | `strategy`       | object    | Matrix strategy config                           |
-| `max_parallel`   | int       | Max parallel matrix jobs (alias: `max-parallel`) |
-| `fail_fast`      | bool      | Fail matrix on first job failure (alias: `fail-fast`) |
-| `envs`           | dict      | Environment variables for all steps              |
+| `env`            | dict      | Environment variables for all steps              |
 | `outputs`        | dict      | Job outputs (template-resolved)                  |
 | `defaults`       | object    | Default run config overrides                     |
+| `cloud`          | str/object| Cloud VPS config — profile name or `CloudConfig` |
 
 > [!TIP]
 > See [Job model code](https://github.com/anhhung04/ofx/blob/main/src/ofx/models/job.py) for job model code.
@@ -48,6 +47,7 @@ Each step executes exactly **one** action:
 | `script` | Inline Python code |
 | `script_file` | Python file path |
 | `uses` | Reusable workflow reference |
+| `task` | Pre-built security tool wrapper (see [Tasks](tasks.md)) |
 
 
 ### Step Properties
@@ -55,19 +55,20 @@ Each step executes exactly **one** action:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `name` | str | - | Descriptive name |
-| `run` / `script` / `script_file` / `uses` | str | - | **Required.** Exactly one action |
-| `timeout` | int | 1440 | Max duration (minutes) |
+| `run` / `script` / `script_file` / `uses` / `task` | str | - | **Required.** Exactly one action |
+| `timeout` | int/str | 1440 | Max duration in minutes (supports Jinja2 expressions) |
 | `retry` | int | 0 | Retry attempts on failure |
-| `retry_delay` | int | 5 | Seconds between retries (alias: `retry-delay`) |
-| `continue_on_error` | bool | false | Continue on failure (alias: `continue-on-error`) |
-| `run_if` | bool\|str | true | Conditional execution (alias: `if`) |
-| `envs` | dict | {} | Step environment variables |
+| `retry-delay` | int | 5 | Seconds between retries |
+| `continue-on-error` | bool | false | Continue on failure |
+| `if` | bool\|str | true | Conditional execution |
+| `env` | dict | {} | Step environment variables |
 | `shell` | str | /bin/bash | Shell for `run`/`script` |
-| `working_directory` | str | cwd | Execution directory (alias: `working-directory`) |
-| `log_stdout` | bool\|str | false | Save stdout to output logs (alias: `log-stdout`) |
-| `interactive` | bool | false | Interactive mode (ignored for `uses`) |
-| `run_with` | dict | {} | Inputs for `uses` (alias: `with`) |
+| `working-directory` | str | cwd | Execution directory |
+| `log-stdout` | bool\|str | false | Save stdout to output logs |
+| `interactive` | bool | false | Interactive mode (single-job stages only) |
+| `with` | dict | {} | Inputs for `uses` / options+target for `task` |
 | `secrets` | dict\|"inherit" | {} | Secrets for `uses` |
+| `store-creds` | bool | null | Auto-store `UserAccount` credentials from task outputs |
 
 ---
 
@@ -79,10 +80,10 @@ steps:
     run: nmap -p {{ inputs.ports }} {{ inputs.target }}
     timeout: 30
     retry: 1
-    retry_delay: 5
- env:
+    retry-delay: 5
+    env:
       MODE: fast
-    working_directory: ./scans
+    working-directory: ./scans
 ```
 
 ### Multi-line Commands
@@ -132,6 +133,38 @@ steps:
     config = wait_for('config', lambda d: d.get('ready'))
     print(f"Got config: {config}")
 ```
+
+---
+
+## 🔧 Task Steps (`task`)
+
+Task steps run pre-built security tool wrappers with structured output parsing. The `with:` block provides the target and tool-specific options.
+
+```yaml
+steps:
+  - task: nmap
+    name: port-scan
+    with:
+      target: "{{ inputs.target }}"
+      ports: "80,443,8080"
+      version_detection: true
+
+  - task: nuclei
+    name: vuln-scan
+    with:
+      target: "{{ inputs.target }}"
+      severity: "critical,high"
+```
+
+Task outputs are parsed into **typed objects** (Port, Url, Vulnerability, etc.) accessible via template helpers:
+
+```yaml
+  - run: |
+      echo "Open ports: {{ ports(steps['port-scan'].outputs.typed_outputs) | length }}"
+      echo "Vulns found: {{ vulns(steps['vuln-scan'].outputs.typed_outputs) | length }}"
+```
+
+See the [Tasks guide](tasks.md) for the full list of available tools and options.
 
 ---
 
