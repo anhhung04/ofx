@@ -52,4 +52,4 @@ jobs:
 - Keep one interactive step per stage to guarantee pass-through.
 - Set generous but finite `timeout` to avoid hung runs.
 - Pre-install tools in a prior job/step to shorten the interactive window.
-- Use `run_if: failure()` to drop into a shell only when something breaks.
+- Use `if: failure()` to drop into a shell only when something breaks.

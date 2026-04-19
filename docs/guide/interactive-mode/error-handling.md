@@ -7,7 +7,7 @@ OFX handles interactive shell exits gracefully:
 - **Exit (exit/quit/close shell):** Exiting the shell (typing `exit`, `Ctrl+D`, or closing the terminal) is treated as a clean exit. The workflow continues to the next step or job.
 - **Ctrl+C (SIGINT):** Pressing `Ctrl+C` in an interactive session (exit code 130) is also treated as a clean exit.
 - **Command Not Found (127):** If you type a command that does not exist, the shell will show an error, but exiting the shell itself is not an error.
-- **Other Errors:** Any other nonzero exit code is treated as a failure and will stop the job unless `continue_on_error: true` is set.
+- **Other Errors:** Any other nonzero exit code is treated as a failure and will stop the job unless `continue-on-error: true` is set.
 
 ### Example: Handling Shell Exit
 

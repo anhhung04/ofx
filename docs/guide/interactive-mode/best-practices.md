@@ -22,7 +22,7 @@ jobs:
       - name: Debug Session
         run: bash
         interactive: true
-        run_if: failure()  # Only run if previous step failed
+        if: failure()  # Only run if previous step failed
 ```
 
 

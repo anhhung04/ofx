@@ -16,7 +16,7 @@ jobs:
         env:
           VAR: value
         timeout: 10
-        continue_on_error: true
+        continue-on-error: true
 ```
 
 ---
@@ -60,7 +60,7 @@ If the expression resolves to an invalid value, a default of 60 minutes is used 
 - Use `script_file:` to execute an existing Python file (resolved relative to the workflow directory)
 - Use `uses:` to call a reusable workflow
 - Use `task:` to run a pre-built security tool wrapper (see [Tasks](../tasks.md))
-- Use `run_if:` for conditional logic
+- Use `if:` for conditional logic
 
 ---
 

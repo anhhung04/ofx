@@ -13,7 +13,7 @@ Jobs are the main execution units in a workflow:
 jobs:
   scan:
     needs: []                  # Dependencies (empty = parallel)
-    run_if: success()          # Optional conditional
+    run_if: success()          # Conditional (alias: if)
     env:
       LOG_LEVEL: INFO          # Job-wide environment
     steps:
@@ -227,7 +227,7 @@ steps:
 ```yaml
 - name: Optional notification
   run: python notify.py
-  continue_on_error: true  # Won't fail the workflow
+  continue-on-error: true  # Won't fail the workflow
 ```
 
 ### Retry Logic
@@ -235,7 +235,7 @@ steps:
 - name: Flaky API call
   run: curl https://api.example.com
   retry: 3
-  retry_delay: 5
+  retry-delay: 5
 ```
 
 ---
@@ -281,7 +281,7 @@ steps:
 
 - name: Optional notification
   run: python notify.py
-  continue_on_error: true
+  continue-on-error: true
 ```
 
 ---
