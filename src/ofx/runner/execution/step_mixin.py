@@ -29,10 +29,11 @@ class StepRunnerMixin:
     def _apply_retry_profile_defaults(self) -> None:
         """Apply retry policy defaults only when step fields are not explicit.
 
-        Resolution order for each field (first match wins):
-          1. Explicitly set in the step YAML (tracked by ``model_fields_set``)
-          2. Value from ``retry_profiles[retry_policy]`` dict
-          3. Profile-level ``max_retries`` / ``timeout_minutes`` fallback
+        Resolution order for each field (last applied wins):
+          1. ``retry_profiles[retry_policy]`` dict provides the base
+          2. Top-level profile knobs (``max_retries``, ``timeout_minutes``)
+             override when explicitly customised (non-default values)
+          3. Step-level explicit YAML values always win (never touched)
         """
         profile = self.ctx.vars.get("profile_model")  # type: ignore[attr-defined]
         if profile is None:
@@ -46,24 +47,27 @@ class StepRunnerMixin:
 
         explicitly_set = set(getattr(self.model, "model_fields_set", set()))  # type: ignore[attr-defined]
 
+        # ── retry ──────────────────────────────────────────────────
         if "retry" not in explicitly_set:
             if "retry" in policy:
                 self.model.retry = int(policy["retry"])  # type: ignore[attr-defined]
-            else:
-                max_retries = getattr(profile, "max_retries", None)
-                if max_retries is not None and max_retries > 0:
-                    self.model.retry = int(max_retries)  # type: ignore[attr-defined]
+            # Top-level max_retries overrides when non-default (default=3)
+            max_retries = getattr(profile, "max_retries", None)
+            if max_retries is not None and max_retries != 3:
+                self.model.retry = int(max_retries)  # type: ignore[attr-defined]
 
+        # ── retry_delay ────────────────────────────────────────────
         if "retry_delay" not in explicitly_set and "retry_delay" in policy:
             self.model.retry_delay = int(policy["retry_delay"])  # type: ignore[attr-defined]
 
+        # ── timeout ────────────────────────────────────────────────
         if "timeout" not in explicitly_set:
             if "timeout" in policy:
                 self.model.timeout = int(policy["timeout"])  # type: ignore[attr-defined]
-            else:
-                timeout_minutes = getattr(profile, "timeout_minutes", None)
-                if timeout_minutes is not None and timeout_minutes != 60 * 24:
-                    self.model.timeout = int(timeout_minutes)  # type: ignore[attr-defined]
+            # Top-level timeout_minutes overrides when non-default (default=60)
+            timeout_minutes = getattr(profile, "timeout_minutes", None)
+            if timeout_minutes is not None and timeout_minutes != 60:
+                self.model.timeout = int(timeout_minutes)  # type: ignore[attr-defined]
 
     @staticmethod
     def _retry_delay_seconds(attempt: int, base_delay: int) -> float:
