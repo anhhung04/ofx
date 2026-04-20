@@ -408,7 +408,7 @@ class TestProfileTaskOptions:
         profile = OFXProfile(
             task_options={"httpx": {"threads": 5, "rate_limit": 20}}
         )
-        ctx = RunContext(vars={"profile": profile})
+        ctx = RunContext(vars={"profile_model": profile})
         model = TaskExecution(
             task_name="httpx",
             target="example.com",
@@ -440,13 +440,78 @@ class TestProfileTaskOptions:
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         profile = OFXProfile(task_options={"nuclei": {"rate_limit": 50}})
-        ctx = RunContext(vars={"profile": profile})
+        ctx = RunContext(vars={"profile_model": profile})
         model = TaskExecution(
             task_name="httpx", target="example.com", opts={"threads": 10}
         )
         runner = TaskRunner(model, ctx)
         runner._apply_profile_task_options()
         assert runner.model.opts == {"threads": 10}
+
+    def test_common_auto_mapping_injects_proxy_threads_delay(self):
+        """Layer 1: profile common fields auto-map to matching task opts."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.core.models import RunContext
+        from ofx.tasks.registry import TaskRegistry
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        profile = OFXProfile(
+            proxy="socks5://127.0.0.1:9050",
+            threads=3,
+            rate_limit=50,
+            user_agent="StealthBot/2.0",
+        )
+        ctx = RunContext(vars={"profile_model": profile})
+        # feroxbuster has proxy, threads, rate_limit, user_agent opts
+        model = TaskExecution(
+            task_name="feroxbuster",
+            target="http://example.com",
+            opts={},
+        )
+        runner = TaskRunner(model, ctx)
+        runner._task = TaskRegistry.get("feroxbuster")()
+        runner._apply_profile_task_options()
+
+        assert runner.model.opts.get("proxy") == "socks5://127.0.0.1:9050"
+        assert runner.model.opts.get("threads") == 3
+        assert runner.model.opts.get("rate_limit") == 50
+        assert runner.model.opts.get("user_agent") == "StealthBot/2.0"
+
+    def test_common_auto_mapping_user_opts_win(self):
+        """Layer 1: user-provided opts are never overridden by profile."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.core.models import RunContext
+        from ofx.tasks.registry import TaskRegistry
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        profile = OFXProfile(threads=3, rate_limit=50)
+        ctx = RunContext(vars={"profile_model": profile})
+        model = TaskExecution(
+            task_name="httpx",
+            target="example.com",
+            opts={"threads": 20},  # explicit user value
+        )
+        runner = TaskRunner(model, ctx)
+        runner._task = TaskRegistry.get("httpx")()
+        runner._apply_profile_task_options()
+
+        assert runner.model.opts["threads"] == 20  # user wins
+        assert runner.model.opts.get("rate_limit") == 50  # profile fills gap
+
+    def test_dict_at_profile_key_does_not_crash(self):
+        """Regression: the old 'profile' key holds a dict — must not crash."""
+        from ofx.runner.core.models import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        # Simulate real runtime: 'profile' is dict, 'profile_model' missing
+        ctx = RunContext(vars={"profile": {"proxy": "http://x", "threads": 2}})
+        model = TaskExecution(
+            task_name="httpx", target="example.com", opts={}
+        )
+        runner = TaskRunner(model, ctx)
+        runner._apply_profile_task_options()
+        # No profile_model → no injection, no crash
+        assert runner.model.opts == {}
 
 
 # ── Profile Env Var Injection ──────────────────────────────────────────

@@ -229,7 +229,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         2. **Per-task overrides** — ``profile.task_options[task_name]`` dict
            provides task-specific defaults.
         """
-        profile = self.ctx.vars.get("profile")
+        profile = self.ctx.vars.get("profile_model")
         if not profile:
             return
 

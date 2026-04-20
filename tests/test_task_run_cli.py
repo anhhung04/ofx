@@ -181,7 +181,7 @@ class TestProfileCommonOptInjection:
         from ofx.runner.core.models import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
-        ctx = RunContext(vars={"profile": profile})
+        ctx = RunContext(vars={"profile_model": profile})
         model = TaskExecution(
             task_name=task_name,
             target="example.com",
