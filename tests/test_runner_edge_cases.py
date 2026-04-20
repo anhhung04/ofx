@@ -426,7 +426,7 @@ class TestStepRetryProfileDefaults:
         assert runner.model.retry == 2
         assert runner.model.retry_delay == 2
 
-    def test_retry_profile_does_not_override_explicit(self):
+    def test_retry_profile_overrides_explicit_step(self):
         from ofx.models.step import Step
         from ofx.profiles.models import OFXProfile
         from ofx.runner.execution.step import StepRunner
@@ -439,8 +439,9 @@ class TestStepRetryProfileDefaults:
         runner.parent = parent
         runner._apply_retry_profile_defaults()
 
-        assert runner.model.retry == 9
-        assert runner.model.retry_delay == 11
+        # Profile (aggressive: retry=2, retry_delay=2) overrides step values
+        assert runner.model.retry == 2
+        assert runner.model.retry_delay == 2
 
 
 class TestStepDynamicTimeout:

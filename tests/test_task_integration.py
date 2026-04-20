@@ -793,8 +793,8 @@ class TestStepRetryProfileDefaults:
         runner._apply_retry_profile_defaults()
         assert runner.model.timeout == 180  # policy wins when timeout_minutes is default
 
-    def test_explicit_step_timeout_wins(self):
-        """Explicitly set step timeout is never overridden."""
+    def test_explicit_step_timeout_overridden_by_profile(self):
+        """Profile timeout_minutes overrides even explicit step timeout."""
         from ofx.profiles.models import OFXProfile
         from ofx.runner.execution.step_mixin import StepRunnerMixin
 
@@ -815,4 +815,73 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.timeout == 120  # explicit wins
+        assert runner.model.timeout == 30  # profile wins
+
+    def test_explicit_step_retry_overridden_by_profile(self):
+        """Profile max_retries overrides even explicit step retry."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(max_retries=1)
+        step = self._make_step(retry=5)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry == 1  # profile wins
+
+    def test_policy_retry_delay_overrides_step(self):
+        """Profile retry_delay from policy overrides step value."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            retry_profiles={"standard": {"retry_delay": 30}},
+        )
+        step = self._make_step(retry_delay=5)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry_delay == 30  # profile wins
+
+    def test_step_values_kept_when_profile_is_default(self):
+        """Default profile values do not override explicit step values."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        # All defaults — timeout_minutes=60, max_retries=3
+        profile = OFXProfile()
+        step = self._make_step(timeout=120, retry=5)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        # Default policy has timeout=1440 → overrides step's 120
+        assert runner.model.timeout == 1440
+        # Default policy has retry=0 → zero doesn't override step's 5
+        assert runner.model.retry == 5

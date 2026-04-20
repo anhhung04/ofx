@@ -27,13 +27,14 @@ class StepRunnerMixin:
     # ------------------------------------------------------------------
 
     def _apply_retry_profile_defaults(self) -> None:
-        """Apply retry policy defaults only when step fields are not explicit.
+        """Apply profile retry/timeout settings to the step.
 
-        Resolution order for each field (last applied wins):
-          1. ``retry_profiles[retry_policy]`` dict provides the base
-          2. Top-level profile knobs (``max_retries``, ``timeout_minutes``)
-             override when explicitly customised (non-default values)
-          3. Step-level explicit YAML values always win (never touched)
+        Precedence (highest → lowest):
+          1. **Profile** — profile-level knobs and ``retry_profiles`` are
+             the governance layer; they override step values.
+          2. **Step** — explicit YAML values apply when the profile does
+             not specify a value for that field.
+          3. **Default** — built-in Step model defaults.
         """
         profile = self.ctx.vars.get("profile_model")  # type: ignore[attr-defined]
         if profile is None:
@@ -45,29 +46,27 @@ class StepRunnerMixin:
         if not isinstance(policy, dict):
             policy = {}
 
-        explicitly_set = set(getattr(self.model, "model_fields_set", set()))  # type: ignore[attr-defined]
-
         # ── retry ──────────────────────────────────────────────────
-        if "retry" not in explicitly_set:
-            if "retry" in policy:
-                self.model.retry = int(policy["retry"])  # type: ignore[attr-defined]
-            # Top-level max_retries overrides when non-default (default=3)
-            max_retries = getattr(profile, "max_retries", None)
-            if max_retries is not None and max_retries != 3:
-                self.model.retry = int(max_retries)  # type: ignore[attr-defined]
+        # Top-level max_retries wins; fall back to policy; then step.
+        max_retries = getattr(profile, "max_retries", None)
+        if max_retries is not None and max_retries != 3:
+            self.model.retry = int(max_retries)  # type: ignore[attr-defined]
+        elif "retry" in policy:
+            policy_retry = int(policy["retry"])
+            if policy_retry != 0:
+                self.model.retry = policy_retry  # type: ignore[attr-defined]
 
         # ── retry_delay ────────────────────────────────────────────
-        if "retry_delay" not in explicitly_set and "retry_delay" in policy:
+        if "retry_delay" in policy:
             self.model.retry_delay = int(policy["retry_delay"])  # type: ignore[attr-defined]
 
         # ── timeout ────────────────────────────────────────────────
-        if "timeout" not in explicitly_set:
-            if "timeout" in policy:
-                self.model.timeout = int(policy["timeout"])  # type: ignore[attr-defined]
-            # Top-level timeout_minutes overrides when non-default (default=60)
-            timeout_minutes = getattr(profile, "timeout_minutes", None)
-            if timeout_minutes is not None and timeout_minutes != 60:
-                self.model.timeout = int(timeout_minutes)  # type: ignore[attr-defined]
+        # Top-level timeout_minutes wins; fall back to policy; then step.
+        timeout_minutes = getattr(profile, "timeout_minutes", None)
+        if timeout_minutes is not None and timeout_minutes != 60:
+            self.model.timeout = int(timeout_minutes)  # type: ignore[attr-defined]
+        elif "timeout" in policy:
+            self.model.timeout = int(policy["timeout"])  # type: ignore[attr-defined]
 
     @staticmethod
     def _retry_delay_seconds(attempt: int, base_delay: int) -> float:
