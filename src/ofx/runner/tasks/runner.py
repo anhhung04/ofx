@@ -237,13 +237,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         if self._task is not None:
             task_opts = self._task.opts  # declared opts for this tool
 
-            _COMMON_MAPPING: list[tuple[str, list[str]]] = [
-                ("proxy", ["proxy", "proxy_url", "http_proxy"]),
-                ("threads", ["threads", "concurrency", "workers"]),
-                ("rate_limit", ["rate_limit", "rate"]),
-                ("delay", ["delay"]),
-                ("user_agent", ["user_agent"]),
-            ]
+            from ofx.cloud.task_runtime import _COMMON_MAPPING
 
             injected: list[str] = []
             for profile_attr, candidate_names in _COMMON_MAPPING:

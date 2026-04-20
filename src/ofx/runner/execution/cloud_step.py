@@ -437,8 +437,12 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         The task's ``build_command`` generates the CLI invocation.  Since
         the structured output file lives on the remote host we cannot
         parse it locally, so we rely on stdout/stderr parsing only.
+
+        Profile auto-mapping and per-task overrides are applied when the
+        execution context carries a ``profile_model``.
         """
-        cmd_str = build_task_command_from_step(self.model)
+        profile = self.ctx.vars.get("profile_model")
+        cmd_str = build_task_command_from_step(self.model, profile=profile)
         return await self._run_remote_command(cmd_str, timeout=timeout)
 
     def _parse_task_output(self, stdout: str) -> list[dict]:

@@ -79,7 +79,8 @@ class TaskRunHandler:
         # Build run context
         ctx_vars: dict[str, Any] = {}
         if profile:
-            ctx_vars["profile"] = profile
+            ctx_vars["profile_model"] = profile
+            ctx_vars["profile"] = profile.model_dump()
         ctx = RunContext(output_path=output_path, vars=ctx_vars)
 
         # Build task execution model

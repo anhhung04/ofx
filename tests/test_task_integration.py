@@ -568,3 +568,182 @@ class TestProfileEnvInjection:
             profile_envs["OFX_USER_AGENT"] = profile.user_agent
 
         assert profile_envs == {}
+
+
+# ── Cloud Task Profile Integration ─────────────────────────────────────
+
+
+class TestCloudTaskProfileIntegration:
+    """Verify profile settings are applied to cloud task commands."""
+
+    def test_build_task_command_with_profile(self):
+        """Profile opts merge into the cloud task command."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile(
+            proxy="socks5://127.0.0.1:9050",
+            threads=3,
+        )
+        step = Step(
+            task="feroxbuster",
+            run_with={"target": "http://example.com"},
+        )
+        cmd = build_task_command_from_step(step, profile=profile)
+        # feroxbuster uses -p for proxy and -t for threads
+        assert "socks5://127.0.0.1:9050" in cmd
+        assert "-t 3" in cmd
+
+    def test_build_task_command_user_opts_win(self):
+        """Step-level with: values take precedence over profile."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile(threads=3)
+        step = Step(
+            task="feroxbuster",
+            run_with={"target": "http://example.com", "threads": 20},
+        )
+        cmd = build_task_command_from_step(step, profile=profile)
+        assert "-t 20" in cmd
+        assert "-t 3" not in cmd
+
+    def test_build_task_command_no_profile(self):
+        """Without a profile the command is unchanged."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+
+        step = Step(
+            task="httpx",
+            run_with={"target": "example.com"},
+        )
+        cmd = build_task_command_from_step(step)
+        assert "httpx" in cmd
+        assert "example.com" in cmd
+
+    def test_build_task_command_profile_task_options(self):
+        """Per-task overrides from profile.task_options are applied."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile(
+            task_options={"httpx": {"rate_limit": 20}}
+        )
+        step = Step(
+            task="httpx",
+            run_with={"target": "example.com"},
+        )
+        cmd = build_task_command_from_step(step, profile=profile)
+        assert "-rate-limit 20" in cmd
+
+
+# ── Step Retry Profile Defaults ────────────────────────────────────────
+
+
+class TestStepRetryProfileDefaults:
+    """Verify max_retries and timeout_minutes fallbacks in step_mixin."""
+
+    def _make_step(self, **overrides):
+        from ofx.models.step import Step
+
+        return Step(run="echo test", **overrides)
+
+    def test_max_retries_fallback_when_policy_has_no_retry(self):
+        """profile.max_retries is used when retry_profiles has no retry key."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            max_retries=5,
+            retry_profiles={"standard": {"retry_delay": 10}},
+        )
+        step = self._make_step()
+
+        # Create a minimal mock that has the interface StepRunnerMixin expects
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry == 5
+
+    def test_max_retries_not_used_when_policy_has_retry(self):
+        """retry_profiles[policy].retry takes precedence over max_retries."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            max_retries=5,
+            retry_profiles={"standard": {"retry": 2, "retry_delay": 10}},
+        )
+        step = self._make_step()
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry == 2  # policy wins over max_retries
+
+    def test_timeout_minutes_fallback(self):
+        """profile.timeout_minutes is used when policy has no timeout."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            timeout_minutes=30,
+            retry_profiles={"standard": {"retry_delay": 10}},
+        )
+        step = self._make_step()
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.timeout == 30
+
+    def test_explicit_step_timeout_wins(self):
+        """Explicitly set step timeout is never overridden."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            timeout_minutes=30,
+            retry_profiles={"standard": {"timeout": 60}},
+        )
+        step = self._make_step(timeout=120)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.timeout == 120  # explicit wins
