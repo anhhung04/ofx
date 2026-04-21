@@ -4,7 +4,7 @@ import json
 import logging
 import threading
 from collections import OrderedDict
-from typing import Any
+from typing import Any, Self
 
 from pydantic import BaseModel
 
@@ -100,7 +100,7 @@ class _StepAccessor(dict):
 class TemplateResolver:
     """Handles template resolution with caching and optimization"""
 
-    _instance: TemplateResolver | None = None
+    _instance: Self | None = None
     _template_cache: OrderedDict[str, Any]
     _support_funcs_cache: dict[str, Any] | None
     _template_cache_max_size: int
