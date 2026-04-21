@@ -6,6 +6,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+import typer
 
 from ofx.models.config import DurableRunConfig
 from ofx.runner.core.durable import (
@@ -249,3 +250,88 @@ async def test_commit_and_push_push_implies_commit(tmp_path: Path) -> None:
     )
     stdout, _ = await proc.communicate()
     assert "test push" in stdout.decode()
+
+
+# ── _resolve_output_path tests ────────────────────────────────────
+
+
+def test_resolve_output_path_explicit(tmp_path: Path) -> None:
+    from ofx.commands.flow.checkpoint import _resolve_output_path
+
+    result = _resolve_output_path(str(tmp_path), "")
+    assert result == tmp_path
+
+
+def test_resolve_output_path_from_project_arg(tmp_path: Path, monkeypatch) -> None:
+    from ofx.commands.flow.checkpoint import _resolve_output_path
+
+    monkeypatch.setattr(
+        "ofx.commands.get_cli_project", lambda: ""
+    )
+    monkeypatch.setattr(
+        "ofx.commands.project.project_manager.ProjectManager.get_active_path",
+        classmethod(lambda cls: None),
+    )
+    monkeypatch.setattr(
+        "ofx.commands.project.project_manager.ProjectManager.resolve_path",
+        classmethod(lambda cls, p: str(tmp_path)),
+    )
+    result = _resolve_output_path("", "myproject")
+    assert result == tmp_path
+
+
+def test_resolve_output_path_from_global_cli_project(tmp_path: Path, monkeypatch) -> None:
+    from ofx.commands.flow.checkpoint import _resolve_output_path
+
+    monkeypatch.setattr(
+        "ofx.commands.get_cli_project", lambda: "globalproj"
+    )
+    monkeypatch.setattr(
+        "ofx.commands.project.project_manager.ProjectManager.resolve_path",
+        classmethod(lambda cls, p: str(tmp_path)),
+    )
+    result = _resolve_output_path("", "")
+    assert result == tmp_path
+
+
+def test_resolve_output_path_from_active_project(tmp_path: Path, monkeypatch) -> None:
+    from ofx.commands.flow.checkpoint import _resolve_output_path
+
+    monkeypatch.setattr(
+        "ofx.commands.get_cli_project", lambda: ""
+    )
+    monkeypatch.setattr(
+        "ofx.commands.project.project_manager.ProjectManager.get_active_path",
+        classmethod(lambda cls: tmp_path),
+    )
+    monkeypatch.setattr(
+        "ofx.commands.project.project_manager.ProjectManager.resolve_path",
+        classmethod(lambda cls, p: str(tmp_path)),
+    )
+    result = _resolve_output_path("", "")
+    assert result == tmp_path
+
+
+def test_resolve_output_path_no_project_raises(monkeypatch) -> None:
+    from ofx.commands.flow.checkpoint import _resolve_output_path
+
+    monkeypatch.setattr(
+        "ofx.commands.get_cli_project", lambda: ""
+    )
+    monkeypatch.setattr(
+        "ofx.commands.project.project_manager.ProjectManager.get_active_path",
+        classmethod(lambda cls: None),
+    )
+    with pytest.raises(typer.BadParameter, match="No output directory"):
+        _resolve_output_path("", "")
+
+
+def test_resolve_output_path_priority_explicit_over_project(tmp_path: Path, monkeypatch) -> None:
+    """Explicit output path wins over project resolution."""
+    from ofx.commands.flow.checkpoint import _resolve_output_path
+
+    other_dir = tmp_path / "other"
+    other_dir.mkdir()
+
+    result = _resolve_output_path(str(other_dir), "")
+    assert result == other_dir

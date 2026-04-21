@@ -35,12 +35,47 @@ def _parse_age(age: str) -> float | None:
         ) from None
 
 
+def _resolve_output_path(output: str, project: str) -> Path:
+    """Resolve the output directory for checkpoint operations.
+
+    Priority: explicit output arg > --project flag > global -p flag > active project.
+    """
+    if output:
+        return Path(output).expanduser()
+
+    from ofx.commands import get_cli_project
+    from ofx.commands.project.project_manager import ProjectManager
+
+    resolved_project = project or get_cli_project()
+    if not resolved_project:
+        active_path = ProjectManager.get_active_path()
+        if active_path:
+            resolved_project = active_path.name
+
+    if resolved_project:
+        try:
+            project_path = Path(ProjectManager.resolve_path(resolved_project))
+            if project_path.is_dir():
+                return project_path
+        except Exception:
+            pass
+
+    raise typer.BadParameter(
+        "No output directory specified and no active project found. "
+        "Provide an output path or set an active project with 'ofx project active <name>'."
+    )
+
+
 @app.command("list")
 def checkpoint_list(
     output: Annotated[
         str,
-        typer.Argument(help="Output directory containing .durable/ checkpoint data."),
-    ],
+        typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
+    ] = "",
+    project: Annotated[
+        str,
+        typer.Option("-p", "--project", help="Resolve output path from this project."),
+    ] = "",
     status: Annotated[
         str,
         typer.Option("-s", "--status", help="Filter by status (comma-separated)."),
@@ -54,7 +89,7 @@ def checkpoint_list(
     from ofx.runner.core.durable import list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = Path(output).expanduser()
+    path = _resolve_output_path(output, project)
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
@@ -98,11 +133,15 @@ def checkpoint_list(
 def checkpoint_show(
     output: Annotated[
         str,
-        typer.Argument(help="Output directory containing .durable/ checkpoint data."),
-    ],
+        typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
+    ] = "",
+    project: Annotated[
+        str,
+        typer.Option("-p", "--project", help="Resolve output path from this project."),
+    ] = "",
     checkpoint_id: Annotated[
         str,
-        typer.Argument(help="Checkpoint ID to show details for."),
+        typer.Option("--id", help="Checkpoint ID to show details for."),
     ] = "",
     backend: Annotated[
         str,
@@ -115,7 +154,7 @@ def checkpoint_show(
     from ofx.runner.core.durable import get_checkpoint, list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = Path(output).expanduser()
+    path = _resolve_output_path(output, project)
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
@@ -141,8 +180,12 @@ def checkpoint_show(
 def checkpoint_clean(
     output: Annotated[
         str,
-        typer.Argument(help="Output directory containing .durable/ checkpoint data."),
-    ],
+        typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
+    ] = "",
+    project: Annotated[
+        str,
+        typer.Option("-p", "--project", help="Resolve output path from this project."),
+    ] = "",
     status: Annotated[
         str,
         typer.Option("-s", "--status", help="Remove only checkpoints with these statuses (comma-separated)."),
@@ -177,7 +220,7 @@ def checkpoint_clean(
     )
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = Path(output).expanduser()
+    path = _resolve_output_path(output, project)
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
