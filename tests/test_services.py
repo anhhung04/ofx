@@ -1,4 +1,4 @@
-"""Tests for runner services: CloudProvisioner, TemplateService, SecretRedactor."""
+"""Tests for runner services: CloudProvisioner, SecretRedactor."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ import pytest
 from ofx.models.cloud import CloudConfig
 from ofx.runner.services.cloud_provisioner import CloudProvisioner
 from ofx.runner.services.secret_redactor import SecretRedactor
-from ofx.runner.services.template_service import TemplateService
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -221,59 +220,6 @@ class TestCloudProvisionerCreateRunner:
             call_kwargs = mock_reg.create.call_args
             assert call_kwargs[0][0] == "winrm"
             assert call_kwargs[1]["username"] == "Admin"
-
-
-# =========================================================================
-# TemplateService
-# =========================================================================
-
-
-class TestTemplateService:
-    """Tests for TemplateService."""
-
-    def test_lazy_resolver_init(self):
-        svc = TemplateService()
-        assert svc._resolver is None
-
-    async def test_resolve_plain_string(self):
-        svc = TemplateService()
-        result = await svc.resolve("hello world", {})
-        assert result == "hello world"
-
-    async def test_resolve_with_variable(self):
-        svc = TemplateService()
-        result = await svc.resolve("host={{ target }}", {"target": "10.0.0.1"})
-        assert result == "host=10.0.0.1"
-
-    async def test_resolve_dict(self):
-        svc = TemplateService()
-        result = await svc.resolve(
-            {"key": "{{ val }}"},
-            {"val": "resolved"},
-        )
-        assert result == {"key": "resolved"}
-
-    async def test_resolve_list(self):
-        svc = TemplateService()
-        result = await svc.resolve(["{{ a }}", "{{ b }}"], {"a": "x", "b": "y"})
-        assert result == ["x", "y"]
-
-    async def test_resolve_non_string_passthrough(self):
-        svc = TemplateService()
-        assert await svc.resolve(42, {}) == 42
-        assert await svc.resolve(True, {}) is True
-
-    async def test_resolve_fields_empty(self):
-        svc = TemplateService()
-        result = await svc.resolve_fields(MagicMock(), [])
-        assert result is False
-
-    async def test_resolve_fields_missing_attr(self):
-        svc = TemplateService()
-        runner = MagicMock()
-        runner.model = MagicMock(spec=[])  # no attributes
-        result = await svc.resolve_fields(runner, ["nonexistent"])
-        assert result is False
 
 
 # =========================================================================

@@ -18,7 +18,6 @@ from ofx.runner.core.durable import get_checkpoint, write_checkpoint
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import RegistryAdapter, cleanup_registry
-from ofx.runner.services.template_service import TemplateService
 from ofx.runner.templates import TemplateResolver
 from ofx.settings import settings
 
@@ -91,7 +90,6 @@ class BaseRunner[TModel: BaseModel]:
         "__lazy_registry",
         "_cached_durable_config",
         "_logger",
-        "_template_service",
     )
 
     def __init__(
@@ -101,7 +99,6 @@ class BaseRunner[TModel: BaseModel]:
         parent: BaseRunner | None = None,
         registry: RegistryAdapter | None = None,
         logger: logging.Logger | None = None,
-        template_service: TemplateService | None = None,
     ):
         assert model is not None, "Model cannot be None"
         self.run_id = str(uuid.uuid4())
@@ -122,12 +119,6 @@ class BaseRunner[TModel: BaseModel]:
         # Logger injection – default to app branding logger if not provided
         self._logger = (
             logger if logger is not None else logging.getLogger(settings.app_branding)
-        )
-        # Template service injection – default to a new TemplateService if not provided
-        from ofx.runner.services.template_service import TemplateService
-
-        self._template_service = (
-            template_service if template_service is not None else TemplateService()
         )
         self._runners: dict[str, BaseRunner] = {}  # child runners
         self._started_at: float | None = None
@@ -382,7 +373,7 @@ class BaseRunner[TModel: BaseModel]:
         return self.__lazy_template_resolver
 
     async def _resolve_template(self, value: Any) -> Any:
-        """Resolve Jinja2 templates in values using the injected TemplateService.
+        """Resolve Jinja2 templates in values using the TemplateResolver.
         Args:
             value: Value to resolve (can be str, dict, list, primitives)
         Returns:
@@ -403,7 +394,7 @@ class BaseRunner[TModel: BaseModel]:
                 "vars": self.ctx.vars,
             }
         )
-        return await self._template_service.resolve(
+        return await self._template_resolver.resolve(
             value,
             context_vars,
         )

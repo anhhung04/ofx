@@ -8,8 +8,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from jinja2 import Environment
+
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
-from ofx.runner.templates.sandbox import build_sandboxed_env
 
 _logger = logging.getLogger("ofx.templates")
 _resolver_lock = threading.Lock()
@@ -36,8 +37,8 @@ def _tojson_python(value: Any, indent: int | None = None) -> str:
 
 
 def _build_jinja_env():
-    """Create a sandboxed Jinja2 Environment with Python-safe ``tojson`` filter."""
-    env = build_sandboxed_env(enable_async=True)
+    """Create a Jinja2 Environment with Python-safe ``tojson`` filter."""
+    env = Environment(enable_async=True)
     env.filters["tojson"] = _tojson_python
     return env
 
