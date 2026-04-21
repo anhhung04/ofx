@@ -9,6 +9,7 @@ import asyncio
 import os
 import shlex
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -324,7 +325,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
 
         opsec_mode = False
         if self.parent and getattr(self.parent, "_cloud_config", None):
-            opsec_mode = bool(getattr(self.parent._cloud_config, "opsec_mode", False))
+            opsec_mode = bool(getattr(getattr(self.parent, "_cloud_config", None), "opsec_mode", False))
         payload = build_python_payload(
             script,
             opsec_mode=opsec_mode,
@@ -384,7 +385,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         )
         opsec_mode = False
         if self.parent and getattr(self.parent, "_cloud_config", None):
-            opsec_mode = bool(getattr(self.parent._cloud_config, "opsec_mode", False))
+            opsec_mode = bool(getattr(getattr(self.parent, "_cloud_config", None), "opsec_mode", False))
         payload = build_python_payload(
             source,
             opsec_mode=opsec_mode,
@@ -472,7 +473,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         parent_model = self.parent.model if self.parent else None
         return should_store_creds(self.model.store_creds, parent_model)
 
-    def _store_credentials(self, typed_outputs: list) -> None:
+    def _store_credentials(self, typed_outputs: list | Sequence) -> None:
         """Store UserAccount outputs in the credential store."""
         from ofx.runner.core.credential_store import store_from_typed_outputs
 
@@ -582,9 +583,9 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         job_id = ""
         workflow_name = ""
         if self.parent and getattr(self.parent, "model", None):
-            job_id = getattr(self.parent.model, "jid", "") or ""
-            if getattr(self.parent, "parent", None) and getattr(self.parent.parent, "model", None):
-                workflow_name = getattr(self.parent.parent.model, "name", "") or ""
+            job_id = getattr(getattr(self.parent, "model", None), "jid", "") or ""
+            if getattr(self.parent, "parent", None) and getattr(getattr(self.parent, "parent", None), "model", None):
+                workflow_name = getattr(getattr(getattr(self.parent, "parent", None), "model", None), "name", "") or ""
         msg = (
             f"workflow[{workflow_name}]"
             f"job[{job_id}]"

@@ -313,24 +313,22 @@ class CommandExecutor:
 
     @staticmethod
     def _close_process(proc: asyncio.subprocess.Process) -> None:
-        """Close process transport and ensure the process tree is reaped."""
-        # First try to kill any remaining children in the process group
+        """Close process transport and streams; ensure the process tree is reaped."""
         pid = proc.pid
         if pid is not None:
             try:
                 pgid = os.getpgid(pid)
-                # Send SIGTERM to remaining orphans in the group
                 os.killpg(pgid, signal.SIGTERM)
             except (OSError, ProcessLookupError):
                 pass
 
+        # Close the subprocess transport (owns the underlying pipe fds)
         transport = getattr(proc, "_transport", None)
-        if transport is None:
-            return
-        try:
-            transport.close()
-        except Exception as e:
-            logger.debug("Failed to close process transport: %s", e)
+        if transport is not None:
+            try:
+                transport.close()
+            except Exception as e:
+                logger.debug("Failed to close process transport: %s", e)
 
     async def capture_outputs_file(self, runner, key: str, log_fn) -> None:
         """Parse ``key=value`` lines from the outputs file into the registry.

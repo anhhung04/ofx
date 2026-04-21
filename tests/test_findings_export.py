@@ -96,7 +96,7 @@ class TestExportTypedOutputs:
             {"_type": "port", "ip": "10.0.0.1", "port": 80},
             {"_type": "port", "ip": "10.0.0.1", "port": 443},
         ]
-        summaries = export_typed_outputs(str(tmp_path), items)
+        _summaries = export_typed_outputs(str(tmp_path), items)
         content = (tmp_path / "hosts" / "ports.txt").read_text()
         assert "10.0.0.1:80" in content
         assert "10.0.0.1:443" in content
@@ -435,4 +435,4 @@ class TestAutoExportFindings:
                 log_fn=lambda msg: log_lines.append(msg),
             )
         )
-        assert any("Findings exported" in l for l in log_lines)
+        assert any("Findings exported" in lst for lst in log_lines)

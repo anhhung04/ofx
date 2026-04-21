@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 import typer
 
+from ofx.cloud.base import CloudProvider
 from ofx.commands.ui_helpers import print_error
 
 
@@ -29,7 +30,7 @@ def resolve_provider(profile: str = "", provider: str = "") -> str:
     return provider
 
 
-def create_cloud_provider(profile: str = "", provider: str = "") -> tuple[str, object]:
+def create_cloud_provider(profile: str = "", provider: str = "") -> tuple[str, CloudProvider]:
     """Resolve and initialize a cloud provider client."""
     provider_name = resolve_provider(profile, provider)
     from ofx.cloud import CloudProviderRegistry

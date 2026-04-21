@@ -8,11 +8,12 @@ from ofx.runner.registry.factory import (
 )
 from ofx.runner.registry.failover import FailoverRegistryAdapter
 from ofx.runner.registry.file import FileRegistry
-from ofx.runner.registry.memory import MemoryJobRegistry
+from ofx.runner.registry.memory import MemoryJobRegistry, RegistryOverflowError
 
 __all__ = [
     "RegistryAdapter",
     "MemoryJobRegistry",
+    "RegistryOverflowError",
     "FileRegistry",
     "CachedRegistryAdapter",
     "FailoverRegistryAdapter",

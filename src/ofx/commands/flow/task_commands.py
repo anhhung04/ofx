@@ -112,7 +112,7 @@ def list_tasks(
     if category:
         entries = TaskRegistry.get_by_category(category)
     else:
-        entries = [(n, TaskRegistry.get(n)) for n in TaskRegistry.list_tasks()]
+        entries = [(n, t) for n in TaskRegistry.list_tasks() if (t := TaskRegistry.get(n)) is not None]
 
     if not entries:
         console.print("[yellow]No tasks found.[/yellow]")

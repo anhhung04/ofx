@@ -1,6 +1,5 @@
 """Tests for OFX output types, deduplication, and UserAccount model."""
 
-import pytest
 
 from ofx.tasks import (
     Port,
@@ -15,9 +14,7 @@ from ofx.tasks.output_types import (
     Exploit,
     Ip,
     Severity,
-    Tag,
 )
-
 
 # ── Output Types ───────────────────────────────────────────────────────────
 

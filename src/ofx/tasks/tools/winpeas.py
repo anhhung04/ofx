@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ofx.tasks.base import OptDef, Task
-from ofx.tasks.output_types import Tag, Vulnerability
+from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
 
@@ -88,10 +88,9 @@ class WinpeasTask(Task):
                     results.append(
                         Vulnerability(
                             name=cve,
-                            url="",
-                            severity="high",
+                            severity=Severity.HIGH,
                             description=clean,
-                            source="winpeas",
+                            provider="winpeas",
                         )
                     )
 

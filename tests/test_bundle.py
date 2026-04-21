@@ -5,11 +5,9 @@ from __future__ import annotations
 import io
 import sys
 import textwrap
-import zipfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # analyzer
@@ -117,7 +115,7 @@ class TestCollectModules:
         assert set(files.keys()) == {"ofx/__init__.py", "ofx/api/__init__.py", "ofx/api/_compat.py"}
 
     def test_stub_content(self):
-        from ofx.api.bundle.collector import collect_modules, _STUB_INIT
+        from ofx.api.bundle.collector import _STUB_INIT, collect_modules
 
         files = collect_modules(set())
         assert files["ofx/__init__.py"] == _STUB_INIT
@@ -145,8 +143,9 @@ class TestBuildBundle:
         assert "opsec" in result.modules
 
     def test_bootstrap_is_valid_python(self):
-        from ofx.api.bundle.builder import build_bundle
         import ast
+
+        from ofx.api.bundle.builder import build_bundle
 
         result = build_bundle("print('hello')")
         # Must parse without error
@@ -173,7 +172,7 @@ class TestBuildBundle:
         from ofx.api.bundle.builder import build_bundle
 
         result = build_bundle("x = 1")
-        with pytest.raises(Exception):
+        with pytest.raises(AttributeError):
             result.script = "changed"  # type: ignore[misc]
 
 
@@ -185,6 +184,7 @@ class TestBuildBundle:
 class TestObfuscateBootstrap:
     def test_obfuscated_is_valid_python(self):
         import ast
+
         from ofx.api.bundle.obfuscator import obfuscate_bootstrap
 
         loader = obfuscate_bootstrap("x = 42")
@@ -360,7 +360,6 @@ class TestObfuscateSources:
 
     def test_metadata_stripped_filename(self):
         """co_filename in the bytecode must not contain the original path."""
-        import marshal
         from ofx.api.bundle.obfuscator import _strip_code
 
         code = compile(b"x = 1", "secret/path/mod.py", "exec")
@@ -370,7 +369,6 @@ class TestObfuscateSources:
 
     def test_metadata_stripped_docstrings(self):
         """Module and function docstrings must be removed."""
-        import marshal
         from ofx.api.bundle.obfuscator import _strip_code
 
         src = b'"""Module doc."""\ndef foo():\n    """Func doc."""\n    return 1\n'

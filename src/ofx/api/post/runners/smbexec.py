@@ -49,7 +49,7 @@ class PostSMBExec(PostRunnerBase):
                 "Install it with: pip install impacket"
             ) from exc
 
-    def run(self, command: str) -> str:
+    def run(self, command: str, timeout: int | None = None) -> str:  # noqa: ARG002
         """Execute a command via SMB exec.
 
         Args:

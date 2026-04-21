@@ -6,7 +6,6 @@ import pytest
 
 from ofx.utils.scheduling import find_parallel_schedule
 
-
 # ── find_parallel_schedule ───────────────────────────────────────────────
 
 

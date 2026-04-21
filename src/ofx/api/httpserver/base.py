@@ -104,7 +104,7 @@ class PHTTPServer(threading.Thread):
                 logger.error("Your machine may not support ipv6")
                 raise RuntimeError("IPv6 not supported")
             self.host_ip = ipv6
-            self.httpserver = HTTPServerV6
+            self.httpserver: type[HTTPServer] = HTTPServerV6
             self.is_ipv6 = True
         else:
             self.is_ipv6 = False

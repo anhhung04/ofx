@@ -21,7 +21,7 @@ def parse_key_value_pairs(inputs: list[str] | None, keep_string = False) -> dict
     Raises:
         ValueError: If input format is invalid
     """
-    processed_inputs = {}
+    processed_inputs: dict[str, Any] = {}
     for inp in inputs or []:
         try:
             key, value = inp.split("=", 1)

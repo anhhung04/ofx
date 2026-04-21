@@ -28,7 +28,7 @@ def _registry_key(output_path: Path, config: DurableRunConfig) -> str:
 
 
 def _resolve_redis_prefix(output_path: Path, config: DurableRunConfig) -> str:
-    digest = hashlib.sha1(output_path.as_posix().encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(output_path.as_posix().encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
     prefix = config.redis_prefix.rstrip(":")
     return f"{prefix}:{digest}:"
 

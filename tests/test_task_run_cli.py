@@ -304,7 +304,7 @@ class TestListTasks:
         names = [n for n, _ in port_tasks]
         assert "nmap" in names
         # Should not include tasks from other categories
-        for name, cls in port_tasks:
+        for _name, cls in port_tasks:
             assert cls is not None
             assert cls().category.startswith("port/")
 

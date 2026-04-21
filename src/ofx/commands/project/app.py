@@ -143,6 +143,9 @@ def list_projects():
         )
         return
 
+    active_path = ProjectManager.get_active_path()
+    active_name = active_path.name if active_path else None
+
     table = Table(
         title=f"[+] OFX Projects ({len(projects)})",
         show_header=True,
@@ -153,10 +156,12 @@ def list_projects():
     table.add_column("#", style="dim", width=4)
     table.add_column("Project Name", style="cyan")
     table.add_column("Path", style="dim")
+    table.add_column("", width=2)  # active indicator
 
     for idx, p in enumerate(projects, 1):
         full_path = ProjectManager._get_default_path() / p
-        table.add_row(str(idx), p, str(full_path))
+        indicator = "[green]✓[/]" if p == active_name else ""
+        table.add_row(str(idx), p, str(full_path), indicator)
 
     console.print(table)
 
@@ -207,14 +212,13 @@ def use(
 ):
     """Set or clear the active/working project."""
     console = get_console()
-    from .project_manager import ProjectManager, _load_config, _save_config
+    from ofx.settings import settings, update_config_field
+
+    from .project_manager import ProjectManager
+
     if clear:
-        cfg = _load_config()
-        cfg.pop("active_project", None)
-        _save_config(cfg)
-        # Also clear environment variable and Settings field
+        update_config_field("active_project", None)
         os.environ.pop("OFX_ACTIVE_PROJECT", None)
-        from ofx.settings import settings
         settings.active_project = None
         console.print("[yellow]Active project cleared.[/]")
         return
@@ -225,12 +229,8 @@ def use(
     if not Path(resolved).exists():
         console.print(f"[red]Project '{name}' not found at {resolved}[/]")
         raise typer.Exit(code=1)
-    cfg = _load_config()
-    cfg["active_project"] = name
-    _save_config(cfg)
-    # Export to env var and Settings for this and downstream processes
+    update_config_field("active_project", name)
     os.environ["OFX_ACTIVE_PROJECT"] = name
-    from ofx.settings import settings
     settings.active_project = name
     console.print(f"[green]Active project set to:[/] {name} → {resolved}")
 

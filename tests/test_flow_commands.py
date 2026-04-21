@@ -306,8 +306,9 @@ class TestFlowHistory:
         assert len(records) == 3
 
     def test_relative_time(self):
+        from datetime import UTC, datetime, timedelta
+
         from ofx.commands.flow.history import _relative_time
-        from datetime import datetime, UTC, timedelta
 
         now = datetime.now(UTC)
         assert _relative_time(now.isoformat()) == "just now"

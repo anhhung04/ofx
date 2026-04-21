@@ -138,7 +138,7 @@ def format_typed_outputs(
         t = item.get("_type", "unknown")
         by_type.setdefault(t, []).append(item)
 
-    renderables = []
+    renderables: list[Any] = []
 
     for type_name, items in by_type.items():
         columns = _TYPE_COLUMNS.get(type_name)

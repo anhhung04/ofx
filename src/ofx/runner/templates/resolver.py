@@ -3,12 +3,13 @@
 import json
 import logging
 import threading
+from collections import OrderedDict
 from typing import Any
 
-from jinja2 import Environment
 from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
+from ofx.runner.templates.sandbox import build_sandboxed_env
 
 _logger = logging.getLogger("ofx.templates")
 _resolver_lock = threading.Lock()
@@ -22,9 +23,6 @@ def _tojson_python(value: Any, indent: int | None = None) -> str:
     in inline ``script:`` blocks.
     """
     raw = json.dumps(value, indent=indent, default=str)
-    # Replace JSON booleans/null with Python equivalents.
-    # Only replace standalone tokens, not substrings inside strings.
-    # json.dumps quotes string values, so bare true/false/null are safe to replace.
     raw = raw.replace(": true", ": True")
     raw = raw.replace(": false", ": False")
     raw = raw.replace(": null", ": None")
@@ -37,9 +35,9 @@ def _tojson_python(value: Any, indent: int | None = None) -> str:
     return raw
 
 
-def _build_jinja_env() -> Environment:
-    """Create a Jinja2 Environment with Python-safe ``tojson`` filter."""
-    env = Environment(enable_async=True)
+def _build_jinja_env():
+    """Create a sandboxed Jinja2 Environment with Python-safe ``tojson`` filter."""
+    env = build_sandboxed_env(enable_async=True)
     env.filters["tojson"] = _tojson_python
     return env
 
@@ -101,16 +99,23 @@ class _StepAccessor(dict):
 class TemplateResolver:
     """Handles template resolution with caching and optimization"""
 
-    _instance = None
+    _instance: TemplateResolver | None = None
+    _template_cache: OrderedDict[str, Any]
+    _support_funcs_cache: dict[str, Any] | None
+    _template_cache_max_size: int
+    _cache_hits: int
+    _cache_misses: int
 
     def __new__(cls):
         if cls._instance is None:
             with _resolver_lock:
                 if cls._instance is None:
                     inst = super().__new__(cls)
-                    inst._template_cache = {}
+                    inst._template_cache = OrderedDict()
                     inst._support_funcs_cache = None
-                    inst._template_cache_max_size = 1000
+                    inst._template_cache_max_size = 2048
+                    inst._cache_hits = 0
+                    inst._cache_misses = 0
                     cls._instance = inst
         return cls._instance
 
@@ -160,10 +165,13 @@ class TemplateResolver:
 
         support_funcs = await self._build_support_functions(context_vars, memo)
 
-        if value_str not in self._template_cache:
+        if value_str in self._template_cache:
+            self._template_cache.move_to_end(value_str)
+            self._cache_hits += 1
+        else:
+            self._cache_misses += 1
             if len(self._template_cache) >= self._template_cache_max_size:
-                first_key = next(iter(self._template_cache))
-                del self._template_cache[first_key]
+                self._template_cache.popitem(last=False)
             self._template_cache[value_str] = _jinja_env.from_string(value_str)
 
         template = self._template_cache[value_str]
@@ -174,8 +182,14 @@ class TemplateResolver:
         try:
             result = await template.render_async(template_vars)
         except Exception as e:
-            # Provide actionable context for template errors
+            # Redact secret values from the error preview to avoid leaking
             preview = value_str[:120] + ("…" if len(value_str) > 120 else "")
+            secrets_dict = context_vars.get("secrets")
+            if isinstance(secrets_dict, dict):
+                for secret_val in secrets_dict.values():
+                    sv = str(secret_val)
+                    if len(sv) >= 4:
+                        preview = preview.replace(sv, "***")
             raise type(e)(
                 f"Template rendering failed: {e}\n"
                 f"  Template: {preview}"
@@ -318,7 +332,21 @@ class TemplateResolver:
         return None
 
     def clear_cache(self) -> None:
-        """Clear the template cache"""
+        """Clear the template cache and reset counters."""
         self._template_cache.clear()
-        if self._support_funcs_cache:
-            self._support_funcs_cache.clear()
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._support_funcs_cache = None
+
+    def cache_info(self) -> dict[str, int]:
+        """Return cache statistics for debugging.
+
+        Returns:
+            Dict with ``hits``, ``misses``, ``size``, ``maxsize``.
+        """
+        return {
+            "hits": self._cache_hits,
+            "misses": self._cache_misses,
+            "size": len(self._template_cache),
+            "maxsize": self._template_cache_max_size,
+        }

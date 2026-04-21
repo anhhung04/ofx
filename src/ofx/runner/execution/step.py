@@ -28,6 +28,14 @@ from ofx.runner.execution.execution_results import (
 from ofx.runner.execution.step_mixin import StepRunnerMixin
 from ofx.runner.logging import get_logger
 
+
+def _timeout_int(value: int | str) -> int:
+    """Coerce a template-resolved timeout (may arrive as str) to int."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return 60 * 24  # default: 24 hours
+
 logger = get_logger()
 
 
@@ -117,7 +125,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
         Execute the step's action with retry logic, timeout handling.
         """
         max_attempts = self.model.retry + 1
-        timeout_seconds = self.model.timeout * 60
+        timeout_seconds = _timeout_int(self.model.timeout) * 60
 
         last_res = None
         attempt_errors: list[str] = []
@@ -134,7 +142,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 else:
                     raise RuntimeError(step_execution_error(res.status, res.error))
             except TimeoutError as e:
-                raise RuntimeError(step_timeout_error(self.model.timeout)) from e
+                raise RuntimeError(step_timeout_error(_timeout_int(self.model.timeout))) from e
             except Exception as e:
                 err_msg = str(e)
                 attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
@@ -264,7 +272,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 script=self.model.script,
                 shell=self.model.shell,
                 working_directory=self.model.working_directory,
-                timeout_minutes=self.model.timeout,
+                timeout_minutes=_timeout_int(self.model.timeout),
                 interactive=self.model.interactive,
             )
             return ScriptRunner(
@@ -280,7 +288,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 cmd=self.model.run,
                 shell=self.model.shell,
                 working_directory=self._resolve_working_dir(),
-                timeout_minutes=self.model.timeout,
+                timeout_minutes=_timeout_int(self.model.timeout),
                 interactive=is_interactive,
             )
             return CommandRunner(
@@ -311,7 +319,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 script=script_content,
                 shell=self.model.shell,
                 working_directory=self.model.working_directory,
-                timeout_minutes=self.model.timeout,
+                timeout_minutes=_timeout_int(self.model.timeout),
                 interactive=self.model.interactive,
             )
 
@@ -351,7 +359,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 opts=task_opts,
                 shell=self.model.shell,
                 working_directory=self._resolve_working_dir(),
-                timeout_minutes=self.model.timeout,
+                timeout_minutes=_timeout_int(self.model.timeout),
                 store_creds=self._resolve_store_creds(),
             )
             return TaskRunner(

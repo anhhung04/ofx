@@ -175,7 +175,7 @@ def test_build_stage_runners_cloud_matrix(monkeypatch):
             self.strategy = type("S", (), {"matrix": {"os": ["a"]}, "fleet": None})()
 
     staged_jobs = {"d": _Job()}
-    stage_runners = manager._build_stage_runners(["d"], staged_jobs)
+    _stage_runners = manager._build_stage_runners(["d"], staged_jobs)
 
     assert created[0][0] == "cloud_matrix"
 
@@ -203,7 +203,7 @@ def test_build_stage_runners_cloud_fleet(monkeypatch):
             self.strategy = type("S", (), {"matrix": None, "fleet": True})()
 
     staged_jobs = {"e": _Job()}
-    stage_runners = manager._build_stage_runners(["e"], staged_jobs)
+    _stage_runners = manager._build_stage_runners(["e"], staged_jobs)
 
     assert created[0][0] == "cloud_fleet"
 

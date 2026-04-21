@@ -1,17 +1,18 @@
 """Tests for the `ofx project use` command."""
 
-import json
 import os
 import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 import ofx.settings as settings_mod
 
+
 # Helper to locate the temporary config file location used by the CLI (HOME is monkey‑patched)
 def _config_path(tmp_home: Path) -> Path:
-    return tmp_home / ".ofx" / "config.json"
+    return tmp_home / ".ofx" / "config.yml"
 
 @pytest.fixture
 def temp_home(tmp_path, monkeypatch):
@@ -43,7 +44,7 @@ def test_use_set_and_clear(temp_home, monkeypatch, tmp_path):
         env=env,
     )
     assert result_set.returncode == 0, f"CLI failed: {result_set.stderr}"
-    cfg = json.loads(_config_path(temp_home).read_text())
+    cfg = yaml.safe_load(_config_path(temp_home).read_text()) or {}
     assert cfg.get("active_project") == proj_name
     assert "Active project set to" in result_set.stdout
 
@@ -56,7 +57,7 @@ def test_use_set_and_clear(temp_home, monkeypatch, tmp_path):
         env=env,
     )
     assert result_clear.returncode == 0, f"CLI clear failed: {result_clear.stderr}"
-    cfg_after = json.loads(_config_path(temp_home).read_text())
+    cfg_after = yaml.safe_load(_config_path(temp_home).read_text()) or {}
     assert "active_project" not in cfg_after
     assert "Active project cleared" in result_clear.stdout
 
@@ -70,3 +71,59 @@ def test_use_invalid_project(temp_home, tmp_path):
     )
     assert result.returncode != 0, "CLI should have exited with error for missing project"
     assert "Project 'nosuchproj' not found" in result.stdout or "Project 'nosuchproj' not found" in result.stderr
+
+
+def test_migrate_json_config(temp_home, monkeypatch):
+    """Legacy config.json active_project is migrated to config.yml on import."""
+    import json
+
+    import yaml
+
+    ofx_dir = temp_home / ".ofx"
+    ofx_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write a legacy config.json
+    (ofx_dir / "config.json").write_text(json.dumps({"active_project": "legacyproj"}))
+
+    # Patch BASE_DATA_DIR so the migration targets temp_home
+    import ofx.settings as sm
+    monkeypatch.setattr(sm, "BASE_DATA_DIR", ofx_dir)
+    monkeypatch.setattr(sm, "CONFIG_YAML", ofx_dir / "config.yml")
+
+    # Run the migration directly
+    sm._migrate_json_config()
+
+    # config.json should be gone
+    assert not (ofx_dir / "config.json").exists()
+
+    # config.yml should contain active_project
+    cfg = yaml.safe_load((ofx_dir / "config.yml").read_text()) or {}
+    assert cfg.get("active_project") == "legacyproj"
+
+
+def test_migrate_json_config_no_overwrite(temp_home, monkeypatch):
+    """Migration does not overwrite an active_project already set in config.yml."""
+    import json
+
+    import yaml
+
+    ofx_dir = temp_home / ".ofx"
+    ofx_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pre-existing config.yml already has active_project
+    (ofx_dir / "config.yml").write_text("active_project: existingproj\n")
+    # Legacy config.json has a different value
+    (ofx_dir / "config.json").write_text(json.dumps({"active_project": "legacyproj"}))
+
+    import ofx.settings as sm
+    monkeypatch.setattr(sm, "BASE_DATA_DIR", ofx_dir)
+    monkeypatch.setattr(sm, "CONFIG_YAML", ofx_dir / "config.yml")
+
+    sm._migrate_json_config()
+
+    # config.json cleaned up
+    assert not (ofx_dir / "config.json").exists()
+
+    # config.yml still has the original value
+    cfg = yaml.safe_load((ofx_dir / "config.yml").read_text()) or {}
+    assert cfg.get("active_project") == "existingproj"

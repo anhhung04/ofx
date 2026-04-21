@@ -111,7 +111,7 @@ class MasscanTask(Task):
         try:
             info = socket.getaddrinfo(base, None, socket.AF_INET, socket.SOCK_STREAM)
             if info:
-                return info[0][4][0]
+                return str(info[0][4][0])
         except socket.gaierror:
             pass
 

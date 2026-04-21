@@ -39,13 +39,14 @@ def url2ip(url: str, with_port: bool = False) -> str | tuple[str, int]:
         if "://" in url
         else urllib.parse.urlparse(f"http://{url}")
     )
+    hostname = url_parsed.hostname or url
 
     if url_parsed.port:
-        ret = socket.gethostbyname(url_parsed.hostname), url_parsed.port
+        ret = socket.gethostbyname(hostname), url_parsed.port
     elif not url_parsed.port and url_parsed.scheme == "https":
-        ret = socket.gethostbyname(url_parsed.hostname), 443
+        ret = socket.gethostbyname(hostname), 443
     else:
-        ret = socket.gethostbyname(url_parsed.hostname), 80
+        ret = socket.gethostbyname(hostname), 80
 
     return ret if with_port else ret[0]
 

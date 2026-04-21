@@ -83,9 +83,9 @@ def _build_inputs_table(workflow: Workflow) -> Table | None:
     for name, inp in workflow.dispatch.inputs.items():
         req = "✓" if inp.required else ""
         default = str(inp.default) if inp.default is not None else "—"
-        alias = inp.alias or "—"
+        alias_val = ", ".join(inp.alias) if isinstance(inp.alias, list) else (inp.alias or "—")
         inp_type = inp.type or "string"
-        table.add_row(name, inp_type, req, default, alias)
+        table.add_row(name, inp_type, req, default, alias_val)
 
     return table
 

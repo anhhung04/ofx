@@ -233,7 +233,7 @@ jobs:
         version: [1, 2]
     steps:
       - run: echo "Building {{ matrix.version }}"
-  
+
   test:
     needs: build
     strategy:
@@ -431,7 +431,7 @@ jobs:
         id: [1, 2, 3]
     steps:
       - run: echo "{{ matrix.id }}"
-  
+
   normal_job:
     steps:
       - run: echo "Normal"

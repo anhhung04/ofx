@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock
 
 import pytest
 
 from ofx.runner.registry.base import RegistryAdapter
-from ofx.runner.registry.failover import FailoverRegistryAdapter, _RECONNECT_INTERVAL
+from ofx.runner.registry.failover import FailoverRegistryAdapter
 from ofx.runner.registry.memory import MemoryJobRegistry
 
 

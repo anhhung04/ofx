@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import marshal
 import os
+import types
 
 from .analyzer import BundleError
 
@@ -68,7 +69,7 @@ exec(_m.loads(bytes(a^_k[i%len(_k)]for i,a in enumerate(_e))))
 # ---------------------------------------------------------------------------
 
 
-def _strip_code(code, *, _generic: str = "<module>") -> object:
+def _strip_code(code, *, _generic: str = "<module>") -> types.CodeType:
     """Recursively strip identifying metadata from a code object.
 
     Removes:
@@ -78,7 +79,7 @@ def _strip_code(code, *, _generic: str = "<module>") -> object:
 
     Returns a new code object; the original is not mutated.
     """
-    new_consts = []
+    new_consts: list[object] = []
     for i, c in enumerate(code.co_consts):
         if hasattr(c, "co_code"):
             # Nested code object (function/class body) — recurse

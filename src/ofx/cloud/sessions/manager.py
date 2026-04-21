@@ -228,11 +228,12 @@ def _session_to_cloud_config(session: Session) -> Any:
     """Build a CloudConfig-like object from persisted session connection fields."""
     from ofx.models.cloud import CloudConfig
 
-    connection_type = "winrm" if session.os_type == "windows" else "ssh"
+    os_type = session.os_type or "linux"
+    connection_type = "winrm" if os_type == "windows" else "ssh"
     return CloudConfig(
         provider=session.cloud_provider or "static",
-        os=session.os_type or "linux",
-        connection_type=connection_type,
+        os=os_type,  # type: ignore[arg-type]
+        connection_type=connection_type,  # type: ignore[arg-type]
         ssh_user=session.ssh_user or "root",
         ssh_port=session.ssh_port or 22,
         ssh_key=session.ssh_key or "",
@@ -958,7 +959,7 @@ class SessionManager:
                         exc,
                     )
                     # Fall through to unencrypted fetch below
-                    local_enc = None
+                    local_enc = None  # type: ignore[assignment]
 
                 if local_enc and local_enc.exists():
                     _decrypt_at_rest_openssl(local_enc, session.at_rest_key, results)

@@ -159,8 +159,8 @@ class GogoTask(Task):
                 results.append(
                     Tag(
                         name=name,
-                        url=url or f"{ip}:{port}",
-                        source="gogo",
+                        value=url or f"{ip}:{port}",
+                        category="fingerprint",
                     )
                 )
 

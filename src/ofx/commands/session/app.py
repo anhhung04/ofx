@@ -231,7 +231,7 @@ def session_list(
         ("Target", {}), ("Status", {}), ("Workflow", {}), ("IP/Host", {}),
         ("PID", {}), ("Age", {"justify": "right"}),
     ]:
-        table.add_column(col, **opts)
+        table.add_column(col, **opts)  # type: ignore[arg-type]
 
     for s in sessions:
         ss = session_status_style(s.status.value)

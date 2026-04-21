@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ofx.tasks.base import OptDef, Task
-from ofx.tasks.output_types import Tag, Vulnerability
+from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
 
@@ -107,10 +107,9 @@ class CertipyTask(Task):
                 results.append(
                     Vulnerability(
                         name=f"ADCS {esc_id}",
-                        url="",
-                        severity="high",
+                        severity=Severity.HIGH,
                         description=f"Template '{tpl_name}': {detail}" if isinstance(detail, str) else f"Template '{tpl_name}' vulnerable to {esc_id}",
-                        source="certipy",
+                        provider="certipy",
                     )
                 )
             results.append(Tag(name="template", value=tpl_name, category="adcs"))
@@ -142,10 +141,9 @@ class CertipyTask(Task):
                 results.append(
                     Vulnerability(
                         name=f"ADCS {esc_id}",
-                        url="",
-                        severity="high",
+                        severity=Severity.HIGH,
                         description=f"{detail}{tpl_ctx}",
-                        source="certipy",
+                        provider="certipy",
                     )
                 )
 

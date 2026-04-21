@@ -173,13 +173,13 @@ def asm_sync(
     # Push phase
     console.print("[bold]Phase 1: Push results → ASM[/bold]")
     try:
-        asm_push.callback(scope=scope_id, output_dir=output_dir, source=source)
+        asm_push.callback(scope=scope_id, output_dir=output_dir, source=source)  # type: ignore[attr-defined]
     except SystemExit:
         pass
 
     # Pull phase
     console.print("\n[bold]Phase 2: Pull targets ← ASM[/bold]")
-    asm_pull.callback(scope=scope_id, effective=True, output_file=targets_file, target_type="")
+    asm_pull.callback(scope=scope_id, effective=True, output_file=targets_file, target_type="")  # type: ignore[attr-defined]
 
 
 # ------------------------------------------------------------------

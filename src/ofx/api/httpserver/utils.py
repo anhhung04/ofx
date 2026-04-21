@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ofx.api._compat import get_logger
+from ofx.api.httpserver.base import PHTTPServer
 from ofx.api.httpserver.exfil import ExfilServer
 from ofx.api.httpserver.payload import PayloadServer
 from ofx.api.httpserver.simple import SimpleHTTPServer
@@ -15,7 +16,7 @@ def start_server(
     host: str = "0.0.0.0",
     port: int = 6666,
     **kwargs: object,
-) -> SimpleHTTPServer | PayloadServer | ExfilServer:
+) -> PHTTPServer:
     """Start an HTTP server of the specified type.
 
     Factory function for creating and starting different types of HTTP servers.
@@ -40,11 +41,11 @@ def start_server(
     server_type = server_type.lower()
 
     if server_type == "simple":
-        server = SimpleHTTPServer(host=host, port=port, **kwargs)
+        server: PHTTPServer = SimpleHTTPServer(host=host, port=port, **kwargs)  # type: ignore[arg-type, assignment]
     elif server_type == "payload":
-        server = PayloadServer(host=host, port=port, **kwargs)
+        server = PayloadServer(host=host, port=port, **kwargs)  # type: ignore[arg-type, assignment]
     elif server_type == "exfil":
-        server = ExfilServer(host=host, port=port, **kwargs)
+        server = ExfilServer(host=host, port=port, **kwargs)  # type: ignore[arg-type, assignment]
     else:
         raise ValueError(
             f"Unknown server type: {server_type}. Must be 'simple', 'payload', or 'exfil'"

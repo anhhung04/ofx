@@ -308,15 +308,15 @@ def make_adapter(
     inline_kwargs = {"python": python, "windows": windows}
 
     if method == "upload":
-        return UploadAdapter(runner, **upload_kwargs)
+        return UploadAdapter(runner, **upload_kwargs)  # type: ignore[arg-type]
     if method == "http":
-        return HttpAdapter(runner, **http_kwargs)
+        return HttpAdapter(runner, **http_kwargs)  # type: ignore[arg-type]
     if method == "inline":
-        return InlineAdapter(runner, **inline_kwargs)
+        return InlineAdapter(runner, **inline_kwargs)  # type: ignore[arg-type]
     if method == "auto":
         if _runner_has_upload(runner):
-            return UploadAdapter(runner, **upload_kwargs)
-        return HttpAdapter(runner, **http_kwargs)
+            return UploadAdapter(runner, **upload_kwargs)  # type: ignore[arg-type]
+        return HttpAdapter(runner, **http_kwargs)  # type: ignore[arg-type]
     raise ValueError(
         f"Unknown delivery method: {method!r}. "
         "Choose 'auto', 'upload', 'http', or 'inline'."

@@ -8,6 +8,7 @@ that was duplicated across ``CloudStepRunner``, ``TaskRunner``, and
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from ofx.settings import settings
@@ -49,7 +50,7 @@ def should_store_creds(
 
 
 def store_from_typed_outputs(
-    typed_outputs: list[Any],
+    typed_outputs: list[Any] | Sequence[Any],
     *,
     log_fn: Any | None = None,
 ) -> int:

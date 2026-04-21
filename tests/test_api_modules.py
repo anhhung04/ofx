@@ -17,7 +17,7 @@ class TestExploitModule:
 
     def test_ordered_dict(self):
         # Standard dict maintains insertion order in Python 3.7+
-        d = dict()
+        d = {}
         d["z"] = 1
         d["a"] = 2
         d["m"] = 3

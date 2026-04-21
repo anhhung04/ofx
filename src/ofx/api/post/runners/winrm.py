@@ -35,7 +35,7 @@ class WinRMCommandError(RuntimeError):
         self.stderr = stderr
 
 
-@RunnerRegistry.register("winrm")
+@RunnerRegistry.register("winrm")  # type: ignore[arg-type]
 @dataclass
 class PostWinRM(BaseRunner):
     """Post-exploitation runner over WinRM with stability and opsec features.

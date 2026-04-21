@@ -80,7 +80,7 @@ class FeroxbusterTask(Task):
     }
 
     input_flag = "-u"
-    file_flag = "--stdin"
+    file_flag: str | None = "--stdin"
     output_flag = "-o"
     json_flag = "--json"
     silent_flag = "--silent"

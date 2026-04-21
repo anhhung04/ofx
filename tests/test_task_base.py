@@ -7,12 +7,10 @@ import pytest
 from ofx.models.step import RunType, Step
 from ofx.tasks import (
     OptDef,
-    Port,
     Task,
     TaskRegistry,
     Url,
 )
-
 
 # ── DummyTask for TestTaskBase ─────────────────────────────────────────────
 

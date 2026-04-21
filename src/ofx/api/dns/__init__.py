@@ -21,7 +21,7 @@ async def resolve_host(host: str, *, timeout: float = 2.0) -> list[str]:
     infos = await loop.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     results: list[str] = []
     for family, _, _, _, sockaddr in infos:
-        ip = sockaddr[0]
+        ip = str(sockaddr[0])
         if family == socket.AF_INET6:
             results.append(ip.split("%", 1)[0])
         else:
@@ -35,7 +35,7 @@ def resolve_host_sync(host: str, *, timeout: float = 2.0) -> list[str]:
     infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     results: list[str] = []
     for family, _, _, _, sockaddr in infos:
-        ip = sockaddr[0]
+        ip = str(sockaddr[0])
         if family == socket.AF_INET6:
             results.append(ip.split("%", 1)[0])
         else:

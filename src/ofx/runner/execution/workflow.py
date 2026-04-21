@@ -4,7 +4,7 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunnerContextBuilder
@@ -17,6 +17,10 @@ from ofx.runner.execution.workflow_execution import WorkflowExecutionManager
 from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
 from ofx.settings import settings
 from ofx.utils.workflow_utils import add_workflow_dir
+
+if TYPE_CHECKING:
+    from ofx.profiles.models import OFXProfile
+    from ofx.profiles.time_window import TimeWindowGuard
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -41,8 +45,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
         self._is_reused = self.parent is not None
         if not self._is_reused:
             self.name = f"[RUN-{self.run_id}]:{self.name}"
-        self._profile = None
-        self._time_guard = None
+        self._profile: OFXProfile | None = None
+        self._time_guard: TimeWindowGuard | None = None
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(
@@ -170,8 +174,8 @@ class WorkflowRunner(BaseRunner[Workflow]):
 
             concise_lines = []
             for job_id in result.failed_job_ids:
-                runner = self._runners.get(job_id)
-                root = extract_root_error(runner._error if runner else None)
+                failed_runner: BaseRunner[Any] | None = self._runners.get(job_id)
+                root = extract_root_error(failed_runner._error if failed_runner else None)
                 concise_lines.append(f"job '{job_id}': {root}")
 
             error_msg = "Job failure(s):\n" + "\n".join(concise_lines)
@@ -439,7 +443,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 f"Unsupported input type '{input_type}' for value '{value}'. "
                 f"Supported types are: {', '.join(type_map.keys())}."
             )
-        return isinstance(value, expected_type)
+        return isinstance(value, expected_type)  # type: ignore[arg-type]
 
     def _expand_list_inputs_to_matrix(self) -> None:
         """Auto-inject matrix strategy when an input is a list.

@@ -452,8 +452,8 @@ class TestProfileTaskOptions:
         """Layer 1: profile common fields auto-map to matching task opts."""
         from ofx.profiles.models import OFXProfile
         from ofx.runner.core.models import RunContext
-        from ofx.tasks.registry import TaskRegistry
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+        from ofx.tasks.registry import TaskRegistry
 
         profile = OFXProfile(
             proxy="socks5://127.0.0.1:9050",
@@ -481,8 +481,8 @@ class TestProfileTaskOptions:
         """Layer 1: user-provided opts are never overridden by profile."""
         from ofx.profiles.models import OFXProfile
         from ofx.runner.core.models import RunContext
-        from ofx.tasks.registry import TaskRegistry
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+        from ofx.tasks.registry import TaskRegistry
 
         profile = OFXProfile(threads=3, rate_limit=50)
         ctx = RunContext(vars={"profile_model": profile})

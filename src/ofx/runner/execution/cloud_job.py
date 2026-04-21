@@ -8,7 +8,7 @@ import shlex
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
@@ -22,6 +22,10 @@ from ofx.runner.core import (
 from ofx.runner.execution.cloud_step import CloudStepRunner
 from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.runner.execution.job_mixin import JobRunnerMixin
+
+if TYPE_CHECKING:
+    from ofx.cloud.base import CloudProvider
+    from ofx.cloud.models import CloudInstanceInfo
 
 # logger will be injected via CloudJobRunner instance
 
@@ -63,10 +67,10 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         cloud_config: CloudConfig | None = None,
     ):
         super().__init__(job, ctx, parent, parent.registry)
-        self._cloud_config: CloudConfig = cloud_config or job.cloud  # type: ignore
-        self._provider = None
-        self._instance = None
-        self._remote_runner = None  # PostSSH or PostWinRM
+        self._cloud_config: CloudConfig = cloud_config or job.cloud  # type: ignore[assignment]
+        self._provider: CloudProvider | None = None
+        self._instance: CloudInstanceInfo | None = None
+        self._remote_runner: Any = None  # PostSSH or PostWinRM
         self._work_dir: str | None = None
         self._is_fleet_child: bool = False  # Set by CloudFleetRunner for fleet children
         self._cached_python: str | None = None  # Cached across steps on same VPS
@@ -262,7 +266,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
             else:
                 fd, tmp = tempfile.mkstemp(prefix=".tmp_rcmd_", suffix=".log")
                 os.close(fd)
-                log_path = tmp
+                log_path = Path(tmp)
             self._log_info(
                 f"Command logging enabled. Logs will be saved to: {log_path}"
             )
@@ -340,6 +344,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
             return
 
         is_windows = self._cloud_config.connection_type == "winrm"
+        assert self._work_dir is not None, "_work_dir must be set before fetching outputs"
 
         try:
             if is_windows:

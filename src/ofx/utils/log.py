@@ -37,12 +37,14 @@ class SecretRedactFilter(logging.Filter):
     """
 
     _instance: SecretRedactFilter | None = None
+    _values: set[str]
+    _pattern: re.Pattern[str] | None
 
     def __new__(cls) -> SecretRedactFilter:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._values: set[str] = set()
-            cls._instance._pattern: re.Pattern | None = None
+            cls._instance._values = set()
+            cls._instance._pattern = None
         return cls._instance
 
     @classmethod

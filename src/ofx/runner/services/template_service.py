@@ -8,7 +8,10 @@ resolver can be mocked in tests and the import is performed lazily.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ofx.runner.templates.resolver import TemplateResolver
 
 # The actual resolver is imported lazily inside the class to avoid import‑time
 # overhead for code paths that never render templates.
@@ -21,6 +24,8 @@ class TemplateService:
     behaviour – it receives a value (which may be a string, dict, list, etc.) and
     a dictionary of variables that are made available to the template engine.
     """
+
+    _resolver: TemplateResolver | None
 
     def __init__(self) -> None:
         # Delay heavy import until first use.
@@ -39,6 +44,7 @@ class TemplateService:
         ``TemplateResolver`` handles the recursion for complex containers.
         """
         self._ensure_resolver()
+        assert self._resolver is not None
         # ``TemplateResolver.resolve`` is async, so we await it directly.
         return await self._resolver.resolve(value, context_vars)
 

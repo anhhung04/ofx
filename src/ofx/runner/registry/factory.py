@@ -165,7 +165,7 @@ class RegistryFactory:
 
         try:
             registry = cls.create(
-                backend,
+                backend,  # type: ignore[arg-type]
                 enable_cache=settings.registry_cache_enabled,
                 enable_failover=settings.registry_failover_enabled,
                 cache_ttl=settings.registry_cache_ttl,

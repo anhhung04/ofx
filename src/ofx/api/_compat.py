@@ -73,7 +73,7 @@ class OFXTimeoutError(BaseError):
 
 def module_name_for_path(prefix: str, path: Path) -> str:
     """Build a stable, unique module name for a file path."""
-    digest = hashlib.sha1(path.as_posix().encode("utf-8")).hexdigest()[:10]
+    digest = hashlib.sha1(path.as_posix().encode("utf-8"), usedforsecurity=False).hexdigest()[:10]
     return f"{prefix}.{path.stem}_{digest}"
 
 

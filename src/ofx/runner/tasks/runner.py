@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -341,7 +342,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
             logger.debug("Channel publish failed (task=%s): %s", self.model.task_name, e)
 
     def _deduplicate_incremental(
-        self, items: list[OutputType]
+        self, items: Sequence[OutputType]
     ) -> list[OutputType]:
         """Deduplicate against already-streamed items."""
         seen = {item._uuid for item in self._streamed_items}
@@ -368,7 +369,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 stderr=result.stderr,
                 output_file=self._output_file,
             )
-            all_items = list(self._streamed_items) + raw
+            all_items = list(self._streamed_items) + list(raw)
             return self._deduplicate(all_items)
         except Exception as e:
             self._log_warning(f"Output parsing failed: {e}")

@@ -14,6 +14,7 @@ import os
 import shutil
 import tempfile
 from abc import ABC
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -159,7 +160,7 @@ class Task(ABC):
         )
         is_multi = "," in target and not Path(target).is_file() if target else False
 
-        if target_is_file:
+        if target_is_file and self.file_flag:
             parts.extend([self.file_flag, target])
         elif is_multi and self.file_flag:
             parts.extend([self.file_flag, self._write_target_file(target)])
@@ -181,7 +182,7 @@ class Task(ABC):
         stdout: str,
         stderr: str,
         output_file: Path | None = None,
-    ) -> list[OutputType]:
+    ) -> Sequence[OutputType]:
         """Parse raw tool output into structured ``OutputType`` objects.
 
         Default implementation reads lines from output_file (or stdout)
@@ -219,7 +220,7 @@ class Task(ABC):
         """
         return type(self).parse_line is not Task.parse_line
 
-    def parse_line(self, line: str) -> list[OutputType]:
+    def parse_line(self, line: str) -> Sequence[OutputType]:
         """Parse a single stdout line into output items (for live streaming).
 
         Override in subclasses whose tool emits JSONL or line-delimited

@@ -4,6 +4,7 @@ import base64
 import json
 import logging
 import os
+from collections.abc import Set as AbstractSet
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ class SecretStore:
     _instance: SecretStore | None = None
     _store_path: Path | None = None
     _passphrase: str | None = None
+    _initialized: bool = False
 
     def __new__(cls, store_path: Path | None = None, passphrase: str | None = None):
         needs_new_instance = (
@@ -48,7 +50,7 @@ class SecretStore:
             self.store_path = SECRETS_STORE
 
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        self._cipher = None
+        self._cipher: Fernet | None = None
         self._initialized = True
 
         if self.is_store_encrypted(self.store_path) and passphrase is None:
@@ -154,7 +156,7 @@ class SecretStore:
             return True
         return False
 
-    def get_many(self, names: set[str]) -> dict[str, Any]:
+    def get_many(self, names: AbstractSet[str]) -> dict[str, Any]:
         """Load only the specified secret keys from the store."""
         if not names:
             return {}

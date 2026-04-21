@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from ofx.tasks.base import OptDef, Task
-from ofx.tasks.output_types import Tag, Vulnerability
+from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
 
@@ -86,10 +86,9 @@ class CoercerTask(Task):
                 results.append(
                     Vulnerability(
                         name=f"Coercion: {m.group(1)}",
-                        url="",
-                        severity="high",
+                        severity=Severity.HIGH,
                         description=f"{m.group(1)} via {m.group(2)} on {m.group(3)}",
-                        source="coercer",
+                        provider="coercer",
                     )
                 )
 

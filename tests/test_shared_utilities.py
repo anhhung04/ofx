@@ -1,10 +1,7 @@
 """Tests for shared runner utilities: matrix_utils, credential_store, step_output."""
 
-import asyncio
-import tempfile
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +9,6 @@ import pytest
 # MatrixCombinationBuilder
 # ---------------------------------------------------------------------------
 from ofx.runner.core.matrix_utils import (
-    MAX_MATRIX_COMBINATIONS,
     estimate_matrix_count,
     generate_matrix_combinations,
 )
@@ -101,7 +97,7 @@ class TestMatrixCombinationBuilder:
 # ---------------------------------------------------------------------------
 # CredentialStore
 # ---------------------------------------------------------------------------
-from ofx.runner.core.credential_store import (
+from ofx.runner.core.credential_store import (  # noqa: E402
     should_store_creds,
     store_from_typed_outputs,
 )
@@ -157,7 +153,7 @@ class TestStoreFromTypedOutputs:
 # ---------------------------------------------------------------------------
 # StepOutputHandler
 # ---------------------------------------------------------------------------
-from ofx.runner.core.step_output import log_output, save_output_file
+from ofx.runner.core.step_output import log_output, save_output_file  # noqa: E402
 
 
 class TestLogOutput:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,8 +11,7 @@ from ofx.cloud.script_runtime import (
     resolve_python_step_source,
 )
 from ofx.cloud.task_runtime import build_task_command_from_step
-from ofx.models.step import RunType, Step
-
+from ofx.models.step import Step
 
 # =========================================================================
 # resolve_python_step_source
@@ -86,7 +84,7 @@ class TestBuildPythonPayload:
         assert r1 is r2  # exact same object from lru_cache
 
     def test_opsec_mode(self):
-        normal = build_python_payload("print(3)", opsec_mode=False)
+        _normal = build_python_payload("print(3)", opsec_mode=False)
         opsec = build_python_payload("print(3)", opsec_mode=True)
         # Both produce strings; opsec should differ (obfuscated)
         assert isinstance(opsec, str)

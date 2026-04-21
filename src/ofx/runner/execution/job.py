@@ -252,7 +252,7 @@ class MatrixJobRunner(BaseRunner[Job]):
             return []
 
         combos = generate_matrix_combinations(
-            strategy.matrix,
+            {k: ([v] if not isinstance(v, list) else v) for k, v in strategy.matrix.items()},
             include=strategy.include,
             exclude=strategy.exclude,
             enforce_limit=True,

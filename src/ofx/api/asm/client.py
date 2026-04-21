@@ -38,7 +38,7 @@ class ASMClient:
         timeout: int = 30,
         custom_headers: dict[str, str] | None = None,
     ) -> None:
-        self.base_url = (base_url or os.getenv("ASM_BASE_URL", "")).rstrip("/")
+        self.base_url = (base_url or os.getenv("ASM_BASE_URL") or "").rstrip("/")
         self.token = token or os.getenv("ASM_API_TOKEN", "")
         self.timeout = timeout
         self._session = requests.Session()

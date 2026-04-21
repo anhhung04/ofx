@@ -18,7 +18,7 @@ from ..encryption import (
 
 logger = logging.getLogger(settings.app_branding)
 
-ENGAGEMENT_FILE_STRUCTURE = [
+ENGAGEMENT_FILE_STRUCTURE: list[str | tuple[str, list]] = [
     ("evidence", ["creds", "data", "screenshots"]),
     "hosts",
     "logs",

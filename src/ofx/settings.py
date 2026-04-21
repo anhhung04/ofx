@@ -24,7 +24,7 @@ USER_DIR = Path.home()
 
 BASE_DATA_DIR = Path.home() / ".ofx"
 TEMP_DIR = Path(
-    tempfile.TemporaryDirectory(prefix=".tmp_r_", dir=str(tempfile.gettempdir())).name
+    tempfile.mkdtemp(prefix=".tmp_r_", dir=tempfile.gettempdir())
 ).absolute()
 CONFIG_FILE = BASE_DATA_DIR / "config.ini"
 CONFIG_YAML = BASE_DATA_DIR / "config.yml"
@@ -367,7 +367,10 @@ class Settings(BaseSettings):
 # ------------------------------------------------------------------
 
 # Fields excluded from config.yml — internal / runtime-only values that
-# should not be persisted or edited by the user.
+# should not be persisted or edited by the user directly.
+# NOTE: active_project is excluded from the auto-generated defaults but CAN
+# appear in config.yml when written by update_config_field(); pydantic-settings'
+# YamlConfigSettingsSource will load it from there regardless.
 _CONFIG_EXCLUDE_FIELDS = frozenset({
     "app_name",
     "app_branding",
@@ -429,6 +432,107 @@ def _ensure_default_config() -> None:
 
 
 _ensure_default_config()
+
+
+def update_config_field(key: str, value: object) -> None:
+    """Update a single field in ``~/.ofx/config.yml``, preserving other values.
+
+    Uses a lock file and atomic rename so concurrent callers and crashes
+    cannot corrupt or lose data.  Locking uses ``fcntl`` on Unix and a
+    busy-retry loop on Windows (where ``fcntl`` is unavailable).
+    """
+    import tempfile
+
+    import yaml
+
+    CONFIG_YAML.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = CONFIG_YAML.with_suffix(".yml.lock")
+
+    def _do_update() -> None:
+        data: dict = {}
+        if CONFIG_YAML.exists():
+            try:
+                data = yaml.safe_load(CONFIG_YAML.read_text()) or {}
+            except Exception:
+                data = {}
+
+        if value is None:
+            data.pop(key, None)
+        else:
+            data[key] = value
+
+        content = _CONFIG_YAML_HEADER + yaml.dump(
+            data, default_flow_style=False, sort_keys=False, allow_unicode=True
+        )
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=CONFIG_YAML.parent, prefix=".config_tmp_"
+        )
+        try:
+            with os.fdopen(tmp_fd, "w") as fh:
+                fh.write(content)
+            os.replace(tmp_path, CONFIG_YAML)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    if IS_WINDOWS:
+        import time
+
+        deadline = time.monotonic() + 5.0
+        while True:
+            try:
+                fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                break
+            except FileExistsError:
+                if time.monotonic() > deadline:
+                    break
+                time.sleep(0.05)
+        try:
+            _do_update()
+        finally:
+            try:
+                os.unlink(lock_path)
+            except OSError:
+                pass
+    else:
+        import fcntl
+
+        with open(lock_path, "w") as lock_fh:
+            fcntl.flock(lock_fh, fcntl.LOCK_EX)
+            try:
+                _do_update()
+            finally:
+                fcntl.flock(lock_fh, fcntl.LOCK_UN)
+
+
+def _migrate_json_config() -> None:
+    """One-time migration: move active_project from legacy config.json to config.yml."""
+    legacy = BASE_DATA_DIR / "config.json"
+    if not legacy.exists():
+        return
+    try:
+        import json
+
+        data = json.loads(legacy.read_text())
+        project = data.get("active_project")
+        if project:
+            import yaml
+
+            existing: dict = {}
+            if CONFIG_YAML.exists():
+                existing = yaml.safe_load(CONFIG_YAML.read_text()) or {}
+            if not existing.get("active_project"):
+                update_config_field("active_project", project)
+        legacy.unlink()
+    except Exception:
+        pass
+
+
+_migrate_json_config()
 
 settings = Settings()
 reload_logging_config(settings)

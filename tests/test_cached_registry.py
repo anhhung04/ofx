@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 
 import pytest
 
@@ -120,7 +119,7 @@ class TestCachedRegistryTTL:
         await cache.set("a", 1)
         await cache.set("b", 2)
         # First get_all fetches from backend
-        all1 = await cache.get_all()
+        _all1 = await cache.get_all()
         # Modify backend directly
         await backend.set("c", 3)
         # Second get_all should use cache (within TTL)

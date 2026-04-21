@@ -2,11 +2,10 @@ import asyncio
 import logging
 from pathlib import Path
 
-from ofx.commands.flow.visualize import VisualizeHandler
-
 from ofx.commands.flow.run import FlowRunHandler
 from ofx.commands.flow.tools import ToolsInstallHandler
 from ofx.commands.flow.validate import ValidateHandler
+from ofx.commands.flow.visualize import VisualizeHandler
 from ofx.utils.args import parse_key_value_pairs
 
 # Setup simple logging

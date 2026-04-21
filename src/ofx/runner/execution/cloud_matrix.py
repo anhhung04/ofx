@@ -94,15 +94,15 @@ class CloudMatrixJobRunner(CloudJobRunner):
         semaphore = asyncio.Semaphore(max_parallel)
         failed_event = asyncio.Event()
 
-        async def run_combo(idx: int, combo: dict[str, Any]):
+        async def run_combo(idx: int, combo: dict[str, Any]) -> Any:
             if fail_fast and failed_event.is_set():
                 return None
             async with semaphore:
                 if fail_fast and failed_event.is_set():
                     return None
                 try:
-                    result = await self._run_steps(combo, suffix=f"_{idx}")
-                    return result
+                    await self._run_steps(combo, suffix=f"_{idx}")
+                    return
                 except Exception as exc:
                     failed_event.set()
                     raise exc
@@ -129,8 +129,13 @@ class CloudMatrixJobRunner(CloudJobRunner):
         if not strategy or not strategy.matrix:
             return []
 
+        # Normalize: wrap scalar/str values in a list so generate_matrix_combinations accepts them
+        matrix: dict[str, list[Any]] = {
+            k: ([v] if not isinstance(v, list) else v)
+            for k, v in strategy.matrix.items()
+        }
         return generate_matrix_combinations(
-            strategy.matrix,
+            matrix,
             include=strategy.include,
             exclude=strategy.exclude,
             enforce_limit=True,
