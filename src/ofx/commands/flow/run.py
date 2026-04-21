@@ -61,6 +61,8 @@ class FlowRunHandler:
         resume: bool | None = None,
         durable_backend: str | None = None,
         durable_redis_prefix: str | None = None,
+        auto_commit: bool = False,
+        auto_push: bool = False,
         quiet: bool = False,
         lock: str | None = None,
         log_format: str = "rich",
@@ -78,6 +80,8 @@ class FlowRunHandler:
         self.resume = resume
         self.durable_backend = durable_backend
         self.durable_redis_prefix = durable_redis_prefix
+        self.auto_commit = auto_commit
+        self.auto_push = auto_push
         self.quiet = quiet
         self.lock_path = Path(lock).expanduser() if lock else None
         self.log_format = log_format
@@ -428,6 +432,8 @@ class FlowRunHandler:
             and self.resume is None
             and self.durable_backend is None
             and self.durable_redis_prefix is None
+            and not self.auto_commit
+            and not self.auto_push
         ):
             return None
 
@@ -440,6 +446,11 @@ class FlowRunHandler:
             config.backend = self.durable_backend
         if self.durable_redis_prefix is not None:
             config.redis_prefix = self.durable_redis_prefix
+        if self.auto_commit:
+            config.auto_commit = True
+        if self.auto_push:
+            config.auto_push = True
+            config.auto_commit = True
         return config
 
     def _configure_logging(self) -> None:

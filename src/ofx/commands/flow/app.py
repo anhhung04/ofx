@@ -4,6 +4,7 @@ from typing import Annotated
 
 import typer
 
+from ofx.commands.flow.checkpoint import app as checkpoint_app
 from ofx.commands.flow.collection import app as collection_app
 from ofx.commands.flow.profile_commands import app as profile_cmd_app
 from ofx.commands.flow.schema import app as dump_app
@@ -15,6 +16,7 @@ logger = logging.getLogger("ofx")
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 app.add_typer(dump_app, name="dump", help="Dumping workflow/job/step model schemas")
 app.add_typer(collection_app, name="collection", help="Manage workflow collections")
+app.add_typer(checkpoint_app, name="checkpoint", help="Manage durable execution checkpoints")
 app.add_typer(task_cmd_app, name="tasks", help="List and inspect registered task wrappers")
 app.add_typer(profile_cmd_app, name="profile", help="Manage execution profiles (rate limits, time windows)")
 
@@ -355,6 +357,20 @@ def run(
             help="Redis key prefix for durable checkpoints.",
         ),
     ] = None,
+    auto_commit: Annotated[
+        bool,
+        typer.Option(
+            "--auto-commit",
+            help="Auto-commit output directory to git after workflow completion.",
+        ),
+    ] = False,
+    auto_push: Annotated[
+        bool,
+        typer.Option(
+            "--auto-push",
+            help="Auto-push committed data to git remote (implies --auto-commit).",
+        ),
+    ] = False,
     quiet: Annotated[
         bool,
         typer.Option(
@@ -449,6 +465,8 @@ def run(
             resume=resume,
             durable_backend=durable_backend,
             durable_redis_prefix=durable_redis_prefix,
+            auto_commit=auto_commit,
+            auto_push=auto_push,
             quiet=quiet,
             lock=lock,
             log_format=log_format,

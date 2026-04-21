@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -86,3 +88,81 @@ async def find_running_checkpoints(
         for checkpoint in checkpoints
         if checkpoint.get("status") == "running"
     ]
+
+
+async def clean_checkpoints(
+    output_path: Path,
+    config: DurableRunConfig,
+    *,
+    status: str | list[str] | None = None,
+    older_than_seconds: float | None = None,
+) -> int:
+    """Remove checkpoints matching the given criteria.
+
+    Args:
+        output_path: Workflow output directory containing .durable/.
+        config: Durable run configuration.
+        status: Remove only checkpoints with this status (or list of statuses).
+            When None, all checkpoints match.
+        older_than_seconds: Remove only checkpoints whose ``finished_at``
+            timestamp is older than this many seconds ago.  Checkpoints
+            without a ``finished_at`` field always match when this filter
+            is set.
+
+    Returns:
+        Number of checkpoints removed.
+    """
+    registry = _get_registry(output_path, config)
+    all_data = await registry.get_all()
+
+    if not all_data:
+        return 0
+
+    statuses: set[str] | None = None
+    if status is not None:
+        statuses = {status} if isinstance(status, str) else set(status)
+
+    cutoff: float | None = None
+    if older_than_seconds is not None:
+        cutoff = time.time() - older_than_seconds
+
+    to_remove: list[str] = []
+    for key, checkpoint in all_data.items():
+        if statuses and checkpoint.get("status") not in statuses:
+            continue
+        if cutoff is not None:
+            finished_at = checkpoint.get("finished_at")
+            if finished_at:
+                try:
+                    ts = datetime.fromisoformat(finished_at).timestamp()
+                    if ts > cutoff:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+        to_remove.append(key)
+
+    for key in to_remove:
+        await registry.delete(key)
+
+    return len(to_remove)
+
+
+async def clean_stale_checkpoints(
+    output_path: Path,
+    config: DurableRunConfig,
+) -> int:
+    """Remove checkpoints stuck in ``running`` status (stale/orphaned)."""
+    return await clean_checkpoints(output_path, config, status="running")
+
+
+async def clean_all_checkpoints(
+    output_path: Path,
+    config: DurableRunConfig,
+) -> int:
+    """Remove all checkpoints."""
+    registry = _get_registry(output_path, config)
+    all_data = await registry.get_all()
+    count = len(all_data)
+    if count:
+        await registry.clear()
+    return count

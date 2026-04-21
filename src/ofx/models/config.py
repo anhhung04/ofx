@@ -40,6 +40,16 @@ class DurableRunConfig(OFXBaseModel):
         default="ofx:durable:",
         description="Redis key prefix for durable checkpoints",
     )
+    auto_commit: bool = Field(
+        default=False,
+        description="Auto-commit output directory to git after workflow completion",
+        alias="auto-commit",
+    )
+    auto_push: bool = Field(
+        default=False,
+        description="Auto-push committed checkpoint data to git remote (implies auto-commit)",
+        alias="auto-push",
+    )
 
 
 class DefaultConfig(OFXBaseModel):

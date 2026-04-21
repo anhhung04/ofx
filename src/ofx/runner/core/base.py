@@ -15,6 +15,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from ofx.runner.core.durable import get_checkpoint, write_checkpoint
+from ofx.runner.core.durable_git import commit_and_push
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import RegistryAdapter, cleanup_registry
@@ -194,6 +195,8 @@ class BaseRunner[TModel: BaseModel]:
                 await cleanup_registry(self._registry)
             except Exception as cleanup_err:
                 self._log_warning(f"registry cleanup failed: {cleanup_err}")
+
+            await self._auto_commit_push()
         return await self.get_result()
 
     async def _on_failure_cleanup(self) -> None:
@@ -329,6 +332,34 @@ class BaseRunner[TModel: BaseModel]:
         if status == RunnerStatus.FINISHED:
             status = RunnerStatus.COMPLETED
         return status.value
+
+    async def _auto_commit_push(self) -> None:
+        """Auto-commit and/or push output directory after workflow completion.
+
+        Only runs for top-level runners (no parent) when the durable config
+        has auto_commit or auto_push enabled and the run reached a terminal state.
+        """
+        if self.parent is not None:
+            return
+        config = self._durable_config()
+        if not config:
+            return
+        if not (config.auto_commit or config.auto_push):
+            return
+        if not self.ctx.output_path:
+            return
+        if not self._state_machine.is_terminal:
+            return
+
+        try:
+            await commit_and_push(
+                self.ctx.output_path,
+                do_commit=config.auto_commit,
+                do_push=config.auto_push,
+                message=f"checkpoint: {getattr(self.model, 'name', 'workflow')} [{self.status.value}]",
+            )
+        except Exception as exc:
+            self._log_warning(f"auto-commit/push failed: {exc}")
 
     async def _do_run(self) -> None:
         """Execute the runner's main logic - must be implemented by subclasses"""
