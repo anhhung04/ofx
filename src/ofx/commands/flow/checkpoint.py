@@ -35,10 +35,10 @@ def _parse_age(age: str) -> float | None:
         ) from None
 
 
-def _resolve_output_path(output: str, project: str) -> Path:
+def _resolve_output_path(output: str) -> Path:
     """Resolve the output directory for checkpoint operations.
 
-    Priority: explicit output arg > --project flag > global -p flag > active project.
+    Priority: explicit output arg > global -p flag > active project.
     """
     if output:
         return Path(output).expanduser()
@@ -46,7 +46,7 @@ def _resolve_output_path(output: str, project: str) -> Path:
     from ofx.commands import get_cli_project
     from ofx.commands.project.project_manager import ProjectManager
 
-    resolved_project = project or get_cli_project()
+    resolved_project = get_cli_project()
     if not resolved_project:
         active_path = ProjectManager.get_active_path()
         if active_path:
@@ -72,10 +72,6 @@ def checkpoint_list(
         str,
         typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
     ] = "",
-    project: Annotated[
-        str,
-        typer.Option("-p", "--project", help="Resolve output path from this project."),
-    ] = "",
     status: Annotated[
         str,
         typer.Option("-s", "--status", help="Filter by status (comma-separated)."),
@@ -89,7 +85,7 @@ def checkpoint_list(
     from ofx.runner.core.durable import list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = _resolve_output_path(output, project)
+    path = _resolve_output_path(output)
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
@@ -135,10 +131,6 @@ def checkpoint_show(
         str,
         typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
     ] = "",
-    project: Annotated[
-        str,
-        typer.Option("-p", "--project", help="Resolve output path from this project."),
-    ] = "",
     checkpoint_id: Annotated[
         str,
         typer.Option("--id", help="Checkpoint ID to show details for."),
@@ -154,7 +146,7 @@ def checkpoint_show(
     from ofx.runner.core.durable import get_checkpoint, list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = _resolve_output_path(output, project)
+    path = _resolve_output_path(output)
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
@@ -181,10 +173,6 @@ def checkpoint_clean(
     output: Annotated[
         str,
         typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
-    ] = "",
-    project: Annotated[
-        str,
-        typer.Option("-p", "--project", help="Resolve output path from this project."),
     ] = "",
     status: Annotated[
         str,
@@ -220,7 +208,7 @@ def checkpoint_clean(
     )
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = _resolve_output_path(output, project)
+    path = _resolve_output_path(output)
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
