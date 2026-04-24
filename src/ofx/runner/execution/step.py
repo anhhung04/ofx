@@ -67,6 +67,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
             "shell",
             "working_directory",
             "log_stdout",
+            "log_command",
             "env",
             "run_if",
         ]
@@ -206,8 +207,9 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
         if self._outputs_file:
             self._outputs_file.unlink(missing_ok=True)
 
-        # Log to project timeline CSV
-        self._log_timeline(result, status_value)
+        # Log to project timeline CSV only when step has explicit log-command config
+        if self.model.log_command:
+            self._log_timeline(result, status_value)
 
     def _save_output_file(self, stdout: str, outputs: dict) -> None:
         """Persist full stdout to a log file under output_path/logs/."""

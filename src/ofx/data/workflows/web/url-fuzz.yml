@@ -26,6 +26,7 @@ jobs:
       fuzz_count: '{{ steps["collect-urls"].outputs.fuzz_count | default("", true) }}'
     steps:
       - task: ffuf
+        log-command: true
         timeout: 15
         name: ffuf-fuzz
         with:
@@ -37,6 +38,7 @@ jobs:
           match_codes: "200,201,204,301,302,307,308,401,403,405,500"
         continue-on-error: true
       - task: feroxbuster
+        log-command: true
         timeout: 20
         name: feroxbuster-fuzz
         with:
@@ -72,6 +74,7 @@ jobs:
       - fuzz
     steps:
       - task: httpx
+        log-command: true
         timeout: 10
         name: probe-fuzzed
         with:
@@ -86,6 +89,7 @@ jobs:
       - probe
     steps:
       - task: nuclei
+        log-command: true
         timeout: 15
         name: hunt-secrets
         with:

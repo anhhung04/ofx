@@ -32,6 +32,7 @@ jobs:
       db_count: '{{ steps["collect-findings"].outputs.db_count | default("", true) }}'
     steps:
     - task: sqlmap
+      log-command: true
       timeout: 15
       name: sqlmap-scan
       with:

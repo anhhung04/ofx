@@ -27,6 +27,7 @@ jobs:
       url_count: '{{ steps["collect-urls"].outputs.url_count | default("", true) }}'
     steps:
     - task: katana
+      log-command: true
       timeout: 15
       name: katana-crawl
       with:
@@ -34,6 +35,7 @@ jobs:
         depth: 3
       continue-on-error: true
     - task: gospider
+      log-command: true
       timeout: 15
       name: gospider-crawl
       with:
@@ -41,12 +43,14 @@ jobs:
         depth: 2
       continue-on-error: true
     - task: gau
+      log-command: true
       timeout: 10
       name: gau-passive
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: httpx
+      log-command: true
       timeout: 10
       name: probe-crawled
       with:
@@ -77,6 +81,7 @@ jobs:
     - url-crawl
     steps:
     - task: ffuf
+      log-command: true
       timeout: 15
       name: ffuf-fuzz
       with:
@@ -87,6 +92,7 @@ jobs:
         follow_redirect: true
       continue-on-error: true
     - task: feroxbuster
+      log-command: true
       timeout: 20
       name: feroxbuster-fuzz
       with:
@@ -101,6 +107,7 @@ jobs:
     - url-crawl
     steps:
     - task: arjun
+      log-command: true
       timeout: 10
       name: param-discovery
       with:
@@ -113,6 +120,7 @@ jobs:
     - param-fuzz
     steps:
     - task: nuclei
+      log-command: true
       timeout: 20
       name: nuclei-scan
       with:
@@ -121,12 +129,14 @@ jobs:
         exclude_tags: network,ssl,file,dns,osint,token-spray,headers
       continue-on-error: true
     - task: dalfox
+      log-command: true
       timeout: 15
       name: xss-scan
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
       continue-on-error: true
     - task: nuclei
+      log-command: true
       timeout: 15
       name: secret-scan
       with:
@@ -134,6 +144,7 @@ jobs:
         tags: exposure,token,secret
       continue-on-error: true
     - task: cariddi
+      log-command: true
       timeout: 10
       name: cariddi-crawl
       with:
@@ -144,6 +155,7 @@ jobs:
         depth: 2
       continue-on-error: true
     - task: whatweb
+      log-command: true
       name: whatweb-fingerprint
       timeout: 10
       with:
@@ -151,6 +163,7 @@ jobs:
         aggression: 3
       continue-on-error: true
     - task: nikto
+      log-command: true
       timeout: 15
       name: nikto-scan
       with:
@@ -158,6 +171,7 @@ jobs:
         maxtime: 900
       continue-on-error: true
     - task: gobuster
+      log-command: true
       timeout: 10
       name: gobuster-dirs
       with:

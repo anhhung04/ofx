@@ -28,6 +28,7 @@ jobs:
       live_urls: '{{ steps["export-info"].outputs.live_urls | default("", true) }}'
     steps:
       - task: rustscan
+        log-command: true
         timeout: 10
         name: port-discovery
         with:
@@ -36,6 +37,7 @@ jobs:
           batch_size: 4500
         continue-on-error: true
       - task: httpx
+        log-command: true
         timeout: 10
         name: http-probe
         with:
@@ -46,12 +48,14 @@ jobs:
           follow_redirects: true
         continue-on-error: true
       - task: wafw00f
+        log-command: true
         timeout: 10
         name: waf-detect
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: whatweb
+        log-command: true
         timeout: 10
         name: whatweb-scan
         with:
@@ -75,6 +79,7 @@ jobs:
       dir_count: '{{ steps["collect-dirs"].outputs.dir_count | default("", true) }}'
     steps:
       - task: feroxbuster
+        log-command: true
         timeout: 20
         name: feroxbuster-deep
         with:
@@ -89,6 +94,7 @@ jobs:
           status_codes: 200,201,204,301,302,307,308,401,403,405,500
         continue-on-error: true
       - task: gobuster
+        log-command: true
         timeout: 10
         name: gobuster-scan
         with:
@@ -99,6 +105,7 @@ jobs:
           status_codes: 200,201,204,301,302,307,401,403
         continue-on-error: true
       - task: dirsearch
+        log-command: true
         timeout: 15
         name: dirsearch-scan
         with:
@@ -130,6 +137,7 @@ jobs:
       crawl_count: '{{ steps["collect-crawled"].outputs.crawl_count | default("", true) }}'
     steps:
       - task: katana
+        log-command: true
         timeout: 15
         name: katana-crawl
         with:
@@ -139,6 +147,7 @@ jobs:
           known_files: all
         continue-on-error: true
       - task: hakrawler
+        log-command: true
         timeout: 10
         name: hakrawler-crawl
         with:
@@ -147,6 +156,7 @@ jobs:
           scope: subs
         continue-on-error: true
       - task: gospider
+        log-command: true
         timeout: 15
         name: gospider-crawl
         with:
@@ -154,6 +164,7 @@ jobs:
           depth: 2
         continue-on-error: true
       - task: gau
+        log-command: true
         timeout: 10
         name: gau-archive
         with:
@@ -186,6 +197,7 @@ jobs:
       param_count: '{{ steps["collect-params"].outputs.param_count | default("", true) }}'
     steps:
       - task: arjun
+        log-command: true
         timeout: 10
         name: arjun-params
         with:
@@ -193,6 +205,7 @@ jobs:
           threads: 20
         continue-on-error: true
       - task: x8
+        log-command: true
         timeout: 10
         name: x8-params
         with:
@@ -200,6 +213,7 @@ jobs:
           method: GET
         continue-on-error: true
       - task: paramspider
+        log-command: true
         timeout: 10
         name: paramspider-discover
         with:
@@ -235,6 +249,7 @@ jobs:
       crlf_count: '{{ steps["collect-vulns"].outputs.crlf_count | default("", true) }}'
     steps:
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-scan
         with:
@@ -242,12 +257,14 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
+        log-command: true
         timeout: 15
         name: xss-scan
         with:
           target: "{{ jobs['param-fuzz'].outputs.param_file | default(inputs.target, true) }}"
         continue-on-error: true
       - task: sqlmap
+        log-command: true
         timeout: 30
         name: sqli-scan
         with:
@@ -258,6 +275,7 @@ jobs:
           threads: 5
         continue-on-error: true
       - task: commix
+        log-command: true
         timeout: 20
         name: cmdi-scan
         with:
@@ -266,12 +284,14 @@ jobs:
           level: 2
         continue-on-error: true
       - task: crlfuzz
+        log-command: true
         name: crlf-scan
         timeout: 10
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
         continue-on-error: true
       - task: nikto
+        log-command: true
         timeout: 15
         name: nikto-scan
         with:
@@ -302,6 +322,7 @@ jobs:
       - crawl
     steps:
       - task: nuclei
+        log-command: true
         timeout: 15
         name: nuclei-secrets
         with:

@@ -24,6 +24,7 @@ jobs:
       typed_outputs: '{{ steps["poutine-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: poutine
+        log-command: true
         timeout: 20
         name: poutine-scan
         with:
@@ -38,6 +39,7 @@ jobs:
       typed_outputs: '{{ steps["legitify-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: legitify
+        log-command: true
         timeout: 20
         name: legitify-scan
         with:

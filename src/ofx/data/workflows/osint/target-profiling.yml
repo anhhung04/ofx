@@ -31,12 +31,14 @@ jobs:
       record_count: '{{ steps["collect-domain"].outputs.record_count | default("", true) }}'
     steps:
       - task: subfinder
+        log-command: true
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
         timeout: 10
         continue-on-error: true
       - task: dnsx
+        log-command: true
         name: dnsx-resolve
         with:
           target: "{{ inputs.target }}"
@@ -62,6 +64,7 @@ jobs:
       email_count: '{{ steps["collect-emails"].outputs.email_count | default("", true) }}'
     steps:
       - task: theharvester
+        log-command: true
         timeout: 15
         name: theharvester-search
         with:
@@ -103,6 +106,7 @@ jobs:
       - email-harvest
     steps:
       - task: holehe
+        log-command: true
         timeout: 10
         name: holehe-check
         with:
@@ -126,6 +130,7 @@ jobs:
       platforms: '{{ steps["collect-social"].outputs.platforms | default("", true) }}'
     steps:
       - task: maigret
+        log-command: true
         timeout: 10
         name: maigret-search
         with:
@@ -150,6 +155,7 @@ jobs:
       - email-harvest
     steps:
       - task: h8mail
+        log-command: true
         timeout: 15
         name: h8mail-breach
         with:
@@ -169,6 +175,7 @@ jobs:
     name: Secret & Leak Scanning
     steps:
       - task: nuclei
+        log-command: true
         timeout: 15
         name: nuclei-secrets
         with:

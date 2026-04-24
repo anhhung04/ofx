@@ -24,12 +24,14 @@ jobs:
     name: Domain Intelligence
     steps:
     - task: whois
+      log-command: true
       name: whois-lookup
       timeout: 5
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: subfinder
+      log-command: true
       timeout: 10
       name: subdomain-enum
       with:
@@ -37,6 +39,7 @@ jobs:
         all: true
       continue-on-error: true
     - task: dnsx
+      log-command: true
       timeout: 10
       name: dns-records
       with:
@@ -56,6 +59,7 @@ jobs:
       email_count: '{{ steps["collect-emails"].outputs.email_count | default("", true) }}'
     steps:
     - task: theharvester
+      log-command: true
       timeout: 15
       name: theharvester-scan
       with:
@@ -64,6 +68,7 @@ jobs:
         limit: 500
       continue-on-error: true
     - task: holehe
+      log-command: true
       timeout: 10
       name: email-existence
       with:
@@ -94,6 +99,7 @@ jobs:
     needs: [domain-intel]
     steps:
     - task: httpx
+      log-command: true
       timeout: 10
       name: http-tech
       with:
@@ -104,6 +110,7 @@ jobs:
         follow_redirects: true
       continue-on-error: true
     - task: wafw00f
+      log-command: true
       timeout: 10
       name: waf-detect
       with:
@@ -116,6 +123,7 @@ jobs:
       typed_outputs: '{{ steps["breach-lookup"].outputs.typed_outputs | default([], true) }}'
     steps:
     - task: h8mail
+      log-command: true
       timeout: 15
       name: breach-lookup
       with:

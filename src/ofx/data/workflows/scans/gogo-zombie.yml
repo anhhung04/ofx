@@ -66,6 +66,7 @@ jobs:
       scan_file: '{{ steps["gogo-scan"].outputs.output_file | default("", true) }}'
     steps:
       - task: gogo
+        log-command: true
         name: gogo-scan
         timeout: 60
         with:
@@ -97,6 +98,7 @@ jobs:
     if: '{{ jobs["scan"].outputs.scan_file }}'
     steps:
       - task: zombie
+        log-command: true
         name: zombie-brute
         timeout: 120
         with:

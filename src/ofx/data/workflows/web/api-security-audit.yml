@@ -28,6 +28,7 @@ jobs:
       typed_outputs: '{{ steps["graphql-detect"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: graphw00f
+        log-command: true
         timeout: 5
         name: graphql-detect
         with:
@@ -42,6 +43,7 @@ jobs:
       typed_outputs: '{{ steps["brute-endpoints"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: kiterunner
+        log-command: true
         timeout: 20
         name: brute-endpoints
         with:
@@ -58,6 +60,7 @@ jobs:
       typed_outputs: '{{ steps["schema-fuzz"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: schemathesis
+        log-command: true
         timeout: 30
         name: schema-fuzz
         with:
@@ -76,6 +79,7 @@ jobs:
       typed_outputs: '{{ steps["cherrybomb-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: cherrybomb
+        log-command: true
         timeout: 15
         name: cherrybomb-scan
         with:

@@ -30,18 +30,21 @@ jobs:
       domain_intel: '{{ steps["export-intel"].outputs.domain_intel | default("", true) }}'
     steps:
       - task: whois
+        log-command: true
         timeout: 5
         name: whois-lookup
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: dnsrecon
+        log-command: true
         timeout: 10
         name: dnsrecon-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: testssl
+        log-command: true
         timeout: 10
         name: tls-check
         with:
@@ -62,6 +65,7 @@ jobs:
       sub_count: '{{ steps["collect-subdomains"].outputs.sub_count | default("", true) }}'
     steps:
       - task: subfinder
+        log-command: true
         timeout: 10
         name: subfinder-enum
         with:
@@ -69,18 +73,21 @@ jobs:
           all: true
         continue-on-error: true
       - task: amass
+        log-command: true
         timeout: 10
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
+        log-command: true
         timeout: 10
         name: assetfinder-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: findomain
+        log-command: true
         timeout: 10
         name: findomain-enum
         with:
@@ -119,6 +126,7 @@ jobs:
       - subdomain-enum
     steps:
       - task: dnsx
+        log-command: true
         timeout: 10
         name: verify-dns
         with:
@@ -153,6 +161,7 @@ jobs:
       - dns-verify
     steps:
       - task: naabu
+        log-command: true
         timeout: 10
         name: naabu-scan
         with:
@@ -161,6 +170,7 @@ jobs:
           rate: 1000
         continue-on-error: true
       - task: masscan
+        log-command: true
         timeout: 10
         name: masscan-sweep
         with:
@@ -195,6 +205,7 @@ jobs:
       - dns-verify
     steps:
       - task: httpx
+        log-command: true
         timeout: 10
         name: probe-subs
         with:
@@ -223,12 +234,14 @@ jobs:
       - http-probe
     steps:
       - name: whatweb-scan
+        log-command: true
         run: |
           echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | head -50 | while read url; do
             whatweb -a 3 "$url" --color=never 2>/dev/null
           done | tee ${OFX_RUN_DIR:-/tmp}/ofx_whatweb_output.txt
         continue-on-error: true
       - task: wafw00f
+        log-command: true
         timeout: 10
         name: waf-detect
         with:
@@ -268,6 +281,7 @@ jobs:
       - http-probe
     steps:
       - task: katana
+        log-command: true
         timeout: 15
         name: katana-crawl
         with:
@@ -275,6 +289,7 @@ jobs:
           depth: 3
         continue-on-error: true
       - task: gospider
+        log-command: true
         timeout: 15
         name: gospider-crawl
         with:
@@ -282,6 +297,7 @@ jobs:
           depth: 2
         continue-on-error: true
       - task: gau
+        log-command: true
         timeout: 10
         name: gau-archive
         with:
@@ -293,6 +309,7 @@ jobs:
           echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | hakrawler -d 2 -subs 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_hakrawler_urls.txt
         continue-on-error: true
       - task: paramspider
+        log-command: true
         timeout: 10
         name: paramspider-discover
         with:
@@ -338,6 +355,7 @@ jobs:
       - dns-verify
     steps:
       - task: subzy
+        log-command: true
         timeout: 10
         name: subzy-check
         with:
@@ -366,6 +384,7 @@ jobs:
       - web-crawl
     steps:
       - task: nuclei
+        log-command: true
         timeout: 15
         name: nuclei-secrets
         with:
@@ -397,6 +416,7 @@ jobs:
       - port-scan
     steps:
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-scan
         with:
@@ -404,6 +424,7 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: nikto
+        log-command: true
         name: nikto-scan
         timeout: 15
         with:
@@ -454,6 +475,7 @@ jobs:
       - domain-intel
     steps:
       - name: theharvester-search
+        log-command: true
         run: |
           theHarvester -d {{ inputs.email_domain if inputs.email_domain else inputs.target }} -b all -l 500 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_harvester_output.txt
         continue-on-error: true
@@ -476,6 +498,7 @@ jobs:
           add_outputs(email_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_extrecon_emails.txt", email_count=len(emails))
           print(f"Harvested {len(emails)} email addresses")
       - task: h8mail
+        log-command: true
         timeout: 15
         name: breach-search
         with:

@@ -27,6 +27,7 @@ jobs:
       alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("", true) }}'
     steps:
     - task: fping
+      log-command: true
       timeout: 10
       name: fping-sweep
       with:
@@ -56,6 +57,7 @@ jobs:
     - host-discovery
     steps:
     - task: rustscan
+      log-command: true
       timeout: 10
       name: rustscan-fast
       with:
@@ -64,6 +66,7 @@ jobs:
         ulimit: 5000
       continue-on-error: true
     - task: naabu
+      log-command: true
       timeout: 10
       name: naabu-precision
       with:
@@ -72,6 +75,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: gogo
+      log-command: true
       timeout: 15
       name: gogo-scan
       with:
@@ -131,6 +135,7 @@ jobs:
     - port-scan
     steps:
     - task: nmap
+      log-command: true
       timeout: 15
       name: nmap-service
       with:
@@ -138,12 +143,14 @@ jobs:
         version_detection: true
       continue-on-error: true
     - task: nerva
+      log-command: true
       timeout: 10
       name: nerva-fingerprint
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
       continue-on-error: true
     - task: httpx
+      log-command: true
       timeout: 10
       name: http-probe
       with:
@@ -184,12 +191,14 @@ jobs:
     - service-detect
     steps:
     - name: whatweb-scan
+      log-command: true
       run: |
         cat {{ jobs['service-detect'].outputs.http_urls_file | default('', true) }} 2>/dev/null | head -50 | while read url; do
           whatweb -a 3 "$url" --color=never 2>/dev/null
         done | tee ${OFX_RUN_DIR:-/tmp}/ofx_whatweb_output.txt
       continue-on-error: true
     - task: gowitness
+      log-command: true
       timeout: 10
       name: gowitness-screenshots
       with:
@@ -224,6 +233,7 @@ jobs:
     - host-discovery
     steps:
     - task: netexec
+      log-command: true
       timeout: 10
       name: nxc-smb-scan
       with:
@@ -269,6 +279,7 @@ jobs:
     - port-scan
     steps:
     - task: zombie
+      log-command: true
       timeout: 30
       name: zombie-brute
       with:

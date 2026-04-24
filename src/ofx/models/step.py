@@ -65,6 +65,11 @@ class Step(OFXBaseModel):
         description="Whether to capture standard output of the step",
         alias="log-stdout",
     )
+    log_command: bool | str = Field(
+        default=False,
+        description="Whether to log the executed command to the oops timeline CSV (~/.oops/logs/)",
+        alias="log-command",
+    )
     uses: str | None = Field(
         default=None,
         description="Select a workflow to run as part of a step in the job",

@@ -25,6 +25,7 @@ jobs:
     - name: probe-targets
       timeout: 30
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.evasion import sleep_with_jitter

@@ -31,6 +31,7 @@ jobs:
       live_urls_json: '{{ steps["export-live-urls"].outputs.live_urls_json | default("[]", true) }}'
     steps:
       - task: subfinder
+        log-command: true
         name: subfinder-scan
         timeout: 15
         with:
@@ -38,24 +39,28 @@ jobs:
           all: true
         continue-on-error: true
       - task: amass
+        log-command: true
         name: amass-passive
         timeout: 30
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
+        log-command: true
         name: assetfinder-enum
         timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: findomain
+        log-command: true
         name: findomain-enum
         timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: tlsx
+        log-command: true
         name: tls-san-enum
         timeout: 10
         with:
@@ -156,12 +161,14 @@ jobs:
       takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count | default("0", true) }}'
     steps:
       - task: subzy
+        log-command: true
         name: subzy-check
         timeout: 15
         with:
           target: "{{ jobs['subdomain-discovery'].outputs.verified_file }}"
         continue-on-error: true
       - task: nuclei
+        log-command: true
         name: nuclei-takeover
         timeout: 20
         with:
@@ -189,6 +196,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
+        log-command: true
         uses: host-scan
         with:
           target: "{{ matrix.target }}"
@@ -202,12 +210,14 @@ jobs:
       param_url_count: '{{ steps["collect-params"].outputs.param_url_count | default("0", true) }}'
     steps:
       - task: paramspider
+        log-command: true
         name: paramspider-mine
         timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gau
+        log-command: true
         name: gau-params
         timeout: 10
         with:
@@ -215,6 +225,7 @@ jobs:
           subs: true
         continue-on-error: true
       - task: arjun
+        log-command: true
         name: arjun-discover
         timeout: 15
         with:
@@ -253,6 +264,7 @@ jobs:
       nuclei_count: '{{ steps["collect-results"].outputs.nuclei_count | default("0", true) }}'
     steps:
       - task: nuclei
+        log-command: true
         name: nuclei-scan
         timeout: 20
         with:
@@ -260,6 +272,7 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
+        log-command: true
         name: dalfox-xss
         timeout: "{{ (jobs['subdomain-discovery'].outputs.verified_count | default(10, true) | int / 10 * 10 + 30) | int }}"
         with:
@@ -287,6 +300,7 @@ jobs:
       secrets_count: '{{ steps["collect-secrets"].outputs.secrets_count | default("0", true) }}'
     steps:
       - task: nuclei
+        log-command: true
         name: nuclei-secrets
         timeout: 15
         with:
@@ -294,6 +308,7 @@ jobs:
           tags: exposure,token,secret,api-key
         continue-on-error: true
       - task: gitleaks
+        log-command: true
         name: gitleaks-scan
         timeout: 15
         with:

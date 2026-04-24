@@ -33,6 +33,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      log-command: true
       continue-on-error: true
     - task: h8mail
       timeout: 15
@@ -40,6 +41,7 @@ jobs:
       with:
         target: '{{ inputs.target }}'
       log-stdout: true
+      log-command: true
       continue-on-error: true
     - name: email-analysis
       script: |
@@ -120,3 +122,4 @@ jobs:
 
         add_outputs(**results)
       log-stdout: true
+      log-command: true

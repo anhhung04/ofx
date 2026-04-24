@@ -33,6 +33,7 @@ jobs:
     - name: query-shodan
       timeout: 5
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.search import Shodan
         import json

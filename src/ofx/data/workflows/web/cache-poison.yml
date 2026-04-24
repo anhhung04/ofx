@@ -23,6 +23,7 @@ jobs:
       live_count: '{{ steps["collect-cache-urls"].outputs.live_count | default("", true) }}'
     steps:
       - task: httpx
+        log-command: true
         timeout: 10
         name: probe-targets
         with:
@@ -59,6 +60,7 @@ jobs:
       total_count: '{{ steps["collect-results"].outputs.total_count | default("", true) }}'
     steps:
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-cache-poison
         with:
@@ -67,6 +69,7 @@ jobs:
         continue-on-error: true
 
       - name: ffuf-unkeyed-headers
+        log-command: true
         run: |
           TARGETS="{{ jobs.discover.outputs.live_file | default(inputs.target, true) }}"
           HEADERS="X-Forwarded-Host X-Original-URL X-Rewrite-URL X-Forwarded-Scheme X-Forwarded-Proto X-Host X-Forwarded-Server X-HTTP-Method-Override X-Amz-Website-Redirect-Location"

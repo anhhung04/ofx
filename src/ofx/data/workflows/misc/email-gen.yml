@@ -29,6 +29,7 @@ jobs:
     - name: gen-emails
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.recon.osint import email_patterns
 
@@ -57,6 +58,7 @@ jobs:
     - name: gen-perms
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.recon.osint import domain_permutations
 

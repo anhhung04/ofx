@@ -24,6 +24,7 @@ jobs:
       profile_urls: '{{ steps["export-accounts"].outputs.profile_urls | default("", true) }}'
     steps:
     - task: maigret
+      log-command: true
       timeout: 10
       name: maigret-search
       with:
@@ -44,6 +45,7 @@ jobs:
       breaches_found: '{{ steps["export-breaches"].outputs.breaches_found | default("", true) }}'
     steps:
     - task: h8mail
+      log-command: true
       timeout: 15
       name: breach-search
       with:

@@ -50,6 +50,7 @@ jobs:
           json: true
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: analyze-certs
         script: |
           vulns = {{ vulns(steps["certipy-find"].outputs.typed_outputs) | tojson }}

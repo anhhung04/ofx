@@ -25,6 +25,7 @@ jobs:
     name: Vulnerability Scanning
     steps:
     - task: nuclei
+      log-command: true
       timeout: 20
       name: nuclei-scan
       with:
@@ -32,6 +33,7 @@ jobs:
         severity: '{{ inputs.severity_threshold }},high,critical'
       continue-on-error: true
     - task: nmap
+      log-command: true
       timeout: 30
       name: nmap-vuln
       with:
@@ -49,6 +51,7 @@ jobs:
       exploitable_data: '{{ steps["check-exploits"].outputs.exploitable_data | default("", true) }}'
     steps:
     - name: check-exploits
+      log-command: true
       script: |
         import json
         import subprocess

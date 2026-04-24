@@ -107,3 +107,4 @@ jobs:
 
           add_outputs(headers_file=out_file, agent_count=len(agents), sample_count=count)
         log-stdout: true
+        log-command: true

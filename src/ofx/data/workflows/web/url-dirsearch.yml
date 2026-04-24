@@ -26,6 +26,7 @@ jobs:
       live_url: '{{ steps["export-url"].outputs.live_url | default("", true) }}'
     steps:
       - task: httpx
+        log-command: true
         timeout: 10
         name: http-probe
         with:
@@ -49,6 +50,7 @@ jobs:
       url_count: '{{ steps["collect-dirs"].outputs.url_count | default("", true) }}'
     steps:
       - task: dirsearch
+        log-command: true
         timeout: 15
         name: dirsearch-scan
         with:
@@ -59,6 +61,7 @@ jobs:
           include_status: "200,201,204,301,302,307,401,403,405,500"
         continue-on-error: true
       - task: ffuf
+        log-command: true
         timeout: 15
         name: ffuf-dirs
         with:
@@ -91,6 +94,7 @@ jobs:
       - dir-search
     steps:
       - task: katana
+        log-command: true
         timeout: 15
         name: crawl-content
         with:

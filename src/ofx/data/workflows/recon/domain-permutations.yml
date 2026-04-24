@@ -26,6 +26,7 @@ jobs:
     - name: gen-perms
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.recon.osint import domain_permutations
 
@@ -50,6 +51,7 @@ jobs:
     - name: dns-resolve
       timeout: 10
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.dns import resolve_host_sync
         from pathlib import Path

@@ -23,6 +23,7 @@ jobs:
       param_count: '{{ steps["merge-params"].outputs.param_count | default("", true) }}'
     steps:
       - task: httpx
+        log-command: true
         timeout: 10
         name: probe-targets
         with:
@@ -32,6 +33,7 @@ jobs:
         continue-on-error: true
 
       - task: arjun
+        log-command: true
         timeout: 10
         name: arjun-params
         with:
@@ -41,6 +43,7 @@ jobs:
         continue-on-error: true
 
       - task: paramspider
+        log-command: true
         timeout: 10
         name: paramspider-mine
         with:
@@ -97,6 +100,7 @@ jobs:
       nuclei_count: '{{ steps["collect-results"].outputs.nuclei_count | default("", true) }}'
     steps:
       - task: tinja
+        log-command: true
         name: tinja-scan
         timeout: 10
         with:
@@ -104,6 +108,7 @@ jobs:
         continue-on-error: true
 
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-ssti
         with:

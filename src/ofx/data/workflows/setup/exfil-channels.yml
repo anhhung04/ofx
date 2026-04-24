@@ -40,6 +40,7 @@ jobs:
     needs: [prepare]
     steps:
       - name: Create HTTPS receiver
+        log-command: true
         script: |
           import ssl
           import os

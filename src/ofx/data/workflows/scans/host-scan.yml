@@ -112,6 +112,7 @@ jobs:
       live_urls: '{{ steps["export-data"].outputs.live_urls | default("", true) }}'
     steps:
       - task: rustscan
+        log-command: true
         timeout: 15
         name: rustscan-fast
         with:
@@ -120,6 +121,7 @@ jobs:
           batch_size: 4500
         continue-on-error: true
       - task: naabu
+        log-command: true
         timeout: 15
         name: port-discovery
         with:
@@ -128,6 +130,7 @@ jobs:
           rate: 1000
         continue-on-error: true
       - task: masscan
+        log-command: true
         timeout: 15
         name: masscan-scan
         with:
@@ -136,6 +139,7 @@ jobs:
           rate: 1000
         continue-on-error: true
       - task: nmap
+        log-command: true
         timeout: 30
         name: service-detect
         with:
@@ -143,18 +147,21 @@ jobs:
           version_detection: true
         continue-on-error: true
       - task: nerva
+        log-command: true
         timeout: 10
         name: nerva-fingerprint
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
         continue-on-error: true
       - task: ssh-audit
+        log-command: true
         timeout: 10
         name: ssh-audit
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
         continue-on-error: true
       - task: httpx
+        log-command: true
         timeout: 15
         name: http-probe
         with:
@@ -185,6 +192,7 @@ jobs:
       - host-recon
     steps:
       - task: whatweb
+        log-command: true
         name: whatweb-fingerprint
         timeout: 15
         with:
@@ -192,6 +200,7 @@ jobs:
           aggression: 3
         continue-on-error: true
       - task: nikto
+        log-command: true
         timeout: 20
         name: nikto-scan
         with:
@@ -206,6 +215,7 @@ jobs:
       - host-recon
     steps:
       - task: katana
+        log-command: true
         timeout: 20
         name: crawl
         with:
@@ -213,6 +223,7 @@ jobs:
           depth: 3
         continue-on-error: true
       - task: gospider
+        log-command: true
         timeout: 20
         name: spider
         with:
@@ -228,6 +239,7 @@ jobs:
       - web-analysis
     steps:
       - task: nuclei
+        log-command: true
         timeout: 30
         name: nuclei-scan
         with:
@@ -235,6 +247,7 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
+        log-command: true
         timeout: 20
         name: xss-scan
         with:

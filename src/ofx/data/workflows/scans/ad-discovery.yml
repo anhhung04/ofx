@@ -45,7 +45,9 @@ jobs:
           output_dir: ${OFX_RUN_DIR:-/tmp}/ofx_ldapdump
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - task: netexec
+        log-command: true
         timeout: 10
         name: nxc-users
         with:
@@ -96,6 +98,7 @@ jobs:
           dns_tcp: true
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: bh-status
         script: |
           bh_tags = {{ tags(steps["bh-collect"].outputs.typed_outputs) | tojson }}
@@ -115,6 +118,7 @@ jobs:
       admin_users: '{{ steps["enum-summary"].outputs.admin_users | default("", true) }}'
     steps:
       - task: netexec
+        log-command: true
         timeout: 10
         name: nxc-groups
         with:
@@ -126,6 +130,7 @@ jobs:
           groups: true
         continue-on-error: true
       - task: netexec
+        log-command: true
         timeout: 10
         name: nxc-sessions
         with:
@@ -137,6 +142,7 @@ jobs:
           sessions: true
         continue-on-error: true
       - task: netexec
+        log-command: true
         timeout: 10
         name: nxc-loggedon
         with:
@@ -148,6 +154,7 @@ jobs:
           loggedon_users: true
         continue-on-error: true
       - task: netexec
+        log-command: true
         timeout: 10
         name: nxc-pass-pol
         with:
@@ -203,6 +210,7 @@ jobs:
           users: "{{ jobs['ldap-enum'].outputs.user_file | default('/tmp/ofx_ad_users.txt', true) }}"
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - task: getuserspns
         timeout: 10
         name: spn-enum
@@ -213,6 +221,7 @@ jobs:
           dc_ip: "{{ inputs.target }}"
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - task: getnpusers
         timeout: 10
         name: asrep-enum
@@ -223,6 +232,7 @@ jobs:
           dc_ip: "{{ inputs.target }}"
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: kerb-summary
         script: |
           kerb_users = {{ users(steps["kerbrute-enum"].outputs.typed_outputs) | tojson }}

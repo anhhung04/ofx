@@ -31,6 +31,7 @@ jobs:
       sub_count: '{{ steps["merge-passive"].outputs.sub_count | default("0", true) }}'
     steps:
       - task: subfinder
+        log-command: true
         name: subfinder-enum
         timeout: 15
         with:
@@ -38,18 +39,21 @@ jobs:
           all: true
         continue-on-error: true
       - task: amass
+        log-command: true
         name: amass-passive
         timeout: 30
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
+        log-command: true
         name: assetfinder-enum
         timeout: 15
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: theharvester
+        log-command: true
         name: harvester-enum
         timeout: 15
         with:
@@ -89,6 +93,7 @@ jobs:
       cert_sub_count: '{{ steps["merge-cert"].outputs.cert_sub_count | default("0", true) }}'
     steps:
       - task: tlsx
+        log-command: true
         name: tls-san-enum
         timeout: 20
         with:
@@ -97,6 +102,7 @@ jobs:
           port: "443,8443"
         continue-on-error: true
       - task: subfinder
+        log-command: true
         name: crtsh-enum
         timeout: 15
         with:
@@ -130,12 +136,14 @@ jobs:
       perm_sub_count: '{{ steps["resolve-perms"].outputs.typed_outputs | default([], true) | length }}'
     steps:
       - task: gotator
+        log-command: true
         name: generate-perms
         timeout: 30
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
         continue-on-error: true
       - task: puredns
+        log-command: true
         name: resolve-perms
         timeout: 20
         if: "{{ steps['generate-perms'].outputs.output_file | default('', true) | length > 0 }}"
@@ -174,6 +182,7 @@ jobs:
           add_outputs(merged_file=merged_path, total_count=len(all_subs))
           print(f"Merged: {len(all_subs)} unique subdomains across all sources")
       - task: dnsx
+        log-command: true
         name: dns-resolve
         timeout: "{{ (steps['merge-all-sources'].outputs.total_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         with:
@@ -216,6 +225,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
     steps:
       - task: httpx
+        log-command: true
         name: probe-hosts
         timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         with:
@@ -252,6 +262,7 @@ jobs:
           for u in live[:20]:
               print(f"  {u}")
       - task: gowitness
+        log-command: true
         name: screenshots
         timeout: 20
         with:
@@ -259,6 +270,7 @@ jobs:
           screenshot_path: "{{ env('OFX_RUN_DIR', '/tmp') }}/ofx_subscan_shots"
         continue-on-error: true
       - task: csprecon
+        log-command: true
         name: csp-enum
         timeout: 10
         with:
@@ -274,12 +286,14 @@ jobs:
       takeover_count: '{{ steps["report-takeovers"].outputs.takeover_count | default("0", true) }}'
     steps:
       - task: subzy
+        log-command: true
         name: subzy-check
         timeout: 15
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
         continue-on-error: true
       - task: nuclei
+        log-command: true
         name: nuclei-takeover
         timeout: 20
         with:
@@ -312,6 +326,7 @@ jobs:
     steps:
       # Historical URLs from archives
       - task: waymore
+        log-command: true
         name: waymore-hist
         timeout: 20
         with:
@@ -319,6 +334,7 @@ jobs:
           mode: U
         continue-on-error: true
       - task: gau
+        log-command: true
         name: gau-hist
         timeout: 15
         with:
@@ -327,6 +343,7 @@ jobs:
         continue-on-error: true
       # Active crawling of live services
       - task: katana
+        log-command: true
         name: katana-crawl
         timeout: 20
         with:
@@ -334,6 +351,7 @@ jobs:
           depth: 3
         continue-on-error: true
       - task: gospider
+        log-command: true
         name: gospider-crawl
         timeout: 20
         with:
@@ -372,6 +390,7 @@ jobs:
     needs: [url-discovery, takeover-check]
     steps:
       - task: nuclei
+        log-command: true
         name: nuclei-scan
         timeout: 30
         with:
@@ -379,6 +398,7 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
+        log-command: true
         name: xss-scan
         timeout: 20
         with:

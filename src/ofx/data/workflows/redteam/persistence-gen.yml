@@ -140,3 +140,4 @@ jobs:
 
                   add_outputs(commands_file=out_file, command_count=total_cmds, methods=json.dumps(list(commands.keys())))
               log-stdout: true
+              log-command: true

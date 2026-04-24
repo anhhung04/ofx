@@ -17,6 +17,7 @@ jobs:
     name: Subdomain Discovery
     steps:
     - task: subfinder
+      log-command: true
       timeout: 10
       name: subdomain-find
       with:
@@ -136,6 +137,7 @@ jobs:
         if not findings:
             print("  No takeover opportunities found")
       log-stdout: true
+      log-command: true
 
     - name: export-to-project
       script: |

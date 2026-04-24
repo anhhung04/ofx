@@ -78,6 +78,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             "shell",
             "working_directory",
             "log_stdout",
+            "log_command",
             "env",
             "run_if",
         ]
@@ -208,8 +209,9 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         )
         await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
 
-        # Log to project timeline CSV
-        self._log_timeline(result, status_value)
+        # Log to project timeline CSV only when step has explicit log-command config
+        if self.model.log_command:
+            self._log_timeline(result, status_value)
 
     def _log_timeline(self, result, status: str) -> None:
         """Write a timeline entry for this cloud step execution."""

@@ -40,6 +40,7 @@ jobs:
       relay_targets_file: '{{ steps["check-smb-signing"].outputs.relay_targets_file | default("", true) }}'
     steps:
     - name: check-smb-signing
+      log-command: true
       run: |
         echo "[+] Checking SMB signing on {{ inputs.target }}..."
 
@@ -68,6 +69,7 @@ jobs:
       coercion_count: '{{ steps["check-coercion"].outputs.coercion_count | default("", true) }}'
     steps:
     - name: check-coercion
+      log-command: true
       script: |
         import subprocess
 

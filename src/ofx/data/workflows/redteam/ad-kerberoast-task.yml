@@ -54,6 +54,7 @@ jobs:
           request: true
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: save-hashes
         script: |
           creds = {{ users(steps["get-spn-tickets"].outputs.typed_outputs) | tojson }}
@@ -92,6 +93,7 @@ jobs:
           format: hashcat
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: save-asrep
         script: |
           creds = {{ users(steps["get-asrep-hashes"].outputs.typed_outputs) | tojson }}
@@ -143,6 +145,7 @@ jobs:
           format: krb5tgs
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - task: john
         timeout: 5
         name: john-show
@@ -152,6 +155,7 @@ jobs:
           show: true
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: crack-summary
         script: |
           cracked = {{ users(steps["john-show"].outputs.typed_outputs) | tojson }}

@@ -47,6 +47,7 @@ jobs:
           always_continue: true
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: scan-summary
         script: |
           vulns = {{ vulns(steps["coercer-scan"].outputs.typed_outputs) | tojson }}

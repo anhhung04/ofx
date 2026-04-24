@@ -24,6 +24,7 @@ jobs:
       no_mfa_count: '{{ steps["check-iam"].outputs.no_mfa_count | default("", true) }}'
     steps:
     - name: check-iam
+      log-command: true
       script: |
         import subprocess
         import json
@@ -81,6 +82,7 @@ jobs:
       public_bucket_count: '{{ steps["check-s3"].outputs.public_bucket_count | default("", true) }}'
     steps:
     - name: check-s3
+      log-command: true
       script: |
         import subprocess
         import json
@@ -126,6 +128,7 @@ jobs:
       risky_sg_count: '{{ steps["check-security-groups"].outputs.risky_sg_count | default("", true) }}'
     steps:
     - name: check-security-groups
+      log-command: true
       script: |
         import subprocess
         import json

@@ -28,6 +28,7 @@ jobs:
     - name: build-cleanup
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.opsec import (
             clean_history_commands,
@@ -132,3 +133,4 @@ jobs:
 
         add_outputs(timestomp_file=out_file, timestomp_count=len([c for c in commands if not c.startswith('#')]))
       log-stdout: true
+      log-command: true

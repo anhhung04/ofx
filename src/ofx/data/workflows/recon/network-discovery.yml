@@ -23,6 +23,7 @@ jobs:
       alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("", true) }}'
     steps:
     - task: fping
+      log-command: true
       timeout: 5
       name: ping-sweep
       with:
@@ -51,6 +52,7 @@ jobs:
     - host-discovery
     steps:
     - task: masscan
+      log-command: true
       timeout: 10
       name: masscan-sweep
       with:
@@ -59,6 +61,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: naabu
+      log-command: true
       timeout: 10
       name: naabu-scan
       with:
@@ -96,6 +99,7 @@ jobs:
     - port-scan
     steps:
     - task: nmap
+      log-command: true
       timeout: 30
       name: version-detect
       with:
@@ -103,6 +107,7 @@ jobs:
         version_detection: true
       continue-on-error: true
     - task: httpx
+      log-command: true
       timeout: 10
       name: http-probe
       with:

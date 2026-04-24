@@ -51,6 +51,7 @@ jobs:
           just_dc_ntlm: true
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - name: collect-hashes
         script: |
           creds = {{ users(steps["dcsync-dump"].outputs.typed_outputs) | tojson }}
@@ -129,7 +130,9 @@ jobs:
           domain: "{{ inputs.domain }}"
         continue-on-error: true
         log-stdout: true
+        log-command: true
       - task: netexec
+        log-command: true
         timeout: 15
         name: pth-ldap
         with:

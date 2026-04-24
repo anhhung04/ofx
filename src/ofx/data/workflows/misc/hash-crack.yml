@@ -28,6 +28,7 @@ jobs:
       results: '{{ steps["identify-hash"].outputs.results | default("", true) }}'
     steps:
     - name: identify-hash
+      log-command: true
       script: |
         import subprocess
         import json
@@ -117,6 +118,7 @@ jobs:
           echo "[-] Wordlist not found: $WORDLIST"
         fi
       log-stdout: true
+      log-command: true
       continue-on-error: true
     - name: try-hashcat
       run: |
@@ -139,8 +141,10 @@ jobs:
           echo "[-] hashcat not available or wordlist missing"
         fi
       log-stdout: true
+      log-command: true
       continue-on-error: true
     - name: collect-results
+      log-command: true
       script: |
         import subprocess
         from pathlib import Path

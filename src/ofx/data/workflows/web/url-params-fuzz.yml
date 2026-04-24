@@ -26,6 +26,7 @@ jobs:
       live_url: '{{ steps["export-url"].outputs.live_url | default("", true) }}'
     steps:
     - task: httpx
+      log-command: true
       timeout: 10
       name: probe-url
       with:
@@ -48,6 +49,7 @@ jobs:
       param_count: '{{ steps["export-params"].outputs.param_count | default("", true) }}'
     steps:
     - task: arjun
+      log-command: true
       timeout: 10
       name: find-params
       with:
@@ -71,6 +73,7 @@ jobs:
     - param-discovery
     steps:
     - task: ffuf
+      log-command: true
       timeout: 15
       name: fuzz-params
       with:

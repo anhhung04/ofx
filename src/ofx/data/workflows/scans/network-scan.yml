@@ -32,6 +32,7 @@ jobs:
       live_hosts_json: '{{ steps["collect-hosts"].outputs.live_hosts_json | default("[]", true) }}'
     steps:
       - task: fping
+        log-command: true
         name: fping-discovery
         timeout: 5
         with:
@@ -39,6 +40,7 @@ jobs:
           generate: true
         continue-on-error: true
       - task: nmap
+        log-command: true
         name: host-discovery
         timeout: 30
         with:
@@ -46,6 +48,7 @@ jobs:
           timing: 4
         continue-on-error: true
       - task: naabu
+        log-command: true
         name: port-sweep
         timeout: 10
         with:
@@ -54,6 +57,7 @@ jobs:
           rate: 2000
         continue-on-error: true
       - task: masscan
+        log-command: true
         name: masscan-sweep
         timeout: 10
         with:
@@ -105,6 +109,7 @@ jobs:
       cred_count: '{{ steps["parse-brutus"].outputs.cred_count | default("0", true) }}'
     steps:
       - name: run-pipeline
+        log-command: true
         run: |
           naabu -list {{ jobs['network-discovery'].outputs.hosts_file }} \
             -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
@@ -159,6 +164,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
+        log-command: true
         uses: host-scan
         with:
           target: "{{ matrix.target }}"

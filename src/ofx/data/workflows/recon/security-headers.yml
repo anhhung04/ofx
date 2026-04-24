@@ -21,6 +21,7 @@ jobs:
     - name: fetch-headers
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.http import fetch, get_http_client
         from ofx.api.recon import security_headers_audit

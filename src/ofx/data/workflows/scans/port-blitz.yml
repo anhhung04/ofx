@@ -29,6 +29,7 @@ jobs:
       port_count: '{{ steps["merge-ports"].outputs.port_count | default("", true) }}'
     steps:
       - task: rustscan
+        log-command: true
         name: rustscan-sweep
         timeout: 10
         with:
@@ -38,6 +39,7 @@ jobs:
           timeout: 3000
         continue-on-error: true
       - task: naabu
+        log-command: true
         timeout: 10
         name: naabu-top
         with:
@@ -46,6 +48,7 @@ jobs:
           rate: "{{ inputs.rate }}"
         continue-on-error: true
       - task: masscan
+        log-command: true
         timeout: 10
         name: masscan-top
         with:
@@ -102,12 +105,14 @@ jobs:
       exploit_count: '{{ steps["collect-services"].outputs.exploit_count | default("", true) }}'
     steps:
       - task: nerva
+        log-command: true
         timeout: 15
         name: nerva-fingerprint
         with:
           target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
         continue-on-error: true
       - task: nmap
+        log-command: true
         timeout: 30
         name: nmap-version
         with:
@@ -116,6 +121,7 @@ jobs:
           version_detection: true
         continue-on-error: true
       - task: httpx
+        log-command: true
         timeout: 10
         name: http-probe
         with:
@@ -126,12 +132,14 @@ jobs:
           follow_redirects: true
         continue-on-error: true
       - task: ssh-audit
+        log-command: true
         timeout: 10
         name: ssh-check
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: searchsploit
+        log-command: true
         timeout: 5
         name: exploit-lookup
         with:

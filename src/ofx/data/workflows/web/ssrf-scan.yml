@@ -137,3 +137,4 @@ jobs:
             print("  No SSRF indicators detected")
             print("  Tip: Use --input callback=<interactsh URL> for blind SSRF detection")
       log-stdout: true
+      log-command: true

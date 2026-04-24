@@ -28,6 +28,7 @@ jobs:
     name: DNS Enumeration
     steps:
       - task: dnsx
+        log-command: true
         name: dns-records
         timeout: 10
         with:
@@ -42,6 +43,7 @@ jobs:
           resp: true
         continue-on-error: true
       - task: dnsrecon
+        log-command: true
         name: dnsrecon-scan
         timeout: 15
         with:
@@ -68,6 +70,7 @@ jobs:
       sub_count: '{{ steps["merge-subs"].outputs.sub_count | default("0", true) }}'
     steps:
       - task: subfinder
+        log-command: true
         name: subfinder-enum
         timeout: 15
         with:
@@ -75,12 +78,14 @@ jobs:
           all: true
         continue-on-error: true
       - task: amass
+        log-command: true
         name: amass-passive
         timeout: 30
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
+        log-command: true
         name: assetfinder-enum
         timeout: 15
         with:
@@ -88,6 +93,7 @@ jobs:
         continue-on-error: true
       # CT log enumeration
       - task: tlsx
+        log-command: true
         name: tls-san-enum
         timeout: 15
         with:
@@ -96,6 +102,7 @@ jobs:
           port: "443,8443"
         continue-on-error: true
       - task: subfinder
+        log-command: true
         name: crtsh-enum
         timeout: 10
         with:
@@ -139,6 +146,7 @@ jobs:
       verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
     steps:
       - task: dnsx
+        log-command: true
         name: verify-subs
         timeout: "{{ (jobs['subdomain-discovery'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         with:
@@ -172,6 +180,7 @@ jobs:
       port_count: '{{ steps["collect-ports"].outputs.port_count | default("0", true) }}'
     steps:
       - task: naabu
+        log-command: true
         name: naabu-scan
         timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int / 10 * 15 + 20) | int }}"
         with:
@@ -180,6 +189,7 @@ jobs:
           rate: 1000
         continue-on-error: true
       - task: masscan
+        log-command: true
         name: masscan-sweep
         timeout: 20
         with:
@@ -188,6 +198,7 @@ jobs:
           rate: 1000
         continue-on-error: true
       - task: nmap
+        log-command: true
         name: service-detect
         timeout: 30
         with:
@@ -231,6 +242,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
     steps:
       - task: httpx
+        log-command: true
         name: probe-hosts
         timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         with:
@@ -242,18 +254,21 @@ jobs:
           ports: "80,443,8080,8443"
         continue-on-error: true
       - task: testssl
+        log-command: true
         name: ssl-audit
         timeout: 15
         with:
           target: "{{ inputs.target }}:443"
         continue-on-error: true
       - task: wafw00f
+        log-command: true
         name: waf-detect
         timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: whatweb
+        log-command: true
         name: tech-fingerprint
         timeout: 10
         with:
@@ -291,6 +306,7 @@ jobs:
     needs: [port-scan, http-probe]
     steps:
       - task: nuclei
+        log-command: true
         name: nuclei-scan
         timeout: 30
         with:
@@ -298,6 +314,7 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: nuclei
+        log-command: true
         name: takeover-check
         timeout: 20
         with:

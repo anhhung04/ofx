@@ -40,6 +40,7 @@ jobs:
     - name: bloodhound-cmd
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.ad.enum import bloodhound_collection_command
 
@@ -56,6 +57,7 @@ jobs:
     - name: shares-cmd
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.ad.enum import enumerate_shares_command
 
@@ -72,6 +74,7 @@ jobs:
     - name: ldap-cmd
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.ad.enum import ldap_query_command
 
@@ -88,6 +91,7 @@ jobs:
     - name: collect-enum
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.ad.enum import (
             bloodhound_collection_command,
@@ -142,6 +146,7 @@ jobs:
     - name: kerberoast-cmd
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.ad.kerberos import kerberoast_command
 
@@ -158,6 +163,7 @@ jobs:
     - name: asreproast-cmd
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.ad.kerberos import asreproast_command
 
@@ -174,6 +180,7 @@ jobs:
     - name: delegation-cmd
       timeout: 2
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.ad.kerberos import find_delegation_command
         import json

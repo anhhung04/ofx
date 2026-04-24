@@ -25,6 +25,7 @@ jobs:
     - name: scan-ports
       timeout: 5
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.recon import async_port_scan, TOP_100_PORTS
         import asyncio
@@ -57,6 +58,7 @@ jobs:
     - name: grab-banners
       timeout: 10
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.service import scan_banner
         import json
