@@ -34,7 +34,7 @@ jobs:
       - task: fping
         log-command: true
         name: fping-discovery
-        timeout: 5
+        timeout: "{{ [[5, cidr_size(inputs.target) // 5000 + 1] | max, 120] | min }}"
         with:
           target: "{{ inputs.target }}"
           generate: true
@@ -42,7 +42,7 @@ jobs:
       - task: nmap
         log-command: true
         name: host-discovery
-        timeout: 60
+        timeout: "{{ [[10, cidr_size(inputs.target) // 200 + 5] | max, 480] | min }}"
         with:
           target: "{{ inputs.target }}"
           timing: 4
@@ -50,7 +50,7 @@ jobs:
       - task: naabu
         log-command: true
         name: port-sweep
-        timeout: 20
+        timeout: "{{ [[10, cidr_size(inputs.target) // 500 + 5] | max, 240] | min }}"
         with:
           target: "{{ inputs.target }}"
           top_ports: "1000"
@@ -59,7 +59,7 @@ jobs:
       - task: masscan
         log-command: true
         name: masscan-sweep
-        timeout: 15
+        timeout: "{{ [[10, cidr_size(inputs.target) // 1000 + 5] | max, 120] | min }}"
         with:
           target: "{{ inputs.target }}"
           top_ports: "100"
@@ -116,7 +116,7 @@ jobs:
             -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
             nerva --json 2>/dev/null | \
             brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_netscan_brutus.jsonl
-        timeout: 20
+        timeout: "{{ [[10, jobs['network-discovery'].outputs.host_count | int // 10 + 5] | max, 120] | min }}"
         continue-on-error: true
       - name: parse-brutus
         script: |

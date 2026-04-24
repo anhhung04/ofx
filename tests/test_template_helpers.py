@@ -211,6 +211,30 @@ class TestNetworkHelpers:
             mock_sock.side_effect = OSError("no network")
             assert h["local_ip"]() == "127.0.0.1"
 
+    def test_cidr_size_single_ip(self):
+        h = _network_helpers()
+        assert h["cidr_size"]("192.168.1.1") == 1
+
+    def test_cidr_size_24(self):
+        h = _network_helpers()
+        assert h["cidr_size"]("192.168.1.0/24") == 254
+
+    def test_cidr_size_16(self):
+        h = _network_helpers()
+        assert h["cidr_size"]("10.0.0.0/16") == 65534
+
+    def test_cidr_size_8(self):
+        h = _network_helpers()
+        assert h["cidr_size"]("10.0.0.0/8") == 16777214
+
+    def test_cidr_size_hostname(self):
+        h = _network_helpers()
+        assert h["cidr_size"]("example.com") == 1
+
+    def test_cidr_size_comma_list(self):
+        h = _network_helpers()
+        assert h["cidr_size"]("192.168.1.0/24,10.0.0.0/24") == 508
+
 
 # ── Datetime helpers ─────────────────────────────────────────────────────
 

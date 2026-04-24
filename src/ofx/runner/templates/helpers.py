@@ -140,9 +140,30 @@ def _network_helpers() -> dict[str, Any]:
             _logger.debug("is_port_open(%s, %s) failed", host, port, exc_info=True)
             return False
 
+    def _cidr_size(target: str) -> int:
+        """Return the number of host addresses in a CIDR range.
+
+        Accepts plain IPs (→ 1), CIDRs (``/24`` → 254), and
+        comma-separated or space-separated lists of targets.
+        """
+        import ipaddress
+
+        total = 0
+        for part in re.split(r"[,\s]+", target.strip()):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                net = ipaddress.ip_network(part, strict=False)
+                total += max(net.num_addresses - 2, 1)
+            except ValueError:
+                total += 1  # hostname or single IP
+        return total
+
     return {
         "local_ip": _get_local_ip,
         "is_port_open": _is_port_open,
+        "cidr_size": _cidr_size,
     }
 
 
