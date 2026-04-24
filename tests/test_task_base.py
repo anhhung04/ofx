@@ -332,12 +332,12 @@ class TestCommandBuilding:
         assert "-t 50" in cmd
 
     def test_output_file_cleanup(self):
-        """Output files are temp files that exist on disk."""
+        """Output path is a unique temp path that does not yet exist on disk."""
         task = TaskRegistry.create("nmap")
         _, out = task.build_command("x.com")
         assert out is not None
-        assert out.exists()
-        out.unlink()  # cleanup
+        assert not out.exists()
+        assert out.parent.exists()
 
 
 # ── Extra Flags Refactor ──────────────────────────────────────────────────
