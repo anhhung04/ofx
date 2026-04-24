@@ -42,7 +42,7 @@ jobs:
       - task: nmap
         log-command: true
         name: host-discovery
-        timeout: 30
+        timeout: 60
         with:
           target: "{{ inputs.target }}"
           timing: 4
@@ -50,7 +50,7 @@ jobs:
       - task: naabu
         log-command: true
         name: port-sweep
-        timeout: 10
+        timeout: 20
         with:
           target: "{{ inputs.target }}"
           top_ports: "1000"
@@ -59,11 +59,12 @@ jobs:
       - task: masscan
         log-command: true
         name: masscan-sweep
-        timeout: 10
+        timeout: 15
         with:
           target: "{{ inputs.target }}"
           top_ports: "100"
           rate: 2000
+          wait: 0
         continue-on-error: true
       - name: collect-hosts
         script: |

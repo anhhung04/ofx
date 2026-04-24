@@ -80,6 +80,8 @@ class MasscanTask(Task):
             )
             os.close(_fd)
             output_file = Path(_path)
+            # Ensure masscan (which may run as root) can write to this file
+            output_file.chmod(0o666)
             parts.extend([self.output_flag, str(output_file)])
 
         # masscan only accepts IPs/CIDRs — resolve hostnames automatically
