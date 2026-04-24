@@ -104,6 +104,23 @@ class Task(ABC):
     def __init__(self) -> None:
         self._temp_target_files: list[str] = []
 
+    # ── Helpers ────────────────────────────────────────────────────
+
+    def _make_output_path(self) -> Path:
+        """Reserve a unique temp path for tool output without pre-creating it.
+
+        Uses mkstemp to guarantee uniqueness, then immediately unlinks the
+        file so the external tool creates it with its own uid/permissions.
+        This avoids "could not open file for writing" errors when the tool
+        runs as a different user (e.g. masscan/nmap via sudo).
+        """
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=f".ofx_task_{self.name}_", suffix=self._output_suffix()
+        )
+        os.close(fd)
+        os.unlink(tmp_path)
+        return Path(tmp_path)
+
     # ── Public API ─────────────────────────────────────────────────
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
@@ -144,11 +161,7 @@ class Task(ABC):
 
         # Output file for tools that write structured output to a file
         if self.output_flag:
-            fd, tmp_path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_", suffix=self._output_suffix()
-            )
-            os.close(fd)
-            output_file = Path(tmp_path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         # Target handling — auto-detect file paths, multi-target lists

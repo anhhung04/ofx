@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -72,12 +70,7 @@ class DalfoxTask(Task):
                 parts.extend([opt.flag, str(value)])
 
         if self.output_flag:
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            output_file = Path(_path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
         else:
             output_file = None

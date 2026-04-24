@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -42,12 +40,7 @@ class Enum4linuxTask(Task):
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Build: ``enum4linux-ng -A {target} -oJ {output_file}``."""
-        _fd, _path = tempfile.mkstemp(
-            prefix=f".ofx_task_{self.name}_",
-            suffix=self._output_suffix(),
-        )
-        os.close(_fd)
-        output_file = Path(_path)
+        output_file = self._make_output_path()
 
         has_enum_flag = any(
             kwargs.get(k) for k in ("users", "shares", "groups", "policies", "all")

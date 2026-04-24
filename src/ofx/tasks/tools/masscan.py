@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -78,13 +76,7 @@ class MasscanTask(Task):
             # (which may run as root) must create the output file itself.
             # Pre-creating with mkstemp can cause "could not open file for
             # writing" when masscan runs as a different uid (e.g. via sudo).
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            os.unlink(_path)
-            output_file = Path(_path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         # masscan only accepts IPs/CIDRs — resolve hostnames automatically

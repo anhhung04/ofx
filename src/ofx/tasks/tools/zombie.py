@@ -98,12 +98,7 @@ class ZombieTask(Task):
             elif value is not None:
                 parts.extend([opt.flag, str(value)])
 
-        import os
-        import tempfile
-
-        _fd, _path = tempfile.mkstemp(prefix=".ofx_task_zombie_", suffix=".json")
-        os.close(_fd)
-        output_file = Path(_path)
+        output_file = self._make_output_path()
         parts.extend(["-f", str(output_file), "-O", "json"])
 
         if gogo_file:

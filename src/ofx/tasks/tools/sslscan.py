@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -83,12 +81,7 @@ class SslscanTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            output_file = Path(_path)
+            output_file = self._make_output_path()
             parts.append(f"{self.output_flag}={output_file}")
 
         parts.append(target)

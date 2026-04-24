@@ -76,12 +76,7 @@ class GogoTask(Task):
         # Quiet mode + uncompressed jsonlines output
         parts.extend(["-q", "-C", "-O", "jsonlines"])
 
-        import os
-        import tempfile
-
-        _fd, _path = tempfile.mkstemp(prefix=".ofx_task_gogo_", suffix=".jsonl")
-        os.close(_fd)
-        output_file = Path(_path)
+        output_file = self._make_output_path()
         parts.extend([self.output_flag, str(output_file)])
 
         if wf:
