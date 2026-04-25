@@ -565,7 +565,6 @@ class TestFlowListHandler:
     def test_show_list_no_workflows(self, tmp_path: Path, monkeypatch):
         """show_list completes without error when no workflows exist."""
         import ofx.settings as settings_mod
-
         from ofx.commands.flow.list_cmd import show_list
 
         monkeypatch.setattr(settings_mod, "BUILTIN_WORKFLOWS_DIR", tmp_path / "empty")
@@ -616,7 +615,6 @@ class TestFlowSearchHandler:
     def test_show_search_no_results(self, tmp_path: Path, monkeypatch):
         """show_search completes without error when nothing matches."""
         import ofx.settings as settings_mod
-
         from ofx.commands.flow.search_cmd import show_search
 
         monkeypatch.setattr(settings_mod, "BUILTIN_WORKFLOWS_DIR", tmp_path / "empty")
