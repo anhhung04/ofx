@@ -1,4 +1,4 @@
-"""Tests for flow info, visualize, validate, and lint commands."""
+"""Tests for flow commands: info, visualize, validate, lint, diff, init, list, search."""
 
 from pathlib import Path
 
@@ -468,3 +468,132 @@ class TestFlowCommandExitCodes:
     def test_visualize_invalid_format_rejected(self, workflow_file: Path):
         result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "mermaid"])
         assert result.exit_code != 0
+
+
+class TestFlowInit:
+    """Tests for the flow init command and FlowInitHandler."""
+
+    def test_handler_creates_file(self, tmp_path: Path):
+        from ofx.commands.flow.init import FlowInitHandler
+
+        handler = FlowInitHandler()
+        handler.run(workflow_name="my-scan", output=str(tmp_path / "my-scan.yml"), force=False)
+
+        out_file = tmp_path / "my-scan.yml"
+        assert out_file.exists()
+        content = out_file.read_text()
+        assert "name: my-scan" in content
+        assert "yaml-language-server" in content
+
+    def test_handler_refuses_overwrite_without_force(self, tmp_path: Path):
+        from click.exceptions import Exit
+
+        from ofx.commands.flow.init import FlowInitHandler
+
+        out_file = tmp_path / "existing.yml"
+        out_file.write_text("already here")
+
+        handler = FlowInitHandler()
+        with pytest.raises(Exit):
+            handler.run(workflow_name="existing", output=str(out_file), force=False)
+
+    def test_handler_overwrites_with_force(self, tmp_path: Path):
+        from ofx.commands.flow.init import FlowInitHandler
+
+        out_file = tmp_path / "overwrite.yml"
+        out_file.write_text("old content")
+
+        handler = FlowInitHandler()
+        handler.run(workflow_name="overwrite", output=str(out_file), force=True)
+
+        assert "name: overwrite" in out_file.read_text()
+
+    def test_handler_output_directory(self, tmp_path: Path):
+        from ofx.commands.flow.init import FlowInitHandler
+
+        handler = FlowInitHandler()
+        handler.run(workflow_name="dir-test", output=str(tmp_path), force=False)
+
+        assert (tmp_path / "dir-test.yml").exists()
+
+    def test_handler_default_output(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow.init import FlowInitHandler
+
+        monkeypatch.chdir(tmp_path)
+        handler = FlowInitHandler()
+        handler.run(workflow_name="default-name", output="", force=False)
+
+        assert (tmp_path / "default-name.yml").exists()
+
+    def test_generated_workflow_is_valid_yaml(self, tmp_path: Path):
+        """The generated scaffold should parse as valid YAML."""
+        from ofx.commands.flow.init import FlowInitHandler
+
+        handler = FlowInitHandler()
+        out_file = tmp_path / "valid-check.yml"
+        handler.run(workflow_name="valid-check", output=str(out_file), force=False)
+
+        data = yaml.safe_load(out_file.read_text())
+        assert isinstance(data, dict)
+        assert data["name"] == "valid-check"
+        assert "jobs" in data
+
+
+class TestFlowListHandler:
+    """Tests for the list_cmd handler."""
+
+    def test_show_list_no_workflows(self, tmp_path: Path, monkeypatch):
+        """show_list completes without error when no workflows exist."""
+        import ofx.settings as settings_mod
+
+        from ofx.commands.flow.list_cmd import show_list
+
+        monkeypatch.setattr(settings_mod, "BUILTIN_WORKFLOWS_DIR", tmp_path / "empty")
+        show_list(builtin=True)
+
+    def test_read_metadata(self, tmp_path: Path):
+        from ofx.commands.flow.list_cmd import _read_metadata
+
+        wf = tmp_path / "test.yml"
+        wf.write_text(yaml.dump({"name": "my-wf", "description": "A test", "tags": ["recon", "web"]}))
+
+        meta = _read_metadata(wf)
+        assert meta["name"] == "my-wf"
+        assert meta["description"] == "A test"
+        assert "recon" in meta["tags"]
+
+    def test_read_metadata_invalid(self, tmp_path: Path):
+        from ofx.commands.flow.list_cmd import _read_metadata
+
+        bad = tmp_path / "bad.yml"
+        bad.write_text("not: valid: yaml: {{")
+
+        meta = _read_metadata(bad)
+        assert meta["name"] == "bad"
+        assert meta["tags"] == []
+
+    def test_scan_yaml_files(self, tmp_path: Path):
+        from ofx.commands.flow.list_cmd import _scan_yaml_files
+
+        (tmp_path / "a.yml").write_text("name: a")
+        (tmp_path / "b.yaml").write_text("name: b")
+        (tmp_path / "c.txt").write_text("not a workflow")
+
+        files = _scan_yaml_files(tmp_path)
+        names = {f.name for f in files}
+        assert "a.yml" in names
+        assert "b.yaml" in names
+        assert "c.txt" not in names
+
+
+class TestFlowSearchHandler:
+    """Tests for the search_cmd handler."""
+
+    def test_show_search_no_results(self, tmp_path: Path, monkeypatch):
+        """show_search completes without error when nothing matches."""
+        import ofx.settings as settings_mod
+
+        from ofx.commands.flow.search_cmd import show_search
+
+        monkeypatch.setattr(settings_mod, "BUILTIN_WORKFLOWS_DIR", tmp_path / "empty")
+        show_search(query="nonexistent_xyz_999")
