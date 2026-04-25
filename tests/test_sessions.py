@@ -35,15 +35,22 @@ class TestSessionModel:
         assert not s.is_done()
 
     def test_is_running_states(self):
-        for status in (SessionStatus.PROVISIONING, SessionStatus.UPLOADING, SessionStatus.RUNNING):
+        for status in (
+            SessionStatus.PROVISIONING,
+            SessionStatus.UPLOADING,
+            SessionStatus.RUNNING,
+        ):
             s = Session(id="test", workflow_file="w.yml", status=status)
             assert s.is_running(), f"{status} should be running"
 
     def test_is_done_states(self):
         for status in (
-            SessionStatus.COMPLETED, SessionStatus.FAILED,
-            SessionStatus.CANCELED, SessionStatus.FETCHED,
-            SessionStatus.ENCRYPTED, SessionStatus.DESTROYED,
+            SessionStatus.COMPLETED,
+            SessionStatus.FAILED,
+            SessionStatus.CANCELED,
+            SessionStatus.FETCHED,
+            SessionStatus.ENCRYPTED,
+            SessionStatus.DESTROYED,
         ):
             s = Session(id="test", workflow_file="w.yml", status=status)
             assert s.is_done(), f"{status} should be done"
@@ -111,15 +118,28 @@ class TestSessionStore:
 
     def test_update_status(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
-        store.save(Session(id="abc12345", workflow_file="w.yml", status=SessionStatus.RUNNING))
+        store.save(
+            Session(id="abc12345", workflow_file="w.yml", status=SessionStatus.RUNNING)
+        )
         updated = store.update_status("abc12345", SessionStatus.COMPLETED)
         assert updated.status == SessionStatus.COMPLETED
 
     def test_list_sessions(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
-        store.save(Session(id="aaa", workflow_file="w1.yml", status=SessionStatus.RUNNING))
-        store.save(Session(id="bbb", workflow_file="w2.yml", status=SessionStatus.COMPLETED))
-        store.save(Session(id="ccc", workflow_file="w3.yml", status=SessionStatus.RUNNING, target=SessionTarget.CLOUD))
+        store.save(
+            Session(id="aaa", workflow_file="w1.yml", status=SessionStatus.RUNNING)
+        )
+        store.save(
+            Session(id="bbb", workflow_file="w2.yml", status=SessionStatus.COMPLETED)
+        )
+        store.save(
+            Session(
+                id="ccc",
+                workflow_file="w3.yml",
+                status=SessionStatus.RUNNING,
+                target=SessionTarget.CLOUD,
+            )
+        )
 
         all_sessions = store.list_sessions()
         assert len(all_sessions) == 3
@@ -141,16 +161,25 @@ class TestSessionStore:
     def test_clean(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
         old_time = datetime.now(UTC) - timedelta(days=10)
-        store.save(Session(
-            id="old", workflow_file="w.yml",
-            status=SessionStatus.COMPLETED, started_at=old_time,
-        ))
-        store.save(Session(
-            id="new", workflow_file="w.yml",
-            status=SessionStatus.COMPLETED,
-        ))
+        store.save(
+            Session(
+                id="old",
+                workflow_file="w.yml",
+                status=SessionStatus.COMPLETED,
+                started_at=old_time,
+            )
+        )
+        store.save(
+            Session(
+                id="new",
+                workflow_file="w.yml",
+                status=SessionStatus.COMPLETED,
+            )
+        )
 
-        removed = store.clean(older_than_seconds=7 * 86400, statuses=[SessionStatus.COMPLETED])
+        removed = store.clean(
+            older_than_seconds=7 * 86400, statuses=[SessionStatus.COMPLETED]
+        )
         assert removed == 1
         assert not store.exists("old")
         assert store.exists("new")
@@ -170,6 +199,7 @@ class TestScriptBuilder:
     def _make_step(self, **kwargs):
         """Create a minimal Step-like object."""
         from ofx.models.step import Step
+
         return Step(**kwargs)
 
     def test_bash_single_command(self):
@@ -207,11 +237,13 @@ class TestScriptBuilder:
     def test_bash_env_vars(self):
         steps = [self._make_step(run="env")]
         script = build_session_script(
-            steps, session_id="aabb", work_dir="/tmp/test",
+            steps,
+            session_id="aabb",
+            work_dir="/tmp/test",
             env={"TARGET": "10.0.0.1", "PORT": "443"},
         )
-        assert 'export TARGET=' in script
-        assert 'export PORT=' in script
+        assert "export TARGET=" in script
+        assert "export PORT=" in script
 
     def test_bash_continue_on_error(self):
         steps = [self._make_step(run="might-fail", continue_on_error=True)]
@@ -226,7 +258,9 @@ class TestScriptBuilder:
     def test_powershell_basic(self):
         steps = [self._make_step(name="wincheck", run="Get-Process")]
         script = build_session_script(
-            steps, session_id="aabb", work_dir="C:\\Windows\\Temp\\test",
+            steps,
+            session_id="aabb",
+            work_dir="C:\\Windows\\Temp\\test",
             workflow_name="wf-win",
             job_name="win-job",
             os_type="windows",
@@ -246,7 +280,9 @@ class TestScriptBuilder:
     def test_bash_encrypt_at_rest(self):
         steps = [self._make_step(name="scan", run="echo hi")]
         script = build_session_script(
-            steps, session_id="aabb", work_dir="/tmp/test",
+            steps,
+            session_id="aabb",
+            work_dir="/tmp/test",
             encrypt_at_rest=True,
         )
         assert ".skey" in script
@@ -258,7 +294,9 @@ class TestScriptBuilder:
     def test_bash_no_encrypt_by_default(self):
         steps = [self._make_step(name="scan", run="echo hi")]
         script = build_session_script(
-            steps, session_id="aabb", work_dir="/tmp/test",
+            steps,
+            session_id="aabb",
+            work_dir="/tmp/test",
             encrypt_at_rest=False,
         )
         assert "openssl enc" not in script
@@ -267,8 +305,11 @@ class TestScriptBuilder:
     def test_powershell_encrypt_at_rest(self):
         steps = [self._make_step(name="scan", run="Get-Process")]
         script = build_session_script(
-            steps, session_id="aabb", work_dir="C:\\Temp\\test",
-            os_type="windows", encrypt_at_rest=True,
+            steps,
+            session_id="aabb",
+            work_dir="C:\\Temp\\test",
+            os_type="windows",
+            encrypt_at_rest=True,
         )
         assert ".skey" in script
         assert "output.enc" in script
@@ -298,7 +339,7 @@ class TestEncryption:
         key1, salt1 = derive_key("same")
         key2, salt2 = derive_key("same")
         assert salt1 != salt2  # Random salts differ
-        assert key1 != key2    # So keys differ
+        assert key1 != key2  # So keys differ
 
     def test_encrypt_decrypt_roundtrip(self, tmp_path):
         # Create a results directory with some files
@@ -371,6 +412,7 @@ class TestSessionManagerLocal:
     def _restore_workflow_dirs(self):
         """Restore DEFAULT_WORKFLOWS_DIRS after each test to prevent pollution."""
         import ofx.settings as settings_mod
+
         original = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
         yield
         settings_mod.DEFAULT_WORKFLOWS_DIRS = original
@@ -378,7 +420,8 @@ class TestSessionManagerLocal:
     def _create_test_workflow(self, tmp_path: Path) -> Path:
         """Write a minimal workflow YAML that echoes output."""
         wf = tmp_path / "test_session.yml"
-        wf.write_text(textwrap.dedent("""\
+        wf.write_text(
+            textwrap.dedent("""\
             name: session-test
             jobs:
               echo-job:
@@ -387,13 +430,15 @@ class TestSessionManagerLocal:
                     run: echo "Hello from session"
                   - name: write-output
                     run: echo "result data" > output/result.txt
-        """))
+        """)
+        )
         return wf
 
     def _create_multi_job_workflow(self, tmp_path: Path) -> Path:
         """Write a two-job workflow to validate full-workflow session submit."""
         wf = tmp_path / "test_session_multi.yml"
-        wf.write_text(textwrap.dedent("""\
+        wf.write_text(
+            textwrap.dedent("""\
             name: session-multi
             jobs:
               first-job:
@@ -405,7 +450,8 @@ class TestSessionManagerLocal:
                 steps:
                   - name: second
                     run: echo "SECOND_JOB" >> output/trace.txt
-        """))
+        """)
+        )
         return wf
 
     def test_submit_local_creates_session(self, tmp_path):
@@ -442,12 +488,11 @@ class TestSessionManagerLocal:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
 
-        session = asyncio.run(
-            mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
-        )
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
         # Wait for the process to finish
         import time
+
         for _ in range(50):
             time.sleep(0.1)
             try:
@@ -461,8 +506,12 @@ class TestSessionManagerLocal:
 
         # At-rest encryption: output.enc should exist, output/ should be removed
         work = Path(session.remote_work_dir)
-        assert (work / "output.enc").exists(), "output.enc missing — at-rest encryption failed"
-        assert not (work / "output").exists(), "output/ dir should be removed after encryption"
+        assert (work / "output.enc").exists(), (
+            "output.enc missing — at-rest encryption failed"
+        )
+        assert not (work / "output").exists(), (
+            "output/ dir should be removed after encryption"
+        )
         # Key file should have been shredded
         assert not (work / ".skey").exists(), "key file should be shredded"
         # Bundled python step artifact should exist for script step in local workspace
@@ -515,7 +564,8 @@ class TestSessionManagerLocal:
 
     def test_submit_local_stages_bundled_python_script(self, tmp_path):
         wf = tmp_path / "test_script_session.yml"
-        wf.write_text(textwrap.dedent("""\
+        wf.write_text(
+            textwrap.dedent("""\
             name: session-script-test
             jobs:
               py-job:
@@ -523,7 +573,8 @@ class TestSessionManagerLocal:
                   - name: inline-python
                     script: |
                       print("INLINE_SCRIPT_OK")
-        """))
+        """)
+        )
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
         session = asyncio.run(mgr.submit(str(wf), target=SessionTarget.LOCAL))
@@ -538,11 +589,10 @@ class TestSessionManagerLocal:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
 
-        session = asyncio.run(
-            mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
-        )
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
         import time
+
         for _ in range(50):
             time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
@@ -556,11 +606,10 @@ class TestSessionManagerLocal:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
 
-        session = asyncio.run(
-            mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
-        )
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
         import time
+
         for _ in range(50):
             time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
@@ -576,11 +625,10 @@ class TestSessionManagerLocal:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
 
-        session = asyncio.run(
-            mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
-        )
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
         import time
+
         for _ in range(50):
             time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
@@ -594,8 +642,9 @@ class TestSessionManagerLocal:
 
         # The at-rest encryption should have been transparently decrypted
         # and result.txt from "echo result data > output/result.txt" should be there
-        assert (results_path / "result.txt").exists(), \
+        assert (results_path / "result.txt").exists(), (
             f"result.txt missing; contents: {list(results_path.iterdir())}"
+        )
 
         # Fetched status
         session = store.load(session.id)
@@ -606,11 +655,10 @@ class TestSessionManagerLocal:
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
 
-        session = asyncio.run(
-            mgr.submit(str(wf_path), target=SessionTarget.LOCAL)
-        )
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
         import time
+
         for _ in range(50):
             time.sleep(0.1)
             session = asyncio.run(mgr.status(session.id))
@@ -628,24 +676,25 @@ class TestSessionManagerLocal:
     def test_cancel_running(self, tmp_path):
         """Submit a long-running job and cancel it."""
         wf = tmp_path / "long_running.yml"
-        wf.write_text(textwrap.dedent("""\
+        wf.write_text(
+            textwrap.dedent("""\
             name: long-run
             jobs:
               wait-job:
                 steps:
                   - name: wait
                     run: sleep 30
-        """))
+        """)
+        )
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
 
-        session = asyncio.run(
-            mgr.submit(str(wf), target=SessionTarget.LOCAL)
-        )
+        session = asyncio.run(mgr.submit(str(wf), target=SessionTarget.LOCAL))
         assert session.remote_pid is not None
 
         # Cancel
         import time
+
         time.sleep(0.2)  # Let it start
         session = asyncio.run(mgr.cancel(session.id))
         assert session.status == SessionStatus.CANCELED
@@ -729,20 +778,20 @@ class TestSessionManagerLocal:
 
     def test_fetch_while_running_raises(self, tmp_path):
         wf = tmp_path / "long_running.yml"
-        wf.write_text(textwrap.dedent("""\
+        wf.write_text(
+            textwrap.dedent("""\
             name: long-run
             jobs:
               wait-job:
                 steps:
                   - name: wait
                     run: sleep 30
-        """))
+        """)
+        )
         store = SessionStore(base_dir=tmp_path / "sessions")
         mgr = _make_manager(store, tmp_path)
 
-        session = asyncio.run(
-            mgr.submit(str(wf), target=SessionTarget.LOCAL)
-        )
+        session = asyncio.run(mgr.submit(str(wf), target=SessionTarget.LOCAL))
 
         with pytest.raises(RuntimeError, match="still running"):
             asyncio.run(mgr.fetch(session.id))
@@ -772,6 +821,7 @@ class TestSessionManagerDecrypt:
         store.save(session)
 
         from ofx.cloud.sessions import SessionManager
+
         mgr = SessionManager(store=store)
         out = asyncio.run(mgr.decrypt("testid", "mypass"))
         assert out.exists()
@@ -804,6 +854,7 @@ class TestSessionInputInjection:
     def test_local_submit_injects_env(self, tmp_path):
         """Local session script contains INPUT_ env vars for workflow inputs."""
         import ofx.settings as settings_mod
+
         original_dirs = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
 
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -823,9 +874,7 @@ class TestSessionInputInjection:
                 )
             )
 
-            script = (
-                Path(session.remote_work_dir) / "run.sh"
-            ).read_text()
+            script = (Path(session.remote_work_dir) / "run.sh").read_text()
             assert 'export INPUT_MODE="fast"' in script
             assert 'export mode="fast"' in script
 
@@ -836,6 +885,7 @@ class TestSessionInputInjection:
     def test_local_submit_stages_file_input(self, tmp_path):
         """Local session copies file-valued inputs into the session workspace."""
         import ofx.settings as settings_mod
+
         original_dirs = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
 
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -873,6 +923,7 @@ class TestSessionInputInjection:
     def test_local_submit_stage_file_failure_raises(self, tmp_path):
         """Local submit should fail fast when staging a file input fails."""
         import ofx.settings as settings_mod
+
         original_dirs = list(settings_mod.DEFAULT_WORKFLOWS_DIRS)
 
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -896,7 +947,9 @@ class TestSessionInputInjection:
         try:
             with pytest.MonkeyPatch.context() as mp:
                 mp.setattr(shutil, "copy2", _copy2_fail)
-                with pytest.raises(RuntimeError, match="Failed to stage session input file"):
+                with pytest.raises(
+                    RuntimeError, match="Failed to stage session input file"
+                ):
                     asyncio.run(
                         mgr.submit(
                             str(wf_file),
@@ -1077,6 +1130,7 @@ def _make_manager(store: SessionStore, search_dir: Path):
     # Prepend search_dir so find_workflow looks in tmp_path, but keep a
     # clean snapshot of the default list to avoid mutation leak.
     import ofx.settings as settings_mod
+
     settings_mod.DEFAULT_WORKFLOWS_DIRS = [search_dir, *_ORIGINAL_WORKFLOW_DIRS]
     return mgr
 
@@ -1171,7 +1225,9 @@ class TestCheckCloudStatusNoPid:
         class _FakeRemote:
             def run(self, cmd, timeout=None):
                 return "__TASK_OK__"
-            def cleanup(self): pass
+
+            def cleanup(self):
+                pass
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
@@ -1190,7 +1246,9 @@ class TestCheckCloudStatusNoPid:
         class _FakeRemote:
             def run(self, cmd, timeout=None):
                 return "__TASK_ERR__"
-            def cleanup(self): pass
+
+            def cleanup(self):
+                pass
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
@@ -1222,7 +1280,10 @@ class TestCheckCloudStatusNoPid:
 
         mgr = self._make_mgr(tmp_path)
         session = self._make_running_session(pid=None).model_copy(
-            update={"remote_launcher": "tmux", "remote_tmux_session": "ofx-ses-abc12345"}
+            update={
+                "remote_launcher": "tmux",
+                "remote_tmux_session": "ofx-ses-abc12345",
+            }
         )
 
         class _FakeRemote:

@@ -14,6 +14,7 @@ import ofx.settings as settings_mod
 def _config_path(tmp_home: Path) -> Path:
     return tmp_home / ".ofx" / "config.yml"
 
+
 @pytest.fixture
 def temp_home(tmp_path, monkeypatch):
     # Point HOME to a temporary directory so the CLI writes config there
@@ -26,9 +27,11 @@ def temp_home(tmp_path, monkeypatch):
     monkeypatch.setattr(settings_mod, "DEFAULT_PROJECTS_PATH", projects_dir)
     return home
 
+
 def test_use_set_and_clear(temp_home, monkeypatch, tmp_path):
     # Create a dummy project using the ProjectManager helper
     from ofx.commands.project.project_manager import ProjectManager
+
     proj_name = "myproj"
     ProjectManager.create_project(proj_name)
 
@@ -61,6 +64,7 @@ def test_use_set_and_clear(temp_home, monkeypatch, tmp_path):
     assert "active_project" not in cfg_after
     assert "Active project cleared" in result_clear.stdout
 
+
 def test_use_invalid_project(temp_home, tmp_path):
     # Attempt to set a non‑existent project
     result = subprocess.run(
@@ -69,8 +73,13 @@ def test_use_invalid_project(temp_home, tmp_path):
         capture_output=True,
         text=True,
     )
-    assert result.returncode != 0, "CLI should have exited with error for missing project"
-    assert "Project 'nosuchproj' not found" in result.stdout or "Project 'nosuchproj' not found" in result.stderr
+    assert result.returncode != 0, (
+        "CLI should have exited with error for missing project"
+    )
+    assert (
+        "Project 'nosuchproj' not found" in result.stdout
+        or "Project 'nosuchproj' not found" in result.stderr
+    )
 
 
 def test_migrate_json_config(temp_home, monkeypatch):
@@ -87,6 +96,7 @@ def test_migrate_json_config(temp_home, monkeypatch):
 
     # Patch BASE_DATA_DIR so the migration targets temp_home
     import ofx.settings as sm
+
     monkeypatch.setattr(sm, "BASE_DATA_DIR", ofx_dir)
     monkeypatch.setattr(sm, "CONFIG_YAML", ofx_dir / "config.yml")
 
@@ -116,6 +126,7 @@ def test_migrate_json_config_no_overwrite(temp_home, monkeypatch):
     (ofx_dir / "config.json").write_text(json.dumps({"active_project": "legacyproj"}))
 
     import ofx.settings as sm
+
     monkeypatch.setattr(sm, "BASE_DATA_DIR", ofx_dir)
     monkeypatch.setattr(sm, "CONFIG_YAML", ofx_dir / "config.yml")
 

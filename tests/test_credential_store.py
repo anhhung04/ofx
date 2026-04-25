@@ -12,7 +12,9 @@ class TestShouldStoreCreds:
     def test_step_false_overrides_all(self):
         from ofx.runner.core.credential_store import should_store_creds
 
-        assert should_store_creds(False, parent_model=None, global_default=True) is False
+        assert (
+            should_store_creds(False, parent_model=None, global_default=True) is False
+        )
 
     def test_parent_defaults_store_creds_true(self):
         from unittest.mock import MagicMock
@@ -21,7 +23,9 @@ class TestShouldStoreCreds:
 
         parent = MagicMock()
         parent.defaults.store_creds = True
-        assert should_store_creds(None, parent_model=parent, global_default=False) is True
+        assert (
+            should_store_creds(None, parent_model=parent, global_default=False) is True
+        )
 
     def test_parent_defaults_store_creds_false(self):
         from unittest.mock import MagicMock
@@ -31,13 +35,17 @@ class TestShouldStoreCreds:
         parent = MagicMock()
         parent.defaults.store_creds = False
         # Falls through to global_default
-        assert should_store_creds(None, parent_model=parent, global_default=True) is True
+        assert (
+            should_store_creds(None, parent_model=parent, global_default=True) is True
+        )
 
     def test_global_default_used_when_no_step_or_parent(self):
         from ofx.runner.core.credential_store import should_store_creds
 
         assert should_store_creds(None, parent_model=None, global_default=True) is True
-        assert should_store_creds(None, parent_model=None, global_default=False) is False
+        assert (
+            should_store_creds(None, parent_model=None, global_default=False) is False
+        )
 
     def test_falls_back_to_settings(self, monkeypatch):
         import ofx.runner.core.credential_store as mod
@@ -56,7 +64,10 @@ class TestShouldStoreCreds:
         class NoDefaults:
             pass
 
-        assert should_store_creds(None, parent_model=NoDefaults(), global_default=False) is False
+        assert (
+            should_store_creds(None, parent_model=NoDefaults(), global_default=False)
+            is False
+        )
 
 
 class TestStoreFromTypedOutputs:
@@ -88,7 +99,9 @@ class TestStoreFromTypedOutputs:
         account = UserAccount(username="admin", password="secret")
 
         # Simulate ImportError for ExegolHistoryDB
-        _original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else None
+        _original_import = (
+            __builtins__.__import__ if hasattr(__builtins__, "__import__") else None
+        )
 
         # Monkeypatch to raise ImportError for exegol_history
         def mock_import(name, *args, **kwargs):
@@ -97,6 +110,7 @@ class TestStoreFromTypedOutputs:
             return orig(name, *args, **kwargs)
 
         import builtins
+
         orig = builtins.__import__
 
         monkeypatch.setattr(builtins, "__import__", mock_import)
@@ -124,7 +138,9 @@ class TestStoreFromTypedOutputs:
         mock_db.get_credential.return_value = None
         mock_db.add_credential.side_effect = RuntimeError("DB write failed")
 
-        with patch("ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=mock_db):
+        with patch(
+            "ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=mock_db
+        ):
             result = store_from_typed_outputs([account])
 
         assert result == 0
@@ -144,7 +160,9 @@ class TestStoreFromTypedOutputs:
         mock_db = MagicMock()
         mock_db.get_credential.return_value = None
 
-        with patch("ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=mock_db):
+        with patch(
+            "ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=mock_db
+        ):
             result = store_from_typed_outputs(accounts)
 
         assert result == 2
@@ -168,7 +186,9 @@ class TestStoreFromTypedOutputs:
         mock_db = MagicMock()
         mock_db.get_credential.return_value = existing
 
-        with patch("ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=mock_db):
+        with patch(
+            "ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=mock_db
+        ):
             result = store_from_typed_outputs([account])
 
         assert result == 0
@@ -183,7 +203,6 @@ class TestStoreFromTypedOutputs:
 
         account = UserAccount(username="bob", password="pw")
         messages: list[str] = []
-
 
         # Make DB unavailable by patching import inside the function
         orig = builtins.__import__

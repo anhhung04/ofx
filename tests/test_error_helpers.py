@@ -76,11 +76,7 @@ def test_extract_root_error_single_line():
 
 
 def test_extract_root_error_multiline_returns_deepest():
-    error = (
-        "Job failure in 'scan':\n"
-        "====\n"
-        "Step 'nmap' failed: connection refused"
-    )
+    error = "Job failure in 'scan':\n====\nStep 'nmap' failed: connection refused"
     assert extract_root_error(error) == "Step 'nmap' failed: connection refused"
 
 

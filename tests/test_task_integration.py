@@ -20,7 +20,11 @@ class TestTemplateHelpers:
             {"_type": "tag", "name": "nginx", "category": "technology"},
             {"_type": "record", "name": "mx.example.com", "type": "MX"},
             {"_type": "domain", "domain": "example.com"},
-            {"_type": "certificate", "host": "example.com:443", "subject_cn": "example.com"},
+            {
+                "_type": "certificate",
+                "host": "example.com:443",
+                "subject_cn": "example.com",
+            },
             {"_type": "exploit", "name": "EDB-12345", "title": "Buffer Overflow"},
             {"_type": "user_account", "username": "admin"},
         ]
@@ -82,9 +86,20 @@ class TestTemplateHelpers:
 
         resolver = TemplateResolver()
         funcs = resolver.get_support_functions()
-        for name in ("of_type", "ports", "urls", "vulns", "subdomains",
-                      "ips", "tags", "records", "domains", "users",
-                      "certs", "exploits"):
+        for name in (
+            "of_type",
+            "ports",
+            "urls",
+            "vulns",
+            "subdomains",
+            "ips",
+            "tags",
+            "records",
+            "domains",
+            "users",
+            "certs",
+            "exploits",
+        ):
             assert name in funcs, f"Helper '{name}' not in support functions"
 
 
@@ -122,9 +137,17 @@ class TestCertsTemplateHelper:
         certs_fn = funcs["certs"]
 
         items = [
-            {"_type": "certificate", "host": "example.com:443", "subject_cn": "example.com"},
+            {
+                "_type": "certificate",
+                "host": "example.com:443",
+                "subject_cn": "example.com",
+            },
             {"_type": "port", "port": 443},
-            {"_type": "certificate", "host": "api.example.com:443", "subject_cn": "api.example.com"},
+            {
+                "_type": "certificate",
+                "host": "api.example.com:443",
+                "subject_cn": "api.example.com",
+            },
         ]
         result = certs_fn(items)
         assert len(result) == 2
@@ -247,9 +270,7 @@ class TestProfiles:
     def test_profile_task_options(self):
         from ofx.profiles.models import OFXProfile
 
-        p = OFXProfile(
-            task_options={"nmap": {"timing": "T2", "ports": "80,443"}}
-        )
+        p = OFXProfile(task_options={"nmap": {"timing": "T2", "ports": "80,443"}})
         assert p.task_options["nmap"]["timing"] == "T2"
 
     def test_profile_retry_policy_defaults(self):
@@ -341,7 +362,6 @@ class TestTimeWindow:
         assert _time_in_range(time(22, 0), time(6, 0), time(12, 0)) is False
 
     def test_time_window_guard_not_started_when_disabled(self):
-
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import TimeWindowGuard
 
@@ -405,9 +425,7 @@ class TestProfileTaskOptions:
         from ofx.runner.core.models import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
-        profile = OFXProfile(
-            task_options={"httpx": {"threads": 5, "rate_limit": 20}}
-        )
+        profile = OFXProfile(task_options={"httpx": {"threads": 5, "rate_limit": 20}})
         ctx = RunContext(vars={"profile_model": profile})
         model = TaskExecution(
             task_name="httpx",
@@ -505,9 +523,7 @@ class TestProfileTaskOptions:
 
         # Simulate real runtime: 'profile' is dict, 'profile_model' missing
         ctx = RunContext(vars={"profile": {"proxy": "http://x", "threads": 2}})
-        model = TaskExecution(
-            task_name="httpx", target="example.com", opts={}
-        )
+        model = TaskExecution(task_name="httpx", target="example.com", opts={})
         runner = TaskRunner(model, ctx)
         runner._apply_profile_task_options()
         # No profile_model → no injection, no crash
@@ -629,9 +645,7 @@ class TestCloudTaskProfileIntegration:
         from ofx.models.step import Step
         from ofx.profiles.models import OFXProfile
 
-        profile = OFXProfile(
-            task_options={"httpx": {"rate_limit": 20}}
-        )
+        profile = OFXProfile(task_options={"httpx": {"rate_limit": 20}})
         step = Step(
             task="httpx",
             run_with={"target": "example.com"},
@@ -791,7 +805,9 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.timeout == 180  # policy wins when timeout_minutes is default
+        assert (
+            runner.model.timeout == 180
+        )  # policy wins when timeout_minutes is default
 
     def test_explicit_step_timeout_overridden_by_profile(self):
         """Profile timeout_minutes overrides even explicit step timeout."""

@@ -163,7 +163,9 @@ class TestTaskBase:
         assert len(t._temp_target_files) == 1
         assert Path(t._temp_target_files[0]).exists()
         t.cleanup_target_files()
-        assert not Path(t._temp_target_files[0]).exists() if t._temp_target_files else True
+        assert (
+            not Path(t._temp_target_files[0]).exists() if t._temp_target_files else True
+        )
 
 
 # ── Task Registry ─────────────────────────────────────────────────────────
@@ -381,8 +383,16 @@ class TestExtraFlags:
 class TestNewToolsRegistered:
     def test_all_tools_registered(self):
         expected = [
-            "nmap", "httpx", "subfinder", "nuclei", "ffuf",
-            "naabu", "katana", "dnsx", "wafw00f", "feroxbuster",
+            "nmap",
+            "httpx",
+            "subfinder",
+            "nuclei",
+            "ffuf",
+            "naabu",
+            "katana",
+            "dnsx",
+            "wafw00f",
+            "feroxbuster",
         ]
         for name in expected:
             assert TaskRegistry.get(name) is not None, f"Task '{name}' not registered"

@@ -1,6 +1,5 @@
 """Tests for OFX output types, deduplication, and UserAccount model."""
 
-
 from ofx.tasks import (
     Port,
     Subdomain,
@@ -150,6 +149,7 @@ class TestDeduplication:
 
     def test_dedup_empty(self):
         from ofx.runner.tasks.runner import TaskRunner
+
         assert TaskRunner._deduplicate([]) == []
 
 

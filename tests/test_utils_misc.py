@@ -14,6 +14,7 @@ import pytest
 # json_utils.py
 # ---------------------------------------------------------------------------
 
+
 class TestEnumEncoder:
     def test_encodes_enum_as_value(self):
         from ofx.utils.json_utils import EnumEncoder
@@ -45,6 +46,7 @@ class TestEnumEncoder:
 # ---------------------------------------------------------------------------
 # module_loader.py
 # ---------------------------------------------------------------------------
+
 
 class TestModuleLoader:
     def test_module_name_is_stable(self):
@@ -78,7 +80,9 @@ class TestModuleLoader:
 
         from ofx.utils.module_loader import load_module_from_file
 
-        monkeypatch.setattr(importlib.util, "spec_from_file_location", lambda *a, **kw: None)
+        monkeypatch.setattr(
+            importlib.util, "spec_from_file_location", lambda *a, **kw: None
+        )
         f = tmp_path / "ghost.py"
         f.write_text("pass")
         result = load_module_from_file(f, "prefix")
@@ -134,6 +138,7 @@ class TestModuleLoader:
 # utils/args.py
 # ---------------------------------------------------------------------------
 
+
 class TestParseKeyValuePairs:
     def test_empty_inputs(self):
         from ofx.utils.args import parse_key_value_pairs
@@ -150,7 +155,7 @@ class TestParseKeyValuePairs:
     def test_json_value_parsed(self):
         from ofx.utils.args import parse_key_value_pairs
 
-        result = parse_key_value_pairs(['ports=[80,443]'])
+        result = parse_key_value_pairs(["ports=[80,443]"])
         assert result == {"ports": [80, 443]}
 
     def test_non_json_string_kept(self):
@@ -176,7 +181,7 @@ class TestParseKeyValuePairs:
     def test_keep_string_skips_json_parse(self):
         from ofx.utils.args import parse_key_value_pairs
 
-        result = parse_key_value_pairs(['n=42'], keep_string=True)
+        result = parse_key_value_pairs(["n=42"], keep_string=True)
         assert result["n"] == "42"
 
     def test_invalid_format_raises(self):
@@ -195,6 +200,7 @@ class TestParseKeyValuePairs:
 # ---------------------------------------------------------------------------
 # utils/matrix.py — expand_jobs + get_expanded_job_ids fallback
 # ---------------------------------------------------------------------------
+
 
 class TestExpandJobs:
     def _make_job(self, matrix: dict | None = None, needs: list | None = None):

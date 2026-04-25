@@ -283,7 +283,9 @@ class TestFlowRunHandlerTimeWindow:
 
     def test_cli_time_window_injected_into_run_vars(self):
         with (
-            patch("ofx.commands.flow.run.run_workflow", new_callable=AsyncMock) as mock_run_workflow,
+            patch(
+                "ofx.commands.flow.run.run_workflow", new_callable=AsyncMock
+            ) as mock_run_workflow,
             patch("ofx.commands.flow.run.get_workflow_search_dirs", return_value=[]),
         ):
             from ofx.commands.flow.run import FlowRunHandler as FRH
@@ -314,7 +316,9 @@ class TestFlowRunHandlerTimeWindow:
 
     def test_no_cli_time_window_when_not_set(self):
         with (
-            patch("ofx.commands.flow.run.run_workflow", new_callable=AsyncMock) as mock_run_workflow,
+            patch(
+                "ofx.commands.flow.run.run_workflow", new_callable=AsyncMock
+            ) as mock_run_workflow,
             patch("ofx.commands.flow.run.get_workflow_search_dirs", return_value=[]),
         ):
             from ofx.commands.flow.run import FlowRunHandler as FRH

@@ -218,7 +218,6 @@ class TestHttpServerModule:
 
         assert PHTTPServer is not None
 
-
     def test_phttp_server_init(self):
         from ofx.api.httpserver import PHTTPServer
 

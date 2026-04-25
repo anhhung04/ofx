@@ -134,14 +134,20 @@ class TestEncodingHelpers:
         assert support_funcs["b64decode"](encoded) == original
 
     def test_url_encode(self, support_funcs):
-        assert support_funcs["url_encode"]("hello world&foo=bar") == "hello%20world%26foo%3Dbar"
+        assert (
+            support_funcs["url_encode"]("hello world&foo=bar")
+            == "hello%20world%26foo%3Dbar"
+        )
 
     def test_url_decode(self, support_funcs):
         assert support_funcs["url_decode"]("hello%20world") == "hello world"
 
     def test_url_roundtrip(self, support_funcs):
         original = "key=value&name=John Doe"
-        assert support_funcs["url_decode"](support_funcs["url_encode"](original)) == original
+        assert (
+            support_funcs["url_decode"](support_funcs["url_encode"](original))
+            == original
+        )
 
     def test_hex_encode(self, support_funcs):
         assert support_funcs["hex_encode"]("AB") == "4142"
@@ -151,23 +157,29 @@ class TestEncodingHelpers:
 
     def test_hex_roundtrip(self, support_funcs):
         original = "binary test"
-        assert support_funcs["hex_decode"](support_funcs["hex_encode"](original)) == original
+        assert (
+            support_funcs["hex_decode"](support_funcs["hex_encode"](original))
+            == original
+        )
 
 
 # ── Hash helpers ─────────────────────────────────────────────────────────
 class TestHashHelpers:
     def test_md5(self, support_funcs):
         import hashlib
+
         expected = hashlib.md5(b"hello").hexdigest()
         assert support_funcs["md5"]("hello") == expected
 
     def test_sha1(self, support_funcs):
         import hashlib
+
         expected = hashlib.sha1(b"hello").hexdigest()
         assert support_funcs["sha1"]("hello") == expected
 
     def test_sha256(self, support_funcs):
         import hashlib
+
         expected = hashlib.sha256(b"hello").hexdigest()
         assert support_funcs["sha256"]("hello") == expected
 
@@ -208,7 +220,10 @@ class TestRandomGenerators:
 
     def test_uuid_format(self, support_funcs):
         result = support_funcs["uuid"]()
-        assert re.match(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", result)
+        assert re.match(
+            r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            result,
+        )
 
     def test_token(self, support_funcs):
         result = support_funcs["token"]()
@@ -406,8 +421,19 @@ class TestTypeFilterHelpers:
         assert len(support_funcs["users"](items)) == 1
 
     def test_all_type_filters_present(self, support_funcs):
-        for name in ["ports", "urls", "vulns", "subdomains", "ips", "tags",
-                      "records", "domains", "users", "certs", "exploits"]:
+        for name in [
+            "ports",
+            "urls",
+            "vulns",
+            "subdomains",
+            "ips",
+            "tags",
+            "records",
+            "domains",
+            "users",
+            "certs",
+            "exploits",
+        ]:
             assert name in support_funcs, f"Missing type filter: {name}"
 
 
@@ -486,6 +512,7 @@ class TestResolveLogic:
 
     async def test_resolve_with_md5(self, resolver):
         import hashlib
+
         expected = hashlib.md5(b"test").hexdigest()
         result = await resolver.resolve("{{ md5('test') }}", {})
         assert result == expected

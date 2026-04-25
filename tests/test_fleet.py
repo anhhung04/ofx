@@ -271,8 +271,12 @@ class TestFleetDistributorSubnet:
 
     def test_same_subnet_grouped(self):
         targets = [
-            "10.0.0.1", "10.0.0.2", "10.0.0.3",  # /24 group 1
-            "10.0.1.1", "10.0.1.2", "10.0.1.3",  # /24 group 2
+            "10.0.0.1",
+            "10.0.0.2",
+            "10.0.0.3",  # /24 group 1
+            "10.0.1.1",
+            "10.0.1.2",
+            "10.0.1.3",  # /24 group 2
         ]
         chunks = FleetDistributor().distribute(targets, count=2, mode="subnet")
         assert len(chunks) == 2

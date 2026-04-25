@@ -48,7 +48,15 @@ class FakeKeePass:
         self.groups[name] = group
         return group
 
-    def add_entry(self, group: FakeGroup, title: str, username: str, password: str, url: str, notes: str):
+    def add_entry(
+        self,
+        group: FakeGroup,
+        title: str,
+        username: str,
+        password: str,
+        url: str,
+        notes: str,
+    ):
         entry = FakeEntry(
             uuid=uuid4(),
             title=title,
@@ -75,7 +83,9 @@ def _install_fake_pykeepass(monkeypatch: pytest.MonkeyPatch, kp: FakeKeePass) ->
     monkeypatch.setitem(sys.modules, "pykeepass", fake_module)
 
 
-def _make_db(tmp_path, monkeypatch: pytest.MonkeyPatch, kp: FakeKeePass) -> ExegolHistoryDB:
+def _make_db(
+    tmp_path, monkeypatch: pytest.MonkeyPatch, kp: FakeKeePass
+) -> ExegolHistoryDB:
     db_path = tmp_path / "db.kdbx"
     key_path = tmp_path / "db.key"
     db_path.write_text("x")
@@ -84,7 +94,9 @@ def _make_db(tmp_path, monkeypatch: pytest.MonkeyPatch, kp: FakeKeePass) -> Exeg
     return ExegolHistoryDB(db_path=db_path, key_path=key_path)
 
 
-def _add_entry(group: FakeGroup, title: str, username: str, password: str, url: str, notes: str):
+def _add_entry(
+    group: FakeGroup, title: str, username: str, password: str, url: str, notes: str
+):
     entry = FakeEntry(
         uuid=uuid4(),
         title=title,
@@ -149,7 +161,9 @@ def test_add_update_delete(monkeypatch: pytest.MonkeyPatch, tmp_path):
     kp = FakeKeePass()
     db = _make_db(tmp_path, monkeypatch, kp)
 
-    cred = db.add_credential("bob", password="pw", hash_value="hash", domain="lab", comment="svc")
+    cred = db.add_credential(
+        "bob", password="pw", hash_value="hash", domain="lab", comment="svc"
+    )
     assert cred.username == "bob"
     assert Credential.GROUP_NAME in kp.groups
     assert cred.hash == "hash"

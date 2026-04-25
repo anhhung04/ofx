@@ -113,9 +113,7 @@ def test_postssh_run_success(mock_ssh_cls):
     ch, out, err = _make_channel(exit_code=0, stdout=b"ok", stderr=b"")
     mock_client.exec_command.return_value = (None, out, err)
 
-    runner = PostSSH(
-        "host", user="root", port=2222, identity_file="/dev/null"
-    )
+    runner = PostSSH("host", user="root", port=2222, identity_file="/dev/null")
     # Bypass key loading
     with patch.object(PostSSH, "_load_key", return_value=MagicMock()):
         assert runner.run("whoami") == "ok"

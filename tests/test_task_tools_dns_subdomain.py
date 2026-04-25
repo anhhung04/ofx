@@ -16,14 +16,17 @@ from ofx.tasks.output_types import (
 class TestDnsxParser:
     def test_parse_jsonl(self):
         lines = [
-            json.dumps({
-                "host": "example.com",
-                "a": ["93.184.216.34"],
-                "cname": ["cdn.example.com"],
-                "mx": ["mail.example.com"],
-            }),
+            json.dumps(
+                {
+                    "host": "example.com",
+                    "a": ["93.184.216.34"],
+                    "cname": ["cdn.example.com"],
+                    "mx": ["mail.example.com"],
+                }
+            ),
         ]
         from ofx.tasks.output_types import Record
+
         task = TaskRegistry.create("dnsx")
         results = task.parse_output("\n".join(lines), "")
         subdomains = [r for r in results if isinstance(r, Subdomain)]
@@ -42,7 +45,6 @@ class TestDnsxParser:
         assert "-a" in cmd
         assert "-cname" in cmd
         assert "-t 50" in cmd
-
 
 
 # ── Dnsrecon Parser ───────────────────────────────────────────────────
@@ -66,7 +68,11 @@ class TestDnsreconParser:
         data = [
             {"type": "A", "name": "www.example.com", "address": "93.184.216.34"},
             {"type": "MX", "name": "example.com", "address": "mail.example.com"},
-            {"type": "AAAA", "name": "ipv6.example.com", "address": "2606:2800:220:1::"},
+            {
+                "type": "AAAA",
+                "name": "ipv6.example.com",
+                "address": "2606:2800:220:1::",
+            },
             {"type": "NS", "name": "example.com", "address": "ns1.example.com"},
         ]
         task = TaskRegistry.create("dnsrecon")
@@ -99,7 +105,6 @@ class TestDnsreconParser:
 # ── TheHarvester Parser ──────────────────────────────────────────────
 
 
-
 # ── Subfinder Parser ──────────────────────────────────────────────────────
 
 
@@ -115,7 +120,6 @@ class TestSubfinderParser:
 
 
 # ── Ffuf Parser ────────────────────────────────────────────────────────────
-
 
 
 # ── Amass Parser ──────────────────────────────────────────────────────
@@ -179,7 +183,6 @@ class TestAmassParser:
 # ── Masscan Parser ────────────────────────────────────────────────────
 
 
-
 # ── Assetfinder Parser ───────────────────────────────────────────────
 
 
@@ -220,7 +223,6 @@ class TestAssetfinderParser:
 
 
 # ── Findomain Parser ─────────────────────────────────────────────────
-
 
 
 # ── Findomain Parser ─────────────────────────────────────────────────
@@ -275,7 +277,6 @@ class TestFindomainParser:
 # ── Mapcidr Parser ────────────────────────────────────────────────────
 
 
-
 # ── Subzy Parser ──────────────────────────────────────────────────────────
 
 
@@ -289,11 +290,13 @@ class TestSubzyParser:
         assert len(task.output_types) > 0
 
     def test_subzy_parse_output(self):
-        stdout = "\n".join([
-            "[NOT VULNERABLE] safe.example.com",
-            "[VULNERABLE] dangling.example.com - Service: GitHub Pages - CNAME pointing to unregistered github.io",
-            "[VULNERABLE] old.example.com - Heroku",
-        ])
+        stdout = "\n".join(
+            [
+                "[NOT VULNERABLE] safe.example.com",
+                "[VULNERABLE] dangling.example.com - Service: GitHub Pages - CNAME pointing to unregistered github.io",
+                "[VULNERABLE] old.example.com - Heroku",
+            ]
+        )
         task = TaskRegistry.create("subzy")
         results = task.parse_output(stdout, "")
         assert len(results) == 2

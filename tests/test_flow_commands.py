@@ -256,7 +256,9 @@ class TestFlowValidate:
         path.write_text(yaml.dump(wf_data))
         result = _validate_one(path, check_tasks=False)
         assert result.valid
-        assert any("dispatch" in w.lower() or "call" in w.lower() for w in result.warnings)
+        assert any(
+            "dispatch" in w.lower() or "call" in w.lower() for w in result.warnings
+        )
 
 
 class TestFlowLint:
@@ -337,8 +339,12 @@ class TestFlowHistory:
         monkeypatch.setattr(history, "HISTORY_DIR", tmp_path)
         monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
 
-        history.save_run_record(run_id="1", workflow_name="scan-target", status="completed")
-        history.save_run_record(run_id="2", workflow_name="recon-dns", status="completed")
+        history.save_run_record(
+            run_id="1", workflow_name="scan-target", status="completed"
+        )
+        history.save_run_record(
+            run_id="2", workflow_name="recon-dns", status="completed"
+        )
 
         records = history.load_history(workflow="scan")
         assert len(records) == 1
@@ -377,7 +383,9 @@ class TestFlowHistory:
         monkeypatch.setattr(history, "HISTORY_FILE", tmp_path / "runs.ndjson")
 
         for i in range(10):
-            history.save_run_record(run_id=str(i), workflow_name=f"flow-{i}", status="completed")
+            history.save_run_record(
+                run_id=str(i), workflow_name=f"flow-{i}", status="completed"
+            )
 
         pruned = history.prune_history(keep=3)
         assert pruned == 7
@@ -434,7 +442,9 @@ class TestFlowCommandExitCodes:
         assert result.exit_code != 0
 
     def test_diff_nonexistent_first_workflow(self):
-        result = self._invoke(["flow", "diff", "nonexistent_a_999", "nonexistent_b_999"])
+        result = self._invoke(
+            ["flow", "diff", "nonexistent_a_999", "nonexistent_b_999"]
+        )
         assert result.exit_code != 0
 
     def test_visualize_nonexistent_workflow(self):
@@ -454,19 +464,27 @@ class TestFlowCommandExitCodes:
         assert result.exit_code == 0
 
     def test_visualize_valid_workflow_terminal(self, workflow_file: Path):
-        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "terminal"])
+        result = self._invoke(
+            ["flow", "visualize", str(workflow_file), "--format", "terminal"]
+        )
         assert result.exit_code == 0
 
     def test_visualize_valid_workflow_dot(self, workflow_file: Path):
-        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "dot"])
+        result = self._invoke(
+            ["flow", "visualize", str(workflow_file), "--format", "dot"]
+        )
         assert result.exit_code == 0
 
     def test_visualize_valid_workflow_json(self, workflow_file: Path):
-        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "json"])
+        result = self._invoke(
+            ["flow", "visualize", str(workflow_file), "--format", "json"]
+        )
         assert result.exit_code == 0
 
     def test_visualize_invalid_format_rejected(self, workflow_file: Path):
-        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "mermaid"])
+        result = self._invoke(
+            ["flow", "visualize", str(workflow_file), "--format", "mermaid"]
+        )
         assert result.exit_code != 0
 
 
@@ -477,7 +495,9 @@ class TestFlowInit:
         from ofx.commands.flow.init import FlowInitHandler
 
         handler = FlowInitHandler()
-        handler.run(workflow_name="my-scan", output=str(tmp_path / "my-scan.yml"), force=False)
+        handler.run(
+            workflow_name="my-scan", output=str(tmp_path / "my-scan.yml"), force=False
+        )
 
         out_file = tmp_path / "my-scan.yml"
         assert out_file.exists()
@@ -555,7 +575,11 @@ class TestFlowListHandler:
         from ofx.commands.flow.list_cmd import _read_metadata
 
         wf = tmp_path / "test.yml"
-        wf.write_text(yaml.dump({"name": "my-wf", "description": "A test", "tags": ["recon", "web"]}))
+        wf.write_text(
+            yaml.dump(
+                {"name": "my-wf", "description": "A test", "tags": ["recon", "web"]}
+            )
+        )
 
         meta = _read_metadata(wf)
         assert meta["name"] == "my-wf"

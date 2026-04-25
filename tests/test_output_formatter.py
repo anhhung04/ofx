@@ -16,6 +16,7 @@ from ofx.runner.execution.output_formatter import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _capture_console() -> tuple[Console, io.StringIO]:
     """Return a Console that writes to a StringIO buffer."""
     buf = io.StringIO()
@@ -77,7 +78,10 @@ class TestCellStyle:
     """Tests for _cell_style."""
 
     def test_severity_critical(self):
-        assert _cell_style({"severity": "critical"}, "severity", "base") == "bold white on red"
+        assert (
+            _cell_style({"severity": "critical"}, "severity", "base")
+            == "bold white on red"
+        )
 
     def test_severity_high(self):
         assert _cell_style({"severity": "high"}, "severity", "base") == "bold red"
@@ -134,8 +138,22 @@ class TestFormatTypedOutputs:
 
     def test_port_items_render_panel(self):
         items = [
-            {"_type": "port", "ip": "10.0.0.1", "port": 80, "protocol": "tcp", "state": "open", "service_name": "http"},
-            {"_type": "port", "ip": "10.0.0.1", "port": 443, "protocol": "tcp", "state": "open", "service_name": "https"},
+            {
+                "_type": "port",
+                "ip": "10.0.0.1",
+                "port": 80,
+                "protocol": "tcp",
+                "state": "open",
+                "service_name": "http",
+            },
+            {
+                "_type": "port",
+                "ip": "10.0.0.1",
+                "port": 443,
+                "protocol": "tcp",
+                "state": "open",
+                "service_name": "https",
+            },
         ]
         console, buf = _capture_console()
         format_typed_outputs(items, task_name="nmap", console=console)
@@ -158,8 +176,21 @@ class TestFormatTypedOutputs:
 
     def test_mixed_types_render_multiple_sections(self):
         items = [
-            {"_type": "port", "ip": "10.0.0.1", "port": 22, "protocol": "tcp", "state": "open", "service_name": "ssh"},
-            {"_type": "url", "url": "https://example.com", "status_code": 200, "title": "Example", "tech": ""},
+            {
+                "_type": "port",
+                "ip": "10.0.0.1",
+                "port": 22,
+                "protocol": "tcp",
+                "state": "open",
+                "service_name": "ssh",
+            },
+            {
+                "_type": "url",
+                "url": "https://example.com",
+                "status_code": 200,
+                "title": "Example",
+                "tech": "",
+            },
             {"_type": "mystery", "foo": "bar"},
         ]
         console, buf = _capture_console()
@@ -173,7 +204,14 @@ class TestFormatTypedOutputs:
     def test_all_empty_fields_skipped(self):
         # Every data field is None/empty/0 — the type should be skipped
         items = [
-            {"_type": "port", "ip": None, "port": 0, "protocol": "", "state": None, "service_name": ""},
+            {
+                "_type": "port",
+                "ip": None,
+                "port": 0,
+                "protocol": "",
+                "state": None,
+                "service_name": "",
+            },
         ]
         console, buf = _capture_console()
         format_typed_outputs(items, task_name="test", console=console)
@@ -182,7 +220,14 @@ class TestFormatTypedOutputs:
 
     def test_overflow_more_than_50_items(self):
         items = [
-            {"_type": "port", "ip": f"10.0.0.{i % 256}", "port": 8000 + i, "protocol": "tcp", "state": "open", "service_name": "http"}
+            {
+                "_type": "port",
+                "ip": f"10.0.0.{i % 256}",
+                "port": 8000 + i,
+                "protocol": "tcp",
+                "state": "open",
+                "service_name": "http",
+            }
             for i in range(1, 62)  # 61 items
         ]
         console, buf = _capture_console()
@@ -192,9 +237,29 @@ class TestFormatTypedOutputs:
 
     def test_summary_counts_displayed(self):
         items = [
-            {"_type": "port", "ip": "10.0.0.1", "port": 80, "protocol": "tcp", "state": "open", "service_name": "http"},
-            {"_type": "port", "ip": "10.0.0.1", "port": 443, "protocol": "tcp", "state": "open", "service_name": "https"},
-            {"_type": "url", "url": "https://a.com", "status_code": 200, "title": "A", "tech": ""},
+            {
+                "_type": "port",
+                "ip": "10.0.0.1",
+                "port": 80,
+                "protocol": "tcp",
+                "state": "open",
+                "service_name": "http",
+            },
+            {
+                "_type": "port",
+                "ip": "10.0.0.1",
+                "port": 443,
+                "protocol": "tcp",
+                "state": "open",
+                "service_name": "https",
+            },
+            {
+                "_type": "url",
+                "url": "https://a.com",
+                "status_code": 200,
+                "title": "A",
+                "tech": "",
+            },
         ]
         console, buf = _capture_console()
         format_typed_outputs(items, task_name="multi", console=console)
@@ -205,7 +270,14 @@ class TestFormatTypedOutputs:
 
     def test_default_title_when_no_task_name(self):
         items = [
-            {"_type": "port", "ip": "10.0.0.1", "port": 22, "protocol": "tcp", "state": "open", "service_name": "ssh"},
+            {
+                "_type": "port",
+                "ip": "10.0.0.1",
+                "port": 22,
+                "protocol": "tcp",
+                "state": "open",
+                "service_name": "ssh",
+            },
         ]
         console, buf = _capture_console()
         format_typed_outputs(items, task_name="", console=console)

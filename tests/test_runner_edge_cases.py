@@ -417,10 +417,16 @@ class TestStepRetryProfileDefaults:
         from ofx.runner.execution.step import StepRunner
 
         step = Step.model_validate({"name": "s1", "run": "echo hi"})
-        parent = type("P", (), {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()})()
+        parent = type(
+            "P",
+            (),
+            {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()},
+        )()
         runner = StepRunner.__new__(StepRunner)
         runner.model = step
-        runner.ctx = RunContext(vars={"profile_model": OFXProfile(retry_policy="aggressive")})
+        runner.ctx = RunContext(
+            vars={"profile_model": OFXProfile(retry_policy="aggressive")}
+        )
         runner.parent = parent
         runner._apply_retry_profile_defaults()
 
@@ -432,11 +438,19 @@ class TestStepRetryProfileDefaults:
         from ofx.profiles.models import OFXProfile
         from ofx.runner.execution.step import StepRunner
 
-        step = Step.model_validate({"name": "s1", "run": "echo hi", "retry": 9, "retry-delay": 11})
-        parent = type("P", (), {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()})()
+        step = Step.model_validate(
+            {"name": "s1", "run": "echo hi", "retry": 9, "retry-delay": 11}
+        )
+        parent = type(
+            "P",
+            (),
+            {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()},
+        )()
         runner = StepRunner.__new__(StepRunner)
         runner.model = step
-        runner.ctx = RunContext(vars={"profile_model": OFXProfile(retry_policy="aggressive")})
+        runner.ctx = RunContext(
+            vars={"profile_model": OFXProfile(retry_policy="aggressive")}
+        )
         runner.parent = parent
         runner._apply_retry_profile_defaults()
 
@@ -521,10 +535,12 @@ class TestMatrixValidation:
         from ofx.models.strategy import MatrixStrategy
         from ofx.utils.matrix import _generate_matrix_combinations
 
-        strategy = MatrixStrategy(matrix={
-            "a": list(range(200)),
-            "b": list(range(200)),
-        })
+        strategy = MatrixStrategy(
+            matrix={
+                "a": list(range(200)),
+                "b": list(range(200)),
+            }
+        )
         with pytest.raises(ValueError, match="combinations"):
             _generate_matrix_combinations(strategy)
 
@@ -533,10 +549,12 @@ class TestMatrixValidation:
         from ofx.models.strategy import MatrixStrategy
         from ofx.utils.matrix import _generate_matrix_combinations
 
-        strategy = MatrixStrategy(matrix={
-            "a": [1, 2, 3],
-            "b": ["x", "y"],
-        })
+        strategy = MatrixStrategy(
+            matrix={
+                "a": [1, 2, 3],
+                "b": ["x", "y"],
+            }
+        )
         combos = _generate_matrix_combinations(strategy)
         assert len(combos) == 6
 

@@ -18,6 +18,7 @@ from ofx.runner.commands.command_executor import CommandExecutionResult, Command
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_executor(
     cmd: str = "echo hello",
     shell: str = "/bin/bash",

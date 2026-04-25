@@ -1,6 +1,5 @@
 """Tests for RUNNER_OUTPUTS feature in command runner"""
 
-
 import pytest
 
 from ofx.models.command import Command
@@ -212,7 +211,7 @@ echo "has_value=something" >> $RUNNER_OUTPUTS
 
         original_max = settings.max_output_size
         settings.max_output_size = 1024
-        cmd = 'python3 -c "print(\'x\' * 5000)"'
+        cmd = "python3 -c \"print('x' * 5000)\""
         ctx = RunContext()
 
         runner = CommandRunner(Command(cmd=cmd), ctx)

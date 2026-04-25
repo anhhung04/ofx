@@ -32,11 +32,13 @@ class TestParseLine:
 
     def test_nuclei_parse_line(self):
         task = TaskRegistry.create("nuclei")
-        line = json.dumps({
-            "template-id": "test-vuln",
-            "info": {"name": "Test Vuln", "severity": "high", "tags": ["cve"]},
-            "matched-at": "https://target.com",
-        })
+        line = json.dumps(
+            {
+                "template-id": "test-vuln",
+                "info": {"name": "Test Vuln", "severity": "high", "tags": ["cve"]},
+                "matched-at": "https://target.com",
+            }
+        )
         result = task.parse_line(line)
         assert any(r._type == "vulnerability" for r in result)
 
@@ -66,7 +68,9 @@ class TestParseLine:
 
     def test_feroxbuster_parse_line(self):
         task = TaskRegistry.create("feroxbuster")
-        line = json.dumps({"type": "response", "url": "https://x.com/admin", "status": 200})
+        line = json.dumps(
+            {"type": "response", "url": "https://x.com/admin", "status": 200}
+        )
         result = task.parse_line(line)
         assert len(result) == 1
         assert result[0].url == "https://x.com/admin"
@@ -90,7 +94,6 @@ class TestParseLine:
 
 
 # ── Error Scenarios & Edge Cases ───────────────────────────────────────
-
 
 
 # ── Error Scenarios & Edge Cases ───────────────────────────────────────
@@ -143,7 +146,6 @@ class TestParseLineEdgeCases:
 
         task = DnsxTask()
         assert task.parse_line("{}") == []
-
 
 
 class TestParseOutputEdgeCases:
@@ -217,7 +219,6 @@ class TestParseOutputEdgeCases:
         assert result == []
 
 
-
 class TestReadOutputFile:
     """Tests for Task._read_output_file helper."""
 
@@ -234,7 +235,6 @@ class TestReadOutputFile:
         f.write_bytes(b"\x00\x01\x02\xff")
         result = Task._read_output_file(f)
         assert isinstance(result, str)
-
 
 
 class TestStreamingDetectionEdgeCases:

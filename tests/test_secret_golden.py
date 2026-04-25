@@ -49,8 +49,13 @@ class TestSecretGolden:
         filt.register_values({self.SECRET_VALUE})
 
         record = logging.LogRecord(
-            "ofx", logging.INFO, "", 0,
-            f"Step output: {self.SECRET_VALUE}", (), None,
+            "ofx",
+            logging.INFO,
+            "",
+            0,
+            f"Step output: {self.SECRET_VALUE}",
+            (),
+            None,
         )
         filt.filter(record)
         assert self.SECRET_VALUE not in record.msg
@@ -61,8 +66,13 @@ class TestSecretGolden:
         filt.register_values({self.SECRET_VALUE})
 
         record = logging.LogRecord(
-            "ofx", logging.INFO, "", 0,
-            "Step output: %s", (self.SECRET_VALUE,), None,
+            "ofx",
+            logging.INFO,
+            "",
+            0,
+            "Step output: %s",
+            (self.SECRET_VALUE,),
+            None,
         )
         filt.filter(record)
         assert self.SECRET_VALUE not in str(record.args)
@@ -72,8 +82,13 @@ class TestSecretGolden:
         filt.register_values({self.SECRET_VALUE})
 
         record = logging.LogRecord(
-            "ofx", logging.INFO, "", 0,
-            "Result: %s %s", ("ok", self.SECRET_VALUE), None,
+            "ofx",
+            logging.INFO,
+            "",
+            0,
+            "Result: %s %s",
+            ("ok", self.SECRET_VALUE),
+            None,
         )
         filt.filter(record)
         assert self.SECRET_VALUE not in str(record.args)
@@ -102,7 +117,13 @@ class TestSecretGolden:
 
         combined = " ".join(secrets.values())
         record = logging.LogRecord(
-            "ofx", logging.INFO, "", 0, f"Output: {combined}", (), None,
+            "ofx",
+            logging.INFO,
+            "",
+            0,
+            f"Output: {combined}",
+            (),
+            None,
         )
         filt.filter(record)
         for val in secrets.values():

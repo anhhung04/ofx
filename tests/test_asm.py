@@ -23,6 +23,7 @@ from ofx.asm.models import (
 # Model tests
 # ------------------------------------------------------------------
 
+
 class TestModels:
     def test_scope_creation(self):
         s = Scope(id="abc-123", name="test.com", scope_type="domain", group="web")
@@ -79,6 +80,7 @@ class TestModels:
 # ------------------------------------------------------------------
 # Export / conversion tests
 # ------------------------------------------------------------------
+
 
 class TestExport:
     def test_subdomain_to_asset(self):
@@ -164,6 +166,7 @@ class TestExport:
 # ------------------------------------------------------------------
 # Config tests
 # ------------------------------------------------------------------
+
 
 class TestConfig:
     def test_config_roundtrip(self, tmp_path):

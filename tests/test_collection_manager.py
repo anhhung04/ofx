@@ -142,6 +142,7 @@ class TestCollectionManager:
         mgr = CollectionManager(base_dir=tmp_path)
         # Manually insert an entry
         from ofx.collections.manifest import InstalledCollection
+
         entry = InstalledCollection(
             name="test-coll",
             source="https://github.com/example/test-coll",
@@ -167,6 +168,7 @@ class TestCollectionManager:
 
     def test_remove_installed(self, tmp_path):
         from ofx.collections.manifest import InstalledCollection
+
         coll_dir = tmp_path / "my-coll"
         coll_dir.mkdir()
         (coll_dir / "test.yaml").write_text("name: test")
@@ -217,9 +219,13 @@ class TestCollectionManager:
 
     def test_add_raises_for_duplicate(self, tmp_path):
         from ofx.collections.manifest import InstalledCollection
+
         mgr = CollectionManager(base_dir=tmp_path)
         mgr._installed["existing"] = InstalledCollection(
-            name="existing", source="url", pinned_ref="x", path=str(tmp_path / "existing"),
+            name="existing",
+            source="url",
+            pinned_ref="x",
+            path=str(tmp_path / "existing"),
         )
         with pytest.raises(ValueError, match="already installed"):
             mgr.add("https://github.com/example/existing")
@@ -247,9 +253,13 @@ class TestMigration:
 
     def test_migrate_skips_already_installed(self, tmp_path):
         from ofx.collections.manifest import InstalledCollection
+
         mgr = CollectionManager(base_dir=tmp_path)
         mgr._installed["existing"] = InstalledCollection(
-            name="existing", source="u", pinned_ref="x", path=str(tmp_path / "existing"),
+            name="existing",
+            source="u",
+            pinned_ref="x",
+            path=str(tmp_path / "existing"),
         )
 
         coll_dir = tmp_path / "existing"
@@ -270,7 +280,10 @@ class TestMigration:
 
 class TestAuthenticatedUrl:
     def test_no_token(self):
-        with patch("ofx.collections.manager.CollectionManager._authenticated_url.__wrapped__", create=True):
+        with patch(
+            "ofx.collections.manager.CollectionManager._authenticated_url.__wrapped__",
+            create=True,
+        ):
             pass
         # Direct call
         with patch("ofx.settings.get_github_token", return_value=""):

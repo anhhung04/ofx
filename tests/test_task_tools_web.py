@@ -49,7 +49,6 @@ class TestHttpxParser:
 # ── Nuclei Parser ──────────────────────────────────────────────────────────
 
 
-
 # ── WhatWeb Parser ────────────────────────────────────────────────────
 
 
@@ -64,15 +63,17 @@ class TestWhatwebParser:
 
     def test_whatweb_parse_output(self):
         lines = [
-            json.dumps({
-                "target": "https://example.com",
-                "plugins": {
-                    "nginx": {"version": ["1.18.0"]},
-                    "PHP": {"version": ["7.4"]},
-                    "jQuery": {},
-                    "Country": {"string": ["US"]},
-                },
-            }),
+            json.dumps(
+                {
+                    "target": "https://example.com",
+                    "plugins": {
+                        "nginx": {"version": ["1.18.0"]},
+                        "PHP": {"version": ["7.4"]},
+                        "jQuery": {},
+                        "Country": {"string": ["US"]},
+                    },
+                }
+            ),
         ]
         task = TaskRegistry.create("whatweb")
         results = task.parse_output("\n".join(lines), "")
@@ -113,7 +114,6 @@ class TestWhatwebParser:
 # ── Sqlmap Parser ─────────────────────────────────────────────────────
 
 
-
 # ── Gowitness Parser ──────────────────────────────────────────────────────
 
 
@@ -127,11 +127,13 @@ class TestGowitnessParser:
         assert len(task.output_types) > 0
 
     def test_gowitness_parse_output(self):
-        stdout = "\n".join([
-            "[200] https://example.com - Example Domain",
-            "[301] https://www.example.com - Redirect",
-            "[404] https://example.com/missing - Not Found",
-        ])
+        stdout = "\n".join(
+            [
+                "[200] https://example.com - Example Domain",
+                "[301] https://www.example.com - Redirect",
+                "[404] https://example.com/missing - Not Found",
+            ]
+        )
         task = TaskRegistry.create("gowitness")
         results = task.parse_output(stdout, "")
         assert len(results) == 3
@@ -156,9 +158,7 @@ class TestGowitnessParser:
 
     def test_gowitness_build_command(self):
         task = TaskRegistry.create("gowitness")
-        cmd, _ = task.build_command(
-            "https://example.com", threads=5, fullpage=True
-        )
+        cmd, _ = task.build_command("https://example.com", threads=5, fullpage=True)
         assert "gowitness scan single" in cmd
         assert "--url https://example.com" in cmd
         assert "--threads 5" in cmd
@@ -172,7 +172,6 @@ class TestGowitnessParser:
 
 
 # ── JWT Tool Parser ───────────────────────────────────────────────────────
-
 
 
 class TestWafw00fParser:
@@ -194,7 +193,6 @@ class TestWafw00fParser:
         task = TaskRegistry.create("wafw00f")
         results = task.parse_output(stdout, "")
         assert results == []
-
 
 
 # ── Ffuf Parser ────────────────────────────────────────────────────────────
@@ -228,19 +226,20 @@ class TestFfufParser:
 # ── Naabu Parser ──────────────────────────────────────────────────────────
 
 
-
 class TestFeroxbusterParser:
     def test_parse_jsonl(self):
         lines = [
-            json.dumps({
-                "type": "response",
-                "url": "https://example.com/admin",
-                "status": 200,
-                "content_length": 5432,
-                "word_count": 120,
-                "line_count": 45,
-                "method": "GET",
-            }),
+            json.dumps(
+                {
+                    "type": "response",
+                    "url": "https://example.com/admin",
+                    "status": 200,
+                    "content_length": 5432,
+                    "word_count": 120,
+                    "line_count": 45,
+                    "method": "GET",
+                }
+            ),
             json.dumps({"type": "statistics", "elapsed": 10}),  # not a response
         ]
         task = TaskRegistry.create("feroxbuster")
@@ -262,7 +261,6 @@ class TestFeroxbusterParser:
 
 
 # ── Live Streaming (parse_line) ────────────────────────────────────────
-
 
 
 # ── Dirsearch Parser ──────────────────────────────────────────────────
@@ -298,7 +296,9 @@ class TestDirsearchParser:
 
     def test_command_building(self):
         task = TaskRegistry.create("dirsearch")
-        cmd, _ = task.build_command("https://example.com", extensions="php,html", threads=30)
+        cmd, _ = task.build_command(
+            "https://example.com", extensions="php,html", threads=30
+        )
         assert "dirsearch" in cmd
         assert "--format" in cmd
         assert "json" in cmd
@@ -312,7 +312,6 @@ class TestDirsearchParser:
 
 
 # ── Arjun Parser ───────────────────────────────────────────────────────
-
 
 
 # ── Gobuster Parser ───────────────────────────────────────────────────
@@ -361,7 +360,12 @@ class TestGobusterParser:
         task = TaskRegistry.create("gobuster")
         assert task.parse_line("") == []
         assert task.parse_line("Progress: 100%") == []
-        assert task.parse_line("===============================================================") == []
+        assert (
+            task.parse_line(
+                "==============================================================="
+            )
+            == []
+        )
 
     def test_gobuster_build_command(self):
         task = TaskRegistry.create("gobuster")
@@ -391,7 +395,6 @@ class TestGobusterParser:
 
 
 # ── Amass Parser ──────────────────────────────────────────────────────
-
 
 
 # ── Arjun Parser ───────────────────────────────────────────────────────
@@ -427,7 +430,9 @@ class TestArjunParser:
 
     def test_command_building(self):
         task = TaskRegistry.create("arjun")
-        cmd, out_file = task.build_command("https://example.com/api", method="POST", threads=5)
+        cmd, out_file = task.build_command(
+            "https://example.com/api", method="POST", threads=5
+        )
         assert "arjun" in cmd
         assert "-u https://example.com/api" in cmd
         assert "-m POST" in cmd
@@ -444,7 +449,6 @@ class TestArjunParser:
 
 
 # ── Testssl Parser ─────────────────────────────────────────────────────
-
 
 
 # ── X8 Parser ─────────────────────────────────────────────────────────
@@ -503,14 +507,19 @@ class TestX8Parser:
 # ── Dnsrecon Parser ───────────────────────────────────────────────────
 
 
-
 class TestKatanaParser:
     def test_parse_jsonl(self):
         lines = [
-            json.dumps({
-                "request": {"endpoint": "https://example.com/page", "host": "example.com", "method": "GET"},
-                "response": {"status_code": 200},
-            }),
+            json.dumps(
+                {
+                    "request": {
+                        "endpoint": "https://example.com/page",
+                        "host": "example.com",
+                        "method": "GET",
+                    },
+                    "response": {"status_code": 200},
+                }
+            ),
         ]
         task = TaskRegistry.create("katana")
         results = task.parse_output("\n".join(lines), "")
@@ -533,15 +542,26 @@ class TestKatanaParser:
         assert "-js-crawl" in cmd
 
 
-
 # ── Gospider Parser ────────────────────────────────────────────────────
 
 
 class TestGospiderParser:
     def test_parse_output(self):
         lines = [
-            json.dumps({"output": "https://example.com/page", "source": "sitemap", "type": "url"}),
-            json.dumps({"output": "https://example.com/robots.txt", "source": "robots", "type": "url"}),
+            json.dumps(
+                {
+                    "output": "https://example.com/page",
+                    "source": "sitemap",
+                    "type": "url",
+                }
+            ),
+            json.dumps(
+                {
+                    "output": "https://example.com/robots.txt",
+                    "source": "robots",
+                    "type": "url",
+                }
+            ),
         ]
         task = TaskRegistry.create("gospider")
         results = task.parse_output("\n".join(lines), "")
@@ -571,7 +591,6 @@ class TestGospiderParser:
 
 
 # ── Gau Parser ─────────────────────────────────────────────────────────
-
 
 
 # ── Gau Parser ─────────────────────────────────────────────────────────
@@ -613,7 +632,6 @@ class TestGauParser:
 # ── Dalfox Parser ──────────────────────────────────────────────────────
 
 
-
 # ── Hakrawler Parser ──────────────────────────────────────────────────────
 
 
@@ -627,11 +645,13 @@ class TestHakrawlerParser:
         assert len(task.output_types) > 0
 
     def test_hakrawler_parse_output(self):
-        stdout = "\n".join([
-            "https://example.com/",
-            "https://example.com/about",
-            "https://example.com/contact?ref=home",
-        ])
+        stdout = "\n".join(
+            [
+                "https://example.com/",
+                "https://example.com/about",
+                "https://example.com/contact?ref=home",
+            ]
+        )
         task = TaskRegistry.create("hakrawler")
         results = task.parse_output(stdout, "")
         assert len(results) == 3
@@ -665,7 +685,6 @@ class TestHakrawlerParser:
 # ── Subzy Parser ──────────────────────────────────────────────────────────
 
 
-
 # ── Cariddi Parser ────────────────────────────────────────────────────
 
 
@@ -681,17 +700,21 @@ class TestCariddiParser:
 
     def test_cariddi_parse_output(self):
         lines = [
-            json.dumps({
-                "url": "https://example.com/login",
-                "status_code": 200,
-                "matches": [
-                    {"name": "API Key", "match": "AKIA...", "type": "secret"},
-                ],
-            }),
-            json.dumps({
-                "url": "https://example.com/api",
-                "status_code": 200,
-            }),
+            json.dumps(
+                {
+                    "url": "https://example.com/login",
+                    "status_code": 200,
+                    "matches": [
+                        {"name": "API Key", "match": "AKIA...", "type": "secret"},
+                    ],
+                }
+            ),
+            json.dumps(
+                {
+                    "url": "https://example.com/api",
+                    "status_code": 200,
+                }
+            ),
         ]
         task = TaskRegistry.create("cariddi")
         results = task.parse_output("\n".join(lines), "")
@@ -708,10 +731,12 @@ class TestCariddiParser:
 
     def test_cariddi_parse_output_with_secrets_array(self):
         lines = [
-            json.dumps({
-                "url": "https://example.com/page",
-                "secrets": ["AWS_KEY=AKIA12345"],
-            }),
+            json.dumps(
+                {
+                    "url": "https://example.com/page",
+                    "secrets": ["AWS_KEY=AKIA12345"],
+                }
+            ),
         ]
         task = TaskRegistry.create("cariddi")
         results = task.parse_output("\n".join(lines), "")
@@ -727,10 +752,14 @@ class TestCariddiParser:
 
     def test_cariddi_parse_line(self):
         task = TaskRegistry.create("cariddi")
-        result = task.parse_line(json.dumps({
-            "url": "https://example.com/test",
-            "status_code": 404,
-        }))
+        result = task.parse_line(
+            json.dumps(
+                {
+                    "url": "https://example.com/test",
+                    "status_code": 404,
+                }
+            )
+        )
         urls = [r for r in result if isinstance(r, Url)]
         assert len(urls) == 1
         assert urls[0].url == "https://example.com/test"
@@ -756,7 +785,6 @@ class TestCariddiParser:
 # ── Nikto Parser ──────────────────────────────────────────────────────
 
 
-
 # ── Paramspider Parser ────────────────────────────────────────────────────
 
 
@@ -770,12 +798,14 @@ class TestParamspiderParser:
         assert len(task.output_types) > 0
 
     def test_paramspider_parse_output(self):
-        stdout = "\n".join([
-            "[INFO] Fetching URLs...",
-            "https://example.com/page?id=FUZZ",
-            "https://example.com/search?q=FUZZ&lang=en",
-            "/api/v1/data?token=FUZZ",
-        ])
+        stdout = "\n".join(
+            [
+                "[INFO] Fetching URLs...",
+                "https://example.com/page?id=FUZZ",
+                "https://example.com/search?q=FUZZ&lang=en",
+                "/api/v1/data?token=FUZZ",
+            ]
+        )
         task = TaskRegistry.create("paramspider")
         results = task.parse_output(stdout, "")
         assert len(results) == 3

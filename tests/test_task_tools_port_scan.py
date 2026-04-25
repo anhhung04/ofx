@@ -106,7 +106,6 @@ class TestNmapParser:
 # ── Httpx Parser ───────────────────────────────────────────────────────────
 
 
-
 # ── Naabu Parser ──────────────────────────────────────────────────────────
 
 
@@ -135,7 +134,6 @@ class TestNaabuParser:
         assert "-rate 1000" in cmd
 
 
-
 # ── Masscan Parser ────────────────────────────────────────────────────
 
 
@@ -150,19 +148,21 @@ class TestMasscanParser:
         assert task.install_cmd == "apt install -y masscan"
 
     def test_masscan_parse_output(self):
-        data = json.dumps([
-            {
-                "ip": "10.0.0.1",
-                "ports": [
-                    {"port": 80, "proto": "tcp", "status": "open"},
-                    {"port": 443, "proto": "tcp", "status": "open"},
-                ],
-            },
-            {
-                "ip": "10.0.0.2",
-                "ports": [{"port": 22, "proto": "tcp", "status": "open"}],
-            },
-        ])
+        data = json.dumps(
+            [
+                {
+                    "ip": "10.0.0.1",
+                    "ports": [
+                        {"port": 80, "proto": "tcp", "status": "open"},
+                        {"port": 443, "proto": "tcp", "status": "open"},
+                    ],
+                },
+                {
+                    "ip": "10.0.0.2",
+                    "ports": [{"port": 22, "proto": "tcp", "status": "open"}],
+                },
+            ]
+        )
         task = TaskRegistry.create("masscan")
         results = task.parse_output(data, "")
         ips = [r for r in results if isinstance(r, Ip)]
@@ -180,14 +180,21 @@ class TestMasscanParser:
         assert ports[2].ip == "10.0.0.2"
 
     def test_masscan_parse_output_with_service(self):
-        data = json.dumps([
-            {
-                "ip": "10.0.0.1",
-                "ports": [
-                    {"port": 80, "proto": "tcp", "status": "open", "service": {"name": "http"}},
-                ],
-            },
-        ])
+        data = json.dumps(
+            [
+                {
+                    "ip": "10.0.0.1",
+                    "ports": [
+                        {
+                            "port": 80,
+                            "proto": "tcp",
+                            "status": "open",
+                            "service": {"name": "http"},
+                        },
+                    ],
+                },
+            ]
+        )
         task = TaskRegistry.create("masscan")
         results = task.parse_output(data, "")
         ports = [r for r in results if isinstance(r, Port)]
@@ -224,7 +231,6 @@ class TestMasscanParser:
 # ── Assetfinder Parser ───────────────────────────────────────────────
 
 
-
 # ── Rustscan Parser ───────────────────────────────────────────────────────
 
 
@@ -238,11 +244,13 @@ class TestRustscanParser:
         assert len(task.output_types) > 0
 
     def test_rustscan_parse_output_open_format(self):
-        stdout = "\n".join([
-            "Open 10.0.0.1:22",
-            "Open 10.0.0.1:80",
-            "Open 10.0.0.1:443",
-        ])
+        stdout = "\n".join(
+            [
+                "Open 10.0.0.1:22",
+                "Open 10.0.0.1:80",
+                "Open 10.0.0.1:443",
+            ]
+        )
         task = TaskRegistry.create("rustscan")
         results = task.parse_output(stdout, "")
         assert len(results) == 3
@@ -278,7 +286,6 @@ class TestRustscanParser:
 
 
 # ── Gowitness Parser ──────────────────────────────────────────────────────
-
 
 
 # ── Fping Parser ──────────────────────────────────────────────────────
@@ -339,7 +346,6 @@ class TestFpingParser:
 # ── Cariddi Parser ────────────────────────────────────────────────────
 
 
-
 class TestNervaParser:
     def test_nerva_metadata(self):
         task = TaskRegistry.create("nerva")
@@ -352,17 +358,19 @@ class TestNervaParser:
 
     def test_nerva_parse_line_full(self):
         task = TaskRegistry.create("nerva")
-        line = json.dumps({
-            "ip": "192.168.1.1",
-            "host": "web.local",
-            "port": 80,
-            "protocol": "tcp",
-            "service": "http",
-            "version": "2.4.51",
-            "product": "Apache",
-            "banner": "Apache/2.4.51 (Ubuntu)",
-            "cpe": "cpe:/a:apache:http_server:2.4.51",
-        })
+        line = json.dumps(
+            {
+                "ip": "192.168.1.1",
+                "host": "web.local",
+                "port": 80,
+                "protocol": "tcp",
+                "service": "http",
+                "version": "2.4.51",
+                "product": "Apache",
+                "banner": "Apache/2.4.51 (Ubuntu)",
+                "cpe": "cpe:/a:apache:http_server:2.4.51",
+            }
+        )
         results = task.parse_line(line)
         ports = [r for r in results if isinstance(r, Port)]
         tags = [r for r in results if isinstance(r, Tag)]
@@ -406,11 +414,20 @@ class TestNervaParser:
 
     def test_nerva_parse_output_stdout(self):
         task = TaskRegistry.create("nerva")
-        stdout = "\n".join([
-            json.dumps({"ip": "10.0.0.1", "port": 22, "service": "ssh"}),
-            json.dumps({"ip": "10.0.0.1", "port": 80, "service": "http", "product": "nginx"}),
-            "[info] scan complete",
-        ])
+        stdout = "\n".join(
+            [
+                json.dumps({"ip": "10.0.0.1", "port": 22, "service": "ssh"}),
+                json.dumps(
+                    {
+                        "ip": "10.0.0.1",
+                        "port": 80,
+                        "service": "http",
+                        "product": "nginx",
+                    }
+                ),
+                "[info] scan complete",
+            ]
+        )
         results = task.parse_output(stdout, "")
         ports = [r for r in results if isinstance(r, Port)]
         tags = [r for r in results if isinstance(r, Tag)]
@@ -420,7 +437,17 @@ class TestNervaParser:
     def test_nerva_parse_output_file(self, tmp_path):
         task = TaskRegistry.create("nerva")
         f = tmp_path / "out.jsonl"
-        f.write_text(json.dumps({"ip": "10.0.0.1", "port": 3306, "service": "mysql", "product": "MySQL", "version": "8.0"}))
+        f.write_text(
+            json.dumps(
+                {
+                    "ip": "10.0.0.1",
+                    "port": 3306,
+                    "service": "mysql",
+                    "product": "MySQL",
+                    "version": "8.0",
+                }
+            )
+        )
         results = task.parse_output("", "", output_file=f)
         assert len(results) == 2  # Port + Tag
         assert results[0].port == 3306
@@ -436,7 +463,6 @@ class TestNervaParser:
 
 
 # ── Brutus Parser ─────────────────────────────────────────────────────────
-
 
 
 # ── Mapcidr Parser ────────────────────────────────────────────────────

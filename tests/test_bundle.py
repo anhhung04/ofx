@@ -112,7 +112,11 @@ class TestCollectModules:
         from ofx.api.bundle.collector import collect_modules
 
         files = collect_modules(set())
-        assert set(files.keys()) == {"ofx/__init__.py", "ofx/api/__init__.py", "ofx/api/_compat.py"}
+        assert set(files.keys()) == {
+            "ofx/__init__.py",
+            "ofx/api/__init__.py",
+            "ofx/api/_compat.py",
+        }
 
     def test_stub_content(self):
         from ofx.api.bundle.collector import _STUB_INIT, collect_modules
@@ -162,7 +166,10 @@ class TestBuildBundle:
         old_stdout = sys.stdout
         sys.stdout = captured
         try:
-            exec(compile(result.bootstrap, "<test_bootstrap>", "exec"), {"__name__": "__main__"})
+            exec(
+                compile(result.bootstrap, "<test_bootstrap>", "exec"),
+                {"__name__": "__main__"},
+            )
         finally:
             sys.stdout = old_stdout
 
@@ -334,7 +341,10 @@ class TestObfuscateSources:
         old_stdout = sys.stdout
         sys.stdout = captured
         try:
-            exec(compile(result.bootstrap, "<test_src_obf>", "exec"), {"__name__": "__main__"})
+            exec(
+                compile(result.bootstrap, "<test_src_obf>", "exec"),
+                {"__name__": "__main__"},
+            )
         finally:
             sys.stdout = old_stdout
 
@@ -561,7 +571,9 @@ class TestDeliverAndRun:
         from ofx.api.bundle.deliverer import deliver_and_run
 
         runner = self._make_runner()
-        result = deliver_and_run(runner, "print('hi')", method="upload", remote_tmp="/tmp/t.py")
+        result = deliver_and_run(
+            runner, "print('hi')", method="upload", remote_tmp="/tmp/t.py"
+        )
 
         runner.upload.assert_called_once()
         assert runner.run.call_count == 2  # exec + rm
@@ -641,7 +653,9 @@ class TestRunRemote:
         runner = MagicMock()
         runner.run.return_value = "win_ok"
 
-        result = run_remote("x = 1", runner, obfuscate=False, method="upload", windows=True)
+        result = run_remote(
+            "x = 1", runner, obfuscate=False, method="upload", windows=True
+        )
 
         exec_cmd = runner.run.call_args_list[0][0][0]
         assert "python " in exec_cmd  # not python3

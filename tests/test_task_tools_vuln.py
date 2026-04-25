@@ -40,7 +40,6 @@ class TestNucleiParser:
 # ── Subfinder Parser ──────────────────────────────────────────────────────
 
 
-
 # ── Nikto Parser ──────────────────────────────────────────────────────
 
 
@@ -122,7 +121,6 @@ class TestNiktoParser:
 # ── WhatWeb Parser ────────────────────────────────────────────────────
 
 
-
 # ── WPScan Parser ─────────────────────────────────────────────────────
 
 
@@ -165,7 +163,9 @@ class TestWpscanParser:
 
     def test_command_building(self):
         task = TaskRegistry.create("wpscan")
-        cmd, _ = task.build_command("https://example.com", enumerate="vp,vt", stealthy=True)
+        cmd, _ = task.build_command(
+            "https://example.com", enumerate="vp,vt", stealthy=True
+        )
         assert "wpscan" in cmd
         assert "--format" in cmd
         assert "json" in cmd
@@ -179,7 +179,6 @@ class TestWpscanParser:
 
 
 # ── SSH-Audit Parser ──────────────────────────────────────────────────
-
 
 
 # ── Sqlmap Parser ─────────────────────────────────────────────────────
@@ -242,22 +241,23 @@ class TestSqlmapParser:
 # ── X8 Parser ─────────────────────────────────────────────────────────
 
 
-
 # ── Dalfox Parser ──────────────────────────────────────────────────────
 
 
 class TestDalfoxParser:
     def test_parse_output(self):
         lines = [
-            json.dumps({
-                "type": "vuln",
-                "data": "[POC] reflected XSS found",
-                "proof": "<script>alert(1)</script>",
-                "param": "q",
-                "payload": "<script>alert(1)</script>",
-                "method": "GET",
-                "url": "https://example.com/search?q=test",
-            }),
+            json.dumps(
+                {
+                    "type": "vuln",
+                    "data": "[POC] reflected XSS found",
+                    "proof": "<script>alert(1)</script>",
+                    "param": "q",
+                    "payload": "<script>alert(1)</script>",
+                    "method": "GET",
+                    "url": "https://example.com/search?q=test",
+                }
+            ),
         ]
         task = TaskRegistry.create("dalfox")
         results = task.parse_output("\n".join(lines), "")
@@ -299,7 +299,6 @@ class TestDalfoxParser:
 # ── Maigret Parser ─────────────────────────────────────────────────────
 
 
-
 # ── Commix Parser ─────────────────────────────────────────────────────────
 
 
@@ -313,15 +312,17 @@ class TestCommixParser:
         assert len(task.output_types) > 0
 
     def test_commix_parse_output(self):
-        stdout = "\n".join([
-            "[*] Testing connection to the target URL...",
-            "[*] Checking if the target is protected by some kind of WAF/IPS...",
-            "The ('classic') technique appears to be injectable.",
-            "The ('eval-based') technique appears to be injectable.",
-            "The parameter 'id' is vulnerable.",
-            "The ('time-based') technique appears to be injectable.",
-            "The parameter 'name' is vulnerable.",
-        ])
+        stdout = "\n".join(
+            [
+                "[*] Testing connection to the target URL...",
+                "[*] Checking if the target is protected by some kind of WAF/IPS...",
+                "The ('classic') technique appears to be injectable.",
+                "The ('eval-based') technique appears to be injectable.",
+                "The parameter 'id' is vulnerable.",
+                "The ('time-based') technique appears to be injectable.",
+                "The parameter 'name' is vulnerable.",
+            ]
+        )
         task = TaskRegistry.create("commix")
         results = task.parse_output(stdout, "")
         assert len(results) == 2
@@ -340,16 +341,17 @@ class TestCommixParser:
         assert task.parse_output("", "") == []
 
     def test_commix_parse_no_vuln(self):
-        stdout = "\n".join([
-            "[*] Testing connection to the target URL...",
-            "[*] Target does not appear to be injectable.",
-        ])
+        stdout = "\n".join(
+            [
+                "[*] Testing connection to the target URL...",
+                "[*] Target does not appear to be injectable.",
+            ]
+        )
         task = TaskRegistry.create("commix")
         assert task.parse_output(stdout, "") == []
 
 
 # ── Rustscan Parser ───────────────────────────────────────────────────────
-
 
 
 # ── CRLFuzz Parser ────────────────────────────────────────────────────────
@@ -365,10 +367,12 @@ class TestCrlfuzzParser:
         assert len(task.output_types) > 0
 
     def test_crlfuzz_parse_output(self):
-        stdout = "\n".join([
-            "https://example.com/path%0d%0aInjected-Header:true",
-            "https://example.com/other%0d%0aSet-Cookie:evil",
-        ])
+        stdout = "\n".join(
+            [
+                "https://example.com/path%0d%0aInjected-Header:true",
+                "https://example.com/other%0d%0aSet-Cookie:evil",
+            ]
+        )
         task = TaskRegistry.create("crlfuzz")
         results = task.parse_output(stdout, "")
         assert len(results) == 2
@@ -392,7 +396,6 @@ class TestCrlfuzzParser:
 
 
 # ── Commix Parser ─────────────────────────────────────────────────────────
-
 
 
 # ── Grype Parser ───────────────────────────────────────────────────────
@@ -442,7 +445,6 @@ class TestGrypeParser:
 
 
 # ── Trivy Parser ───────────────────────────────────────────────────────
-
 
 
 # ── Trivy Parser ───────────────────────────────────────────────────────
@@ -504,7 +506,6 @@ class TestTrivyParser:
 # ── WPScan Parser ─────────────────────────────────────────────────────
 
 
-
 # ── Sslscan Parser ────────────────────────────────────────────────────
 
 
@@ -556,15 +557,17 @@ class TestSslscanParser:
         from ofx.tasks.output_types import Certificate
 
         xml = self._make_sslscan_xml(
-            certs=[{
-                "subject": "/CN=example.com/O=Example Inc",
-                "issuer": "/CN=DigiCert/O=DigiCert Inc",
-                "not-valid-before": "Jan  1 00:00:00 2024 GMT",
-                "not-valid-after": "Dec 31 23:59:59 2025 GMT",
-                "self-signed": "false",
-                "fingerprint": "AA:BB:CC:DD",
-                "altnames": "example.com, www.example.com",
-            }],
+            certs=[
+                {
+                    "subject": "/CN=example.com/O=Example Inc",
+                    "issuer": "/CN=DigiCert/O=DigiCert Inc",
+                    "not-valid-before": "Jan  1 00:00:00 2024 GMT",
+                    "not-valid-after": "Dec 31 23:59:59 2025 GMT",
+                    "self-signed": "false",
+                    "fingerprint": "AA:BB:CC:DD",
+                    "altnames": "example.com, www.example.com",
+                }
+            ],
         )
         task = TaskRegistry.create("sslscan")
         results = task.parse_output(xml, "")
@@ -651,7 +654,6 @@ class TestSslscanParser:
 # ── Netexec Parser ─────────────────────────────────────────────────────────
 
 
-
 # ── Testssl Parser ─────────────────────────────────────────────────────
 
 
@@ -678,6 +680,7 @@ class TestTestsslParser:
         task = TaskRegistry.create("testssl")
         results = task.parse_output("", "", output_file=outfile)
         from ofx.tasks.output_types import Certificate
+
         certs = [r for r in results if isinstance(r, Certificate)]
         tags = [r for r in results if isinstance(r, Tag)]
         # cert_notAfter starts with "cert_" → Certificate
@@ -713,7 +716,9 @@ class TestTestsslParser:
 
     def test_command_building(self):
         task = TaskRegistry.create("testssl")
-        cmd, out_file = task.build_command("example.com:443", protocols=True, vulnerabilities=True)
+        cmd, out_file = task.build_command(
+            "example.com:443", protocols=True, vulnerabilities=True
+        )
         assert "testssl.sh" in cmd
         assert "-p" in cmd
         assert "-U" in cmd
@@ -729,7 +734,6 @@ class TestTestsslParser:
 
 
 # ── H8mail Parser ─────────────────────────────────────────────────────
-
 
 
 # ── SSH-Audit Parser ──────────────────────────────────────────────────

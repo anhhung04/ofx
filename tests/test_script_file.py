@@ -34,7 +34,11 @@ async def test_script_file_relative_and_absolute(caplog):
             # Full stdout is saved to log files (not dumped to console),
             # so check the saved log files for multi-line output assertions.
             log_dir = tmpdir / "logs"
-            log_files = list(log_dir.glob("stdout_test-script-file_Run-Python-script-from-default-scripts-directory*.log"))
+            log_files = list(
+                log_dir.glob(
+                    "stdout_test-script-file_Run-Python-script-from-default-scripts-directory*.log"
+                )
+            )
             assert log_files, "Expected log file for script_file step"
             log_content = log_files[0].read_text()
             assert "REQUESTS_OK" in log_content, (

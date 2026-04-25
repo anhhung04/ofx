@@ -115,16 +115,22 @@ class TestCloudProfileManager:
     def populated_manager(self, tmp_path):
         config_path = tmp_path / "cloud.yml"
         m = CloudProfileManager(config_path=config_path)
-        m.add("do-small", {
-            "provider": "static",
-            "host": "10.0.0.1",
-            "ssh_user": "root",
-        })
-        m.add("aws-large", {
-            "provider": "static",
-            "host": "10.0.0.2",
-            "ssh_user": "ubuntu",
-        })
+        m.add(
+            "do-small",
+            {
+                "provider": "static",
+                "host": "10.0.0.1",
+                "ssh_user": "root",
+            },
+        )
+        m.add(
+            "aws-large",
+            {
+                "provider": "static",
+                "host": "10.0.0.2",
+                "ssh_user": "ubuntu",
+            },
+        )
         return m
 
     def test_empty_manager(self, manager):

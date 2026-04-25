@@ -143,9 +143,7 @@ class TestStoreFromTypedOutputs:
 
         # Patch the import path used inside the function
         with patch.dict("sys.modules", {"ofx.api.creds.exegol_history": None}):
-            result = store_from_typed_outputs(
-                [account], log_fn=logs.append
-            )
+            result = store_from_typed_outputs([account], log_fn=logs.append)
         assert result == 0
         assert any("unavailable" in m for m in logs)
 
@@ -195,9 +193,7 @@ class TestSaveOutputFile:
             script=None,
             task=None,
         )
-        result = save_output_file(
-            tmp_path, "job1", step, "hello world", {}
-        )
+        result = save_output_file(tmp_path, "job1", step, "hello world", {})
         assert result is not None
         assert result.exists()
         content = result.read_text()

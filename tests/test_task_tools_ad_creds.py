@@ -24,12 +24,14 @@ class TestNetexecParser:
         assert len(task.output_types) > 0
 
     def test_netexec_parse_output(self):
-        stdout = "\n".join([
-            "SMB  10.0.0.1  445  DC01  [+] CORP\\admin:P@ssw0rd (Pwn3d!)",
-            "SMB  10.0.0.1  445  DC01  [+] CORP\\user1:password123",
-            "SMB  10.0.0.1  445  DC01  [-] CORP\\baduser:wrong STATUS_LOGON_FAILURE",
-            "SMB  10.0.0.1  445  DC01  [*] Windows 10.0 Build 17763 x64",
-        ])
+        stdout = "\n".join(
+            [
+                "SMB  10.0.0.1  445  DC01  [+] CORP\\admin:P@ssw0rd (Pwn3d!)",
+                "SMB  10.0.0.1  445  DC01  [+] CORP\\user1:password123",
+                "SMB  10.0.0.1  445  DC01  [-] CORP\\baduser:wrong STATUS_LOGON_FAILURE",
+                "SMB  10.0.0.1  445  DC01  [*] Windows 10.0 Build 17763 x64",
+            ]
+        )
         task = TaskRegistry.create("netexec")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import Tag, UserAccount
@@ -54,7 +56,10 @@ class TestNetexecParser:
 
         users = [r for r in results if isinstance(r, UserAccount)]
         assert len(users) == 1
-        assert users[0].hash == "aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
+        assert (
+            users[0].hash
+            == "aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
+        )
         assert users[0].password == ""
 
     def test_netexec_parse_user_enum(self):
@@ -101,7 +106,6 @@ class TestNetexecParser:
 # ── Kerbrute Parser ────────────────────────────────────────────────────────
 
 
-
 # ── Kerbrute Parser ────────────────────────────────────────────────────────
 
 
@@ -115,12 +119,14 @@ class TestKerbruteParser:
         assert len(task.output_types) > 0
 
     def test_kerbrute_parse_output(self):
-        stdout = "\n".join([
-            "2024/01/15 10:00:00 >  [+] VALID USERNAME:	 admin@corp.local",
-            "2024/01/15 10:00:01 >  [+] VALID USERNAME:	 jsmith@corp.local",
-            "2024/01/15 10:00:02 >  [+] VALID LOGIN:	 admin@corp.local:Password1",
-            "2024/01/15 10:00:03 >  [-] INVALID USERNAME:  fakeuser@corp.local",
-        ])
+        stdout = "\n".join(
+            [
+                "2024/01/15 10:00:00 >  [+] VALID USERNAME:	 admin@corp.local",
+                "2024/01/15 10:00:01 >  [+] VALID USERNAME:	 jsmith@corp.local",
+                "2024/01/15 10:00:02 >  [+] VALID LOGIN:	 admin@corp.local:Password1",
+                "2024/01/15 10:00:03 >  [-] INVALID USERNAME:  fakeuser@corp.local",
+            ]
+        )
         task = TaskRegistry.create("kerbrute")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import UserAccount
@@ -158,7 +164,6 @@ class TestKerbruteParser:
 
 
 # ── Hydra Parser ───────────────────────────────────────────────────────────
-
 
 
 # ── Enum4linux Parser ──────────────────────────────────────────────────────
@@ -241,7 +246,6 @@ class TestEnum4linuxParser:
 # ── Paramspider Parser ────────────────────────────────────────────────────
 
 
-
 # ── Secretsdump Parser ────────────────────────────────────────────────────
 
 
@@ -249,7 +253,11 @@ class TestSecretsdumpParser:
     def test_build_command(self):
         task = TaskRegistry.create("secretsdump")
         cmd, _ = task.build_command(
-            "10.0.0.1", username="admin", password="pass", domain="CORP", just_dc_ntlm=True
+            "10.0.0.1",
+            username="admin",
+            password="pass",
+            domain="CORP",
+            just_dc_ntlm=True,
         )
         assert "impacket-secretsdump" in cmd
         assert "-just-dc-ntlm" in cmd
@@ -258,8 +266,10 @@ class TestSecretsdumpParser:
     def test_build_command_with_hashes(self):
         task = TaskRegistry.create("secretsdump")
         cmd, _ = task.build_command(
-            "10.0.0.1", username="admin", domain="CORP",
-            hash="aad3b435b51404ee:31d6cfe0d16ae931"
+            "10.0.0.1",
+            username="admin",
+            domain="CORP",
+            hash="aad3b435b51404ee:31d6cfe0d16ae931",
         )
         assert "-hashes aad3b435b51404ee:31d6cfe0d16ae931" in cmd
         assert "CORP/admin@10.0.0.1" in cmd
@@ -290,7 +300,6 @@ class TestSecretsdumpParser:
 # ── GetUserSPNs Parser ───────────────────────────────────────────────────
 
 
-
 # ── GetUserSPNs Parser ───────────────────────────────────────────────────
 
 
@@ -298,8 +307,11 @@ class TestGetUserSPNsParser:
     def test_build_command(self):
         task = TaskRegistry.create("getuserspns")
         cmd, _ = task.build_command(
-            "CORP.LOCAL", username="user", password="pass",
-            dc_ip="10.0.0.1", request=True
+            "CORP.LOCAL",
+            username="user",
+            password="pass",
+            dc_ip="10.0.0.1",
+            request=True,
         )
         assert "impacket-GetUserSPNs" in cmd
         assert "-dc-ip 10.0.0.1" in cmd
@@ -339,7 +351,6 @@ class TestGetUserSPNsParser:
 # ── GetNPUsers Parser ────────────────────────────────────────────────────
 
 
-
 # ── GetNPUsers Parser ────────────────────────────────────────────────────
 
 
@@ -377,7 +388,6 @@ class TestGetNPUsersParser:
 # ── GetTGT Parser ────────────────────────────────────────────────────────
 
 
-
 # ── GetTGT Parser ────────────────────────────────────────────────────────
 
 
@@ -400,10 +410,7 @@ class TestGetTGTParser:
 
     def test_parse_ticket_output(self):
         task = TaskRegistry.create("gettgt")
-        stdout = (
-            "Impacket v0.11.0\n"
-            "[*] Saving ticket in admin.ccache\n"
-        )
+        stdout = "Impacket v0.11.0\n[*] Saving ticket in admin.ccache\n"
         results = task.parse_output(stdout, "")
         assert len(results) == 1
         assert isinstance(results[0], Tag)
@@ -418,7 +425,6 @@ class TestGetTGTParser:
 # ── GetST Parser ─────────────────────────────────────────────────────────
 
 
-
 # ── GetST Parser ─────────────────────────────────────────────────────────
 
 
@@ -426,8 +432,11 @@ class TestGetSTParser:
     def test_build_command(self):
         task = TaskRegistry.create("getst")
         cmd, _ = task.build_command(
-            "CORP.LOCAL", username="svc_sql", password="pass",
-            spn="cifs/dc01.corp.local", impersonate="administrator"
+            "CORP.LOCAL",
+            username="svc_sql",
+            password="pass",
+            spn="cifs/dc01.corp.local",
+            impersonate="administrator",
         )
         assert "impacket-getST" in cmd
         assert "-spn cifs/dc01.corp.local" in cmd
@@ -456,7 +465,6 @@ class TestGetSTParser:
 # ── Certipy Parser ───────────────────────────────────────────────────────
 
 
-
 # ── Certipy Parser ───────────────────────────────────────────────────────
 
 
@@ -477,13 +485,9 @@ class TestCertipyParser:
         data = {
             "Certificate Templates": {
                 "VulnTemplate": {
-                    "Vulnerabilities": {
-                        "ESC1": "Enrollee supplies subject"
-                    }
+                    "Vulnerabilities": {"ESC1": "Enrollee supplies subject"}
                 },
-                "SafeTemplate": {
-                    "Vulnerabilities": {}
-                },
+                "SafeTemplate": {"Vulnerabilities": {}},
             }
         }
         results = task.parse_output(json.dumps(data), "")
@@ -525,7 +529,6 @@ class TestCertipyParser:
 # ── BloodHound-Python Parser ─────────────────────────────────────────────
 
 
-
 # ── BloodHound-Python Parser ─────────────────────────────────────────────
 
 
@@ -558,7 +561,9 @@ class TestBloodhoundPythonParser:
         results = task.parse_output(stdout, "")
         info_tags = [r for r in results if r.name == "collection_info"]
         status_tags = [r for r in results if r.name == "status"]
-        assert len(info_tags) == 4  # Found AD domain, Found 42 users, Found 15 groups, Found 3 computers
+        assert (
+            len(info_tags) == 4
+        )  # Found AD domain, Found 42 users, Found 15 groups, Found 3 computers
         assert len(status_tags) == 1
         assert status_tags[0].value == "completed"
         assert "42 users" in info_tags[1].value
@@ -571,7 +576,6 @@ class TestBloodhoundPythonParser:
 # ── Hashcat Parser ───────────────────────────────────────────────────────
 
 
-
 # ── Ldeep Parser ─────────────────────────────────────────────────────────
 
 
@@ -579,8 +583,11 @@ class TestLdeepParser:
     def test_build_command(self):
         task = TaskRegistry.create("ldeep")
         cmd, _ = task.build_command(
-            "10.0.0.1", username="user", password="pass",
-            domain="corp.local", action="users"
+            "10.0.0.1",
+            username="user",
+            password="pass",
+            domain="corp.local",
+            action="users",
         )
         assert "ldeep ldap" in cmd
         assert "-u user" in cmd
@@ -592,8 +599,14 @@ class TestLdeepParser:
     def test_parse_json_list(self):
         task = TaskRegistry.create("ldeep")
         data = [
-            {"sAMAccountName": "jdoe", "distinguishedName": "CN=jdoe,OU=Users,DC=corp,DC=local"},
-            {"sAMAccountName": "admin", "distinguishedName": "CN=admin,OU=Admins,DC=corp,DC=local"},
+            {
+                "sAMAccountName": "jdoe",
+                "distinguishedName": "CN=jdoe,OU=Users,DC=corp,DC=local",
+            },
+            {
+                "sAMAccountName": "admin",
+                "distinguishedName": "CN=admin,OU=Admins,DC=corp,DC=local",
+            },
         ]
         results = task.parse_output(json.dumps(data), "")
         accounts = [r for r in results if isinstance(r, UserAccount)]
@@ -604,7 +617,11 @@ class TestLdeepParser:
     def test_parse_json_asreproastable(self):
         task = TaskRegistry.create("ldeep")
         data = [
-            {"sAMAccountName": "vuln_user", "userAccountControl": 0x400000, "distinguishedName": "CN=vuln_user,DC=corp,DC=local"},
+            {
+                "sAMAccountName": "vuln_user",
+                "userAccountControl": 0x400000,
+                "distinguishedName": "CN=vuln_user,DC=corp,DC=local",
+            },
         ]
         results = task.parse_output(json.dumps(data), "")
         tags = [r for r in results if isinstance(r, Tag)]
@@ -625,16 +642,13 @@ class TestLdeepParser:
 # ── LdapDomainDump Parser ───────────────────────────────────────────────
 
 
-
 # ── LdapDomainDump Parser ───────────────────────────────────────────────
 
 
 class TestLdapDomainDumpParser:
     def test_build_command(self):
         task = TaskRegistry.create("ldapdomaindump")
-        cmd, _ = task.build_command(
-            "10.0.0.1", username="CORP\\admin", password="pass"
-        )
+        cmd, _ = task.build_command("10.0.0.1", username="CORP\\admin", password="pass")
         assert "ldapdomaindump" in cmd
         assert "ldap://10.0.0.1" in cmd
         assert "-u CORP\\admin" in cmd or "-u CORP\\\\admin" in cmd
@@ -674,7 +688,6 @@ class TestLdapDomainDumpParser:
 
 
 # ── Coercer Parser ───────────────────────────────────────────────────────
-
 
 
 # ── Responder Parser ─────────────────────────────────────────────────────
@@ -719,7 +732,6 @@ class TestResponderParser:
 # ── Ldeep Parser ─────────────────────────────────────────────────────────
 
 
-
 # ── Coercer Parser ───────────────────────────────────────────────────────
 
 
@@ -727,8 +739,11 @@ class TestCoercerParser:
     def test_build_command(self):
         task = TaskRegistry.create("coercer")
         cmd, _ = task.build_command(
-            "10.0.0.1", listener="10.0.0.100",
-            username="user", password="pass", domain="CORP"
+            "10.0.0.1",
+            listener="10.0.0.100",
+            username="user",
+            password="pass",
+            domain="CORP",
         )
         assert "coercer scan" in cmd
         assert "-t 10.0.0.1" in cmd
@@ -763,7 +778,6 @@ class TestCoercerParser:
 # ── Linpeas Parser ───────────────────────────────────────────────────────
 
 
-
 # ── Hashcat Parser ───────────────────────────────────────────────────────
 
 
@@ -771,8 +785,11 @@ class TestHashcatParser:
     def test_build_command(self):
         task = TaskRegistry.create("hashcat")
         cmd, _ = task.build_command(
-            "hashes.txt", hash_type=1000, attack_mode=0,
-            wordlist="/usr/share/wordlists/rockyou.txt", force=True
+            "hashes.txt",
+            hash_type=1000,
+            attack_mode=0,
+            wordlist="/usr/share/wordlists/rockyou.txt",
+            force=True,
         )
         assert "hashcat" in cmd
         assert "-m 1000" in cmd
@@ -814,7 +831,6 @@ class TestHashcatParser:
 # ── John Parser ──────────────────────────────────────────────────────────
 
 
-
 # ── John Parser ──────────────────────────────────────────────────────────
 
 
@@ -822,8 +838,7 @@ class TestJohnParser:
     def test_build_command(self):
         task = TaskRegistry.create("john")
         cmd, _ = task.build_command(
-            "hashes.txt", wordlist="/usr/share/wordlists/rockyou.txt",
-            format="NT"
+            "hashes.txt", wordlist="/usr/share/wordlists/rockyou.txt", format="NT"
         )
         assert "john" in cmd
         assert "--wordlist" in cmd
@@ -834,9 +849,7 @@ class TestJohnParser:
     def test_parse_show_output(self):
         task = TaskRegistry.create("john")
         stdout = (
-            "admin:password123\n"
-            "jdoe:Summer2024!\n"
-            "2 password hashes cracked, 0 left\n"
+            "admin:password123\njdoe:Summer2024!\n2 password hashes cracked, 0 left\n"
         )
         results = task.parse_output(stdout, "")
         assert len(results) == 2
@@ -858,7 +871,6 @@ class TestJohnParser:
 
 
 # ── Responder Parser ─────────────────────────────────────────────────────
-
 
 
 # ── Linpeas Parser ───────────────────────────────────────────────────────
@@ -888,10 +900,7 @@ class TestLinpeasParser:
 
     def test_parse_dedup_cves(self):
         task = TaskRegistry.create("linpeas")
-        stdout = (
-            "CVE-2021-4034 PwnKit\n"
-            "CVE-2021-4034 also mentioned here\n"
-        )
+        stdout = "CVE-2021-4034 PwnKit\nCVE-2021-4034 also mentioned here\n"
         results = task.parse_output(stdout, "")
         vulns = [r for r in results if isinstance(r, Vulnerability)]
         assert len(vulns) == 1
@@ -902,7 +911,6 @@ class TestLinpeasParser:
 
 
 # ── Winpeas Parser ───────────────────────────────────────────────────────
-
 
 
 # ── Winpeas Parser ───────────────────────────────────────────────────────
@@ -930,10 +938,7 @@ class TestWinpeasParser:
 
     def test_parse_dedup_cves(self):
         task = TaskRegistry.create("winpeas")
-        stdout = (
-            "CVE-2021-36934 first mention\n"
-            "CVE-2021-36934 second mention\n"
-        )
+        stdout = "CVE-2021-36934 first mention\nCVE-2021-36934 second mention\n"
         results = task.parse_output(stdout, "")
         vulns = [r for r in results if isinstance(r, Vulnerability)]
         assert len(vulns) == 1
@@ -941,7 +946,6 @@ class TestWinpeasParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("winpeas")
         assert task.parse_output("", "") == []
-
 
 
 # ── Hydra Parser ───────────────────────────────────────────────────────────
@@ -957,13 +961,15 @@ class TestHydraParser:
         assert len(task.output_types) > 0
 
     def test_hydra_parse_output(self):
-        stdout = "\n".join([
-            "Hydra v9.5 starting...",
-            "[DATA] max 16 tasks per 1 server",
-            "[22][ssh] host: 10.0.0.1   login: root   password: toor",
-            "[22][ssh] host: 10.0.0.1   login: admin   password: admin123",
-            "[STATUS] attack finished for 10.0.0.1",
-        ])
+        stdout = "\n".join(
+            [
+                "Hydra v9.5 starting...",
+                "[DATA] max 16 tasks per 1 server",
+                "[22][ssh] host: 10.0.0.1   login: root   password: toor",
+                "[22][ssh] host: 10.0.0.1   login: admin   password: admin123",
+                "[STATUS] attack finished for 10.0.0.1",
+            ]
+        )
         task = TaskRegistry.create("hydra")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import UserAccount
@@ -1004,7 +1010,6 @@ class TestHydraParser:
 # ── Enum4linux Parser ──────────────────────────────────────────────────────
 
 
-
 # ── Brutus Parser ─────────────────────────────────────────────────────────
 
 
@@ -1019,14 +1024,16 @@ class TestBrutusParser:
 
     def test_brutus_parse_line_full(self):
         task = TaskRegistry.create("brutus")
-        line = json.dumps({
-            "host": "192.168.1.1",
-            "port": 22,
-            "service": "ssh",
-            "username": "admin",
-            "password": "admin123",
-            "banner": "SSH-2.0-OpenSSH_8.9",
-        })
+        line = json.dumps(
+            {
+                "host": "192.168.1.1",
+                "port": 22,
+                "service": "ssh",
+                "username": "admin",
+                "password": "admin123",
+                "banner": "SSH-2.0-OpenSSH_8.9",
+            }
+        )
         results = task.parse_line(line)
         assert len(results) == 1
         ua = results[0]
@@ -1041,7 +1048,9 @@ class TestBrutusParser:
 
     def test_brutus_parse_line_alt_keys(self):
         task = TaskRegistry.create("brutus")
-        line = json.dumps({"ip": "10.0.0.5", "login": "root", "pass": "toor", "protocol": "ftp"})
+        line = json.dumps(
+            {"ip": "10.0.0.5", "login": "root", "pass": "toor", "protocol": "ftp"}
+        )
         results = task.parse_line(line)
         assert len(results) == 1
         assert results[0].username == "root"
@@ -1063,11 +1072,29 @@ class TestBrutusParser:
 
     def test_brutus_parse_output_stdout(self):
         task = TaskRegistry.create("brutus")
-        stdout = "\n".join([
-            json.dumps({"host": "10.0.0.1", "port": 22, "username": "admin", "password": "admin", "service": "ssh"}),
-            json.dumps({"host": "10.0.0.2", "port": 3306, "username": "root", "password": "", "service": "mysql"}),
-            "[info] done",
-        ])
+        stdout = "\n".join(
+            [
+                json.dumps(
+                    {
+                        "host": "10.0.0.1",
+                        "port": 22,
+                        "username": "admin",
+                        "password": "admin",
+                        "service": "ssh",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "host": "10.0.0.2",
+                        "port": 3306,
+                        "username": "root",
+                        "password": "",
+                        "service": "mysql",
+                    }
+                ),
+                "[info] done",
+            ]
+        )
         results = task.parse_output(stdout, "")
         assert len(results) == 2
         assert all(isinstance(r, UserAccount) for r in results)
@@ -1077,7 +1104,17 @@ class TestBrutusParser:
     def test_brutus_parse_output_file(self, tmp_path):
         task = TaskRegistry.create("brutus")
         f = tmp_path / "out.jsonl"
-        f.write_text(json.dumps({"host": "10.0.0.1", "port": 5432, "username": "postgres", "password": "postgres", "service": "postgresql"}))
+        f.write_text(
+            json.dumps(
+                {
+                    "host": "10.0.0.1",
+                    "port": 5432,
+                    "username": "postgres",
+                    "password": "postgres",
+                    "service": "postgresql",
+                }
+            )
+        )
         results = task.parse_output("", "", output_file=f)
         assert len(results) == 1
         assert results[0].username == "postgres"

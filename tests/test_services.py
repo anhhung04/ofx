@@ -66,8 +66,12 @@ class TestCloudProvisionerBuildKwargs:
 
     def test_static_provider(self):
         cfg = CloudConfig(
-            provider="static", host="10.0.0.1", ssh_user="admin",
-            ssh_port=2222, ssh_key="/tmp/id_rsa", ssh_password="pass",
+            provider="static",
+            host="10.0.0.1",
+            ssh_user="admin",
+            ssh_port=2222,
+            ssh_key="/tmp/id_rsa",
+            ssh_password="pass",
         )
         kw = CloudProvisioner._build_provider_kwargs(cfg)
         assert kw["host"] == "10.0.0.1"
@@ -94,7 +98,8 @@ class TestCloudProvisionerBuildKwargs:
 
     def test_aws_provider(self):
         cfg = CloudConfig(
-            provider="aws", region="eu-west-1",
+            provider="aws",
+            region="eu-west-1",
             extra={
                 "aws_access_key_id": "AKIA",
                 "aws_secret_access_key": "secret",
@@ -129,7 +134,9 @@ class TestCloudProvisionerProvision:
         with (
             patch("ofx.cloud.ssh.wait_for_connectivity", new_callable=AsyncMock),
             patch("ofx.cloud.ssh.wait_for_login", new_callable=AsyncMock),
-            patch.object(CloudProvisioner, "_create_remote_runner", return_value=MagicMock()),
+            patch.object(
+                CloudProvisioner, "_create_remote_runner", return_value=MagicMock()
+            ),
         ):
             provider, instance, runner, work_dir = await provisioner.provision(cfg)
         assert instance.ip == "1.2.3.4"
@@ -140,7 +147,9 @@ class TestCloudProvisionerProvision:
         with (
             patch("ofx.cloud.ssh.wait_for_connectivity", new_callable=AsyncMock),
             patch("ofx.cloud.ssh.wait_for_login", new_callable=AsyncMock),
-            patch.object(CloudProvisioner, "_create_remote_runner", return_value=MagicMock()),
+            patch.object(
+                CloudProvisioner, "_create_remote_runner", return_value=MagicMock()
+            ),
         ):
             _, instance, _, _ = await provisioner.provision(cfg)
         assert instance.ip == "1.2.3.4"
@@ -158,7 +167,9 @@ class TestCloudProvisionerProvision:
         with (
             patch("ofx.cloud.ssh.wait_for_connectivity", new_callable=AsyncMock),
             patch("ofx.cloud.ssh.wait_for_login", new_callable=AsyncMock),
-            patch.object(CloudProvisioner, "_create_remote_runner", return_value=MagicMock()),
+            patch.object(
+                CloudProvisioner, "_create_remote_runner", return_value=MagicMock()
+            ),
         ):
             _, _, _, work_dir = await prov.provision(cfg)
         assert "C:\\Windows\\Temp" in work_dir
@@ -197,8 +208,11 @@ class TestCloudProvisionerCreateRunner:
 
     def test_creates_ssh_runner(self):
         cfg = CloudConfig(
-            provider="static", host="10.0.0.1",
-            ssh_user="deploy", ssh_port=2222, ssh_key="/tmp/key",
+            provider="static",
+            host="10.0.0.1",
+            ssh_user="deploy",
+            ssh_port=2222,
+            ssh_key="/tmp/key",
         )
         with patch("ofx.api.post.RunnerRegistry") as mock_reg:
             mock_reg.create.return_value = MagicMock()
@@ -211,8 +225,11 @@ class TestCloudProvisionerCreateRunner:
 
     def test_creates_winrm_runner(self):
         cfg = CloudConfig(
-            provider="static", host="10.0.0.1",
-            connection_type="winrm", winrm_user="Admin", winrm_password="P@ss",
+            provider="static",
+            host="10.0.0.1",
+            connection_type="winrm",
+            winrm_user="Admin",
+            winrm_password="P@ss",
         )
         with patch("ofx.api.post.RunnerRegistry") as mock_reg:
             mock_reg.create.return_value = MagicMock()

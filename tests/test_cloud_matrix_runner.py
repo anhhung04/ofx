@@ -187,12 +187,14 @@ class TestCloudMatrixProduceLog:
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
         runner.parent = None
-        runner.ctx = RunContext(vars={
-            "fleet": {
-                "fleet_name": "[scan]{2}",
-                "fleet_index": 2,
+        runner.ctx = RunContext(
+            vars={
+                "fleet": {
+                    "fleet_name": "[scan]{2}",
+                    "fleet_index": 2,
+                }
             }
-        })
+        )
 
         msg = runner._produce_log("test message")
         assert "[scan]{2}" in msg
@@ -313,7 +315,9 @@ class TestCloudMatrixExpansion:
 class TestCloudStepRunnerEnvPrefix:
     """Tests for CloudStepRunner._build_env_prefix and _shell_escape."""
 
-    def _make_step_runner(self, ctx_envs: dict | None = None, step_env: dict | None = None):
+    def _make_step_runner(
+        self, ctx_envs: dict | None = None, step_env: dict | None = None
+    ):
         """Build a CloudStepRunner with minimal stubs — no real SSH needed."""
         from ofx.models.step import Step
         from ofx.runner.core import RunContext
@@ -358,7 +362,12 @@ class TestCloudStepRunnerEnvPrefix:
             }
         )
         prefix = runner._build_env_prefix()
-        for key in ("REMOTE_FLEET_INDEX", "REMOTE_FLEET_TOTAL", "REMOTE_FLEET_TARGET_COUNT", "REMOTE_FLEET_INPUT_FILE"):
+        for key in (
+            "REMOTE_FLEET_INDEX",
+            "REMOTE_FLEET_TOTAL",
+            "REMOTE_FLEET_TARGET_COUNT",
+            "REMOTE_FLEET_INPUT_FILE",
+        ):
             assert key in prefix
 
     def test_fleet_prefix_vars_still_exported(self):
@@ -403,7 +412,10 @@ class TestCloudStepRunnerEnvPrefix:
         """Normal file paths are unchanged by escaping."""
         from ofx.utils.shell import bash_dquote_escape
 
-        assert bash_dquote_escape("/tmp/.run-abc/fleet_targets.txt") == "/tmp/.run-abc/fleet_targets.txt"
+        assert (
+            bash_dquote_escape("/tmp/.run-abc/fleet_targets.txt")
+            == "/tmp/.run-abc/fleet_targets.txt"
+        )
 
 
 class TestCloudMatrixFailFast:
@@ -425,7 +437,9 @@ class TestCloudMatrixFailFast:
             model = type("W", (), {"name": "test-wf"})()
             runners = {}
             _runners = {}
-            def _produce_log(self, msg): return msg
+
+            def _produce_log(self, msg):
+                return msg
 
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job

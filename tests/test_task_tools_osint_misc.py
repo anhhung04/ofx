@@ -31,6 +31,7 @@ class TestSearchsploitParser:
         task = TaskRegistry.create("searchsploit")
         results = task.parse_output(json.dumps(data), "")
         from ofx.tasks.output_types import Exploit
+
         exploits = [r for r in results if isinstance(r, Exploit)]
         assert len(exploits) == 1
         assert exploits[0].name == "Apache 2.4.49 - Path Traversal"
@@ -60,19 +61,20 @@ class TestSearchsploitParser:
 # ── Gitleaks Parser ────────────────────────────────────────────────────
 
 
-
 # ── Maigret Parser ─────────────────────────────────────────────────────
 
 
 class TestMaigretParser:
     def test_parse_output(self):
         lines = [
-            json.dumps({
-                "siteName": "GitHub",
-                "url_user": "https://github.com/testuser",
-                "status": "Claimed",
-                "username": "testuser",
-            }),
+            json.dumps(
+                {
+                    "siteName": "GitHub",
+                    "url_user": "https://github.com/testuser",
+                    "status": "Claimed",
+                    "username": "testuser",
+                }
+            ),
         ]
         task = TaskRegistry.create("maigret")
         results = task.parse_output("\n".join(lines), "")
@@ -100,7 +102,6 @@ class TestMaigretParser:
 
 
 # ── Searchsploit Parser ───────────────────────────────────────────────
-
 
 
 # ── H8mail Parser ─────────────────────────────────────────────────────
@@ -152,13 +153,11 @@ class TestH8mailParser:
 # ── Whois Parser ───────────────────────────────────────────────────────
 
 
-
 # ── Holehe Parser ─────────────────────────────────────────────────────
 
 
 class TestHoleheParser:
     def test_holehe_metadata(self):
-
         task = TaskRegistry.create("holehe")
         assert task.name == "holehe"
         assert task.cmd == "holehe"
@@ -167,7 +166,6 @@ class TestHoleheParser:
         assert "holehe" in task.install_cmd
 
     def test_holehe_parse_output(self):
-
         stdout = (
             "[+] user@example.com is used on: Twitter\n"
             "[+] user@example.com is used on: GitHub\n"
@@ -188,7 +186,9 @@ class TestHoleheParser:
 
     def test_holehe_build_command(self):
         task = TaskRegistry.create("holehe")
-        cmd, out_file = task.build_command("user@example.com", only_used=True, timeout=30)
+        cmd, out_file = task.build_command(
+            "user@example.com", only_used=True, timeout=30
+        )
         assert "holehe" in cmd
         assert "--no-color" in cmd
         assert "--only-used" in cmd
@@ -201,13 +201,11 @@ class TestHoleheParser:
 # ── Sslscan Parser ────────────────────────────────────────────────────
 
 
-
 # ── TheHarvester Parser ──────────────────────────────────────────────
 
 
 class TestTheHarvesterParser:
     def test_theharvester_metadata(self):
-
         task = TaskRegistry.create("theharvester")
         assert task.name == "theharvester"
         assert task.cmd == "theHarvester"
@@ -217,7 +215,6 @@ class TestTheHarvesterParser:
         assert "theHarvester" in task.install_cmd
 
     def test_theharvester_parse_xml(self, tmp_path):
-
         xml_content = (
             "<theHarvester>"
             "<email>admin@example.com</email>"
@@ -242,12 +239,7 @@ class TestTheHarvesterParser:
         assert subs[1].host == "api.example.com"
 
     def test_theharvester_parse_stdout_fallback(self):
-
-        stdout = (
-            "[*] Searching Google...\n"
-            "user1@example.com\n"
-            "user2@example.com\n"
-        )
+        stdout = "[*] Searching Google...\nuser1@example.com\nuser2@example.com\n"
         task = TaskRegistry.create("theharvester")
         results = task.parse_output(stdout, "")
         emails = [r for r in results if isinstance(r, UserAccount)]
@@ -282,7 +274,6 @@ class TestTheHarvesterParser:
 # ── Holehe Parser ─────────────────────────────────────────────────────
 
 
-
 # ── Whois Parser ───────────────────────────────────────────────────────
 
 
@@ -299,6 +290,7 @@ class TestWhoisParser:
         task = TaskRegistry.create("whois")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import Domain
+
         domains = [r for r in results if isinstance(r, Domain)]
         assert len(domains) == 1
         assert domains[0].domain == "example.com"
@@ -326,7 +318,6 @@ class TestWhoisParser:
 
 
 # ── Gobuster Parser ───────────────────────────────────────────────────
-
 
 
 # ── Gitleaks Parser ────────────────────────────────────────────────────
@@ -378,21 +369,22 @@ class TestGitleaksParser:
 # ── Trufflehog Parser ─────────────────────────────────────────────────
 
 
-
 # ── Trufflehog Parser ─────────────────────────────────────────────────
 
 
 class TestTrufflehogParser:
     def test_parse_output(self):
         lines = [
-            json.dumps({
-                "DetectorName": "AWS",
-                "Verified": True,
-                "Raw": "AKIAIOSFODNN7EXAMPLE",
-                "SourceMetadata": {
-                    "Data": {"Filesystem": {"file": "secrets.txt"}},
-                },
-            }),
+            json.dumps(
+                {
+                    "DetectorName": "AWS",
+                    "Verified": True,
+                    "Raw": "AKIAIOSFODNN7EXAMPLE",
+                    "SourceMetadata": {
+                        "Data": {"Filesystem": {"file": "secrets.txt"}},
+                    },
+                }
+            ),
         ]
         task = TaskRegistry.create("trufflehog")
         results = task.parse_output("\n".join(lines), "")
@@ -425,7 +417,6 @@ class TestTrufflehogParser:
 # ── Grype Parser ───────────────────────────────────────────────────────
 
 
-
 # ── Name-That-Hash Parser ────────────────────────────────────────────────
 
 
@@ -451,11 +442,13 @@ class TestNameThatHashParser:
         assert tags[0].category == "crypto"
 
     def test_name_that_hash_parse_default_mode(self):
-        stdout = "\n".join([
-            "5d41402abc4b2a76b9719d911017c592",
-            "  MD5  HC: 0  JtR: raw-md5",
-            "  MD4  HC: 900  JtR: raw-md4",
-        ])
+        stdout = "\n".join(
+            [
+                "5d41402abc4b2a76b9719d911017c592",
+                "  MD5  HC: 0  JtR: raw-md5",
+                "  MD4  HC: 900  JtR: raw-md4",
+            ]
+        )
         task = TaskRegistry.create("name-that-hash")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import Tag
@@ -475,7 +468,6 @@ class TestNameThatHashParser:
 # ── Hashid Parser ─────────────────────────────────────────────────────────
 
 
-
 # ── Hashid Parser ─────────────────────────────────────────────────────────
 
 
@@ -489,12 +481,14 @@ class TestHashidParser:
         assert len(task.output_types) > 0
 
     def test_hashid_parse_output(self):
-        stdout = "\n".join([
-            "Analyzing '5d41402abc4b2a76b9719d911017c592'",
-            "[+] MD5 [Hashcat Mode: 0] [JtR Format: raw-md5]",
-            "[+] MD4 [Hashcat Mode: 900] [JtR Format: raw-md4]",
-            "[+] Domain Cached Credentials [Hashcat Mode: 1100]",
-        ])
+        stdout = "\n".join(
+            [
+                "Analyzing '5d41402abc4b2a76b9719d911017c592'",
+                "[+] MD5 [Hashcat Mode: 0] [JtR Format: raw-md5]",
+                "[+] MD4 [Hashcat Mode: 900] [JtR Format: raw-md4]",
+                "[+] Domain Cached Credentials [Hashcat Mode: 1100]",
+            ]
+        )
         task = TaskRegistry.create("hashid")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import Tag
@@ -510,12 +504,14 @@ class TestHashidParser:
         assert tags[2].value
 
     def test_hashid_parse_multiple_hashes(self):
-        stdout = "\n".join([
-            "Analyzing 'abc123'",
-            "[+] MD5",
-            "Analyzing 'def456'",
-            "[+] SHA-1",
-        ])
+        stdout = "\n".join(
+            [
+                "Analyzing 'abc123'",
+                "[+] MD5",
+                "Analyzing 'def456'",
+                "[+] SHA-1",
+            ]
+        )
         task = TaskRegistry.create("hashid")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import Tag
@@ -535,8 +531,6 @@ class TestHashidParser:
 # ── Nerva Parser ──────────────────────────────────────────────────────────
 
 
-
-
 # ── JWT Tool Parser ───────────────────────────────────────────────────────
 
 
@@ -550,13 +544,15 @@ class TestJwtToolParser:
         assert len(task.output_types) > 0
 
     def test_jwt_tool_parse_output(self):
-        stdout = "\n".join([
-            "[*] sub = \"admin\"",
-            "[*] iat = 1700000000",
-            "[+] VULNERABILITY: Algorithm confusion allows forging tokens",
-            "[*] Decoded token info line",
-            "[+] WEAK key used for signing",
-        ])
+        stdout = "\n".join(
+            [
+                '[*] sub = "admin"',
+                "[*] iat = 1700000000",
+                "[+] VULNERABILITY: Algorithm confusion allows forging tokens",
+                "[*] Decoded token info line",
+                "[+] WEAK key used for signing",
+            ]
+        )
         task = TaskRegistry.create("jwt_tool")
         results = task.parse_output(stdout, "")
         from ofx.tasks.output_types import Tag

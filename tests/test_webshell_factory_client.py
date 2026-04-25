@@ -81,7 +81,9 @@ class TestWebShellCodeFactory:
         assert "open" in code
         # assert "/etc/passwd" in code # Encoded
         assert "base64" in code
-        assert "L2V0Yy9wYXNzd2Q=" in code or "L2V0Yy9wYXNzd2Q" in code # /etc/passwd base64
+        assert (
+            "L2V0Yy9wYXNzd2Q=" in code or "L2V0Yy9wYXNzd2Q" in code
+        )  # /etc/passwd base64
 
     def test_read_file_php(self):
         """Test PHP file read generation."""
@@ -89,7 +91,10 @@ class TestWebShellCodeFactory:
         assert "file_get_contents" in code
         # assert "/var/www/config.php" in code # Encoded
         assert "base64_decode" in code
-        assert "L3Zhci93d3cvY29uZmlnLnBocA==" in code or "L3Zhci93d3cvY29uZmlnLnBocA" in code
+        assert (
+            "L3Zhci93d3cvY29uZmlnLnBocA==" in code
+            or "L3Zhci93d3cvY29uZmlnLnBocA" in code
+        )
 
     def test_read_file_jsp(self):
         """Test JSP file read generation."""

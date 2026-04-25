@@ -20,11 +20,13 @@ class TestCloudConfig:
     def test_parse_cloud_field_dict(self):
         from ofx.models.cloud import parse_cloud_field
 
-        result = parse_cloud_field({
-            "provider": "digitalocean",
-            "region": "nyc1",
-            "size": "s-1vcpu-1gb",
-        })
+        result = parse_cloud_field(
+            {
+                "provider": "digitalocean",
+                "region": "nyc1",
+                "size": "s-1vcpu-1gb",
+            }
+        )
         assert result is not None
         assert result.provider == "digitalocean"
         assert result.region == "nyc1"
@@ -266,8 +268,11 @@ class TestFleetDistributor:
         dist = FleetDistributor()
         # /16 prefix — two groups: 10.0.x.x and 10.1.x.x
         targets = [
-            "10.0.0.1", "10.0.0.2", "10.0.1.1",  # all 10.0.0.0/16
-            "10.1.0.1", "10.1.0.2",                # 10.1.0.0/16
+            "10.0.0.1",
+            "10.0.0.2",
+            "10.0.1.1",  # all 10.0.0.0/16
+            "10.1.0.1",
+            "10.1.0.2",  # 10.1.0.0/16
         ]
         result = dist.distribute(targets, count=2, mode="subnet", min_prefix=16)
         assert len(result) == 2
@@ -387,12 +392,15 @@ class TestCloudProfileManager:
         from ofx.models.cloud import CloudConfig
 
         mgr = CloudProfileManager(config_path=tmp_path / "cloud.yml")
-        mgr.add("base", {
-            "provider": "digitalocean",
-            "region": "nyc1",
-            "size": "s-1vcpu-1gb",
-            "image": "ubuntu-24-04-x64",
-        })
+        mgr.add(
+            "base",
+            {
+                "provider": "digitalocean",
+                "region": "nyc1",
+                "size": "s-1vcpu-1gb",
+                "image": "ubuntu-24-04-x64",
+            },
+        )
 
         # Inline config with profile reference
         cfg = CloudConfig(profile="base", size="s-2vcpu-2gb")
@@ -433,14 +441,12 @@ class TestCloudInstanceInfo:
         from ofx.cloud.models import CloudInstanceInfo
 
         active = CloudInstanceInfo(
-            instance_id="i-123", ip="10.0.0.1",
-            status="active", provider="do"
+            instance_id="i-123", ip="10.0.0.1", status="active", provider="do"
         )
         assert active.is_ready
 
         new = CloudInstanceInfo(
-            instance_id="i-456", ip="10.0.0.2",
-            status="new", provider="do"
+            instance_id="i-456", ip="10.0.0.2", status="new", provider="do"
         )
         assert not new.is_ready
 
@@ -449,14 +455,15 @@ class TestCloudInstanceInfo:
 
         instances = [
             CloudInstanceInfo(
-                instance_id=f"i-{i}", ip=f"10.0.0.{i}",
-                status="active", provider="do"
+                instance_id=f"i-{i}", ip=f"10.0.0.{i}", status="active", provider="do"
             )
             for i in range(3)
         ]
         fleet = FleetInfo(
-            fleet_id="f-1", name="test-fleet",
-            provider="do", instances=instances,
+            fleet_id="f-1",
+            name="test-fleet",
+            provider="do",
+            instances=instances,
         )
         assert fleet.count == 3
         assert len(fleet.ips) == 3
@@ -496,7 +503,10 @@ jobs:
         assert job.cloud is not None
         assert job.cloud.provider == "static"
         assert job.strategy is not None
-        assert job.strategy.matrix == {"tool": ["nmap", "masscan"], "target": ["10.0.0.1", "10.0.0.2"]}
+        assert job.strategy.matrix == {
+            "tool": ["nmap", "masscan"],
+            "target": ["10.0.0.1", "10.0.0.2"],
+        }
 
     def test_cloud_fleet_workflow_parses(self):
         """Cloud+fleet workflow YAML loads into correct model structure."""
@@ -596,7 +606,6 @@ class TestWaitForLogin:
 
         cfg = CloudConfig(provider="static", host="10.0.0.99", ssh_key="/tmp/fake.pem")
 
-
         async def _failing_probe(*_args, **_kwargs):
             raise ConnectionRefusedError("refused")
 
@@ -665,7 +674,9 @@ class TestFleetDistributorEdgeCases:
         """expand_fleet_to_matrix with no input should return empty, not spawn VPSes."""
         from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
 
-        combos, files = expand_fleet_to_matrix({"count": 3, "input": "", "distribution": "chunk"})
+        combos, files = expand_fleet_to_matrix(
+            {"count": 3, "input": "", "distribution": "chunk"}
+        )
         assert combos == []
         assert files == []
 
@@ -674,7 +685,12 @@ class TestFleetDistributorEdgeCases:
         from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
 
         combos, files = expand_fleet_to_matrix(
-            {"count": 2, "input": "10.0.0.1", "distribution": "chunk", "exclude": ["10.0.0.1"]},
+            {
+                "count": 2,
+                "input": "10.0.0.1",
+                "distribution": "chunk",
+                "exclude": ["10.0.0.1"],
+            },
         )
         assert combos == []
         assert files == []

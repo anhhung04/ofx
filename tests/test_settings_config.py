@@ -23,6 +23,7 @@ def isolated_config(tmp_path, monkeypatch):
 # update_config_field
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateConfigField:
     def test_creates_config_when_missing(self, isolated_config):
         from ofx.settings import update_config_field
@@ -115,6 +116,7 @@ class TestUpdateConfigField:
 # _dump_default_config
 # ---------------------------------------------------------------------------
 
+
 class TestDumpDefaultConfig:
     def test_returns_yaml_string_with_header(self):
         from ofx.settings import _CONFIG_YAML_HEADER, _dump_default_config
@@ -122,7 +124,7 @@ class TestDumpDefaultConfig:
         result = _dump_default_config()
         assert result.startswith(_CONFIG_YAML_HEADER)
         # Should be valid YAML after the header
-        body = result[len(_CONFIG_YAML_HEADER):]
+        body = result[len(_CONFIG_YAML_HEADER) :]
         data = yaml.safe_load(body)
         assert isinstance(data, dict)
 
@@ -145,6 +147,7 @@ class TestDumpDefaultConfig:
 # ---------------------------------------------------------------------------
 # _ensure_default_config
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureDefaultConfig:
     def test_creates_config_when_missing(self, isolated_config):

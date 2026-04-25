@@ -34,7 +34,10 @@ class TestStoreCredentials:
         runner = self._make_runner()
         assert runner._store_credentials([]) == 0
 
-    @patch("ofx.api.creds.exegol_history.ExegolHistoryDB", side_effect=ImportError("no pykeepass"))
+    @patch(
+        "ofx.api.creds.exegol_history.ExegolHistoryDB",
+        side_effect=ImportError("no pykeepass"),
+    )
     def test_import_error_returns_zero(self, _mock):
         """Missing pykeepass → graceful fallback."""
         runner = self._make_runner()
@@ -42,7 +45,10 @@ class TestStoreCredentials:
         result = runner._store_credentials(accounts)
         assert result == 0
 
-    @patch("ofx.api.creds.exegol_history.ExegolHistoryDB", side_effect=FileNotFoundError("no DB"))
+    @patch(
+        "ofx.api.creds.exegol_history.ExegolHistoryDB",
+        side_effect=FileNotFoundError("no DB"),
+    )
     def test_file_not_found_returns_zero(self, _mock):
         """Missing DB file → graceful fallback."""
         runner = self._make_runner()
@@ -227,9 +233,7 @@ class TestStoreCredsResolution:
 
     def test_task_execution_model_carries_flag(self):
         """TaskExecution model stores store_creds flag."""
-        model = TaskExecution(
-            task_name="hydra", target="10.0.0.1", store_creds=True
-        )
+        model = TaskExecution(task_name="hydra", target="10.0.0.1", store_creds=True)
         assert model.store_creds is True
 
     def test_task_execution_default_false(self):

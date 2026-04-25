@@ -17,7 +17,7 @@ def test_templates():
     aspx = connector.generate("aspx", password="pass", obfuscate=True)
     print(f"ASPX Preview: {aspx[:100]}...")
     assert "<%@ Page" in aspx
-    assert "System.Diagnostics" in aspx # Directive preserved
+    assert "System.Diagnostics" in aspx  # Directive preserved
     # Check for obfuscation evidence
     assert "Convert.FromBase64String" in aspx or "System.Text.Encoding" in aspx
 
@@ -33,6 +33,7 @@ def test_templates():
     assert "<%" in asp
     assert "Chr(" in asp or "Execute" in asp
 
+
 if __name__ == "__main__":
     try:
         test_templates()
@@ -40,4 +41,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nTest Failed: {e}")
         import traceback
+
         traceback.print_exc()

@@ -29,9 +29,13 @@ from ofx.runner.core.durable_git import (
 @pytest.mark.asyncio
 async def test_clean_checkpoints_by_status(tmp_path: Path) -> None:
     config = DurableRunConfig(enabled=True, resume=True, backend="file")
-    await write_checkpoint(tmp_path, config, "cp1", {"status": "completed", "name": "a"})
+    await write_checkpoint(
+        tmp_path, config, "cp1", {"status": "completed", "name": "a"}
+    )
     await write_checkpoint(tmp_path, config, "cp2", {"status": "failed", "name": "b"})
-    await write_checkpoint(tmp_path, config, "cp3", {"status": "completed", "name": "c"})
+    await write_checkpoint(
+        tmp_path, config, "cp3", {"status": "completed", "name": "c"}
+    )
 
     removed = await clean_checkpoints(tmp_path, config, status="completed")
     assert removed == 2
@@ -59,8 +63,12 @@ async def test_clean_checkpoints_by_multiple_statuses(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_clean_stale_checkpoints(tmp_path: Path) -> None:
     config = DurableRunConfig(enabled=True, resume=True, backend="file")
-    await write_checkpoint(tmp_path, config, "cp1", {"status": "running", "name": "stale"})
-    await write_checkpoint(tmp_path, config, "cp2", {"status": "completed", "name": "ok"})
+    await write_checkpoint(
+        tmp_path, config, "cp1", {"status": "running", "name": "stale"}
+    )
+    await write_checkpoint(
+        tmp_path, config, "cp2", {"status": "completed", "name": "ok"}
+    )
 
     removed = await clean_stale_checkpoints(tmp_path, config)
     assert removed == 1
@@ -149,8 +157,11 @@ async def test_is_git_repo_false(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_is_git_repo_true(tmp_path: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "git", "init", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "init",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
     result = await is_git_repo(tmp_path)
@@ -160,19 +171,32 @@ async def test_is_git_repo_true(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_auto_commit_creates_commit(tmp_path: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "git", "init", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "init",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
 
     proc = await asyncio.create_subprocess_exec(
-        "git", "config", "user.email", "test@test.com", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "config",
+        "user.email",
+        "test@test.com",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
     proc = await asyncio.create_subprocess_exec(
-        "git", "config", "user.name", "Test", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "config",
+        "user.name",
+        "Test",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
 
@@ -181,8 +205,12 @@ async def test_auto_commit_creates_commit(tmp_path: Path) -> None:
     assert result is True
 
     proc = await asyncio.create_subprocess_exec(
-        "git", "log", "--oneline", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "log",
+        "--oneline",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     stdout, _ = await proc.communicate()
     assert "test commit" in stdout.decode()
@@ -191,8 +219,11 @@ async def test_auto_commit_creates_commit(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_auto_commit_nothing_to_commit(tmp_path: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "git", "init", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "init",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
 
@@ -209,8 +240,11 @@ async def test_auto_commit_non_git_dir(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_auto_push_no_remote(tmp_path: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "git", "init", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "init",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
 
@@ -226,18 +260,31 @@ async def test_commit_and_push_no_action(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_commit_and_push_push_implies_commit(tmp_path: Path) -> None:
     proc = await asyncio.create_subprocess_exec(
-        "git", "init", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "init",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
     proc = await asyncio.create_subprocess_exec(
-        "git", "config", "user.email", "test@test.com", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "config",
+        "user.email",
+        "test@test.com",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
     proc = await asyncio.create_subprocess_exec(
-        "git", "config", "user.name", "Test", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "config",
+        "user.name",
+        "Test",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     await proc.communicate()
 
@@ -245,8 +292,12 @@ async def test_commit_and_push_push_implies_commit(tmp_path: Path) -> None:
     await commit_and_push(tmp_path, do_push=True, message="test push")
 
     proc = await asyncio.create_subprocess_exec(
-        "git", "log", "--oneline", cwd=str(tmp_path),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "git",
+        "log",
+        "--oneline",
+        cwd=str(tmp_path),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     stdout, _ = await proc.communicate()
     assert "test push" in stdout.decode()
@@ -262,12 +313,12 @@ def test_resolve_output_path_explicit(tmp_path: Path) -> None:
     assert result == tmp_path
 
 
-def test_resolve_output_path_from_global_cli_project(tmp_path: Path, monkeypatch) -> None:
+def test_resolve_output_path_from_global_cli_project(
+    tmp_path: Path, monkeypatch
+) -> None:
     from ofx.commands.flow.checkpoint import _resolve_output_path
 
-    monkeypatch.setattr(
-        "ofx.commands.get_cli_project", lambda: "globalproj"
-    )
+    monkeypatch.setattr("ofx.commands.get_cli_project", lambda: "globalproj")
     monkeypatch.setattr(
         "ofx.commands.project.project_manager.ProjectManager.resolve_path",
         classmethod(lambda cls, p: str(tmp_path)),
@@ -279,9 +330,7 @@ def test_resolve_output_path_from_global_cli_project(tmp_path: Path, monkeypatch
 def test_resolve_output_path_from_active_project(tmp_path: Path, monkeypatch) -> None:
     from ofx.commands.flow.checkpoint import _resolve_output_path
 
-    monkeypatch.setattr(
-        "ofx.commands.get_cli_project", lambda: ""
-    )
+    monkeypatch.setattr("ofx.commands.get_cli_project", lambda: "")
     monkeypatch.setattr(
         "ofx.commands.project.project_manager.ProjectManager.get_active_path",
         classmethod(lambda cls: tmp_path),
@@ -297,9 +346,7 @@ def test_resolve_output_path_from_active_project(tmp_path: Path, monkeypatch) ->
 def test_resolve_output_path_no_project_raises(monkeypatch) -> None:
     from ofx.commands.flow.checkpoint import _resolve_output_path
 
-    monkeypatch.setattr(
-        "ofx.commands.get_cli_project", lambda: ""
-    )
+    monkeypatch.setattr("ofx.commands.get_cli_project", lambda: "")
     monkeypatch.setattr(
         "ofx.commands.project.project_manager.ProjectManager.get_active_path",
         classmethod(lambda cls: None),
@@ -308,7 +355,9 @@ def test_resolve_output_path_no_project_raises(monkeypatch) -> None:
         _resolve_output_path("")
 
 
-def test_resolve_output_path_priority_explicit_over_project(tmp_path: Path, monkeypatch) -> None:
+def test_resolve_output_path_priority_explicit_over_project(
+    tmp_path: Path, monkeypatch
+) -> None:
     """Explicit output path wins over project resolution."""
     from ofx.commands.flow.checkpoint import _resolve_output_path
 

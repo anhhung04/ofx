@@ -217,9 +217,7 @@ class TestCollectionManager:
 
         d = tmp_path / "info-test"
         d.mkdir()
-        mgr._installed["info-test"] = InstalledCollection(
-            name="info-test", path=str(d)
-        )
+        mgr._installed["info-test"] = InstalledCollection(name="info-test", path=str(d))
         entry = mgr.info("info-test")
         assert entry is not None
         assert entry.name == "info-test"
@@ -229,9 +227,7 @@ class TestCollectionManager:
 
         d = tmp_path / "wf-dir"
         d.mkdir()
-        mgr._installed["wf-dir"] = InstalledCollection(
-            name="wf-dir", path=str(d)
-        )
+        mgr._installed["wf-dir"] = InstalledCollection(name="wf-dir", path=str(d))
         dirs = mgr.collection_workflow_dirs()
         assert len(dirs) == 1
         assert dirs[0] == d
@@ -244,7 +240,14 @@ class TestCollectionManager:
 
         assets_file = tmp_path / "assets.json"
         assets_file.write_text(
-            json.dumps({"legacy-coll": {"path": str(legacy_dir), "url": "https://example.com/repo"}})
+            json.dumps(
+                {
+                    "legacy-coll": {
+                        "path": str(legacy_dir),
+                        "url": "https://example.com/repo",
+                    }
+                }
+            )
         )
 
         count = mgr.migrate_from_assets(assets_file)

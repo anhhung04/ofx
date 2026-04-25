@@ -20,8 +20,8 @@ from ofx.runner.registry.memory import MemoryJobRegistry, RegistryOverflowError
 
 # ── MemoryJobRegistry maxsize ────────────────────────────────────────────
 
-class TestMemoryRegistryMaxsize:
 
+class TestMemoryRegistryMaxsize:
     async def test_default_maxsize_is_large(self):
         reg = MemoryJobRegistry()
         assert reg._maxsize == 100_000
@@ -61,8 +61,8 @@ class TestMemoryRegistryMaxsize:
 
 # ── FileRegistry atomic writes ──────────────────────────────────────────
 
-class TestFileRegistryAtomicWrite:
 
+class TestFileRegistryAtomicWrite:
     async def test_write_is_atomic(self, tmp_path):
         """Verify writes go through tmp file + os.replace."""
         filepath = tmp_path / "reg.json"
@@ -116,6 +116,7 @@ class TestFileRegistryAtomicWrite:
 
 
 # ── Protocol conformance ────────────────────────────────────────────────
+
 
 class TestProtocolConformance:
     """Verify all adapters implement the required interface."""
