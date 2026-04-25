@@ -6,9 +6,8 @@ import threading
 from collections import OrderedDict
 from typing import Any, Self
 
-from pydantic import BaseModel
-
 from jinja2 import Environment
+from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 

@@ -38,18 +38,16 @@ def show_diff(name_a: str, name_b: str) -> None:
     try:
         wf_a = _find_workflow_fuzzy(name_a)
     except Exception as e:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Workflow Not Found", str(e))
-        return
+        error_exit("Workflow Not Found", str(e))
 
     try:
         wf_b = _find_workflow_fuzzy(name_b)
     except Exception as e:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Workflow Not Found", str(e))
-        return
+        error_exit("Workflow Not Found", str(e))
 
     has_diff = False
 

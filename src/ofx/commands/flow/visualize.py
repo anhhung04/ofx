@@ -232,10 +232,9 @@ def visualize(
     try:
         workflow = _find_workflow_fuzzy(workflow_name)
     except Exception as e:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Workflow Not Found", f"Could not find workflow '{workflow_name}'", str(e))
-        return
+        error_exit("Workflow Not Found", f"Could not find workflow '{workflow_name}'", str(e))
 
     if format == "terminal":
         _render_terminal(workflow, detailed=detailed)
@@ -246,10 +245,9 @@ def visualize(
     elif format == "json":
         content = _render_json(workflow)
     else:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Invalid Format", f"Unknown format: '{format}'", "Supported: terminal, dot, json")
-        return
+        error_exit("Invalid Format", f"Unknown format: '{format}'", "Supported: terminal, dot, json")
 
     if output:
         from pathlib import Path

@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import logging
 from typing import Annotated
 
@@ -12,6 +13,13 @@ from ofx.commands.flow.task_commands import app as task_cmd_app
 from ofx.commands.project.project_manager import ProjectManager
 
 logger = logging.getLogger("ofx")
+
+
+class VisualizeFormat(str, enum.Enum):
+    terminal = "terminal"
+    dot = "dot"
+    json = "json"
+
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 app.add_typer(dump_app, name="dump", help="Dumping workflow/job/step model schemas")
@@ -566,9 +574,9 @@ def info(
 def visualize_cmd(
     workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to visualize", autocompletion=_complete_workflow_names)],
     format: Annotated[
-        str,
+        VisualizeFormat,
         typer.Option("--format", "-f", help="Output format: terminal (default), dot, json."),
-    ] = "terminal",
+    ] = VisualizeFormat.terminal,
     output: Annotated[
         str,
         typer.Option("--output", "-o", help="Save visualization to file instead of printing."),
@@ -581,7 +589,7 @@ def visualize_cmd(
     """Visualize workflow dependencies and execution flow as a DAG."""
     from ofx.commands.flow.visualize import visualize
 
-    visualize(workflow_name, format=format, output=output, detailed=detailed)
+    visualize(workflow_name, format=format.value, output=output, detailed=detailed)
 
 
 @app.command()

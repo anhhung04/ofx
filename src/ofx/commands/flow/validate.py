@@ -92,13 +92,12 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
 
 def _print_single_result(result: ValidationResult) -> None:
     """Print detailed validation result for a single workflow."""
-    from ofx.commands.ui_helpers import print_error, print_success
+    from ofx.commands.ui_helpers import error_exit, print_success
 
     console = get_console()
 
     if not result.valid:
-        print_error("Validation Failed", f"[cyan]{result.path}[/]", result.error)
-        return
+        error_exit("Validation Failed", f"[cyan]{result.path}[/]", result.error)
 
     # Build details
     details: dict[str, str] = {
@@ -219,7 +218,7 @@ def validate_workflows(
     check_tasks: bool = False,
 ) -> None:
     """Validate one or all workflows with detailed diagnostics."""
-    from ofx.commands.ui_helpers import print_error, print_info, print_warning
+    from ofx.commands.ui_helpers import error_exit, print_info, print_warning
 
     console = get_console()
 
@@ -237,8 +236,7 @@ def validate_workflows(
         return
 
     if not workflow_name:
-        print_error("Missing Argument", "Provide a workflow name or use --all")
-        return
+        error_exit("Missing Argument", "Provide a workflow name or use --all")
 
     # Single workflow: try find_workflow first, then recursive search
     from ofx.utils.workflow_utils import find_workflow
@@ -260,8 +258,7 @@ def validate_workflows(
                 break
 
     if not path:
-        print_error("Workflow Not Found", f"Could not find workflow '{workflow_name}'")
-        return
+        error_exit("Workflow Not Found", f"Could not find workflow '{workflow_name}'")
 
     print_info("Validating", f"[cyan]{workflow_name}[/]")
     console.print()

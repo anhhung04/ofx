@@ -324,3 +324,68 @@ class TestFlowHistory:
 
         records = history.load_history()
         assert records == []
+
+
+class TestFlowCommandExitCodes:
+    """Verify that flow subcommands exit non-zero on error conditions."""
+
+    def _invoke(self, args: list[str]):
+        from typer.testing import CliRunner
+
+        from ofx.commands.__init__ import _register_commands, app
+
+        runner = CliRunner()
+        _register_commands()
+        return runner.invoke(app, args)
+
+    def test_validate_missing_argument(self):
+        result = self._invoke(["flow", "validate"])
+        assert result.exit_code != 0
+
+    def test_validate_nonexistent_workflow(self):
+        result = self._invoke(["flow", "validate", "nonexistent_workflow_xyz_999"])
+        assert result.exit_code != 0
+
+    def test_info_nonexistent_workflow(self):
+        result = self._invoke(["flow", "info", "nonexistent_workflow_xyz_999"])
+        assert result.exit_code != 0
+
+    def test_lint_missing_argument(self):
+        result = self._invoke(["flow", "lint"])
+        assert result.exit_code != 0
+
+    def test_diff_nonexistent_first_workflow(self):
+        result = self._invoke(["flow", "diff", "nonexistent_a_999", "nonexistent_b_999"])
+        assert result.exit_code != 0
+
+    def test_visualize_nonexistent_workflow(self):
+        result = self._invoke(["flow", "visualize", "nonexistent_workflow_xyz_999"])
+        assert result.exit_code != 0
+
+    def test_validate_valid_workflow(self, workflow_file: Path):
+        result = self._invoke(["flow", "validate", str(workflow_file)])
+        assert result.exit_code == 0
+
+    def test_info_valid_workflow(self, workflow_file: Path):
+        result = self._invoke(["flow", "info", str(workflow_file)])
+        assert result.exit_code == 0
+
+    def test_lint_valid_workflow(self, workflow_file: Path):
+        result = self._invoke(["flow", "lint", str(workflow_file)])
+        assert result.exit_code == 0
+
+    def test_visualize_valid_workflow_terminal(self, workflow_file: Path):
+        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "terminal"])
+        assert result.exit_code == 0
+
+    def test_visualize_valid_workflow_dot(self, workflow_file: Path):
+        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "dot"])
+        assert result.exit_code == 0
+
+    def test_visualize_valid_workflow_json(self, workflow_file: Path):
+        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "json"])
+        assert result.exit_code == 0
+
+    def test_visualize_invalid_format_rejected(self, workflow_file: Path):
+        result = self._invoke(["flow", "visualize", str(workflow_file), "--format", "mermaid"])
+        assert result.exit_code != 0

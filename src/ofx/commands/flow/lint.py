@@ -110,7 +110,7 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
     """Run best-practice lint checks on workflows."""
     from rich.table import Table
 
-    from ofx.commands.ui_helpers import print_error, print_info, print_warning
+    from ofx.commands.ui_helpers import error_exit, print_info, print_warning
 
     console = get_console()
 
@@ -119,8 +119,7 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
     elif workflow_name:
         files = _find_workflow_file(workflow_name)
     else:
-        print_error("Missing Argument", "Provide a workflow name or use --all")
-        return
+        error_exit("Missing Argument", "Provide a workflow name or use --all")
 
     if not files:
         print_warning("No Workflows", "No workflow files found.")
