@@ -148,167 +148,19 @@ def list_workflows(
 
     Use --tag/-t to filter by tag, --search/-s to search, --tags to show tags.
     """
-    from collections import defaultdict
-    from pathlib import Path
+    from ofx.commands.flow.list_cmd import show_list
 
-    import yaml
-    from rich.table import Table
-    from rich.tree import Tree
-
-    from ofx.collections import CollectionManager
-    from ofx.commands.ui_helpers import print_error, print_warning
-    from ofx.settings import (
-        ALLOWED_WORKFLOW_FILE_EXTENSIONS,
-        BUILTIN_WORKFLOWS_DIR,
-        get_console,
-    )
-
-    show_all = not builtin and not collection
     filter_tags = {t.lower() for t in tag} if tag else set()
-    search_term = search.lower().strip()
 
-    def _scan_yaml_files(root: Path) -> list[Path]:
-        files: list[Path] = []
-        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            files.extend(sorted(root.rglob(f"*{ext}")))
-        return sorted(set(files))
-
-    def _read_metadata(path: Path) -> dict:
-        """Read name, description, and tags from a workflow YAML file."""
-        try:
-            with open(path) as f:
-                data = yaml.safe_load(f)
-            if isinstance(data, dict):
-                tags = data.get("tags", [])
-                return {
-                    "name": str(data.get("name", path.stem)),
-                    "description": str(data.get("description", "")),
-                    "tags": [str(t).lower() for t in tags] if isinstance(tags, list) else [],
-                }
-        except Exception as e:
-            logger.debug("Failed to parse workflow metadata from %s: %s", path, e)
-            pass
-        return {"name": path.stem, "description": "", "tags": []}
-
-    # Collect all files first: (path, source_label, base_root)
-    all_files: list[tuple[Path, str, Path]] = []
-    seen_paths: set[str] = set()
-
-    def _collect(root: Path, source: str) -> None:
-        for file in _scan_yaml_files(root):
-            resolved = str(file.resolve())
-            if resolved not in seen_paths:
-                seen_paths.add(resolved)
-                all_files.append((file, source, root))
-
-    # Built-in workflows
-    if builtin or show_all:
-        if BUILTIN_WORKFLOWS_DIR.is_dir():
-            _collect(BUILTIN_WORKFLOWS_DIR, "📦 Built-in")
-
-    # Collection workflows
-    if collection or show_all:
-        manager = CollectionManager()
-        installed = manager.list_installed()
-
-        if collection and collection not in installed:
-            print_error(
-                "Collection not found",
-                f"'{collection}' is not installed.",
-                f"Installed: {', '.join(installed) or '(none)'}",
-            )
-            raise typer.Exit(code=1)
-
-        targets = {collection: installed[collection]} if collection else installed
-        for coll_name, entry in targets.items():
-            coll_path = Path(entry.path)
-            if not coll_path.is_dir():
-                continue
-            _collect(coll_path, f"📦 {coll_name}")
-
-    console = get_console()
-
-    # --list-tags mode: show all unique tags with counts
-    if list_tags:
-        tag_counts: dict[str, int] = defaultdict(int)
-        for file, _, _ in all_files:
-            for t in _read_metadata(file)["tags"]:
-                tag_counts[t] += 1
-
-        if not tag_counts:
-            print_warning("No Tags Found", "No workflows have tags defined.")
-            return
-
-        table = Table(title="Available Tags", show_lines=False, padding=(0, 2))
-        table.add_column("Tag", style="cyan bold")
-        table.add_column("Workflows", style="white", justify="right")
-        for t in sorted(tag_counts, key=lambda x: (-tag_counts[x], x)):
-            table.add_row(t, str(tag_counts[t]))
-        console.print(table)
-        return
-
-    # Read metadata when filtering or showing
-    need_metadata = bool(filter_tags) or bool(search_term) or show_tags or show_descriptions
-    file_meta: dict[str, dict] = {}
-    if need_metadata:
-        for file, _, _ in all_files:
-            file_meta[str(file.resolve())] = _read_metadata(file)
-
-    # Build grouped tree: source_label -> {category -> [(name, tags, description)]}
-    groups: dict[str, dict[str, list[tuple[str, list[str], str]]]] = {}
-
-    for file, source, base_root in all_files:
-        resolved = str(file.resolve())
-        meta = file_meta.get(resolved, {"name": file.stem, "description": "", "tags": []})
-        tags = meta["tags"]
-        description = meta["description"]
-
-        # Apply tag filter
-        if filter_tags and not filter_tags.intersection(tags):
-            continue
-
-        # Apply search filter
-        if search_term:
-            searchable = f"{file.stem} {meta['name']} {description} {' '.join(tags)}".lower()
-            if search_term not in searchable:
-                continue
-
-        try:
-            category = file.relative_to(base_root).parent
-            cat_str = str(category) if str(category) != "." else ""
-        except ValueError:
-            cat_str = ""
-        groups.setdefault(source, defaultdict(list))[cat_str].append((file.stem, tags, description))
-
-    if not groups:
-        if filter_tags:
-            print_warning("No Workflows Found", f"No workflows matched tags: {', '.join(sorted(filter_tags))}")
-        elif search_term:
-            print_warning("No Workflows Found", f"No workflows matched search: '{search_term}'")
-        else:
-            print_warning("No Workflows Found", "No workflows matched the filter.")
-        return
-
-    root = Tree("[bold]Available Workflows[/bold]")
-
-    for source_label in sorted(groups):
-        categories = groups[source_label]
-        source_branch = root.add(f"[bold magenta]{source_label}[/bold magenta]")
-        for cat in sorted(categories):
-            if cat:
-                cat_branch = source_branch.add(f"[yellow]📁 {cat}[/yellow]")
-            else:
-                cat_branch = source_branch
-            for name, tags, description in sorted(categories[cat]):
-                parts = [f"[cyan]{name}[/cyan]"]
-                if show_tags and tags:
-                    parts.append(" ".join(f"[dim]#{t}[/dim]" for t in tags))
-                if (show_descriptions or search_term) and description:
-                    desc = description.split("\n")[0][:80]
-                    parts.append(f"[dim italic]{desc}[/dim italic]")
-                cat_branch.add("  ".join(parts))
-
-    console.print(root)
+    show_list(
+        builtin=builtin,
+        collection=collection,
+        filter_tags=filter_tags,
+        search_term=search.lower().strip(),
+        show_tags=show_tags,
+        show_descriptions=show_descriptions,
+        list_tags=list_tags,
+    )
 
 
 @app.command()
@@ -693,115 +545,17 @@ def search(
       ofx flow search nmap --tags
       ofx flow search --tag vuln --tag scan
     """
-    from pathlib import Path
-
-    import yaml
-    from rich.table import Table
-
-    from ofx.collections import CollectionManager
     from ofx.commands.ui_helpers import print_warning
-    from ofx.settings import (
-        ALLOWED_WORKFLOW_FILE_EXTENSIONS,
-        BUILTIN_WORKFLOWS_DIR,
-        get_console,
-    )
 
-    console = get_console()
     filter_tags = {t.lower() for t in tag} if tag else set()
-    search_term = query.lower().strip()
 
-    if not search_term and not filter_tags:
+    if not query.strip() and not filter_tags:
         print_warning("No Query", "Provide a search term or --tag filter.")
         raise typer.Exit(code=1)
 
-    # Gather all workflow dirs with source labels
-    sources: list[tuple[Path, str]] = []
-    if BUILTIN_WORKFLOWS_DIR.is_dir():
-        sources.append((BUILTIN_WORKFLOWS_DIR, "builtin"))
+    from ofx.commands.flow.search_cmd import show_search
 
-    user_dir = Path.home() / ".ofx" / "workflows"
-    if user_dir.is_dir():
-        sources.append((user_dir, "user"))
-
-    manager = CollectionManager()
-    for cname, entry in manager.list_installed().items():
-        cpath = Path(entry.path)
-        if cpath.is_dir():
-            sources.append((cpath, f"collection:{cname}"))
-
-    # Scan and filter
-    results: list[dict] = []
-    seen: set[str] = set()
-
-    for root, source in sources:
-        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            for path in sorted(root.rglob(f"*{ext}")):
-                resolved = str(path.resolve())
-                if resolved in seen:
-                    continue
-                seen.add(resolved)
-
-                try:
-                    data = yaml.safe_load(path.read_text())
-                    if not isinstance(data, dict):
-                        continue
-                except Exception:
-                    continue
-
-                name = str(data.get("name", path.stem))
-                desc = str(data.get("description", "")).strip()
-                tags_list = [str(t).lower() for t in data.get("tags") or [] if t]
-
-                # Tag filter
-                if filter_tags and not filter_tags.intersection(tags_list):
-                    continue
-
-                # Keyword filter
-                if search_term:
-                    searchable = f"{path.stem} {name} {desc} {' '.join(tags_list)}".lower()
-                    if search_term not in searchable:
-                        continue
-
-                try:
-                    category = str(path.relative_to(root).parent)
-                    if category == ".":
-                        category = ""
-                except ValueError:
-                    category = ""
-
-                results.append({
-                    "name": path.stem,
-                    "category": category,
-                    "description": desc.split("\n")[0][:80] if desc else "",
-                    "tags": tags_list,
-                    "source": source,
-                })
-
-    if not results:
-        if search_term and filter_tags:
-            print_warning("No Results", f"No workflows matched '{search_term}' with tags: {', '.join(sorted(filter_tags))}")
-        elif search_term:
-            print_warning("No Results", f"No workflows matched '{search_term}'")
-        else:
-            print_warning("No Results", f"No workflows matched tags: {', '.join(sorted(filter_tags))}")
-        return
-
-    table = Table(title=f"Search Results ({len(results)})", show_lines=False, padding=(0, 1))
-    table.add_column("Workflow", style="cyan bold", no_wrap=True)
-    table.add_column("Description", style="white")
-    if show_tags:
-        table.add_column("Tags", style="dim")
-    table.add_column("Source", style="dim", no_wrap=True)
-
-    for r in sorted(results, key=lambda x: (x["source"], x["category"], x["name"])):
-        wf_name = f"{r['category']}/{r['name']}" if r["category"] else r["name"]
-        row = [wf_name, r["description"]]
-        if show_tags:
-            row.append(", ".join(r["tags"]) if r["tags"] else "")
-        row.append(r["source"])
-        table.add_row(*row)
-
-    console.print(table)
+    show_search(query=query, filter_tags=filter_tags, show_tags=show_tags)
 
 
 @app.command("diff")

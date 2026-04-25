@@ -107,6 +107,85 @@ class TestFlowInfo:
         assert "uses:" in _step_type_label(Step(uses="./other.yml", name="s"))
 
 
+class TestFlowDiff:
+    def test_diff_dicts_added(self):
+        from ofx.commands.flow.diff import _diff_dicts
+
+        rows = _diff_dicts({"a": 1}, {"a": 1, "b": 2}, "test")
+        assert len(rows) == 1
+        assert rows[0][0] == "b"
+        assert "added" in rows[0][1]
+
+    def test_diff_dicts_removed(self):
+        from ofx.commands.flow.diff import _diff_dicts
+
+        rows = _diff_dicts({"a": 1, "b": 2}, {"a": 1}, "test")
+        assert len(rows) == 1
+        assert rows[0][0] == "b"
+        assert "removed" in rows[0][1]
+
+    def test_diff_dicts_changed(self):
+        from ofx.commands.flow.diff import _diff_dicts
+
+        rows = _diff_dicts({"a": 1}, {"a": 2}, "test")
+        assert len(rows) == 1
+        assert "changed" in rows[0][1]
+
+    def test_diff_dicts_identical(self):
+        from ofx.commands.flow.diff import _diff_dicts
+
+        rows = _diff_dicts({"a": 1}, {"a": 1}, "test")
+        assert rows == []
+
+    def test_diff_lists(self):
+        from ofx.commands.flow.diff import _diff_lists
+
+        added, removed, common = _diff_lists(["a", "b"], ["b", "c"])
+        assert added == ["c"]
+        assert removed == ["a"]
+        assert common == ["b"]
+
+    def test_diff_lists_identical(self):
+        from ofx.commands.flow.diff import _diff_lists
+
+        added, removed, common = _diff_lists(["a", "b"], ["a", "b"])
+        assert added == []
+        assert removed == []
+        assert common == ["a", "b"]
+
+    def test_show_diff_identical(self, workflow_file: Path, capsys):
+        """show_diff completes without error for identical workflows."""
+        from ofx.commands.flow.diff import show_diff
+
+        show_diff(str(workflow_file), str(workflow_file))
+
+    def test_show_diff_different(self, tmp_path: Path):
+        """show_diff detects differences between two workflows."""
+        from ofx.commands.flow.diff import show_diff
+
+        wf_a = {
+            "name": "workflow-a",
+            "description": "First workflow",
+            "tags": ["recon"],
+            "jobs": {"scan": {"steps": [{"name": "s1", "run": "echo a"}]}},
+        }
+        wf_b = {
+            "name": "workflow-b",
+            "description": "Second workflow",
+            "tags": ["recon", "web"],
+            "jobs": {
+                "scan": {"steps": [{"name": "s1", "run": "echo b"}]},
+                "report": {"steps": [{"name": "s2", "run": "echo report"}]},
+            },
+        }
+        path_a = tmp_path / "wf-a.yml"
+        path_b = tmp_path / "wf-b.yml"
+        path_a.write_text(yaml.dump(wf_a))
+        path_b.write_text(yaml.dump(wf_b))
+
+        show_diff(str(path_a), str(path_b))
+
+
 class TestFlowVisualize:
     def test_build_dag_data(self, workflow: Workflow):
         from ofx.commands.flow.visualize import _build_dag_data
