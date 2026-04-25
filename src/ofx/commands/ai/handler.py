@@ -9,8 +9,8 @@ from pathlib import Path
 from rich.console import Console
 
 from ofx.commands.ui_helpers import (
+    error_exit,
     header_panel,
-    print_error,
     print_success,
     print_warning,
     status_table,
@@ -45,22 +45,20 @@ def _require_deps(cfg: dict) -> None:
     from ofx.ai.client import check_ai_available
 
     if not check_ai_available():
-        print_error(
+        error_exit(
             "Missing Dependency",
             "openai package is not installed.",
             "Install with: uv add openai",
         )
-        raise SystemExit(1)
 
     if not cfg["api_key"] and not cfg["base_url"]:
-        print_error(
+        error_exit(
             "API Key Missing",
             "No API key found and no base_url configured.",
             "Set OFX_AI__API_KEY=sk-... (or OPENAI_API_KEY=sk-...) and retry, "
             "or set OFX_AI__BASE_URL for a local provider (e.g. Ollama). "
             "Run 'ofx ai setup' for configuration help.",
         )
-        raise SystemExit(1)
 
 
 def _prepare(model: str | None = None) -> tuple[dict, Console]:  # noqa: F821
@@ -260,12 +258,11 @@ class AnalyzeHandler:
 
         context_parts = self._collect_context()
         if not context_parts:
-            print_error(
+            error_exit(
                 "No Input",
                 "Nothing to analyze.",
                 "Provide --output-file, --workflow-file, or pipe data via stdin.",
             )
-            raise SystemExit(1)
 
         skill_text = _build_skill_prompt(self.skill)
         system = ANALYZE_SYSTEM_PROMPT

@@ -11,7 +11,7 @@ from ofx.commands.secret.helpers import (
     _resolve_passphrase,
 )
 from ofx.commands.ui_helpers import (
-    print_error,
+    error_exit,
     print_success,
     print_warning,
 )
@@ -86,12 +86,11 @@ def backup_secrets(
 
     output_path = Path(output_file)
     if output_path.exists() and not force:
-        print_error(
+        error_exit(
             "File Exists",
             f"Backup file already exists: {output_path}",
             "Use --force to overwrite",
         )
-        raise typer.Exit(1)
 
     try:
         count = secrets_store.backup_secrets(
@@ -110,12 +109,11 @@ def backup_secrets(
         )
 
     except Exception as e:
-        print_error(
+        error_exit(
             "Backup Error",
             "Backup failed",
             details=str(e),
         )
-        raise typer.Exit(1) from e
 
 
 @backup_app.command("restore")
@@ -179,12 +177,11 @@ def restore_secrets(
     resolved_passphrase = _resolve_passphrase(passphrase, ask_passphrase)
     console = get_console()
     if not backup_file.exists():
-        print_error(
+        error_exit(
             "File Not Found",
             "Backup file not found",
             details=str(backup_file),
         )
-        raise typer.Exit(1)
 
     _maybe_backup_store(backup_to, resolved_passphrase, backup_overwrite)
 
@@ -273,12 +270,11 @@ def restore_secrets(
         )
 
     except Exception as e:
-        print_error(
+        error_exit(
             "Restore Error",
             "Restore failed",
             details=str(e),
         )
-        raise typer.Exit(1) from e
 
 
 @backup_app.command("history")

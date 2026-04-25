@@ -7,7 +7,7 @@ import typer
 from rich.table import Table
 
 from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
-from ofx.commands.ui_helpers import print_error, print_warning
+from ofx.commands.ui_helpers import error_exit, print_warning
 from ofx.settings import get_console
 
 instance_app = typer.Typer(no_args_is_help=True, help="Manage cloud instances")
@@ -107,8 +107,7 @@ def instance_create(
         image = image or cfg.image or ""
 
     if not provider:
-        print_error("Missing cloud provider", "Specify --provider or --profile.")
-        raise typer.Exit(code=1)
+        error_exit("Missing cloud provider", "Specify --provider or --profile.")
 
     from ofx.cloud import CloudProviderRegistry
     from ofx.models.cloud import CloudConfig

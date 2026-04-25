@@ -25,7 +25,7 @@ import typer
 from rich.table import Table
 
 from ofx.commands.ui_helpers import (
-    print_error,
+    error_exit,
     print_info,
     print_success,
     session_status_style,
@@ -58,12 +58,10 @@ def _run_session_op(
     mgr = SessionManager()
     try:
         return asyncio.run(coro(mgr))
-    except FileNotFoundError as exc:
-        print_error("Session not found", f"Session '{session_id}' not found.")
-        raise typer.Exit(code=1) from exc
+    except FileNotFoundError:
+        error_exit("Session not found", f"Session '{session_id}' not found.")
     except (*extra_exc,) as exc:
-        print_error(error_title, error_msg or f"{op_name} failed.", details=str(exc))
-        raise typer.Exit(code=1) from exc
+        error_exit(error_title, error_msg or f"{op_name} failed.", details=str(exc))
 
 
 def _session_detail_table(session) -> Table:
@@ -159,8 +157,7 @@ def session_submit(
             session_project = active_path.name
 
     if cloud and local:
-        print_error("Invalid options", "Cannot use both --local and --cloud.")
-        raise typer.Exit(code=1)
+        error_exit("Invalid options", "Cannot use both --local and --cloud.")
 
     target = SessionTarget.CLOUD if cloud else SessionTarget.LOCAL
     mgr = SessionManager()
@@ -171,8 +168,7 @@ def session_submit(
             inputs=parsed_inputs, name=name, env=parsed_env, project=session_project,
         ))
     except Exception as exc:
-        print_error("Submit failed", "Session submit failed.", details=str(exc))
-        raise typer.Exit(code=1) from exc
+        error_exit("Submit failed", "Session submit failed.", details=str(exc))
 
     print_success("Session submitted", "Session submitted successfully.", details={
         "Session ID": session.id, "Name": session.name,
@@ -372,8 +368,7 @@ def session_clean(
     if older_than:
         age_seconds = _parse_duration(older_than)
         if age_seconds is None:
-            print_error("Invalid duration", f"Invalid duration: {older_than}", details="Examples: 7d, 24h, 30m, 3600s")
-            raise typer.Exit(code=1)
+            error_exit("Invalid duration", f"Invalid duration: {older_than}", details="Examples: 7d, 24h, 30m, 3600s")
 
     statuses = []
     for s in status.split(","):
@@ -381,9 +376,8 @@ def session_clean(
         if s:
             try:
                 statuses.append(SessionStatus(s))
-            except ValueError as e:
-                print_error("Invalid status", f"Unknown status: {s}")
-                raise typer.Exit(code=1) from e
+            except ValueError:
+                error_exit("Invalid status", f"Unknown status: {s}")
 
     all_sessions = store.list_sessions()
     matching = []
@@ -426,8 +420,7 @@ def session_guard(
     store = SessionStore()
     age_seconds = _parse_duration(older_than)
     if age_seconds is None:
-        print_error("Invalid duration", f"Invalid duration: {older_than}", details="Examples: 7d, 24h, 30m, 3600s")
-        raise typer.Exit(code=1)
+        error_exit("Invalid duration", f"Invalid duration: {older_than}", details="Examples: 7d, 24h, 30m, 3600s")
 
     statuses: list[SessionStatus] = []
     for raw in status.split(","):
@@ -436,9 +429,8 @@ def session_guard(
             continue
         try:
             statuses.append(SessionStatus(s))
-        except ValueError as exc:
-            print_error("Invalid status", f"Unknown status: {s}")
-            raise typer.Exit(code=1) from exc
+        except ValueError:
+            error_exit("Invalid status", f"Unknown status: {s}")
 
     removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
     print_success("Guard cleanup", "Auto-cleanup completed.", details={"Removed sessions": removed})
@@ -457,6 +449,5 @@ def session_bundle(
     try:
         bundle = asyncio.run(mgr.bundle_artifacts(session_id, output_file=out_file))
     except Exception as exc:
-        print_error("Bundle failed", "Could not create artifacts bundle.", details=str(exc))
-        raise typer.Exit(code=1) from exc
+        error_exit("Bundle failed", "Could not create artifacts bundle.", details=str(exc))
     print_success("Bundle created", "Run artifacts bundle created.", details={"Path": str(bundle)})
