@@ -104,7 +104,7 @@ call:
 ```bash
 ofx flow tasks list                          # See all 90+ built-in tasks
 ofx flow tasks info nmap                     # Task options and details
-ofx flow visualize recon.yml --format mermaid # Render the DAG
+ofx flow visualize recon.yml --format dot      # Render the DAG (DOT format)
 ofx flow run recon.yml --output ./runs/recon  # Custom output directory
 ```
 

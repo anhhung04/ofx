@@ -46,7 +46,7 @@ OFX CLI provides commands for:
 
 !!! example "Visualize workflow DAG"
 	```bash
-	ofx flow visualize my-workflow.yml --format png
+	ofx flow visualize my-workflow.yml --format dot
 	```
 
 ---
