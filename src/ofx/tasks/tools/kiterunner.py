@@ -14,8 +14,7 @@ class KiterunnerTask(Task):
     description = "API endpoint brute-force discovery"
     category = "recon/api"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v"
-        " github.com/assetnote/kiterunner/cmd/kr@latest"
+        "GOBIN=~/Tools/bin go install -v github.com/assetnote/kiterunner/cmd/kr@latest"
     )
     output_types = [Url, Tag]
 
@@ -75,4 +74,3 @@ class KiterunnerTask(Task):
             )
 
         return results
-

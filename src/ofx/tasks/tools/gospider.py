@@ -15,14 +15,18 @@ class GospiderTask(Task):
     cmd = "gospider"
     description = "Fast web spider written in Go"
     category = "url/crawl"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/jaeles-project/gospider@latest"
+    install_cmd = (
+        "GOBIN=~/Tools/bin go install -v github.com/jaeles-project/gospider@latest"
+    )
     output_types = [Url]
 
     opts = {
         "depth": OptDef(flag="-d", type=int, help="Maximum depth to crawl"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "concurrent": OptDef(flag="-c", type=int, help="Concurrent requests per site"),
-        "timeout": OptDef(flag="--timeout", type=int, help="Request timeout in seconds"),
+        "timeout": OptDef(
+            flag="--timeout", type=int, help="Request timeout in seconds"
+        ),
         "include_subs": OptDef(
             flag="--include-subs", is_flag=True, help="Include subdomains"
         ),
@@ -58,4 +62,3 @@ class GospiderTask(Task):
             pass
 
         return [Url(url=url, host=host)]
-

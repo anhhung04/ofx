@@ -62,7 +62,9 @@ class FeroxbusterTask(Task):
             flag="--collect-words", is_flag=True, help="Collect discovered words"
         ),
         "smart": OptDef(
-            flag="--smart", is_flag=True, help="Smart mode: auto-detect extensions and filter 404s"
+            flag="--smart",
+            is_flag=True,
+            help="Smart mode: auto-detect extensions and filter 404s",
         ),
         "collect_extensions": OptDef(
             flag="--collect-extensions",
@@ -74,9 +76,7 @@ class FeroxbusterTask(Task):
             is_flag=True,
             help="Force recursion on all found directories",
         ),
-        "user_agent": OptDef(
-            flag="-a", type=str, help="Custom User-Agent string"
-        ),
+        "user_agent": OptDef(flag="-a", type=str, help="Custom User-Agent string"),
     }
 
     input_flag = "-u"
@@ -86,18 +86,14 @@ class FeroxbusterTask(Task):
     silent_flag = "--silent"
     extra_flags = ["--no-state"]
 
-    def build_command(
-        self, target: str, **kwargs: Any
-    ) -> tuple[str, Path | None]:
+    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Override to pipe file/multi-line targets via stdin.
 
         feroxbuster's ``--stdin`` reads URLs from stdin (one per line),
         unlike most tools where the file flag takes a path argument.
         """
         target_is_file = (
-            target
-            and not target.startswith("http")
-            and Path(target).is_file()
+            target and not target.startswith("http") and Path(target).is_file()
         )
         has_newlines = target and "\n" in target
 
@@ -154,4 +150,3 @@ class FeroxbusterTask(Task):
                 method=data.get("method", "GET"),
             )
         ]
-

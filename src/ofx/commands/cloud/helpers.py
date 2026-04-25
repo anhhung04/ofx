@@ -12,6 +12,7 @@ def resolve_provider(profile: str = "", provider: str = "") -> str:
     Exits with code 1 if no provider can be determined.
     """
     from ofx.cloud.config import get_cloud_profile_manager
+
     if profile:
         mgr = get_cloud_profile_manager()
         try:
@@ -26,7 +27,9 @@ def resolve_provider(profile: str = "", provider: str = "") -> str:
     return provider
 
 
-def create_cloud_provider(profile: str = "", provider: str = "") -> tuple[str, CloudProvider]:
+def create_cloud_provider(
+    profile: str = "", provider: str = ""
+) -> tuple[str, CloudProvider]:
     """Resolve and initialize a cloud provider client."""
     provider_name = resolve_provider(profile, provider)
     from ofx.cloud import CloudProviderRegistry

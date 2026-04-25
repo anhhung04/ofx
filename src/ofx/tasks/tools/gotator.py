@@ -86,4 +86,3 @@ class GotatorTask(Task):
 
         domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
         return [Subdomain(host=host, domain=domain)]
-

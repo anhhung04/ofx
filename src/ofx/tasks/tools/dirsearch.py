@@ -21,9 +21,7 @@ class DirsearchTask(Task):
 
     opts = {
         "wordlist": OptDef(flag="-w", type=str, help="Wordlist path"),
-        "extensions": OptDef(
-            flag="-e", type=str, help="Extensions e.g. php,html,js"
-        ),
+        "extensions": OptDef(flag="-e", type=str, help="Extensions e.g. php,html,js"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "recursive": OptDef(flag="-r", is_flag=True, help="Brute-force recursively"),
         "recursion_depth": OptDef(

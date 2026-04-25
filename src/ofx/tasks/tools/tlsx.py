@@ -13,9 +13,7 @@ class TlsxTask(Task):
     cmd = "tlsx"
     description = "TLS/SSL certificate analysis and subdomain discovery"
     category = "cert/scan"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/tlsx/cmd/tlsx@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/tlsx/cmd/tlsx@latest"
     output_types = [Certificate, Subdomain]
 
     opts = {
@@ -30,12 +28,12 @@ class TlsxTask(Task):
             flag="-self-signed", is_flag=True, help="Show only self-signed certs"
         ),
         "tls_version": OptDef(
-            flag="-tls-version", type=str, help="Min TLS version (tls10, tls11, tls12, tls13)"
+            flag="-tls-version",
+            type=str,
+            help="Min TLS version (tls10, tls11, tls12, tls13)",
         ),
         "cipher": OptDef(flag="-cipher", is_flag=True, help="Display cipher info"),
-        "hash": OptDef(
-            flag="-hash", type=str, help="Hash type (md5, sha1, sha256)"
-        ),
+        "hash": OptDef(flag="-hash", type=str, help="Hash type (md5, sha1, sha256)"),
         "jarm": OptDef(flag="-jarm", is_flag=True, help="Compute JARM fingerprint"),
         "ja3": OptDef(flag="-ja3", is_flag=True, help="Show JA3 fingerprint"),
         "wildcard_cert": OptDef(
@@ -108,4 +106,3 @@ class TlsxTask(Task):
                 )
 
         return results
-

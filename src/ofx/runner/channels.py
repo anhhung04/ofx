@@ -79,7 +79,9 @@ class ChannelStore:
             try:
                 json_text = json.dumps(value, default=str)
             except (TypeError, ValueError) as exc:
-                raise ValueError(f"Failed to serialize channel '{channel}' data: {exc}") from exc
+                raise ValueError(
+                    f"Failed to serialize channel '{channel}' data: {exc}"
+                ) from exc
             data_path.write_text(json_text)
             # Update cache immediately
             mtime = data_path.stat().st_mtime

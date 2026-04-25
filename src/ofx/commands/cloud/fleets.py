@@ -208,7 +208,9 @@ def fleet_run(
         chunks = distributor.distribute(target_list, count, distribution)
         effective_count = len(chunks)
         if effective_count == 0:
-            console.print("[red]Fleet: no targets after parsing/exclusion. Check --targets.[/red]")
+            console.print(
+                "[red]Fleet: no targets after parsing/exclusion. Check --targets.[/red]"
+            )
             raise typer.Exit(code=1)
         temp_dir = Path(tempfile.mkdtemp(prefix="ofx_fleet_run_"))
         for i, chunk in enumerate(chunks):
@@ -280,6 +282,7 @@ def fleet_run(
             # Chunk files have been uploaded by the session manager — safe to remove
             if temp_dir:
                 import shutil as _shutil
+
                 _shutil.rmtree(temp_dir, ignore_errors=True)
 
     console.print()
@@ -432,7 +435,9 @@ def fleet_results(
 
                 proj_path = Path(ProjectManager.resolve_path(fleet_proj))
                 if proj_path.exists():
-                    agg_dir = proj_path / "evidence" / "sessions" / f"fleet-{fleet_group_id}"
+                    agg_dir = (
+                        proj_path / "evidence" / "sessions" / f"fleet-{fleet_group_id}"
+                    )
                 else:
                     fleet_proj = ""
             except Exception:
@@ -534,7 +539,9 @@ def fleet_destroy(
     """Destroy fleet instances by tag or name prefix."""
     console = get_console()
     _, cloud = create_cloud_provider(profile, provider)
-    all_instances = run_cloud_sync("list instances", lambda: asyncio.run(cloud.list_instances()))
+    all_instances = run_cloud_sync(
+        "list instances", lambda: asyncio.run(cloud.list_instances())
+    )
 
     # Filter by tag or prefix
     targets = []

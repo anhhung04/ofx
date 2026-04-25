@@ -134,11 +134,19 @@ def _parse_duration(s: str) -> int | None:
 @app.command("submit")
 def session_submit(
     workflow: Annotated[str, typer.Argument(help="Workflow file name or path")],
-    job: Annotated[str, typer.Option("--job", "-j", help="Job ID to run (default: full workflow)")] = "",
-    local: Annotated[bool, typer.Option("--local", "-l", help="Run as local background process")] = False,
-    cloud: Annotated[str, typer.Option("--cloud", "-c", help="Cloud profile to use")] = "",
+    job: Annotated[
+        str, typer.Option("--job", "-j", help="Job ID to run (default: full workflow)")
+    ] = "",
+    local: Annotated[
+        bool, typer.Option("--local", "-l", help="Run as local background process")
+    ] = False,
+    cloud: Annotated[
+        str, typer.Option("--cloud", "-c", help="Cloud profile to use")
+    ] = "",
     name: Annotated[str, typer.Option("--name", "-n", help="Session name/tag")] = "",
-    inputs: Annotated[list[str] | None, typer.Option("--input", "-i", help="Input key=value pairs")] = None,
+    inputs: Annotated[
+        list[str] | None, typer.Option("--input", "-i", help="Input key=value pairs")
+    ] = None,
 ):
     """Submit a workflow as a detached session."""
     console = get_console()
@@ -152,6 +160,7 @@ def session_submit(
     session_project = get_cli_project()
     if not session_project:
         from ofx.commands.project.project_manager import ProjectManager
+
         active_path = ProjectManager.get_active_path()
         if active_path:
             session_project = active_path.name
@@ -163,31 +172,53 @@ def session_submit(
     mgr = SessionManager()
 
     try:
-        session = asyncio.run(mgr.submit(
-            workflow, job_id=job, target=target, cloud_profile=cloud,
-            inputs=parsed_inputs, name=name, env=parsed_env, project=session_project,
-        ))
+        session = asyncio.run(
+            mgr.submit(
+                workflow,
+                job_id=job,
+                target=target,
+                cloud_profile=cloud,
+                inputs=parsed_inputs,
+                name=name,
+                env=parsed_env,
+                project=session_project,
+            )
+        )
     except Exception as exc:
         error_exit("Submit failed", "Session submit failed.", details=str(exc))
 
-    print_success("Session submitted", "Session submitted successfully.", details={
-        "Session ID": session.id, "Name": session.name,
-        "Target": session.target.value, "Status": session.status.value,
-        "Workflow": session.workflow_file,
-        "Execution scope": session.job_id or "full-workflow",
-        **(
-            {"Auto destroy": "Yes" if getattr(session, "auto_destroy", True) else "No"}
-            if session.target.value == "cloud"
-            else {}
-        ),
-        **({"Project": session.project} if session.project else {}),
-    })
+    print_success(
+        "Session submitted",
+        "Session submitted successfully.",
+        details={
+            "Session ID": session.id,
+            "Name": session.name,
+            "Target": session.target.value,
+            "Status": session.status.value,
+            "Workflow": session.workflow_file,
+            "Execution scope": session.job_id or "full-workflow",
+            **(
+                {
+                    "Auto destroy": "Yes"
+                    if getattr(session, "auto_destroy", True)
+                    else "No"
+                }
+                if session.target.value == "cloud"
+                else {}
+            ),
+            **({"Project": session.project} if session.project else {}),
+        },
+    )
     console.print(_session_detail_table(session))
-    print_info("Next steps", "Useful follow-up commands.", details={
-        "Check status": f"ofx session status {session.id}",
-        "View logs": f"ofx session logs {session.id}",
-        "Fetch results": f"ofx session fetch {session.id}",
-    })
+    print_info(
+        "Next steps",
+        "Useful follow-up commands.",
+        details={
+            "Check status": f"ofx session status {session.id}",
+            "View logs": f"ofx session logs {session.id}",
+            "Fetch results": f"ofx session fetch {session.id}",
+        },
+    )
 
 
 # ======================================================================
@@ -197,9 +228,15 @@ def session_submit(
 
 @app.command("list")
 def session_list(
-    status: Annotated[str, typer.Option("--status", "-s", help="Filter by status")] = "",
-    target: Annotated[str, typer.Option("--target", "-t", help="Filter: local or cloud")] = "",
-    project: Annotated[str, typer.Option("--project", help="Filter by project name")] = "",
+    status: Annotated[
+        str, typer.Option("--status", "-s", help="Filter by status")
+    ] = "",
+    target: Annotated[
+        str, typer.Option("--target", "-t", help="Filter: local or cloud")
+    ] = "",
+    project: Annotated[
+        str, typer.Option("--project", help="Filter by project name")
+    ] = "",
 ):
     """List all sessions."""
     console = get_console()
@@ -209,32 +246,48 @@ def session_list(
     _status = None
     if status:
         from ofx.cloud.sessions.models import SessionStatus
+
         try:
             _status = SessionStatus(status)
         except ValueError as exc:
             console.print(f"[red]Unknown status: {status}[/red]")
-            console.print(f"[dim]Valid: {', '.join(s.value for s in SessionStatus)}[/dim]")
+            console.print(
+                f"[dim]Valid: {', '.join(s.value for s in SessionStatus)}[/dim]"
+            )
             raise typer.Exit(code=1) from exc
 
-    sessions = store.list_sessions(status=_status, target=target or None, project=project or None)
+    sessions = store.list_sessions(
+        status=_status, target=target or None, project=project or None
+    )
     if not sessions:
         print_info("Sessions", "No sessions found.")
         return
 
     table = Table(title="Sessions")
     for col, opts in [
-        ("ID", {"style": "cyan", "no_wrap": True}), ("Name", {}), ("Project", {}),
-        ("Target", {}), ("Status", {}), ("Workflow", {}), ("IP/Host", {}),
-        ("PID", {}), ("Age", {"justify": "right"}),
+        ("ID", {"style": "cyan", "no_wrap": True}),
+        ("Name", {}),
+        ("Project", {}),
+        ("Target", {}),
+        ("Status", {}),
+        ("Workflow", {}),
+        ("IP/Host", {}),
+        ("PID", {}),
+        ("Age", {"justify": "right"}),
     ]:
         table.add_column(col, **opts)  # type: ignore[arg-type]
 
     for s in sessions:
         ss = session_status_style(s.status.value)
         table.add_row(
-            s.id, s.name or "-", s.project or "-", s.target.value,
-            f"[{ss}]{s.status.value}[/{ss}]", s.workflow_file,
-            s.instance_ip or "(local)", str(s.remote_pid) if s.remote_pid else "-",
+            s.id,
+            s.name or "-",
+            s.project or "-",
+            s.target.value,
+            f"[{ss}]{s.status.value}[/{ss}]",
+            s.workflow_file,
+            s.instance_ip or "(local)",
+            str(s.remote_pid) if s.remote_pid else "-",
             s.age_display(),
         )
     console.print(table)
@@ -265,7 +318,9 @@ def session_logs(
 ):
     """View session output log (tail last N lines)."""
     console = get_console()
-    output = _run_session_op(session_id, "logs", lambda mgr: mgr.logs(session_id, tail=tail))
+    output = _run_session_op(
+        session_id, "logs", lambda mgr: mgr.logs(session_id, tail=tail)
+    )
     console.print(output)
 
 
@@ -277,15 +332,22 @@ def session_logs(
 @app.command("fetch")
 def session_fetch(
     session_id: Annotated[str, typer.Argument(help="Session ID")],
-    passphrase: Annotated[str, typer.Option("--passphrase", "-p", help="Encrypt results with this passphrase")] = "",
-    output: Annotated[str, typer.Option("--output", "-o", help="Output directory")] = "",
+    passphrase: Annotated[
+        str,
+        typer.Option("--passphrase", "-p", help="Encrypt results with this passphrase"),
+    ] = "",
+    output: Annotated[
+        str, typer.Option("--output", "-o", help="Output directory")
+    ] = "",
 ):
     """Fetch results from a completed session. Optionally encrypt with --passphrase."""
     output_dir = Path(output) if output else None
     result_path = _run_session_op(
-        session_id, "fetch",
+        session_id,
+        "fetch",
         lambda mgr: mgr.fetch(session_id, passphrase=passphrase, output_dir=output_dir),
-        error_title="Fetch failed", error_msg="Failed to fetch session results.",
+        error_title="Fetch failed",
+        error_msg="Failed to fetch session results.",
         extra_exc=(RuntimeError,),
     )
     msg = "Results fetched and encrypted." if passphrase else "Results fetched."
@@ -300,15 +362,30 @@ def session_fetch(
 @app.command("decrypt")
 def session_decrypt(
     session_id: Annotated[str, typer.Argument(help="Session ID")],
-    passphrase: Annotated[str, typer.Option("--passphrase", "-p", help="Decryption passphrase", prompt=True, hide_input=True)],
-    output: Annotated[str, typer.Option("--output", "-o", help="Output directory")] = "",
+    passphrase: Annotated[
+        str,
+        typer.Option(
+            "--passphrase",
+            "-p",
+            help="Decryption passphrase",
+            prompt=True,
+            hide_input=True,
+        ),
+    ],
+    output: Annotated[
+        str, typer.Option("--output", "-o", help="Output directory")
+    ] = "",
 ):
     """Decrypt previously encrypted session results."""
     output_dir = Path(output) if output else None
     result_path = _run_session_op(
-        session_id, "decrypt",
-        lambda mgr: mgr.decrypt(session_id, passphrase=passphrase, output_dir=output_dir),
-        error_title="Decrypt failed", error_msg="Failed to decrypt session results.",
+        session_id,
+        "decrypt",
+        lambda mgr: mgr.decrypt(
+            session_id, passphrase=passphrase, output_dir=output_dir
+        ),
+        error_title="Decrypt failed",
+        error_msg="Failed to decrypt session results.",
         extra_exc=(RuntimeError, ValueError),
     )
     print_success("Results", "Results decrypted.", details={"Path": str(result_path)})
@@ -334,13 +411,17 @@ def session_cancel(session_id: Annotated[str, typer.Argument(help="Session ID")]
 @app.command("destroy")
 def session_destroy(
     session_id: Annotated[str, typer.Argument(help="Session ID")],
-    force: Annotated[bool, typer.Option("--force", "-f", help="Force destroy even if running")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Force destroy even if running")
+    ] = False,
 ):
     """Destroy a cloud session's VPS. For local, cleans up workspace."""
     session = _run_session_op(
-        session_id, "destroy",
+        session_id,
+        "destroy",
         lambda mgr: mgr.destroy(session_id, force=force),
-        error_title="Destroy failed", error_msg="Failed to destroy session.",
+        error_title="Destroy failed",
+        error_msg="Failed to destroy session.",
         extra_exc=(RuntimeError,),
     )
     print_info("Session updated", f"Session {session_id} → {session.status.value}")
@@ -353,8 +434,12 @@ def session_destroy(
 
 @app.command("clean")
 def session_clean(
-    older_than: Annotated[str, typer.Option("--older-than", help="Age threshold (e.g., 7d, 24h, 30m)")] = "",
-    status: Annotated[str, typer.Option("--status", "-s", help="Comma-separated statuses to clean")] = "completed,fetched,encrypted,destroyed,canceled",
+    older_than: Annotated[
+        str, typer.Option("--older-than", help="Age threshold (e.g., 7d, 24h, 30m)")
+    ] = "",
+    status: Annotated[
+        str, typer.Option("--status", "-s", help="Comma-separated statuses to clean")
+    ] = "completed,fetched,encrypted,destroyed,canceled",
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation")] = False,
 ):
     """Remove old session data from disk."""
@@ -368,7 +453,11 @@ def session_clean(
     if older_than:
         age_seconds = _parse_duration(older_than)
         if age_seconds is None:
-            error_exit("Invalid duration", f"Invalid duration: {older_than}", details="Examples: 7d, 24h, 30m, 3600s")
+            error_exit(
+                "Invalid duration",
+                f"Invalid duration: {older_than}",
+                details="Examples: 7d, 24h, 30m, 3600s",
+            )
 
     statuses = []
     for s in status.split(","):
@@ -386,6 +475,7 @@ def session_clean(
             continue
         if age_seconds:
             from datetime import datetime
+
             age = (datetime.now(UTC) - sess.started_at).total_seconds()
             if age < age_seconds:
                 continue
@@ -397,7 +487,9 @@ def session_clean(
 
     console.print(f"[yellow]Will remove {len(matching)} session(s):[/yellow]")
     for sess in matching:
-        console.print(f"  {sess.id}  {sess.name or '-'}  {sess.status.value}  {sess.age_display()}")
+        console.print(
+            f"  {sess.id}  {sess.name or '-'}  {sess.status.value}  {sess.age_display()}"
+        )
 
     if not yes:
         if not typer.confirm("Proceed?"):
@@ -410,8 +502,12 @@ def session_clean(
 
 @app.command("guard")
 def session_guard(
-    older_than: Annotated[str, typer.Option("--older-than", help="Age threshold (e.g., 7d, 24h, 30m)")] = "7d",
-    status: Annotated[str, typer.Option("--status", "-s", help="Comma-separated statuses to clean")] = "completed,fetched,encrypted,destroyed,canceled,failed",
+    older_than: Annotated[
+        str, typer.Option("--older-than", help="Age threshold (e.g., 7d, 24h, 30m)")
+    ] = "7d",
+    status: Annotated[
+        str, typer.Option("--status", "-s", help="Comma-separated statuses to clean")
+    ] = "completed,fetched,encrypted,destroyed,canceled,failed",
 ):
     """Auto-cleanup guard for unattended environments (non-interactive)."""
     from ofx.cloud.sessions import SessionStore
@@ -420,7 +516,11 @@ def session_guard(
     store = SessionStore()
     age_seconds = _parse_duration(older_than)
     if age_seconds is None:
-        error_exit("Invalid duration", f"Invalid duration: {older_than}", details="Examples: 7d, 24h, 30m, 3600s")
+        error_exit(
+            "Invalid duration",
+            f"Invalid duration: {older_than}",
+            details="Examples: 7d, 24h, 30m, 3600s",
+        )
 
     statuses: list[SessionStatus] = []
     for raw in status.split(","):
@@ -433,13 +533,19 @@ def session_guard(
             error_exit("Invalid status", f"Unknown status: {s}")
 
     removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
-    print_success("Guard cleanup", "Auto-cleanup completed.", details={"Removed sessions": removed})
+    print_success(
+        "Guard cleanup",
+        "Auto-cleanup completed.",
+        details={"Removed sessions": removed},
+    )
 
 
 @app.command("bundle")
 def session_bundle(
     session_id: Annotated[str, typer.Argument(help="Session ID")],
-    output: Annotated[str, typer.Option("--output", "-o", help="Output tar.gz path")] = "",
+    output: Annotated[
+        str, typer.Option("--output", "-o", help="Output tar.gz path")
+    ] = "",
 ):
     """Create a run artifacts bundle for a session (metadata + results)."""
     from ofx.cloud.sessions import SessionManager
@@ -449,5 +555,9 @@ def session_bundle(
     try:
         bundle = asyncio.run(mgr.bundle_artifacts(session_id, output_file=out_file))
     except Exception as exc:
-        error_exit("Bundle failed", "Could not create artifacts bundle.", details=str(exc))
-    print_success("Bundle created", "Run artifacts bundle created.", details={"Path": str(bundle)})
+        error_exit(
+            "Bundle failed", "Could not create artifacts bundle.", details=str(exc)
+        )
+    print_success(
+        "Bundle created", "Run artifacts bundle created.", details={"Path": str(bundle)}
+    )

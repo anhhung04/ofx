@@ -25,8 +25,7 @@ class LegitifyTask(Task):
     description = "GitHub/GitLab security posture scanner"
     category = "recon/cicd"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v"
-        " github.com/Legit-Labs/legitify@latest"
+        "GOBIN=~/Tools/bin go install -v github.com/Legit-Labs/legitify@latest"
     )
     output_types = [Vulnerability, Tag]
 
@@ -105,7 +104,11 @@ class LegitifyTask(Task):
                     severity=_SEVERITY_MAP.get(sev, Severity.MEDIUM),
                     provider="legitify",
                     description=str(desc),
-                    extra_data={k: v for k, v in v.items() if k not in ("policy_name", "severity", "entity", "description")},
+                    extra_data={
+                        k: v
+                        for k, v in v.items()
+                        if k not in ("policy_name", "severity", "entity", "description")
+                    },
                 )
             )
             results.append(Tag(name=str(policy), value=sev, category="scm_posture"))

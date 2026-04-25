@@ -289,7 +289,9 @@ class ScriptRunner(BaseRunner[Script]):
                 channels_dir,
                 outputs_file,
             )
-            result = await asyncio.get_running_loop().run_in_executor(None, future.result)
+            result = await asyncio.get_running_loop().run_in_executor(
+                None, future.result
+            )
             return result
 
     async def _pre_run(self) -> None:

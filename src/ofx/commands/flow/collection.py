@@ -19,6 +19,7 @@ def _mgr():
 
     return CollectionManager()
 
+
 # ------------------------------------------------------------------
 # add
 # ------------------------------------------------------------------
@@ -28,9 +29,7 @@ def _mgr():
 def add(
     name_or_url: Annotated[
         str,
-        typer.Argument(
-            help="Collection name, org/repo, or full git URL."
-        ),
+        typer.Argument(help="Collection name, org/repo, or full git URL."),
     ],
     name: Annotated[
         str,

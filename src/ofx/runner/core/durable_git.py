@@ -41,7 +41,9 @@ async def auto_commit(output_path: Path, message: str | None = None) -> bool:
         return False
 
     if not await is_git_repo(output_path):
-        logger.debug("auto-commit skipped: %s is not inside a git repository", output_path)
+        logger.debug(
+            "auto-commit skipped: %s is not inside a git repository", output_path
+        )
         return False
 
     rc, _, _ = await _run_git(["add", "-A", "."], output_path)

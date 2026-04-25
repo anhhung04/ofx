@@ -22,12 +22,8 @@ class NiktoTask(Task):
         "port": OptDef(flag="-p", type=str, help="Port(s) to scan"),
         "ssl": OptDef(flag="-ssl", is_flag=True, help="Force SSL mode"),
         "plugins": OptDef(flag="-Plugins", type=str, help="Plugins to run"),
-        "tuning": OptDef(
-            flag="-Tuning", type=str, help="Scan tuning options"
-        ),
-        "timeout": OptDef(
-            flag="-timeout", type=int, help="Timeout per request"
-        ),
+        "tuning": OptDef(flag="-Tuning", type=str, help="Scan tuning options"),
+        "timeout": OptDef(flag="-timeout", type=int, help="Timeout per request"),
         "maxtime": OptDef(
             flag="-maxtime", type=int, help="Maximum scan time in seconds"
         ),

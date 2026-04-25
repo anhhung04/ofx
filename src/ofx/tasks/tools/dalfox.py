@@ -106,4 +106,3 @@ class DalfoxTask(Task):
             return [Url(url=url)]
 
         return []
-

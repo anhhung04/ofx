@@ -102,4 +102,3 @@ class KatanaTask(Task):
                 return [Url(url=line)]
 
         return []
-

@@ -76,7 +76,10 @@ class SecretStore:
             temp_instance._get_cipher().decrypt(store_path.read_bytes())
             return False
         except Exception:
-            logger.debug("Secret store encryption check failed, assuming encrypted", exc_info=True)
+            logger.debug(
+                "Secret store encryption check failed, assuming encrypted",
+                exc_info=True,
+            )
             return True
 
     @classmethod
@@ -194,31 +197,45 @@ def _with_store(
     return SecretStore.get_instance(store_path, passphrase)
 
 
-def set_secret(name: str, value: Any, store_path: Path | None = None, passphrase: str | None = None) -> None:
+def set_secret(
+    name: str, value: Any, store_path: Path | None = None, passphrase: str | None = None
+) -> None:
     _with_store(store_path, passphrase).set(name, value)
 
 
-def get_secret(name: str, store_path: Path | None = None, passphrase: str | None = None) -> Any:
+def get_secret(
+    name: str, store_path: Path | None = None, passphrase: str | None = None
+) -> Any:
     return _with_store(store_path, passphrase).get(name)
 
 
-def delete_secret(name: str, store_path: Path | None = None, passphrase: str | None = None) -> bool:
+def delete_secret(
+    name: str, store_path: Path | None = None, passphrase: str | None = None
+) -> bool:
     return _with_store(store_path, passphrase).delete(name)
 
 
-def list_secrets(store_path: Path | None = None, passphrase: str | None = None) -> dict[str, Any]:
+def list_secrets(
+    store_path: Path | None = None, passphrase: str | None = None
+) -> dict[str, Any]:
     return _with_store(store_path, passphrase).list()
 
 
-def secret_exists(name: str, store_path: Path | None = None, passphrase: str | None = None) -> bool:
+def secret_exists(
+    name: str, store_path: Path | None = None, passphrase: str | None = None
+) -> bool:
     return _with_store(store_path, passphrase).exists(name)
 
 
-def clear_secrets(store_path: Path | None = None, passphrase: str | None = None) -> None:
+def clear_secrets(
+    store_path: Path | None = None, passphrase: str | None = None
+) -> None:
     _with_store(store_path, passphrase).clear()
 
 
-def export_secrets(output_path: Path, store_path: Path | None = None, passphrase: str | None = None) -> int:
+def export_secrets(
+    output_path: Path, store_path: Path | None = None, passphrase: str | None = None
+) -> int:
     secrets = _with_store(store_path, passphrase).export_unencrypted()
     if secrets:
         output_path.write_text(json.dumps(secrets, indent=2))
@@ -226,8 +243,10 @@ def export_secrets(output_path: Path, store_path: Path | None = None, passphrase
 
 
 def import_secrets_from_file(
-    input_path: Path, overwrite: bool = False,
-    store_path: Path | None = None, passphrase: str | None = None,
+    input_path: Path,
+    overwrite: bool = False,
+    store_path: Path | None = None,
+    passphrase: str | None = None,
 ) -> int:
     if not input_path.exists():
         raise FileNotFoundError(f"File not found: {input_path}")
@@ -264,10 +283,13 @@ def get_store_path(store_path: Path | None = None) -> Path:
     if store_path:
         return store_path
     from ofx.settings import SECRETS_STORE
+
     return SECRETS_STORE
 
 
-def get_store_info(store_path: Path | None = None, passphrase: str | None = None) -> dict[str, Any]:
+def get_store_info(
+    store_path: Path | None = None, passphrase: str | None = None
+) -> dict[str, Any]:
     path = get_store_path(store_path)
     return {
         "path": str(path),
@@ -299,10 +321,13 @@ def backup_secrets(
         return 0
 
     from datetime import datetime
+
     backup_data = {
         "metadata": {
-            "version": "1.0", "created": datetime.now().isoformat(),
-            "count": len(secrets), "type": "ofx-secret-backup",
+            "version": "1.0",
+            "created": datetime.now().isoformat(),
+            "count": len(secrets),
+            "type": "ofx-secret-backup",
         },
         "secrets": secrets,
     }
@@ -314,8 +339,10 @@ def backup_secrets(
 
 
 def restore_secrets(
-    backup_path: Path, overwrite: bool = False,
-    store_path: Path | None = None, passphrase: str | None = None,
+    backup_path: Path,
+    overwrite: bool = False,
+    store_path: Path | None = None,
+    passphrase: str | None = None,
 ) -> int:
     """Restore secrets from an encrypted backup."""
     store = _with_store(store_path, passphrase)
@@ -342,6 +369,7 @@ def get_backup_info(
         raise ValueError("Invalid backup file format")
 
     from datetime import datetime
+
     metadata = backup_data["metadata"]
     secrets = backup_data.get("secrets", {})
     return {
@@ -353,7 +381,9 @@ def get_backup_info(
     }
 
 
-def _load_dir_secrets(secrets_dir: Path, keys: set[str] | None = None) -> dict[str, Any]:
+def _load_dir_secrets(
+    secrets_dir: Path, keys: set[str] | None = None
+) -> dict[str, Any]:
     """Load secrets from a legacy directory, optionally filtered by keys."""
     result: dict[str, Any] = {}
     if not secrets_dir or not secrets_dir.exists():
@@ -381,7 +411,9 @@ def load_secrets(secrets_dir: Path | None = None) -> dict[str, str]:
 
 
 def load_secrets_by_keys(
-    keys: set[str], secrets_dir: Path | None = None, passphrase: str | None = None,
+    keys: set[str],
+    secrets_dir: Path | None = None,
+    passphrase: str | None = None,
 ) -> dict[str, str]:
     """Load only the specified secrets, falling back to directory for missing keys."""
     if not keys:

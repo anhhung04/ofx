@@ -180,7 +180,9 @@ class ASMClient:
         """Return effective targets for a scope."""
         return self._get(f"/scopes/{scope_id}/targets/effective").get("data", [])
 
-    def add_target(self, scope_id: str, value: str, target_type: str = "domain") -> dict:
+    def add_target(
+        self, scope_id: str, value: str, target_type: str = "domain"
+    ) -> dict:
         """Add a target to a scope."""
         return self._post(
             f"/scopes/{scope_id}/targets",
@@ -262,9 +264,7 @@ class ASMClient:
             },
         }
 
-    def assets_as_text(
-        self, scope_id: str, asset_type: str | None = None
-    ) -> str:
+    def assets_as_text(self, scope_id: str, asset_type: str | None = None) -> str:
         """Return assets as newline-separated values for CLI piping."""
         assets = self.list_all_assets(scope_id, asset_type=asset_type)
         return "\n".join(a["value"] for a in assets if a.get("value"))

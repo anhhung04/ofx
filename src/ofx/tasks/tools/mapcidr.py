@@ -20,15 +20,9 @@ class MapcidrTask(Task):
     output_types = [Ip]
 
     opts = {
-        "aggregate": OptDef(
-            flag="-a", is_flag=True, help="Aggregate IPs/CIDRs"
-        ),
-        "count": OptDef(
-            flag="-count", is_flag=True, help="Count IPs in CIDR"
-        ),
-        "filter": OptDef(
-            flag="-f", type=str, help="Filter IP by port (e.g. 80)"
-        ),
+        "aggregate": OptDef(flag="-a", is_flag=True, help="Aggregate IPs/CIDRs"),
+        "count": OptDef(flag="-count", is_flag=True, help="Count IPs in CIDR"),
+        "filter": OptDef(flag="-f", type=str, help="Filter IP by port (e.g. 80)"),
     }
 
     input_flag = "-cidr"
@@ -45,4 +39,3 @@ class MapcidrTask(Task):
             return []
 
         return [Ip(ip=line, alive=False)]
-

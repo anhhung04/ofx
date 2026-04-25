@@ -17,7 +17,9 @@ class WaymoreTask(Task):
     output_types = [Url]
 
     opts = {
-        "mode": OptDef(flag="-mode", type=str, help="Mode: U (URLs), R (responses), B (both)"),
+        "mode": OptDef(
+            flag="-mode", type=str, help="Mode: U (URLs), R (responses), B (both)"
+        ),
         "timeout": OptDef(flag="-t", type=int, help="Timeout in minutes"),
         "limit": OptDef(flag="-l", type=int, help="URL limit"),
         "threads": OptDef(flag="-p", type=int, help="Number of processes"),
@@ -36,4 +38,3 @@ class WaymoreTask(Task):
         if not url or url.startswith("#"):
             return []
         return [Url(url=url)]
-

@@ -27,13 +27,23 @@ class GetSTTask(Task):
         "aesKey": OptDef(flag="-aesKey", type=str, help="AES key"),
         "dc_ip": OptDef(flag="-dc-ip", type=str, help="Domain controller IP"),
         "spn": OptDef(flag="-spn", type=str, help="Target SPN (e.g., cifs/host)"),
-        "impersonate": OptDef(flag="-impersonate", type=str, help="User to impersonate"),
-        "altservice": OptDef(flag="-altservice", type=str, help="Substitute service in ticket"),
+        "impersonate": OptDef(
+            flag="-impersonate", type=str, help="User to impersonate"
+        ),
+        "altservice": OptDef(
+            flag="-altservice", type=str, help="Substitute service in ticket"
+        ),
         "self_": OptDef(flag="-self", is_flag=True, help="Perform S4U2Self only"),
-        "additional_ticket": OptDef(flag="-additional-ticket", type=str, help="Additional ticket for S4U2Proxy"),
+        "additional_ticket": OptDef(
+            flag="-additional-ticket", type=str, help="Additional ticket for S4U2Proxy"
+        ),
         "k": OptDef(flag="-k", is_flag=True, help="Use Kerberos authentication"),
         "no_pass": OptDef(flag="-no-pass", is_flag=True, help="Don't ask for password"),
-        "force_forwardable": OptDef(flag="-force-forwardable", is_flag=True, help="Force ticket to be forwardable"),
+        "force_forwardable": OptDef(
+            flag="-force-forwardable",
+            is_flag=True,
+            help="Force ticket to be forwardable",
+        ),
     }
 
     input_flag = None

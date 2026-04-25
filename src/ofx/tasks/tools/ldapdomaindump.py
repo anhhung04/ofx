@@ -89,7 +89,5 @@ class LdapDomainDumpTask(Task):
             if isinstance(sam, list):
                 sam = sam[0] if sam else ""
             if sam:
-                results.append(
-                    UserAccount(username=sam, source="ldapdomaindump")
-                )
+                results.append(UserAccount(username=sam, source="ldapdomaindump"))
         return results

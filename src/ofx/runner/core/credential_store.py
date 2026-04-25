@@ -69,9 +69,7 @@ def store_from_typed_outputs(
 
     _debug = log_fn or logger.debug
 
-    accounts = [
-        o for o in typed_outputs if isinstance(o, UserAccount) and o.username
-    ]
+    accounts = [o for o in typed_outputs if isinstance(o, UserAccount) and o.username]
     if not accounts:
         return 0
 

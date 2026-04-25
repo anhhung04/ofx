@@ -20,7 +20,9 @@ def config_show():
 
     if not data:
         console.print("[dim]ASM not configured.[/dim]")
-        console.print("Run: [bold]ofx asm config set --url <URL> --token <TOKEN>[/bold]")
+        console.print(
+            "Run: [bold]ofx asm config set --url <URL> --token <TOKEN>[/bold]"
+        )
         return
 
     import yaml
@@ -44,9 +46,16 @@ def config_show():
 
 @config_app.command("set")
 def config_set(
-    url: Annotated[str, typer.Option("--url", "-u", help="ASM server URL (e.g. http://localhost:8080)")] = "",
-    token: Annotated[str, typer.Option("--token", "-t", help="API token for authentication")] = "",
-    default_scope: Annotated[str, typer.Option("--default-scope", "-s", help="Default scope ID or name")] = "",
+    url: Annotated[
+        str,
+        typer.Option("--url", "-u", help="ASM server URL (e.g. http://localhost:8080)"),
+    ] = "",
+    token: Annotated[
+        str, typer.Option("--token", "-t", help="API token for authentication")
+    ] = "",
+    default_scope: Annotated[
+        str, typer.Option("--default-scope", "-s", help="Default scope ID or name")
+    ] = "",
 ):
     """Set ASM connection parameters.
 
@@ -72,7 +81,9 @@ def config_set(
         changed = True
 
     if not changed:
-        console.print("[yellow]No changes. Use --url, --token, or --default-scope.[/yellow]")
+        console.print(
+            "[yellow]No changes. Use --url, --token, or --default-scope.[/yellow]"
+        )
         return
 
     # Test connectivity if we have both url and token
@@ -83,7 +94,9 @@ def config_set(
         if client.health():
             console.print("[green]✓ Connection to ASM server verified.[/green]")
         else:
-            console.print("[yellow]⚠ Could not reach ASM server. Check URL and token.[/yellow]")
+            console.print(
+                "[yellow]⚠ Could not reach ASM server. Check URL and token.[/yellow]"
+            )
         client.close()
 
 
@@ -95,7 +108,9 @@ def config_test():
 
     cfg = get_asm_config()
     if not cfg.configured:
-        console.print("[red]ASM not configured. Run: ofx asm config set --url <URL> --token <TOKEN>[/red]")
+        console.print(
+            "[red]ASM not configured. Run: ofx asm config set --url <URL> --token <TOKEN>[/red]"
+        )
         raise typer.Exit(code=1)
 
     from ofx.asm.client import ASMClient
@@ -106,7 +121,9 @@ def config_test():
             console.print(f"[green]✓ ASM server at {cfg.url} is healthy.[/green]")
             # Try listing scopes as a deeper check
             scopes = client.list_scopes()
-            console.print(f"[green]✓ Authenticated. {len(scopes)} scope(s) accessible.[/green]")
+            console.print(
+                f"[green]✓ Authenticated. {len(scopes)} scope(s) accessible.[/green]"
+            )
         else:
             console.print(f"[red]✗ Cannot reach ASM server at {cfg.url}[/red]")
             raise typer.Exit(code=1)

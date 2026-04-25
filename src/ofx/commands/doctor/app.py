@@ -44,7 +44,9 @@ def _score_fleet_config(cfg: Any, provider_registered: bool) -> list[CheckResult
         CheckResult(
             name="Provider registration",
             status="pass" if provider_registered else "fail",
-            detail=provider if provider_registered else f"Unknown provider '{provider}'",
+            detail=provider
+            if provider_registered
+            else f"Unknown provider '{provider}'",
         )
     )
 
@@ -80,7 +82,9 @@ def _score_fleet_config(cfg: Any, provider_registered: bool) -> list[CheckResult
             CheckResult(
                 name="Static target host(s)",
                 status="pass" if (has_host or has_hosts) else "fail",
-                detail="Configured" if (has_host or has_hosts) else "Missing host/hosts",
+                detail="Configured"
+                if (has_host or has_hosts)
+                else "Missing host/hosts",
             )
         )
 
@@ -129,7 +133,9 @@ async def _probe_connectivity(cfg: Any, host: str, timeout: int) -> list[CheckRe
             cfg=cfg,
             timeout=getattr(cfg, "login_timeout", timeout) or timeout,
         )
-        checks.append(CheckResult("Authenticated login", "pass", "Login probe succeeded"))
+        checks.append(
+            CheckResult("Authenticated login", "pass", "Login probe succeeded")
+        )
     except Exception as exc:
         checks.append(CheckResult("Authenticated login", "fail", str(exc)))
     return checks
@@ -138,7 +144,10 @@ async def _probe_connectivity(cfg: Any, host: str, timeout: int) -> list[CheckRe
 @app.command("workflows")
 def doctor_workflows(
     check_tasks: Annotated[
-        bool, typer.Option("--check-tasks", help="Verify that referenced tasks are registered")
+        bool,
+        typer.Option(
+            "--check-tasks", help="Verify that referenced tasks are registered"
+        ),
     ] = False,
 ):
     """Validate all discoverable workflows and report a health summary."""
@@ -149,12 +158,19 @@ def doctor_workflows(
 
 @app.command("fleet")
 def doctor_fleet(
-    profile: Annotated[str, typer.Option("--profile", "-p", help="Cloud profile to score")] = "",
-    host: Annotated[str, typer.Option("--host", help="Optional host override for live probe")] = "",
+    profile: Annotated[
+        str, typer.Option("--profile", "-p", help="Cloud profile to score")
+    ] = "",
+    host: Annotated[
+        str, typer.Option("--host", help="Optional host override for live probe")
+    ] = "",
     check_connectivity: Annotated[
-        bool, typer.Option("--check-connectivity", help="Run live connectivity/login probes")
+        bool,
+        typer.Option("--check-connectivity", help="Run live connectivity/login probes"),
     ] = False,
-    timeout: Annotated[int, typer.Option("--timeout", "-t", help="Probe timeout in seconds")] = 60,
+    timeout: Annotated[
+        int, typer.Option("--timeout", "-t", help="Probe timeout in seconds")
+    ] = 60,
 ):
     """Run a fleet reliability scorecard against a cloud profile."""
     from ofx.cloud import CloudProviderRegistry
@@ -166,7 +182,9 @@ def doctor_fleet(
 
     profile_name = profile or mgr.default_profile_name
     if not profile_name:
-        console.print("[red]No profile specified and no default cloud profile set.[/red]")
+        console.print(
+            "[red]No profile specified and no default cloud profile set.[/red]"
+        )
         raise typer.Exit(code=1)
 
     try:
@@ -188,7 +206,9 @@ def doctor_fleet(
 
     if check_connectivity:
         if probe_host:
-            checks.extend(asyncio.run(_probe_connectivity(resolved, probe_host, timeout)))
+            checks.extend(
+                asyncio.run(_probe_connectivity(resolved, probe_host, timeout))
+            )
         else:
             checks.append(
                 CheckResult(

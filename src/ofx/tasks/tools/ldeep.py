@@ -113,15 +113,19 @@ class LdeepTask(Task):
                 results.append(
                     UserAccount(
                         username=sam,
-                        domain=item.get("distinguishedName", "").split(",DC=")[-2].split(",")[0] if ",DC=" in item.get("distinguishedName", "") else "",
+                        domain=item.get("distinguishedName", "")
+                        .split(",DC=")[-2]
+                        .split(",")[0]
+                        if ",DC=" in item.get("distinguishedName", "")
+                        else "",
                         source="ldeep",
-                        comment=item.get("description", [""])[0] if isinstance(item.get("description"), list) else item.get("description", ""),
+                        comment=item.get("description", [""])[0]
+                        if isinstance(item.get("description"), list)
+                        else item.get("description", ""),
                     )
                 )
             # ASREQ-roastable
             uac = item.get("userAccountControl", 0)
             if isinstance(uac, int) and uac & 0x400000:
-                results.append(
-                    Tag(name="asreproastable", value=sam, category="ad")
-                )
+                results.append(Tag(name="asreproastable", value=sam, category="ad"))
         return results

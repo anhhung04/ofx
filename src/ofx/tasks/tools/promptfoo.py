@@ -63,7 +63,10 @@ class PromptfooTask(Task):
 
         # If target looks like a file path use -c, otherwise --providers
         if target:
-            if Path(target).suffix in {".yml", ".yaml", ".json"} or Path(target).is_file():
+            if (
+                Path(target).suffix in {".yml", ".yaml", ".json"}
+                or Path(target).is_file()
+            ):
                 if "config" not in kwargs:
                     parts.extend(["-c", target])
             elif "providers" not in kwargs:

@@ -13,9 +13,7 @@ class CdncheckTask(Task):
     cmd = "cdncheck"
     description = "Identify CDN/WAF/cloud providers for IPs and domains"
     category = "recon/cdn"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
     output_types = [Tag, Ip]
 
     opts = {
@@ -58,15 +56,11 @@ class CdncheckTask(Task):
 
         cdn_name = data.get("cdn_name", "")
         if cdn_name:
-            results.append(
-                Tag(name=cdn_name, value=cdn_name, match=ip, category="cdn")
-            )
+            results.append(Tag(name=cdn_name, value=cdn_name, match=ip, category="cdn"))
 
         waf_name = data.get("waf_name", "")
         if waf_name:
-            results.append(
-                Tag(name=waf_name, value=waf_name, match=ip, category="waf")
-            )
+            results.append(Tag(name=waf_name, value=waf_name, match=ip, category="waf"))
 
         cloud_name = data.get("cloud_name", "")
         if cloud_name:
@@ -82,4 +76,3 @@ class CdncheckTask(Task):
             )
 
         return results
-

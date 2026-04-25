@@ -71,7 +71,9 @@ def show_search(
                     continue
 
                 if search_term:
-                    searchable = f"{path.stem} {name} {desc} {' '.join(tags_list)}".lower()
+                    searchable = (
+                        f"{path.stem} {name} {desc} {' '.join(tags_list)}".lower()
+                    )
                     if search_term not in searchable:
                         continue
 
@@ -82,24 +84,34 @@ def show_search(
                 except ValueError:
                     category = ""
 
-                results.append({
-                    "name": path.stem,
-                    "category": category,
-                    "description": desc.split("\n")[0][:80] if desc else "",
-                    "tags": tags_list,
-                    "source": source,
-                })
+                results.append(
+                    {
+                        "name": path.stem,
+                        "category": category,
+                        "description": desc.split("\n")[0][:80] if desc else "",
+                        "tags": tags_list,
+                        "source": source,
+                    }
+                )
 
     if not results:
         if search_term and filter_tags:
-            print_warning("No Results", f"No workflows matched '{search_term}' with tags: {', '.join(sorted(filter_tags))}")
+            print_warning(
+                "No Results",
+                f"No workflows matched '{search_term}' with tags: {', '.join(sorted(filter_tags))}",
+            )
         elif search_term:
             print_warning("No Results", f"No workflows matched '{search_term}'")
         else:
-            print_warning("No Results", f"No workflows matched tags: {', '.join(sorted(filter_tags))}")
+            print_warning(
+                "No Results",
+                f"No workflows matched tags: {', '.join(sorted(filter_tags))}",
+            )
         return
 
-    table = Table(title=f"Search Results ({len(results)})", show_lines=False, padding=(0, 1))
+    table = Table(
+        title=f"Search Results ({len(results)})", show_lines=False, padding=(0, 1)
+    )
     table.add_column("Workflow", style="cyan bold", no_wrap=True)
     table.add_column("Description", style="white")
     if show_tags:

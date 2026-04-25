@@ -133,9 +133,7 @@ class ToolsInstallHandler:
                     # Recurse into uses: subworkflows
                     if step.uses:
                         try:
-                            sub_wf = find_workflow(
-                                step.uses, tuple(search_dirs)
-                            )
+                            sub_wf = find_workflow(step.uses, tuple(search_dirs))
                             if sub_wf.workflow_path:
                                 self._collect_tools_recursive(
                                     sub_wf.workflow_path, all_tools, visited

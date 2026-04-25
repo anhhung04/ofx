@@ -27,7 +27,9 @@ class ResponderTask(Task):
         "force_wpad": OptDef(flag="-F", is_flag=True, help="Force WPAD authentication"),
         "proxy_auth": OptDef(flag="-P", is_flag=True, help="Force NTLM auth for proxy"),
         "lm": OptDef(flag="--lm", is_flag=True, help="Force LM hashing downgrade"),
-        "disable_ess": OptDef(flag="--disable-ess", is_flag=True, help="Disable ESS downgrade"),
+        "disable_ess": OptDef(
+            flag="--disable-ess", is_flag=True, help="Disable ESS downgrade"
+        ),
         "verbose": OptDef(flag="-v", is_flag=True, help="Verbose output"),
     }
 

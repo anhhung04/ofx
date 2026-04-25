@@ -28,7 +28,11 @@ class LinpeasTask(Task):
         "thorough": OptDef(flag="-a", is_flag=True, help="All checks (thorough)"),
         "no_network": OptDef(flag="-N", is_flag=True, help="Skip network checks"),
         "password": OptDef(flag="-P", type=str, help="Test sudo with this password"),
-        "checks": OptDef(flag="-s", type=str, help="Specific check sections (SysI,Devs,Net,UsrI,SofI,ProCronSrworworworwo...)"),
+        "checks": OptDef(
+            flag="-s",
+            type=str,
+            help="Specific check sections (SysI,Devs,Net,UsrI,SofI,ProCronSrworworworwo...)",
+        ),
     }
 
     input_flag = None

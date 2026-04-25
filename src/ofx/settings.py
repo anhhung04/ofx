@@ -33,7 +33,11 @@ SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DATA_DIR = Path(__file__).parent / "data"
 BUILTIN_WORKFLOWS_DIR = DATA_DIR / "workflows"
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
-DEFAULT_WORKFLOWS_DIRS = [Path.cwd().absolute(), DEFAULT_WORKFLOWS_DIR.absolute(), BUILTIN_WORKFLOWS_DIR.absolute()]
+DEFAULT_WORKFLOWS_DIRS = [
+    Path.cwd().absolute(),
+    DEFAULT_WORKFLOWS_DIR.absolute(),
+    BUILTIN_WORKFLOWS_DIR.absolute(),
+]
 DEFAULT_PROJECTS_PATH = BASE_DATA_DIR / "projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
@@ -233,9 +237,7 @@ class Settings(BaseSettings):
     ai: AiSettings = Field(default_factory=AiSettings)
 
     # Active project name (populated from env var or CLI)
-    active_project: str | None = Field(
-        default=None, description="Active project name"
-    )
+    active_project: str | None = Field(default=None, description="Active project name")
 
     debug: bool = Field(default=False, description="Enable debug mode")
     max_output_size: int = Field(
@@ -358,7 +360,11 @@ class Settings(BaseSettings):
             env_settings,
             dotenv_settings,
             YamlConfigSettingsSource(settings_cls, yaml_file=CONFIG_YAML),
-            NestedSecretsSettingsSource(file_secret_settings, secrets_nested_subdir=True, secrets_dir=SECRETS_DIR.absolute()),
+            NestedSecretsSettingsSource(
+                file_secret_settings,
+                secrets_nested_subdir=True,
+                secrets_dir=SECRETS_DIR.absolute(),
+            ),
         )
 
 
@@ -371,12 +377,14 @@ class Settings(BaseSettings):
 # NOTE: active_project is excluded from the auto-generated defaults but CAN
 # appear in config.yml when written by update_config_field(); pydantic-settings'
 # YamlConfigSettingsSource will load it from there regardless.
-_CONFIG_EXCLUDE_FIELDS = frozenset({
-    "app_name",
-    "app_branding",
-    "active_project",
-    "channels_dir",
-})
+_CONFIG_EXCLUDE_FIELDS = frozenset(
+    {
+        "app_name",
+        "app_branding",
+        "active_project",
+        "channels_dir",
+    }
+)
 
 _CONFIG_YAML_HEADER = """\
 # OFX Configuration — ~/.ofx/config.yml
@@ -418,7 +426,9 @@ def _dump_default_config() -> str:
 
         data[name] = value
 
-    body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    body = yaml.dump(
+        data, default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
     return _CONFIG_YAML_HEADER + body
 
 

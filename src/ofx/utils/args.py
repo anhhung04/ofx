@@ -9,7 +9,9 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-def parse_key_value_pairs(inputs: list[str] | None, keep_string = False) -> dict[str, Any]:
+def parse_key_value_pairs(
+    inputs: list[str] | None, keep_string=False
+) -> dict[str, Any]:
     """Parse key=value string inputs into a dictionary.
 
     Supports multiple values for the same key (creates list) and JSON value parsing.

@@ -55,7 +55,13 @@ def build_session_script(
     """
     if os_type == "windows":
         return _build_powershell(
-            steps, session_id, work_dir, workflow_name, job_name, env or {}, encrypt_at_rest
+            steps,
+            session_id,
+            work_dir,
+            workflow_name,
+            job_name,
+            env or {},
+            encrypt_at_rest,
         )
     return _build_bash(
         steps, session_id, work_dir, workflow_name, job_name, env or {}, encrypt_at_rest
@@ -386,12 +392,7 @@ def _ps_escape(s: str) -> str:
     Escapes backticks (PS escape char), double-quotes, and dollar signs so that
     the value is treated literally rather than expanded or misinterpreted.
     """
-    return (
-        s
-        .replace("`", "``")
-        .replace('"', '`"')
-        .replace("$", "`$")
-    )
+    return s.replace("`", "``").replace('"', '`"').replace("$", "`$")
 
 
 def _step_command_ps(step: Step, step_index: int, work_dir: str) -> str:

@@ -73,4 +73,3 @@ class NaabuTask(Task):
                 service_name="",
             )
         ]
-

@@ -423,7 +423,9 @@ class GitHandler:
         self.encrypt = encrypt
         self.encryption_key = encryption_key
         self.encryptor: EncryptionHandler | None = (
-            EncryptionHandler(self.encryption_key) if self.encrypt and self.encryption_key else None
+            EncryptionHandler(self.encryption_key)
+            if self.encrypt and self.encryption_key
+            else None
         )
 
     def sync(self) -> None:

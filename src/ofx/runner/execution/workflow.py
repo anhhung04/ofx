@@ -166,7 +166,9 @@ class WorkflowRunner(BaseRunner[Workflow]):
                     try:
                         await runner._post_run()
                     except Exception as e:
-                        logger.debug("post_run cleanup failed for %s: %s", runner.model.jid, e)
+                        logger.debug(
+                            "post_run cleanup failed for %s: %s", runner.model.jid, e
+                        )
             await self._store_summaries()
 
             # Build concise error: one line per failed job with root cause
@@ -175,7 +177,9 @@ class WorkflowRunner(BaseRunner[Workflow]):
             concise_lines = []
             for job_id in result.failed_job_ids:
                 failed_runner: BaseRunner[Any] | None = self._runners.get(job_id)
-                root = extract_root_error(failed_runner._error if failed_runner else None)
+                root = extract_root_error(
+                    failed_runner._error if failed_runner else None
+                )
                 concise_lines.append(f"job '{job_id}': {root}")
 
             error_msg = "Job failure(s):\n" + "\n".join(concise_lines)

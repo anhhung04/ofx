@@ -21,20 +21,38 @@ class SecretsdumpTask(Task):
     output_types = [UserAccount]
 
     opts = {
-        "username": OptDef(flag="-username", type=str, help="Username for authentication"),
+        "username": OptDef(
+            flag="-username", type=str, help="Username for authentication"
+        ),
         "password": OptDef(flag="-password", type=str, help="Password"),
         "hash": OptDef(flag="-hashes", type=str, help="NTLM hashes (LMHASH:NTHASH)"),
         "domain": OptDef(flag="-domain", type=str, help="Domain name"),
         "dc_ip": OptDef(flag="-dc-ip", type=str, help="Domain controller IP"),
-        "just_dc": OptDef(flag="-just-dc", is_flag=True, help="Extract only NTDS.dit data (DRSUAPI)"),
-        "just_dc_ntlm": OptDef(flag="-just-dc-ntlm", is_flag=True, help="Extract only NTLM hashes from NTDS"),
-        "just_dc_user": OptDef(flag="-just-dc-user", type=str, help="Extract data for specific user only"),
+        "just_dc": OptDef(
+            flag="-just-dc", is_flag=True, help="Extract only NTDS.dit data (DRSUAPI)"
+        ),
+        "just_dc_ntlm": OptDef(
+            flag="-just-dc-ntlm",
+            is_flag=True,
+            help="Extract only NTLM hashes from NTDS",
+        ),
+        "just_dc_user": OptDef(
+            flag="-just-dc-user", type=str, help="Extract data for specific user only"
+        ),
         "sam": OptDef(flag="-sam", is_flag=True, help="Dump local SAM hashes"),
         "system": OptDef(flag="-system", type=str, help="Path to SYSTEM hive"),
         "ntds": OptDef(flag="-ntds", type=str, help="Path to NTDS.dit file"),
-        "use_vss": OptDef(flag="-use-vss", is_flag=True, help="Use VSS method instead of DRSUAPI"),
-        "exec_method": OptDef(flag="-exec-method", type=str, help="Remote exec method (smbexec/wmiexec/mmcexec)"),
-        "output_file": OptDef(flag="-outputfile", type=str, help="Base name for output files"),
+        "use_vss": OptDef(
+            flag="-use-vss", is_flag=True, help="Use VSS method instead of DRSUAPI"
+        ),
+        "exec_method": OptDef(
+            flag="-exec-method",
+            type=str,
+            help="Remote exec method (smbexec/wmiexec/mmcexec)",
+        ),
+        "output_file": OptDef(
+            flag="-outputfile", type=str, help="Base name for output files"
+        ),
         "k": OptDef(flag="-k", is_flag=True, help="Use Kerberos authentication"),
         "no_pass": OptDef(flag="-no-pass", is_flag=True, help="Don't ask for password"),
     }

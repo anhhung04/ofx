@@ -21,24 +21,60 @@ class HashcatTask(Task):
     output_types = [UserAccount]
 
     opts = {
-        "hash_type": OptDef(flag="-m", type=int, help="Hash type (e.g., 0=MD5, 1000=NTLM, 13100=Kerberoast, 18200=AS-REP)"),
-        "attack_mode": OptDef(flag="-a", type=int, help="Attack mode (0=dict, 1=combo, 3=brute, 6=hybrid, 7=hybrid)"),
+        "hash_type": OptDef(
+            flag="-m",
+            type=int,
+            help="Hash type (e.g., 0=MD5, 1000=NTLM, 13100=Kerberoast, 18200=AS-REP)",
+        ),
+        "attack_mode": OptDef(
+            flag="-a",
+            type=int,
+            help="Attack mode (0=dict, 1=combo, 3=brute, 6=hybrid, 7=hybrid)",
+        ),
         "wordlist": OptDef(flag="--wordlist", type=str, help="Wordlist file path"),
         "rules": OptDef(flag="-r", type=str, help="Rules file"),
-        "increment": OptDef(flag="--increment", is_flag=True, help="Enable increment mode"),
-        "increment_min": OptDef(flag="--increment-min", type=int, help="Minimum increment length"),
-        "increment_max": OptDef(flag="--increment-max", type=int, help="Maximum increment length"),
-        "output_file": OptDef(flag="-o", type=str, help="Output file for cracked hashes"),
-        "outfile_format": OptDef(flag="--outfile-format", type=int, help="Output format (1-15)"),
+        "increment": OptDef(
+            flag="--increment", is_flag=True, help="Enable increment mode"
+        ),
+        "increment_min": OptDef(
+            flag="--increment-min", type=int, help="Minimum increment length"
+        ),
+        "increment_max": OptDef(
+            flag="--increment-max", type=int, help="Maximum increment length"
+        ),
+        "output_file": OptDef(
+            flag="-o", type=str, help="Output file for cracked hashes"
+        ),
+        "outfile_format": OptDef(
+            flag="--outfile-format", type=int, help="Output format (1-15)"
+        ),
         "show": OptDef(flag="--show", is_flag=True, help="Show cracked hashes"),
         "force": OptDef(flag="--force", is_flag=True, help="Ignore warnings"),
-        "potfile_disable": OptDef(flag="--potfile-disable", is_flag=True, help="Disable potfile"),
-        "status": OptDef(flag="--status", is_flag=True, help="Enable automatic status updates"),
-        "status_timer": OptDef(flag="--status-timer", type=int, help="Status update interval (seconds)"),
-        "workload": OptDef(flag="-w", type=int, help="Workload profile (1=low, 2=default, 3=high, 4=nightmare)"),
-        "device_type": OptDef(flag="-D", type=str, help="Device types (1=CPU, 2=GPU, 3=FPGA)"),
-        "username": OptDef(flag="--username", is_flag=True, help="Hash file contains username:hash format"),
-        "separator": OptDef(flag="--separator", type=str, help="Separator char for username:hash"),
+        "potfile_disable": OptDef(
+            flag="--potfile-disable", is_flag=True, help="Disable potfile"
+        ),
+        "status": OptDef(
+            flag="--status", is_flag=True, help="Enable automatic status updates"
+        ),
+        "status_timer": OptDef(
+            flag="--status-timer", type=int, help="Status update interval (seconds)"
+        ),
+        "workload": OptDef(
+            flag="-w",
+            type=int,
+            help="Workload profile (1=low, 2=default, 3=high, 4=nightmare)",
+        ),
+        "device_type": OptDef(
+            flag="-D", type=str, help="Device types (1=CPU, 2=GPU, 3=FPGA)"
+        ),
+        "username": OptDef(
+            flag="--username",
+            is_flag=True,
+            help="Hash file contains username:hash format",
+        ),
+        "separator": OptDef(
+            flag="--separator", type=str, help="Separator char for username:hash"
+        ),
     }
 
     input_flag = None

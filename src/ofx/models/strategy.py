@@ -64,7 +64,9 @@ class MatrixStrategy(OFXBaseModel):
 
     @field_validator("matrix")
     @classmethod
-    def _validate_matrix_keys(cls, v: dict[str, list[Any] | str]) -> dict[str, list[Any] | str]:
+    def _validate_matrix_keys(
+        cls, v: dict[str, list[Any] | str]
+    ) -> dict[str, list[Any] | str]:
         """Ensure matrix keys are valid identifiers (used as template variables)."""
         import re
 

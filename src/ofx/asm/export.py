@@ -31,7 +31,9 @@ _TYPE_MAP: dict[str, str] = {
 _FINDING_TYPES = {"vulnerability"}
 
 
-def typed_output_to_asm_asset(item: dict[str, Any], source: str = "ofx") -> dict[str, str] | None:
+def typed_output_to_asm_asset(
+    item: dict[str, Any], source: str = "ofx"
+) -> dict[str, str] | None:
     """Convert a single OFX typed output dict to an ASM generic import item.
 
     Returns ``{"type": ..., "value": ...}`` or ``None`` if unmappable.
@@ -52,7 +54,9 @@ def typed_output_to_asm_asset(item: dict[str, Any], source: str = "ofx") -> dict
     return {"type": asset_type, "value": value}
 
 
-def typed_output_to_asm_finding(item: dict[str, Any], source: str = "ofx") -> dict[str, Any] | None:
+def typed_output_to_asm_finding(
+    item: dict[str, Any], source: str = "ofx"
+) -> dict[str, Any] | None:
     """Convert a vulnerability typed output to an ASM finding dict.
 
     Returns a dict compatible with the ASM generic import ``Finding`` shape,
@@ -71,7 +75,8 @@ def typed_output_to_asm_finding(item: dict[str, Any], source: str = "ofx") -> di
         "severity": severity,
         "title": item.get("name", "") or item.get("matched_at", ""),
         "detail": {
-            k: v for k, v in item.items()
+            k: v
+            for k, v in item.items()
             if k not in ("_type", "_uuid", "_target") and v
         },
         "source": source,

@@ -20,13 +20,9 @@ class ArjunTask(Task):
     output_types = [Url, Tag]
 
     opts = {
-        "method": OptDef(
-            flag="-m", type=str, help="HTTP method GET/POST/JSON/XML"
-        ),
+        "method": OptDef(flag="-m", type=str, help="HTTP method GET/POST/JSON/XML"),
         "headers": OptDef(flag="--headers", type=str, help="Custom headers"),
-        "include": OptDef(
-            flag="--include", type=str, help="Include params pattern"
-        ),
+        "include": OptDef(flag="--include", type=str, help="Include params pattern"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "delay": OptDef(flag="-d", type=int, help="Delay between requests"),
         "timeout": OptDef(flag="--timeout", type=int, help="Request timeout"),

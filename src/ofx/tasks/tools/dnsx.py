@@ -90,4 +90,3 @@ class DnsxTask(Task):
             results.append(Record(name=txt, type="TXT", host=host))
 
         return results
-

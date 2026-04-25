@@ -344,7 +344,9 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
             return
 
         is_windows = self._cloud_config.connection_type == "winrm"
-        assert self._work_dir is not None, "_work_dir must be set before fetching outputs"
+        assert self._work_dir is not None, (
+            "_work_dir must be set before fetching outputs"
+        )
 
         try:
             if is_windows:
@@ -368,7 +370,11 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
 
             for fname in files:
                 # Sanitize filename to prevent path traversal
-                safe_name = PureWindowsPath(fname).name if is_windows else PurePosixPath(fname).name
+                safe_name = (
+                    PureWindowsPath(fname).name
+                    if is_windows
+                    else PurePosixPath(fname).name
+                )
                 if not safe_name or safe_name in (".", ".."):
                     continue
                 if is_windows:
@@ -420,9 +426,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                         f"Emergency cleanup: destroying partially-provisioned "
                         f"instance {self._instance.instance_id}"
                     )
-                    await self._provider.destroy_instance(
-                        self._instance.instance_id
-                    )
+                    await self._provider.destroy_instance(self._instance.instance_id)
                 except Exception as e:
                     self._log_warning(
                         f"Emergency instance destroy failed "
@@ -457,7 +461,9 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                     )
                 else:
                     await asyncio.to_thread(
-                        self._remote_runner.run, f"rm -rf {shlex.quote(self._work_dir)}", 15
+                        self._remote_runner.run,
+                        f"rm -rf {shlex.quote(self._work_dir)}",
+                        15,
                     )
             except Exception as e:
                 self._log_debug(f"Failed to clean remote work dir: {e}")
@@ -581,10 +587,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         workflow_name = ""
         if self.parent and getattr(self.parent, "model", None):
             workflow_name = getattr(self.parent.model, "name", "") or ""
-        msg = (
-            f"workflow[{workflow_name}] "
-            f"job[{self.model.jid}] [cloud] › {message_str}"
-        )
+        msg = f"workflow[{workflow_name}] job[{self.model.jid}] [cloud] › {message_str}"
         if self.parent:
             return self.parent._produce_log(msg)
         return msg

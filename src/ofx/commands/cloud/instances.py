@@ -23,7 +23,9 @@ def instance_list(
     """List cloud instances."""
     console = get_console()
     provider, cloud = create_cloud_provider(profile, provider)
-    instances = run_cloud_sync("list instances", lambda: asyncio.run(cloud.list_instances()))
+    instances = run_cloud_sync(
+        "list instances", lambda: asyncio.run(cloud.list_instances())
+    )
 
     if not instances:
         print_warning(
@@ -74,7 +76,9 @@ def instance_destroy(
         if not confirm:
             raise typer.Abort()
 
-    run_cloud_sync("destroy instance", lambda: asyncio.run(cloud.destroy_instance(instance_id)))
+    run_cloud_sync(
+        "destroy instance", lambda: asyncio.run(cloud.destroy_instance(instance_id))
+    )
     console.print(f"[green]Instance {instance_id} destroyed.[/green]")
 
 

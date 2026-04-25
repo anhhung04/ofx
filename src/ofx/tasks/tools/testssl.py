@@ -37,7 +37,9 @@ class TestsslTask(Task):
             flag="-U", is_flag=True, help="Check vulnerabilities"
         ),
         "server_defaults": OptDef(
-            flag="-S", is_flag=True, help="Display server default picks and certificate info"
+            flag="-S",
+            is_flag=True,
+            help="Display server default picks and certificate info",
         ),
         "headers": OptDef(flag="-h", is_flag=True, help="Check HTTP headers"),
         "starttls": OptDef(
@@ -45,9 +47,7 @@ class TestsslTask(Task):
             type=str,
             help="Protocol for STARTTLS: ftp/smtp/pop3/imap/xmpp/telnet/ldap",
         ),
-        "openssl": OptDef(
-            flag="--openssl", type=str, help="Path to openssl binary"
-        ),
+        "openssl": OptDef(flag="--openssl", type=str, help="Path to openssl binary"),
         "full": OptDef(flag="--full", is_flag=True, help="Full test"),
     }
 

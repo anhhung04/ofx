@@ -108,7 +108,9 @@ def _apply_rate_limit(rate_limit: float | None) -> None:
         get_rate_limiter(rate_limit).wait()
 
 
-def _raise_http_error(url: str, timeout: int, exc: Exception) -> APIError | OFXTimeoutError:
+def _raise_http_error(
+    url: str, timeout: int, exc: Exception
+) -> APIError | OFXTimeoutError:
     if isinstance(exc, httpx.TimeoutException):
         return OFXTimeoutError(f"Request to {url} timed out", timeout_seconds=timeout)
     if isinstance(exc, httpx.HTTPStatusError):

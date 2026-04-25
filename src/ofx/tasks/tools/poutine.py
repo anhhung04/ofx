@@ -28,13 +28,14 @@ class PoutineTask(Task):
     description = "CI/CD pipeline security scanner"
     category = "vuln/cicd"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v"
-        " github.com/boostsecurityio/poutine@latest"
+        "GOBIN=~/Tools/bin go install -v github.com/boostsecurityio/poutine@latest"
     )
     output_types = [Vulnerability, Tag]
 
     opts = {
-        "format": OptDef(flag="-f", type=str, help="Output format (json, sarif, pretty)"),
+        "format": OptDef(
+            flag="-f", type=str, help="Output format (json, sarif, pretty)"
+        ),
         "token": OptDef(flag="--token", type=str, help="GitHub/GitLab token"),
         "threads": OptDef(flag="--threads", type=int, help="Number of threads"),
     }
@@ -75,7 +76,11 @@ class PoutineTask(Task):
         if data is None:
             return []
 
-        findings = data if isinstance(data, list) else data.get("findings", data.get("results", []))
+        findings = (
+            data
+            if isinstance(data, list)
+            else data.get("findings", data.get("results", []))
+        )
         if not isinstance(findings, list):
             return []
 
@@ -83,7 +88,9 @@ class PoutineTask(Task):
         for finding in findings:
             rule = finding.get("rule", finding.get("rule_id", finding.get("id", "")))
             sev = str(finding.get("severity", finding.get("level", "medium"))).lower()
-            file_path = finding.get("file", finding.get("path", finding.get("location", "")))
+            file_path = finding.get(
+                "file", finding.get("path", finding.get("location", ""))
+            )
             line_num = finding.get("line", finding.get("line_number", ""))
             desc = finding.get("description", finding.get("message", ""))
             matched = f"{file_path}:{line_num}" if line_num else str(file_path)
@@ -95,7 +102,11 @@ class PoutineTask(Task):
                     severity=_SEVERITY_MAP.get(sev, Severity.MEDIUM),
                     provider="poutine",
                     description=str(desc),
-                    extra_data={k: v for k, v in finding.items() if k not in ("rule", "severity", "file", "description")},
+                    extra_data={
+                        k: v
+                        for k, v in finding.items()
+                        if k not in ("rule", "severity", "file", "description")
+                    },
                 )
             )
             results.append(Tag(name=str(rule), value=sev, category="cicd"))

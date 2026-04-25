@@ -57,7 +57,13 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
 
     # Check for common issues
     for jid, job in workflow.jobs.items():
-        needs = job.needs if isinstance(job.needs, list) else [job.needs] if job.needs else []
+        needs = (
+            job.needs
+            if isinstance(job.needs, list)
+            else [job.needs]
+            if job.needs
+            else []
+        )
         for dep in needs:
             if dep and dep not in workflow.jobs:
                 result.warnings.append(f"Job '{jid}' depends on unknown job '{dep}'")
@@ -140,7 +146,9 @@ def _print_bulk_results(results: list[ValidationResult]) -> None:
     failed = sum(1 for r in results if not r.valid)
     warned = sum(1 for r in results if r.valid and r.warnings)
 
-    table = Table(title=f"Workflow Validation: {passed} passed, {failed} failed, {warned} warnings")
+    table = Table(
+        title=f"Workflow Validation: {passed} passed, {failed} failed, {warned} warnings"
+    )
     table.add_column("Workflow", style="cyan")
     table.add_column("Status", justify="center")
     table.add_column("Jobs", justify="right")
@@ -225,7 +233,9 @@ def validate_workflows(
     if all_workflows:
         files = _discover_all_workflows()
         if not files:
-            print_warning("No Workflows", "No workflow files found in search directories.")
+            print_warning(
+                "No Workflows", "No workflow files found in search directories."
+            )
             return
 
         print_info("Bulk Validation", f"Validating [cyan]{len(files)}[/] workflows…")

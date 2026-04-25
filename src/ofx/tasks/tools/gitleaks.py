@@ -16,7 +16,9 @@ class GitleaksTask(Task):
     cmd = "gitleaks"
     description = "Detect secrets in source code and git repositories"
     category = "secret/scan"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/gitleaks/gitleaks/v8@latest"
+    install_cmd = (
+        "GOBIN=~/Tools/bin go install -v github.com/gitleaks/gitleaks/v8@latest"
+    )
     output_types = [Tag]
 
     # gitleaks returns exit code 1 when secrets/leaks are found — that's expected.

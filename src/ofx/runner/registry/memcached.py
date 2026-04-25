@@ -95,13 +95,17 @@ class MemcachedJobRegistry(RegistryAdapter):
             else:
                 keys = []
         except Exception as exc:
-            logger.warning("Failed to fetch memcached index for '%s': %s", index_key, exc)
+            logger.warning(
+                "Failed to fetch memcached index for '%s': %s", index_key, exc
+            )
             keys = []
 
         if key not in keys:
             keys.append(key)
             try:
-                await client.set(index_key.encode(), json.dumps(keys, default=str).encode())
+                await client.set(
+                    index_key.encode(), json.dumps(keys, default=str).encode()
+                )
             except (TypeError, ValueError) as exc:
                 logger.warning("Failed to serialize index for key '%s': %s", key, exc)
 
@@ -117,9 +121,15 @@ class MemcachedJobRegistry(RegistryAdapter):
                 if key in keys:
                     keys.remove(key)
                     try:
-                        await client.set(index_key.encode(), json.dumps(keys, default=str).encode())
+                        await client.set(
+                            index_key.encode(), json.dumps(keys, default=str).encode()
+                        )
                     except (TypeError, ValueError) as exc:
-                        logger.warning("Failed to serialize index after removing key '%s': %s", key, exc)
+                        logger.warning(
+                            "Failed to serialize index after removing key '%s': %s",
+                            key,
+                            exc,
+                        )
         except Exception as e:
             logger.warning("Memcached delete failed for key removal: %s", e)
 
@@ -145,7 +155,9 @@ class MemcachedJobRegistry(RegistryAdapter):
             try:
                 return json.loads(value.decode())
             except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                logger.warning(
+                    "Failed to decode registry value for key '%s': %s", key, exc
+                )
                 return None
         return None
 

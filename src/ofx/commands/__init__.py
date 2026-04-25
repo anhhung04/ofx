@@ -2,7 +2,11 @@ import typer
 
 from ofx.commands.ui_helpers import error_exit, print_banner
 
-app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False, invoke_without_command=True)
+app = typer.Typer(
+    no_args_is_help=True,
+    pretty_exceptions_show_locals=False,
+    invoke_without_command=True,
+)
 
 from ofx.commands import (  # noqa: E402
     ai,
@@ -134,14 +138,15 @@ def _register_commands():
     add_app(asm)
     add_aliases()
 
+
 def _clean_up():
     import os
     import shutil
 
     from ofx.settings import TEMP_DIR
+
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR, ignore_errors=True)
-
 
 
 def main():

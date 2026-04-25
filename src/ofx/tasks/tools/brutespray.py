@@ -24,7 +24,9 @@ class BrutesprayTask(Task):
     cmd = "brutespray"
     description = "Automated service password spraying from scan output"
     category = "brute/spray"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/x90skysn3k/brutespray@latest"
+    install_cmd = (
+        "GOBIN=~/Tools/bin go install -v github.com/x90skysn3k/brutespray@latest"
+    )
     output_types = [UserAccount, Port]
 
     opts = {
@@ -41,6 +43,7 @@ class BrutesprayTask(Task):
     input_flag = "-H"
     file_flag = "-f"
     output_flag = None
+
     def _output_suffix(self) -> str:
         return ".txt"
 
@@ -104,4 +107,3 @@ class BrutesprayTask(Task):
         ]
 
         return results
-

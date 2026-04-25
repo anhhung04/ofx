@@ -88,4 +88,3 @@ class HttpxTask(Task):
             results.append(Tag(name=t, value=t, match=url, category="technology"))
 
         return results
-

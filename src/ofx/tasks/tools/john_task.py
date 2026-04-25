@@ -22,17 +22,25 @@ class JohnTask(Task):
 
     opts = {
         "wordlist": OptDef(flag="--wordlist", type=str, help="Wordlist file"),
-        "format": OptDef(flag="--format", type=str, help="Hash format (e.g., NT, krb5tgs, krb5asrep)"),
+        "format": OptDef(
+            flag="--format", type=str, help="Hash format (e.g., NT, krb5tgs, krb5asrep)"
+        ),
         "rules": OptDef(flag="--rules", type=str, help="Word mangling rules"),
         "show": OptDef(flag="--show", is_flag=True, help="Show cracked passwords"),
         "single": OptDef(flag="--single", is_flag=True, help="Single crack mode"),
-        "incremental": OptDef(flag="--incremental", is_flag=True, help="Incremental mode"),
-        "mask": OptDef(flag="--mask", type=str, help="Mask for brute-force (e.g., ?u?l?l?l?d?d)"),
+        "incremental": OptDef(
+            flag="--incremental", is_flag=True, help="Incremental mode"
+        ),
+        "mask": OptDef(
+            flag="--mask", type=str, help="Mask for brute-force (e.g., ?u?l?l?l?d?d)"
+        ),
         "fork": OptDef(flag="--fork", type=int, help="Number of parallel processes"),
         "pot": OptDef(flag="--pot", type=str, help="Potfile location"),
         "session": OptDef(flag="--session", type=str, help="Session name"),
         "restore": OptDef(flag="--restore", type=str, help="Restore a session"),
-        "max_run_time": OptDef(flag="--max-run-time", type=int, help="Max runtime in seconds"),
+        "max_run_time": OptDef(
+            flag="--max-run-time", type=int, help="Max runtime in seconds"
+        ),
     }
 
     input_flag = None

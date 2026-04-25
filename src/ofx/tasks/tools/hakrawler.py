@@ -21,7 +21,9 @@ class HakrawlerTask(Task):
 
     opts = {
         "depth": OptDef(flag="-d", type=int, help="Crawl depth (default 2)"),
-        "insecure": OptDef(flag="-insecure", is_flag=True, help="Skip TLS verification"),
+        "insecure": OptDef(
+            flag="-insecure", is_flag=True, help="Skip TLS verification"
+        ),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "timeout": OptDef(flag="-timeout", type=int, help="Timeout per URL in seconds"),
         "proxy": OptDef(flag="-proxy", type=str, help="Proxy URL"),
@@ -71,4 +73,3 @@ class HakrawlerTask(Task):
         if "://" in line:
             return [Url(url=line)]
         return []
-

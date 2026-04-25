@@ -23,16 +23,12 @@ class MasscanTask(Task):
     opts = {
         "ports": OptDef(flag="-p", type=str, help="Port range to scan"),
         "rate": OptDef(flag="--rate", type=int, help="Packets per second"),
-        "top_ports": OptDef(
-            flag="--top-ports", type=str, help="Scan top N ports"
-        ),
+        "top_ports": OptDef(flag="--top-ports", type=str, help="Scan top N ports"),
         "banners": OptDef(
             flag="--banners", is_flag=True, help="Grab banners from services"
         ),
         "interface": OptDef(flag="-e", type=str, help="Network interface to use"),
-        "source_ip": OptDef(
-            flag="--adapter-ip", type=str, help="Source IP address"
-        ),
+        "source_ip": OptDef(flag="--adapter-ip", type=str, help="Source IP address"),
         "exclude": OptDef(flag="--exclude", type=str, help="Exclude hosts"),
         "wait": OptDef(
             flag="--wait", type=int, help="Seconds to wait after transmit done"

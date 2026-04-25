@@ -68,7 +68,10 @@ def load_history(limit: int = 50, workflow: str = "", status: str = "") -> list[
                     continue
                 try:
                     record = json.loads(line)
-                    if workflow and workflow.lower() not in record.get("workflow", "").lower():
+                    if (
+                        workflow
+                        and workflow.lower() not in record.get("workflow", "").lower()
+                    ):
                         continue
                     if status and record.get("status", "").lower() != status.lower():
                         continue
@@ -102,7 +105,11 @@ def prune_history(keep: int = MAX_HISTORY_ENTRIES) -> int:
     if not HISTORY_FILE.exists():
         return 0
     try:
-        lines = [line for line in HISTORY_FILE.read_text().splitlines(keepends=True) if line.strip()]
+        lines = [
+            line
+            for line in HISTORY_FILE.read_text().splitlines(keepends=True)
+            if line.strip()
+        ]
         if len(lines) <= keep:
             return 0
         pruned = len(lines) - keep
@@ -132,12 +139,20 @@ def show_history(
 
     if not records:
         if workflow or status:
-            print_warning("No Runs Found", f"No runs match the filter (workflow={workflow!r}, status={status!r}).")
+            print_warning(
+                "No Runs Found",
+                f"No runs match the filter (workflow={workflow!r}, status={status!r}).",
+            )
         else:
-            print_warning("No Run History", "No workflow runs recorded yet. Run a workflow to start tracking.")
+            print_warning(
+                "No Run History",
+                "No workflow runs recorded yet. Run a workflow to start tracking.",
+            )
         return
 
-    table = Table(title=f"Run History (last {len(records)})", show_lines=False, padding=(0, 1))
+    table = Table(
+        title=f"Run History (last {len(records)})", show_lines=False, padding=(0, 1)
+    )
     table.add_column("Run ID", style="dim", max_width=12)
     table.add_column("Workflow", style="cyan bold")
     table.add_column("Status", justify="center")

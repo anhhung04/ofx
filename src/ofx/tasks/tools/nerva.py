@@ -17,10 +17,16 @@ class NervaTask(Task):
     output_types = [Port, Tag]
 
     opts = {
-        "workers": OptDef(flag="-W", type=int, help="Number of concurrent scan workers"),
+        "workers": OptDef(
+            flag="-W", type=int, help="Number of concurrent scan workers"
+        ),
         "timeout": OptDef(flag="-w", type=int, help="Timeout in milliseconds"),
-        "rate_limit": OptDef(flag="-R", type=float, help="Max scans per second (0=unlimited)"),
-        "max_host_conn": OptDef(flag="-H", type=int, help="Max concurrent connections per host IP"),
+        "rate_limit": OptDef(
+            flag="-R", type=float, help="Max scans per second (0=unlimited)"
+        ),
+        "max_host_conn": OptDef(
+            flag="-H", type=int, help="Max concurrent connections per host IP"
+        ),
         "fast": OptDef(flag="-f", is_flag=True, help="Fast mode"),
         "udp": OptDef(flag="-U", is_flag=True, help="Run UDP plugins"),
         "sctp": OptDef(flag="-S", is_flag=True, help="Run SCTP plugins (Linux only)"),
@@ -89,4 +95,3 @@ class NervaTask(Task):
             )
 
         return results
-

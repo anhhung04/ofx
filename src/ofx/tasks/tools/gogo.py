@@ -17,23 +17,30 @@ class GogoTask(Task):
     description = "Fast port scanner with fingerprinting and nuclei integration"
     category = "port/scan"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v "
-        "github.com/chainreactors/gogo/v2@latest"
+        "GOBIN=~/Tools/bin go install -v github.com/chainreactors/gogo/v2@latest"
     )
     output_types = [Port, Url, Tag, Vulnerability]
 
     opts = {
-        "ports": OptDef(flag="-p", type=str, help="Ports to scan (e.g. top2,win,db,1-1000)"),
+        "ports": OptDef(
+            flag="-p", type=str, help="Ports to scan (e.g. top2,win,db,1-1000)"
+        ),
         "mod": OptDef(flag="-m", type=str, help="Smart mode (s/ss/sc/default)"),
         "threads": OptDef(flag="-t", type=int, help="Concurrent threads"),
         "timeout": OptDef(flag="-d", type=int, help="Socket/HTTP timeout in seconds"),
         "ssl_timeout": OptDef(flag="-D", type=int, help="SSL/HTTPS timeout in seconds"),
         "exploit": OptDef(flag="-e", is_flag=True, help="Enable nuclei exploit scan"),
-        "verbose": OptDef(flag="-v", is_flag=True, help="Enable active fingerprint scan"),
-        "spray": OptDef(flag="-s", is_flag=True, help="Enable port-first spray generator"),
+        "verbose": OptDef(
+            flag="-v", is_flag=True, help="Enable active fingerprint scan"
+        ),
+        "spray": OptDef(
+            flag="-s", is_flag=True, help="Enable port-first spray generator"
+        ),
         "ping": OptDef(flag="--ping", is_flag=True, help="Pre-scan with ping"),
         "workflow": OptDef(flag="-w", type=str, help="Use a built-in workflow preset"),
-        "exploit_name": OptDef(flag="-E", type=str, help="Specify nuclei template name"),
+        "exploit_name": OptDef(
+            flag="-E", type=str, help="Specify nuclei template name"
+        ),
         "suffix": OptDef(flag="--suffix", type=str, help="URL path suffix"),
         "extract": OptDef(flag="--extract", type=str, help="Custom extract regex"),
         "proxy": OptDef(flag="--proxy", type=str, help="SOCKS5 proxy URL"),
@@ -85,7 +92,9 @@ class GogoTask(Task):
             if target:
                 parts.extend([self.input_flag, target])
         else:
-            target_is_file = target and not target.startswith("http") and Path(target).is_file()
+            target_is_file = (
+                target and not target.startswith("http") and Path(target).is_file()
+            )
             if target_is_file:
                 parts.extend([self.file_flag, target])
             else:
@@ -117,7 +126,11 @@ class GogoTask(Task):
             frameworks = data.get("frameworks", [])
             service = ""
             if frameworks:
-                service = frameworks[0].get("name", "") if isinstance(frameworks[0], dict) else str(frameworks[0])
+                service = (
+                    frameworks[0].get("name", "")
+                    if isinstance(frameworks[0], dict)
+                    else str(frameworks[0])
+                )
             results.append(
                 Port(
                     port=port,
@@ -135,7 +148,9 @@ class GogoTask(Task):
         title = data.get("title", "")
         if url or (protocol in ("http", "https") and port):
             if not url:
-                scheme = "https" if protocol == "https" or port in (443, 8443) else "http"
+                scheme = (
+                    "https" if protocol == "https" or port in (443, 8443) else "http"
+                )
                 url = f"{scheme}://{host or ip}:{port}"
             results.append(
                 Url(
@@ -161,9 +176,13 @@ class GogoTask(Task):
 
         # Vulnerabilities from nuclei results
         for vuln in data.get("vulns", []):
-            vuln_name = vuln if isinstance(vuln, str) else vuln.get("name", vuln.get("id", ""))
+            vuln_name = (
+                vuln if isinstance(vuln, str) else vuln.get("name", vuln.get("id", ""))
+            )
             if vuln_name:
-                severity_str = vuln.get("severity", "info") if isinstance(vuln, dict) else "info"
+                severity_str = (
+                    vuln.get("severity", "info") if isinstance(vuln, dict) else "info"
+                )
                 from ofx.tasks.output_types import Severity
 
                 sev_map = {
@@ -182,4 +201,3 @@ class GogoTask(Task):
                 )
 
         return results
-

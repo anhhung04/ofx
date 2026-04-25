@@ -47,9 +47,7 @@ class PurednsTask(Task):
     def _output_suffix(self) -> str:
         return ".txt"
 
-    def build_command(
-        self, target: str, **kwargs: object
-    ) -> tuple[str, Path | None]:
+    def build_command(self, target: str, **kwargs: object) -> tuple[str, Path | None]:
         """Build: puredns resolve [flags] <input_file> -w <output_file>."""
         parts = [self.cmd, *self.extra_flags]
 
@@ -84,4 +82,3 @@ class PurednsTask(Task):
 
         domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
         return [Subdomain(host=host, domain=domain)]
-

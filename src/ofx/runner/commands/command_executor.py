@@ -53,6 +53,7 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
 
     # Give children 2 seconds to exit, then force-kill
     import time
+
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
         try:

@@ -218,11 +218,7 @@ def _pick_columns(type_name: str, items: list[dict]) -> list[str]:
 
     # Fallback: pick keys from first item, skip internal fields
     if items:
-        return [
-            k
-            for k in items[0]
-            if not k.startswith("_") and k != "extra_data"
-        ][:6]
+        return [k for k in items[0] if not k.startswith("_") and k != "extra_data"][:6]
     return []
 
 

@@ -36,6 +36,7 @@ def _timeout_int(value: int | str) -> int:
     except (ValueError, TypeError):
         return 60 * 24  # default: 24 hours
 
+
 logger = get_logger()
 
 
@@ -143,7 +144,9 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 else:
                     raise RuntimeError(step_execution_error(res.status, res.error))
             except TimeoutError as e:
-                raise RuntimeError(step_timeout_error(_timeout_int(self.model.timeout))) from e
+                raise RuntimeError(
+                    step_timeout_error(_timeout_int(self.model.timeout))
+                ) from e
             except Exception as e:
                 err_msg = str(e)
                 attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
@@ -334,9 +337,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
         elif self._run_type is RunType.TASK:
             from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
-            assert self.model.task is not None, (
-                "task cannot be None for TASK run type"
-            )
+            assert self.model.task is not None, "task cannot be None for TASK run type"
 
             # Extract target from run_with; remaining keys are task options
             task_opts = dict(self.model.run_with)

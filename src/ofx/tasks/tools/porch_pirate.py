@@ -20,18 +20,10 @@ class PorchPirateTask(Task):
     output_types = [Url, Tag]
 
     opts = {
-        "globals": OptDef(
-            flag="-g", is_flag=True, help="Search for global variables"
-        ),
-        "collections": OptDef(
-            flag="-c", is_flag=True, help="Search for collections"
-        ),
-        "requests": OptDef(
-            flag="-r", is_flag=True, help="Search for requests"
-        ),
-        "raw": OptDef(
-            flag="--raw", is_flag=True, help="Show raw output"
-        ),
+        "globals": OptDef(flag="-g", is_flag=True, help="Search for global variables"),
+        "collections": OptDef(flag="-c", is_flag=True, help="Search for collections"),
+        "requests": OptDef(flag="-r", is_flag=True, help="Search for requests"),
+        "raw": OptDef(flag="--raw", is_flag=True, help="Show raw output"),
     }
 
     input_flag = "-s"

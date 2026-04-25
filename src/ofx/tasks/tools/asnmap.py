@@ -13,9 +13,7 @@ class AsnmapTask(Task):
     cmd = "asnmap"
     description = "ASN to CIDR mapping tool"
     category = "recon/asn"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/asnmap/cmd/asnmap@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/asnmap/cmd/asnmap@latest"
     output_types = [Ip]
 
     opts = {
@@ -57,4 +55,3 @@ class AsnmapTask(Task):
                 },
             )
         ]
-

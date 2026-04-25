@@ -30,9 +30,7 @@ class TheHarvesterTask(Task):
         "limit": OptDef(flag="-l", type=int, help="Limit results"),
         "start": OptDef(flag="-S", type=int, help="Start result number"),
         "shodan": OptDef(flag="-s", is_flag=True, help="Use Shodan"),
-        "dns_brute": OptDef(
-            flag="-c", is_flag=True, help="DNS brute force"
-        ),
+        "dns_brute": OptDef(flag="-c", is_flag=True, help="DNS brute force"),
         "virtual_host": OptDef(
             flag="-v", is_flag=True, help="Virtual host verification"
         ),
@@ -137,11 +135,7 @@ class TheHarvesterTask(Task):
                 # Strip trailing IP in format "host:ip"
                 host = host.split(":")[0].strip()
                 if host:
-                    domain = (
-                        ".".join(host.rsplit(".", 2)[-2:])
-                        if "." in host
-                        else host
-                    )
+                    domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
                     results.append(Subdomain(host=host, domain=domain))
 
         return results

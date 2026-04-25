@@ -25,7 +25,11 @@ class CommixTask(Task):
         "headers": OptDef(flag="--headers", type=str, help="Custom HTTP headers"),
         "method": OptDef(flag="--method", type=str, help="HTTP method"),
         "level": OptDef(flag="--level", type=int, help="Level of tests (1-3)"),
-        "technique": OptDef(flag="-t", type=str, help="Technique (classic,eval-based,time-based,file-based)"),
+        "technique": OptDef(
+            flag="-t",
+            type=str,
+            help="Technique (classic,eval-based,time-based,file-based)",
+        ),
         "proxy": OptDef(flag="--proxy", type=str, help="Proxy URL"),
         "tor": OptDef(flag="--tor", is_flag=True, help="Use Tor network"),
         "batch": OptDef(flag="--batch", is_flag=True, help="Non-interactive mode"),
@@ -41,9 +45,7 @@ class CommixTask(Task):
         return ".txt"
 
     # The parameter 'id' is vulnerable.
-    _VULN_PARAM_RE = re.compile(
-        r"The parameter '([^']+)' is vulnerable", re.IGNORECASE
-    )
+    _VULN_PARAM_RE = re.compile(r"The parameter '([^']+)' is vulnerable", re.IGNORECASE)
     # The ('...') technique appears to be injectable.
     _TECHNIQUE_RE = re.compile(
         r"The \('([^']+)'\) technique appears to be injectable", re.IGNORECASE

@@ -38,7 +38,9 @@ def _read_metadata(path: Path) -> dict:
             return {
                 "name": str(data.get("name", path.stem)),
                 "description": str(data.get("description", "")),
-                "tags": [str(t).lower() for t in tags] if isinstance(tags, list) else [],
+                "tags": [str(t).lower() for t in tags]
+                if isinstance(tags, list)
+                else [],
             }
     except Exception as e:
         logger.debug("Failed to parse workflow metadata from %s: %s", path, e)
@@ -115,7 +117,9 @@ def show_list(
         return
 
     # Read metadata when filtering or showing extra columns
-    need_metadata = bool(filter_tags) or bool(search_term) or show_tags or show_descriptions
+    need_metadata = (
+        bool(filter_tags) or bool(search_term) or show_tags or show_descriptions
+    )
     file_meta: dict[str, dict] = {}
     if need_metadata:
         for file, _, _ in all_files:
@@ -126,7 +130,9 @@ def show_list(
 
     for file, source, base_root in all_files:
         resolved = str(file.resolve())
-        meta = file_meta.get(resolved, {"name": file.stem, "description": "", "tags": []})
+        meta = file_meta.get(
+            resolved, {"name": file.stem, "description": "", "tags": []}
+        )
         tags = meta["tags"]
         description = meta["description"]
 
@@ -134,7 +140,9 @@ def show_list(
             continue
 
         if search_term:
-            searchable = f"{file.stem} {meta['name']} {description} {' '.join(tags)}".lower()
+            searchable = (
+                f"{file.stem} {meta['name']} {description} {' '.join(tags)}".lower()
+            )
             if search_term not in searchable:
                 continue
 
@@ -143,13 +151,20 @@ def show_list(
             cat_str = str(category) if str(category) != "." else ""
         except ValueError:
             cat_str = ""
-        groups.setdefault(source, defaultdict(list))[cat_str].append((file.stem, tags, description))
+        groups.setdefault(source, defaultdict(list))[cat_str].append(
+            (file.stem, tags, description)
+        )
 
     if not groups:
         if filter_tags:
-            print_warning("No Workflows Found", f"No workflows matched tags: {', '.join(sorted(filter_tags))}")
+            print_warning(
+                "No Workflows Found",
+                f"No workflows matched tags: {', '.join(sorted(filter_tags))}",
+            )
         elif search_term:
-            print_warning("No Workflows Found", f"No workflows matched search: '{search_term}'")
+            print_warning(
+                "No Workflows Found", f"No workflows matched search: '{search_term}'"
+            )
         else:
             print_warning("No Workflows Found", "No workflows matched the filter.")
         return

@@ -20,9 +20,13 @@ class S3scannerTask(Task):
     output_types = [Vulnerability, Tag]
 
     opts = {
-        "provider": OptDef(flag="-provider", type=str, help="Cloud provider: aws, gcp, digitalocean"),
+        "provider": OptDef(
+            flag="-provider", type=str, help="Cloud provider: aws, gcp, digitalocean"
+        ),
         "threads": OptDef(flag="-threads", type=int, help="Number of threads"),
-        "write_test": OptDef(flag="-write", is_flag=True, help="Test write permissions"),
+        "write_test": OptDef(
+            flag="-write", is_flag=True, help="Test write permissions"
+        ),
     }
 
     input_flag = None
@@ -95,4 +99,3 @@ class S3scannerTask(Task):
             results = [Tag(name=bucket_name, value="not_found", category="s3")]
 
         return results
-

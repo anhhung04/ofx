@@ -243,7 +243,9 @@ class MatrixJobRunner(BaseRunner[Job]):
             return []
 
         # Detect empty source lists before expansion so the warning is accurate.
-        empty_keys = [k for k, v in strategy.matrix.items() if isinstance(v, list) and len(v) == 0]
+        empty_keys = [
+            k for k, v in strategy.matrix.items() if isinstance(v, list) and len(v) == 0
+        ]
         if empty_keys:
             self._log_warning(
                 f"Matrix produced 0 combinations: key(s) {empty_keys} resolved to an empty list. "
@@ -252,7 +254,10 @@ class MatrixJobRunner(BaseRunner[Job]):
             return []
 
         combos = generate_matrix_combinations(
-            {k: ([v] if not isinstance(v, list) else v) for k, v in strategy.matrix.items()},
+            {
+                k: ([v] if not isinstance(v, list) else v)
+                for k, v in strategy.matrix.items()
+            },
             include=strategy.include,
             exclude=strategy.exclude,
             enforce_limit=True,

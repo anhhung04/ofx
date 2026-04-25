@@ -80,9 +80,7 @@ class HoleheTask(Task):
 
         results: list[UserAccount] = []
         # holehe lines: [+] email is used on: SiteName
-        used_re = re.compile(
-            r"\[\+\]\s*(\S+@\S+)\s+is used on:\s*(.+)", re.IGNORECASE
-        )
+        used_re = re.compile(r"\[\+\]\s*(\S+@\S+)\s+is used on:\s*(.+)", re.IGNORECASE)
         # Alternative format: [+] SiteName
         alt_re = re.compile(r"\[\+\]\s+(.+)")
 

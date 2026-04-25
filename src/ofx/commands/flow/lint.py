@@ -65,11 +65,15 @@ def _lint_workflow(path: Path) -> LintResult:
 
     # Check: no dispatch or call
     if not workflow.dispatch and not workflow.call:
-        result.issues.append(LintIssue("info", "No dispatch or call trigger — can only run directly"))
+        result.issues.append(
+            LintIssue("info", "No dispatch or call trigger — can only run directly")
+        )
 
     # Check: dispatch without inputs
     if workflow.dispatch and not workflow.dispatch.inputs:
-        result.issues.append(LintIssue("info", "Dispatch defined but no inputs declared"))
+        result.issues.append(
+            LintIssue("info", "Dispatch defined but no inputs declared")
+        )
 
     for jid, job in workflow.jobs.items():
         # Check: job without name
@@ -78,32 +82,48 @@ def _lint_workflow(path: Path) -> LintResult:
 
         # Check: job has no outputs
         if not job.outputs:
-            result.issues.append(LintIssue("info", "Job has no outputs declared", location=jid))
+            result.issues.append(
+                LintIssue("info", "Job has no outputs declared", location=jid)
+            )
 
         for step in job.steps:
             # Check: step without a meaningful name
             if not step.name or step.name.startswith("<should_be_replaced>"):
                 result.issues.append(
-                    LintIssue("warn", "Step has no name", location=f"{jid}.step[{step.step_index}]")
+                    LintIssue(
+                        "warn",
+                        "Step has no name",
+                        location=f"{jid}.step[{step.step_index}]",
+                    )
                 )
 
             # Check: task step without timeout override
             if step.task and step.timeout == 1440:
                 result.issues.append(
-                    LintIssue("info", f"Task step '{step.name}' uses default 24h timeout", location=jid)
+                    LintIssue(
+                        "info",
+                        f"Task step '{step.name}' uses default 24h timeout",
+                        location=jid,
+                    )
                 )
 
             # Check: run step with very long command (>500 chars)
             if step.run and len(step.run) > 500:
                 result.issues.append(
-                    LintIssue("info", f"Step '{step.name}' has a long run command ({len(step.run)} chars) — consider script", location=jid)
+                    LintIssue(
+                        "info",
+                        f"Step '{step.name}' has a long run command ({len(step.run)} chars) — consider script",
+                        location=jid,
+                    )
                 )
 
     return result
 
 
 def _severity_icon(severity: str) -> str:
-    return {"error": "[red]✗[/]", "warn": "[yellow]⚠[/]", "info": "[dim]ℹ[/]"}.get(severity, "?")
+    return {"error": "[red]✗[/]", "warn": "[yellow]⚠[/]", "info": "[dim]ℹ[/]"}.get(
+        severity, "?"
+    )
 
 
 def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None:
@@ -135,7 +155,10 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
     if all_workflows:
         # Summary table
         results_with_issues = [r for r in results if r.issues]
-        print_info("Lint Results", f"{len(results)} workflows: {clean} clean, {total_warns} warnings, {total_errors} errors, {total_infos} info")
+        print_info(
+            "Lint Results",
+            f"{len(results)} workflows: {clean} clean, {total_warns} warnings, {total_errors} errors, {total_infos} info",
+        )
         console.print()
 
         if not results_with_issues:
@@ -148,7 +171,9 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
         table.add_column("Issue")
         table.add_column("Location", style="dim")
 
-        for r in sorted(results_with_issues, key=lambda x: (-x.error_count, -x.warn_count, x.name)):
+        for r in sorted(
+            results_with_issues, key=lambda x: (-x.error_count, -x.warn_count, x.name)
+        ):
             first = True
             for issue in r.issues:
                 table.add_row(
@@ -166,7 +191,9 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
         if not r.issues:
             from ofx.commands.ui_helpers import print_success
 
-            print_success("Lint Passed", f"[cyan]{r.name or r.path.stem}[/] — no issues found")
+            print_success(
+                "Lint Passed", f"[cyan]{r.name or r.path.stem}[/] — no issues found"
+            )
             return
 
         console.print(f"[bold]{r.name or r.path.stem}[/]  ({r.path})")
@@ -175,7 +202,9 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
             loc = f" [dim]({issue.location})[/]" if issue.location else ""
             console.print(f"  {_severity_icon(issue.severity)} {issue.message}{loc}")
         console.print()
-        console.print(f"  {r.error_count} errors, {r.warn_count} warnings, {sum(1 for i in r.issues if i.severity == 'info')} info")
+        console.print(
+            f"  {r.error_count} errors, {r.warn_count} warnings, {sum(1 for i in r.issues if i.severity == 'info')} info"
+        )
 
 
 def _discover_workflow_files() -> list[Path]:

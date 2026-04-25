@@ -70,7 +70,9 @@ def _resolve_output_path(output: str) -> Path:
 def checkpoint_list(
     output: Annotated[
         str,
-        typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
+        typer.Argument(
+            help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."
+        ),
     ] = "",
     status: Annotated[
         str,
@@ -104,7 +106,9 @@ def checkpoint_list(
     from rich.table import Table
 
     console = get_console()
-    table = Table(title=f"Checkpoints ({len(checkpoints)})", show_lines=False, padding=(0, 1))
+    table = Table(
+        title=f"Checkpoints ({len(checkpoints)})", show_lines=False, padding=(0, 1)
+    )
     table.add_column("Name", style="cyan", no_wrap=True)
     table.add_column("Status", style="bold")
     table.add_column("Runner", style="dim")
@@ -120,7 +124,13 @@ def checkpoint_list(
         dur = cp.get("duration_ms")
         dur_str = f"{dur}ms" if dur is not None else ""
 
-        table.add_row(str(name), f"[{style}]{st}[/]" if style else st, runner_type, started, dur_str)
+        table.add_row(
+            str(name),
+            f"[{style}]{st}[/]" if style else st,
+            runner_type,
+            started,
+            dur_str,
+        )
 
     console.print(table)
 
@@ -129,7 +139,9 @@ def checkpoint_list(
 def checkpoint_show(
     output: Annotated[
         str,
-        typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
+        typer.Argument(
+            help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."
+        ),
     ] = "",
     checkpoint_id: Annotated[
         str,
@@ -172,19 +184,30 @@ def checkpoint_show(
 def checkpoint_clean(
     output: Annotated[
         str,
-        typer.Argument(help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."),
+        typer.Argument(
+            help="Output directory containing .durable/ checkpoint data. Auto-resolved from active project when omitted."
+        ),
     ] = "",
     status: Annotated[
         str,
-        typer.Option("-s", "--status", help="Remove only checkpoints with these statuses (comma-separated)."),
+        typer.Option(
+            "-s",
+            "--status",
+            help="Remove only checkpoints with these statuses (comma-separated).",
+        ),
     ] = "",
     older_than: Annotated[
         str,
-        typer.Option("--older-than", help="Remove checkpoints older than this (e.g. 7d, 24h, 30m)."),
+        typer.Option(
+            "--older-than",
+            help="Remove checkpoints older than this (e.g. 7d, 24h, 30m).",
+        ),
     ] = "",
     stale: Annotated[
         bool,
-        typer.Option("--stale", help="Remove only stale (stuck in running) checkpoints."),
+        typer.Option(
+            "--stale", help="Remove only stale (stuck in running) checkpoints."
+        ),
     ] = False,
     all_checkpoints: Annotated[
         bool,
@@ -232,7 +255,9 @@ def checkpoint_clean(
         return
 
     age_seconds = _parse_age(older_than)
-    statuses: list[str] | None = [s.strip() for s in status.split(",") if s.strip()] or None
+    statuses: list[str] | None = [
+        s.strip() for s in status.split(",") if s.strip()
+    ] or None
 
     if not statuses and age_seconds is None:
         print_warning("No Filter", "Specify --status, --older-than, --stale, or --all.")

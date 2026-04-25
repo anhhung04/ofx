@@ -206,8 +206,12 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
 
 @app.command(name="use")
 def use(
-    name: Annotated[str, typer.Argument(help="Project name or path (empty when clearing)")] = "",
-    clear: Annotated[bool, typer.Option("--clear", "-c", help="Clear the active project setting")] = False,
+    name: Annotated[
+        str, typer.Argument(help="Project name or path (empty when clearing)")
+    ] = "",
+    clear: Annotated[
+        bool, typer.Option("--clear", "-c", help="Clear the active project setting")
+    ] = False,
 ):
     """Set or clear the active/working project."""
     console = get_console()
@@ -232,6 +236,7 @@ def use(
     os.environ["OFX_ACTIVE_PROJECT"] = name
     settings.active_project = name
     console.print(f"[green]Active project set to:[/] {name} → {resolved}")
+
 
 @app.command()
 def status(
@@ -267,14 +272,27 @@ def status(
     # Count files in key directories
     dir_stats: list[tuple[str, int]] = []
     key_dirs = [
-        "hosts", "subdomains", "vulns", "web", "certs", "osint",
-        "evidence", "scans", "scope", "targets", "tools", "exploits",
-        "logs", "post-exploits",
+        "hosts",
+        "subdomains",
+        "vulns",
+        "web",
+        "certs",
+        "osint",
+        "evidence",
+        "scans",
+        "scope",
+        "targets",
+        "tools",
+        "exploits",
+        "logs",
+        "post-exploits",
     ]
     for d in key_dirs:
         dp = project_path / d
         if dp.is_dir():
-            count = sum(1 for f in dp.rglob("*") if f.is_file() and f.name != ".gitkeep")
+            count = sum(
+                1 for f in dp.rglob("*") if f.is_file() and f.name != ".gitkeep"
+            )
             if count > 0:
                 dir_stats.append((d, count))
 

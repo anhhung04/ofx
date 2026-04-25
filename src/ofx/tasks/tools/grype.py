@@ -35,9 +35,7 @@ class GrypeTask(Task):
             is_flag=True,
             help="Generate CPEs if none are present",
         ),
-        "by_cve": OptDef(
-            flag="--by-cve", is_flag=True, help="Orient results by CVE"
-        ),
+        "by_cve": OptDef(flag="--by-cve", is_flag=True, help="Orient results by CVE"),
         "fail_on": OptDef(
             flag="--fail-on",
             type=str,

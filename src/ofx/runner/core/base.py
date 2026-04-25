@@ -177,7 +177,9 @@ class BaseRunner[TModel: BaseModel]:
                     self._log_debug(f"Cleanup after failure failed: {cleanup_exc}")
         finally:
             self._mark_finish()
-            self._emit_event("runner_finish", {"status": self.status.value, "error": self._error})
+            self._emit_event(
+                "runner_finish", {"status": self.status.value, "error": self._error}
+            )
             initial_checkpoint_status = self._checkpoint_status()
             try:
                 await self._write_checkpoint(initial_checkpoint_status)
@@ -214,7 +216,9 @@ class BaseRunner[TModel: BaseModel]:
             return path
         return None
 
-    def _emit_event(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
+    def _emit_event(
+        self, event_type: str, payload: dict[str, Any] | None = None
+    ) -> None:
         """Emit structured runner lifecycle event as NDJSON (best effort)."""
         sink = self._event_sink_path()
         if sink is None:

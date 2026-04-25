@@ -13,9 +13,7 @@ class FavireconTask(Task):
     cmd = "favirecon"
     description = "Favicon hash technology detection"
     category = "web/recon"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/edoardottt/favirecon/cmd/favirecon@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/edoardottt/favirecon/cmd/favirecon@latest"
     output_types = [Tag, Url]
 
     opts = {
@@ -58,4 +56,3 @@ class FavireconTask(Task):
             results.append(Url(url=url))
 
         return results
-

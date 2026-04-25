@@ -15,7 +15,9 @@ from ofx.tasks.registry import TaskRegistry
 class CoercerTask(Task):
     name = "coercer"
     cmd = "coercer"
-    description = "Windows authentication coercion scanner (PetitPotam, PrinterBug, DFSCoerce)"
+    description = (
+        "Windows authentication coercion scanner (PetitPotam, PrinterBug, DFSCoerce)"
+    )
     category = "ad/coerce"
     install_cmd = "uv tool install coercer"
     output_types = [Vulnerability, Tag]
@@ -26,10 +28,22 @@ class CoercerTask(Task):
         "hash": OptDef(flag="--hashes", type=str, help="NTLM hashes"),
         "domain": OptDef(flag="-d", type=str, help="Domain"),
         "listener": OptDef(flag="-l", type=str, help="Listener IP (attacker)"),
-        "target_file": OptDef(flag="--targets-file", type=str, help="File with target IPs"),
-        "filter_protocol": OptDef(flag="--filter-protocol-name", type=str, help="Filter by protocol (MS-EFSR, MS-RPRN, etc.)"),
-        "filter_method": OptDef(flag="--filter-method-name", type=str, help="Filter by method name"),
-        "always_continue": OptDef(flag="--always-continue", is_flag=True, help="Continue after successful coercion"),
+        "target_file": OptDef(
+            flag="--targets-file", type=str, help="File with target IPs"
+        ),
+        "filter_protocol": OptDef(
+            flag="--filter-protocol-name",
+            type=str,
+            help="Filter by protocol (MS-EFSR, MS-RPRN, etc.)",
+        ),
+        "filter_method": OptDef(
+            flag="--filter-method-name", type=str, help="Filter by method name"
+        ),
+        "always_continue": OptDef(
+            flag="--always-continue",
+            is_flag=True,
+            help="Continue after successful coercion",
+        ),
         "verbose": OptDef(flag="-v", is_flag=True, help="Verbose output"),
     }
 

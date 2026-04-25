@@ -124,17 +124,24 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             try:
                 if run_type == RunType.COMMAND:
                     output = await asyncio.wait_for(
-                        self._run_remote_command(self.model.run, timeout=timeout_seconds),
-                        timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,  # grace period for network latency
+                        self._run_remote_command(
+                            self.model.run, timeout=timeout_seconds
+                        ),
+                        timeout=timeout_seconds
+                        + _NETWORK_GRACE_SECONDS,  # grace period for network latency
                     )
                 elif run_type == RunType.SCRIPT:
                     output = await asyncio.wait_for(
-                        self._run_remote_script(self.model.script, timeout=timeout_seconds),
+                        self._run_remote_script(
+                            self.model.script, timeout=timeout_seconds
+                        ),
                         timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
                     )
                 elif run_type == RunType.SCRIPT_FILE:
                     output = await asyncio.wait_for(
-                        self._run_remote_script_file(self.model.script_file, timeout=timeout_seconds),
+                        self._run_remote_script_file(
+                            self.model.script_file, timeout=timeout_seconds
+                        ),
                         timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
                     )
                 elif run_type == RunType.WORKFLOW:
@@ -222,7 +229,10 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         # Get VPS host/IP as source — this is where commands actually run
         cloud_host = ""
         from ofx.runner.execution.cloud_job import CloudJobRunner
-        if isinstance(self.parent, CloudJobRunner) and hasattr(self.parent, "_cloud_config"):
+
+        if isinstance(self.parent, CloudJobRunner) and hasattr(
+            self.parent, "_cloud_config"
+        ):
             cfg = self.parent._cloud_config
             if cfg:
                 cloud_host = getattr(cfg, "host", "") or ""
@@ -327,7 +337,11 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
 
         opsec_mode = False
         if self.parent and getattr(self.parent, "_cloud_config", None):
-            opsec_mode = bool(getattr(getattr(self.parent, "_cloud_config", None), "opsec_mode", False))
+            opsec_mode = bool(
+                getattr(
+                    getattr(self.parent, "_cloud_config", None), "opsec_mode", False
+                )
+            )
         payload = build_python_payload(
             script,
             opsec_mode=opsec_mode,
@@ -365,7 +379,11 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         finally:
             # Cleanup remote script
             try:
-                rm_cmd = f'del /f "{remote_script}"' if self._is_windows else f"rm -f {shlex.quote(remote_script)}"
+                rm_cmd = (
+                    f'del /f "{remote_script}"'
+                    if self._is_windows
+                    else f"rm -f {shlex.quote(remote_script)}"
+                )
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
                 self._log_debug(f"Failed to remove remote script {remote_script}: {e}")
@@ -387,7 +405,11 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         )
         opsec_mode = False
         if self.parent and getattr(self.parent, "_cloud_config", None):
-            opsec_mode = bool(getattr(getattr(self.parent, "_cloud_config", None), "opsec_mode", False))
+            opsec_mode = bool(
+                getattr(
+                    getattr(self.parent, "_cloud_config", None), "opsec_mode", False
+                )
+            )
         payload = build_python_payload(
             source,
             opsec_mode=opsec_mode,
@@ -425,7 +447,11 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             Path(local_tmp).unlink(missing_ok=True)
             # Clean up remote file.
             try:
-                rm_cmd = f'del /f "{remote_path}"' if self._is_windows else f"rm -f {shlex.quote(remote_path)}"
+                rm_cmd = (
+                    f'del /f "{remote_path}"'
+                    if self._is_windows
+                    else f"rm -f {shlex.quote(remote_path)}"
+                )
                 await asyncio.to_thread(self._remote.run, rm_cmd, 10)
             except Exception as e:
                 self._log_debug(f"Failed to remove remote file {remote_path}: {e}")
@@ -479,9 +505,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         """Store UserAccount outputs in the credential store."""
         from ofx.runner.core.credential_store import store_from_typed_outputs
 
-        stored = store_from_typed_outputs(
-            typed_outputs, log_fn=self._log_debug
-        )
+        stored = store_from_typed_outputs(typed_outputs, log_fn=self._log_debug)
         if stored:
             self._log_info(f"Stored {stored} credential(s) in credential store")
 
@@ -553,9 +577,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
 
         if self._is_windows:
             # CMD syntax: SET FOO=bar (no quoting needed; && chaining handled by caller)
-            exports = " && ".join(
-                f"SET {k}={str(v)}" for k, v in env_vars.items()
-            )
+            exports = " && ".join(f"SET {k}={str(v)}" for k, v in env_vars.items())
             return f"{exports} &&" if exports else ""
 
         exports = " ".join(
@@ -580,14 +602,25 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        run_type = self._run_type.value if self._run_type else self.model.get_run_type().value
+        run_type = (
+            self._run_type.value if self._run_type else self.model.get_run_type().value
+        )
         step_name = self.model.name or f"step_{self.model.step_index}"
         job_id = ""
         workflow_name = ""
         if self.parent and getattr(self.parent, "model", None):
             job_id = getattr(getattr(self.parent, "model", None), "jid", "") or ""
-            if getattr(self.parent, "parent", None) and getattr(getattr(self.parent, "parent", None), "model", None):
-                workflow_name = getattr(getattr(getattr(self.parent, "parent", None), "model", None), "name", "") or ""
+            if getattr(self.parent, "parent", None) and getattr(
+                getattr(self.parent, "parent", None), "model", None
+            ):
+                workflow_name = (
+                    getattr(
+                        getattr(getattr(self.parent, "parent", None), "model", None),
+                        "name",
+                        "",
+                    )
+                    or ""
+                )
         msg = (
             f"workflow[{workflow_name}]"
             f"job[{job_id}]"

@@ -127,13 +127,16 @@ class CollectionManager:
             raw = json.loads(self.installed_file.read_text())
             return {k: InstalledCollection.model_validate(v) for k, v in raw.items()}
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
-            logger.warning("Failed to load installed collections from %s: %s", self.installed_file, exc)
+            logger.warning(
+                "Failed to load installed collections from %s: %s",
+                self.installed_file,
+                exc,
+            )
             return {}
 
     def _save_installed(self) -> None:
         data = {k: v.model_dump() for k, v in self._installed.items()}
         self.installed_file.write_text(json.dumps(data, indent=2))
-
 
     # ------------------------------------------------------------------
     # Add / Install
@@ -284,7 +287,9 @@ class CollectionManager:
         try:
             raw = json.loads(assets_file.read_text())
         except (json.JSONDecodeError, KeyError, ValueError) as exc:
-            logger.warning("Failed to parse legacy assets file %s: %s", assets_file, exc)
+            logger.warning(
+                "Failed to parse legacy assets file %s: %s", assets_file, exc
+            )
             return 0
 
         count = 0
@@ -350,4 +355,3 @@ class CollectionManager:
                 1,
             )
         return source
-

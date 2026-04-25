@@ -9,9 +9,7 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
 
-_ENGINE_RE = re.compile(
-    r"(?:is\s+|Detected:\s*)(\w[\w\s.-]*\w)", re.IGNORECASE
-)
+_ENGINE_RE = re.compile(r"(?:is\s+|Detected:\s*)(\w[\w\s.-]*\w)", re.IGNORECASE)
 
 
 @TaskRegistry.register("graphw00f")

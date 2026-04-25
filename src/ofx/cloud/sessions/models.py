@@ -40,9 +40,7 @@ class Session(OFXBaseModel):
     # Identity
     id: str = Field(..., description="Short session identifier (8-char hex)")
     name: str = Field(default="", description="User-provided session name or tag")
-    project: str = Field(
-        default="", description="Project name this session belongs to"
-    )
+    project: str = Field(default="", description="Project name this session belongs to")
 
     # What to run
     workflow_file: str = Field(..., description="Workflow path or name")

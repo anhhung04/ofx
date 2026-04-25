@@ -27,12 +27,8 @@ class WpscanTask(Task):
             type=str,
             help="Enumerate: vp,vt,u,m,ap,at,cb,dbe",
         ),
-        "api_token": OptDef(
-            flag="--api-token", type=str, help="WPScan API token"
-        ),
-        "stealthy": OptDef(
-            flag="--stealthy", is_flag=True, help="Use stealthy mode"
-        ),
+        "api_token": OptDef(flag="--api-token", type=str, help="WPScan API token"),
+        "stealthy": OptDef(flag="--stealthy", is_flag=True, help="Use stealthy mode"),
         "random_user_agent": OptDef(
             flag="--random-user-agent",
             is_flag=True,
@@ -75,9 +71,7 @@ class WpscanTask(Task):
                 for key, item in items.items():
                     if not isinstance(item, dict):
                         continue
-                    self._parse_component(
-                        results, key, item, target_url, section
-                    )
+                    self._parse_component(results, key, item, target_url, section)
 
         return results
 

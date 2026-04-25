@@ -182,7 +182,9 @@ class PostWinRM(BaseRunner):
                 stdout = result.std_out.decode(errors="ignore")
                 stderr = result.std_err.decode(errors="ignore").strip()
 
-                self._log_command(f"{log_prefix}{command}", stdout, stderr, result.status_code)
+                self._log_command(
+                    f"{log_prefix}{command}", stdout, stderr, result.status_code
+                )
 
                 if result.status_code != 0:
                     raise WinRMCommandError(
@@ -216,9 +218,7 @@ class PostWinRM(BaseRunner):
 
     def _run_cmd_with_retry(self, command: str) -> str:
         """Execute CMD command with retries."""
-        return self._execute_with_retry(
-            self._session.run_cmd, command, "", "cmd"
-        )
+        return self._execute_with_retry(self._session.run_cmd, command, "", "cmd")
 
     def run_ps(self, script: str) -> str:
         """Execute a PowerShell script via WinRM with retries.

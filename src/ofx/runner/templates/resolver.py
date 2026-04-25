@@ -191,8 +191,7 @@ class TemplateResolver:
                     if len(sv) >= 4:
                         preview = preview.replace(sv, "***")
             raise type(e)(
-                f"Template rendering failed: {e}\n"
-                f"  Template: {preview}"
+                f"Template rendering failed: {e}\n  Template: {preview}"
             ) from e
 
         resolve_stack.pop()

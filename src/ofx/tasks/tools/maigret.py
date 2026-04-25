@@ -17,7 +17,9 @@ class MaigretTask(Task):
     output_types = [UserAccount]
 
     opts = {
-        "timeout": OptDef(flag="--timeout", type=int, help="Request timeout in seconds"),
+        "timeout": OptDef(
+            flag="--timeout", type=int, help="Request timeout in seconds"
+        ),
         "retries": OptDef(flag="-r", type=int, help="Number of retries"),
         "top_sites": OptDef(
             flag="--top-sites", type=int, help="Check only top N popular sites"
@@ -56,4 +58,3 @@ class MaigretTask(Task):
                 extra_data={"url": url_user, "site": site_name},
             )
         ]
-

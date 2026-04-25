@@ -72,8 +72,8 @@ class Task(ABC):
     # Set these to auto-inject machine-friendly output flags.
     # They are appended to the command automatically.  Set to ``""``
     # to disable a particular auto-flag.
-    json_flag: str = ""      # e.g. "-json", "--json", "-jsonl"
-    silent_flag: str = ""    # e.g. "-silent", "--silent", "-s"
+    json_flag: str = ""  # e.g. "-json", "--json", "-jsonl"
+    silent_flag: str = ""  # e.g. "-silent", "--silent", "-s"
 
     # ── Exit code handling ─────────────────────────────────────────
     # Exit codes considered successful.  Override in subclasses for tools

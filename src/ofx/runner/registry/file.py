@@ -70,7 +70,9 @@ class FileRegistry(RegistryAdapter):
                 try:
                     data = json.loads(content)
                 except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                    logger.warning("Failed to decode registry file '%s': %s", self.filepath, exc)
+                    logger.warning(
+                        "Failed to decode registry file '%s': %s", self.filepath, exc
+                    )
                     data = {}
             else:
                 data = {}

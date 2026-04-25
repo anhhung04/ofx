@@ -26,9 +26,13 @@ class GetNPUsersTask(Task):
         "hash": OptDef(flag="-hashes", type=str, help="NTLM hashes (LMHASH:NTHASH)"),
         "dc_ip": OptDef(flag="-dc-ip", type=str, help="Domain controller IP"),
         "dc_host": OptDef(flag="-dc-host", type=str, help="Domain controller hostname"),
-        "usersfile": OptDef(flag="-usersfile", type=str, help="File with usernames to test"),
+        "usersfile": OptDef(
+            flag="-usersfile", type=str, help="File with usernames to test"
+        ),
         "format": OptDef(flag="-format", type=str, help="Output format (hashcat/john)"),
-        "output_file": OptDef(flag="-outputfile", type=str, help="Output file for hashes"),
+        "output_file": OptDef(
+            flag="-outputfile", type=str, help="Output file for hashes"
+        ),
         "request": OptDef(flag="-request", is_flag=True, help="Request AS-REP hashes"),
         "k": OptDef(flag="-k", is_flag=True, help="Use Kerberos authentication"),
         "no_pass": OptDef(flag="-no-pass", is_flag=True, help="Don't ask for password"),

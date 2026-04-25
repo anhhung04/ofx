@@ -27,12 +27,20 @@ class GetUserSPNsTask(Task):
         "dc_ip": OptDef(flag="-dc-ip", type=str, help="Domain controller IP"),
         "dc_host": OptDef(flag="-dc-host", type=str, help="Domain controller hostname"),
         "request": OptDef(flag="-request", is_flag=True, help="Request TGS tickets"),
-        "request_user": OptDef(flag="-request-user", type=str, help="Request TGS for specific user"),
-        "output_file": OptDef(flag="-outputfile", type=str, help="Output file for hashes"),
-        "format": OptDef(flag="-outputformat", type=str, help="Output format (hashcat/john)"),
+        "request_user": OptDef(
+            flag="-request-user", type=str, help="Request TGS for specific user"
+        ),
+        "output_file": OptDef(
+            flag="-outputfile", type=str, help="Output file for hashes"
+        ),
+        "format": OptDef(
+            flag="-outputformat", type=str, help="Output format (hashcat/john)"
+        ),
         "k": OptDef(flag="-k", is_flag=True, help="Use Kerberos authentication"),
         "no_pass": OptDef(flag="-no-pass", is_flag=True, help="Don't ask for password"),
-        "no_preauth": OptDef(flag="-no-preauth", type=str, help="User without preauth for PKINIT"),
+        "no_preauth": OptDef(
+            flag="-no-preauth", type=str, help="User without preauth for PKINIT"
+        ),
     }
 
     input_flag = None

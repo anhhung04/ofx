@@ -195,9 +195,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
             if self.model.store_creds and typed_outputs:
                 stored = self._store_credentials(typed_outputs)
                 if stored:
-                    self._log_info(
-                        f"Stored {stored} credential(s) in credential store"
-                    )
+                    self._log_info(f"Stored {stored} credential(s) in credential store")
 
             # Export output file to output_path with target in filename
             if self._task.export_output:
@@ -258,9 +256,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
                         break  # first matching opt wins
 
             if injected:
-                self._log_debug(
-                    f"Injected profile common opts: {', '.join(injected)}"
-                )
+                self._log_debug(f"Injected profile common opts: {', '.join(injected)}")
 
         # Layer 2: per-task overrides from profile.task_options
         task_options = getattr(profile, "task_options", None) or {}
@@ -339,11 +335,11 @@ class TaskRunner(BaseRunner[TaskExecution]):
             for item in items:
                 store.publish(channel, item.to_dict())
         except Exception as e:
-            logger.debug("Channel publish failed (task=%s): %s", self.model.task_name, e)
+            logger.debug(
+                "Channel publish failed (task=%s): %s", self.model.task_name, e
+            )
 
-    def _deduplicate_incremental(
-        self, items: Sequence[OutputType]
-    ) -> list[OutputType]:
+    def _deduplicate_incremental(self, items: Sequence[OutputType]) -> list[OutputType]:
         """Deduplicate against already-streamed items."""
         seen = {item._uuid for item in self._streamed_items}
         new: list[OutputType] = []
@@ -392,7 +388,9 @@ class TaskRunner(BaseRunner[TaskExecution]):
             try:
                 self._output_file.unlink()
             except OSError as e:
-                logger.debug("Failed to remove task output file %s: %s", self._output_file, e)
+                logger.debug(
+                    "Failed to remove task output file %s: %s", self._output_file, e
+                )
 
     def _export_output_file(self) -> Path | None:
         """Copy task output file to output_path with target in the filename.
@@ -461,9 +459,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         """
         from ofx.runner.core.credential_store import store_from_typed_outputs
 
-        return store_from_typed_outputs(
-            typed_outputs, log_fn=self._log_debug
-        )
+        return store_from_typed_outputs(typed_outputs, log_fn=self._log_debug)
 
 
 def _extract_item_target(item: dict[str, Any]) -> str:

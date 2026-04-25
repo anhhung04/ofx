@@ -28,9 +28,7 @@ class SshAuditTask(Task):
         "level": OptDef(
             flag="-l", type=str, help="Minimum output level: info/warn/fail"
         ),
-        "policy": OptDef(
-            flag="-P", type=str, help="Policy file to check against"
-        ),
+        "policy": OptDef(flag="-P", type=str, help="Policy file to check against"),
     }
 
     input_flag = None

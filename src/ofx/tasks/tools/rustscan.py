@@ -26,7 +26,9 @@ class RustscanTask(Task):
         "timeout": OptDef(flag="-t", type=int, help="Timeout in milliseconds"),
         "tries": OptDef(flag="--tries", type=int, help="Number of tries"),
         "ulimit": OptDef(flag="--ulimit", type=int, help="Ulimit value"),
-        "scan_order": OptDef(flag="--scan-order", type=str, help="Scan order (serial/random)"),
+        "scan_order": OptDef(
+            flag="--scan-order", type=str, help="Scan order (serial/random)"
+        ),
     }
 
     input_flag = "-a"

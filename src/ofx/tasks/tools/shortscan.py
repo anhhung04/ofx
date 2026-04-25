@@ -16,17 +16,15 @@ class ShortscanTask(Task):
     cmd = "shortscan"
     description = "IIS shortname vulnerability scanner"
     category = "web/fuzz"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/bitquark/shortscan/cmd/shortscan@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/bitquark/shortscan/cmd/shortscan@latest"
     output_types = [Url, Vulnerability]
 
     opts = {
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
-        "timeout": OptDef(flag="--timeout", type=int, help="Request timeout in seconds"),
-        "wordlist": OptDef(
-            flag="-w", type=str, help="Wordlist for full name matching"
+        "timeout": OptDef(
+            flag="--timeout", type=int, help="Request timeout in seconds"
         ),
+        "wordlist": OptDef(flag="-w", type=str, help="Wordlist for full name matching"),
         "header": OptDef(flag="-H", type=str, help="Custom header (key:value)"),
         "no_recurse": OptDef(
             flag="--no-recurse", is_flag=True, help="Disable recursive scanning"
@@ -34,9 +32,7 @@ class ShortscanTask(Task):
         "full_url": OptDef(
             flag="--full-url", is_flag=True, help="Show full URLs in output"
         ),
-        "patience": OptDef(
-            flag="-p", type=int, help="Patience level (0-2)"
-        ),
+        "patience": OptDef(flag="-p", type=int, help="Patience level (0-2)"),
     }
 
     input_flag = None  # positional URL

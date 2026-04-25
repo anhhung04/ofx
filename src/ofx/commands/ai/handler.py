@@ -293,9 +293,13 @@ class AnalyzeHandler:
         if self.workflow_file:
             wf_path = Path(self.workflow_file)
             if wf_path.exists():
-                parts.append(f"## Workflow Definition\n```yaml\n{wf_path.read_text()}\n```")
+                parts.append(
+                    f"## Workflow Definition\n```yaml\n{wf_path.read_text()}\n```"
+                )
             else:
-                print_warning("Not Found", f"Workflow file not found: {self.workflow_file}")
+                print_warning(
+                    "Not Found", f"Workflow file not found: {self.workflow_file}"
+                )
 
         if self.output_file:
             out_path = Path(self.output_file)
@@ -449,8 +453,16 @@ class SetupHandler:
                     ai.base_url or "[dim]not set — uses OpenAI default[/dim]",
                     "Base URL for compatible providers (Ollama, Groq, Together AI, …)",
                 ),
-                ("OFX_AI__TEMPERATURE", str(ai.temperature), "Sampling temperature (default: 0.7)"),
-                ("OFX_AI__MAX_TOKENS", str(ai.max_tokens), "Max response tokens (default: 8192)"),
+                (
+                    "OFX_AI__TEMPERATURE",
+                    str(ai.temperature),
+                    "Sampling temperature (default: 0.7)",
+                ),
+                (
+                    "OFX_AI__MAX_TOKENS",
+                    str(ai.max_tokens),
+                    "Max response tokens (default: 8192)",
+                ),
                 (
                     "OFX_AI__MAX_HISTORY_TOKENS",
                     str(ai.max_history_tokens),
@@ -463,11 +475,23 @@ class SetupHandler:
         console.print()
         console.print("[dim]Provider examples:[/dim]")
         examples = [
-            ("OpenAI",       "OFX_AI__API_KEY=sk-...   OFX_AI__MODEL=gpt-4o"),
-            ("Ollama",       "OFX_AI__BASE_URL=http://localhost:11434/v1   OFX_AI__MODEL=llama3.2"),
-            ("Groq",         "OFX_AI__API_KEY=gsk_...  OFX_AI__BASE_URL=https://api.groq.com/openai/v1  OFX_AI__MODEL=llama-3.3-70b-versatile"),
-            ("Together AI",  "OFX_AI__API_KEY=...      OFX_AI__BASE_URL=https://api.together.xyz/v1"),
-            ("LM Studio",    "OFX_AI__BASE_URL=http://localhost:1234/v1   OFX_AI__MODEL=local-model"),
+            ("OpenAI", "OFX_AI__API_KEY=sk-...   OFX_AI__MODEL=gpt-4o"),
+            (
+                "Ollama",
+                "OFX_AI__BASE_URL=http://localhost:11434/v1   OFX_AI__MODEL=llama3.2",
+            ),
+            (
+                "Groq",
+                "OFX_AI__API_KEY=gsk_...  OFX_AI__BASE_URL=https://api.groq.com/openai/v1  OFX_AI__MODEL=llama-3.3-70b-versatile",
+            ),
+            (
+                "Together AI",
+                "OFX_AI__API_KEY=...      OFX_AI__BASE_URL=https://api.together.xyz/v1",
+            ),
+            (
+                "LM Studio",
+                "OFX_AI__BASE_URL=http://localhost:1234/v1   OFX_AI__MODEL=local-model",
+            ),
         ]
         for provider, example in examples:
             console.print(f"  [bold]{provider:<12}[/bold] [dim]{example}[/dim]")

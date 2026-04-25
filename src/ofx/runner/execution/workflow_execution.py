@@ -70,9 +70,7 @@ class WorkflowExecutionManager:
             # Check time window guard between stages
             time_guard = getattr(self._parent, "_time_guard", None)
             if time_guard and time_guard.should_abort:
-                remaining_ids = [
-                    jid for s in schedule[stage_index:] for jid in s
-                ]
+                remaining_ids = [jid for s in schedule[stage_index:] for jid in s]
                 result.failed_job_ids.extend(remaining_ids)
                 result.failed_stage_indices.append(stage_index)
                 self._parent._log_error(
@@ -152,8 +150,7 @@ class WorkflowExecutionManager:
                 await stage_runners[job_id].run()
 
         tasks = {
-            job_id: asyncio.create_task(_guarded_run(job_id))
-            for job_id in job_ids
+            job_id: asyncio.create_task(_guarded_run(job_id)) for job_id in job_ids
         }
         task_to_job = {t: jid for jid, t in tasks.items()}
         failed_jobs: list[str] = []

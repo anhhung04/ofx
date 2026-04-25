@@ -85,9 +85,10 @@ class TinjaTask(Task):
                     severity=Severity.HIGH,
                     provider="tinja",
                     description=f"Engine: {engine}" if engine else "SSTI detected",
-                    extra_data={k: v for k, v in data.items() if k not in ("url", "URL")},
+                    extra_data={
+                        k: v for k, v in data.items() if k not in ("url", "URL")
+                    },
                 )
             )
 
         return results
-

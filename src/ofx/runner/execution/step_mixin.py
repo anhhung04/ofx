@@ -173,7 +173,8 @@ class StepRunnerMixin:
             tool = task_name
             target = str(
                 self.model.run_with.get(  # type: ignore[attr-defined]
-                    "target", self.model.run_with.get("targets", "")  # type: ignore[attr-defined]
+                    "target",
+                    self.model.run_with.get("targets", ""),  # type: ignore[attr-defined]
                 )
             )
             command = result.outputs.get("command", f"task:{task_name}")

@@ -31,11 +31,21 @@ class GarakTask(Task):
     output_types = [Vulnerability, Tag]
 
     opts = {
-        "model_type": OptDef(flag="--model_type", type=str, help="Model type (e.g. huggingface, openai)"),
-        "model_name": OptDef(flag="--model_name", type=str, help="Model name or endpoint"),
-        "probes": OptDef(flag="--probes", type=str, help="Comma-separated probe modules"),
-        "detectors": OptDef(flag="--detectors", type=str, help="Comma-separated detector modules"),
-        "generations": OptDef(flag="--generations", type=int, help="Number of generations per probe"),
+        "model_type": OptDef(
+            flag="--model_type", type=str, help="Model type (e.g. huggingface, openai)"
+        ),
+        "model_name": OptDef(
+            flag="--model_name", type=str, help="Model name or endpoint"
+        ),
+        "probes": OptDef(
+            flag="--probes", type=str, help="Comma-separated probe modules"
+        ),
+        "detectors": OptDef(
+            flag="--detectors", type=str, help="Comma-separated detector modules"
+        ),
+        "generations": OptDef(
+            flag="--generations", type=int, help="Number of generations per probe"
+        ),
         "seed": OptDef(flag="--seed", type=int, help="Random seed"),
         "parallel_requests": OptDef(
             flag="--parallel_requests", type=int, help="Parallel request count"
@@ -112,11 +122,17 @@ class GarakTask(Task):
                                 severity=Severity.HIGH,
                                 provider="garak",
                                 description=f"Probe {probe} failed on detector {detector}",
-                                extra_data={k: v for k, v in data.items() if k not in ("status", "result")},
+                                extra_data={
+                                    k: v
+                                    for k, v in data.items()
+                                    if k not in ("status", "result")
+                                },
                             )
                         )
                     if probe:
-                        results.append(Tag(name=probe, value=str(status), category="llm_probe"))
+                        results.append(
+                            Tag(name=probe, value=str(status), category="llm_probe")
+                        )
                     continue
 
             # Fall back to text summary parsing

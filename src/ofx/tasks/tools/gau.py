@@ -14,7 +14,9 @@ from ofx.tasks.registry import TaskRegistry
 class GauTask(Task):
     name = "gau"
     cmd = "gau"
-    description = "Fetch known URLs from AlienVault OTX, Wayback Machine, and Common Crawl"
+    description = (
+        "Fetch known URLs from AlienVault OTX, Wayback Machine, and Common Crawl"
+    )
     category = "url/recon"
     install_cmd = "GOBIN=~/Tools/bin go install -v github.com/lc/gau/v2/cmd/gau@latest"
     output_types = [Url, Subdomain]
@@ -27,9 +29,7 @@ class GauTask(Task):
         "blacklist": OptDef(
             flag="--blacklist", type=str, help="Comma-separated extensions to skip"
         ),
-        "from_date": OptDef(
-            flag="--from", type=str, help="Date range start (YYYYMM)"
-        ),
+        "from_date": OptDef(flag="--from", type=str, help="Date range start (YYYYMM)"),
         "to_date": OptDef(flag="--to", type=str, help="Date range end (YYYYMM)"),
     }
 
@@ -75,4 +75,3 @@ class GauTask(Task):
                 results.append(Url(url=line))
 
         return results
-

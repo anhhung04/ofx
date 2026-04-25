@@ -64,7 +64,9 @@ def _path_helpers() -> dict[str, Any]:
         "join_path": lambda *parts: str(Path(*parts)),
         "basename": lambda path: Path(path).name,
         "dirname": lambda path: str(Path(path).parent),
-        "glob": lambda pattern, directory=".": [str(p) for p in Path(directory).glob(pattern)],
+        "glob": lambda pattern, directory=".": [
+            str(p) for p in Path(directory).glob(pattern)
+        ],
         "cwd": lambda: str(Path.cwd()),
         "home": lambda: str(Path.home()),
     }
@@ -87,6 +89,7 @@ def _hash_helpers() -> dict[str, Any]:
     def _make_hasher(algo: str):
         def _hash(s: str) -> str:
             return hashlib.new(algo, s.encode()).hexdigest()
+
         return _hash
 
     return {
@@ -230,6 +233,7 @@ def _type_filter_helpers() -> dict[str, Any]:
     def _make_type_filter(type_name: str):
         def _filter(items: list) -> list:
             return _of_type(items, type_name)
+
         return _filter
 
     return {
@@ -243,6 +247,7 @@ def _asm_helpers() -> dict[str, Any]:
     def _asm_resolve_scope(client: Any, scope_ref: str) -> str:
         if not scope_ref:
             from ofx.asm.config import get_asm_config
+
             scope_ref = get_asm_config().default_scope
         if not scope_ref:
             raise ValueError("No ASM scope specified")
@@ -253,9 +258,12 @@ def _asm_helpers() -> dict[str, Any]:
             return found.id
         raise ValueError(f"ASM scope '{scope_ref}' not found")
 
-    def _asm_targets(scope: str = "", effective: bool = True, target_type: str = "") -> list[str]:
+    def _asm_targets(
+        scope: str = "", effective: bool = True, target_type: str = ""
+    ) -> list[str]:
         try:
             from ofx.asm.config import get_asm_client
+
             client = get_asm_client()
         except Exception:
             _logger.debug("ASM client unavailable for asm_targets()", exc_info=True)
@@ -265,13 +273,16 @@ def _asm_helpers() -> dict[str, Any]:
             if effective:
                 raw = client.effective_targets(scope_id)
                 return [
-                    t.value for t in raw
-                    if not t.excluded and (not target_type or t.target_type == target_type)
+                    t.value
+                    for t in raw
+                    if not t.excluded
+                    and (not target_type or t.target_type == target_type)
                 ]
             else:
                 raw_t = client.list_targets(scope_id)
                 return [
-                    t.value for t in raw_t
+                    t.value
+                    for t in raw_t
                     if t.enabled and (not target_type or t.target_type == target_type)
                 ]
         except Exception:
@@ -282,6 +293,7 @@ def _asm_helpers() -> dict[str, Any]:
         try:
             from ofx.asm.config import get_asm_client
             from ofx.asm.export import batch_convert
+
             client = get_asm_client()
         except Exception:
             _logger.debug("ASM client unavailable for asm_push()", exc_info=True)
@@ -300,16 +312,20 @@ def _asm_helpers() -> dict[str, Any]:
     def _asm_scopes() -> list[dict]:
         try:
             from ofx.asm.config import get_asm_client
+
             client = get_asm_client()
             return [s.model_dump() for s in client.list_scopes()]
         except Exception:
             _logger.debug("asm_scopes() failed", exc_info=True)
             return []
 
-    def _asm_scope_assets(scope: str = "", asset_type: str = "", limit: int = 1000) -> list[dict]:
+    def _asm_scope_assets(
+        scope: str = "", asset_type: str = "", limit: int = 1000
+    ) -> list[dict]:
         """List assets from an ASM scope."""
         try:
             from ofx.asm.config import get_asm_client
+
             client = get_asm_client()
             scope_id = _asm_resolve_scope(client, scope)
             assets, _ = client.list_assets(scope_id, limit=limit, asset_type=asset_type)
@@ -322,6 +338,7 @@ def _asm_helpers() -> dict[str, Any]:
         """Add targets to an ASM scope (auto-detect types)."""
         try:
             from ofx.asm.config import get_asm_client
+
             client = get_asm_client()
             scope_id = _asm_resolve_scope(client, scope)
             result = client.bulk_import_targets(scope_id, targets, auto_detect=True)

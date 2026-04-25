@@ -24,9 +24,17 @@ class VisualizeFormat(str, enum.Enum):
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 app.add_typer(dump_app, name="dump", help="Dumping workflow/job/step model schemas")
 app.add_typer(collection_app, name="collection", help="Manage workflow collections")
-app.add_typer(checkpoint_app, name="checkpoint", help="Manage durable execution checkpoints")
-app.add_typer(task_cmd_app, name="tasks", help="List and inspect registered task wrappers")
-app.add_typer(profile_cmd_app, name="profile", help="Manage execution profiles (rate limits, time windows)")
+app.add_typer(
+    checkpoint_app, name="checkpoint", help="Manage durable execution checkpoints"
+)
+app.add_typer(
+    task_cmd_app, name="tasks", help="List and inspect registered task wrappers"
+)
+app.add_typer(
+    profile_cmd_app,
+    name="profile",
+    help="Manage execution profiles (rate limits, time windows)",
+)
 
 NAME = "flow"
 
@@ -121,15 +129,26 @@ def list_workflows(
     ] = False,
     collection: Annotated[
         str,
-        typer.Option("--collection", "-c", help="Show workflows from a specific installed collection."),
+        typer.Option(
+            "--collection",
+            "-c",
+            help="Show workflows from a specific installed collection.",
+        ),
     ] = "",
     tag: Annotated[
         list[str] | None,
-        typer.Option("--tag", "-t", help="Filter workflows by tag. Can be specified multiple times (OR logic).", autocompletion=_complete_tag_names),
+        typer.Option(
+            "--tag",
+            "-t",
+            help="Filter workflows by tag. Can be specified multiple times (OR logic).",
+            autocompletion=_complete_tag_names,
+        ),
     ] = None,
     search: Annotated[
         str,
-        typer.Option("--search", "-s", help="Search workflows by name, description, or tags."),
+        typer.Option(
+            "--search", "-s", help="Search workflows by name, description, or tags."
+        ),
     ] = "",
     show_tags: Annotated[
         bool,
@@ -137,11 +156,17 @@ def list_workflows(
     ] = False,
     show_descriptions: Annotated[
         bool,
-        typer.Option("--descriptions", "-d", help="Show first line of description for each workflow."),
+        typer.Option(
+            "--descriptions",
+            "-d",
+            help="Show first line of description for each workflow.",
+        ),
     ] = False,
     list_tags: Annotated[
         bool,
-        typer.Option("--list-tags", help="List all available tags with workflow counts."),
+        typer.Option(
+            "--list-tags", help="List all available tags with workflow counts."
+        ),
     ] = False,
 ):
     """List available workflows as a folder tree.
@@ -165,7 +190,12 @@ def list_workflows(
 
 @app.command()
 def run(
-    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to run", autocompletion=_complete_workflow_names)],
+    workflow_name: Annotated[
+        str,
+        typer.Argument(
+            help="Name of the workflow to run", autocompletion=_complete_workflow_names
+        ),
+    ],
     input: Annotated[
         list[str] | None,
         typer.Option(
@@ -342,7 +372,11 @@ def run(
 @app.command()
 def validate(
     workflow_name: Annotated[
-        str, typer.Argument(help="Name of the workflow to validate", autocompletion=_complete_workflow_names)
+        str,
+        typer.Argument(
+            help="Name of the workflow to validate",
+            autocompletion=_complete_workflow_names,
+        ),
     ] = "",
     all_workflows: Annotated[
         bool,
@@ -350,7 +384,9 @@ def validate(
     ] = False,
     check_tasks: Annotated[
         bool,
-        typer.Option("--check-tasks", help="Verify that referenced tasks are registered."),
+        typer.Option(
+            "--check-tasks", help="Verify that referenced tasks are registered."
+        ),
     ] = False,
 ):
     """Validate workflow configuration with detailed diagnostics.
@@ -370,7 +406,10 @@ def validate(
 @app.command()
 def lint(
     workflow_name: Annotated[
-        str, typer.Argument(help="Name of the workflow to lint", autocompletion=_complete_workflow_names)
+        str,
+        typer.Argument(
+            help="Name of the workflow to lint", autocompletion=_complete_workflow_names
+        ),
     ] = "",
     all_workflows: Annotated[
         bool,
@@ -410,7 +449,13 @@ def init(
 
 @app.command()
 def info(
-    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to inspect", autocompletion=_complete_workflow_names)],
+    workflow_name: Annotated[
+        str,
+        typer.Argument(
+            help="Name of the workflow to inspect",
+            autocompletion=_complete_workflow_names,
+        ),
+    ],
     detailed: Annotated[
         bool,
         typer.Option("--detailed", "-d", help="Show detailed step-level information."),
@@ -424,18 +469,30 @@ def info(
 
 @app.command("visualize")
 def visualize_cmd(
-    workflow_name: Annotated[str, typer.Argument(help="Name of the workflow to visualize", autocompletion=_complete_workflow_names)],
+    workflow_name: Annotated[
+        str,
+        typer.Argument(
+            help="Name of the workflow to visualize",
+            autocompletion=_complete_workflow_names,
+        ),
+    ],
     format: Annotated[
         VisualizeFormat,
-        typer.Option("--format", "-f", help="Output format: terminal (default), dot, json."),
+        typer.Option(
+            "--format", "-f", help="Output format: terminal (default), dot, json."
+        ),
     ] = VisualizeFormat.terminal,
     output: Annotated[
         str,
-        typer.Option("--output", "-o", help="Save visualization to file instead of printing."),
+        typer.Option(
+            "--output", "-o", help="Save visualization to file instead of printing."
+        ),
     ] = "",
     detailed: Annotated[
         bool,
-        typer.Option("--detailed", "-d", help="Show detailed step-level information in boxes."),
+        typer.Option(
+            "--detailed", "-d", help="Show detailed step-level information in boxes."
+        ),
     ] = False,
 ):
     """Visualize workflow dependencies and execution flow as a DAG."""
@@ -452,15 +509,21 @@ def history(
     ] = 20,
     workflow: Annotated[
         str,
-        typer.Option("-w", "--workflow", help="Filter by workflow name (substring match)."),
+        typer.Option(
+            "-w", "--workflow", help="Filter by workflow name (substring match)."
+        ),
     ] = "",
     status: Annotated[
         str,
-        typer.Option("-s", "--status", help="Filter by status: completed, failed, canceled."),
+        typer.Option(
+            "-s", "--status", help="Filter by status: completed, failed, canceled."
+        ),
     ] = "",
     verbose: Annotated[
         bool,
-        typer.Option("-v", "--verbose", help="Show additional columns (project, jobs, steps)."),
+        typer.Option(
+            "-v", "--verbose", help="Show additional columns (project, jobs, steps)."
+        ),
     ] = False,
     clear: Annotated[
         bool,
@@ -523,11 +586,18 @@ def tools(
 def search(
     query: Annotated[
         str,
-        typer.Argument(help="Search term — matches against name, description, and tags"),
+        typer.Argument(
+            help="Search term — matches against name, description, and tags"
+        ),
     ] = "",
     tag: Annotated[
         list[str] | None,
-        typer.Option("--tag", "-t", help="Filter by tag. Can be repeated (OR logic).", autocompletion=_complete_tag_names),
+        typer.Option(
+            "--tag",
+            "-t",
+            help="Filter by tag. Can be repeated (OR logic).",
+            autocompletion=_complete_tag_names,
+        ),
     ] = None,
     show_tags: Annotated[
         bool,
@@ -562,11 +632,15 @@ def search(
 def diff_cmd(
     workflow_a: Annotated[
         str,
-        typer.Argument(help="First workflow name or path", autocompletion=_complete_workflow_names),
+        typer.Argument(
+            help="First workflow name or path", autocompletion=_complete_workflow_names
+        ),
     ],
     workflow_b: Annotated[
         str,
-        typer.Argument(help="Second workflow name or path", autocompletion=_complete_workflow_names),
+        typer.Argument(
+            help="Second workflow name or path", autocompletion=_complete_workflow_names
+        ),
     ],
 ):
     """Compare two workflows and show structural differences.

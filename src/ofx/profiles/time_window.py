@@ -27,9 +27,7 @@ def _now_in_tz(tz_name: str) -> datetime:
 
         return datetime.now(ZoneInfo(tz_name))
     except (ImportError, KeyError):
-        logger.warning(
-            "Timezone '%s' not available, falling back to UTC", tz_name
-        )
+        logger.warning("Timezone '%s' not available, falling back to UTC", tz_name)
         return datetime.now(UTC)
 
 

@@ -34,7 +34,9 @@ class CariddiTask(Task):
         ),
         "errors": OptDef(flag="-err", is_flag=True, help="Hunt for errors"),
         "info": OptDef(
-            flag="-info", is_flag=True, help="Hunt for info disclosures (already in extra_flags)"
+            flag="-info",
+            is_flag=True,
+            help="Hunt for info disclosures (already in extra_flags)",
         ),
     }
 
@@ -106,7 +108,11 @@ class CariddiTask(Task):
                 )
 
         # Handle top-level secrets/errors/infos arrays
-        for section, cat in (("secrets", "secret"), ("errors", "error"), ("infos", "info")):
+        for section, cat in (
+            ("secrets", "secret"),
+            ("errors", "error"),
+            ("infos", "info"),
+        ):
             for item in data.get(section, []):
                 if isinstance(item, str):
                     results.append(Tag(name=cat, value=item, match=url, category=cat))
@@ -121,4 +127,3 @@ class CariddiTask(Task):
                     )
 
         return results
-

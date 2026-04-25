@@ -24,7 +24,13 @@ _EXTERNAL_BACKENDS: dict[str, tuple[str, str, dict, str, str]] = {
     "redis": (
         "ofx.runner.registry.redis",
         "RedisJobRegistry",
-        {"host": "localhost", "port": 6379, "db": 0, "password": None, "prefix": "ofx:job:"},
+        {
+            "host": "localhost",
+            "port": 6379,
+            "db": 0,
+            "password": None,
+            "prefix": "ofx:job:",
+        },
         "redis",
         "redis",
     ),
@@ -65,8 +71,12 @@ class RegistryFactory:
         enable_failover: bool,
     ) -> RegistryAdapter:
         if enable_cache:
-            registry = CachedRegistryAdapter(registry, ttl=cache_ttl, max_entries=cache_max_entries)
-        if enable_failover and not isinstance(registry, (MemoryJobRegistry, FailoverRegistryAdapter)):
+            registry = CachedRegistryAdapter(
+                registry, ttl=cache_ttl, max_entries=cache_max_entries
+            )
+        if enable_failover and not isinstance(
+            registry, (MemoryJobRegistry, FailoverRegistryAdapter)
+        ):
             registry = FailoverRegistryAdapter(registry)
         return registry
 
@@ -86,6 +96,7 @@ class RegistryFactory:
         mod_path, cls_name, defaults, pip_extra, pkg_name = _EXTERNAL_BACKENDS[backend]
         try:
             import importlib
+
             mod = importlib.import_module(mod_path)
             registry_cls = getattr(mod, cls_name)
         except ImportError as e:
@@ -106,7 +117,9 @@ class RegistryFactory:
 
         logger.debug("Creating %s with params: %s", cls_name, params)
         registry = registry_cls(**params)
-        return cls._wrap(registry, enable_cache, cache_ttl, cache_max_entries, enable_failover)
+        return cls._wrap(
+            registry, enable_cache, cache_ttl, cache_max_entries, enable_failover
+        )
 
     @classmethod
     def create(
@@ -125,7 +138,9 @@ class RegistryFactory:
 
         if backend == "memory":
             logger.debug("Creating MemoryJobRegistry")
-            return cls._wrap(MemoryJobRegistry(), cache_flag, cache_ttl, cache_max_entries, False)
+            return cls._wrap(
+                MemoryJobRegistry(), cache_flag, cache_ttl, cache_max_entries, False
+            )
 
         if backend == "file":
             file_kwargs = {}
@@ -133,7 +148,9 @@ class RegistryFactory:
                 file_kwargs["filepath"] = kwargs.pop("filepath")
             logger.debug("Creating FileRegistry with kwargs: %s", file_kwargs)
             registry = FileRegistry(**file_kwargs)
-            return cls._wrap(registry, cache_flag, cache_ttl, cache_max_entries, enable_failover)
+            return cls._wrap(
+                registry, cache_flag, cache_ttl, cache_max_entries, enable_failover
+            )
 
         if backend in _EXTERNAL_BACKENDS:
             return cls._create_external(
@@ -160,7 +177,11 @@ class RegistryFactory:
         if backend == "file":
             kwargs["filepath"] = settings.registry_file_path
         elif backend in _EXTERNAL_BACKENDS:
-            config_map = {"redis": "registry_redis", "memcached": "registry_memcached", "etcd": "registry_etcd"}
+            config_map = {
+                "redis": "registry_redis",
+                "memcached": "registry_memcached",
+                "etcd": "registry_etcd",
+            }
             kwargs["config"] = getattr(settings, config_map.get(backend, ""), None)
 
         try:

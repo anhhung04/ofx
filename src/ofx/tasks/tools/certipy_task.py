@@ -28,15 +28,25 @@ class CertipyTask(Task):
         "dns_tcp": OptDef(flag="-dns-tcp", is_flag=True, help="Use TCP for DNS"),
         "ns": OptDef(flag="-ns", type=str, help="Nameserver IP"),
         "ca": OptDef(flag="-ca", type=str, help="Certificate Authority name"),
-        "template": OptDef(flag="-template", type=str, help="Certificate template name"),
+        "template": OptDef(
+            flag="-template", type=str, help="Certificate template name"
+        ),
         "upn": OptDef(flag="-upn", type=str, help="User Principal Name for ESC1"),
         "pfx": OptDef(flag="-pfx", type=str, help="PFX file for authentication"),
         "output": OptDef(flag="-output", type=str, help="Output file prefix"),
         "json": OptDef(flag="-json", is_flag=True, help="Output in JSON format"),
-        "bloodhound": OptDef(flag="-bloodhound", is_flag=True, help="Output for BloodHound"),
-        "vulnerable": OptDef(flag="-vulnerable", is_flag=True, help="Show only vulnerable templates"),
-        "enabled": OptDef(flag="-enabled", is_flag=True, help="Show only enabled templates"),
-        "old_bloodhound": OptDef(flag="-old-bloodhound", is_flag=True, help="Output for BloodHound CE < 5.0"),
+        "bloodhound": OptDef(
+            flag="-bloodhound", is_flag=True, help="Output for BloodHound"
+        ),
+        "vulnerable": OptDef(
+            flag="-vulnerable", is_flag=True, help="Show only vulnerable templates"
+        ),
+        "enabled": OptDef(
+            flag="-enabled", is_flag=True, help="Show only enabled templates"
+        ),
+        "old_bloodhound": OptDef(
+            flag="-old-bloodhound", is_flag=True, help="Output for BloodHound CE < 5.0"
+        ),
     }
 
     input_flag = None
@@ -108,7 +118,9 @@ class CertipyTask(Task):
                     Vulnerability(
                         name=f"ADCS {esc_id}",
                         severity=Severity.HIGH,
-                        description=f"Template '{tpl_name}': {detail}" if isinstance(detail, str) else f"Template '{tpl_name}' vulnerable to {esc_id}",
+                        description=f"Template '{tpl_name}': {detail}"
+                        if isinstance(detail, str)
+                        else f"Template '{tpl_name}' vulnerable to {esc_id}",
                         provider="certipy",
                     )
                 )
@@ -125,12 +137,16 @@ class CertipyTask(Task):
             m_tpl = self._TEMPLATE_RE.match(line)
             if m_tpl:
                 current_template = m_tpl.group(1).strip()
-                results.append(Tag(name="template", value=current_template, category="adcs"))
+                results.append(
+                    Tag(name="template", value=current_template, category="adcs")
+                )
                 continue
 
             m_ca = self._CA_RE.match(line)
             if m_ca:
-                results.append(Tag(name="ca", value=m_ca.group(1).strip(), category="adcs"))
+                results.append(
+                    Tag(name="ca", value=m_ca.group(1).strip(), category="adcs")
+                )
                 continue
 
             m_esc = self._ESC_RE.match(line)

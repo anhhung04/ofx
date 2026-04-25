@@ -13,9 +13,7 @@ class SubfinderTask(Task):
     cmd = "subfinder"
     description = "Fast passive subdomain enumeration tool"
     category = "dns/recon"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest"
     output_types = [Subdomain]
 
     opts = {
@@ -53,4 +51,3 @@ class SubfinderTask(Task):
         domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
 
         return [Subdomain(host=host, domain=domain)]
-

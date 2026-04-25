@@ -145,7 +145,9 @@ def get_secret(
                 f"[bold cyan]Secret: {name}[/bold cyan]\n{json.dumps(value, indent=2)}"
             )
         else:
-            console.print(f"[bold cyan]Secret: {name}[/bold cyan]\n[cyan]{value}[/cyan]")
+            console.print(
+                f"[bold cyan]Secret: {name}[/bold cyan]\n[cyan]{value}[/cyan]"
+            )
     else:
         print_info(
             "Secret Found",

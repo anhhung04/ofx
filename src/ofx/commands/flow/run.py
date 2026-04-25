@@ -175,7 +175,9 @@ class FlowRunHandler:
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
                 vars=run_vars or None,
-                event_sink_path=(self.output / "events.ndjson") if self.events else None,
+                event_sink_path=(self.output / "events.ndjson")
+                if self.events
+                else None,
             )
 
             if result.status.value == "completed":
@@ -232,7 +234,9 @@ class FlowRunHandler:
                 line = line.strip()
                 if line.startswith("job '") or line.startswith("- job '"):
                     # Extract root error for each job
-                    root = extract_root_error(line.split(":", 1)[-1] if ":" in line else line)
+                    root = extract_root_error(
+                        line.split(":", 1)[-1] if ":" in line else line
+                    )
                     job_name = line.split("'")[1] if "'" in line else "unknown"
                     logger.error("  ✗ %s: %s", job_name, root)
                 elif line and not line.startswith("Job failure"):
@@ -344,11 +348,11 @@ class FlowRunHandler:
                 )
             entries = self._read_target_file(filepath)
             if not entries:
-                raise typer.BadParameter(
-                    f"File for input '{key}' is empty: {filepath}"
-                )
+                raise typer.BadParameter(f"File for input '{key}' is empty: {filepath}")
             self.input[key] = entries[0] if len(entries) == 1 else entries
-            logger.info("Loaded %d value(s) for '%s' from %s", len(entries), key, filepath)
+            logger.info(
+                "Loaded %d value(s) for '%s' from %s", len(entries), key, filepath
+            )
 
     def _validate_inputs(self) -> None:
         """Validate inputs against the workflow dispatch schema.
@@ -391,9 +395,7 @@ class FlowRunHandler:
                     try:
                         self.input[name] = int(value)
                     except ValueError:
-                        errors.append(
-                            f"Input '{name}' expects integer, got '{value}'"
-                        )
+                        errors.append(f"Input '{name}' expects integer, got '{value}'")
                 elif declared_type == "boolean":
                     self.input[name] = value.lower() in ("true", "1", "yes")
 
