@@ -23,6 +23,7 @@ class SessionStatus(str, Enum):
     FETCHED = "fetched"
     ENCRYPTED = "encrypted"
     DESTROYED = "destroyed"
+    UNREACHABLE = "unreachable"
 
 
 class SessionTarget(str, Enum):
@@ -170,6 +171,7 @@ class Session(OFXBaseModel):
             SessionStatus.FETCHED,
             SessionStatus.ENCRYPTED,
             SessionStatus.DESTROYED,
+            SessionStatus.UNREACHABLE,
         )
 
     def age_display(self) -> str:

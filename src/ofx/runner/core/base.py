@@ -212,24 +212,22 @@ class BaseRunner[TModel: BaseModel]:
             self._emit_event(
                 "runner_finish", {"status": self.status.value, "error": self._error}
             )
-            # Shield cleanup from cancellation so checkpoints and registry
-            # teardown complete even when the task has been cancelled.
             initial_checkpoint_status = self._checkpoint_status()
             try:
-                await asyncio.shield(self._write_checkpoint(initial_checkpoint_status))
-            except (asyncio.CancelledError, Exception) as checkpoint_err:
+                await self._write_checkpoint(initial_checkpoint_status)
+            except Exception as checkpoint_err:
                 self._log_warning(f"checkpoint write failed: {checkpoint_err}")
 
             final_status = self._checkpoint_status()
             if final_status != initial_checkpoint_status:
                 try:
-                    await asyncio.shield(self._write_checkpoint(final_status))
-                except (asyncio.CancelledError, Exception):
+                    await self._write_checkpoint(final_status)
+                except Exception:
                     self._log_warning("final checkpoint update skipped due to error")
 
             try:
-                await asyncio.shield(cleanup_registry(self._registry))
-            except (asyncio.CancelledError, Exception) as cleanup_err:
+                await cleanup_registry(self._registry)
+            except Exception as cleanup_err:
                 self._log_warning(f"registry cleanup failed: {cleanup_err}")
 
             await self._auto_commit_push()

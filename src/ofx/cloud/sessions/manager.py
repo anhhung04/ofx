@@ -28,6 +28,12 @@ logger = logging.getLogger("ofx")
 _DONE_MARKER = "__TASK_OK__"
 _FAIL_MARKER = "__TASK_ERR__"
 
+_INITIAL_POLL_INTERVAL = 10.0    # seconds before first retry
+_MAX_POLL_INTERVAL = 120.0       # 2 minutes max between retries
+_POLL_BACKOFF_FACTOR = 1.5       # multiply interval on each failure
+_MAX_CONSECUTIVE_FAILURES = 10   # mark session as unreachable after N failures
+_SSH_COMMAND_TIMEOUT = 30        # seconds for individual SSH commands during polling
+
 
 def _inputs_to_env(inputs: dict[str, Any]) -> dict[str, str]:
     """Convert session inputs dict to environment variable entries.
@@ -194,7 +200,7 @@ def _remote_is_alive(remote: Any, session: Session) -> bool:
         check_cmd = (
             f"kill -0 {session.remote_pid} 2>/dev/null && echo alive || echo dead"
         )
-    output = remote.run(check_cmd, timeout=15).strip().lower()
+    output = remote.run(check_cmd, timeout=_SSH_COMMAND_TIMEOUT).strip().lower()
     return "alive" in output or "true" in output
 
 
@@ -203,21 +209,21 @@ def _cancel_remote_execution(remote: Any, session: Session) -> None:
     if session.os_type == "windows":
         remote.run(
             f'powershell "Stop-Process -Id {session.remote_pid} -Force -ErrorAction SilentlyContinue"',
-            timeout=15,
+            timeout=_SSH_COMMAND_TIMEOUT,
         )
         return
 
     if session.remote_launcher == "tmux" and session.remote_tmux_session:
         remote.run(
             f"tmux kill-session -t {_shq(session.remote_tmux_session)} 2>/dev/null || true",
-            timeout=15,
+            timeout=_SSH_COMMAND_TIMEOUT,
         )
         return
 
     if session.remote_pid:
         remote.run(
             f"kill {session.remote_pid} 2>/dev/null; sleep 1; kill -9 {session.remote_pid} 2>/dev/null",
-            timeout=15,
+            timeout=_SSH_COMMAND_TIMEOUT,
         )
 
 
@@ -272,6 +278,7 @@ class SessionManager:
 
     def __init__(self, store: SessionStore | None = None):
         self.store = store or SessionStore()
+        self._poll_failures: dict[str, int] = {}
 
     # ------------------------------------------------------------------
     # Submit (fire-and-forget)
@@ -721,7 +728,16 @@ class SessionManager:
         )
 
     async def _check_cloud_status(self, session: Session) -> Session:
-        """SSH in and check PID + log markers on a cloud VPS."""
+        """SSH in and check PID + log markers on a cloud VPS.
+
+        Tracks consecutive connection failures per session.  After
+        *_MAX_CONSECUTIVE_FAILURES* the session is marked ``UNREACHABLE``.
+        On a successful probe the failure counter resets to zero.
+        """
+        failures = getattr(self, "_poll_failures", {})
+        if not hasattr(self, "_poll_failures"):
+            self._poll_failures = failures
+
         if session.remote_pid is None:
             # No PID recorded — check log only
             try:
@@ -730,8 +746,11 @@ class SessionManager:
                     tail_cmd = _build_tail_cmd(
                         session.os_type, session.remote_log_file, 5
                     )
-                    log_tail = remote.run(tail_cmd, timeout=15).strip()
+                    log_tail = remote.run(tail_cmd, timeout=_SSH_COMMAND_TIMEOUT).strip()
                     marker = _parse_marker(log_tail)
+
+                    self._poll_failures[session.id] = 0
+
                     if marker == _DONE_MARKER:
                         return session.model_copy(
                             update={
@@ -756,7 +775,7 @@ class SessionManager:
                             remote.run(
                                 f"tmux has-session -t {_shq(session.remote_tmux_session)} "
                                 "2>/dev/null && echo alive || echo dead",
-                                timeout=15,
+                                timeout=_SSH_COMMAND_TIMEOUT,
                             )
                             .strip()
                             .lower()
@@ -766,13 +785,61 @@ class SessionManager:
                 finally:
                     _cleanup_remote(remote)
             except Exception as exc:
-                logger.debug("Status check (no-pid) failed for %s: %s", session.id, exc)
+                count = self._poll_failures.get(session.id, 0) + 1
+                self._poll_failures[session.id] = count
+                backoff = min(
+                    _INITIAL_POLL_INTERVAL * (_POLL_BACKOFF_FACTOR ** count),
+                    _MAX_POLL_INTERVAL,
+                )
+                if count >= _MAX_CONSECUTIVE_FAILURES:
+                    logger.warning(
+                        "Session %s unreachable after %d consecutive failures",
+                        session.id,
+                        count,
+                    )
+                    return session.model_copy(
+                        update={
+                            "status": SessionStatus.UNREACHABLE,
+                            "error": f"Unreachable after {count} consecutive poll failures: {exc}",
+                        }
+                    )
+                logger.debug(
+                    "Status check (no-pid) failed for %s (attempt %d, next backoff %.1fs): %s",
+                    session.id,
+                    count,
+                    backoff,
+                    exc,
+                )
             return session
 
         try:
             remote = self._reconnect(session)
         except Exception as exc:
-            logger.debug("Cannot reconnect to %s: %s", session.instance_ip, exc)
+            count = self._poll_failures.get(session.id, 0) + 1
+            self._poll_failures[session.id] = count
+            backoff = min(
+                _INITIAL_POLL_INTERVAL * (_POLL_BACKOFF_FACTOR ** count),
+                _MAX_POLL_INTERVAL,
+            )
+            if count >= _MAX_CONSECUTIVE_FAILURES:
+                logger.warning(
+                    "Session %s unreachable after %d consecutive failures",
+                    session.id,
+                    count,
+                )
+                return session.model_copy(
+                    update={
+                        "status": SessionStatus.UNREACHABLE,
+                        "error": f"Unreachable after {count} consecutive poll failures: {exc}",
+                    }
+                )
+            logger.debug(
+                "Cannot reconnect to %s (attempt %d, next backoff %.1fs): %s",
+                session.instance_ip,
+                count,
+                backoff,
+                exc,
+            )
             return session  # Can't determine — leave as-is
 
         try:
@@ -780,8 +847,10 @@ class SessionManager:
 
             # Check log marker
             tail_cmd = _build_tail_cmd(session.os_type, session.remote_log_file, 5)
-            log_tail = remote.run(tail_cmd, timeout=15).strip()
+            log_tail = remote.run(tail_cmd, timeout=_SSH_COMMAND_TIMEOUT).strip()
             marker = _parse_marker(log_tail)
+
+            self._poll_failures[session.id] = 0
 
             if marker == _DONE_MARKER:
                 return session.model_copy(
@@ -803,7 +872,31 @@ class SessionManager:
 
             return session  # Still running
         except Exception as exc:
-            logger.debug("Status check failed for %s: %s", session.id, exc)
+            count = self._poll_failures.get(session.id, 0) + 1
+            self._poll_failures[session.id] = count
+            backoff = min(
+                _INITIAL_POLL_INTERVAL * (_POLL_BACKOFF_FACTOR ** count),
+                _MAX_POLL_INTERVAL,
+            )
+            if count >= _MAX_CONSECUTIVE_FAILURES:
+                logger.warning(
+                    "Session %s unreachable after %d consecutive failures",
+                    session.id,
+                    count,
+                )
+                return session.model_copy(
+                    update={
+                        "status": SessionStatus.UNREACHABLE,
+                        "error": f"Unreachable after {count} consecutive poll failures: {exc}",
+                    }
+                )
+            logger.debug(
+                "Status check failed for %s (attempt %d, next backoff %.1fs): %s",
+                session.id,
+                count,
+                backoff,
+                exc,
+            )
             return session
         finally:
             _cleanup_remote(remote)

@@ -51,6 +51,7 @@ class TestSessionModel:
             SessionStatus.FETCHED,
             SessionStatus.ENCRYPTED,
             SessionStatus.DESTROYED,
+            SessionStatus.UNREACHABLE,
         ):
             s = Session(id="test", workflow_file="w.yml", status=status)
             assert s.is_done(), f"{status} should be done"
@@ -1198,6 +1199,7 @@ class TestCheckCloudStatusNoPid:
         store = SessionStore(base_dir=tmp_path)
         mgr = SessionManager.__new__(SessionManager)
         mgr.store = store
+        mgr._poll_failures = {}
         return mgr
 
     def _make_running_session(self, pid=None):
@@ -1304,7 +1306,126 @@ class TestCheckCloudStatusNoPid:
         assert result.status == SessionStatus.RUNNING
 
 
-class TestTmuxLaunchMetadata:
+class TestCloudStatusBackoff:
+    """Tests for exponential backoff and circuit breaker in _check_cloud_status."""
+
+    def _make_mgr(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from ofx.cloud.sessions.store import SessionStore
+
+        store = SessionStore(base_dir=tmp_path)
+        mgr = SessionManager.__new__(SessionManager)
+        mgr.store = store
+        mgr._poll_failures = {}
+        return mgr
+
+    def _make_running_session(self, pid=42):
+        return Session(
+            id="back0ff1",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.RUNNING,
+            instance_ip="10.0.0.1",
+            remote_pid=pid,
+            remote_log_file="/tmp/output.log",
+            os_type="linux",
+        )
+
+    @pytest.mark.asyncio
+    async def test_reconnect_failure_increments_counter(self, tmp_path):
+        """Each reconnect failure bumps _poll_failures for that session."""
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session()
+
+        def _fail(s):
+            raise ConnectionRefusedError("refused")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", _fail)
+            await mgr._check_cloud_status(session)
+
+        assert mgr._poll_failures["back0ff1"] == 1
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", _fail)
+            await mgr._check_cloud_status(session)
+
+        assert mgr._poll_failures["back0ff1"] == 2
+
+    @pytest.mark.asyncio
+    async def test_success_resets_failure_counter(self, tmp_path):
+        """A successful probe resets the failure counter to zero."""
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session()
+        mgr._poll_failures["back0ff1"] = 5
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                if "kill -0" in cmd:
+                    return "alive"
+                return ""
+
+            def cleanup(self):
+                pass
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            await mgr._check_cloud_status(session)
+
+        assert mgr._poll_failures["back0ff1"] == 0
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_marks_unreachable(self, tmp_path):
+        """After _MAX_CONSECUTIVE_FAILURES, session becomes UNREACHABLE."""
+        from ofx.cloud.sessions import manager as mgr_mod
+
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session()
+        mgr._poll_failures["back0ff1"] = mgr_mod._MAX_CONSECUTIVE_FAILURES - 1
+
+        def _fail(s):
+            raise ConnectionRefusedError("refused")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", _fail)
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.UNREACHABLE
+        assert "Unreachable" in result.error
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_no_pid_marks_unreachable(self, tmp_path):
+        """Circuit breaker works in the no-PID path too."""
+        from ofx.cloud.sessions import manager as mgr_mod
+
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session(pid=None)
+        mgr._poll_failures["back0ff1"] = mgr_mod._MAX_CONSECUTIVE_FAILURES - 1
+
+        def _fail(s):
+            raise ConnectionRefusedError("refused")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", _fail)
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.UNREACHABLE
+
+    @pytest.mark.asyncio
+    async def test_below_threshold_stays_running(self, tmp_path):
+        """Failures below the threshold keep session as RUNNING."""
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session()
+
+        def _fail(s):
+            raise ConnectionRefusedError("refused")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", _fail)
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.RUNNING
+        assert mgr._poll_failures["back0ff1"] == 1
     def test_session_model_tmux_fields_roundtrip(self):
         s = Session(
             id="tmux1234",
