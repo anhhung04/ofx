@@ -3,6 +3,8 @@ description: |
   Complete subdomain attack surface mapping — passive + active + cert-based
   enumeration, DNS verification, permutation bruteforcing, HTTP probing,
   screenshot capture, takeover detection, web crawling, and vuln scanning.
+  Enhanced with wildcard detection, port scanning, WAF/CDN detection,
+  SSL audit, parameter discovery, secret scanning, and JS analysis.
 tags:
   - recon
   - dns
@@ -33,6 +35,8 @@ jobs:
       - task: subfinder
         name: subfinder-enum
         timeout: 15
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           all: true
@@ -40,46 +44,55 @@ jobs:
       - task: amass
         name: amass-passive
         timeout: 30
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
         name: assetfinder-enum
         timeout: 15
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: theharvester
         name: harvester-enum
         timeout: 15
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: findomain
+        name: findomain-enum
+        timeout: 15
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - name: merge-passive
         script: |
           from pathlib import Path
-
           base = '{{ inputs.target }}'
           subs = {base}
-
-          for item in {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  subs.add(item['host'])
-          for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  subs.add(item['host'])
-          for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  subs.add(item['host'])
-          for item in {{ subdomains(steps["harvester-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  subs.add(item['host'])
-
+          for items in [
+              {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ subdomains(steps["harvester-enum"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ subdomains(steps["findomain-enum"].outputs.typed_outputs) | default([], true) | tojson }},
+          ]:
+              for item in items:
+                  h = item.get('host', '')
+                  if h.endswith(f'.{base}') or h == base:
+                      subs.add(h)
           subs_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_passive.txt'
           Path(subs_path).write_text('\n'.join(sorted(subs)))
           add_outputs(subs_file=subs_path, sub_count=len(subs))
           print(f"Passive: {len(subs)} unique subdomains")
-
   # ── Phase 2a: TLS Certificate / CT Log Enumeration (parallel) ────
   cert-enum:
     name: Certificate & CT Enumeration
@@ -91,6 +104,8 @@ jobs:
       - task: tlsx
         name: tls-san-enum
         timeout: 20
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
           san: true
@@ -99,6 +114,8 @@ jobs:
       - task: subfinder
         name: crtsh-enum
         timeout: 15
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           sources: "crtsh,certspotter,digitorus"
@@ -106,21 +123,20 @@ jobs:
       - name: merge-cert
         script: |
           from pathlib import Path
-
           base = '{{ inputs.target }}'
           cert_subs = set()
-          for item in {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  cert_subs.add(item['host'])
-          for item in {{ subdomains(steps["crtsh-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  cert_subs.add(item['host'])
-
+          for items in [
+              {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ subdomains(steps["crtsh-enum"].outputs.typed_outputs) | default([], true) | tojson }},
+          ]:
+              for item in items:
+                  h = item.get('host', '')
+                  if h.endswith(f'.{base}') or h == base:
+                      cert_subs.add(h)
           cert_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_certsubs.txt'
           Path(cert_path).write_text('\n'.join(sorted(cert_subs)))
           add_outputs(cert_subs_file=cert_path, cert_sub_count=len(cert_subs))
           print(f"Cert/TLS: {len(cert_subs)} subdomains from certificates")
-
   # ── Phase 2b: Permutation Bruteforce (parallel) ──────────────────
   permutation-enum:
     name: Permutation Bruteforce
@@ -132,30 +148,33 @@ jobs:
       - task: gotator
         name: generate-perms
         timeout: 30
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['passive-enum'].outputs.subs_file }}"
         continue-on-error: true
       - task: puredns
         name: resolve-perms
         timeout: 20
+        retry: 2
+        retry-delay: 5
         if: "{{ steps['generate-perms'].outputs.output_file | default('', true) | length > 0 }}"
         with:
           target: "{{ steps['generate-perms'].outputs.output_file | default('', true) }}"
         continue-on-error: true
-
   # ── Phase 3: DNS Verification (merge all sources) ─────────────────
   dns-verify:
     name: DNS Verification
     needs: [passive-enum, cert-enum, permutation-enum]
     outputs:
       verified_file: '{{ steps["export-verified"].outputs.verified_file | default("", true) }}'
-      verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
+      verified_count: '{{ steps["export-verified"].outputs.verified_count | default("0", true) }}'
       verified_hosts_json: '{{ steps["export-verified"].outputs.verified_hosts_json | default("[]", true) }}'
+      wildcard_detected: '{{ steps["wildcard-detect"].outputs.wildcard_detected | default("false", true) }}'
     steps:
       - name: merge-all-sources
         script: |
           from pathlib import Path
-
           base = '{{ inputs.target }}'
           all_subs = {base}
           for path_str in [
@@ -166,9 +185,8 @@ jobs:
               if path_str and Path(path_str).is_file():
                   for line in Path(path_str).read_text().splitlines():
                       h = line.strip()
-                      if h and base in h:
+                      if h and (h.endswith(f'.{base}') or h == base):
                           all_subs.add(h)
-
           merged_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_all.txt'
           Path(merged_path).write_text('\n'.join(sorted(all_subs)))
           add_outputs(merged_file=merged_path, total_count=len(all_subs))
@@ -176,6 +194,8 @@ jobs:
       - task: dnsx
         name: dns-resolve
         timeout: "{{ (steps['merge-all-sources'].outputs.total_count | default(50, true) | int / 50 * 15 + 30) | int }}"
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ steps['merge-all-sources'].outputs.merged_file }}"
           a: true
@@ -186,16 +206,46 @@ jobs:
           resp: true
           wildcard_domain: "{{ inputs.target }}"
         continue-on-error: true
+      - name: wildcard-detect
+        script: |
+          import socket, random, string
+          base = '{{ inputs.target }}'
+          probes = [
+              f"{''.join(random.choices(string.ascii_lowercase + string.digits, k=12))}.{base}"
+              for _ in range(3)
+          ]
+          resolved = []
+          for probe in probes:
+              try:
+                  ips = {r[4][0] for r in socket.getaddrinfo(probe, None, socket.AF_INET)}
+                  resolved.append(ips)
+              except socket.gaierror:
+                  resolved.append(set())
+          non_empty = [r for r in resolved if r]
+          if len(non_empty) >= 2 and all(r == non_empty[0] for r in non_empty[1:]):
+              wildcard_ips = non_empty[0]
+              print(f"⚠  Wildcard DNS detected! IPs: {', '.join(wildcard_ips)}")
+              add_outputs(wildcard_detected='true', wildcard_ips=','.join(wildcard_ips))
+          else:
+              print("No wildcard DNS detected")
+              add_outputs(wildcard_detected='false', wildcard_ips='')
       - name: export-verified
         script: |
           import json
           from pathlib import Path
-
           verified = set()
+          wc_raw = '{{ steps["wildcard-detect"].outputs.wildcard_ips | default("", true) }}'
+          wildcard_ips = set(wc_raw.split(',')) - {''} if wc_raw else set()
           for item in {{ subdomains(steps["dns-resolve"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if item.get('host'):
-                  verified.add(item['host'])
-
+              h = item.get('host', '')
+              if not h:
+                  continue
+              # Filter hosts that resolve only to wildcard IPs
+              if wildcard_ips and item.get('a'):
+                  item_ips = set(item['a']) if isinstance(item['a'], list) else {item['a']}
+                  if item_ips and item_ips.issubset(wildcard_ips):
+                      continue
+              verified.add(h)
           verified_list = sorted(verified)
           verified_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_verified.txt'
           Path(verified_path).write_text('\n'.join(verified_list))
@@ -204,8 +254,8 @@ jobs:
               verified_count=len(verified_list),
               verified_hosts_json=json.dumps(verified_list),
           )
-          print(f"DNS-verified: {len(verified_list)} live hosts")
-
+          suffix = " (wildcard IPs filtered)" if wildcard_ips else ""
+          print(f"DNS-verified: {len(verified_list)} live hosts{suffix}")
   # ── Phase 4a: HTTP Probing + Screenshots (parallel) ───────────────
   http-probe:
     name: HTTP Probing & Visual Recon
@@ -214,10 +264,14 @@ jobs:
       live_urls_file: '{{ steps["export-live"].outputs.live_urls_file | default("", true) }}'
       live_urls_json: '{{ steps["export-live"].outputs.live_urls_json | default("[]", true) }}'
       live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
+      waf_detected_count: '{{ steps["infra-report"].outputs.waf_detected_count | default("0", true) }}'
+      cdn_count: '{{ steps["infra-report"].outputs.cdn_count | default("0", true) }}'
     steps:
       - task: httpx
         name: probe-hosts
         timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           tech_detect: true
@@ -231,29 +285,49 @@ jobs:
           import json
           from pathlib import Path
           from urllib.parse import urlparse
-
           live_urls = [
               item.get('url', '') for item in
               {{ urls(steps["probe-hosts"].outputs.typed_outputs) | default([], true) | tojson }}
               if item.get('status_code', 0) > 0 and item.get('url', '')
           ]
-          # One URL per hostname to avoid duplicates (http + https same host)
           seen = {}
           for url in live_urls:
               host = urlparse(url).hostname or url
               if host not in seen:
                   seen[host] = url
           live = sorted(seen.values())
-
           live_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_live.txt'
           Path(live_path).write_text('\n'.join(live))
           add_outputs(live_urls_file=live_path, live_urls_json=json.dumps(live), live_count=len(live))
           print(f"Live HTTP: {len(live)} services")
-          for u in live[:20]:
-              print(f"  {u}")
+      - task: wafw00f
+        name: waf-detect
+        timeout: 15
+        retry: 2
+        retry-delay: 5
+        if: "{{ steps['export-live'].outputs.live_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ steps['export-live'].outputs.live_urls_file }}"
+        continue-on-error: true
+      - task: cdncheck
+        name: cdn-detect
+        timeout: 10
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+        continue-on-error: true
+      - name: infra-report
+        script: |
+          waf_count = sum(1 for i in {{ steps["waf-detect"].outputs.typed_outputs | default([], true) | tojson }} if i.get('_type') == 'tag' or i.get('waf'))
+          cdn_count = sum(1 for i in {{ steps["cdn-detect"].outputs.typed_outputs | default([], true) | tojson }} if i.get('cdn') or i.get('_type') == 'tag')
+          add_outputs(waf_detected_count=waf_count, cdn_count=cdn_count)
+          print(f"WAF: {waf_count} host(s), CDN: {cdn_count} host(s)")
       - task: gowitness
         name: screenshots
         timeout: 20
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ steps['export-live'].outputs.live_urls_file }}"
           screenshot_path: "{{ env('OFX_RUN_DIR', '/tmp') }}/ofx_subscan_shots"
@@ -261,11 +335,12 @@ jobs:
       - task: csprecon
         name: csp-enum
         timeout: 10
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ steps['export-live'].outputs.live_urls_file }}"
           domain: "{{ inputs.target }}"
         continue-on-error: true
-
   # ── Phase 4b: Takeover Detection (parallel) ──────────────────────
   takeover-check:
     name: Subdomain Takeover Detection
@@ -276,12 +351,16 @@ jobs:
       - task: subzy
         name: subzy-check
         timeout: 15
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
         continue-on-error: true
       - task: nuclei
         name: nuclei-takeover
         timeout: 20
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           tags: "subdomain-takeover,takeover,dns"
@@ -301,19 +380,84 @@ jobs:
                   print(f"  {t}")
           else:
               print("No takeovers detected")
-
-  # ── Phase 5: URL Discovery (waymore + crawl) ─────────────────────
+  # ── Phase 4c: Port Scanning (parallel) ────────────────────────────
+  port-scan:
+    name: Port Scanning
+    needs: [dns-verify]
+    outputs:
+      open_port_count: '{{ steps["port-report"].outputs.open_port_count | default("0", true) }}'
+    steps:
+      - task: naabu
+        name: naabu-scan
+        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 10 * 5 + 30) | int }}"
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+          top_ports: "1000"
+          rate: 1000
+        continue-on-error: true
+      - name: port-report
+        script: |
+          ports_found = {{ ports(steps["naabu-scan"].outputs.typed_outputs) | default([], true) | tojson }}
+          by_host = {}
+          for p in ports_found:
+              by_host.setdefault(p.get('host', '?'), []).append(str(p.get('port', '')))
+          add_outputs(open_port_count=len(ports_found))
+          print(f"Open ports: {len(ports_found)} across {len(by_host)} host(s)")
+  # ── Phase 4d: SSL/TLS Audit (parallel) ────────────────────────────
+  ssl-audit:
+    name: SSL/TLS Audit
+    needs: [dns-verify]
+    outputs:
+      ssl_issues_count: '{{ steps["ssl-report"].outputs.ssl_issues_count | default("0", true) }}'
+    steps:
+      - task: testssl
+        name: testssl-scan
+        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int * 3 + 30) | int }}"
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+        continue-on-error: true
+      - task: sslscan
+        name: sslscan-check
+        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int * 2 + 20) | int }}"
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
+        continue-on-error: true
+      - name: ssl-report
+        script: |
+          weak_keywords = ['deprecated', 'weak', 'sslv', 'tls 1.0', 'tls 1.1', 'rc4', 'des', 'null', 'export', 'sweet32', 'poodle', 'heartbleed']
+          issues = []
+          for items in [
+              {{ vulns(steps["testssl-scan"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ vulns(steps["sslscan-check"].outputs.typed_outputs) | default([], true) | tojson }},
+          ]:
+              for item in items:
+                  name = item.get('name', '')
+                  if any(k in name.lower() for k in weak_keywords):
+                      issues.append(f"{item.get('host','')}: {name}")
+          unique_issues = sorted(set(issues))
+          add_outputs(ssl_issues_count=len(unique_issues))
+          print(f"SSL/TLS issues: {len(unique_issues)}" + (f"\n" + '\n'.join(f"  {i}" for i in unique_issues[:10]) if unique_issues else " — none found"))
+        log-stdout: true
+  # ── Phase 5: URL Discovery (waymore + crawl + JS analysis) ───────
   url-discovery:
     name: URL Discovery & Crawling
     needs: [http-probe]
     outputs:
       urls_file: '{{ steps["merge-urls"].outputs.urls_file | default("", true) }}'
       url_count: '{{ steps["merge-urls"].outputs.url_count | default("0", true) }}'
+      js_findings_count: '{{ steps["js-analysis"].outputs.typed_outputs | default([], true) | length }}'
     steps:
-      # Historical URLs from archives
       - task: waymore
         name: waymore-hist
         timeout: 20
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           mode: U
@@ -321,14 +465,17 @@ jobs:
       - task: gau
         name: gau-hist
         timeout: 15
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           subs: true
         continue-on-error: true
-      # Active crawling of live services
       - task: katana
         name: katana-crawl
         timeout: 20
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
           depth: 3
@@ -336,6 +483,8 @@ jobs:
       - task: gospider
         name: gospider-crawl
         timeout: 20
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
           depth: 2
@@ -344,36 +493,127 @@ jobs:
         script: |
           import json
           from pathlib import Path
-
-          base = '{{ inputs.target }}'
           all_urls = set()
-          for item in {{ urls(steps["waymore-hist"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if item.get('url'):
-                  all_urls.add(item['url'])
-          for item in {{ urls(steps["gau-hist"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if item.get('url'):
-                  all_urls.add(item['url'])
-          for item in {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if item.get('url'):
-                  all_urls.add(item['url'])
-          for item in {{ urls(steps["gospider-crawl"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if item.get('url'):
-                  all_urls.add(item['url'])
-
+          for items in [
+              {{ urls(steps["waymore-hist"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ urls(steps["gau-hist"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ urls(steps["gospider-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
+          ]:
+              for item in items:
+                  if item.get('url'):
+                      all_urls.add(item['url'])
           urls_list = sorted(all_urls)
           urls_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_urls.txt'
           Path(urls_path).write_text('\n'.join(urls_list))
-          add_outputs(urls_file=urls_path, url_count=len(urls_list))
-          print(f"URL discovery: {len(urls_list)} unique URLs")
-
-  # ── Phase 6: Vulnerability Scanning ──────────────────────────────
+          js_urls = [u for u in urls_list if u.rsplit('?', 1)[0].rsplit('#', 1)[0].endswith('.js')]
+          js_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_js_urls.txt'
+          Path(js_path).write_text('\n'.join(js_urls))
+          add_outputs(urls_file=urls_path, url_count=len(urls_list),
+                      js_urls_file=js_path, js_url_count=len(js_urls))
+          print(f"URL discovery: {len(urls_list)} unique URLs ({len(js_urls)} JS files)")
+      - task: jsluice
+        name: js-analysis
+        timeout: 15
+        retry: 2
+        retry-delay: 5
+        if: "{{ steps['merge-urls'].outputs.js_url_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ steps['merge-urls'].outputs.js_urls_file }}"
+        continue-on-error: true
+  # ── Phase 6a: Parameter Discovery ─────────────────────────────────
+  param-discovery:
+    name: Parameter Discovery
+    needs: [url-discovery]
+    outputs:
+      param_urls_file: '{{ steps["merge-params"].outputs.param_urls_file | default("", true) }}'
+      param_url_count: '{{ steps["merge-params"].outputs.param_url_count | default("0", true) }}'
+    steps:
+      - task: arjun
+        name: arjun-discover
+        timeout: "{{ (jobs['http-probe'].outputs.live_count | default(10, true) | int * 3 + 20) | int }}"
+        retry: 2
+        retry-delay: 5
+        if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+        continue-on-error: true
+      - task: paramspider
+        name: paramspider-discover
+        timeout: 15
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - name: merge-params
+        script: |
+          from pathlib import Path
+          param_urls = set()
+          for items in [
+              {{ urls(steps["arjun-discover"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ urls(steps["paramspider-discover"].outputs.typed_outputs) | default([], true) | tojson }},
+          ]:
+              for item in items:
+                  u = item.get('url', '')
+                  if u and '=' in u:
+                      param_urls.add(u)
+          # Also harvest parameterized URLs from url-discovery
+          urls_file = '{{ jobs["url-discovery"].outputs.urls_file | default("", true) }}'
+          if urls_file and Path(urls_file).is_file():
+              for line in Path(urls_file).read_text().splitlines():
+                  if '=' in line.strip():
+                      param_urls.add(line.strip())
+          param_list = sorted(param_urls)
+          param_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_params.txt'
+          Path(param_path).write_text('\n'.join(param_list))
+          add_outputs(param_urls_file=param_path, param_url_count=len(param_list))
+          print(f"Parameter discovery: {len(param_list)} parameterized URLs")
+  # ── Phase 6b: Secret Scanning (parallel with vuln-scan) ──────────
+  secret-scan:
+    name: Secret Scanning
+    needs: [url-discovery]
+    outputs:
+      secret_count: '{{ steps["secret-report"].outputs.secret_count | default("0", true) }}'
+    steps:
+      - task: nuclei
+        name: nuclei-secrets
+        timeout: 20
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+          tags: "exposure,secret,token,api-key"
+        continue-on-error: true
+      - task: gitleaks
+        name: gitleaks-scan
+        timeout: 15
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+        continue-on-error: true
+      - name: secret-report
+        script: |
+          secrets = []
+          for item in {{ vulns(steps["nuclei-secrets"].outputs.typed_outputs) | default([], true) | tojson }}:
+              secrets.append(f"{item.get('severity','').upper()} {item.get('host','')} — {item.get('name','')}")
+          for item in {{ steps["gitleaks-scan"].outputs.typed_outputs | default([], true) | tojson }}:
+              if item.get('_type') == 'vulnerability':
+                  secrets.append(f"SECRET {item.get('host', item.get('matched_at', ''))}: {item.get('name', '')}")
+          add_outputs(secret_count=len(secrets))
+          print(f"Secrets/exposures: {len(secrets)}" + (f"\n" + '\n'.join(f"  {s}" for s in secrets[:10]) if secrets else " — none found"))
+        log-stdout: true
+  # ── Phase 7: Vulnerability Scanning ──────────────────────────────
   vuln-scan:
     name: Vulnerability Scanning
-    needs: [url-discovery, takeover-check]
+    needs: [url-discovery, takeover-check, param-discovery]
     steps:
       - task: nuclei
         name: nuclei-scan
         timeout: 30
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['url-discovery'].outputs.urls_file | default(jobs['http-probe'].outputs.live_urls_file, true) }}"
           severity: critical,high,medium
@@ -381,54 +621,100 @@ jobs:
       - task: dalfox
         name: xss-scan
         timeout: 20
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
         continue-on-error: true
+      - task: sqlmap_task
+        name: sqli-scan
+        timeout: 30
+        retry: 2
+        retry-delay: 5
+        if: "{{ jobs['param-discovery'].outputs.param_url_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ jobs['param-discovery'].outputs.param_urls_file }}"
+          batch: true
+          level: 2
+          risk: 2
+        continue-on-error: true
+      - task: crlfuzz
+        name: crlf-scan
+        timeout: 15
+        retry: 2
+        retry-delay: 5
+        if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
+        continue-on-error: true
+      - task: commix_task
+        name: cmdi-scan
+        timeout: 25
+        retry: 2
+        retry-delay: 5
+        if: "{{ jobs['param-discovery'].outputs.param_url_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ jobs['param-discovery'].outputs.param_urls_file }}"
+          batch: true
+          level: 2
+        continue-on-error: true
       - name: vuln-summary
         script: |
-          all_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | default([], true) | tojson }}
-          xss_vulns = {{ vulns(steps["xss-scan"].outputs.typed_outputs) | default([], true) | tojson }}
-          all_vulns += xss_vulns
-
+          all_vulns = []
+          for items in [
+              {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ vulns(steps["xss-scan"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ vulns(steps["sqli-scan"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ vulns(steps["crlf-scan"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ vulns(steps["cmdi-scan"].outputs.typed_outputs) | default([], true) | tojson }},
+          ]:
+              all_vulns.extend(items)
           by_sev = {}
+          by_type = {}
           for v in all_vulns:
               s = v.get('severity', 'unknown')
               by_sev.setdefault(s, []).append(v)
-
-          print(f"\nVulnerabilities: {len(all_vulns)}")
-          for sev in ['critical', 'high', 'medium', 'low', 'info']:
-              cnt = len(by_sev.get(sev, []))
-              if cnt:
-                  print(f"  {sev.upper()}: {cnt}")
+              name = v.get('name', 'unknown')
+              by_type.setdefault(name, []).append(v)
+          sev_str = ', '.join(f"{s.upper()}: {len(by_sev[s])}" for s in ['critical','high','medium','low','info'] if by_sev.get(s))
+          print(f"\nVulnerabilities: {len(all_vulns)} — {sev_str or 'none'}")
+          top_types = sorted(by_type.items(), key=lambda x: -len(x[1]))[:8]
+          if top_types:
+              print("By type: " + ', '.join(f"{t} ({len(v)})" for t, v in top_types))
         log-stdout: true
-
-  # ── Phase 7: Summary ─────────────────────────────────────────────
+  # ── Phase 8: Summary ─────────────────────────────────────────────
   summary:
     name: Subdomain Scan Summary
-    needs: [vuln-scan]
+    needs: [vuln-scan, port-scan, ssl-audit, secret-scan]
     steps:
       - name: report
         run: |
           echo "=================================================="
           echo " SUBDOMAIN SCAN COMPLETE: {{ inputs.target }}"
           echo "=================================================="
-          echo ""
           echo "--- Discovery ---"
-          echo "Passive subdomains:  {{ jobs['passive-enum'].outputs.sub_count }}"
-          echo "Cert/TLS subs:       {{ jobs['cert-enum'].outputs.cert_sub_count | default(0) }}"
-          echo "Permutation subs:    {{ jobs['permutation-enum'].outputs.perm_sub_count | default(0) }}"
-          echo "DNS-verified:        {{ jobs['dns-verify'].outputs.verified_count }}"
-          echo "Live HTTP services:  {{ jobs['http-probe'].outputs.live_count }}"
-          echo "URLs discovered:     {{ jobs['url-discovery'].outputs.url_count | default(0) }}"
-          echo ""
+          echo "Passive subdomains:   {{ jobs['passive-enum'].outputs.sub_count }}"
+          echo "Cert/TLS subs:        {{ jobs['cert-enum'].outputs.cert_sub_count | default(0) }}"
+          echo "Permutation subs:     {{ jobs['permutation-enum'].outputs.perm_sub_count | default(0) }}"
+          echo "DNS-verified:         {{ jobs['dns-verify'].outputs.verified_count }}"
+          echo "Wildcard DNS:         {{ jobs['dns-verify'].outputs.wildcard_detected }}"
+          echo "Live HTTP services:   {{ jobs['http-probe'].outputs.live_count }}"
+          echo "URLs discovered:      {{ jobs['url-discovery'].outputs.url_count | default(0) }}"
+          echo "JS findings:          {{ jobs['url-discovery'].outputs.js_findings_count | default(0) }}"
+          echo "Parameterized URLs:   {{ jobs['param-discovery'].outputs.param_url_count | default(0) }}"
+          echo "--- Infrastructure ---"
+          echo "Open ports:           {{ jobs['port-scan'].outputs.open_port_count | default(0) }}"
+          echo "WAF detections:       {{ jobs['http-probe'].outputs.waf_detected_count | default(0) }}"
+          echo "CDN detections:       {{ jobs['http-probe'].outputs.cdn_count | default(0) }}"
+          echo "SSL/TLS issues:       {{ jobs['ssl-audit'].outputs.ssl_issues_count | default(0) }}"
           echo "--- Threats ---"
-          echo "Takeover candidates: {{ jobs['takeover-check'].outputs.takeover_count }}"
+          echo "Takeover candidates:  {{ jobs['takeover-check'].outputs.takeover_count }}"
+          echo "Secrets/exposures:    {{ jobs['secret-scan'].outputs.secret_count | default(0) }}"
         log-stdout: true
       - name: export-to-project
         script: |
           import shutil
           from pathlib import Path
-
           project = '{{ vars.project_path | default("", true) }}'
           if not project:
               print('No --project set, skipping file export')
@@ -438,17 +724,22 @@ jobs:
               for label, src_str in [
                   ('subdomains.txt', '{{ jobs["passive-enum"].outputs.subs_file | default("", true) }}'),
                   ('verified.txt',   '{{ jobs["dns-verify"].outputs.verified_file | default("", true) }}'),
+                  ('live_urls.txt',  '{{ jobs["http-probe"].outputs.live_urls_file | default("", true) }}'),
+                  ('urls.txt',       '{{ jobs["url-discovery"].outputs.urls_file | default("", true) }}'),
+                  ('params.txt',     '{{ jobs["param-discovery"].outputs.param_urls_file | default("", true) }}'),
               ]:
                   if src_str and Path(src_str).is_file():
                       shutil.copy2(src_str, d / label)
                       print(f'  [+] subdomains/{label}')
-
               all_typed = []
               for typed in [
                   {{ jobs['passive-enum'].outputs.typed_outputs | default([], true) | tojson }},
                   {{ jobs['dns-verify'].outputs.typed_outputs | default([], true) | tojson }},
                   {{ jobs['http-probe'].outputs.typed_outputs | default([], true) | tojson }},
                   {{ jobs['url-discovery'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['port-scan'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['ssl-audit'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['secret-scan'].outputs.typed_outputs | default([], true) | tojson }},
                   {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
               ]:
                   all_typed.extend(typed)
