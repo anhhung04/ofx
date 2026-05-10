@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ...core.base import BaseRunner
+from ..base import ConnectionError, PostRunnerError
 from ..registry import RunnerRegistry
 
 __all__ = ["PostWinRM"]
@@ -22,17 +23,15 @@ logger = logging.getLogger("ofx")
 CHUNK_SIZE = 768_000
 
 
-class WinRMConnectionError(RuntimeError):
+class WinRMConnectionError(ConnectionError):
     """WinRM connection failed."""
 
 
-class WinRMCommandError(RuntimeError):
+class WinRMCommandError(PostRunnerError):
     """WinRM command returned non-zero exit code."""
 
     def __init__(self, message: str, exit_code: int | None = None, stderr: str = ""):
-        super().__init__(message)
-        self.exit_code = exit_code
-        self.stderr = stderr
+        super().__init__(message, exit_code=exit_code, stderr=stderr)
 
 
 @RunnerRegistry.register("winrm")  # type: ignore[arg-type]

@@ -14,7 +14,7 @@ from random import uniform
 
 import paramiko  # type: ignore[import-untyped]
 
-from ..base import PostRunnerBase
+from ..base import AuthenticationError, ConnectionError, PostRunnerBase, PostRunnerError
 from ..registry import RunnerRegistry
 
 __all__ = ["PostSSH"]
@@ -22,23 +22,23 @@ __all__ = ["PostSSH"]
 logger = logging.getLogger("ofx")
 
 
-class SSHConnectionError(RuntimeError):
+class SSHConnectionError(ConnectionError):
     """SSH connection failed."""
 
 
-class SSHAuthError(RuntimeError):
+class SSHAuthError(AuthenticationError):
     """SSH authentication failed."""
 
 
-class SSHTimeoutError(RuntimeError):
+class SSHTimeoutError(PostRunnerError):
     """SSH command timed out."""
 
 
-class SSHCommandError(RuntimeError):
+class SSHCommandError(PostRunnerError):
     """Remote command returned non-zero exit code."""
 
     def __init__(self, message: str, exit_code: int | None = None, stderr: str = ""):
-        super().__init__(message)
+        super().__init__(message, exit_code=exit_code, stderr=stderr)
         self.exit_code = exit_code
         self.stderr = stderr
 
@@ -516,7 +516,7 @@ class PostSSH(PostRunnerBase):
                     )
                     time.sleep(delay)
 
-        raise RuntimeError(
+        raise SSHConnectionError(
             f"SFTP {operation.lower()} failed after {self.max_retries} attempts: {last_error}"
         )
 

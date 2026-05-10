@@ -6,6 +6,7 @@ import pytest
 
 from ofx.api.post import (
     PostRunnerBase,
+    PostRunnerError,
     PostSSH,
 )
 from ofx.api.post.enum import (
@@ -136,7 +137,7 @@ def test_postssh_run_failure(mock_ssh_cls):
     mock_client.exec_command.return_value = (None, out, err)
 
     runner = PostSSH("host")
-    with pytest.raises(RuntimeError):
+    with pytest.raises(PostRunnerError):
         runner.run("id")
 
 

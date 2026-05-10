@@ -12,7 +12,59 @@ from .transfer import build_download_command
 if TYPE_CHECKING:
     pass
 
-__all__ = ["CommandRunner", "PostRunnerBase"]
+__all__ = [
+    "AuthenticationError",
+    "CommandRunner",
+    "ConnectionError",
+    "PostRunnerBase",
+    "PostRunnerError",
+]
+
+
+class PostRunnerError(Exception):
+    """Standardized exception for post-exploitation runner failures."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        exit_code: int | None = None,
+        stderr: str = "",
+        stdout: str = "",
+        command: str = "",
+        runner_type: str = "",
+        host: str = "",
+    ) -> None:
+        self.exit_code = exit_code
+        self.stderr = stderr
+        self.stdout = stdout
+        self.command = command
+        self.runner_type = runner_type
+        self.host = host
+        super().__init__(message)
+
+    def __str__(self) -> str:
+        parts = [super().__str__()]
+        if self.host:
+            parts.append(f"host={self.host}")
+        if self.exit_code is not None:
+            parts.append(f"exit_code={self.exit_code}")
+        if self.command:
+            cmd_preview = self.command[:100] + ("..." if len(self.command) > 100 else "")
+            parts.append(f"cmd={cmd_preview}")
+        return " | ".join(parts)
+
+
+class ConnectionError(PostRunnerError):  # noqa: A001
+    """Failed to establish connection to target host."""
+
+    pass
+
+
+class AuthenticationError(PostRunnerError):
+    """Authentication failed (bad credentials, key, etc.)."""
+
+    pass
 
 
 @runtime_checkable

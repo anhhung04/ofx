@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 # Core abstractions
-from .base import CommandRunner, PostRunnerBase
+from .base import (
+    AuthenticationError,
+    CommandRunner,
+    ConnectionError,
+    PostRunnerBase,
+    PostRunnerError,
+)
 
 # Utilities
 from .detect import detect_os
@@ -23,8 +29,11 @@ from .transfer import build_download_command
 
 __all__ = [
     # Core
+    "AuthenticationError",
     "CommandRunner",
+    "ConnectionError",
     "PostRunnerBase",
+    "PostRunnerError",
     "RunnerRegistry",
     # Runners
     "PostSSH",
