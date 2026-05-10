@@ -76,12 +76,10 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         self._failure_cleanup_done: bool = False
 
     async def run(self, *args, **kwargs):
-        """Override to salvage outputs and prompt before VPS destruction on failure."""
+        """Override to ensure VPS destruction on failure."""
         result = await super().run(*args, **kwargs)
         if result.status == RunnerStatus.FAILED and not self._failure_cleanup_done:
-            # Fleet children defer the destroy prompt to CloudMatrixJobRunner,
-            # which handles all surviving instances in a single batch.
-            await self._handle_failure(prompt_destroy=not self._is_fleet_child)
+            await self._on_failure_cleanup()
         return result
 
     # ------------------------------------------------------------------
@@ -438,9 +436,14 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                 self._log_debug(f"Remote runner cleanup failed: {e}")
 
     async def _on_failure_cleanup(self) -> None:
-        """Handle failure: salvage outputs, prompt for VPS destruction."""
+        """Handle failure: salvage outputs, ensure VPS destruction."""
         self._failure_cleanup_done = True
-        await self._handle_failure(prompt_destroy=not self._is_fleet_child)
+        try:
+            await self._download_outputs()
+        except Exception as e:
+            self._log_warning(f"Output salvage on failure failed: {e}")
+        await self._destroy_instance()
+        await self._cleanup_remote()
 
     async def _cleanup_remote(self) -> None:
         """Clean up remote working directory and runner resources."""
