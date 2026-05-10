@@ -264,150 +264,26 @@ class StepRunner(BaseRunner[Step]):
         )
 
     def _create_runner(self) -> BaseRunner:
-        """Creates the appropriate runner instance based on the step's run type."""
-        is_interactive = self.model.interactive and self.ctx.allow_interactive
+        """Creates the appropriate runner instance based on the step's run type.
 
-        if is_interactive and self._run_type == RunType.WORKFLOW:
+        Uses a handler registry to dispatch to the correct factory method,
+        replacing the previous if/elif chain with an extensible lookup.
+        """
+        if (
+            self.model.interactive
+            and self.ctx.allow_interactive
+            and self._run_type == RunType.WORKFLOW
+        ):
             self._log_warning(
                 "Interactive mode is not supported for workflow steps ('uses'). Ignoring interactive flag."
             )
-            is_interactive = False
 
-        if self._run_type is RunType.WORKFLOW:
-            from ofx.runner.execution.workflow import WorkflowRunner
-            from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
-
-            workflow_dirs = (
-                self.ctx.workflow_dirs.copy() if self.ctx.workflow_dirs else []
-            )
-
-            workflow = find_workflow(
-                self.model.uses or "",
-                tuple(workflow_dirs),
-                self.parent.model.defaults.flow_registry_url,  # type: ignore
-            )
-
-            return WorkflowRunner(
-                workflow,
-                self._child_context(
-                    update={
-                        "workflow_dirs": add_workflow_dir(
-                            workflow_dirs, workflow.workflow_path.parent
-                        ),
-                    }
-                ),
-                parent=self,
-            )
-        elif self._run_type is RunType.SCRIPT:
-            from ofx.runner.commands.command import Script, ScriptRunner
-
-            assert self.model.script is not None, (
-                "Script cannot be None for SCRIPT run type"
-            )
-            script_model = Script(
-                script=self.model.script,
-                shell=self.model.shell,
-                working_directory=self.model.working_directory,
-                timeout_minutes=self.model.timeout,
-                interactive=self.model.interactive,
-            )
-            return ScriptRunner(
-                script_model,
-                self._child_context(),
-                parent=self,
-            )
-        elif self._run_type is RunType.COMMAND:
-            from ofx.runner.commands.command import Command, CommandRunner
-
-            assert self.model.run is not None, "Run cannot be None for COMMAND run type"
-            cmd = Command(
-                cmd=self.model.run,
-                shell=self.model.shell,
-                working_directory=self._resolve_working_dir(),
-                timeout_minutes=self.model.timeout,
-                interactive=is_interactive,
-            )
-            return CommandRunner(
-                cmd,
-                self._child_context(),
-                parent=self,
-            )
-        elif self._run_type is RunType.SCRIPT_FILE:
-            from ofx.runner.commands.command import Script, ScriptRunner
-
-            assert self.model.script_file is not None, (
-                "script_file cannot be None for SCRIPT_FILE run type"
-            )
-
-            script_path = (
-                Path(self.model.script_file.strip()).expanduser().with_suffix(".py")
-            )
-
-            if not script_path.is_absolute():
-                base_dir = getattr(self.ctx, "workflow_dir", Path.cwd())
-                script_path = (base_dir / script_path).resolve()
-
-            if not script_path.exists():
-                raise FileNotFoundError(f"Script file '{script_path}' does not exist.")
-
-            script_content = script_path.read_text()
-            script_model = Script(
-                script=script_content,
-                shell=self.model.shell,
-                working_directory=self.model.working_directory,
-                timeout_minutes=self.model.timeout,
-                interactive=self.model.interactive,
-            )
-
-            return ScriptRunner(
-                script_model,
-                self._child_context(),
-                parent=self,
-            )
-
-        elif self._run_type is RunType.TASK:
-            from ofx.runner.tasks.runner import TaskExecution, TaskRunner
-
-            assert self.model.task is not None, (
-                "task cannot be None for TASK run type"
-            )
-
-            # Extract target from run_with; remaining keys are task options
-            task_opts = dict(self.model.run_with)
-            raw_target = task_opts.pop("target", task_opts.pop("targets", ""))
-            # If target is a list (e.g. from unresolved matrix input), join
-            # with commas so CLI tools receive a valid argument instead of a
-            # Python list repr like "['url1', 'url2']".
-            if isinstance(raw_target, list):
-                target = ",".join(str(t) for t in raw_target)
-            else:
-                target = str(raw_target)
-
-            if not target:
-                self._log_warning(
-                    f"Task '{self.model.task}' has no 'target' in 'with:' — "
-                    f"the tool may fail or scan nothing."
-                )
-
-            task_model = TaskExecution(
-                task_name=self.model.task,
-                target=target,
-                opts=task_opts,
-                shell=self.model.shell,
-                working_directory=self._resolve_working_dir(),
-                timeout_minutes=self.model.timeout,
-                store_creds=self._resolve_store_creds(),
-            )
-            return TaskRunner(
-                task_model,
-                self._child_context(),
-                parent=self,
-            )
-
-        else:
+        handler = _STEP_HANDLERS.get(self._run_type)
+        if handler is None:
             raise ValueError(
                 f"Invalid run type '{self._run_type}' for step '{self.model.name}'."
             )
+        return handler(self)
 
     def _produce_log(self, message: Any) -> str:
         msg = str(message)
@@ -506,3 +382,148 @@ class StepRunner(BaseRunner[Step]):
 
         parent_model = self.parent.model if self.parent else None
         return should_store_creds(self.model.store_creds, parent_model)
+
+
+# ---------------------------------------------------------------------------
+# Step handler registry — each handler builds a runner for its RunType.
+# Imports are lazy to avoid pulling heavy dependencies at import time.
+# ---------------------------------------------------------------------------
+
+
+def _create_workflow_runner(step_runner: StepRunner) -> BaseRunner:
+    from ofx.runner.execution.workflow import WorkflowRunner
+    from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
+
+    workflow_dirs = (
+        step_runner.ctx.workflow_dirs.copy() if step_runner.ctx.workflow_dirs else []
+    )
+    workflow = find_workflow(
+        step_runner.model.uses or "",
+        tuple(workflow_dirs),
+        step_runner.parent.model.defaults.flow_registry_url,  # type: ignore
+    )
+    return WorkflowRunner(
+        workflow,
+        step_runner._child_context(
+            update={
+                "workflow_dirs": add_workflow_dir(
+                    workflow_dirs, workflow.workflow_path.parent
+                ),
+            }
+        ),
+        parent=step_runner,
+    )
+
+
+def _create_script_runner(step_runner: StepRunner) -> BaseRunner:
+    from ofx.runner.commands.command import Script, ScriptRunner
+
+    assert step_runner.model.script is not None, (
+        "Script cannot be None for SCRIPT run type"
+    )
+    script_model = Script(
+        script=step_runner.model.script,
+        shell=step_runner.model.shell,
+        working_directory=step_runner.model.working_directory,
+        timeout_minutes=step_runner.model.timeout,
+        interactive=step_runner.model.interactive,
+    )
+    return ScriptRunner(
+        script_model,
+        step_runner._child_context(),
+        parent=step_runner,
+    )
+
+
+def _create_command_runner(step_runner: StepRunner) -> BaseRunner:
+    from ofx.runner.commands.command import Command, CommandRunner
+
+    is_interactive = step_runner.model.interactive and step_runner.ctx.allow_interactive
+    assert step_runner.model.run is not None, "Run cannot be None for COMMAND run type"
+    cmd = Command(
+        cmd=step_runner.model.run,
+        shell=step_runner.model.shell,
+        working_directory=step_runner._resolve_working_dir(),
+        timeout_minutes=step_runner.model.timeout,
+        interactive=is_interactive,
+    )
+    return CommandRunner(
+        cmd,
+        step_runner._child_context(),
+        parent=step_runner,
+    )
+
+
+def _create_script_file_runner(step_runner: StepRunner) -> BaseRunner:
+    from ofx.runner.commands.command import Script, ScriptRunner
+
+    assert step_runner.model.script_file is not None, (
+        "script_file cannot be None for SCRIPT_FILE run type"
+    )
+    script_path = (
+        Path(step_runner.model.script_file.strip()).expanduser().with_suffix(".py")
+    )
+    if not script_path.is_absolute():
+        base_dir = getattr(step_runner.ctx, "workflow_dir", Path.cwd())
+        script_path = (base_dir / script_path).resolve()
+    if not script_path.exists():
+        raise FileNotFoundError(f"Script file '{script_path}' does not exist.")
+    script_content = script_path.read_text()
+    script_model = Script(
+        script=script_content,
+        shell=step_runner.model.shell,
+        working_directory=step_runner.model.working_directory,
+        timeout_minutes=step_runner.model.timeout,
+        interactive=step_runner.model.interactive,
+    )
+    return ScriptRunner(
+        script_model,
+        step_runner._child_context(),
+        parent=step_runner,
+    )
+
+
+def _create_task_runner(step_runner: StepRunner) -> BaseRunner:
+    from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+    assert step_runner.model.task is not None, (
+        "task cannot be None for TASK run type"
+    )
+    task_opts = dict(step_runner.model.run_with)
+    raw_target = task_opts.pop("target", task_opts.pop("targets", ""))
+    if isinstance(raw_target, list):
+        target = ",".join(str(t) for t in raw_target)
+    else:
+        target = str(raw_target)
+    if not target:
+        step_runner._log_warning(
+            f"Task '{step_runner.model.task}' has no 'target' in 'with:' — "
+            f"the tool may fail or scan nothing."
+        )
+    task_model = TaskExecution(
+        task_name=step_runner.model.task,
+        target=target,
+        opts=task_opts,
+        shell=step_runner.model.shell,
+        working_directory=step_runner._resolve_working_dir(),
+        timeout_minutes=step_runner.model.timeout,
+        store_creds=step_runner._resolve_store_creds(),
+    )
+    return TaskRunner(
+        task_model,
+        step_runner._child_context(),
+        parent=step_runner,
+    )
+
+
+from collections.abc import Callable
+
+StepHandlerFn = Callable[[StepRunner], BaseRunner]
+
+_STEP_HANDLERS: dict[RunType, StepHandlerFn] = {
+    RunType.WORKFLOW: _create_workflow_runner,
+    RunType.SCRIPT: _create_script_runner,
+    RunType.COMMAND: _create_command_runner,
+    RunType.SCRIPT_FILE: _create_script_file_runner,
+    RunType.TASK: _create_task_runner,
+}

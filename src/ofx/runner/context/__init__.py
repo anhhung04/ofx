@@ -12,25 +12,24 @@ from ofx.runner.core.models import RunContext
 class RunnerContextBuilder:
     base: RunContext
 
+    def _shallow_copy_with_dict(self, field: str, updates: dict[str, Any]) -> RunContext:
+        """Create a shallow copy of base, deep-copying only the target dict field."""
+        # Deep-copy only the dict being mutated; other fields share references
+        current = getattr(self.base, field)
+        merged = {**current, **updates}
+        return self.base.model_copy(update={field: merged})
+
     def with_env(self, env: dict[str, Any]) -> RunContext:
-        ctx = self.base.model_copy(deep=True)
-        ctx.envs.update(env)
-        return ctx
+        return self._shallow_copy_with_dict("envs", env)
 
     def with_inputs(self, inputs: dict[str, Any]) -> RunContext:
-        ctx = self.base.model_copy(deep=True)
-        ctx.inputs.update(inputs)
-        return ctx
+        return self._shallow_copy_with_dict("inputs", inputs)
 
     def with_secrets(self, secrets: dict[str, Any]) -> RunContext:
-        ctx = self.base.model_copy(deep=True)
-        ctx.secrets.update(secrets)
-        return ctx
+        return self._shallow_copy_with_dict("secrets", secrets)
 
     def with_vars(self, vars_update: dict[str, Any]) -> RunContext:
-        ctx = self.base.model_copy(deep=True)
-        ctx.vars.update(vars_update)
-        return ctx
+        return self._shallow_copy_with_dict("vars", vars_update)
 
     def with_update(self, update: dict[str, Any]) -> RunContext:
-        return self.base.model_copy(update=update, deep=True)
+        return self.base.model_copy(update=update)

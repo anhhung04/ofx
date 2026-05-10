@@ -212,9 +212,6 @@ class TaskRunner(BaseRunner[TaskExecution]):
                     outputs["output_file"] = str(self._output_file)
                     await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
 
-    async def _post_run(self) -> None:
-        pass
-
     # ── Profile integration ────────────────────────────────────────
 
     def _apply_profile_task_options(self) -> None:

@@ -151,9 +151,10 @@ class WorkflowExecutionManager:
         task_to_job = {t: jid for jid, t in tasks.items()}
         failed_jobs: list[str] = []
         try:
-            while tasks:
-                done, _ = await asyncio.wait(
-                    tasks.values(), timeout=0.01, return_when=asyncio.FIRST_COMPLETED
+            pending = set(tasks.values())
+            while pending:
+                done, pending = await asyncio.wait(
+                    pending, return_when=asyncio.FIRST_COMPLETED
                 )
                 for task in done:
                     job_id = task_to_job[task]
@@ -167,13 +168,12 @@ class WorkflowExecutionManager:
                         logger.debug("Job '%s' raised: %s", job_id, exc)
                     if runner.is_failed:
                         failed_jobs.append(job_id)
-                    del tasks[job_id]
         except (asyncio.CancelledError, KeyboardInterrupt):
             # Cancel remaining tasks on interruption
-            for _job_id, task in tasks.items():
+            for task in pending:
                 if not task.done():
                     task.cancel()
-            await asyncio.gather(*tasks.values(), return_exceptions=True)
+            await asyncio.gather(*pending, return_exceptions=True)
             raise
         return failed_jobs
 

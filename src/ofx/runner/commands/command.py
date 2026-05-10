@@ -1,6 +1,7 @@
 """Command and script runners for executing shell commands and Python scripts"""
 
 import asyncio
+import atexit
 import builtins
 import contextlib
 import io
@@ -21,6 +22,26 @@ from ofx.runner.core import (
     RunResult,
 )
 from ofx.settings import DEFAULT_SHELL, settings
+
+# Shared ProcessPoolExecutor — avoids creating a new executor per script call.
+_shared_executor: ProcessPoolExecutor | None = None
+
+
+def _get_shared_executor() -> ProcessPoolExecutor:
+    """Return or create the shared ProcessPoolExecutor."""
+    global _shared_executor
+    if _shared_executor is None:
+        _shared_executor = ProcessPoolExecutor(max_workers=4)
+        atexit.register(_shutdown_shared_executor)
+    return _shared_executor
+
+
+def _shutdown_shared_executor() -> None:
+    """Shutdown the shared executor at process exit."""
+    global _shared_executor
+    if _shared_executor is not None:
+        _shared_executor.shutdown(wait=False)
+        _shared_executor = None
 
 
 def exec_script_in_process(
@@ -391,30 +412,26 @@ class ScriptRunner(BaseRunner[Script]):
         channels_dir = settings.channels_dir
         outputs_file = self.ctx.envs.get("RUNNER_OUTPUTS")
 
-        with ProcessPoolExecutor() as executor:
-            future = executor.submit(
-                exec_script_in_process,
-                self.model.script,
-                str(self.model.working_directory),
-                self.parent.parent.model
-                if self.parent and self.parent.parent
-                else None,
-                self.parent.model if self.parent else None,
-                self.parent.parent.parent.model
-                if self.parent and self.parent.parent and self.parent.parent.parent
-                else None,
-                self.ctx,
-                self.ctx.inputs,
-                self.ctx.secrets,
-                channels_dir,
-                outputs_file,
-            )
-            result = await asyncio.get_running_loop().run_in_executor(None, future.result)
-            return result
-
-    async def _pre_run(self) -> None:
-        """Pre-run hook"""
-        pass
+        executor = _get_shared_executor()
+        future = executor.submit(
+            exec_script_in_process,
+            self.model.script,
+            str(self.model.working_directory),
+            self.parent.parent.model
+            if self.parent and self.parent.parent
+            else None,
+            self.parent.model if self.parent else None,
+            self.parent.parent.parent.model
+            if self.parent and self.parent.parent and self.parent.parent.parent
+            else None,
+            self.ctx,
+            self.ctx.inputs,
+            self.ctx.secrets,
+            channels_dir,
+            outputs_file,
+        )
+        result = await asyncio.get_running_loop().run_in_executor(None, future.result)
+        return result
 
     async def _post_run(self) -> None:
         if self._error:
@@ -422,9 +439,3 @@ class ScriptRunner(BaseRunner[Script]):
         self._log_debug(
             f"script result: \n---\n{await self.get_result()}\n---\n with context: \n---\n{self.ctx}\n---"
         )
-
-    def _produce_log(self, message: Any) -> str:
-        msg = str(message)
-        if self.parent:
-            return self.parent._produce_log(msg)
-        return msg

@@ -92,6 +92,7 @@ class BaseRunner[TModel: BaseModel]:
         "_cached_durable_config",
         "_logger",
         "_template_service",
+        "_cached_key_prefix",
     )
 
     def __init__(
@@ -147,16 +148,15 @@ class BaseRunner[TModel: BaseModel]:
         await self._write_checkpoint("running")
         pre_run_ok = False
         try:
-            await self.reg_set(
-                "metadata",
+            await self.reg_set_many(
                 {
-                    "run_id": self.run_id,
-                    "name": self.name,
-                    "type": str(type(self.model)),
-                },
-            )
-            await self.reg_set(
-                "context", self.ctx.model_dump(exclude={"secrets", "envs"})
+                    "metadata": {
+                        "run_id": self.run_id,
+                        "name": self.name,
+                        "type": str(type(self.model)),
+                    },
+                    "context": self.ctx.model_dump(exclude={"secrets", "envs"}),
+                }
             )
 
             # Execute lifecycle
@@ -344,12 +344,12 @@ class BaseRunner[TModel: BaseModel]:
         raise NotImplementedError("Subclasses should implement _do_run method.")
 
     async def _pre_run(self) -> None:
-        """Pre-run - must be implemented by subclasses"""
-        raise NotImplementedError("Subclasses should implement _pre_run method.")
+        """Pre-run hook. Default is no-op; override in subclasses."""
+        pass
 
     async def _post_run(self) -> None:
-        """Post-run - must be implemented by subclasses"""
-        raise NotImplementedError("Subclasses should implement _post_run method.")
+        """Post-run hook. Default is no-op; override in subclasses."""
+        pass
 
     async def _resolve_job_outputs(self) -> dict[str, Any]:
         """Resolve template expressions in ``model.outputs``.
@@ -453,8 +453,11 @@ class BaseRunner[TModel: BaseModel]:
         return self.ctx.model_copy(update=update, deep=deep)
 
     def _produce_log(self, message: Any) -> str:
-        """Produce a log message - must be implemented by subclasses"""
-        raise NotImplementedError("Subclasses should implement _produce_log method.")
+        """Produce a log message. Override in subclasses for custom prefixes."""
+        msg = str(message)
+        if self.parent:
+            return self.parent._produce_log(msg)
+        return f"[{self.__class__.__name__}] {msg}"
 
     def _log_debug(self, message: Any) -> None:
         self._logger.debug(self._produce_log(message))
@@ -550,6 +553,11 @@ class BaseRunner[TModel: BaseModel]:
         """Update namespaced data in the registry."""
         await self._registry.update(self.get_key(key), updates)
 
+    async def reg_set_many(self, items: dict[str, dict[str, Any]]) -> None:
+        """Store multiple namespaced key-value pairs in the registry."""
+        for key, value in items.items():
+            await self._registry.set(self.get_key(key), value)
+
     async def reg_set_global(self, key: str, value: dict[str, Any]) -> None:
         """Store data with a raw, non-namespaced key."""
         await self._registry.set(key, value)
@@ -575,11 +583,27 @@ class BaseRunner[TModel: BaseModel]:
         return f"{self.__class__.__name__}:{self.name}"
 
     def get_key(self, key: str) -> str:
-        """Generate a namespaced key for the runner"""
-        key = f"{self._namespace()}:{key}"
-        if self.parent:
-            return self.parent.get_key(key)
-        return key
+        """Generate a namespaced key for the runner.
+
+        The prefix is cached after first computation since the parent
+        chain and namespace are immutable during a runner's lifetime.
+        """
+        try:
+            prefix = self._cached_key_prefix
+        except AttributeError:
+            prefix = self._build_key_prefix()
+            self._cached_key_prefix = prefix
+        return f"{prefix}{key}" if prefix else key
+
+    def _build_key_prefix(self) -> str:
+        """Walk the parent chain once to build the full namespace prefix."""
+        parts: list[str] = []
+        runner: BaseRunner | None = self
+        while runner is not None:
+            parts.append(runner._namespace())
+            runner = runner.parent
+        parts.reverse()
+        return ":".join(parts) + ":"
 
     @property
     def log_level(self) -> int:

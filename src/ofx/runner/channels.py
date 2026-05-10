@@ -12,6 +12,7 @@ injected into shell commands and use the same file + ``flock`` mechanism.
 
 from __future__ import annotations
 
+import asyncio
 import fcntl
 import json
 import logging
@@ -40,6 +41,9 @@ class ChannelStore:
       ``dict``.
     * **Mtime-based read cache** — avoids re-reading a file whose content
       hasn't changed since the last read.
+    * **Async API** — non-blocking ``async_publish/async_get/async_subscribe``
+      methods for use from ``asyncio`` runners.  In-process events provide
+      instant notification without file polling.
     """
 
     def __init__(self, channels_dir: str | Path | None = None) -> None:
@@ -49,6 +53,8 @@ class ChannelStore:
         self._dir.mkdir(parents=True, exist_ok=True)
         # Per-channel mtime cache: channel → (mtime, parsed_value)
         self._cache: dict[str, tuple[float, Any]] = {}
+        # Per-channel asyncio.Event for in-process notification
+        self._events: dict[str, asyncio.Event] = {}
         logger.debug("ChannelStore initialized at %s", self._dir)
 
     # ------------------------------------------------------------------
@@ -62,6 +68,24 @@ class ChannelStore:
     def _lock_path(self, channel: str) -> Path:
         """Return the lock file for *channel* (same dir, ``.lock`` suffix)."""
         return self._dir / f"{channel}.lock"
+
+    # ------------------------------------------------------------------
+    # In-process event helpers
+    # ------------------------------------------------------------------
+
+    def _get_event(self, channel: str) -> asyncio.Event:
+        """Return (or create) an asyncio.Event for *channel*."""
+        event = self._events.get(channel)
+        if event is None:
+            event = asyncio.Event()
+            self._events[channel] = event
+        return event
+
+    def _notify(self, channel: str) -> None:
+        """Signal in-process subscribers that *channel* was updated."""
+        event = self._events.get(channel)
+        if event is not None:
+            event.set()
 
     # ------------------------------------------------------------------
     # Low-level I/O with flock
@@ -86,6 +110,9 @@ class ChannelStore:
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
+
+        # Wake in-process subscribers
+        self._notify(channel)
 
     def _read(self, channel: str) -> Any | None:
         """Read the channel value under a shared flock, using mtime cache."""
@@ -167,6 +194,82 @@ class ChannelStore:
             time.sleep(poll_interval)
         raise TimeoutError(f"Timeout waiting for channel '{channel}'")
 
+    # ------------------------------------------------------------------
+    # Async API — non-blocking variants for asyncio runners
+    # ------------------------------------------------------------------
+
+    async def async_publish(self, channel: str, data: ChannelValue) -> None:
+        """Async publish *data* to *channel*.
+
+        Offloads the blocking flock I/O to a thread so the event loop
+        stays responsive.
+        """
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._write, channel, data)
+        logger.debug("Channel '%s' async published", channel)
+
+    async def async_get(self, channel: str) -> Any | None:
+        """Async read of the latest *channel* value."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._read, channel)
+
+    async def async_subscribe(self, channel: str, poll_interval: float = 0.1):
+        """Async generator that yields new values from *channel*.
+
+        Uses in-process ``asyncio.Event`` for instant notification when
+        ``async_publish`` is called from the same process, falling back to
+        timed polling for cross-process updates.
+        """
+        event = self._get_event(channel)
+        last_value = object()  # sentinel
+        while True:
+            # Wait for notification or poll timeout
+            event.clear()
+            try:
+                await asyncio.wait_for(event.wait(), timeout=poll_interval)
+            except TimeoutError:
+                pass
+
+            loop = asyncio.get_running_loop()
+            value = await loop.run_in_executor(None, self._read, channel)
+            if value is not None and value != last_value:
+                yield value
+                last_value = value
+
+    async def async_wait_for(
+        self,
+        channel: str,
+        condition,
+        timeout: int = 60,
+        poll_interval: float = 0.1,
+    ):
+        """Async version of :meth:`wait_for`.
+
+        Uses in-process event notification for low-latency detection.
+        """
+        event = self._get_event(channel)
+        deadline = asyncio.get_event_loop().time() + timeout
+        loop = asyncio.get_running_loop()
+
+        while True:
+            data = await loop.run_in_executor(None, self._read, channel)
+            if data is not None and condition(data):
+                return data
+            remaining = deadline - asyncio.get_event_loop().time()
+            if remaining <= 0:
+                raise TimeoutError(f"Timeout waiting for channel '{channel}'")
+            event.clear()
+            try:
+                await asyncio.wait_for(
+                    event.wait(), timeout=min(poll_interval, remaining)
+                )
+            except TimeoutError:
+                pass
+
+    # ------------------------------------------------------------------
+    # Management
+    # ------------------------------------------------------------------
+
     def delete(self, channel: str) -> bool:
         """Remove a channel file and its lock."""
         removed = False
@@ -177,6 +280,7 @@ class ChannelStore:
             except FileNotFoundError:
                 pass
         self._cache.pop(channel, None)
+        self._events.pop(channel, None)
         return removed
 
     def list_channels(self) -> list[str]:
@@ -195,6 +299,7 @@ class ChannelStore:
             except FileNotFoundError:
                 pass
         self._cache.clear()
+        self._events.clear()
 
     def close(self) -> None:
         """Clear all channels and remove the channels directory."""
