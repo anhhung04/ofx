@@ -205,8 +205,13 @@ class Task(ABC):
         results: list[OutputType] = []
         lines: list[str] = []
 
-        if output_file and output_file.exists():
-            lines = self._read_output_file(output_file).strip().splitlines()
+        if output_file:
+            if not output_file.exists():
+                return []
+            content = self._read_output_file(output_file)
+            if not content.strip():
+                return []
+            lines = content.strip().splitlines()
         elif stdout:
             lines = stdout.strip().splitlines()
 

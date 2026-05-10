@@ -40,9 +40,8 @@ class MatrixStrategy(OFXBaseModel):
         default_factory=dict,
         description="Matrix variables — lists of values or a template string that resolves to a JSON list at runtime",
     )
-    max_parallel: int = Field(
+    max_parallel: int | None = Field(
         default=4,
-        ge=1,
         description="Maximum number of matrix jobs to run in parallel per stage",
     )
     fail_fast: bool = Field(
@@ -61,6 +60,13 @@ class MatrixStrategy(OFXBaseModel):
         default=None,
         description="Fleet distribution strategy for cloud-based parallel execution",
     )
+
+    @field_validator("max_parallel")
+    @classmethod
+    def validate_max_parallel(cls, v: int | None) -> int | None:
+        if v is not None and v < 1:
+            raise ValueError("max_parallel must be >= 1")
+        return v
 
     @field_validator("matrix")
     @classmethod

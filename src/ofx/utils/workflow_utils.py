@@ -68,9 +68,14 @@ def _find_workflow_cached(
     if workflow_name.startswith(("/", ".")):
         flow_path = Path(workflow_name)
         if flow_path.is_absolute():
-            flow = Workflow.model_validate(
-                yaml.safe_load(flow_path.read_text().strip())
-            )
+            try:
+                flow = Workflow.model_validate(
+                    yaml.safe_load(flow_path.read_text().strip())
+                )
+            except yaml.YAMLError as e:
+                raise RuntimeError(
+                    f"Invalid YAML in workflow file {flow_path}: {e}"
+                ) from None
             flow.workflow_path = flow_path
             return flow
 
@@ -78,7 +83,14 @@ def _find_workflow_cached(
             path = find_valid_flow(directory, workflow_name)
             if not path:
                 continue
-            workflow = Workflow.model_validate(yaml.safe_load(path.read_text().strip()))
+            try:
+                workflow = Workflow.model_validate(
+                    yaml.safe_load(path.read_text().strip())
+                )
+            except yaml.YAMLError as e:
+                raise RuntimeError(
+                    f"Invalid YAML in workflow file {path}: {e}"
+                ) from None
             workflow.workflow_path = path
             return workflow
         else:
@@ -89,14 +101,28 @@ def _find_workflow_cached(
         path = find_valid_flow(directory, workflow_name)
         if not path:
             continue
-        workflow = Workflow.model_validate(yaml.safe_load(path.read_text().strip()))
+        try:
+            workflow = Workflow.model_validate(
+                yaml.safe_load(path.read_text().strip())
+            )
+        except yaml.YAMLError as e:
+            raise RuntimeError(
+                f"Invalid YAML in workflow file {path}: {e}"
+            ) from None
         workflow.workflow_path = path
         return workflow
 
     if is_remote_path(workflow_name) and not is_git_repo(workflow_name):
-        response = httpx.get(workflow_name)
+        response = httpx.get(workflow_name, timeout=30)
         response.raise_for_status()
-        workflow = Workflow.model_validate(yaml.safe_load(response.text.strip()))
+        try:
+            workflow = Workflow.model_validate(
+                yaml.safe_load(response.text.strip())
+            )
+        except yaml.YAMLError as e:
+            raise RuntimeError(
+                f"Invalid YAML in remote workflow {workflow_name}: {e}"
+            ) from None
         workflow.workflow_path = Path.cwd()
         return workflow
 
@@ -109,7 +135,14 @@ def _find_workflow_cached(
         raise RuntimeError(
             f"No main workflow file found in cloned repo {workflow_name}."
         )
-    workflow = Workflow.model_validate(yaml.safe_load(main_path.read_text().strip()))
+    try:
+        workflow = Workflow.model_validate(
+            yaml.safe_load(main_path.read_text().strip())
+        )
+    except yaml.YAMLError as e:
+        raise RuntimeError(
+            f"Invalid YAML in cloned workflow {main_path}: {e}"
+        ) from None
     workflow.workflow_path = main_path
     return workflow
 
