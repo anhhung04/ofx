@@ -169,7 +169,7 @@ class PostSSH(PostRunnerBase):
             try:
                 pkey = self._load_key(self.identity_file)
                 connect_kwargs["pkey"] = pkey
-            except Exception as e:
+            except (paramiko.SSHException, OSError, SSHAuthError) as e:
                 raise SSHAuthError(
                     f"Failed to load key '{self.identity_file}': {e}"
                 ) from e
@@ -202,19 +202,19 @@ class PostSSH(PostRunnerBase):
         if self._sftp:
             try:
                 self._sftp.close()
-            except Exception as e:
+            except (OSError, paramiko.SSHException) as e:
                 logger.debug("SFTP close error: %s", e)
             self._sftp = None
         if self._client:
             try:
                 self._client.close()
-            except Exception as e:
+            except (OSError, paramiko.SSHException) as e:
                 logger.debug("SSH client close error: %s", e)
             self._client = None
         if self._jump_client:
             try:
                 self._jump_client.close()
-            except Exception as e:
+            except (OSError, paramiko.SSHException) as e:
                 logger.debug("Jump host close error: %s", e)
             self._jump_client = None
 
@@ -224,7 +224,7 @@ class PostSSH(PostRunnerBase):
             try:
                 self._sftp.stat(".")
                 return self._sftp
-            except Exception:
+            except (OSError, paramiko.SSHException, EOFError):
                 logger.debug("SFTP session stale, reconnecting")
                 self._sftp = None
         client = self._connect()
@@ -286,8 +286,8 @@ class PostSSH(PostRunnerBase):
             if self.identity_file:
                 try:
                     jump_kwargs["pkey"] = self._load_key(self.identity_file)
-                except Exception as e:
-                    logger.debug("Failed to load key for jump host: %s", e)
+                except (paramiko.SSHException, OSError, SSHAuthError) as e:
+                    logger.warning("Failed to load key for jump host: %s", e)
             try:
                 jump_client.connect(**jump_kwargs)
                 transport = jump_client.get_transport()
@@ -301,10 +301,10 @@ class PostSSH(PostRunnerBase):
                     (self.host, self.port),
                     ("127.0.0.1", 0),
                 )
-            except Exception:
+            except (paramiko.SSHException, OSError, EOFError):
                 try:
                     jump_client.close()
-                except Exception:
+                except (OSError, paramiko.SSHException):
                     pass
                 raise
 
@@ -400,11 +400,6 @@ class PostSSH(PostRunnerBase):
                     )
                     time.sleep(delay)
                     continue
-            except Exception as e:
-                last_error = e
-                self._close_client()
-                if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
 
         raise SSHConnectionError(
             f"SSH failed after {self.max_retries} attempts: {last_error}"
@@ -470,7 +465,7 @@ class PostSSH(PostRunnerBase):
             Path(local_tmp).unlink(missing_ok=True)
             try:
                 self._run_direct(f"rm -f {remote_out}", timeout=10)
-            except Exception as e:
+            except (OSError, paramiko.SSHException, EOFError) as e:
                 logger.debug("Failed to remove remote output file: %s", e)
 
         return output
@@ -520,11 +515,6 @@ class PostSSH(PostRunnerBase):
                         e,
                     )
                     time.sleep(delay)
-            except Exception as e:
-                last_error = e
-                self._sftp = None
-                if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
 
         raise RuntimeError(
             f"SFTP {operation.lower()} failed after {self.max_retries} attempts: {last_error}"
@@ -593,6 +583,29 @@ class PostSSH(PostRunnerBase):
     # Logging
     # -------------------------------------------------------------------------
 
+    @staticmethod
+    def _sanitize_for_log(text: str) -> str:
+        """Redact common credential patterns from text before logging."""
+        import re
+
+        # URL credentials: https://user:pass@host
+        text = re.sub(r"(https?://[^:]+:)[^\s@]+(@)", r"\1***\2", text)
+        # Key=value patterns: password=secret, token=abc, key=xyz
+        text = re.sub(
+            r"((?:password|passwd|token|secret|api_key|apikey|auth|credential|jwt)=)[^\s&\"']+",
+            r"\1***",
+            text,
+            flags=re.IGNORECASE,
+        )
+        # Flag patterns: --password secret, --token secret (only for known flags)
+        text = re.sub(
+            r"(--(?:password|passwd|token|secret|api-key)\s+)\S+",
+            r"\1***",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return text
+
     def _log_command(
         self, command: str, stdout: str, stderr: str, returncode: int
     ) -> None:
@@ -600,8 +613,9 @@ class PostSSH(PostRunnerBase):
         if not self.log_commands or not self._log_file:
             return
 
+        sanitized_cmd = self._sanitize_for_log(command)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"[{timestamp}] host={self.host} rc={returncode}\nCMD: {command}\n"
+        entry = f"[{timestamp}] host={self.host} rc={returncode}\nCMD: {sanitized_cmd}\n"
         if stdout:
             entry += f"STDOUT:\n{stdout[:5000]}\n"
         if stderr:
@@ -612,8 +626,8 @@ class PostSSH(PostRunnerBase):
             self._log_file.parent.mkdir(parents=True, exist_ok=True)
             with self._log_file.open("a") as f:
                 f.write(entry)
-        except Exception as e:
-            logger.debug("Failed to write command log: %s", e)
+        except OSError as e:
+            logger.warning("Failed to write command log: %s", e)
 
     # -------------------------------------------------------------------------
     # Cleanup
@@ -625,8 +639,8 @@ class PostSSH(PostRunnerBase):
             try:
                 files = " ".join(self._remote_temp_files)
                 self._run_direct(f"rm -f {files}", timeout=10)
-            except Exception as e:
-                logger.debug("Failed to clean remote temp files: %s", e)
+            except (OSError, paramiko.SSHException, EOFError) as e:
+                logger.warning("Failed to clean remote temp files: %s", e)
             self._remote_temp_files.clear()
 
         self._close_client()
