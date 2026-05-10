@@ -190,8 +190,14 @@ class TemplateResolver:
                     sv = str(secret_val)
                     if len(sv) >= 4:
                         preview = preview.replace(sv, "***")
+            # List available top-level variables for debugging
+            available = sorted(
+                k for k in template_vars if not k.startswith("_") and k != "secrets"
+            )
             raise type(e)(
-                f"Template rendering failed: {e}\n  Template: {preview}"
+                f"Template rendering failed: {e}\n"
+                f"  Template: {preview}\n"
+                f"  Available variables: {', '.join(available[:20])}"
             ) from e
 
         resolve_stack.pop()
@@ -202,11 +208,23 @@ class TemplateResolver:
             try:
                 return int(result)
             except ValueError:
+                _logger.debug(
+                    "Template returned non-integer '%s' for int field, "
+                    "keeping as string (template: %s)",
+                    result[:50],
+                    value_str[:80],
+                )
                 return result
         elif isinstance(value, float):
             try:
                 return float(result)
             except ValueError:
+                _logger.debug(
+                    "Template returned non-float '%s' for float field, "
+                    "keeping as string (template: %s)",
+                    result[:50],
+                    value_str[:80],
+                )
                 return result
 
         return result
