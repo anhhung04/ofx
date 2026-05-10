@@ -267,3 +267,121 @@ class TestGetExpandedJobIds:
         # 'missing' not in expanded → should return ["missing"]
         result = get_expanded_job_ids(expanded, "missing")
         assert result == ["missing"]
+
+
+# ---------------------------------------------------------------------------
+# coerce_input_value (workflow_utils.py)
+# ---------------------------------------------------------------------------
+
+
+class TestCoerceInputValue:
+    def _coerce(self, value, expected_type, name="test"):
+        from ofx.utils.workflow_utils import coerce_input_value
+
+        return coerce_input_value(value, expected_type, name)
+
+    # -- number --
+
+    def test_number_from_int(self):
+        assert self._coerce(42, "number") == 42
+
+    def test_number_from_float(self):
+        assert self._coerce(3.14, "number") == 3.14
+
+    def test_number_from_int_string(self):
+        assert self._coerce("42", "number") == 42
+        assert isinstance(self._coerce("42", "number"), int)
+
+    def test_number_from_float_string(self):
+        assert self._coerce("3.14", "number") == 3.14
+        assert isinstance(self._coerce("3.14", "number"), float)
+
+    def test_number_rejects_non_numeric_string(self):
+        with pytest.raises(ValueError, match="Cannot convert 'abc' to number"):
+            self._coerce("abc", "number")
+
+    def test_number_rejects_bool(self):
+        with pytest.raises(ValueError, match="Cannot convert boolean"):
+            self._coerce(True, "number")
+
+    def test_number_rejects_list(self):
+        with pytest.raises(ValueError, match="Cannot convert list"):
+            self._coerce([1, 2], "number")
+
+    # -- boolean --
+
+    def test_boolean_passthrough(self):
+        assert self._coerce(True, "boolean") is True
+        assert self._coerce(False, "boolean") is False
+
+    def test_boolean_from_truthy_strings(self):
+        for val in ("true", "True", "TRUE", "yes", "Yes", "1", "y", "Y"):
+            assert self._coerce(val, "boolean") is True
+
+    def test_boolean_from_falsy_strings(self):
+        for val in ("false", "False", "FALSE", "no", "No", "0", "n", "N"):
+            assert self._coerce(val, "boolean") is False
+
+    def test_boolean_rejects_invalid_string(self):
+        with pytest.raises(ValueError, match="Cannot convert 'maybe' to boolean"):
+            self._coerce("maybe", "boolean")
+
+    def test_boolean_from_int(self):
+        assert self._coerce(1, "boolean") is True
+        assert self._coerce(0, "boolean") is False
+
+    # -- array --
+
+    def test_array_passthrough(self):
+        assert self._coerce([1, 2, 3], "array") == [1, 2, 3]
+
+    def test_array_from_json_string(self):
+        assert self._coerce('["a", "b"]', "array") == ["a", "b"]
+
+    def test_array_rejects_plain_string(self):
+        with pytest.raises(ValueError, match="Cannot convert 'hello' to array"):
+            self._coerce("hello", "array")
+
+    def test_array_rejects_dict(self):
+        with pytest.raises(ValueError, match="Cannot convert dict to array"):
+            self._coerce({"a": 1}, "array")
+
+    def test_array_rejects_json_object_string(self):
+        with pytest.raises(ValueError, match="Cannot convert"):
+            self._coerce('{"a": 1}', "array")
+
+    # -- object --
+
+    def test_object_passthrough(self):
+        assert self._coerce({"key": "val"}, "object") == {"key": "val"}
+
+    def test_object_from_json_string(self):
+        assert self._coerce('{"key": "val"}', "object") == {"key": "val"}
+
+    def test_object_rejects_plain_string(self):
+        with pytest.raises(ValueError, match="Cannot convert 'hello' to object"):
+            self._coerce("hello", "object")
+
+    def test_object_rejects_list(self):
+        with pytest.raises(ValueError, match="Cannot convert list to object"):
+            self._coerce([1, 2], "object")
+
+    def test_object_rejects_json_array_string(self):
+        with pytest.raises(ValueError, match="Cannot convert"):
+            self._coerce("[1, 2]", "object")
+
+    # -- string --
+
+    def test_string_passthrough(self):
+        assert self._coerce("hello", "string") == "hello"
+
+    def test_string_from_int(self):
+        assert self._coerce(42, "string") == "42"
+
+    def test_string_from_bool(self):
+        assert self._coerce(True, "string") == "True"
+
+    # -- unknown type --
+
+    def test_unknown_type_passthrough(self):
+        assert self._coerce("val", "custom") == "val"

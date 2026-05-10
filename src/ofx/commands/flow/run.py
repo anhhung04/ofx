@@ -376,8 +376,10 @@ class FlowRunHandler:
         """Validate inputs against the workflow dispatch schema.
 
         Checks required inputs are present and coerces types where possible.
+        Type mismatches that cannot be coerced produce warnings rather than
+        hard errors so the workflow can still attempt to run.
         """
-        from ofx.utils.workflow_utils import find_workflow
+        from ofx.utils.workflow_utils import coerce_input_value, find_workflow
 
         try:
             wf = find_workflow(self.workflow_name, tuple(get_workflow_search_dirs()))
@@ -407,17 +409,13 @@ class FlowRunHandler:
                     self.input[name] = spec.default
                 continue
 
-            # Type coercion
+            # Type coercion — warn on failure instead of blocking execution
             value = self.input[name]
             declared_type = getattr(spec, "type", "string") or "string"
-            if isinstance(value, str):
-                if declared_type == "integer":
-                    try:
-                        self.input[name] = int(value)
-                    except ValueError:
-                        errors.append(f"Input '{name}' expects integer, got '{value}'")
-                elif declared_type == "boolean":
-                    self.input[name] = value.lower() in ("true", "1", "yes")
+            try:
+                self.input[name] = coerce_input_value(value, declared_type, name)
+            except ValueError as exc:
+                logger.warning("%s — keeping original value", exc)
 
         # Warn about inputs that don't match any declared dispatch input
         declared_names = set(wf.dispatch.inputs.keys())

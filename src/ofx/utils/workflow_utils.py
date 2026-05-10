@@ -1,8 +1,10 @@
 """Workflow utilities for OFX framework."""
 
+import json
 import logging
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import httpx
 import yaml
@@ -13,6 +15,105 @@ from ofx.utils.git import clone_remote_repo
 from ofx.utils.path import find_valid_flow, is_git_repo, is_remote_path
 
 logger = logging.getLogger(settings.app_branding)
+
+
+def coerce_input_value(value: Any, expected_type: str, name: str = "") -> Any:
+    """Coerce an input value to the expected workflow input type.
+
+    Handles values that may already be JSON-decoded by the CLI parser.
+
+    Args:
+        value: The value to coerce.
+        expected_type: One of ``"string"``, ``"number"``, ``"boolean"``,
+            ``"array"``, ``"object"``.
+        name: Input name used in error messages.
+
+    Returns:
+        The coerced value.
+
+    Raises:
+        ValueError: If coercion is not possible.
+    """
+    if expected_type == "number":
+        # bool is a subclass of int — reject it explicitly
+        if isinstance(value, bool):
+            raise ValueError(
+                f"Cannot convert boolean '{value}' to number for input '{name}'"
+            )
+        if isinstance(value, (int, float)):
+            return value
+        if isinstance(value, str):
+            try:
+                return int(value) if "." not in value else float(value)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"Cannot convert '{value}' to number for input '{name}'"
+                ) from None
+        raise ValueError(
+            f"Cannot convert {type(value).__name__} to number for input '{name}'"
+        )
+
+    elif expected_type == "boolean":
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return bool(value)
+        if isinstance(value, str):
+            if value.lower() in ("true", "yes", "1", "y"):
+                return True
+            if value.lower() in ("false", "no", "0", "n"):
+                return False
+            raise ValueError(
+                f"Cannot convert '{value}' to boolean for input '{name}' "
+                "(use true/false/yes/no/1/0)"
+            )
+        raise ValueError(
+            f"Cannot convert {type(value).__name__} to boolean for input '{name}'"
+        )
+
+    elif expected_type == "array":
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+            raise ValueError(
+                f"Cannot convert '{value}' to array for input '{name}' "
+                '(use JSON array syntax: ["a", "b"])'
+            )
+        raise ValueError(
+            f"Cannot convert {type(value).__name__} to array for input '{name}'"
+        )
+
+    elif expected_type == "object":
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+                if isinstance(parsed, dict):
+                    return parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+            raise ValueError(
+                f"Cannot convert '{value}' to object for input '{name}' "
+                '(use JSON object syntax: {{"key": "value"}})'
+            )
+        raise ValueError(
+            f"Cannot convert {type(value).__name__} to object for input '{name}'"
+        )
+
+    elif expected_type == "string":
+        if not isinstance(value, str):
+            return str(value)
+        return value
+
+    # Unknown type — pass through
+    return value
 
 
 def add_workflow_dir(workflow_dirs: list[Path], path: Path | str) -> list[Path]:
