@@ -115,6 +115,7 @@ class CollectionManager:
         self.base_dir = ensure_dir(base_dir or BASE_DATA_DIR / "collections")
         self.installed_file = self.base_dir / "installed.json"
         self._installed: dict[str, InstalledCollection] = self._load_installed()
+        self._installing: set[str] = set()  # circular-dep guard
 
     # ------------------------------------------------------------------
     # Persistence
@@ -148,6 +149,7 @@ class CollectionManager:
         *,
         alias: str = "",
         ref: str = "",
+        install_deps: bool = True,
     ) -> InstalledCollection:
         """Install a collection from a git URL or local path.
 
@@ -155,6 +157,7 @@ class CollectionManager:
             name_or_url: Full git URL or local path.
             alias: Override the directory/display name.
             ref: Git tag or branch to pin (default: repo default branch).
+            install_deps: Recursively install dependencies from collection.yaml.
 
         Returns:
             The ``InstalledCollection`` metadata.
@@ -165,6 +168,17 @@ class CollectionManager:
         """
         source = name_or_url.strip()
         inferred_name = alias or Path(source).stem.removesuffix(".git")
+
+        # Circular dependency guard
+        if inferred_name in self._installing:
+            logger.warning(
+                "Circular dependency detected: '%s' is already being installed, skipping.",
+                inferred_name,
+            )
+            existing = self._installed.get(inferred_name)
+            if existing:
+                return existing
+            return InstalledCollection(name=inferred_name, source=source)
 
         if inferred_name in self._installed:
             raise ValueError(f"Collection '{inferred_name}' is already installed.")
@@ -188,18 +202,28 @@ class CollectionManager:
         except GitCommandError as exc:
             raise RuntimeError(f"Failed to clone '{source}': {exc}") from exc
 
-        entry = InstalledCollection(
-            name=inferred_name,
-            source=source,
-            pinned_ref=ref or self._current_ref(target),
-            path=str(target),
-            installed_at=datetime.now(UTC).isoformat(),
-        )
-        self._installed[inferred_name] = entry
-        self._save_installed()
-        logger.info("Installed collection '%s'", inferred_name)
+        # Validate cloned directory structure
+        self._validate_collection_dir(target)
 
-        return entry
+        self._installing.add(inferred_name)
+        try:
+            entry = InstalledCollection(
+                name=inferred_name,
+                source=source,
+                pinned_ref=ref or self._current_ref(target),
+                path=str(target),
+                installed_at=datetime.now(UTC).isoformat(),
+            )
+            self._installed[inferred_name] = entry
+            self._save_installed()
+            logger.info("Installed collection '%s'", inferred_name)
+
+            if install_deps:
+                self._install_dependencies(target)
+
+            return entry
+        finally:
+            self._installing.discard(inferred_name)
 
     # ------------------------------------------------------------------
     # Remove
@@ -324,6 +348,55 @@ class CollectionManager:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_collection_dir(target: Path) -> None:
+        """Warn if a cloned directory has no collection.yaml or workflow files."""
+        if (target / "collection.yaml").exists():
+            return
+        if (target / "collection.yml").exists():
+            return
+        yaml_files = list(target.glob("*.yml")) + list(target.glob("*.yaml"))
+        if yaml_files:
+            return
+        logger.warning(
+            "Collection directory '%s' contains no collection.yaml or workflow files.",
+            target,
+        )
+
+    def _install_dependencies(self, target: Path) -> None:
+        """Read collection.yaml and recursively install listed dependencies."""
+        manifest_path = target / "collection.yaml"
+        if not manifest_path.exists():
+            manifest_path = target / "collection.yml"
+        if not manifest_path.exists():
+            return
+        try:
+            import yaml
+
+            manifest = yaml.safe_load(manifest_path.read_text()) or {}
+        except Exception as exc:
+            logger.warning("Failed to parse %s: %s", manifest_path, exc)
+            return
+
+        deps = manifest.get("dependencies")
+        if not deps or not isinstance(deps, list):
+            return
+
+        for dep in deps:
+            dep_name = str(dep).strip()
+            if not dep_name:
+                continue
+            if dep_name in self._installed:
+                logger.debug("Dependency '%s' already installed, skipping.", dep_name)
+                continue
+            try:
+                logger.info("Installing dependency '%s' …", dep_name)
+                self.add(dep_name, install_deps=True)
+            except (ValueError, RuntimeError) as exc:
+                logger.warning(
+                    "Failed to install dependency '%s': %s", dep_name, exc
+                )
 
     @staticmethod
     def _current_ref(repo_path: Path) -> str:
