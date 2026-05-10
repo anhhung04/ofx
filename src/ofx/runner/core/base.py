@@ -36,8 +36,16 @@ class RunnerStateMachine:
                 RunnerStatus.CANCELED,
                 RunnerStatus.FAILED,
             ],
-            RunnerStatus.RUNNING: [RunnerStatus.FINISHED, RunnerStatus.FAILED],
-            RunnerStatus.FINISHED: [RunnerStatus.COMPLETED, RunnerStatus.FAILED],
+            RunnerStatus.RUNNING: [
+                RunnerStatus.FINISHED,
+                RunnerStatus.FAILED,
+                RunnerStatus.CANCELED,
+            ],
+            RunnerStatus.FINISHED: [
+                RunnerStatus.COMPLETED,
+                RunnerStatus.FAILED,
+                RunnerStatus.CANCELED,
+            ],
             RunnerStatus.FAILED: [],
             RunnerStatus.COMPLETED: [],
             RunnerStatus.CANCELED: [],
@@ -161,6 +169,20 @@ class BaseRunner[TModel: BaseModel]:
             await self._post_run()
             # cleanup_registry handled in finally block
             self._state_machine.transition(RunnerStatus.COMPLETED)
+        except (asyncio.CancelledError, KeyboardInterrupt) as e:
+            self._error = f"Cancelled: {type(e).__name__}"
+            if self._state_machine.can_transition(RunnerStatus.CANCELED):
+                self._state_machine.transition(RunnerStatus.CANCELED)
+            elif self._state_machine.current_state not in (
+                RunnerStatus.FAILED,
+                RunnerStatus.CANCELED,
+            ):
+                self._state_machine.transition(RunnerStatus.FAILED)
+            if pre_run_ok:
+                try:
+                    await self._on_failure_cleanup()
+                except Exception as cleanup_exc:
+                    self._log_debug(f"Cleanup after cancellation failed: {cleanup_exc}")
         except Exception as e:
             self._error = str(e)
             if self._state_machine.current_state not in [
@@ -190,22 +212,24 @@ class BaseRunner[TModel: BaseModel]:
             self._emit_event(
                 "runner_finish", {"status": self.status.value, "error": self._error}
             )
+            # Shield cleanup from cancellation so checkpoints and registry
+            # teardown complete even when the task has been cancelled.
             initial_checkpoint_status = self._checkpoint_status()
             try:
-                await self._write_checkpoint(initial_checkpoint_status)
-            except Exception as checkpoint_err:
+                await asyncio.shield(self._write_checkpoint(initial_checkpoint_status))
+            except (asyncio.CancelledError, Exception) as checkpoint_err:
                 self._log_warning(f"checkpoint write failed: {checkpoint_err}")
 
             final_status = self._checkpoint_status()
             if final_status != initial_checkpoint_status:
                 try:
-                    await self._write_checkpoint(final_status)
-                except Exception:
+                    await asyncio.shield(self._write_checkpoint(final_status))
+                except (asyncio.CancelledError, Exception):
                     self._log_warning("final checkpoint update skipped due to error")
 
             try:
-                await cleanup_registry(self._registry)
-            except Exception as cleanup_err:
+                await asyncio.shield(cleanup_registry(self._registry))
+            except (asyncio.CancelledError, Exception) as cleanup_err:
                 self._log_warning(f"registry cleanup failed: {cleanup_err}")
 
             await self._auto_commit_push()

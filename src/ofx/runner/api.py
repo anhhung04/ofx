@@ -2,9 +2,12 @@
 Programmatic API for running OFX workflows.
 """
 
+import asyncio
 import logging
 import re
+import signal
 import tempfile
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -233,8 +236,46 @@ async def run_workflow(
     if quiet:
         runner.log_level = logging.ERROR
 
+    # --- Graceful shutdown signal handling ---
+    _shutting_down = False
+    _runner_task = asyncio.current_task()
+    _registered_signals: list[int] = []
+
+    def _handle_shutdown(sig_num: int) -> None:
+        nonlocal _shutting_down
+        sig_name = signal.Signals(sig_num).name
+        if _shutting_down:
+            logger.warning("Received %s again — forcing exit", sig_name)
+            raise SystemExit(128 + sig_num)
+        _shutting_down = True
+        logger.warning(
+            "Received %s — initiating graceful shutdown...", sig_name
+        )
+        if _runner_task and not _runner_task.done():
+            _runner_task.cancel()
+
+    if threading.current_thread() is threading.main_thread():
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, _handle_shutdown, sig)
+                _registered_signals.append(sig)
+            except (NotImplementedError, OSError):
+                pass  # Windows or restricted environments
+
     try:
         result = await runner.run()
         return result
+    except asyncio.CancelledError:
+        logger.warning("Workflow execution cancelled — collecting partial results")
+        return await runner.get_result()
     finally:
+        # Restore default signal handlers
+        if _registered_signals and threading.current_thread() is threading.main_thread():
+            loop = asyncio.get_running_loop()
+            for sig in _registered_signals:
+                try:
+                    loop.remove_signal_handler(sig)
+                except (NotImplementedError, OSError):
+                    pass
         _cleanup_run(output_dir)
