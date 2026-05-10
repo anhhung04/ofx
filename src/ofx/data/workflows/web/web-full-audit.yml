@@ -1,8 +1,8 @@
 name: web-full-audit
-description:
-  "Comprehensive web application audit — port discovery, fingerprinting, directory brute-forcing, parameter fuzzing, vulnerability scanning (XSS, SQLi, CRLF, command injection), and secret hunting.
-
-  "
+description: >
+  Comprehensive web application audit — port discovery, fingerprinting, directory brute-forcing,
+  parameter fuzzing, vulnerability scanning (XSS, SQLi, SSTI, SSRF, CRLF, command injection),
+  SSL/TLS analysis, JS secret extraction, and secret hunting.
 tags:
   - web
   - audit
@@ -10,6 +10,8 @@ tags:
   - fuzz
   - xss
   - sqli
+  - ssrf
+  - ssti
 dispatch:
   inputs:
     target:
@@ -26,10 +28,17 @@ jobs:
     name: Fingerprinting
     outputs:
       live_urls: '{{ steps["export-info"].outputs.live_urls | default("", true) }}'
+      waf_status: '{{ steps["export-info"].outputs.waf_status | default("unknown", true) }}'
+      baseline_404_size: '{{ steps["baseline-404"].outputs.baseline_404_size | default("", true) }}'
+      baseline_404_status: '{{ steps["baseline-404"].outputs.baseline_404_status | default("", true) }}'
+      baseline_404_title: '{{ steps["baseline-404"].outputs.baseline_404_title | default("", true) }}'
+      allowed_methods: '{{ steps["http-methods"].outputs.allowed_methods | default("", true) }}'
     steps:
       - task: rustscan
         timeout: 10
         name: port-discovery
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           range: 1-10000
@@ -38,6 +47,8 @@ jobs:
       - task: httpx
         timeout: 10
         name: http-probe
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           tech_detect: true
@@ -48,15 +59,56 @@ jobs:
       - task: wafw00f
         timeout: 10
         name: waf-detect
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: whatweb
         timeout: 10
         name: whatweb-scan
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           aggression: 3
+        continue-on-error: true
+      - name: baseline-404
+        script: |
+          import urllib.request, urllib.error, ssl, re
+          target = '{{ inputs.target }}'.rstrip('/')
+          probe = target + '/ofx_nonexistent_8f3k2x1z.html'
+          ctx = ssl.create_default_context()
+          ctx.check_hostname = False
+          ctx.verify_mode = ssl.CERT_NONE
+          try:
+              req = urllib.request.Request(probe, headers={'User-Agent': 'Mozilla/5.0'})
+              resp = urllib.request.urlopen(req, timeout=10, context=ctx)
+              body = resp.read().decode('utf-8', errors='ignore')
+              status = resp.getcode()
+          except urllib.error.HTTPError as e:
+              body = e.read().decode('utf-8', errors='ignore')
+              status = e.code
+          except Exception:
+              body, status = '', 0
+          size = len(body)
+          title_m = re.search(r'<title[^>]*>(.*?)</title>', body, re.I | re.S)
+          title = title_m.group(1).strip()[:80] if title_m else ''
+          add_outputs(baseline_404_size=size, baseline_404_status=status, baseline_404_title=title)
+          print(f"404 baseline: status={status} size={size} title='{title}'")
+        continue-on-error: true
+      - name: http-methods
+        run: |
+          TARGET="{{ inputs.target }}"
+          ALLOWED=""
+          for METHOD in PUT DELETE PATCH OPTIONS TRACE; do
+            CODE=$(curl -sk -o /dev/null -w '%{http_code}' -X "$METHOD" "$TARGET" 2>/dev/null)
+            if [ "$CODE" != "405" ] && [ "$CODE" != "501" ] && [ "$CODE" != "000" ]; then
+              ALLOWED="${ALLOWED}${METHOD}(${CODE}) "
+            fi
+          done
+          echo "allowed_methods=${ALLOWED:-none}" >> "$OFX_OUTPUTS"
+          echo "Allowed methods: ${ALLOWED:-none}"
         continue-on-error: true
       - name: export-info
         script: |
@@ -65,7 +117,50 @@ jobs:
           for item in typed:
               if item.get("_type") == "url" and item.get("status_code", 0) > 0:
                   live.append(item["url"])
-          add_outputs(live_urls='\n'.join(sorted(set(live))))
+
+          waf_typed = {{ steps["waf-detect"].outputs.typed_outputs | default([], true) | tojson }}
+          waf_names = [t.get('name', '') for t in waf_typed if t.get('_type') == 'tag' and t.get('name')]
+          waf_status = ', '.join(waf_names) if waf_names else 'None detected'
+
+          add_outputs(live_urls='\n'.join(sorted(set(live))), waf_status=waf_status)
+
+  ssl-audit:
+    name: SSL/TLS Audit
+    needs:
+      - fingerprint
+    outputs:
+      ssl_vulns: '{{ steps["collect-ssl"].outputs.ssl_vulns | default("0", true) }}'
+      ssl_certs: '{{ steps["collect-ssl"].outputs.ssl_certs | default("0", true) }}'
+    steps:
+      - task: testssl
+        timeout: 15
+        name: testssl-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          vulnerabilities: true
+          protocols: true
+        continue-on-error: true
+      - task: sslscan
+        timeout: 10
+        name: sslscan-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          show_certificate: true
+        continue-on-error: true
+      - name: collect-ssl
+        script: |
+          testssl_t = {{ steps["testssl-scan"].outputs.typed_outputs | default([], true) | tojson }}
+          sslscan_t = {{ steps["sslscan-scan"].outputs.typed_outputs | default([], true) | tojson }}
+          all_items = testssl_t + sslscan_t
+          vulns = [i for i in all_items if i.get('_type') == 'vulnerability']
+          certs = [i for i in all_items if i.get('_type') == 'certificate']
+          add_outputs(ssl_vulns=len(vulns), ssl_certs=len(certs))
+          print(f"SSL: {len(vulns)} vulnerabilities, {len(certs)} certificate findings")
+
   dir-brute:
     name: Directory Brute-Force
     needs:
@@ -77,6 +172,8 @@ jobs:
       - task: feroxbuster
         timeout: 20
         name: feroxbuster-deep
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           wordlist: "{{ inputs.wordlist }}"
@@ -91,6 +188,8 @@ jobs:
       - task: gobuster
         timeout: 10
         name: gobuster-scan
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           mode: dir
@@ -101,6 +200,8 @@ jobs:
       - task: dirsearch
         timeout: 15
         name: dirsearch-scan
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           threads: 30
@@ -121,6 +222,7 @@ jobs:
 
           add_outputs(dir_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_webaudit_dirs.txt", dir_count=len(urls))
           print(f"Discovered {len(urls)} unique URLs/directories")
+
   crawl:
     name: Content Discovery
     needs:
@@ -128,10 +230,13 @@ jobs:
     outputs:
       crawled_file: '{{ steps["collect-crawled"].outputs.crawled_file | default("", true) }}'
       crawl_count: '{{ steps["collect-crawled"].outputs.crawl_count | default("", true) }}'
+      js_findings: '{{ steps["collect-crawled"].outputs.js_findings | default("0", true) }}'
     steps:
       - task: katana
         timeout: 15
         name: katana-crawl
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           depth: 3
@@ -141,6 +246,8 @@ jobs:
       - task: hakrawler
         timeout: 10
         name: hakrawler-crawl
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           depth: 3
@@ -149,6 +256,8 @@ jobs:
       - task: gospider
         timeout: 15
         name: gospider-crawl
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           depth: 2
@@ -156,26 +265,56 @@ jobs:
       - task: gau
         timeout: 10
         name: gau-archive
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           subs: true
         continue-on-error: true
+      - task: waymore
+        timeout: 15
+        name: waymore-archive
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: jsluice
+        timeout: 10
+        name: jsluice-analysis
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
+        continue-on-error: true
       - name: collect-crawled
         script: |
           urls = set()
-          for idx in range(4):
+          for idx in range(5):
               step_data = {{ steps | tojson }}
-              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(str(idx), {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   url = item.get('url', '')
                   if url:
                       urls.add(url)
 
+          js_typed = {{ steps["jsluice-analysis"].outputs.typed_outputs | default([], true) | tojson }}
+          js_count = len(js_typed)
+          for item in js_typed:
+              url = item.get('url', '')
+              if url:
+                  urls.add(url)
+
           with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_webaudit_crawled.txt', 'w') as tf:
               tf.write('\n'.join(sorted(urls)))
 
-          add_outputs(crawled_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_webaudit_crawled.txt", crawl_count=len(urls))
-          print(f"Crawled {len(urls)} unique URLs")
+          add_outputs(
+              crawled_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_webaudit_crawled.txt",
+              crawl_count=len(urls),
+              js_findings=js_count,
+          )
+          print(f"Crawled {len(urls)} unique URLs, {js_count} JS findings")
+
   param-fuzz:
     name: Parameter Discovery & Fuzzing
     needs:
@@ -188,6 +327,8 @@ jobs:
       - task: arjun
         timeout: 10
         name: arjun-params
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           threads: 20
@@ -195,6 +336,8 @@ jobs:
       - task: x8
         timeout: 10
         name: x8-params
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           method: GET
@@ -202,6 +345,8 @@ jobs:
       - task: paramspider
         timeout: 10
         name: paramspider-discover
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
@@ -210,7 +355,7 @@ jobs:
           param_urls = set()
           for idx in range(3):
               step_data = {{ steps | tojson }}
-              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(str(idx), {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   url = item.get('url', '')
                   if url and ('=' in url or '?' in url):
@@ -221,22 +366,27 @@ jobs:
 
           add_outputs(param_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_param_urls.txt", param_count=len(param_urls))
           print(f"Discovered {len(param_urls)} parameterized URLs")
+
   vuln-scan:
     name: Vulnerability Scanning
     needs:
       - param-fuzz
     outputs:
-      total_vulns: '{{ steps["collect-vulns"].outputs.total_vulns | default("", true) }}'
-      critical_count: '{{ steps["collect-vulns"].outputs.critical_count | default("", true) }}'
-      high_count: '{{ steps["collect-vulns"].outputs.high_count | default("", true) }}'
-      xss_count: '{{ steps["collect-vulns"].outputs.xss_count | default("", true) }}'
-      sqli_count: '{{ steps["collect-vulns"].outputs.sqli_count | default("", true) }}'
-      cmdi_count: '{{ steps["collect-vulns"].outputs.cmdi_count | default("", true) }}'
-      crlf_count: '{{ steps["collect-vulns"].outputs.crlf_count | default("", true) }}'
+      total_vulns: '{{ steps["collect-vulns"].outputs.total_vulns | default("0", true) }}'
+      critical_count: '{{ steps["collect-vulns"].outputs.critical_count | default("0", true) }}'
+      high_count: '{{ steps["collect-vulns"].outputs.high_count | default("0", true) }}'
+      xss_count: '{{ steps["collect-vulns"].outputs.xss_count | default("0", true) }}'
+      sqli_count: '{{ steps["collect-vulns"].outputs.sqli_count | default("0", true) }}'
+      cmdi_count: '{{ steps["collect-vulns"].outputs.cmdi_count | default("0", true) }}'
+      crlf_count: '{{ steps["collect-vulns"].outputs.crlf_count | default("0", true) }}'
+      ssrf_count: '{{ steps["collect-vulns"].outputs.ssrf_count | default("0", true) }}'
+      ssti_count: '{{ steps["collect-vulns"].outputs.ssti_count | default("0", true) }}'
     steps:
       - task: nuclei
         timeout: 20
         name: nuclei-scan
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           severity: critical,high,medium
@@ -244,14 +394,20 @@ jobs:
       - task: dalfox
         timeout: 15
         name: xss-scan
+        retry: 2
+        retry-delay: 5
+        run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file | default(inputs.target, true) }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
         continue-on-error: true
       - task: sqlmap
         timeout: 30
         name: sqli-scan
+        retry: 2
+        retry-delay: 5
+        run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file | default(inputs.target, true) }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
           batch: true
           level: 3
           risk: 2
@@ -260,23 +416,48 @@ jobs:
       - task: commix
         timeout: 20
         name: cmdi-scan
+        retry: 2
+        retry-delay: 5
+        run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file | default(inputs.target, true) }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
           batch: true
           level: 2
         continue-on-error: true
       - task: crlfuzz
-        name: crlf-scan
         timeout: 10
+        name: crlf-scan
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
         continue-on-error: true
       - task: nikto
         timeout: 15
         name: nikto-scan
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ inputs.target }}"
           maxtime: 900
+        continue-on-error: true
+      - task: ssrfmap
+        timeout: 15
+        name: ssrf-scan
+        retry: 2
+        retry-delay: 5
+        run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
+        continue-on-error: true
+      - task: tinja
+        timeout: 15
+        name: ssti-scan
+        retry: 2
+        retry-delay: 5
+        run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
+        with:
+          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
         continue-on-error: true
       - name: collect-vulns
         script: |
@@ -286,33 +467,70 @@ jobs:
           cmdi_v = {{ vulns(steps["cmdi-scan"].outputs.typed_outputs) | tojson }}
           crlf_v = {{ vulns(steps["crlf-scan"].outputs.typed_outputs) | tojson }}
           nikto_v = {{ vulns(steps["nikto-scan"].outputs.typed_outputs) | tojson }}
+          ssrf_v = {{ vulns(steps["ssrf-scan"].outputs.typed_outputs) | tojson }}
+          ssti_v = {{ vulns(steps["ssti-scan"].outputs.typed_outputs) | tojson }}
 
-          total = len(nuclei_v) + len(xss_v) + len(sqli_v) + len(cmdi_v) + len(crlf_v) + len(nikto_v)
-          critical = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'critical')
-          high = sum(1 for v in nuclei_v + xss_v + sqli_v + cmdi_v if v.get('severity') == 'high')
+          all_v = nuclei_v + xss_v + sqli_v + cmdi_v + crlf_v + nikto_v + ssrf_v + ssti_v
+          total = len(all_v)
+          critical = sum(1 for v in all_v if v.get('severity') == 'critical')
+          high = sum(1 for v in all_v if v.get('severity') == 'high')
 
-          add_outputs(total_vulns=total, critical_count=critical, high_count=high, xss_count=len(xss_v), sqli_count=len(sqli_v), cmdi_count=len(cmdi_v), crlf_count=len(crlf_v))
+          add_outputs(
+              total_vulns=total, critical_count=critical, high_count=high,
+              xss_count=len(xss_v), sqli_count=len(sqli_v), cmdi_count=len(cmdi_v),
+              crlf_count=len(crlf_v), ssrf_count=len(ssrf_v), ssti_count=len(ssti_v),
+          )
           print(f"Total: {total} vulns (C:{critical} H:{high})")
-          print(f"  XSS: {len(xss_v)}, SQLi: {len(sqli_v)}, CMDi: {len(cmdi_v)}, CRLF: {len(crlf_v)}")
+          print(f"  XSS:{len(xss_v)} SQLi:{len(sqli_v)} CMDi:{len(cmdi_v)} CRLF:{len(crlf_v)} SSRF:{len(ssrf_v)} SSTI:{len(ssti_v)}")
+
   secrets:
     name: Secret Hunting
-    outputs:
-      typed_outputs: '{{ steps["nuclei-secrets"].outputs.typed_outputs | default([], true) }}'
     needs:
       - crawl
+    outputs:
+      typed_outputs: '{{ steps["collect-secrets"].outputs.typed_outputs | default([], true) }}'
+      secret_count: '{{ steps["collect-secrets"].outputs.secret_count | default("0", true) }}'
     steps:
       - task: nuclei
         timeout: 15
         name: nuclei-secrets
+        retry: 2
+        retry-delay: 5
         with:
           target: "{{ jobs['crawl'].outputs.crawled_file | default(inputs.target, true) }}"
           tags: exposure,token,secret
         continue-on-error: true
+      - task: trufflehog
+        timeout: 15
+        name: trufflehog-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: gitleaks
+        timeout: 10
+        name: gitleaks-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - name: collect-secrets
+        script: |
+          nuclei_s = {{ steps["nuclei-secrets"].outputs.typed_outputs | default([], true) | tojson }}
+          trufflehog_s = {{ steps["trufflehog-scan"].outputs.typed_outputs | default([], true) | tojson }}
+          gitleaks_s = {{ steps["gitleaks-scan"].outputs.typed_outputs | default([], true) | tojson }}
+          all_secrets = nuclei_s + trufflehog_s + gitleaks_s
+          add_outputs(typed_outputs=all_secrets, secret_count=len(all_secrets))
+          print(f"Secrets: {len(nuclei_s)} nuclei, {len(trufflehog_s)} trufflehog, {len(gitleaks_s)} gitleaks = {len(all_secrets)} total")
+
   summary:
     name: Web Audit Summary
     needs:
       - vuln-scan
       - secrets
+      - ssl-audit
     steps:
       - name: report
         run: |
@@ -320,19 +538,35 @@ jobs:
           echo " WEB FULL AUDIT COMPLETE: {{ inputs.target }}"
           echo "======================================================"
           echo ""
+          echo "--- Fingerprint ---"
+          echo "WAF: {{ jobs.fingerprint.outputs.waf_status | default('unknown', true) }}"
+          echo "404 Baseline: size={{ jobs.fingerprint.outputs.baseline_404_size | default('N/A', true) }} status={{ jobs.fingerprint.outputs.baseline_404_status | default('N/A', true) }} title='{{ jobs.fingerprint.outputs.baseline_404_title | default('', true) }}'"
+          echo "HTTP Methods: {{ jobs.fingerprint.outputs.allowed_methods | default('N/A', true) }}"
+          echo ""
           echo "--- Discovery ---"
-          echo "Directories found: {{ jobs['dir-brute'].outputs.dir_count }}"
-          echo "URLs crawled: {{ jobs.crawl.outputs.crawl_count }}"
-          echo "Parameterized URLs: {{ jobs['param-fuzz'].outputs.param_count }}"
+          echo "Directories found: {{ jobs['dir-brute'].outputs.dir_count | default('0', true) }}"
+          echo "URLs crawled: {{ jobs.crawl.outputs.crawl_count | default('0', true) }}"
+          echo "JS findings: {{ jobs.crawl.outputs.js_findings | default('0', true) }}"
+          echo "Parameterized URLs: {{ jobs['param-fuzz'].outputs.param_count | default('0', true) }}"
+          echo ""
+          echo "--- SSL/TLS ---"
+          echo "SSL vulnerabilities: {{ jobs['ssl-audit'].outputs.ssl_vulns | default('0', true) }}"
+          echo "Certificate issues: {{ jobs['ssl-audit'].outputs.ssl_certs | default('0', true) }}"
           echo ""
           echo "--- Vulnerabilities ---"
-          echo "Total findings: {{ jobs['vuln-scan'].outputs.total_vulns }}"
-          echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
-          echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
-          echo "  XSS: {{ jobs['vuln-scan'].outputs.xss_count }}"
-          echo "  SQLi: {{ jobs['vuln-scan'].outputs.sqli_count }}"
-          echo "  Command Injection: {{ jobs['vuln-scan'].outputs.cmdi_count }}"
-          echo "  CRLF Injection: {{ jobs['vuln-scan'].outputs.crlf_count }}"
+          echo "Total findings: {{ jobs['vuln-scan'].outputs.total_vulns | default('0', true) }}"
+          echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count | default('0', true) }}"
+          echo "  High: {{ jobs['vuln-scan'].outputs.high_count | default('0', true) }}"
+          echo "  XSS: {{ jobs['vuln-scan'].outputs.xss_count | default('0', true) }}"
+          echo "  SQLi: {{ jobs['vuln-scan'].outputs.sqli_count | default('0', true) }}"
+          echo "  Command Injection: {{ jobs['vuln-scan'].outputs.cmdi_count | default('0', true) }}"
+          echo "  CRLF Injection: {{ jobs['vuln-scan'].outputs.crlf_count | default('0', true) }}"
+          echo "  SSRF: {{ jobs['vuln-scan'].outputs.ssrf_count | default('0', true) }}"
+          echo "  SSTI: {{ jobs['vuln-scan'].outputs.ssti_count | default('0', true) }}"
+          echo ""
+          echo "--- Secrets ---"
+          echo "Secret findings: {{ jobs.secrets.outputs.secret_count | default('0', true) }}"
+          echo "======================================================"
         log-stdout: true
       - name: export-to-project
         script: |
@@ -353,16 +587,12 @@ jobs:
                   print('  [+] web/directories.txt')
 
               # crawled URLs
-              d = '{{ vars.project_web }}'
-              Path(d).mkdir(parents=True, exist_ok=True)
               src = '''{{ jobs['crawl'].outputs.crawled_file | default('', true) }}'''
               if src and Path(src).is_file():
                   shutil.copy2(src, Path(d) / 'crawled-urls.txt')
                   print('  [+] web/crawled-urls.txt')
 
               # param URLs
-              d = '{{ vars.project_web }}'
-              Path(d).mkdir(parents=True, exist_ok=True)
               src = '''{{ jobs['param-fuzz'].outputs.param_file | default('', true) }}'''
               if src and Path(src).is_file():
                   shutil.copy2(src, Path(d) / 'param-urls.txt')
@@ -377,6 +607,7 @@ jobs:
                   {{ jobs['param-fuzz'].outputs.typed_outputs | default([], true) | tojson }},
                   {{ jobs['vuln-scan'].outputs.typed_outputs | default([], true) | tojson }},
                   {{ jobs['secrets'].outputs.typed_outputs | default([], true) | tojson }},
+                  {{ jobs['ssl-audit'].outputs.typed_outputs | default([], true) | tojson }},
               ]:
                   all_typed.extend(typed)
               summaries = export_typed_outputs(project, all_typed)
