@@ -1,5 +1,6 @@
 """Template resolver for Jinja2-based workflow templates"""
 
+import asyncio
 import json
 import logging
 import threading
@@ -256,8 +257,10 @@ class TemplateResolver:
 
             runner = context_vars.get("runner")
             if runner is not None and not jobs_data and not steps_data:
-                jobs_data = await self._jobs_from_runner(runner)
-                steps_data = await self._steps_from_runner(runner)
+                jobs_data, steps_data = await asyncio.gather(
+                    self._jobs_from_runner(runner),
+                    self._steps_from_runner(runner),
+                )
                 memo["jobs_data"] = jobs_data
                 memo["steps_data"] = steps_data
 
@@ -283,44 +286,73 @@ class TemplateResolver:
             return {}
 
         jobs: dict[str, Any] = {}
-        for child in getattr(container, "_runners", {}).values():
-            await self._collect_job_output(child, jobs)
+        # Parallelize registry lookups across all child runners
+        tasks = [
+            self._collect_job_output(child, jobs)
+            for child in getattr(container, "_runners", {}).values()
+        ]
+        await asyncio.gather(*tasks)
         return jobs
 
     async def _collect_job_output(self, runner: Any, jobs: dict[str, Any]) -> None:
         model = getattr(runner, "model", None)
+        children = list(getattr(runner, "_runners", {}).values())
+
+        # Collect all (job_id, runner) pairs that need registry lookups
+        targets: list[tuple[str, Any]] = []
         if model is not None and hasattr(model, "jid"):
             job_id = getattr(model, "jid", None) or getattr(
                 model, "original_job_id", ""
             )
             if job_id:
-                outputs = await runner.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
-                jobs[job_id] = {"outputs": outputs}
+                targets.append((job_id, runner))
 
-        for child in getattr(runner, "_runners", {}).values():
-            model = getattr(child, "model", None)
-            if model is None or not hasattr(model, "jid"):
+        for child in children:
+            child_model = getattr(child, "model", None)
+            if child_model is None or not hasattr(child_model, "jid"):
                 continue
-            job_id = getattr(model, "jid", None) or getattr(
-                model, "original_job_id", ""
+            job_id = getattr(child_model, "jid", None) or getattr(
+                child_model, "original_job_id", ""
             )
             if not job_id:
                 continue
-            outputs = await child.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
-            jobs[job_id] = {"outputs": outputs}
+            targets.append((job_id, child))
+
+        if not targets:
+            return
+
+        # Batch all reg_get calls in parallel instead of sequential N+1
+        results = await asyncio.gather(
+            *(r.reg_get(RunnerRegistryKeys.OUTPUTS) for _, r in targets)
+        )
+        # Dict updates between awaits are safe in asyncio's single-threaded model
+        for (job_id, _), outputs in zip(targets, results, strict=True):
+            jobs[job_id] = {"outputs": outputs or {}}
 
     async def _steps_from_runner(self, runner: Any) -> _StepAccessor:
         container = self._find_container_with_child_attr(runner, "step_index")
         if not container:
             return _StepAccessor()
 
-        steps = _StepAccessor()
+        # Collect targets needing registry lookups
+        targets: list[tuple[Any, Any]] = []
         for child in getattr(container, "_runners", {}).values():
             model = getattr(child, "model", None)
             if model is None or not hasattr(model, "step_index"):
                 continue
-            raw = await child.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
-            outputs = {"typed_outputs": [], **raw}
+            targets.append((model, child))
+
+        if not targets:
+            return _StepAccessor()
+
+        # Batch all reg_get calls in parallel instead of sequential N+1
+        results = await asyncio.gather(
+            *(child.reg_get(RunnerRegistryKeys.OUTPUTS) for _, child in targets)
+        )
+
+        steps = _StepAccessor()
+        for (model, _), raw in zip(targets, results, strict=True):
+            outputs = {"typed_outputs": [], **(raw or {})}
             entry = {
                 "index": getattr(model, "step_index", None),
                 "name": getattr(model, "name", None),
