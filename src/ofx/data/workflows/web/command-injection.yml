@@ -26,6 +26,7 @@ jobs:
       commix_vuln_param: '{{ steps["collect-commix"].outputs.commix_vuln_param | default("", true) }}'
     steps:
     - task: commix
+      log-command: true
       timeout: 15
       name: commix-scan
       with:
@@ -52,6 +53,7 @@ jobs:
       nuclei_vuln_count: '{{ steps["collect-nuclei"].outputs.nuclei_vuln_count | default("", true) }}'
     steps:
     - task: nuclei
+      log-command: true
       timeout: 20
       name: nuclei-cmdi
       with:

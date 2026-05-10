@@ -124,7 +124,7 @@ def find_all_workflows(search_dirs: list[Path]) -> list[Path]:
     """
     from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
-    workflow_files = []
+    workflow_files: list[Path] = []
     for directory in search_dirs:
         if not directory.exists():
             continue

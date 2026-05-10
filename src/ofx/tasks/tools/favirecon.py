@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
@@ -15,9 +13,7 @@ class FavireconTask(Task):
     cmd = "favirecon"
     description = "Favicon hash technology detection"
     category = "web/recon"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/edoardottt/favirecon/cmd/favirecon@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/edoardottt/favirecon/cmd/favirecon@latest"
     output_types = [Tag, Url]
 
     opts = {
@@ -36,12 +32,8 @@ class FavireconTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[Tag | Url]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         url = data.get("url", "")
@@ -64,4 +56,3 @@ class FavireconTask(Task):
             results.append(Url(url=url))
 
         return results
-

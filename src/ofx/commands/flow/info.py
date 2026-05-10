@@ -83,9 +83,11 @@ def _build_inputs_table(workflow: Workflow) -> Table | None:
     for name, inp in workflow.dispatch.inputs.items():
         req = "✓" if inp.required else ""
         default = str(inp.default) if inp.default is not None else "—"
-        alias = inp.alias or "—"
+        alias_val = (
+            ", ".join(inp.alias) if isinstance(inp.alias, list) else (inp.alias or "—")
+        )
         inp_type = inp.type or "string"
-        table.add_row(name, inp_type, req, default, alias)
+        table.add_row(name, inp_type, req, default, alias_val)
 
     return table
 
@@ -125,7 +127,9 @@ def _build_jobs_tree(workflow: Workflow, detailed: bool) -> Tree:
 
             if detailed:
                 for step in job.steps:
-                    step_label = f"[white]{step.name}[/] [dim]{_step_type_label(step)}[/]"
+                    step_label = (
+                        f"[white]{step.name}[/] [dim]{_step_type_label(step)}[/]"
+                    )
                     if step.timeout and step.timeout != 1440:
                         step_label += f" [dim]⏱{step.timeout}m[/]"
                     job_branch.add(step_label)
@@ -188,14 +192,22 @@ def show_info(workflow_name: str, detailed: bool = False) -> None:
     try:
         workflow = _find_workflow_fuzzy(workflow_name)
     except Exception as e:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Workflow Not Found", f"Could not find workflow '{workflow_name}'", str(e))
-        return
+        error_exit(
+            "Workflow Not Found", f"Could not find workflow '{workflow_name}'", str(e)
+        )
 
     # Overview
     overview = _build_overview_table(workflow)
-    console.print(Panel(overview, title=f"[bold]📋 {workflow.name}[/]", border_style="cyan", padding=(1, 2)))
+    console.print(
+        Panel(
+            overview,
+            title=f"[bold]📋 {workflow.name}[/]",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+    )
 
     # Inputs
     inputs_table = _build_inputs_table(workflow)

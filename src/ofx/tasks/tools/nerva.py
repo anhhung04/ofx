@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Port, Tag
 from ofx.tasks.registry import TaskRegistry
@@ -19,10 +17,16 @@ class NervaTask(Task):
     output_types = [Port, Tag]
 
     opts = {
-        "workers": OptDef(flag="-W", type=int, help="Number of concurrent scan workers"),
+        "workers": OptDef(
+            flag="-W", type=int, help="Number of concurrent scan workers"
+        ),
         "timeout": OptDef(flag="-w", type=int, help="Timeout in milliseconds"),
-        "rate_limit": OptDef(flag="-R", type=float, help="Max scans per second (0=unlimited)"),
-        "max_host_conn": OptDef(flag="-H", type=int, help="Max concurrent connections per host IP"),
+        "rate_limit": OptDef(
+            flag="-R", type=float, help="Max scans per second (0=unlimited)"
+        ),
+        "max_host_conn": OptDef(
+            flag="-H", type=int, help="Max concurrent connections per host IP"
+        ),
         "fast": OptDef(flag="-f", is_flag=True, help="Fast mode"),
         "udp": OptDef(flag="-U", is_flag=True, help="Run UDP plugins"),
         "sctp": OptDef(flag="-S", is_flag=True, help="Run SCTP plugins (Linux only)"),
@@ -38,12 +42,8 @@ class NervaTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[Port | Tag]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         ip = data.get("ip", data.get("host", ""))
@@ -95,4 +95,3 @@ class NervaTask(Task):
             )
 
         return results
-

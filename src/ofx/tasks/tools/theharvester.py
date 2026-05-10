@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -32,9 +30,7 @@ class TheHarvesterTask(Task):
         "limit": OptDef(flag="-l", type=int, help="Limit results"),
         "start": OptDef(flag="-S", type=int, help="Start result number"),
         "shodan": OptDef(flag="-s", is_flag=True, help="Use Shodan"),
-        "dns_brute": OptDef(
-            flag="-c", is_flag=True, help="DNS brute force"
-        ),
+        "dns_brute": OptDef(flag="-c", is_flag=True, help="DNS brute force"),
         "virtual_host": OptDef(
             flag="-v", is_flag=True, help="Virtual host verification"
         ),
@@ -73,12 +69,7 @@ class TheHarvesterTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            output_file = Path(_path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         if self.input_flag:
@@ -144,11 +135,7 @@ class TheHarvesterTask(Task):
                 # Strip trailing IP in format "host:ip"
                 host = host.split(":")[0].strip()
                 if host:
-                    domain = (
-                        ".".join(host.rsplit(".", 2)[-2:])
-                        if "." in host
-                        else host
-                    )
+                    domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
                     results.append(Subdomain(host=host, domain=domain))
 
         return results

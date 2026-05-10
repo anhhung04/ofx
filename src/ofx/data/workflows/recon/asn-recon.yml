@@ -135,3 +135,4 @@ jobs:
 
         add_outputs(asn=f"AS{asn}", prefix_count=len(prefixes), results_file=out_file)
       log-stdout: true
+      log-command: true

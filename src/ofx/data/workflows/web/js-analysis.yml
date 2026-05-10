@@ -26,6 +26,7 @@ jobs:
       url_count: '{{ steps["extract-js-urls"].outputs.url_count | default("", true) }}'
     steps:
       - task: katana
+        log-command: true
         timeout: 15
         name: katana-js-crawl
         with:
@@ -35,6 +36,7 @@ jobs:
         continue-on-error: true
 
       - task: httpx
+        log-command: true
         timeout: 10
         name: httpx-probe
         with:
@@ -44,6 +46,7 @@ jobs:
         continue-on-error: true
 
       - task: gau
+        log-command: true
         timeout: 10
         name: gau-archive
         with:
@@ -96,6 +99,7 @@ jobs:
       high_count: '{{ steps["js-summary"].outputs.high_count | default("", true) }}'
     steps:
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-exposure
         with:

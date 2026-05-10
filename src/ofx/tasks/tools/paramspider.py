@@ -17,7 +17,9 @@ class ParamspiderTask(Task):
     output_types = [Url]
 
     opts = {
-        "exclude": OptDef(flag="--exclude", type=str, help="Comma-separated extensions to exclude"),
+        "exclude": OptDef(
+            flag="--exclude", type=str, help="Comma-separated extensions to exclude"
+        ),
         "subs": OptDef(flag="-s", is_flag=True, help="Include subdomains"),
         "level": OptDef(flag="--level", type=str, help="URL path level"),
     }
@@ -37,4 +39,3 @@ class ParamspiderTask(Task):
         if "://" in line or line.startswith("/"):
             return [Url(url=line)]
         return []
-

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -17,9 +16,7 @@ class JsluiceTask(Task):
     cmd = "jsluice"
     description = "JavaScript secret and endpoint extraction"
     category = "web/js"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/BishopFox/jsluice/cmd/jsluice@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/BishopFox/jsluice/cmd/jsluice@latest"
     output_types = [Url, Tag]
 
     opts = {
@@ -58,12 +55,8 @@ class JsluiceTask(Task):
         return " ".join(parts), None
 
     def parse_line(self, line: str) -> list[Url | Tag]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         kind = data.get("kind", "")
@@ -93,4 +86,3 @@ class JsluiceTask(Task):
             )
 
         return results
-

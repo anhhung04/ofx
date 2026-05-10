@@ -9,9 +9,7 @@ from ofx.commands.flow.info import _find_workflow_fuzzy, _step_type_label
 from ofx.settings import get_console
 
 
-def _diff_dicts(
-    a: dict, b: dict, label: str
-) -> list[tuple[str, str, str]]:
+def _diff_dicts(a: dict, b: dict, label: str) -> list[tuple[str, str, str]]:
     """Compare two dicts, return list of (key, status, detail) tuples."""
     rows: list[tuple[str, str, str]] = []
     all_keys = sorted(set(a) | set(b))
@@ -21,7 +19,9 @@ def _diff_dicts(
         elif k not in b:
             rows.append((k, "[red]- removed[/]", str(a[k])[:60]))
         elif str(a[k]) != str(b[k]):
-            rows.append((k, "[yellow]~ changed[/]", f"{str(a[k])[:30]} → {str(b[k])[:30]}"))
+            rows.append(
+                (k, "[yellow]~ changed[/]", f"{str(a[k])[:30]} → {str(b[k])[:30]}")
+            )
     return rows
 
 
@@ -38,18 +38,16 @@ def show_diff(name_a: str, name_b: str) -> None:
     try:
         wf_a = _find_workflow_fuzzy(name_a)
     except Exception as e:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Workflow Not Found", str(e))
-        return
+        error_exit("Workflow Not Found", str(e))
 
     try:
         wf_b = _find_workflow_fuzzy(name_b)
     except Exception as e:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Workflow Not Found", str(e))
-        return
+        error_exit("Workflow Not Found", str(e))
 
     has_diff = False
 
@@ -66,7 +64,11 @@ def show_diff(name_a: str, name_b: str) -> None:
 
     fields = [
         ("name", wf_a.name, wf_b.name),
-        ("description", wf_a.description.split("\n")[0][:60], wf_b.description.split("\n")[0][:60]),
+        (
+            "description",
+            wf_a.description.split("\n")[0][:60],
+            wf_b.description.split("\n")[0][:60],
+        ),
         ("tags", ", ".join(sorted(wf_a.tags)), ", ".join(sorted(wf_b.tags))),
         ("jobs", str(len(wf_a.jobs)), str(len(wf_b.jobs))),
         (
@@ -113,17 +115,13 @@ def show_diff(name_a: str, name_b: str) -> None:
         has_diff = True
         for jid in added_jobs:
             job_b = wf_b.jobs[jid]
-            tree.add(
-                f"[green]+ {jid}[/] ({len(job_b.steps)} steps)"
-            )
+            tree.add(f"[green]+ {jid}[/] ({len(job_b.steps)} steps)")
 
     if removed_jobs:
         has_diff = True
         for jid in removed_jobs:
             job_a = wf_a.jobs[jid]
-            tree.add(
-                f"[red]- {jid}[/] ({len(job_a.steps)} steps)"
-            )
+            tree.add(f"[red]- {jid}[/] ({len(job_a.steps)} steps)")
 
     for jid in common_jobs:
         job_a = wf_a.jobs[jid]
@@ -133,8 +131,12 @@ def show_diff(name_a: str, name_b: str) -> None:
         # Compare job fields
         if job_a.name != job_b.name:
             changes.append(f"name: {job_a.name} → {job_b.name}")
-        needs_a = sorted(job_a.needs if isinstance(job_a.needs, list) else [job_a.needs])
-        needs_b = sorted(job_b.needs if isinstance(job_b.needs, list) else [job_b.needs])
+        needs_a = sorted(
+            job_a.needs if isinstance(job_a.needs, list) else [job_a.needs]
+        )
+        needs_b = sorted(
+            job_b.needs if isinstance(job_b.needs, list) else [job_b.needs]
+        )
         if needs_a != needs_b:
             changes.append(f"needs: {needs_a} → {needs_b}")
         if len(job_a.steps) != len(job_b.steps):
@@ -159,18 +161,26 @@ def show_diff(name_a: str, name_b: str) -> None:
                 list(steps_a.keys()), list(steps_b.keys())
             )
             for sn in added_s:
-                job_branch.add(f"  [green]+ step: {sn}[/] ({_step_type_label(steps_b[sn])})")
+                job_branch.add(
+                    f"  [green]+ step: {sn}[/] ({_step_type_label(steps_b[sn])})"
+                )
             for sn in removed_s:
-                job_branch.add(f"  [red]- step: {sn}[/] ({_step_type_label(steps_a[sn])})")
+                job_branch.add(
+                    f"  [red]- step: {sn}[/] ({_step_type_label(steps_a[sn])})"
+                )
             for sn in common_s:
                 sa, sb = steps_a[sn], steps_b[sn]
                 step_changes: list[str] = []
                 if sa.get_run_type() != sb.get_run_type():
-                    step_changes.append(f"type: {sa.get_run_type().name} → {sb.get_run_type().name}")
+                    step_changes.append(
+                        f"type: {sa.get_run_type().name} → {sb.get_run_type().name}"
+                    )
                 if sa.timeout != sb.timeout:
                     step_changes.append(f"timeout: {sa.timeout} → {sb.timeout}")
                 if sa.continue_on_error != sb.continue_on_error:
-                    step_changes.append(f"continue-on-error: {sa.continue_on_error} → {sb.continue_on_error}")
+                    step_changes.append(
+                        f"continue-on-error: {sa.continue_on_error} → {sb.continue_on_error}"
+                    )
                 if sa.retry != sb.retry:
                     step_changes.append(f"retry: {sa.retry} → {sb.retry}")
                 if step_changes:

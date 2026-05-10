@@ -16,7 +16,7 @@ jobs:
         env:
           VAR: value
         timeout: 10
-        continue_on_error: true
+        continue-on-error: true
 ```
 
 ---
@@ -60,7 +60,60 @@ If the expression resolves to an invalid value, a default of 60 minutes is used 
 - Use `script_file:` to execute an existing Python file (resolved relative to the workflow directory)
 - Use `uses:` to call a reusable workflow
 - Use `task:` to run a pre-built security tool wrapper (see [Tasks](../tasks.md))
-- Use `run_if:` for conditional logic
+- Use `if:` for conditional logic
+
+---
+
+## Task Steps
+
+Task steps run pre-built tool wrappers that handle option mapping, execution, and output parsing automatically. The `with:` block must include `target` (or `targets`) plus any tool-specific options:
+
+```yaml
+steps:
+  - task: nmap
+    name: port-scan
+    with:
+      target: "{{ inputs.target }}"
+      ports: "80,443,8080"
+      version_detection: true
+
+  - task: nuclei
+    name: vuln-scan
+    with:
+      target: "{{ inputs.target }}"
+      severity: "critical,high"
+      tags: "cve"
+```
+
+**Multiple targets** — Use `targets` (plural) or a comma-separated string:
+
+```yaml
+  - task: httpx
+    with:
+      targets: "a.com,b.com,c.com"       # comma-separated
+  - task: httpx
+    with:
+      targets: "{{ inputs.target_list }}"  # from workflow input
+```
+
+**Credential storage** — Task steps producing `UserAccount` outputs can auto-store them:
+
+```yaml
+  - task: maigret
+    store-creds: true
+    with:
+      target: "username"
+```
+
+Task outputs include raw `stdout` and structured `typed_outputs` (Port, Url, Vulnerability, Certificate, Exploit, UserAccount, etc.) accessible via template helpers:
+
+```yaml
+  - run: |
+      echo "Ports: {{ ports(steps['port-scan'].outputs.typed_outputs) | map(attribute='host_port') | join(', ') }}"
+      echo "Vulns: {{ vulns(steps['vuln-scan'].outputs.typed_outputs) | length }}"
+```
+
+For the full list of available tasks and options, see the [Tasks guide](../tasks.md).
 
 ---
 

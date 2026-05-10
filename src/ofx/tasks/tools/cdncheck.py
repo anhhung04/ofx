@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Ip, Tag
 from ofx.tasks.registry import TaskRegistry
@@ -15,9 +13,7 @@ class CdncheckTask(Task):
     cmd = "cdncheck"
     description = "Identify CDN/WAF/cloud providers for IPs and domains"
     category = "recon/cdn"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
     output_types = [Tag, Ip]
 
     opts = {
@@ -47,12 +43,8 @@ class CdncheckTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[Tag | Ip]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         ip = data.get("ip", data.get("input", ""))
@@ -64,15 +56,11 @@ class CdncheckTask(Task):
 
         cdn_name = data.get("cdn_name", "")
         if cdn_name:
-            results.append(
-                Tag(name=cdn_name, value=cdn_name, match=ip, category="cdn")
-            )
+            results.append(Tag(name=cdn_name, value=cdn_name, match=ip, category="cdn"))
 
         waf_name = data.get("waf_name", "")
         if waf_name:
-            results.append(
-                Tag(name=waf_name, value=waf_name, match=ip, category="waf")
-            )
+            results.append(Tag(name=waf_name, value=waf_name, match=ip, category="waf"))
 
         cloud_name = data.get("cloud_name", "")
         if cloud_name:
@@ -88,4 +76,3 @@ class CdncheckTask(Task):
             )
 
         return results
-

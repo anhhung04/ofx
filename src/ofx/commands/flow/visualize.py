@@ -45,7 +45,11 @@ def _build_dag_data(workflow: Workflow) -> dict[str, Any]:
     for jid, job in workflow.jobs.items():
         jobs_data[jid] = {
             "name": job.name or jid,
-            "needs": job.needs if isinstance(job.needs, list) else [job.needs] if job.needs else [],
+            "needs": job.needs
+            if isinstance(job.needs, list)
+            else [job.needs]
+            if job.needs
+            else [],
             "steps": len(job.steps),
             "cloud": bool(job.cloud),
             "matrix": bool(job.strategy and job.strategy.matrix),
@@ -59,7 +63,13 @@ def _build_dag_data(workflow: Workflow) -> dict[str, Any]:
         "dependencies": [
             {"from": dep, "to": jid}
             for jid, job in workflow.jobs.items()
-            for dep in (job.needs if isinstance(job.needs, list) else [job.needs] if job.needs else [])
+            for dep in (
+                job.needs
+                if isinstance(job.needs, list)
+                else [job.needs]
+                if job.needs
+                else []
+            )
             if dep
         ],
     }
@@ -123,7 +133,13 @@ def _render_terminal(workflow: Workflow, detailed: bool) -> None:
         # Render job boxes for this stage
         for jid in stage_jobs:
             job: Job = workflow.jobs[jid]
-            needs = job.needs if isinstance(job.needs, list) else [job.needs] if job.needs else []
+            needs = (
+                job.needs
+                if isinstance(job.needs, list)
+                else [job.needs]
+                if job.needs
+                else []
+            )
 
             # Build box content
             box_lines: list[str] = []
@@ -149,7 +165,15 @@ def _render_terminal(workflow: Workflow, detailed: bool) -> None:
 
             if detailed:
                 for step in job.steps:
-                    kind = "task" if step.task else "uses" if step.uses else "run" if step.run else "script"
+                    kind = (
+                        "task"
+                        if step.task
+                        else "uses"
+                        if step.uses
+                        else "run"
+                        if step.run
+                        else "script"
+                    )
                     box_lines.append(f"  • {step.name} [{kind}]")
                 if job.outputs:
                     box_lines.append(f"  ↳ outputs: {', '.join(job.outputs.keys())}")
@@ -206,7 +230,13 @@ def _render_dot(workflow: Workflow) -> str:
 
     # Edges
     for jid, job in workflow.jobs.items():
-        needs = job.needs if isinstance(job.needs, list) else [job.needs] if job.needs else []
+        needs = (
+            job.needs
+            if isinstance(job.needs, list)
+            else [job.needs]
+            if job.needs
+            else []
+        )
         for dep in needs:
             if dep:
                 lines.append(f'  "{dep}" -> "{jid}";')
@@ -232,10 +262,11 @@ def visualize(
     try:
         workflow = _find_workflow_fuzzy(workflow_name)
     except Exception as e:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Workflow Not Found", f"Could not find workflow '{workflow_name}'", str(e))
-        return
+        error_exit(
+            "Workflow Not Found", f"Could not find workflow '{workflow_name}'", str(e)
+        )
 
     if format == "terminal":
         _render_terminal(workflow, detailed=detailed)
@@ -246,10 +277,13 @@ def visualize(
     elif format == "json":
         content = _render_json(workflow)
     else:
-        from ofx.commands.ui_helpers import print_error
+        from ofx.commands.ui_helpers import error_exit
 
-        print_error("Invalid Format", f"Unknown format: '{format}'", "Supported: terminal, dot, json")
-        return
+        error_exit(
+            "Invalid Format",
+            f"Unknown format: '{format}'",
+            "Supported: terminal, dot, json",
+        )
 
     if output:
         from pathlib import Path

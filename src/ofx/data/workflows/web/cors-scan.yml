@@ -97,3 +97,4 @@ jobs:
             for finding in findings:
                 print(f"  [{finding['severity']}] {finding['url']} — {finding['test']}")
       log-stdout: true
+      log-command: true

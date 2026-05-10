@@ -73,9 +73,7 @@ class TestAWSCreateInstance:
             "Instances": [{"InstanceId": "i-def456", "State": {"Name": "pending"}}]
         }
 
-        config = _make_cloud_config(
-            key_pair_name="my-key", security_group="sg-12345"
-        )
+        config = _make_cloud_config(key_pair_name="my-key", security_group="sg-12345")
         asyncio.run(provider.create_instance(config))
 
         call_kwargs = ec2.run_instances.call_args[1]
@@ -295,7 +293,10 @@ def _make_do_provider():
     mock_client = MagicMock()
 
     with (
-        patch("ofx.cloud.providers.digitalocean.DOClient", MagicMock(return_value=mock_client)),
+        patch(
+            "ofx.cloud.providers.digitalocean.DOClient",
+            MagicMock(return_value=mock_client),
+        ),
         patch("ofx.cloud.providers.digitalocean.get_secret", return_value=""),
     ):
         from ofx.cloud.providers.digitalocean import DigitalOceanProvider
@@ -460,9 +461,7 @@ class TestDOListInstances:
                     "region": {"slug": "nyc3"},
                     "size_slug": "s-1vcpu-1gb",
                     "tags": ["ofx"],
-                    "networks": {
-                        "v4": [{"type": "public", "ip_address": "1.1.1.1"}]
-                    },
+                    "networks": {"v4": [{"type": "public", "ip_address": "1.1.1.1"}]},
                 },
                 {
                     "id": 222,
@@ -562,9 +561,7 @@ class TestDOWaitForAction:
 
     def test_action_errored(self):
         provider, client = _make_do_provider()
-        client.actions.get.return_value = {
-            "action": {"id": 9999, "status": "errored"}
-        }
+        client.actions.get.return_value = {"action": {"id": 9999, "status": "errored"}}
 
         with pytest.raises(RuntimeError, match="failed"):
             asyncio.run(provider._wait_for_action(9999, timeout=30))

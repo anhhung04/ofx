@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Url, Vulnerability
 from ofx.tasks.registry import TaskRegistry

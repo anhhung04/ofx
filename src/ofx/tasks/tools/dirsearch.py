@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -22,9 +21,7 @@ class DirsearchTask(Task):
 
     opts = {
         "wordlist": OptDef(flag="-w", type=str, help="Wordlist path"),
-        "extensions": OptDef(
-            flag="-e", type=str, help="Extensions e.g. php,html,js"
-        ),
+        "extensions": OptDef(flag="-e", type=str, help="Extensions e.g. php,html,js"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "recursive": OptDef(flag="-r", is_flag=True, help="Brute-force recursively"),
         "recursion_depth": OptDef(
@@ -66,19 +63,8 @@ class DirsearchTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Url]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         results: list[Url] = []

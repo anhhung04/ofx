@@ -118,3 +118,4 @@ jobs:
 
                   add_outputs(output_file=out_file, decoded_size=len(decoded_data), is_text=is_text)
               log-stdout: true
+              log-command: true

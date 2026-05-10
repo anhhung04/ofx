@@ -22,7 +22,7 @@ def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
 
         def __init__(self, *args: object, **kwargs: object) -> None:
             self._upload_dir = upload_dir
-            super().__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)  # type: ignore[arg-type]
 
         def log_message(self, format: str, *args: object) -> None:
             logger.info(

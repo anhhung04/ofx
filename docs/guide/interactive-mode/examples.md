@@ -154,7 +154,7 @@ jobs:
       - name: After Shell
         run: echo "Shell exited"
 ```
-*Exiting with `exit`, `Ctrl+D`, or `Ctrl+C` is treated as a clean exit. Nonzero exit codes (except 127/130) stop the job unless `continue_on_error: true` is set.*
+*Exiting with `exit`, `Ctrl+D`, or `Ctrl+C` is treated as a clean exit. Nonzero exit codes (except 127/130) stop the job unless `continue-on-error: true` is set.*
 
 ---
 
@@ -170,7 +170,7 @@ jobs:
       - name: Debug Shell
         run: bash
         interactive: true
-        run_if: failure()
+        if: failure()
 ```
 
 ---
@@ -179,8 +179,8 @@ jobs:
 
 - Always set a `timeout` to avoid hanging sessions.
 - Use job dependencies (`needs:`) to ensure only one interactive job runs at a time.
-- Use `envs:` to set environment variables for your session.
-- Use `run_if:` for conditional debugging.
+- Use `env:` to set environment variables for your session.
+- Use `if:` for conditional debugging.
 - Save session logs or history for later review.
 
 ---

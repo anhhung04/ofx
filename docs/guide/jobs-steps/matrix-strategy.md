@@ -247,7 +247,7 @@ jobs:
 
 ## Advanced: Combining with Inputs
 
-Matrix values can use workflow inputs:
+Matrix values can reference workflow inputs:
 
 ```yaml
 name: Parameterized Matrix
@@ -256,16 +256,36 @@ dispatch:
     platforms:
       type: array
       default: ["linux", "windows"]
-```
 
 jobs:
   build:
     strategy:
       matrix:
-        platform: {{ inputs.platforms }}
+        platform: "{{ inputs.platforms }}"
         config: [debug, release]
     steps:
       - run: echo "Building {{ matrix.config }} on {{ matrix.platform }}"
+```
+
+---
+
+## Fleet Distribution
+
+For cloud-based parallel execution, the `fleet` field within a matrix strategy distributes targets across multiple VPS instances. See [Fleet](../cloud/fleet.md) for details.
+
+```yaml
+jobs:
+  scan:
+    cloud: do-nyc
+    strategy:
+      matrix:
+        ports: [80, 443]
+      fleet:
+        count: 3
+        input: targets.txt
+        distribution: chunk
+    steps:
+      - run: nmap -p {{ matrix.ports }} -iL $FLEET_INPUT_FILE
 ```
 
 ## Debugging Matrix Jobs
@@ -273,7 +293,7 @@ jobs:
 View expanded matrix jobs in logs:
 
 ```bash
-ofx flow run my-workflow --debug
+OFX_DEBUG=1 ofx flow run my-workflow
 ```
 
 The logs will show each expanded job ID and its matrix values:

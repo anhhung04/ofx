@@ -1,8 +1,12 @@
 import typer
 
-from ofx.commands.ui_helpers import print_banner, print_error
+from ofx.commands.ui_helpers import error_exit, print_banner
 
-app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False, invoke_without_command=True)
+app = typer.Typer(
+    no_args_is_help=True,
+    pretty_exceptions_show_locals=False,
+    invoke_without_command=True,
+)
 
 from ofx.commands import (  # noqa: E402
     ai,
@@ -105,12 +109,11 @@ def inject_env_vars(
     global _cli_env_vars, _cli_project
     try:
         _cli_env_vars = parse_key_value_pairs(e, keep_string=True)
-    except ValueError as exc:
-        print_error(
+    except ValueError:
+        error_exit(
             "Invalid environment variable format",
             "Expected KEY=VAL for each -e flag",
         )
-        raise typer.Exit(code=1) from exc
 
     for key, value in _cli_env_vars.items():
         os.environ[key] = str(value)
@@ -135,14 +138,15 @@ def _register_commands():
     add_app(asm)
     add_aliases()
 
+
 def _clean_up():
     import os
     import shutil
 
     from ofx.settings import TEMP_DIR
+
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR, ignore_errors=True)
-
 
 
 def main():
@@ -158,5 +162,4 @@ def main():
 
         if os.getenv("OFX_DEBUG"):
             traceback.print_exc()
-        print_error("Unhandled Error", str(e))
-        return typer.Exit(code=1)
+        error_exit("Unhandled Error", str(e))

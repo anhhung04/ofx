@@ -58,6 +58,7 @@ jobs:
       shell_size: '{{ steps["create-shell"].outputs.shell_size | default("", true) }}'
     steps:
     - name: create-shell
+      log-command: true
       script: |
         from pathlib import Path
         import importlib
@@ -105,6 +106,7 @@ jobs:
     if: "{{ inputs.upload_method != 'url' }}"
     steps:
     - name: deploy-shell
+      log-command: true
       script: |
         from ofx.api.post import RunnerRegistry
         from pathlib import Path
@@ -148,6 +150,7 @@ jobs:
     needs: [upload]
     steps:
     - name: test-connection
+      log-command: true
       script: |
         from ofx.api.exploitation.webshell.client import WebShellClient
         import time
@@ -195,6 +198,7 @@ jobs:
     needs: [verify]
     steps:
     - name: enum-via-shell
+      log-command: true
       script: |
         from ofx.api.exploitation.webshell.client import WebShellClient
 

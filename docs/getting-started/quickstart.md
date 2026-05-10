@@ -21,40 +21,70 @@ ofx project init quickstart-demo
 cd ~/.ofx/projects/quickstart-demo
 ```
 
-## 3) Create a workflow
+## 3) Run a task directly
 
-Create `hello.yml`:
+The fastest way to use OFX is running a task from the command line — no YAML needed:
+
+```bash
+# Port scan a target
+ofx flow tasks run nmap 10.10.10.5 --opt ports=1-1000
+
+# Probe HTTP services
+ofx flow tasks run httpx example.com --opt tech_detect
+
+# Subdomain enumeration
+ofx flow tasks run subfinder example.com
+```
+
+## 4) Create a workflow
+
+Create `recon.yml`:
 
 ```yaml
-name: hello-world
+name: quick-recon
 
 dispatch:
   inputs:
     target:
       type: string
       required: true
-      description: Target label to print
+      description: Target to scan
 
 jobs:
-  greet:
+  scan:
     steps:
-      - run: echo "Hello {{ inputs.target }} from OFX"
+      # Task step — structured output parsing
+      - task: nmap
+        name: port-scan
+        with:
+          target: "{{ inputs.target }}"
+          ports: "80,443,8080"
 
-  metadata:
-    needs: [greet]
+      # Shell command
+      - name: show-results
+        run: echo "Found {{ ports(steps['port-scan'].outputs.typed_outputs) | length }} open ports"
+
+  analyze:
+    needs: [scan]
     steps:
-      - run: echo "Run ID: {{ ctx.run_id }}"
-      - run: echo "Output: {{ ctx.output_path }}"
+      # Inline Python script
+      - name: summarize
+        script: |
+          import json
+          result = {"target": "{{ inputs.target }}", "status": "complete"}
+          with open("{{ ctx.output_path }}/summary.json", "w") as f:
+            json.dump(result, f, indent=2)
+          print(f"Summary saved to {{ ctx.output_path }}/summary.json")
 ```
 
-## 4) Validate and run
+## 5) Validate and run
 
 ```bash
-ofx flow validate hello.yml
-ofx flow run hello.yml --input target=team
+ofx flow validate recon.yml
+ofx flow run recon.yml --input target=10.10.10.5
 ```
 
-## 5) Add secrets (optional)
+## 6) Add secrets (optional)
 
 ```bash
 ofx secret set API_KEY
@@ -69,18 +99,20 @@ call:
       required: true
 ```
 
-## 6) Useful next commands
+## 7) Useful next commands
 
 ```bash
-ofx flow visualize hello.yml --format mermaid
-ofx flow run hello.yml --output ./runs/hello
-ofx doctor fleet
+ofx flow tasks list                          # See all 90+ built-in tasks
+ofx flow tasks info nmap                     # Task options and details
+ofx flow visualize recon.yml --format dot      # Render the DAG (DOT format)
+ofx flow run recon.yml --output ./runs/recon  # Custom output directory
 ```
 
 ## What to read next
 
-- [Workflows](../guide/workflows.md)
-- [Jobs & Steps](../guide/jobs-steps.md)
-- [Templates](../guide/templates.md)
-- [Secrets & Inputs](../guide/secrets-inputs.md)
-- [Cloud Runners](../guide/cloud-runners.md)
+- [Tasks](../guide/tasks.md) — Pre-built security tool wrappers
+- [Workflows](../guide/workflows.md) — Workflow structure and features
+- [Jobs & Steps](../guide/jobs-steps.md) — Step types and configuration
+- [Templates](../guide/templates.md) — Jinja2 helpers and functions
+- [Secrets & Inputs](../guide/secrets-inputs.md) — Credential management
+- [Cloud Runners](../guide/cloud-runners.md) — Remote execution

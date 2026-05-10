@@ -35,7 +35,7 @@ class WinRMCommandError(RuntimeError):
         self.stderr = stderr
 
 
-@RunnerRegistry.register("winrm")
+@RunnerRegistry.register("winrm")  # type: ignore[arg-type]
 @dataclass
 class PostWinRM(BaseRunner):
     """Post-exploitation runner over WinRM with stability and opsec features.
@@ -163,21 +163,32 @@ class PostWinRM(BaseRunner):
             return self._run_via_file(command)
         return self._run_cmd_with_retry(command)
 
-    def _run_cmd_with_retry(self, command: str) -> str:
-        """Execute CMD command with retries."""
+    def _execute_with_retry(
+        self,
+        execute_fn: Any,
+        command: str,
+        log_prefix: str,
+        error_label: str,
+    ) -> str:
+        """Run *execute_fn* with exponential-backoff retries.
+
+        This is the shared retry loop for both CMD and PowerShell execution.
+        """
         last_error: Exception | None = None
 
         for attempt in range(self.max_retries):
             try:
-                result = self._session.run_cmd(command)
+                result = execute_fn(command)
                 stdout = result.std_out.decode(errors="ignore")
                 stderr = result.std_err.decode(errors="ignore").strip()
 
-                self._log_command(command, stdout, stderr, result.status_code)
+                self._log_command(
+                    f"{log_prefix}{command}", stdout, stderr, result.status_code
+                )
 
                 if result.status_code != 0:
                     raise WinRMCommandError(
-                        stderr or f"WinRM cmd failed: exit {result.status_code}",
+                        stderr or f"{error_label} failed: exit {result.status_code}",
                         exit_code=result.status_code,
                         stderr=stderr,
                     )
@@ -193,14 +204,21 @@ class PostWinRM(BaseRunner):
                 if attempt < self.max_retries - 1:
                     delay = 2**attempt
                     logger.debug(
-                        f"WinRM connection failed, retrying in {delay}s "
-                        f"(attempt {attempt + 1}/{self.max_retries})"
+                        "WinRM %s failed, retrying in %ds (attempt %d/%d)",
+                        error_label,
+                        delay,
+                        attempt + 1,
+                        self.max_retries,
                     )
                     time.sleep(delay)
 
         raise WinRMConnectionError(
-            f"WinRM failed after {self.max_retries} attempts: {last_error}"
+            f"WinRM {error_label} failed after {self.max_retries} attempts: {last_error}"
         )
+
+    def _run_cmd_with_retry(self, command: str) -> str:
+        """Execute CMD command with retries."""
+        return self._execute_with_retry(self._session.run_cmd, command, "", "cmd")
 
     def run_ps(self, script: str) -> str:
         """Execute a PowerShell script via WinRM with retries.
@@ -217,36 +235,8 @@ class PostWinRM(BaseRunner):
             WinRMCommandError: If script fails after all retries.
         """
         effective_script = self._prepend_amsi_bypass(script)
-        last_error: Exception | None = None
-
-        for attempt in range(self.max_retries):
-            try:
-                result = self._session.run_ps(effective_script)
-                stdout = result.std_out.decode(errors="ignore")
-                stderr = result.std_err.decode(errors="ignore").strip()
-
-                self._log_command(f"[PS] {script}", stdout, stderr, result.status_code)
-
-                if result.status_code != 0:
-                    raise WinRMCommandError(
-                        stderr or f"PowerShell failed: exit {result.status_code}",
-                        exit_code=result.status_code,
-                        stderr=stderr,
-                    )
-
-                if len(stdout) > self.max_output_size:
-                    stdout = stdout[: self.max_output_size] + "\n[OUTPUT TRUNCATED]"
-                return stdout
-
-            except WinRMCommandError:
-                raise
-            except Exception as e:
-                last_error = e
-                if attempt < self.max_retries - 1:
-                    time.sleep(2**attempt)
-
-        raise WinRMConnectionError(
-            f"WinRM PS failed after {self.max_retries} attempts: {last_error}"
+        return self._execute_with_retry(
+            self._session.run_ps, effective_script, "[PS] ", "PowerShell"
         )
 
     def run_encoded(self, script: str) -> str:

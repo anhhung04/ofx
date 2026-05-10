@@ -47,9 +47,7 @@ class PurednsTask(Task):
     def _output_suffix(self) -> str:
         return ".txt"
 
-    def build_command(
-        self, target: str, **kwargs: object
-    ) -> tuple[str, Path | None]:
+    def build_command(self, target: str, **kwargs: object) -> tuple[str, Path | None]:
         """Build: puredns resolve [flags] <input_file> -w <output_file>."""
         parts = [self.cmd, *self.extra_flags]
 
@@ -69,15 +67,7 @@ class PurednsTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            import tempfile as _tf
-
-            import os
-
-            _fd, path = _tf.mkstemp(
-                prefix=".ofx_task_puredns_", suffix=self._output_suffix()
-            )
-            os.close(_fd)
-            output_file = Path(path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         if target:
@@ -92,4 +82,3 @@ class PurednsTask(Task):
 
         domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
         return [Subdomain(host=host, domain=domain)]
-

@@ -209,10 +209,14 @@ class SSHHandler:
     """
 
     def __init__(self, config: dict):
-        self.host = config.get("host")
-        self.user = config.get("user")
-        self.remote_path = config.get("remote_path")
-        self.port = config.get("port", 22)
+        host = config.get("host")
+        user = config.get("user")
+        if not host or not user:
+            raise ValueError("SSH storage config requires 'host' and 'user' fields")
+        self.host: str = host
+        self.user: str = user
+        self.remote_path: str = config.get("remote_path") or ""
+        self.port: int = int(config.get("port", 22))
         self.key_path = self._find_ssh_key()
         self._ensure_ssh_key()
 
@@ -418,11 +422,11 @@ class GitHandler:
         self.branch = self.config.get("branch", "main")
         self.encrypt = encrypt
         self.encryption_key = encryption_key
-
-        if self.encrypt and self.encryption_key:
-            self.encryptor = EncryptionHandler(self.encryption_key)
-        else:
-            self.encryptor = None
+        self.encryptor: EncryptionHandler | None = (
+            EncryptionHandler(self.encryption_key)
+            if self.encrypt and self.encryption_key
+            else None
+        )
 
     def sync(self) -> None:
         """Sync with git remote."""

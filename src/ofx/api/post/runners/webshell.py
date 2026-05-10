@@ -33,7 +33,7 @@ class PostWebShell(PostRunnerBase):
     def __init__(self, client: WebShellClient):
         self.client = client
 
-    def run(self, command: str) -> str:
+    def run(self, command: str, timeout: int | None = None) -> str:  # noqa: ARG002
         """Execute a command via the webshell.
 
         Args:

@@ -104,3 +104,4 @@ jobs:
             print("\nNo obvious privesc vectors found")
         print(f"\nFull report: {out_file}")
       log-stdout: true
+      log-command: true

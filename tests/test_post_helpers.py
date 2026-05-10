@@ -1,20 +1,12 @@
 from __future__ import annotations
 
-import subprocess
-from io import BytesIO
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ofx.api.exploitation.webshell.client import WebShellClient
 from ofx.api.post import (
     PostRunnerBase,
     PostSSH,
-    PostWebShell,
-    deploy_and_run,
-    download_via_scp,
-    upload_via_scp,
 )
 from ofx.api.post.enum import (
     bundled_tool_path,
@@ -121,9 +113,7 @@ def test_postssh_run_success(mock_ssh_cls):
     ch, out, err = _make_channel(exit_code=0, stdout=b"ok", stderr=b"")
     mock_client.exec_command.return_value = (None, out, err)
 
-    runner = PostSSH(
-        "host", user="root", port=2222, identity_file="/dev/null"
-    )
+    runner = PostSSH("host", user="root", port=2222, identity_file="/dev/null")
     # Bypass key loading
     with patch.object(PostSSH, "_load_key", return_value=MagicMock()):
         assert runner.run("whoami") == "ok"
@@ -172,79 +162,3 @@ def test_postssh_upload_download(mock_ssh_cls, tmp_path):
 
     runner.download("/tmp/payload.bin", str(local))
     mock_sftp.get.assert_called_once_with("/tmp/payload.bin", str(local))
-
-
-def test_deploy_and_run_webshell(tmp_path):
-    """Test deploy_and_run with a webshell runner."""
-    calls = {"upload": []}
-
-    client = WebShellClient.__new__(WebShellClient)
-
-    def fake_upload(local, remote):
-        calls["upload"].append((local, remote))
-        return "ok"
-
-    def fake_run(cmd):
-        return f"ran {cmd}"
-
-    client.upload_file = fake_upload
-    client.run_command = fake_run
-
-    webshell_runner = PostWebShell(client)
-    local = tmp_path / "tool.bin"
-    local.write_text("x")
-
-    result = deploy_and_run(webshell_runner, str(local), "/tmp/tool.bin")
-    assert result == "ran /tmp/tool.bin"
-    assert calls["upload"] == [(str(local), "/tmp/tool.bin")]
-
-
-@patch("paramiko.SSHClient")
-def test_deploy_and_run_ssh(mock_ssh_cls, tmp_path):
-    """Test deploy_and_run with SSH runner."""
-    mock_client = MagicMock()
-    mock_ssh_cls.return_value = mock_client
-
-    transport = MagicMock()
-    transport.is_active.return_value = True
-    mock_client.get_transport.return_value = transport
-
-    mock_sftp = MagicMock()
-    mock_sftp.stat.return_value = True
-    mock_client.open_sftp.return_value = mock_sftp
-
-    ch, out, err = _make_channel(exit_code=0, stdout=b"ran command", stderr=b"")
-    mock_client.exec_command.return_value = (None, out, err)
-
-    local = tmp_path / "ssh_tool.bin"
-    local.write_text("x")
-
-    ssh_runner = PostSSH("host", user="root")
-    result = deploy_and_run(ssh_runner, str(local), "/tmp/ssh.bin", exec_cmd="runme")
-
-    assert "ran" in result
-    mock_sftp.put.assert_called_once()  # Upload was called
-
-
-@patch("paramiko.SSHClient")
-def test_transfer_scp_compat(mock_ssh_cls, tmp_path):
-    """Test deprecated upload_via_scp / download_via_scp still work."""
-    mock_client = MagicMock()
-    mock_ssh_cls.return_value = mock_client
-
-    transport = MagicMock()
-    transport.is_active.return_value = True
-    mock_client.get_transport.return_value = transport
-
-    mock_sftp = MagicMock()
-    mock_sftp.stat.return_value = True
-    mock_client.open_sftp.return_value = mock_sftp
-
-    local = tmp_path / "payload.bin"
-    local.write_text("x")
-
-    upload_via_scp(str(local), "/tmp/payload.bin", "host", user="root", port=2222)
-    mock_sftp.put.assert_called_once()
-
-    download_via_scp("/tmp/payload.bin", str(local), "host", user="root", port=2222)
-    mock_sftp.get.assert_called_once()

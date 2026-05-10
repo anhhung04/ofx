@@ -40,6 +40,7 @@ jobs:
       hash_file: '{{ steps["get-spn-tickets"].outputs.hash_file | default("", true) }}'
     steps:
     - name: get-spn-tickets
+      log-command: true
       run: |
         echo "[+] Kerberoasting {{ inputs.domain }}..."
         AUTH="{{ inputs.domain }}/{{ inputs.user }}"
@@ -71,6 +72,7 @@ jobs:
       asrep_file: '{{ steps["get-asrep-hashes"].outputs.asrep_file | default("", true) }}'
     steps:
     - name: get-asrep-hashes
+      log-command: true
       run: |
         echo "[+] AS-REP Roasting {{ inputs.domain }}..."
         AUTH="{{ inputs.domain }}/{{ inputs.user }}"
@@ -127,5 +129,6 @@ jobs:
 
         echo "[+] Cracking complete"
       log-stdout: true
+      log-command: true
       continue-on-error: true
       timeout: 30

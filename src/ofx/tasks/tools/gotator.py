@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -78,11 +76,7 @@ class GotatorTask(Task):
         elif target:
             parts.extend(["-sub", target])
 
-        _fd, path = tempfile.mkstemp(
-            prefix=".ofx_task_gotator_", suffix=self._output_suffix()
-        )
-        os.close(_fd)
-        output_file = Path(path)
+        output_file = self._make_output_path()
         return f"{' '.join(parts)} > {output_file}", output_file
 
     def parse_line(self, line: str) -> list[Subdomain]:
@@ -92,4 +86,3 @@ class GotatorTask(Task):
 
         domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
         return [Subdomain(host=host, domain=domain)]
-

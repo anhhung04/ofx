@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -29,18 +28,10 @@ class DnsreconTask(Task):
             help="Enumeration type: std,brt,rvl,srv,axfr,snoop,zonewalk",
         ),
         "threads": OptDef(flag="--threads", type=int, help="Number of threads"),
-        "lifetime": OptDef(
-            flag="--lifetime", type=int, help="DNS query timeout"
-        ),
-        "nameserver": OptDef(
-            flag="-n", type=str, help="Domain server to use"
-        ),
-        "wordlist": OptDef(
-            flag="-D", type=str, help="Wordlist for brute force"
-        ),
-        "range": OptDef(
-            flag="-r", type=str, help="IP range for reverse lookup"
-        ),
+        "lifetime": OptDef(flag="--lifetime", type=int, help="DNS query timeout"),
+        "nameserver": OptDef(flag="-n", type=str, help="Domain server to use"),
+        "wordlist": OptDef(flag="-D", type=str, help="Wordlist for brute force"),
+        "range": OptDef(flag="-r", type=str, help="IP range for reverse lookup"),
     }
 
     input_flag = "-d"
@@ -48,9 +39,7 @@ class DnsreconTask(Task):
     output_flag = "-j"
     extra_flags = []
 
-    def build_command(
-        self, target: str, **kwargs: Any
-    ) -> tuple[str, Path | None]:
+    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         # Strip 'brt' from type if no wordlist is provided (it requires -D)
         enum_type = kwargs.get("type", "")
         if enum_type and "brt" in enum_type and not kwargs.get("wordlist"):
@@ -74,19 +63,8 @@ class DnsreconTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Record | Subdomain]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         if not isinstance(data, list):

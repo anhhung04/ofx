@@ -147,9 +147,7 @@ def export_typed_outputs(
     return summaries
 
 
-def _write_findings_file(
-    fpath: Path, type_name: str, items: list[dict]
-) -> int:
+def _write_findings_file(fpath: Path, type_name: str, items: list[dict]) -> int:
     """Write findings to a file, returning the count of new items."""
     new_count = 0
 
@@ -176,9 +174,7 @@ def _write_findings_file(
                 values.add(key)
         existing_lines: set[str] = set()
         if fpath.exists():
-            existing_lines = {
-                ln for ln in fpath.read_text().strip().splitlines() if ln
-            }
+            existing_lines = {ln for ln in fpath.read_text().strip().splitlines() if ln}
         new_values = values - existing_lines
         new_count = len(new_values)
         merged = values | existing_lines
@@ -244,7 +240,9 @@ async def _collect_from_job(job_runner: Any) -> list[dict]:
                 if isinstance(step_typed, list):
                     typed.extend(step_typed)
         except Exception as e:
-            logger.debug("Failed to collect typed outputs from step %s: %s", _step_id, e)
+            logger.debug(
+                "Failed to collect typed outputs from step %s: %s", _step_id, e
+            )
             continue
     return typed
 

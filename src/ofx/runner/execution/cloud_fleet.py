@@ -131,7 +131,10 @@ class CloudFleetRunner(BaseRunner[Job]):
                 if fail_fast and failed_event.is_set():
                     return None
                 result = await self._run_single_fleet_job(idx, combo)
-                if isinstance(result, RunResult) and result.status != RunnerStatus.COMPLETED:
+                if (
+                    isinstance(result, RunResult)
+                    and result.status != RunnerStatus.COMPLETED
+                ):
                     failed_event.set()
                 return result
 

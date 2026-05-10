@@ -3,6 +3,7 @@ import logging
 from ofx.runner.logging import get_logger
 from ofx.settings import settings
 
+
 def test_shared_logger_singleton():
     logger1 = get_logger()
     logger2 = get_logger()

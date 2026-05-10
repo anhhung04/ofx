@@ -23,6 +23,7 @@ jobs:
     - name: gen-commands
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.privesc.linux import (
             suid_commands,
@@ -207,3 +208,4 @@ jobs:
         print(f"\n[*] Full script: {{ jobs.enumerate.outputs.commands_file }}")
         print(f"[*] Total checks: {{ jobs.enumerate.outputs.check_count }}")
       log-stdout: true
+      log-command: true

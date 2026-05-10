@@ -25,7 +25,7 @@ def _normalize_repo_name(url: str) -> str:
 
 def _cache_key(url: str, ref: str) -> str:
     key = f"{url}@{ref}" if ref else url
-    return hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
 
 
 def clone_remote_repo(path: str, default_registry: str | None) -> Path | None:

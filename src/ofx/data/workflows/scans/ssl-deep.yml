@@ -21,6 +21,7 @@ jobs:
     name: TestSSL Analysis
     steps:
     - task: testssl
+      log-command: true
       timeout: 10
       name: testssl-scan
       with:
@@ -31,6 +32,7 @@ jobs:
     name: SSH Audit
     steps:
     - task: ssh-audit
+      log-command: true
       timeout: 10
       name: ssh-audit
       with:
@@ -128,6 +130,7 @@ jobs:
         for finding in findings:
             print(f"  {finding}")
       log-stdout: true
+      log-command: true
       continue-on-error: true
   summary:
     name: Summary

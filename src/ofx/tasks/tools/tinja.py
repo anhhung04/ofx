@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -65,12 +64,8 @@ class TinjaTask(Task):
         return " ".join(parts), None
 
     def parse_line(self, line: str) -> list[Vulnerability | Url]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         url = data.get("url", data.get("URL", ""))
@@ -90,9 +85,10 @@ class TinjaTask(Task):
                     severity=Severity.HIGH,
                     provider="tinja",
                     description=f"Engine: {engine}" if engine else "SSTI detected",
-                    extra_data={k: v for k, v in data.items() if k not in ("url", "URL")},
+                    extra_data={
+                        k: v for k, v in data.items() if k not in ("url", "URL")
+                    },
                 )
             )
 
         return results
-

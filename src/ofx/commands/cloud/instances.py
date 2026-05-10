@@ -7,7 +7,7 @@ import typer
 from rich.table import Table
 
 from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
-from ofx.commands.ui_helpers import print_error, print_warning
+from ofx.commands.ui_helpers import error_exit, print_warning
 from ofx.settings import get_console
 
 instance_app = typer.Typer(no_args_is_help=True, help="Manage cloud instances")
@@ -23,7 +23,9 @@ def instance_list(
     """List cloud instances."""
     console = get_console()
     provider, cloud = create_cloud_provider(profile, provider)
-    instances = run_cloud_sync("list instances", lambda: asyncio.run(cloud.list_instances()))
+    instances = run_cloud_sync(
+        "list instances", lambda: asyncio.run(cloud.list_instances())
+    )
 
     if not instances:
         print_warning(
@@ -74,7 +76,9 @@ def instance_destroy(
         if not confirm:
             raise typer.Abort()
 
-    run_cloud_sync("destroy instance", lambda: asyncio.run(cloud.destroy_instance(instance_id)))
+    run_cloud_sync(
+        "destroy instance", lambda: asyncio.run(cloud.destroy_instance(instance_id))
+    )
     console.print(f"[green]Instance {instance_id} destroyed.[/green]")
 
 
@@ -84,9 +88,6 @@ def instance_create(
     provider: Annotated[
         str, typer.Option("--provider", "-p", help="Cloud provider")
     ] = "",
-    name: Annotated[
-        str, typer.Option("--name", "-n", help="Instance name")
-    ] = "ofx-manual",
     region: Annotated[str, typer.Option("--region", "-r", help="Region")] = "",
     size: Annotated[str, typer.Option("--size", "-s", help="Instance size")] = "",
     image: Annotated[str, typer.Option("--image", "-i", help="OS image")] = "",
@@ -110,8 +111,7 @@ def instance_create(
         image = image or cfg.image or ""
 
     if not provider:
-        print_error("Missing cloud provider", "Specify --provider or --profile.")
-        raise typer.Exit(code=1)
+        error_exit("Missing cloud provider", "Specify --provider or --profile.")
 
     from ofx.cloud import CloudProviderRegistry
     from ofx.models.cloud import CloudConfig

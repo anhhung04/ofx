@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
@@ -38,7 +37,9 @@ class TestsslTask(Task):
             flag="-U", is_flag=True, help="Check vulnerabilities"
         ),
         "server_defaults": OptDef(
-            flag="-S", is_flag=True, help="Display server default picks and certificate info"
+            flag="-S",
+            is_flag=True,
+            help="Display server default picks and certificate info",
         ),
         "headers": OptDef(flag="-h", is_flag=True, help="Check HTTP headers"),
         "starttls": OptDef(
@@ -46,9 +47,7 @@ class TestsslTask(Task):
             type=str,
             help="Protocol for STARTTLS: ftp/smtp/pop3/imap/xmpp/telnet/ldap",
         ),
-        "openssl": OptDef(
-            flag="--openssl", type=str, help="Path to openssl binary"
-        ),
+        "openssl": OptDef(flag="--openssl", type=str, help="Path to openssl binary"),
         "full": OptDef(flag="--full", is_flag=True, help="Full test"),
     }
 
@@ -67,19 +66,8 @@ class TestsslTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Certificate | Vulnerability | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         if not isinstance(data, list):

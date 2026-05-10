@@ -1,6 +1,7 @@
 """Tests for runner edge cases and error handling"""
 
 import asyncio
+from collections import OrderedDict
 from pathlib import Path
 
 import pytest
@@ -416,31 +417,46 @@ class TestStepRetryProfileDefaults:
         from ofx.runner.execution.step import StepRunner
 
         step = Step.model_validate({"name": "s1", "run": "echo hi"})
-        parent = type("P", (), {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()})()
+        parent = type(
+            "P",
+            (),
+            {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()},
+        )()
         runner = StepRunner.__new__(StepRunner)
         runner.model = step
-        runner.ctx = RunContext(vars={"profile_model": OFXProfile(retry_policy="aggressive")})
+        runner.ctx = RunContext(
+            vars={"profile_model": OFXProfile(retry_policy="aggressive")}
+        )
         runner.parent = parent
         runner._apply_retry_profile_defaults()
 
         assert runner.model.retry == 2
         assert runner.model.retry_delay == 2
 
-    def test_retry_profile_does_not_override_explicit(self):
+    def test_retry_profile_overrides_explicit_step(self):
         from ofx.models.step import Step
         from ofx.profiles.models import OFXProfile
         from ofx.runner.execution.step import StepRunner
 
-        step = Step.model_validate({"name": "s1", "run": "echo hi", "retry": 9, "retry-delay": 11})
-        parent = type("P", (), {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()})()
+        step = Step.model_validate(
+            {"name": "s1", "run": "echo hi", "retry": 9, "retry-delay": 11}
+        )
+        parent = type(
+            "P",
+            (),
+            {"registry": None, "_runners": {}, "model": type("M", (), {"jid": "j"})()},
+        )()
         runner = StepRunner.__new__(StepRunner)
         runner.model = step
-        runner.ctx = RunContext(vars={"profile_model": OFXProfile(retry_policy="aggressive")})
+        runner.ctx = RunContext(
+            vars={"profile_model": OFXProfile(retry_policy="aggressive")}
+        )
         runner.parent = parent
         runner._apply_retry_profile_defaults()
 
-        assert runner.model.retry == 9
-        assert runner.model.retry_delay == 11
+        # Profile (aggressive: retry=2, retry_delay=2) overrides step values
+        assert runner.model.retry == 2
+        assert runner.model.retry_delay == 2
 
 
 class TestStepDynamicTimeout:
@@ -516,25 +532,29 @@ class TestMatrixValidation:
 
     def test_matrix_limit_rejects_huge_product(self):
         """Matrix with excessive combinations raises ValueError."""
-        from ofx.utils.matrix import _generate_matrix_combinations
         from ofx.models.strategy import MatrixStrategy
+        from ofx.utils.matrix import _generate_matrix_combinations
 
-        strategy = MatrixStrategy(matrix={
-            "a": list(range(200)),
-            "b": list(range(200)),
-        })
+        strategy = MatrixStrategy(
+            matrix={
+                "a": list(range(200)),
+                "b": list(range(200)),
+            }
+        )
         with pytest.raises(ValueError, match="combinations"):
             _generate_matrix_combinations(strategy)
 
     def test_matrix_limit_allows_small_product(self):
         """Matrix under limit works fine."""
-        from ofx.utils.matrix import _generate_matrix_combinations
         from ofx.models.strategy import MatrixStrategy
+        from ofx.utils.matrix import _generate_matrix_combinations
 
-        strategy = MatrixStrategy(matrix={
-            "a": [1, 2, 3],
-            "b": ["x", "y"],
-        })
+        strategy = MatrixStrategy(
+            matrix={
+                "a": [1, 2, 3],
+                "b": ["x", "y"],
+            }
+        )
         combos = _generate_matrix_combinations(strategy)
         assert len(combos) == 6
 
@@ -548,9 +568,11 @@ class TestTemplateCircularDetection:
         from ofx.runner.templates.resolver import TemplateResolver
 
         resolver = TemplateResolver.__new__(TemplateResolver)
-        resolver._template_cache = {}
+        resolver._template_cache = OrderedDict()
         resolver._support_funcs_cache = None
         resolver._template_cache_max_size = 1000
+        resolver._cache_hits = 0
+        resolver._cache_misses = 0
 
         result = await resolver.resolve("{{ x + 1 }}", {"x": 5})
         assert result == "6"
@@ -561,9 +583,11 @@ class TestTemplateCircularDetection:
         from ofx.runner.templates.resolver import TemplateResolver
 
         resolver = TemplateResolver.__new__(TemplateResolver)
-        resolver._template_cache = {}
+        resolver._template_cache = OrderedDict()
         resolver._support_funcs_cache = None
         resolver._template_cache_max_size = 1000
+        resolver._cache_hits = 0
+        resolver._cache_misses = 0
 
         memo = {"_resolve_stack": ["{{ a }}"]}
         with pytest.raises(ValueError, match="Circular template reference"):

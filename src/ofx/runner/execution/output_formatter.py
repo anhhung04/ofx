@@ -138,7 +138,7 @@ def format_typed_outputs(
         t = item.get("_type", "unknown")
         by_type.setdefault(t, []).append(item)
 
-    renderables = []
+    renderables: list[Any] = []
 
     for type_name, items in by_type.items():
         columns = _TYPE_COLUMNS.get(type_name)
@@ -157,14 +157,14 @@ def format_typed_outputs(
             expand=False,
         )
         for _, header, style, max_w in columns:
-            table.add_column(header, style=style, max_width=max_w, no_wrap=max_w is not None)
+            table.add_column(
+                header, style=style, max_width=max_w, no_wrap=max_w is not None
+            )
 
         # Skip groups where every item has empty data columns
         data_fields = [f for f, _, _, _ in columns]
         non_empty_items = [
-            item
-            for item in items
-            if any(_cell_value(item, f) for f in data_fields)
+            item for item in items if any(_cell_value(item, f) for f in data_fields)
         ]
         if not non_empty_items:
             continue
@@ -177,11 +177,18 @@ def format_typed_outputs(
             for field, _, style, _ in columns:
                 val = _cell_value(item, field)
                 cell_style = _cell_style(item, field, style)
-                cells.append(Text(val, style=cell_style) if cell_style != style else val)
+                cells.append(
+                    Text(val, style=cell_style) if cell_style != style else val
+                )
             table.add_row(*cells)
 
         if len(items) > max_rows:
-            table.add_row(*[f"… +{len(items) - max_rows} more" if i == 0 else "" for i in range(len(columns))])
+            table.add_row(
+                *[
+                    f"… +{len(items) - max_rows} more" if i == 0 else ""
+                    for i in range(len(columns))
+                ]
+            )
 
         renderables.append(table)
 

@@ -1,10 +1,7 @@
 """Tests for shared runner utilities: matrix_utils, credential_store, step_output."""
 
-import asyncio
-import tempfile
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +9,6 @@ import pytest
 # MatrixCombinationBuilder
 # ---------------------------------------------------------------------------
 from ofx.runner.core.matrix_utils import (
-    MAX_MATRIX_COMBINATIONS,
     estimate_matrix_count,
     generate_matrix_combinations,
 )
@@ -101,7 +97,7 @@ class TestMatrixCombinationBuilder:
 # ---------------------------------------------------------------------------
 # CredentialStore
 # ---------------------------------------------------------------------------
-from ofx.runner.core.credential_store import (
+from ofx.runner.core.credential_store import (  # noqa: E402
     should_store_creds,
     store_from_typed_outputs,
 )
@@ -147,9 +143,7 @@ class TestStoreFromTypedOutputs:
 
         # Patch the import path used inside the function
         with patch.dict("sys.modules", {"ofx.api.creds.exegol_history": None}):
-            result = store_from_typed_outputs(
-                [account], log_fn=logs.append
-            )
+            result = store_from_typed_outputs([account], log_fn=logs.append)
         assert result == 0
         assert any("unavailable" in m for m in logs)
 
@@ -157,7 +151,7 @@ class TestStoreFromTypedOutputs:
 # ---------------------------------------------------------------------------
 # StepOutputHandler
 # ---------------------------------------------------------------------------
-from ofx.runner.core.step_output import log_output, save_output_file
+from ofx.runner.core.step_output import log_output, save_output_file  # noqa: E402
 
 
 class TestLogOutput:
@@ -199,9 +193,7 @@ class TestSaveOutputFile:
             script=None,
             task=None,
         )
-        result = save_output_file(
-            tmp_path, "job1", step, "hello world", {}
-        )
+        result = save_output_file(tmp_path, "job1", step, "hello world", {})
         assert result is not None
         assert result.exists()
         content = result.read_text()
@@ -294,7 +286,7 @@ class TestCloudRetryBackoff:
         for attempt in range(5):
             # Can't compare exact values due to jitter, but verify ranges match
             for _ in range(20):
-                local = StepRunner._retry_delay_seconds(None, attempt, 10)
+                local = StepRunner._retry_delay_seconds(attempt, 10)
                 cloud = CloudStepRunner._retry_delay_seconds(attempt, 10)
                 # Both capped at 300, both use uniform(0.5, 1.0) jitter
                 cap = min(10 * (2**attempt), 300)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
@@ -22,10 +23,7 @@ class CloudfoxTask(Task):
     cmd = "cloudfox"
     description = "AWS/Azure/GCP cloud enumeration tool"
     category = "recon/cloud"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v"
-        " github.com/BishopFox/cloudfox@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/BishopFox/cloudfox@latest"
     output_types = [Tag, Vulnerability]
 
     opts = {

@@ -23,6 +23,7 @@ jobs:
     - name: fetch-and-fingerprint
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.recon.web import web_fingerprint
@@ -64,6 +65,7 @@ jobs:
     - name: audit-headers
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.recon.web import security_headers_audit
@@ -98,6 +100,7 @@ jobs:
     - name: check-robots
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.recon.web import robots_txt_url

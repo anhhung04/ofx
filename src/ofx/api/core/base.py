@@ -46,11 +46,11 @@ class Result[T]:
     def unwrap(self) -> T:
         if self._ok:
             return self._value  # type: ignore[return-value]
-        raise self._error  # type: ignore[raise-no-type]
+        raise self._error or RuntimeError("Result has no error")
 
     def unwrap_err(self) -> Exception:
         if not self._ok:
-            return self._error  # type: ignore[return-value]
+            return self._error or RuntimeError("Result has no error")
         raise ValueError("Result is Ok, no error present")
 
     def map(self, fn: Callable[[T], Any]) -> Result[Any]:
@@ -59,7 +59,7 @@ class Result[T]:
                 return Result.Ok(fn(self._value))  # type: ignore[arg-type]
             except Exception as exc:  # pragma: no cover
                 return Result.Err(exc)
-        return Result.Err(self._error)  # type: ignore[return-value]
+        return Result.Err(self._error or RuntimeError("Unknown error"))
 
     def __repr__(self) -> str:
         if self._ok:
@@ -69,11 +69,9 @@ class Result[T]:
 
 @runtime_checkable
 class BaseRunner(Protocol):
-    """Base runner protocol (compatible with legacy PostRunnerBase)."""
-
     """Protocol for post‑execution runners (SSH, WinRM, etc.)."""
 
-    def run(self, *args: Any, **kwargs: Any) -> Result[Any]: ...
+    def run(self, *args: Any, **kwargs: Any) -> Any: ...
 
 
 @runtime_checkable

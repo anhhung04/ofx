@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,7 @@ class FileRegistry(RegistryAdapter):
             filepath = BASE_DATA_DIR / "job_registry.json"
 
         self.filepath = Path(filepath)
-        self.filepath.parent.mkdir(parents=True, exist_ok=True)
+        self.filepath.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
         # Create lock file alongside the data file
         self.lockfile = self.filepath.with_suffix(".lock")
@@ -69,7 +70,9 @@ class FileRegistry(RegistryAdapter):
                 try:
                     data = json.loads(content)
                 except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                    logger.warning("Failed to decode registry file '%s': %s", self.filepath, exc)
+                    logger.warning(
+                        "Failed to decode registry file '%s': %s", self.filepath, exc
+                    )
                     data = {}
             else:
                 data = {}
@@ -78,15 +81,18 @@ class FileRegistry(RegistryAdapter):
             return data
 
     async def _write_registry(self, data: dict[str, Any]) -> None:
-        """Write data to the registry file and update cache."""
+        """Write data to the registry file atomically and update cache."""
         try:
             json_text = json.dumps(data, default=str)
         except (TypeError, ValueError) as exc:
             logger.warning("Failed to serialize registry data: %s", exc)
             return
         with self._lock:
-            self.filepath.write_text(json_text)
-            self.filepath.chmod(0o600)
+            # Atomic write: write to tmp file, then rename into place.
+            tmp_path = self.filepath.with_suffix(".json.tmp")
+            tmp_path.write_text(json_text)
+            tmp_path.chmod(0o600)
+            os.replace(str(tmp_path), str(self.filepath))
             self._cache = data
             self._cache_mtime = self.filepath.stat().st_mtime
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -194,9 +195,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
             if self.model.store_creds and typed_outputs:
                 stored = self._store_credentials(typed_outputs)
                 if stored:
-                    self._log_info(
-                        f"Stored {stored} credential(s) in credential store"
-                    )
+                    self._log_info(f"Stored {stored} credential(s) in credential store")
 
             # Export output file to output_path with target in filename
             if self._task.export_output:
@@ -212,6 +211,10 @@ class TaskRunner(BaseRunner[TaskExecution]):
                     outputs["output_file"] = str(self._output_file)
                     await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
 
+    async def _post_run(self) -> None:
+        if self._task is not None:
+            self._task.cleanup_target_files()
+
     # ── Profile integration ────────────────────────────────────────
 
     def _apply_profile_task_options(self) -> None:
@@ -225,7 +228,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         2. **Per-task overrides** — ``profile.task_options[task_name]`` dict
            provides task-specific defaults.
         """
-        profile = self.ctx.vars.get("profile")
+        profile = self.ctx.vars.get("profile_model")
         if not profile:
             return
 
@@ -233,13 +236,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         if self._task is not None:
             task_opts = self._task.opts  # declared opts for this tool
 
-            _COMMON_MAPPING: list[tuple[str, list[str]]] = [
-                ("proxy", ["proxy", "proxy_url", "http_proxy"]),
-                ("threads", ["threads", "concurrency", "workers"]),
-                ("rate_limit", ["rate_limit", "rate"]),
-                ("delay", ["delay"]),
-                ("user_agent", ["user_agent"]),
-            ]
+            from ofx.cloud.task_runtime import _COMMON_MAPPING
 
             injected: list[str] = []
             for profile_attr, candidate_names in _COMMON_MAPPING:
@@ -259,9 +256,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
                         break  # first matching opt wins
 
             if injected:
-                self._log_debug(
-                    f"Injected profile common opts: {', '.join(injected)}"
-                )
+                self._log_debug(f"Injected profile common opts: {', '.join(injected)}")
 
         # Layer 2: per-task overrides from profile.task_options
         task_options = getattr(profile, "task_options", None) or {}
@@ -340,11 +335,11 @@ class TaskRunner(BaseRunner[TaskExecution]):
             for item in items:
                 store.publish(channel, item.to_dict())
         except Exception as e:
-            logger.debug("Channel publish failed (task=%s): %s", self.model.task_name, e)
+            logger.debug(
+                "Channel publish failed (task=%s): %s", self.model.task_name, e
+            )
 
-    def _deduplicate_incremental(
-        self, items: list[OutputType]
-    ) -> list[OutputType]:
+    def _deduplicate_incremental(self, items: Sequence[OutputType]) -> list[OutputType]:
         """Deduplicate against already-streamed items."""
         seen = {item._uuid for item in self._streamed_items}
         new: list[OutputType] = []
@@ -370,7 +365,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 stderr=result.stderr,
                 output_file=self._output_file,
             )
-            all_items = list(self._streamed_items) + raw
+            all_items = list(self._streamed_items) + list(raw)
             return self._deduplicate(all_items)
         except Exception as e:
             self._log_warning(f"Output parsing failed: {e}")
@@ -393,7 +388,9 @@ class TaskRunner(BaseRunner[TaskExecution]):
             try:
                 self._output_file.unlink()
             except OSError as e:
-                logger.debug("Failed to remove task output file %s: %s", self._output_file, e)
+                logger.debug(
+                    "Failed to remove task output file %s: %s", self._output_file, e
+                )
 
     def _export_output_file(self) -> Path | None:
         """Copy task output file to output_path with target in the filename.
@@ -462,9 +459,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         """
         from ofx.runner.core.credential_store import store_from_typed_outputs
 
-        return store_from_typed_outputs(
-            typed_outputs, log_fn=self._log_debug
-        )
+        return store_from_typed_outputs(typed_outputs, log_fn=self._log_debug)
 
 
 def _extract_item_target(item: dict[str, Any]) -> str:

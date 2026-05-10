@@ -70,3 +70,4 @@ jobs:
 
         add_outputs(results_file=out_file, domain_count=len(results))
       log-stdout: true
+      log-command: true

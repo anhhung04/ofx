@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -21,9 +20,13 @@ class S3scannerTask(Task):
     output_types = [Vulnerability, Tag]
 
     opts = {
-        "provider": OptDef(flag="-provider", type=str, help="Cloud provider: aws, gcp, digitalocean"),
+        "provider": OptDef(
+            flag="-provider", type=str, help="Cloud provider: aws, gcp, digitalocean"
+        ),
         "threads": OptDef(flag="-threads", type=int, help="Number of threads"),
-        "write_test": OptDef(flag="-write", is_flag=True, help="Test write permissions"),
+        "write_test": OptDef(
+            flag="-write", is_flag=True, help="Test write permissions"
+        ),
     }
 
     input_flag = None
@@ -64,12 +67,8 @@ class S3scannerTask(Task):
         return " ".join(parts), None
 
     def parse_line(self, line: str) -> list[Vulnerability | Tag]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         bucket_name = data.get("name", data.get("bucket", ""))
@@ -100,4 +99,3 @@ class S3scannerTask(Task):
             results = [Tag(name=bucket_name, value="not_found", category="s3")]
 
         return results
-

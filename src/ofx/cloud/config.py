@@ -135,7 +135,9 @@ class CloudProfileManager:
 
         # Get overrides from the inline config (non-default values)
         overrides = {}
-        default_config = CloudConfig.model_validate({"profile": profile_name}, strict=False)
+        default_config = CloudConfig.model_validate(
+            {"profile": profile_name}, strict=False
+        )
         for field_name, _field_info in CloudConfig.model_fields.items():
             if field_name == "profile":
                 continue

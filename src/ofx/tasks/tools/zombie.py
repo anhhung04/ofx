@@ -36,8 +36,7 @@ class ZombieTask(Task):
     description = "Lightweight service credential brute-forcer with gogo integration"
     category = "brute/login"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v "
-        "github.com/chainreactors/zombie@latest"
+        "GOBIN=~/Tools/bin go install -v github.com/chainreactors/zombie@latest"
     )
     output_types = [UserAccount]
 
@@ -48,20 +47,40 @@ class ZombieTask(Task):
         "password_file": OptDef(flag="-P", type=str, help="File with passwords"),
         "auth": OptDef(flag="-a", type=str, help="Auth pair (user::pass)"),
         "auth_file": OptDef(flag="-A", type=str, help="File with auth pairs"),
-        "service": OptDef(flag="-s", type=str, help="Service name (ssh,mysql,smb,rdp,ftp,...)"),
-        "filter_service": OptDef(flag="-S", type=str, help="Filter services from gogo/json input"),
-        "gogo": OptDef(flag="-g", type=str, help="Gogo result file (.dat/.dat1) for chaining"),
+        "service": OptDef(
+            flag="-s", type=str, help="Service name (ssh,mysql,smb,rdp,ftp,...)"
+        ),
+        "filter_service": OptDef(
+            flag="-S", type=str, help="Filter services from gogo/json input"
+        ),
+        "gogo": OptDef(
+            flag="-g", type=str, help="Gogo result file (.dat/.dat1) for chaining"
+        ),
         "json_input": OptDef(flag="-j", type=str, help="JSON result file input"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
-        "timeout": OptDef(flag="--timeout", type=int, help="Connection timeout in seconds"),
+        "timeout": OptDef(
+            flag="--timeout", type=int, help="Connection timeout in seconds"
+        ),
         "mode": OptDef(flag="-m", type=str, help="Attack mode (clusterbomb/sniper)"),
-        "weakpass": OptDef(flag="--weakpass", is_flag=True, help="Generate common weak passwords"),
-        "force_continue": OptDef(flag="--force-continue", is_flag=True, help="Don't stop after first success per host"),
+        "weakpass": OptDef(
+            flag="--weakpass", is_flag=True, help="Generate common weak passwords"
+        ),
+        "force_continue": OptDef(
+            flag="--force-continue",
+            is_flag=True,
+            help="Don't stop after first success per host",
+        ),
         "no_unauth": OptDef(flag="--no-unauth", is_flag=True, help="Skip unauth check"),
-        "no_honeypot": OptDef(flag="--no-honeypot", is_flag=True, help="Skip honeypot check"),
+        "no_honeypot": OptDef(
+            flag="--no-honeypot", is_flag=True, help="Skip honeypot check"
+        ),
         "top": OptDef(flag="--top", type=int, help="Use top N passwords only"),
-        "userrule": OptDef(flag="--userrule", type=str, help="Username generator rule file"),
-        "pwdrule": OptDef(flag="--pwdrule", type=str, help="Password generator rule file"),
+        "userrule": OptDef(
+            flag="--userrule", type=str, help="Username generator rule file"
+        ),
+        "pwdrule": OptDef(
+            flag="--pwdrule", type=str, help="Password generator rule file"
+        ),
         "param": OptDef(flag="--param", type=str, help="Service-specific parameters"),
         "bar": OptDef(flag="--bar", is_flag=True, help="Show progress bar"),
     }
@@ -98,12 +117,7 @@ class ZombieTask(Task):
             elif value is not None:
                 parts.extend([opt.flag, str(value)])
 
-        import os
-        import tempfile
-
-        _fd, _path = tempfile.mkstemp(prefix=".ofx_task_zombie_", suffix=".json")
-        os.close(_fd)
-        output_file = Path(_path)
+        output_file = self._make_output_path()
         parts.extend(["-f", str(output_file), "-O", "json"])
 
         if gogo_file:

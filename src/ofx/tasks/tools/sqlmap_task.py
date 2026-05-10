@@ -38,15 +38,11 @@ class SqlmapTask(Task):
         "random_agent": OptDef(
             flag="--random-agent", is_flag=True, help="Use random User-Agent"
         ),
-        "forms": OptDef(
-            flag="--forms", is_flag=True, help="Parse and test forms"
-        ),
+        "forms": OptDef(flag="--forms", is_flag=True, help="Parse and test forms"),
         "crawl": OptDef(flag="--crawl", type=int, help="Crawl depth"),
         "dump": OptDef(flag="--dump", is_flag=True, help="Dump DBMS table entries"),
         "dbs": OptDef(flag="--dbs", is_flag=True, help="Enumerate databases"),
-        "tables": OptDef(
-            flag="--tables", is_flag=True, help="Enumerate tables"
-        ),
+        "tables": OptDef(flag="--tables", is_flag=True, help="Enumerate tables"),
     }
 
     input_flag = "-u"
@@ -77,9 +73,7 @@ class SqlmapTask(Task):
 
         # Extract target URL from sqlmap output
         target_url = ""
-        target_match = re.search(
-            r"(?:testing URL|URL)\s*['\"]?(https?://\S+)", raw
-        )
+        target_match = re.search(r"(?:testing URL|URL)\s*['\"]?(https?://\S+)", raw)
         if target_match:
             target_url = target_match.group(1).rstrip("'\"")
 
@@ -124,8 +118,7 @@ class SqlmapTask(Task):
                                 severity=Severity.HIGH,
                                 provider="sqlmap",
                                 description=(
-                                    f"Parameter: {current_param}, "
-                                    f"Type: {current_type}"
+                                    f"Parameter: {current_param}, Type: {current_type}"
                                 ),
                                 tags=["sqli"],
                                 extra_data={
@@ -147,10 +140,7 @@ class SqlmapTask(Task):
                     matched_at=target_url or current_param,
                     severity=Severity.HIGH,
                     provider="sqlmap",
-                    description=(
-                        f"Parameter: {current_param}, "
-                        f"Type: {current_type}"
-                    ),
+                    description=(f"Parameter: {current_param}, Type: {current_type}"),
                     tags=["sqli"],
                     extra_data={
                         "parameter": current_param,

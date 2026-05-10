@@ -32,34 +32,39 @@ jobs:
       live_hosts_json: '{{ steps["collect-hosts"].outputs.live_hosts_json | default("[]", true) }}'
     steps:
       - task: fping
+        log-command: true
         name: fping-discovery
-        timeout: 5
+        timeout: "{{ [[5, cidr_size(inputs.target) // 5000 + 1] | max, 120] | min }}"
         with:
           target: "{{ inputs.target }}"
           generate: true
         continue-on-error: true
       - task: nmap
+        log-command: true
         name: host-discovery
-        timeout: 30
+        timeout: "{{ [[10, cidr_size(inputs.target) // 200 + 5] | max, 480] | min }}"
         with:
           target: "{{ inputs.target }}"
           timing: 4
         continue-on-error: true
       - task: naabu
+        log-command: true
         name: port-sweep
-        timeout: 10
+        timeout: "{{ [[10, cidr_size(inputs.target) // 500 + 5] | max, 240] | min }}"
         with:
           target: "{{ inputs.target }}"
           top_ports: "1000"
           rate: 2000
         continue-on-error: true
       - task: masscan
+        log-command: true
         name: masscan-sweep
-        timeout: 10
+        timeout: "{{ [[10, cidr_size(inputs.target) // 1000 + 5] | max, 120] | min }}"
         with:
           target: "{{ inputs.target }}"
           top_ports: "100"
           rate: 2000
+          wait: 0
         continue-on-error: true
       - name: collect-hosts
         script: |
@@ -105,12 +110,13 @@ jobs:
       cred_count: '{{ steps["parse-brutus"].outputs.cred_count | default("0", true) }}'
     steps:
       - name: run-pipeline
+        log-command: true
         run: |
           naabu -list {{ jobs['network-discovery'].outputs.hosts_file }} \
             -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
             nerva --json 2>/dev/null | \
             brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_netscan_brutus.jsonl
-        timeout: 20
+        timeout: "{{ [[10, jobs['network-discovery'].outputs.host_count | int // 10 + 5] | max, 120] | min }}"
         continue-on-error: true
       - name: parse-brutus
         script: |
@@ -159,6 +165,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
+        log-command: true
         uses: host-scan
         with:
           target: "{{ matrix.target }}"

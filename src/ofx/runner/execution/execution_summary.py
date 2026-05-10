@@ -118,7 +118,7 @@ class ExecutionSummaryReporter:
                                 "duration_ms": step_runner.duration_ms(),
                             }
                         )
-            total_steps += job_exec.get("total_steps", len(steps))
+            total_steps += (job_exec or {}).get("total_steps", len(steps))
             failed_steps += sum(
                 1 for step in steps if step.get("status") == RunnerStatus.FAILED.value
             )
@@ -130,7 +130,7 @@ class ExecutionSummaryReporter:
                     "name": runner.model.name,
                     "status": runner.status.value,
                     "error": runner._error,
-                    "duration_ms": job_exec.get("duration_ms"),
+                    "duration_ms": (job_exec or {}).get("duration_ms"),
                     "steps": steps,
                 }
             )

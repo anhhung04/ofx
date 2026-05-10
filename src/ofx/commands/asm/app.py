@@ -30,11 +30,21 @@ app.add_typer(scope_app, name="scope")
 # ofx asm push
 # ------------------------------------------------------------------
 
+
 @app.command("push")
 def asm_push(
     scope: Annotated[str, typer.Argument(help="Scope ID or name")] = "",
-    output_dir: Annotated[str, typer.Option("--output", "-o", help="Path to OFX output directory with typed_outputs.json")] = "",
-    source: Annotated[str, typer.Option("--source", "-s", help="Source label for imported assets")] = "ofx",
+    output_dir: Annotated[
+        str,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Path to OFX output directory with typed_outputs.json",
+        ),
+    ] = "",
+    source: Annotated[
+        str, typer.Option("--source", "-s", help="Source label for imported assets")
+    ] = "ofx",
 ):
     """Push OFX scan results (typed outputs) to an ASM scope.
 
@@ -83,30 +93,49 @@ def asm_push(
 
     assets, findings = batch_convert(items, source=source)
 
-    console.print(f"[dim]Converting {len(items)} typed outputs → {len(assets)} assets, {len(findings)} findings[/dim]")
+    console.print(
+        f"[dim]Converting {len(items)} typed outputs → {len(assets)} assets, {len(findings)} findings[/dim]"
+    )
 
     if assets:
         result = client.import_generic(scope_id, assets)
         imported = result.get("imported", 0)
         total = result.get("total", len(assets))
-        console.print(f"[green]✓ Imported {imported}/{total} assets to scope {scope_id}[/green]")
+        console.print(
+            f"[green]✓ Imported {imported}/{total} assets to scope {scope_id}[/green]"
+        )
     else:
         console.print("[dim]No assets to push.[/dim]")
 
     if findings:
-        console.print(f"[yellow]⚠ {len(findings)} findings detected but ASM import endpoint handles assets only. Findings will be available when ASM adds finding import support.[/yellow]")
+        console.print(
+            f"[yellow]⚠ {len(findings)} findings detected but ASM import endpoint handles assets only. Findings will be available when ASM adds finding import support.[/yellow]"
+        )
 
 
 # ------------------------------------------------------------------
 # ofx asm pull
 # ------------------------------------------------------------------
 
+
 @app.command("pull")
 def asm_pull(
     scope: Annotated[str, typer.Argument(help="Scope ID or name")] = "",
-    effective: Annotated[bool, typer.Option("--effective", "-e", help="Show effective targets (after exclude rules)")] = False,
-    output_file: Annotated[str, typer.Option("--output", "-o", help="Write targets to file (one per line)")] = "",
-    target_type: Annotated[str, typer.Option("--type", "-t", help="Filter by target type (domain, ip, cidr, url)")] = "",
+    effective: Annotated[
+        bool,
+        typer.Option(
+            "--effective", "-e", help="Show effective targets (after exclude rules)"
+        ),
+    ] = False,
+    output_file: Annotated[
+        str, typer.Option("--output", "-o", help="Write targets to file (one per line)")
+    ] = "",
+    target_type: Annotated[
+        str,
+        typer.Option(
+            "--type", "-t", help="Filter by target type (domain, ip, cidr, url)"
+        ),
+    ] = "",
 ):
     """Pull targets from an ASM scope for use in OFX workflows.
 
@@ -122,14 +151,16 @@ def asm_pull(
     if effective:
         raw = client.effective_targets(scope_id)
         targets = [
-            t for t in raw
+            t
+            for t in raw
             if not t.excluded and (not target_type or t.target_type == target_type)
         ]
         values = [t.value for t in targets]
     else:
         raw_targets = client.list_targets(scope_id)
         targets_list = [
-            t for t in raw_targets
+            t
+            for t in raw_targets
             if t.enabled and (not target_type or t.target_type == target_type)
         ]
         values = [t.value for t in targets_list]
@@ -152,12 +183,19 @@ def asm_pull(
 # ofx asm sync
 # ------------------------------------------------------------------
 
+
 @app.command("sync")
 def asm_sync(
     scope: Annotated[str, typer.Argument(help="Scope ID or name")] = "",
-    output_dir: Annotated[str, typer.Option("--output", "-o", help="OFX output directory to push")] = "",
-    targets_file: Annotated[str, typer.Option("--targets-file", help="Write pulled targets to this file")] = "",
-    source: Annotated[str, typer.Option("--source", "-s", help="Source label for imported assets")] = "ofx",
+    output_dir: Annotated[
+        str, typer.Option("--output", "-o", help="OFX output directory to push")
+    ] = "",
+    targets_file: Annotated[
+        str, typer.Option("--targets-file", help="Write pulled targets to this file")
+    ] = "",
+    source: Annotated[
+        str, typer.Option("--source", "-s", help="Source label for imported assets")
+    ] = "ofx",
 ):
     """Bidirectional sync: push OFX results and pull updated targets.
 
@@ -173,21 +211,21 @@ def asm_sync(
     # Push phase
     console.print("[bold]Phase 1: Push results → ASM[/bold]")
     try:
-        # Reuse push logic
-        import sys
-        sys.argv  # just to avoid unused import
-        asm_push.callback(scope=scope_id, output_dir=output_dir, source=source)
+        asm_push.callback(scope=scope_id, output_dir=output_dir, source=source)  # type: ignore[attr-defined]
     except SystemExit:
         pass
 
     # Pull phase
     console.print("\n[bold]Phase 2: Pull targets ← ASM[/bold]")
-    asm_pull.callback(scope=scope_id, effective=True, output_file=targets_file, target_type="")
+    asm_pull.callback(
+        scope=scope_id, effective=True, output_file=targets_file, target_type=""
+    )  # type: ignore[attr-defined]
 
 
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _resolve_scope_id(client, scope_ref: str) -> str:
     """Resolve a scope reference (ID or name) to scope ID."""
@@ -197,8 +235,12 @@ def _resolve_scope_id(client, scope_ref: str) -> str:
         cfg = get_asm_config()
         scope_ref = cfg.default_scope
         if not scope_ref:
-            get_console().print("[red]No scope specified and no default scope configured.[/red]")
-            get_console().print("Set a default: [bold]ofx asm config set --default-scope <ID>[/bold]")
+            get_console().print(
+                "[red]No scope specified and no default scope configured.[/red]"
+            )
+            get_console().print(
+                "Set a default: [bold]ofx asm config set --default-scope <ID>[/bold]"
+            )
             raise typer.Exit(code=1)
 
     # If it looks like a UUID, use directly

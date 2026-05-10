@@ -21,6 +21,7 @@ jobs:
       open_ports: '{{ steps["identify-services"].outputs.open_ports | default("", true) }}'
     steps:
     - task: naabu
+      log-command: true
       timeout: 10
       name: port-scan
       with:
@@ -29,6 +30,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: nerva
+      log-command: true
       timeout: 10
       name: fingerprint
       with:
@@ -161,6 +163,7 @@ jobs:
         add_outputs(enum_file=out_file, service_count=len(services))
         print(f"\n[+] Full results: {out_file}")
       log-stdout: true
+      log-command: true
       timeout: 10
 
     - name: export-to-project
@@ -190,6 +193,7 @@ jobs:
       cred_count: '{{ steps["parse-results"].outputs.cred_count | default("", true) }}'
     steps:
     - name: nerva-brutus
+      log-command: true
       run: |
         naabu -host {{ inputs.target }} -p {{ jobs['port-discovery'].outputs.open_ports | default('22,21,3306,5432,6379', true) }} -silent 2>/dev/null | \
           nerva --json 2>/dev/null | \

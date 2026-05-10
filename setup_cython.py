@@ -173,8 +173,10 @@ def collect_extensions() -> tuple[list[Extension], list[str]]:
 
     _save_cache(new_cache)
     elapsed = time.monotonic() - start
-    print(f"[cython] Scanned {len(candidates)} modules in {elapsed:.2f}s"
-          f" ({cache_hits} cached)")
+    print(
+        f"[cython] Scanned {len(candidates)} modules in {elapsed:.2f}s"
+        f" ({cache_hits} cached)"
+    )
 
     return extensions, skipped
 
@@ -182,8 +184,10 @@ def collect_extensions() -> tuple[list[Extension], list[str]]:
 def main():
     extensions, skipped = collect_extensions()
     total = len(extensions) + len(skipped)
-    print(f"[cython] {len(extensions)}/{total} modules to compile"
-          f" ({len(skipped)} skipped)")
+    print(
+        f"[cython] {len(extensions)}/{total} modules to compile"
+        f" ({len(skipped)} skipped)"
+    )
     if skipped:
         for s in skipped:
             print(f"  skip: {s}")

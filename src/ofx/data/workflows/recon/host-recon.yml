@@ -21,6 +21,7 @@ jobs:
     name: Host Recon
     steps:
       - name: host-scan
+        log-command: true
         uses: host-scan
         with:
           target: "{{ inputs.target }}"

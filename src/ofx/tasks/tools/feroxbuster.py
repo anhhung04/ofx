@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -63,7 +62,9 @@ class FeroxbusterTask(Task):
             flag="--collect-words", is_flag=True, help="Collect discovered words"
         ),
         "smart": OptDef(
-            flag="--smart", is_flag=True, help="Smart mode: auto-detect extensions and filter 404s"
+            flag="--smart",
+            is_flag=True,
+            help="Smart mode: auto-detect extensions and filter 404s",
         ),
         "collect_extensions": OptDef(
             flag="--collect-extensions",
@@ -75,30 +76,24 @@ class FeroxbusterTask(Task):
             is_flag=True,
             help="Force recursion on all found directories",
         ),
-        "user_agent": OptDef(
-            flag="-a", type=str, help="Custom User-Agent string"
-        ),
+        "user_agent": OptDef(flag="-a", type=str, help="Custom User-Agent string"),
     }
 
     input_flag = "-u"
-    file_flag = "--stdin"
+    file_flag: str | None = "--stdin"
     output_flag = "-o"
     json_flag = "--json"
     silent_flag = "--silent"
     extra_flags = ["--no-state"]
 
-    def build_command(
-        self, target: str, **kwargs: Any
-    ) -> tuple[str, Path | None]:
+    def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Override to pipe file/multi-line targets via stdin.
 
         feroxbuster's ``--stdin`` reads URLs from stdin (one per line),
         unlike most tools where the file flag takes a path argument.
         """
         target_is_file = (
-            target
-            and not target.startswith("http")
-            and Path(target).is_file()
+            target and not target.startswith("http") and Path(target).is_file()
         )
         has_newlines = target and "\n" in target
 
@@ -131,12 +126,8 @@ class FeroxbusterTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[Url]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         # feroxbuster JSON has type field; we only want "response" entries
@@ -159,4 +150,3 @@ class FeroxbusterTask(Task):
                 method=data.get("method", "GET"),
             )
         ]
-

@@ -31,6 +31,7 @@ jobs:
     name: Install Nginx & Certbot
     steps:
       - name: Install packages
+        log-command: true
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq nginx certbot python3-certbot-nginx
@@ -44,6 +45,7 @@ jobs:
       key_path: "/etc/letsencrypt/live/{{ inputs.domain }}/privkey.pem"
     steps:
       - name: Obtain certificate
+        log-command: true
         run: |
           sudo certbot certonly --nginx -d {{ inputs.domain }} \
             --non-interactive --agree-tos --register-unsafely-without-email \
@@ -112,3 +114,4 @@ jobs:
           sudo nginx -t && sudo systemctl restart nginx
           echo "Redirector active: https://{{ inputs.domain }} → {{ inputs.c2_host }}:{{ inputs.c2_port }}"
         log-stdout: true
+        log-command: true

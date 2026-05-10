@@ -61,6 +61,8 @@ class FlowRunHandler:
         resume: bool | None = None,
         durable_backend: str | None = None,
         durable_redis_prefix: str | None = None,
+        auto_commit: bool = False,
+        auto_push: bool = False,
         quiet: bool = False,
         lock: str | None = None,
         log_format: str = "rich",
@@ -78,6 +80,8 @@ class FlowRunHandler:
         self.resume = resume
         self.durable_backend = durable_backend
         self.durable_redis_prefix = durable_redis_prefix
+        self.auto_commit = auto_commit
+        self.auto_push = auto_push
         self.quiet = quiet
         self.lock_path = Path(lock).expanduser() if lock else None
         self.log_format = log_format
@@ -171,7 +175,9 @@ class FlowRunHandler:
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
                 vars=run_vars or None,
-                event_sink_path=(self.output / "events.ndjson") if self.events else None,
+                event_sink_path=(self.output / "events.ndjson")
+                if self.events
+                else None,
             )
 
             if result.status.value == "completed":
@@ -228,7 +234,9 @@ class FlowRunHandler:
                 line = line.strip()
                 if line.startswith("job '") or line.startswith("- job '"):
                     # Extract root error for each job
-                    root = extract_root_error(line.split(":", 1)[-1] if ":" in line else line)
+                    root = extract_root_error(
+                        line.split(":", 1)[-1] if ":" in line else line
+                    )
                     job_name = line.split("'")[1] if "'" in line else "unknown"
                     logger.error("  ✗ %s: %s", job_name, root)
                 elif line and not line.startswith("Job failure"):
@@ -340,11 +348,11 @@ class FlowRunHandler:
                 )
             entries = self._read_target_file(filepath)
             if not entries:
-                raise typer.BadParameter(
-                    f"File for input '{key}' is empty: {filepath}"
-                )
+                raise typer.BadParameter(f"File for input '{key}' is empty: {filepath}")
             self.input[key] = entries[0] if len(entries) == 1 else entries
-            logger.info("Loaded %d value(s) for '%s' from %s", len(entries), key, filepath)
+            logger.info(
+                "Loaded %d value(s) for '%s' from %s", len(entries), key, filepath
+            )
 
     def _validate_inputs(self) -> None:
         """Validate inputs against the workflow dispatch schema.
@@ -387,9 +395,7 @@ class FlowRunHandler:
                     try:
                         self.input[name] = int(value)
                     except ValueError:
-                        errors.append(
-                            f"Input '{name}' expects integer, got '{value}'"
-                        )
+                        errors.append(f"Input '{name}' expects integer, got '{value}'")
                 elif declared_type == "boolean":
                     self.input[name] = value.lower() in ("true", "1", "yes")
 
@@ -428,6 +434,8 @@ class FlowRunHandler:
             and self.resume is None
             and self.durable_backend is None
             and self.durable_redis_prefix is None
+            and not self.auto_commit
+            and not self.auto_push
         ):
             return None
 
@@ -440,6 +448,11 @@ class FlowRunHandler:
             config.backend = self.durable_backend
         if self.durable_redis_prefix is not None:
             config.redis_prefix = self.durable_redis_prefix
+        if self.auto_commit:
+            config.auto_commit = True
+        if self.auto_push:
+            config.auto_push = True
+            config.auto_commit = True
         return config
 
     def _configure_logging(self) -> None:

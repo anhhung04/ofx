@@ -20,6 +20,13 @@ class TestTemplateHelpers:
             {"_type": "tag", "name": "nginx", "category": "technology"},
             {"_type": "record", "name": "mx.example.com", "type": "MX"},
             {"_type": "domain", "domain": "example.com"},
+            {
+                "_type": "certificate",
+                "host": "example.com:443",
+                "subject_cn": "example.com",
+            },
+            {"_type": "exploit", "name": "EDB-12345", "title": "Buffer Overflow"},
+            {"_type": "user_account", "username": "admin"},
         ]
 
     @staticmethod
@@ -57,6 +64,15 @@ class TestTemplateHelpers:
     def test_domains(self, sample_outputs):
         assert len(self._of_type(sample_outputs, "domain")) == 1
 
+    def test_certs(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "certificate")) == 1
+
+    def test_exploits(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "exploit")) == 1
+
+    def test_users(self, sample_outputs):
+        assert len(self._of_type(sample_outputs, "user_account")) == 1
+
     def test_of_type_with_non_list(self):
         assert self._of_type("not a list", "port") == []
         assert self._of_type(None, "port") == []
@@ -70,8 +86,20 @@ class TestTemplateHelpers:
 
         resolver = TemplateResolver()
         funcs = resolver.get_support_functions()
-        for name in ("of_type", "ports", "urls", "vulns", "subdomains",
-                      "ips", "tags", "records", "domains"):
+        for name in (
+            "of_type",
+            "ports",
+            "urls",
+            "vulns",
+            "subdomains",
+            "ips",
+            "tags",
+            "records",
+            "domains",
+            "users",
+            "certs",
+            "exploits",
+        ):
             assert name in funcs, f"Helper '{name}' not in support functions"
 
 
@@ -95,6 +123,71 @@ class TestUsersTemplateHelper:
         assert len(result) == 2
         assert result[0]["username"] == "admin"
         assert result[1]["username"] == "guest"
+
+
+# ── Template Helpers: certs() and exploits() ───────────────────────────
+
+
+class TestCertsTemplateHelper:
+    def test_certs_filter(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        certs_fn = funcs["certs"]
+
+        items = [
+            {
+                "_type": "certificate",
+                "host": "example.com:443",
+                "subject_cn": "example.com",
+            },
+            {"_type": "port", "port": 443},
+            {
+                "_type": "certificate",
+                "host": "api.example.com:443",
+                "subject_cn": "api.example.com",
+            },
+        ]
+        result = certs_fn(items)
+        assert len(result) == 2
+        assert result[0]["subject_cn"] == "example.com"
+        assert result[1]["host"] == "api.example.com:443"
+
+    def test_certs_empty(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        assert funcs["certs"]([]) == []
+        assert funcs["certs"]([{"_type": "port", "port": 80}]) == []
+
+
+class TestExploitsTemplateHelper:
+    def test_exploits_filter(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        exploits_fn = funcs["exploits"]
+
+        items = [
+            {"_type": "exploit", "name": "EDB-12345", "title": "Buffer Overflow"},
+            {"_type": "vulnerability", "name": "XSS"},
+            {"_type": "exploit", "name": "EDB-67890", "title": "SQL Injection"},
+        ]
+        result = exploits_fn(items)
+        assert len(result) == 2
+        assert result[0]["name"] == "EDB-12345"
+        assert result[1]["title"] == "SQL Injection"
+
+    def test_exploits_empty(self):
+        from ofx.runner.templates.resolver import TemplateResolver
+
+        resolver = TemplateResolver()
+        funcs = resolver.get_support_functions()
+        assert funcs["exploits"]([]) == []
+        assert funcs["exploits"]([{"_type": "url", "url": "http://x.com"}]) == []
 
 
 # ── Profile System ─────────────────────────────────────────────────────
@@ -177,9 +270,7 @@ class TestProfiles:
     def test_profile_task_options(self):
         from ofx.profiles.models import OFXProfile
 
-        p = OFXProfile(
-            task_options={"nmap": {"timing": "T2", "ports": "80,443"}}
-        )
+        p = OFXProfile(task_options={"nmap": {"timing": "T2", "ports": "80,443"}})
         assert p.task_options["nmap"]["timing"] == "T2"
 
     def test_profile_retry_policy_defaults(self):
@@ -204,13 +295,14 @@ class TestTimeWindow:
         assert result["allowed"] is True
 
     def test_check_within_window(self):
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        # Create a window that covers the current time
-        now = datetime.now()
+        # Build a window around the current UTC time (check_time_window
+        # defaults to UTC) so the assertion is timezone-independent.
+        now = datetime.now(UTC)
         start = f"{max(0, now.hour - 1):02d}:00"
         end = f"{min(23, now.hour + 1):02d}:59"
         day = now.strftime("%A").lower()
@@ -230,12 +322,12 @@ class TestTimeWindow:
         assert "outside the allowed days" in result["message"]
 
     def test_check_outside_window_time(self):
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        now = datetime.now()
+        now = datetime.now(UTC)
         # Set window to an hour that's definitely not now
         if now.hour < 12:
             start, end = "18:00", "19:00"
@@ -270,7 +362,6 @@ class TestTimeWindow:
         assert _time_in_range(time(22, 0), time(6, 0), time(12, 0)) is False
 
     def test_time_window_guard_not_started_when_disabled(self):
-
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import TimeWindowGuard
 
@@ -280,12 +371,12 @@ class TestTimeWindow:
         assert guard._task is None
 
     def test_warn_message_near_end(self):
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        now = datetime.now()
+        now = datetime.now(UTC)
         day = now.strftime("%A").lower()
         # Window that ends in 5 minutes
         end_min = (now.minute + 5) % 60
@@ -334,10 +425,8 @@ class TestProfileTaskOptions:
         from ofx.runner.core.models import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
-        profile = OFXProfile(
-            task_options={"httpx": {"threads": 5, "rate_limit": 20}}
-        )
-        ctx = RunContext(vars={"profile": profile})
+        profile = OFXProfile(task_options={"httpx": {"threads": 5, "rate_limit": 20}})
+        ctx = RunContext(vars={"profile_model": profile})
         model = TaskExecution(
             task_name="httpx",
             target="example.com",
@@ -369,13 +458,76 @@ class TestProfileTaskOptions:
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         profile = OFXProfile(task_options={"nuclei": {"rate_limit": 50}})
-        ctx = RunContext(vars={"profile": profile})
+        ctx = RunContext(vars={"profile_model": profile})
         model = TaskExecution(
             task_name="httpx", target="example.com", opts={"threads": 10}
         )
         runner = TaskRunner(model, ctx)
         runner._apply_profile_task_options()
         assert runner.model.opts == {"threads": 10}
+
+    def test_common_auto_mapping_injects_proxy_threads_delay(self):
+        """Layer 1: profile common fields auto-map to matching task opts."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.core.models import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+        from ofx.tasks.registry import TaskRegistry
+
+        profile = OFXProfile(
+            proxy="socks5://127.0.0.1:9050",
+            threads=3,
+            rate_limit=50,
+            user_agent="StealthBot/2.0",
+        )
+        ctx = RunContext(vars={"profile_model": profile})
+        # feroxbuster has proxy, threads, rate_limit, user_agent opts
+        model = TaskExecution(
+            task_name="feroxbuster",
+            target="http://example.com",
+            opts={},
+        )
+        runner = TaskRunner(model, ctx)
+        runner._task = TaskRegistry.get("feroxbuster")()
+        runner._apply_profile_task_options()
+
+        assert runner.model.opts.get("proxy") == "socks5://127.0.0.1:9050"
+        assert runner.model.opts.get("threads") == 3
+        assert runner.model.opts.get("rate_limit") == 50
+        assert runner.model.opts.get("user_agent") == "StealthBot/2.0"
+
+    def test_common_auto_mapping_user_opts_win(self):
+        """Layer 1: user-provided opts are never overridden by profile."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.core.models import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+        from ofx.tasks.registry import TaskRegistry
+
+        profile = OFXProfile(threads=3, rate_limit=50)
+        ctx = RunContext(vars={"profile_model": profile})
+        model = TaskExecution(
+            task_name="httpx",
+            target="example.com",
+            opts={"threads": 20},  # explicit user value
+        )
+        runner = TaskRunner(model, ctx)
+        runner._task = TaskRegistry.get("httpx")()
+        runner._apply_profile_task_options()
+
+        assert runner.model.opts["threads"] == 20  # user wins
+        assert runner.model.opts.get("rate_limit") == 50  # profile fills gap
+
+    def test_dict_at_profile_key_does_not_crash(self):
+        """Regression: the old 'profile' key holds a dict — must not crash."""
+        from ofx.runner.core.models import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        # Simulate real runtime: 'profile' is dict, 'profile_model' missing
+        ctx = RunContext(vars={"profile": {"proxy": "http://x", "threads": 2}})
+        model = TaskExecution(task_name="httpx", target="example.com", opts={})
+        runner = TaskRunner(model, ctx)
+        runner._apply_profile_task_options()
+        # No profile_model → no injection, no crash
+        assert runner.model.opts == {}
 
 
 # ── Profile Env Var Injection ──────────────────────────────────────────
@@ -432,3 +584,320 @@ class TestProfileEnvInjection:
             profile_envs["OFX_USER_AGENT"] = profile.user_agent
 
         assert profile_envs == {}
+
+
+# ── Cloud Task Profile Integration ─────────────────────────────────────
+
+
+class TestCloudTaskProfileIntegration:
+    """Verify profile settings are applied to cloud task commands."""
+
+    def test_build_task_command_with_profile(self):
+        """Profile opts merge into the cloud task command."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile(
+            proxy="socks5://127.0.0.1:9050",
+            threads=3,
+        )
+        step = Step(
+            task="feroxbuster",
+            run_with={"target": "http://example.com"},
+        )
+        cmd = build_task_command_from_step(step, profile=profile)
+        # feroxbuster uses -p for proxy and -t for threads
+        assert "socks5://127.0.0.1:9050" in cmd
+        assert "-t 3" in cmd
+
+    def test_build_task_command_user_opts_win(self):
+        """Step-level with: values take precedence over profile."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile(threads=3)
+        step = Step(
+            task="feroxbuster",
+            run_with={"target": "http://example.com", "threads": 20},
+        )
+        cmd = build_task_command_from_step(step, profile=profile)
+        assert "-t 20" in cmd
+        assert "-t 3" not in cmd
+
+    def test_build_task_command_no_profile(self):
+        """Without a profile the command is unchanged."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+
+        step = Step(
+            task="httpx",
+            run_with={"target": "example.com"},
+        )
+        cmd = build_task_command_from_step(step)
+        assert "httpx" in cmd
+        assert "example.com" in cmd
+
+    def test_build_task_command_profile_task_options(self):
+        """Per-task overrides from profile.task_options are applied."""
+        from ofx.cloud.task_runtime import build_task_command_from_step
+        from ofx.models.step import Step
+        from ofx.profiles.models import OFXProfile
+
+        profile = OFXProfile(task_options={"httpx": {"rate_limit": 20}})
+        step = Step(
+            task="httpx",
+            run_with={"target": "example.com"},
+        )
+        cmd = build_task_command_from_step(step, profile=profile)
+        assert "-rate-limit 20" in cmd
+
+
+# ── Step Retry Profile Defaults ────────────────────────────────────────
+
+
+class TestStepRetryProfileDefaults:
+    """Verify max_retries and timeout_minutes fallbacks in step_mixin."""
+
+    def _make_step(self, **overrides):
+        from ofx.models.step import Step
+
+        return Step(run="echo test", **overrides)
+
+    def test_max_retries_fallback_when_policy_has_no_retry(self):
+        """profile.max_retries is used when retry_profiles has no retry key."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            max_retries=5,
+            retry_profiles={"standard": {"retry_delay": 10}},
+        )
+        step = self._make_step()
+
+        # Create a minimal mock that has the interface StepRunnerMixin expects
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry == 5
+
+    def test_max_retries_overrides_policy_when_non_default(self):
+        """Non-default max_retries overrides retry_profiles[policy].retry."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            max_retries=5,
+            retry_profiles={"standard": {"retry": 2, "retry_delay": 10}},
+        )
+        step = self._make_step()
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry == 5  # top-level knob wins
+
+    def test_default_max_retries_uses_policy(self):
+        """Default max_retries=3 does NOT override policy.retry."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            # max_retries=3 (default)
+            retry_profiles={"standard": {"retry": 2, "retry_delay": 10}},
+        )
+        step = self._make_step()
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry == 2  # policy wins when max_retries is default
+
+    def test_timeout_minutes_fallback(self):
+        """profile.timeout_minutes is used when policy has no timeout."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            timeout_minutes=30,
+            retry_profiles={"standard": {"retry_delay": 10}},
+        )
+        step = self._make_step()
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.timeout == 30
+
+    def test_timeout_minutes_overrides_default_policy_timeout(self):
+        """Non-default timeout_minutes overrides default policy timeout=1440."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        # User sets timeout_minutes=15 but uses default retry_profiles
+        # which has standard.timeout=1440
+        profile = OFXProfile(timeout_minutes=15)
+        step = self._make_step()
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.timeout == 15  # top-level knob wins
+
+    def test_default_timeout_minutes_uses_policy(self):
+        """Default timeout_minutes=60 does NOT override policy.timeout."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        # Default profile with stealth policy (timeout=180)
+        profile = OFXProfile(retry_policy="stealth")
+        step = self._make_step()
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert (
+            runner.model.timeout == 180
+        )  # policy wins when timeout_minutes is default
+
+    def test_explicit_step_timeout_overridden_by_profile(self):
+        """Profile timeout_minutes overrides even explicit step timeout."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            timeout_minutes=30,
+            retry_profiles={"standard": {"timeout": 60}},
+        )
+        step = self._make_step(timeout=120)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.timeout == 30  # profile wins
+
+    def test_explicit_step_retry_overridden_by_profile(self):
+        """Profile max_retries overrides even explicit step retry."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(max_retries=1)
+        step = self._make_step(retry=5)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry == 1  # profile wins
+
+    def test_policy_retry_delay_overrides_step(self):
+        """Profile retry_delay from policy overrides step value."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        profile = OFXProfile(
+            retry_profiles={"standard": {"retry_delay": 30}},
+        )
+        step = self._make_step(retry_delay=5)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        assert runner.model.retry_delay == 30  # profile wins
+
+    def test_step_values_kept_when_profile_is_default(self):
+        """Default profile values do not override explicit step values."""
+        from ofx.profiles.models import OFXProfile
+        from ofx.runner.execution.step_mixin import StepRunnerMixin
+
+        # All defaults — timeout_minutes=60, max_retries=3
+        profile = OFXProfile()
+        step = self._make_step(timeout=120, retry=5)
+
+        class FakeRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = step
+
+                class FakeCtx:
+                    vars = {"profile_model": profile}
+
+                self.ctx = FakeCtx()
+
+        runner = FakeRunner()
+        runner._apply_retry_profile_defaults()
+        # Default policy has timeout=1440 → overrides step's 120
+        assert runner.model.timeout == 1440
+        # Default policy has retry=0 → zero doesn't override step's 5
+        assert runner.model.retry == 5

@@ -24,6 +24,7 @@ jobs:
       weak_cipher_count: '{{ steps["collect-sslscan"].outputs.weak_cipher_count | default("", true) }}'
     steps:
     - task: sslscan
+      log-command: true
       timeout: 10
       name: sslscan-run
       with:
@@ -61,6 +62,7 @@ jobs:
       cert_issues: '{{ steps["export-testssl"].outputs.cert_issues | default("", true) }}'
     steps:
     - task: testssl
+      log-command: true
       timeout: 10
       name: testssl-scan
       with:

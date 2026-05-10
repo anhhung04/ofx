@@ -18,10 +18,16 @@ from ofx.runner.execution.findings_export import (
 
 class TestTypeDisplayKey:
     def test_subdomain(self):
-        assert type_display_key("subdomain", {"host": "sub.example.com"}) == "sub.example.com"
+        assert (
+            type_display_key("subdomain", {"host": "sub.example.com"})
+            == "sub.example.com"
+        )
 
     def test_url(self):
-        assert type_display_key("url", {"url": "https://example.com/path"}) == "https://example.com/path"
+        assert (
+            type_display_key("url", {"url": "https://example.com/path"})
+            == "https://example.com/path"
+        )
 
     def test_ip(self):
         assert type_display_key("ip", {"ip": "10.0.0.1"}) == "10.0.0.1"
@@ -30,7 +36,10 @@ class TestTypeDisplayKey:
         assert type_display_key("port", {"ip": "10.0.0.1", "port": 80}) == "10.0.0.1:80"
 
     def test_port_with_host(self):
-        assert type_display_key("port", {"host": "example.com", "port": 443}) == "example.com:443"
+        assert (
+            type_display_key("port", {"host": "example.com", "port": 443})
+            == "example.com:443"
+        )
 
     def test_tag(self):
         assert type_display_key("tag", {"name": "Laravel"}) == "Laravel"
@@ -39,7 +48,9 @@ class TestTypeDisplayKey:
         assert type_display_key("domain", {"domain": "example.com"}) == "example.com"
 
     def test_record(self):
-        result = type_display_key("record", {"name": "example.com", "type": "A", "host": "10.0.0.1"})
+        result = type_display_key(
+            "record", {"name": "example.com", "type": "A", "host": "10.0.0.1"}
+        )
         assert result == "example.com A 10.0.0.1"
 
     def test_unknown_type(self):
@@ -96,15 +107,25 @@ class TestExportTypedOutputs:
             {"_type": "port", "ip": "10.0.0.1", "port": 80},
             {"_type": "port", "ip": "10.0.0.1", "port": 443},
         ]
-        summaries = export_typed_outputs(str(tmp_path), items)
+        _summaries = export_typed_outputs(str(tmp_path), items)
         content = (tmp_path / "hosts" / "ports.txt").read_text()
         assert "10.0.0.1:80" in content
         assert "10.0.0.1:443" in content
 
     def test_exports_vulnerabilities_as_jsonl(self, tmp_path):
         items = [
-            {"_type": "vulnerability", "name": "XSS", "severity": "high", "url": "https://x.com"},
-            {"_type": "vulnerability", "name": "SQLi", "severity": "critical", "url": "https://y.com"},
+            {
+                "_type": "vulnerability",
+                "name": "XSS",
+                "severity": "high",
+                "url": "https://x.com",
+            },
+            {
+                "_type": "vulnerability",
+                "name": "SQLi",
+                "severity": "critical",
+                "url": "https://y.com",
+            },
         ]
         summaries = export_typed_outputs(str(tmp_path), items)
         assert "vulns/vulnerabilities.jsonl" in summaries[0]
@@ -215,7 +236,11 @@ class TestExportTypedOutputs:
 
     def test_certificates_as_jsonl(self, tmp_path):
         items = [
-            {"_type": "certificate", "subject": "*.example.com", "issuer": "Let's Encrypt"},
+            {
+                "_type": "certificate",
+                "subject": "*.example.com",
+                "issuer": "Let's Encrypt",
+            },
         ]
         export_typed_outputs(str(tmp_path), items)
         assert (tmp_path / "certs" / "certificates.jsonl").exists()
@@ -319,32 +344,40 @@ class TestCollectTypedOutputs:
 
     def test_collects_from_job_runners(self):
         runners = {
-            "job1": self._make_job_runner([
-                [{"_type": "subdomain", "host": "a.example.com"}],
-                [{"_type": "url", "url": "https://example.com"}],
-            ]),
+            "job1": self._make_job_runner(
+                [
+                    [{"_type": "subdomain", "host": "a.example.com"}],
+                    [{"_type": "url", "url": "https://example.com"}],
+                ]
+            ),
         }
         result = asyncio.run(collect_typed_outputs(runners))
         assert len(result) == 2
 
     def test_collects_from_matrix_runners(self):
         runners = {
-            "matrix_job": self._make_matrix_runner([
-                [[{"_type": "subdomain", "host": "a.com"}]],
-                [[{"_type": "subdomain", "host": "b.com"}]],
-            ]),
+            "matrix_job": self._make_matrix_runner(
+                [
+                    [[{"_type": "subdomain", "host": "a.com"}]],
+                    [[{"_type": "subdomain", "host": "b.com"}]],
+                ]
+            ),
         }
         result = asyncio.run(collect_typed_outputs(runners))
         assert len(result) == 2
 
     def test_mixed_job_and_matrix(self):
         runners = {
-            "job1": self._make_job_runner([
-                [{"_type": "ip", "ip": "10.0.0.1"}],
-            ]),
-            "matrix_job": self._make_matrix_runner([
-                [[{"_type": "subdomain", "host": "a.com"}]],
-            ]),
+            "job1": self._make_job_runner(
+                [
+                    [{"_type": "ip", "ip": "10.0.0.1"}],
+                ]
+            ),
+            "matrix_job": self._make_matrix_runner(
+                [
+                    [[{"_type": "subdomain", "host": "a.com"}]],
+                ]
+            ),
         }
         result = asyncio.run(collect_typed_outputs(runners))
         assert len(result) == 2
@@ -394,12 +427,14 @@ class TestAutoExportFindings:
         from ofx.runner.execution.job import JobRunner
 
         step = MagicMock()
-        step.reg_get = AsyncMock(return_value={
-            "typed_outputs": [
-                {"_type": "subdomain", "host": "a.example.com"},
-                {"_type": "subdomain", "host": "b.example.com"},
-            ]
-        })
+        step.reg_get = AsyncMock(
+            return_value={
+                "typed_outputs": [
+                    {"_type": "subdomain", "host": "a.example.com"},
+                    {"_type": "subdomain", "host": "b.example.com"},
+                ]
+            }
+        )
 
         job = MagicMock(spec=JobRunner)
         job._runners = {"0": step}
@@ -421,9 +456,9 @@ class TestAutoExportFindings:
         from ofx.runner.execution.job import JobRunner
 
         step = MagicMock()
-        step.reg_get = AsyncMock(return_value={
-            "typed_outputs": [{"_type": "ip", "ip": "10.0.0.1"}]
-        })
+        step.reg_get = AsyncMock(
+            return_value={"typed_outputs": [{"_type": "ip", "ip": "10.0.0.1"}]}
+        )
         job = MagicMock(spec=JobRunner)
         job._runners = {"0": step}
 
@@ -435,4 +470,4 @@ class TestAutoExportFindings:
                 log_fn=lambda msg: log_lines.append(msg),
             )
         )
-        assert any("Findings exported" in l for l in log_lines)
+        assert any("Findings exported" in lst for lst in log_lines)

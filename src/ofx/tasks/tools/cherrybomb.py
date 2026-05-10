@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
@@ -19,9 +20,7 @@ _SEVERITY_MAP = {
 # Match lines like:  Alert: Missing auth  |  Check: BOLA  |  severity: high
 _ALERT_RE = re.compile(r"Alert:\s*(.+)", re.IGNORECASE)
 _CHECK_RE = re.compile(r"Check:\s*(.+)", re.IGNORECASE)
-_SEVERITY_RE = re.compile(
-    r"severity:\s*(critical|high|medium|low|info)", re.IGNORECASE
-)
+_SEVERITY_RE = re.compile(r"severity:\s*(critical|high|medium|low|info)", re.IGNORECASE)
 
 
 @TaskRegistry.register("cherrybomb")

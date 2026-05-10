@@ -13,11 +13,13 @@ class RunnerContextBuilder:
     base: RunContext
 
     def _shallow_copy_with_dict(self, field: str, updates: dict[str, Any]) -> RunContext:
-        """Create a shallow copy of base, deep-copying only the target dict field."""
-        # Deep-copy only the dict being mutated; other fields share references
-        current = getattr(self.base, field)
-        merged = {**current, **updates}
-        return self.base.model_copy(update={field: merged})
+        """Create a copy of base, deep-copying only the target dict field."""
+        import copy
+
+        # Deep-copy the target dict so nested structures are isolated
+        current = copy.deepcopy(getattr(self.base, field))
+        current.update(updates)
+        return self.base.model_copy(update={field: current})
 
     def with_env(self, env: dict[str, Any]) -> RunContext:
         return self._shallow_copy_with_dict("envs", env)

@@ -46,4 +46,3 @@ class CrlfuzzTask(Task):
                 )
             ]
         return []
-

@@ -138,6 +138,20 @@ def print_error(title: str, message: str, details: str | None = None) -> None:
     get_console().print(error_panel(title, message, details))
 
 
+def error_exit(
+    title: str, message: str, details: str | None = None, *, code: int = 1
+) -> None:
+    """Print an error panel and raise typer.Exit with the given code.
+
+    Combines print_error() + raise typer.Exit() into a single call to
+    prevent the common mistake of printing an error but forgetting to exit.
+    """
+    import typer
+
+    print_error(title, message, details)
+    raise typer.Exit(code=code)
+
+
 def print_warning(title: str, message: str, hint: str | None = None) -> None:
     get_console().print(warning_panel(title, message, hint))
 
@@ -308,7 +322,9 @@ def execution_summary_panel(summary: Any) -> Panel:
             if error:
                 for line in error.splitlines()[:5]:
                     content_items.append(
-                        Text.from_markup(f"    [dim red]{_truncate_text(line, 200)}[/dim red]")
+                        Text.from_markup(
+                            f"    [dim red]{_truncate_text(line, 200)}[/dim red]"
+                        )
                     )
 
     content = Group(*content_items)
@@ -339,7 +355,8 @@ def _collect_failed_steps(data: dict[str, Any]) -> list[dict[str, str]]:
                 failed.append(
                     {
                         "job": job_name,
-                        "step": step.get("name") or f"step{step.get('step_index', '?')}",
+                        "step": step.get("name")
+                        or f"step{step.get('step_index', '?')}",
                         "error": step.get("error") or "",
                     }
                 )

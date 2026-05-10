@@ -21,13 +21,13 @@ def jitter_delay(
         jitter_pct: Fractional jitter (0.2 => +/-20%)
         rng: Optional RNG for deterministic tests
     """
-    rng = rng or random
     spread = max(0.0, float(jitter_pct))
     base = max(0.0, float(base_seconds))
     if spread == 0.0:
         return base
     delta = base * spread
-    return max(0.0, rng.uniform(base - delta, base + delta))
+    _rng = rng or random.SystemRandom()
+    return max(0.0, _rng.uniform(base - delta, base + delta))
 
 
 def sleep_with_jitter(base_seconds: float, jitter_pct: float = 0.2) -> float:

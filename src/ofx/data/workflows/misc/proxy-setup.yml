@@ -102,3 +102,4 @@ jobs:
 
           add_outputs(conf_file=conf_file, env_file=env_file, proxy_count=len(proxies))
         log-stdout: true
+        log-command: true

@@ -31,6 +31,7 @@ jobs:
     - name: fofa-query
       timeout: 5
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.search.fofa import Fofa
         import json

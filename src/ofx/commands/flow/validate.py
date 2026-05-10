@@ -57,7 +57,13 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
 
     # Check for common issues
     for jid, job in workflow.jobs.items():
-        needs = job.needs if isinstance(job.needs, list) else [job.needs] if job.needs else []
+        needs = (
+            job.needs
+            if isinstance(job.needs, list)
+            else [job.needs]
+            if job.needs
+            else []
+        )
         for dep in needs:
             if dep and dep not in workflow.jobs:
                 result.warnings.append(f"Job '{jid}' depends on unknown job '{dep}'")
@@ -92,13 +98,12 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
 
 def _print_single_result(result: ValidationResult) -> None:
     """Print detailed validation result for a single workflow."""
-    from ofx.commands.ui_helpers import print_error, print_success
+    from ofx.commands.ui_helpers import error_exit, print_success
 
     console = get_console()
 
     if not result.valid:
-        print_error("Validation Failed", f"[cyan]{result.path}[/]", result.error)
-        return
+        error_exit("Validation Failed", f"[cyan]{result.path}[/]", result.error)
 
     # Build details
     details: dict[str, str] = {
@@ -141,7 +146,9 @@ def _print_bulk_results(results: list[ValidationResult]) -> None:
     failed = sum(1 for r in results if not r.valid)
     warned = sum(1 for r in results if r.valid and r.warnings)
 
-    table = Table(title=f"Workflow Validation: {passed} passed, {failed} failed, {warned} warnings")
+    table = Table(
+        title=f"Workflow Validation: {passed} passed, {failed} failed, {warned} warnings"
+    )
     table.add_column("Workflow", style="cyan")
     table.add_column("Status", justify="center")
     table.add_column("Jobs", justify="right")
@@ -219,14 +226,16 @@ def validate_workflows(
     check_tasks: bool = False,
 ) -> None:
     """Validate one or all workflows with detailed diagnostics."""
-    from ofx.commands.ui_helpers import print_error, print_info, print_warning
+    from ofx.commands.ui_helpers import error_exit, print_info, print_warning
 
     console = get_console()
 
     if all_workflows:
         files = _discover_all_workflows()
         if not files:
-            print_warning("No Workflows", "No workflow files found in search directories.")
+            print_warning(
+                "No Workflows", "No workflow files found in search directories."
+            )
             return
 
         print_info("Bulk Validation", f"Validating [cyan]{len(files)}[/] workflows…")
@@ -237,8 +246,7 @@ def validate_workflows(
         return
 
     if not workflow_name:
-        print_error("Missing Argument", "Provide a workflow name or use --all")
-        return
+        error_exit("Missing Argument", "Provide a workflow name or use --all")
 
     # Single workflow: try find_workflow first, then recursive search
     from ofx.utils.workflow_utils import find_workflow
@@ -260,8 +268,7 @@ def validate_workflows(
                 break
 
     if not path:
-        print_error("Workflow Not Found", f"Could not find workflow '{workflow_name}'")
-        return
+        error_exit("Workflow Not Found", f"Could not find workflow '{workflow_name}'")
 
     print_info("Validating", f"[cyan]{workflow_name}[/]")
     console.print()

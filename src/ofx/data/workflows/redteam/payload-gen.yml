@@ -111,3 +111,4 @@ jobs:
 
         add_outputs(payload_file=out_path, payload_type=ptype, payload_size=len(content))
       log-stdout: true
+      log-command: true

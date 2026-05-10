@@ -24,6 +24,7 @@ jobs:
     name: Domain Recon
     steps:
       - name: domain-scan
+        log-command: true
         uses: domain-scan
         with:
           target: "{{ inputs.target }}"

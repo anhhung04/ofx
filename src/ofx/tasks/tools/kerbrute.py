@@ -21,11 +21,17 @@ class KerbruteTask(Task):
     output_types = [UserAccount]
 
     opts = {
-        "mode": OptDef(flag="--mode", type=str, help="Mode (userenum/bruteuser/bruteforce/passwordspray)"),
+        "mode": OptDef(
+            flag="--mode",
+            type=str,
+            help="Mode (userenum/bruteuser/bruteforce/passwordspray)",
+        ),
         "dc": OptDef(flag="--dc", type=str, help="Domain controller IP/hostname"),
         "domain": OptDef(flag="-d", type=str, help="Domain name"),
         "users": OptDef(flag="--users", type=str, help="Path to user wordlist"),
-        "password": OptDef(flag="--password", type=str, help="Password for passwordspray"),
+        "password": OptDef(
+            flag="--password", type=str, help="Password for passwordspray"
+        ),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "delay": OptDef(flag="--delay", type=int, help="Delay between requests (ms)"),
         "output": OptDef(flag="-o", type=str, help="Output file path"),

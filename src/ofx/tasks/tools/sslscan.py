@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
@@ -40,21 +38,11 @@ class SslscanTask(Task):
         ),
         "ssl2": OptDef(flag="--ssl2", is_flag=True, help="Test SSLv2 ciphers"),
         "ssl3": OptDef(flag="--ssl3", is_flag=True, help="Test SSLv3 ciphers"),
-        "tls10": OptDef(
-            flag="--tls10", is_flag=True, help="Test TLS 1.0 ciphers"
-        ),
-        "tls11": OptDef(
-            flag="--tls11", is_flag=True, help="Test TLS 1.1 ciphers"
-        ),
-        "tls12": OptDef(
-            flag="--tls12", is_flag=True, help="Test TLS 1.2 ciphers"
-        ),
-        "tls13": OptDef(
-            flag="--tls13", is_flag=True, help="Test TLS 1.3 ciphers"
-        ),
-        "targets": OptDef(
-            flag="--targets", type=str, help="File containing targets"
-        ),
+        "tls10": OptDef(flag="--tls10", is_flag=True, help="Test TLS 1.0 ciphers"),
+        "tls11": OptDef(flag="--tls11", is_flag=True, help="Test TLS 1.1 ciphers"),
+        "tls12": OptDef(flag="--tls12", is_flag=True, help="Test TLS 1.2 ciphers"),
+        "tls13": OptDef(flag="--tls13", is_flag=True, help="Test TLS 1.3 ciphers"),
+        "targets": OptDef(flag="--targets", type=str, help="File containing targets"),
     }
 
     input_flag = None  # positional
@@ -83,12 +71,7 @@ class SslscanTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            output_file = Path(_path)
+            output_file = self._make_output_path()
             parts.append(f"{self.output_flag}={output_file}")
 
         parts.append(target)
@@ -128,9 +111,7 @@ class SslscanTask(Task):
                 issuer = self._child_text(cert_el, "issuer")
                 not_before = self._child_text(cert_el, "not-valid-before")
                 not_after = self._child_text(cert_el, "not-valid-after")
-                self_signed_text = self._child_text(
-                    cert_el, "self-signed"
-                ).lower()
+                self_signed_text = self._child_text(cert_el, "self-signed").lower()
                 fingerprint = self._child_text(cert_el, "fingerprint")
                 altnames = self._child_text(cert_el, "altnames")
 
@@ -209,9 +190,7 @@ class SslscanTask(Task):
                             matched_at=target_str,
                             severity=severity,
                             provider="sslscan",
-                            description=(
-                                f"{ssl_version} {cipher_name} ({bits} bits)"
-                            ),
+                            description=(f"{ssl_version} {cipher_name} ({bits} bits)"),
                             extra_data={
                                 "sslversion": ssl_version,
                                 "cipher": cipher_name,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +29,9 @@ class ScoutsuiteTask(Task):
         "profile": OptDef(flag="--profile", type=str, help="Cloud profile name"),
         "regions": OptDef(flag="--regions", type=str, help="Regions to scan"),
         "services": OptDef(flag="--services", type=str, help="Services to audit"),
-        "no_browser": OptDef(flag="--no-browser", is_flag=True, help="Do not open browser"),
+        "no_browser": OptDef(
+            flag="--no-browser", is_flag=True, help="Do not open browser"
+        ),
         "result_format": OptDef(flag="--result-format", type=str, help="Result format"),
         "report_dir": OptDef(flag="--report-dir", type=str, help="Report directory"),
     }
@@ -69,19 +70,8 @@ class ScoutsuiteTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         results: list[Vulnerability | Tag] = []
@@ -102,13 +92,19 @@ class ScoutsuiteTask(Task):
                 if not isinstance(finding, dict):
                     continue
                 flagged = finding.get("flagged_items", finding.get("items", []))
-                level = str(finding.get("level", finding.get("severity", "warning"))).lower()
+                level = str(
+                    finding.get("level", finding.get("severity", "warning"))
+                ).lower()
                 desc = finding.get("description", finding.get("rationale", ""))
 
                 if not flagged:
                     continue
 
-                count = len(flagged) if isinstance(flagged, list) else self._safe_int(flagged)
+                count = (
+                    len(flagged)
+                    if isinstance(flagged, list)
+                    else self._safe_int(flagged)
+                )
                 results.append(
                     Vulnerability(
                         name=str(finding_key),
@@ -124,8 +120,6 @@ class ScoutsuiteTask(Task):
                 )
 
             # Emit service-level tag
-            results.append(
-                Tag(name=svc_name, value="scanned", category="cloud_audit")
-            )
+            results.append(Tag(name=svc_name, value="scanned", category="cloud_audit"))
 
         return results

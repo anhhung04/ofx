@@ -25,7 +25,9 @@ class HydraTask(Task):
         "login_file": OptDef(flag="-L", type=str, help="File with login names"),
         "password": OptDef(flag="-p", type=str, help="Single password"),
         "password_file": OptDef(flag="-P", type=str, help="File with passwords"),
-        "combo_file": OptDef(flag="-C", type=str, help="Colon-separated user:pass file"),
+        "combo_file": OptDef(
+            flag="-C", type=str, help="Colon-separated user:pass file"
+        ),
         "service": OptDef(flag="--service", type=str, help="Service to attack"),
         "port": OptDef(flag="-s", type=int, help="Port number"),
         "threads": OptDef(flag="-t", type=int, help="Number of parallel tasks"),
@@ -34,7 +36,9 @@ class HydraTask(Task):
         "vV": OptDef(flag="-vV", is_flag=True, help="Verbose mode"),
         "force": OptDef(flag="-f", is_flag=True, help="Stop on first valid pair"),
         "output": OptDef(flag="-o", type=str, help="Output file"),
-        "output_format": OptDef(flag="-b", type=str, help="Output format (text/json/jsonv1)"),
+        "output_format": OptDef(
+            flag="-b", type=str, help="Output format (text/json/jsonv1)"
+        ),
     }
 
     input_flag = None

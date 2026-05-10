@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -25,16 +23,12 @@ class MasscanTask(Task):
     opts = {
         "ports": OptDef(flag="-p", type=str, help="Port range to scan"),
         "rate": OptDef(flag="--rate", type=int, help="Packets per second"),
-        "top_ports": OptDef(
-            flag="--top-ports", type=str, help="Scan top N ports"
-        ),
+        "top_ports": OptDef(flag="--top-ports", type=str, help="Scan top N ports"),
         "banners": OptDef(
             flag="--banners", is_flag=True, help="Grab banners from services"
         ),
         "interface": OptDef(flag="-e", type=str, help="Network interface to use"),
-        "source_ip": OptDef(
-            flag="--adapter-ip", type=str, help="Source IP address"
-        ),
+        "source_ip": OptDef(flag="--adapter-ip", type=str, help="Source IP address"),
         "exclude": OptDef(flag="--exclude", type=str, help="Exclude hosts"),
         "wait": OptDef(
             flag="--wait", type=int, help="Seconds to wait after transmit done"
@@ -74,12 +68,11 @@ class MasscanTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            output_file = Path(_path)
+            # Generate a unique path without pre-creating the file — masscan
+            # (which may run as root) must create the output file itself.
+            # Pre-creating with mkstemp can cause "could not open file for
+            # writing" when masscan runs as a different uid (e.g. via sudo).
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         # masscan only accepts IPs/CIDRs — resolve hostnames automatically
@@ -111,7 +104,7 @@ class MasscanTask(Task):
         try:
             info = socket.getaddrinfo(base, None, socket.AF_INET, socket.SOCK_STREAM)
             if info:
-                return info[0][4][0]
+                return str(info[0][4][0])
         except socket.gaierror:
             pass
 

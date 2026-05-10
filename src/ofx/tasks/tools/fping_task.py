@@ -89,4 +89,3 @@ class FpingTask(Task):
                 pass
 
         return []
-

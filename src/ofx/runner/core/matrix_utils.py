@@ -87,9 +87,7 @@ def estimate_matrix_count(
     return max(len(combos), 1)
 
 
-def _matches_any_filter(
-    combo: dict[str, Any], filters: list[dict[str, Any]]
-) -> bool:
+def _matches_any_filter(combo: dict[str, Any], filters: list[dict[str, Any]]) -> bool:
     """Check if *combo* matches any filter dict (all keys must match)."""
     for filter_dict in filters:
         if all(combo.get(key) == value for key, value in filter_dict.items()):

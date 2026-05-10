@@ -135,3 +135,4 @@ jobs:
 
         add_outputs(**{k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in results.items()})
       log-stdout: true
+      log-command: true

@@ -187,12 +187,14 @@ class TestCloudMatrixProduceLog:
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
         runner.parent = None
-        runner.ctx = RunContext(vars={
-            "fleet": {
-                "fleet_name": "[scan]{2}",
-                "fleet_index": 2,
+        runner.ctx = RunContext(
+            vars={
+                "fleet": {
+                    "fleet_name": "[scan]{2}",
+                    "fleet_index": 2,
+                }
             }
-        })
+        )
 
         msg = runner._produce_log("test message")
         assert "[scan]{2}" in msg
@@ -313,7 +315,9 @@ class TestCloudMatrixExpansion:
 class TestCloudStepRunnerEnvPrefix:
     """Tests for CloudStepRunner._build_env_prefix and _shell_escape."""
 
-    def _make_step_runner(self, ctx_envs: dict | None = None, step_env: dict | None = None):
+    def _make_step_runner(
+        self, ctx_envs: dict | None = None, step_env: dict | None = None
+    ):
         """Build a CloudStepRunner with minimal stubs — no real SSH needed."""
         from ofx.models.step import Step
         from ofx.runner.core import RunContext
@@ -358,7 +362,12 @@ class TestCloudStepRunnerEnvPrefix:
             }
         )
         prefix = runner._build_env_prefix()
-        for key in ("REMOTE_FLEET_INDEX", "REMOTE_FLEET_TOTAL", "REMOTE_FLEET_TARGET_COUNT", "REMOTE_FLEET_INPUT_FILE"):
+        for key in (
+            "REMOTE_FLEET_INDEX",
+            "REMOTE_FLEET_TOTAL",
+            "REMOTE_FLEET_TARGET_COUNT",
+            "REMOTE_FLEET_INPUT_FILE",
+        ):
             assert key in prefix
 
     def test_fleet_prefix_vars_still_exported(self):
@@ -392,18 +401,21 @@ class TestCloudStepRunnerEnvPrefix:
 
     def test_shell_escape_prevents_injection(self):
         """Values with $, backticks, and double-quotes are escaped."""
-        from ofx.runner.execution.cloud_step import _shell_escape
+        from ofx.utils.shell import bash_dquote_escape
 
-        assert _shell_escape("$(id)") == "\\$(id)"
-        assert _shell_escape("`whoami`") == "\\`whoami\\`"
-        assert _shell_escape('say "hi"') == 'say \\"hi\\"'
-        assert _shell_escape("a\\b") == "a\\\\b"
+        assert bash_dquote_escape("$(id)") == "\\$(id)"
+        assert bash_dquote_escape("`whoami`") == "\\`whoami\\`"
+        assert bash_dquote_escape('say "hi"') == 'say \\"hi\\"'
+        assert bash_dquote_escape("a\\b") == "a\\\\b"
 
     def test_shell_escape_plain_path(self):
         """Normal file paths are unchanged by escaping."""
-        from ofx.runner.execution.cloud_step import _shell_escape
+        from ofx.utils.shell import bash_dquote_escape
 
-        assert _shell_escape("/tmp/.run-abc/fleet_targets.txt") == "/tmp/.run-abc/fleet_targets.txt"
+        assert (
+            bash_dquote_escape("/tmp/.run-abc/fleet_targets.txt")
+            == "/tmp/.run-abc/fleet_targets.txt"
+        )
 
 
 class TestCloudMatrixFailFast:
@@ -425,7 +437,9 @@ class TestCloudMatrixFailFast:
             model = type("W", (), {"name": "test-wf"})()
             runners = {}
             _runners = {}
-            def _produce_log(self, msg): return msg
+
+            def _produce_log(self, msg):
+                return msg
 
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
@@ -488,6 +502,7 @@ class TestDiscoverPythonCache:
         step_runner._remote = _FakeRemote()
         step_runner._work_dir = "/tmp"
         step_runner._log_info = lambda msg: None  # avoid BaseRunner slot access
+        step_runner._log_debug = lambda msg: None
         return step_runner, parent_job
 
     @pytest.mark.asyncio

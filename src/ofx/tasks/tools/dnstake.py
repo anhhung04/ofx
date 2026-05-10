@@ -63,4 +63,3 @@ class DnstakeTask(Task):
                 return [Subdomain(host=host, domain=domain)]
 
         return []
-

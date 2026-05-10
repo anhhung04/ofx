@@ -134,3 +134,4 @@ jobs:
 
         add_outputs(urls_tested=len(urls), finding_count=len(all_findings), grades=json.dumps(grades))
       log-stdout: true
+      log-command: true

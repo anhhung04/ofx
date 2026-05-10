@@ -13,9 +13,7 @@ class UrlfinderTask(Task):
     cmd = "urlfinder"
     description = "Passive URL extraction from web archives and sources"
     category = "web/recon"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/urlfinder/cmd/urlfinder@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/urlfinder/cmd/urlfinder@latest"
     output_types = [Url]
 
     opts = {
@@ -31,12 +29,8 @@ class UrlfinderTask(Task):
         "exclude_sources": OptDef(
             flag="-es", type=str, help="Exclude comma-separated sources"
         ),
-        "filter": OptDef(
-            flag="-f", type=str, help="Filter output using regex"
-        ),
-        "match": OptDef(
-            flag="-m", type=str, help="Match output using regex"
-        ),
+        "filter": OptDef(flag="-f", type=str, help="Filter output using regex"),
+        "match": OptDef(flag="-m", type=str, help="Match output using regex"),
     }
 
     input_flag = "-d"
@@ -56,4 +50,3 @@ class UrlfinderTask(Task):
             return [Url(url=url)]
 
         return []
-

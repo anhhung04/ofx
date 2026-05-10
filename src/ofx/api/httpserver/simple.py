@@ -24,7 +24,7 @@ class SimpleHTTPHandler(SimpleHTTPRequestHandler):
             f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
         )
 
-    def list_directory(self, path: str) -> bytes | None:
+    def list_directory(self, path: str | os.PathLike[str]) -> bytes | None:  # type: ignore[override]
         """Override directory listing to disable it.
 
         Returns None to prevent directory listing, which is a security

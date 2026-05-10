@@ -77,6 +77,7 @@ jobs:
       nuclei_vuln_count: '{{ steps["collect-results"].outputs.nuclei_vuln_count | default("", true) }}'
     steps:
       - task: s3scanner
+        log-command: true
         name: s3scanner-scan
         timeout: 10
         with:
@@ -84,6 +85,7 @@ jobs:
         continue-on-error: true
 
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-cloud-scan
         with:

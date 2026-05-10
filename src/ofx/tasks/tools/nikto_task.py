@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
@@ -23,12 +22,8 @@ class NiktoTask(Task):
         "port": OptDef(flag="-p", type=str, help="Port(s) to scan"),
         "ssl": OptDef(flag="-ssl", is_flag=True, help="Force SSL mode"),
         "plugins": OptDef(flag="-Plugins", type=str, help="Plugins to run"),
-        "tuning": OptDef(
-            flag="-Tuning", type=str, help="Scan tuning options"
-        ),
-        "timeout": OptDef(
-            flag="-timeout", type=int, help="Timeout per request"
-        ),
+        "tuning": OptDef(flag="-Tuning", type=str, help="Scan tuning options"),
+        "timeout": OptDef(flag="-timeout", type=int, help="Timeout per request"),
         "maxtime": OptDef(
             flag="-maxtime", type=int, help="Maximum scan time in seconds"
         ),
@@ -55,19 +50,8 @@ class NiktoTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         results: list[Vulnerability] = []

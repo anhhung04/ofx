@@ -4,27 +4,28 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import sys
 import tempfile
-from pathlib import Path
-from typing import Any
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import TYPE_CHECKING, Any
 
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.core import (
     BaseRunner,
-    ConditionNotMetError,
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
 )
 from ofx.runner.execution.cloud_step import CloudStepRunner
 from ofx.runner.execution.error_helpers import job_step_failed
-from ofx.runner.execution.execution_results import (
-    build_job_execution_result,
-    build_run_if_context,
-)
+from ofx.runner.execution.job_mixin import JobRunnerMixin
+
+if TYPE_CHECKING:
+    from ofx.cloud.base import CloudProvider
+    from ofx.cloud.models import CloudInstanceInfo
 
 # logger will be injected via CloudJobRunner instance
 
@@ -48,7 +49,7 @@ async def _prompt_destroy_instance(instance_info: str) -> bool:
         return False
 
 
-class CloudJobRunner(BaseRunner[Job]):
+class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
     """Runs a job on a cloud VPS (or static remote host).
 
     Lifecycle:
@@ -66,10 +67,10 @@ class CloudJobRunner(BaseRunner[Job]):
         cloud_config: CloudConfig | None = None,
     ):
         super().__init__(job, ctx, parent, parent.registry)
-        self._cloud_config: CloudConfig = cloud_config or job.cloud  # type: ignore
-        self._provider = None
-        self._instance = None
-        self._remote_runner = None  # PostSSH or PostWinRM
+        self._cloud_config: CloudConfig = cloud_config or job.cloud  # type: ignore[assignment]
+        self._provider: CloudProvider | None = None
+        self._instance: CloudInstanceInfo | None = None
+        self._remote_runner: Any = None  # PostSSH or PostWinRM
         self._work_dir: str | None = None
         self._is_fleet_child: bool = False  # Set by CloudFleetRunner for fleet children
         self._cached_python: str | None = None  # Cached across steps on same VPS
@@ -131,27 +132,8 @@ class CloudJobRunner(BaseRunner[Job]):
         # Register collected secrets (duplicates are ignored by the service).
         SecretRedactor.register(_cred_vals)
 
-        # Check run_if conditions (same as JobRunner)
-        if isinstance(self.model.needs, str):
-            self.model.needs = [self.model.needs]
-
-        runners: dict[str, BaseRunner] = self.parent.runners  # type: ignore
-        dep_runners = []
-        for job_id in self.model.needs:
-            runner = runners.get(job_id)
-            if not runner:
-                raise RuntimeError(
-                    f"Job dependency '{job_id}' is missing from workflow runners."
-                )
-            dep_runners.append(runner)
-
-        run_if_expr = self.model.run_if
-        if run_if_expr is True and dep_runners:
-            run_if_expr = "success()"
-
-        if not self._evaluate_run_if(run_if_expr, build_run_if_context(dep_runners)):
-            self._state_machine.transition(RunnerStatus.CANCELED)
-            raise ConditionNotMetError(self._produce_log("Job condition is not met"))
+        # Check run_if conditions (shared with JobRunner via mixin)
+        self._check_dependencies_and_run_if()
 
         # Provision VPS or connect to static host
         self._log_info(
@@ -244,7 +226,7 @@ class CloudJobRunner(BaseRunner[Job]):
             self._work_dir = f"/tmp/.run-{self.run_id[:8]}"
             try:
                 await asyncio.to_thread(
-                    self._remote_runner.run, f"mkdir -p {self._work_dir}"
+                    self._remote_runner.run, f"mkdir -p {shlex.quote(self._work_dir)}"
                 )
             except Exception as e:
                 self._log_warning(f"Work dir creation failed, using /tmp: {e}")
@@ -284,7 +266,7 @@ class CloudJobRunner(BaseRunner[Job]):
             else:
                 fd, tmp = tempfile.mkstemp(prefix=".tmp_rcmd_", suffix=".log")
                 os.close(fd)
-                log_path = tmp
+                log_path = Path(tmp)
             self._log_info(
                 f"Command logging enabled. Logs will be saved to: {log_path}"
             )
@@ -350,12 +332,7 @@ class CloudJobRunner(BaseRunner[Job]):
     # ------------------------------------------------------------------
 
     async def _post_run(self) -> None:
-        resolved_outputs = await self._resolve_job_outputs()
-        if resolved_outputs:
-            await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
-
-        job_exec = build_job_execution_result(self, self._runners)
-        await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
+        await self._save_job_results()
 
         await self._download_outputs()
         await self._destroy_instance()
@@ -367,6 +344,9 @@ class CloudJobRunner(BaseRunner[Job]):
             return
 
         is_windows = self._cloud_config.connection_type == "winrm"
+        assert self._work_dir is not None, (
+            "_work_dir must be set before fetching outputs"
+        )
 
         try:
             if is_windows:
@@ -378,10 +358,10 @@ class CloudJobRunner(BaseRunner[Job]):
             else:
                 files_output = await asyncio.to_thread(
                     self._remote_runner.run,
-                    f"ls -1 {self._work_dir}/output 2>/dev/null || true",
+                    f"ls -1 {shlex.quote(self._work_dir + '/output')} 2>/dev/null || true",
                 )
 
-            files = [f.strip() for f in files_output.strip().split("\n") if f.strip()]
+            files = [f.strip() for f in files_output.strip().splitlines() if f.strip()]
             if not files:
                 return
 
@@ -389,11 +369,19 @@ class CloudJobRunner(BaseRunner[Job]):
             local_out.mkdir(parents=True, exist_ok=True)
 
             for fname in files:
+                # Sanitize filename to prevent path traversal
+                safe_name = (
+                    PureWindowsPath(fname).name
+                    if is_windows
+                    else PurePosixPath(fname).name
+                )
+                if not safe_name or safe_name in (".", ".."):
+                    continue
                 if is_windows:
-                    remote = f"{self._work_dir}\\output\\{fname}"
+                    remote = f"{self._work_dir}\\output\\{safe_name}"
                 else:
-                    remote = f"{self._work_dir}/output/{fname}"
-                local = str(local_out / fname)
+                    remote = f"{self._work_dir}/output/{safe_name}"
+                local = str(local_out / safe_name)
                 try:
                     await asyncio.to_thread(self._remote_runner.download, remote, local)
                 except Exception as e:
@@ -438,9 +426,7 @@ class CloudJobRunner(BaseRunner[Job]):
                         f"Emergency cleanup: destroying partially-provisioned "
                         f"instance {self._instance.instance_id}"
                     )
-                    await self._provider.destroy_instance(
-                        self._instance.instance_id
-                    )
+                    await self._provider.destroy_instance(self._instance.instance_id)
                 except Exception as e:
                     self._log_warning(
                         f"Emergency instance destroy failed "
@@ -475,7 +461,9 @@ class CloudJobRunner(BaseRunner[Job]):
                     )
                 else:
                     await asyncio.to_thread(
-                        self._remote_runner.run, f"rm -rf {self._work_dir}", 15
+                        self._remote_runner.run,
+                        f"rm -rf {shlex.quote(self._work_dir)}",
+                        15,
                     )
             except Exception as e:
                 self._log_debug(f"Failed to clean remote work dir: {e}")
@@ -599,17 +587,10 @@ class CloudJobRunner(BaseRunner[Job]):
         workflow_name = ""
         if self.parent and getattr(self.parent, "model", None):
             workflow_name = getattr(self.parent.model, "name", "") or ""
-        msg = (
-            f"workflow[{workflow_name}] "
-            f"job[{self.model.jid}] [cloud] › {message_str}"
-        )
+        msg = f"workflow[{workflow_name}] job[{self.model.jid}] [cloud] › {message_str}"
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
-
-    @property
-    def total_steps(self) -> int:
-        return len(self.model.steps)
 
     @property
     def remote_work_dir(self) -> str | None:

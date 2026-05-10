@@ -98,13 +98,17 @@ class TestChannelStoreSubscribe:
 
         t = threading.Thread(target=publish_later)
         t.start()
-        result = store.wait_for("ch1", lambda v: v == "ready", timeout=5, poll_interval=0.01)
+        result = store.wait_for(
+            "ch1", lambda v: v == "ready", timeout=5, poll_interval=0.01
+        )
         assert result == "ready"
         t.join()
 
     def test_wait_for_timeout(self, store):
         with pytest.raises(TimeoutError, match="Timeout waiting for channel"):
-            store.wait_for("ch1", lambda v: v == "never", timeout=0.1, poll_interval=0.01)
+            store.wait_for(
+                "ch1", lambda v: v == "never", timeout=0.1, poll_interval=0.01
+            )
 
 
 class TestChannelStoreManagement:
@@ -159,7 +163,7 @@ class TestChannelStoreCrossProcess:
         """Spawn multiple processes writing to the same channel concurrently."""
         script = f"""
 import sys
-sys.path.insert(0, "{Path(__file__).resolve().parent.parent / 'src'}")
+sys.path.insert(0, "{Path(__file__).resolve().parent.parent / "src"}")
 from ofx.runner.channels import ChannelStore
 store = ChannelStore("{channels_dir}")
 for i in range(50):

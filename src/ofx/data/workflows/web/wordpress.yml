@@ -28,6 +28,7 @@ jobs:
       typed_outputs: '{{ steps["http-probe"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: httpx
+        log-command: true
         timeout: 10
         name: http-probe
         with:
@@ -44,6 +45,7 @@ jobs:
       typed_outputs: '{{ (steps["wpscan-full"].outputs.typed_outputs | default([], true)) + (steps["nuclei-wordpress"].outputs.typed_outputs | default([], true)) }}'
     steps:
       - task: wpscan
+        log-command: true
         timeout: 15
         name: wpscan-full
         with:
@@ -52,6 +54,7 @@ jobs:
           api_token: "{{ inputs.api_token }}"
         continue-on-error: true
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-wordpress
         with:

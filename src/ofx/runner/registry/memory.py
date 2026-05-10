@@ -9,6 +9,13 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
+_DEFAULT_MAX_SIZE = 100_000
+
+
+class RegistryOverflowError(RuntimeError):
+    """Raised when the in-memory registry exceeds its configured size limit."""
+
+
 class MemoryJobRegistry(RegistryAdapter):
     """In-memory implementation of job registry
 
@@ -16,13 +23,29 @@ class MemoryJobRegistry(RegistryAdapter):
     Data is lost when the process terminates.
     """
 
-    def __init__(self):
-        """Initialize the in-memory registry"""
+    def __init__(self, maxsize: int = _DEFAULT_MAX_SIZE):
+        """Initialize the in-memory registry
+
+        Args:
+            maxsize: Maximum number of keys before RegistryOverflowError is raised.
+        """
+        if maxsize <= 0:
+            raise ValueError("maxsize must be positive")
         self._registry: dict[str, Any] = {}
+        self._maxsize = maxsize
         self._log_debug("Initialized MemoryJobRegistry")
+
+    def _check_capacity(self) -> None:
+        if len(self._registry) >= self._maxsize:
+            raise RegistryOverflowError(
+                f"MemoryJobRegistry exceeded maxsize ({self._maxsize}). "
+                f"Consider using FileRegistry or RedisJobRegistry for large workloads."
+            )
 
     async def _set(self, key: str, value: Any) -> None:
         """Store data in memory"""
+        if key not in self._registry:
+            self._check_capacity()
         self._registry[key] = value.copy() if isinstance(value, dict) else value
         self._log_debug(f"Set key '{key}' in MemoryJobRegistry")
 

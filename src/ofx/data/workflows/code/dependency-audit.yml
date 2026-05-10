@@ -30,6 +30,7 @@ jobs:
       high_count: "{{ steps.aggregate.outputs.high_count }}"
     steps:
       - task: grype
+        log-command: true
         timeout: 15
         name: grype-scan
         with:
@@ -37,6 +38,7 @@ jobs:
         continue-on-error: true
 
       - task: trivy
+        log-command: true
         timeout: 15
         name: trivy-scan
         with:
@@ -77,6 +79,7 @@ jobs:
         log-stdout: true
 
       - name: Check threshold
+        log-command: true
         run: |
           critical={{ jobs['scan'].outputs.critical_count | default('0', true) }}
           if [ "{{ inputs.fail_on_critical }}" = "true" ] && [ "$critical" -gt 0 ]; then

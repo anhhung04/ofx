@@ -22,6 +22,7 @@ jobs:
       url_count: '{{ steps["collect-urls"].outputs.url_count | default("", true) }}'
     steps:
       - task: katana
+        log-command: true
         timeout: 15
         name: katana-crawl
         with:
@@ -31,6 +32,7 @@ jobs:
           known_files: all
         continue-on-error: true
       - task: gospider
+        log-command: true
         timeout: 15
         name: gospider-crawl
         with:
@@ -38,6 +40,7 @@ jobs:
           depth: 2
         continue-on-error: true
       - task: gau
+        log-command: true
         timeout: 10
         name: gau-passive
         with:
@@ -70,6 +73,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("", true) }}'
     steps:
       - task: httpx
+        log-command: true
         timeout: 10
         name: probe-urls
         with:
@@ -94,6 +98,7 @@ jobs:
       - probe
     steps:
       - task: nuclei
+        log-command: true
         timeout: 15
         name: hunt-secrets
         with:
@@ -101,6 +106,7 @@ jobs:
           tags: exposure,token,secret
         continue-on-error: true
       - task: cariddi
+        log-command: true
         timeout: 10
         name: cariddi-crawl
         with:

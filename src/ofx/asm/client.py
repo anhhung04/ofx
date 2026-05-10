@@ -83,6 +83,9 @@ class ASMClient:
                 body = resp.json()
                 msg = body.get("error", resp.text)
             except Exception:
+                logger.debug(
+                    "Failed to parse ASM error response as JSON", exc_info=True
+                )
                 msg = resp.text
             raise ASMError(msg, status_code=resp.status_code)
         return resp.json()
@@ -91,7 +94,9 @@ class ASMClient:
         clean = {k: v for k, v in params.items() if v is not None and v != ""}
         return self._request("GET", path, params=clean)
 
-    def _post(self, path: str, body: dict | list | None = None, **params) -> dict[str, Any]:
+    def _post(
+        self, path: str, body: dict | list | None = None, **params
+    ) -> dict[str, Any]:
         clean = {k: v for k, v in params.items() if v is not None and v != ""}
         return self._request("POST", path, json_body=body, params=clean)
 
@@ -114,6 +119,7 @@ class ASMClient:
             self._get("/health")
             return True
         except Exception:
+            logger.debug("ASM health check failed", exc_info=True)
             return False
 
     # ------------------------------------------------------------------
@@ -297,15 +303,11 @@ class ASMClient:
     # Export
     # ------------------------------------------------------------------
 
-    def export_assets(
-        self, scope_id: str, fmt: str = "json"
-    ) -> list[dict[str, Any]]:
+    def export_assets(self, scope_id: str, fmt: str = "json") -> list[dict[str, Any]]:
         data = self._get(f"/scopes/{scope_id}/export/assets", format=fmt)
         return data.get("data") or []
 
-    def export_findings(
-        self, scope_id: str, fmt: str = "json"
-    ) -> list[dict[str, Any]]:
+    def export_findings(self, scope_id: str, fmt: str = "json") -> list[dict[str, Any]]:
         data = self._get(f"/scopes/{scope_id}/export/findings", format=fmt)
         return data.get("data") or []
 

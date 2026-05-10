@@ -25,6 +25,7 @@ jobs:
     - name: dns-brute
       timeout: 15
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.dns import bruteforce_subdomains_sync
         from pathlib import Path
@@ -82,6 +83,7 @@ jobs:
     - name: resolve-ips
       timeout: 10
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.dns import resolve_host_sync
         import json

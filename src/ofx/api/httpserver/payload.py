@@ -28,7 +28,7 @@ def build_payload_handler(
             self._payload_path = payload_path
             self._payloads = payloads
             self._hits = hits
-            super().__init__(*args, **kwargs)
+            super().__init__(*args, **kwargs)  # type: ignore[arg-type]
 
         def log_message(self, format: str, *args: object) -> None:
             print(

@@ -13,9 +13,7 @@ class CspreconTask(Task):
     cmd = "csprecon"
     description = "CSP header subdomain discovery"
     category = "dns/recon"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/edoardottt/csprecon/cmd/csprecon@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/edoardottt/csprecon/cmd/csprecon@latest"
     output_types = [Subdomain]
 
     opts = {
@@ -37,4 +35,3 @@ class CspreconTask(Task):
 
         domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
         return [Subdomain(host=host, domain=domain)]
-

@@ -76,6 +76,51 @@ class TestSemver:
         assert check_version_constraint("1.0.0", "1.0.0")
         assert not check_version_constraint("1.0.1", "1.0.0")
 
+    def test_check_constraint_compatible_release(self):
+        from ofx.collections.manager import check_version_constraint
+
+        # ~=1.2.0 means >=1.2.0, <2.0.0
+        assert check_version_constraint("1.2.0", "~=1.2.0")
+        assert check_version_constraint("1.9.9", "~=1.2.0")
+        assert not check_version_constraint("2.0.0", "~=1.2.0")
+        assert not check_version_constraint("1.1.9", "~=1.2.0")
+
+    def test_check_constraint_gt(self):
+        from ofx.collections.manager import check_version_constraint
+
+        assert check_version_constraint("1.0.1", ">1.0.0")
+        assert not check_version_constraint("1.0.0", ">1.0.0")
+        assert not check_version_constraint("0.9.0", ">1.0.0")
+
+    def test_check_constraint_lte(self):
+        from ofx.collections.manager import check_version_constraint
+
+        assert check_version_constraint("1.0.0", "<=1.0.0")
+        assert check_version_constraint("0.5.0", "<=1.0.0")
+        assert not check_version_constraint("1.0.1", "<=1.0.0")
+
+    def test_cmp_prerelease_ordering(self):
+        from ofx.collections.manager import _semver_cmp
+
+        # Pre-release < release
+        assert _semver_cmp("1.0.0-alpha", "1.0.0") == -1
+        assert _semver_cmp("1.0.0", "1.0.0-alpha") == 1
+        # Both with pre-release — lexicographic
+        assert _semver_cmp("1.0.0-alpha", "1.0.0-beta") == -1
+
+    def test_parse_malformed_version(self):
+        from ofx.collections.manager import _parse_semver
+
+        # Non-standard versions fall back to (0,0,0,"")
+        result = _parse_semver("1.0")
+        assert result == (0, 0, 0, "")
+
+    def test_constraint_with_spaces(self):
+        from ofx.collections.manager import check_version_constraint
+
+        assert check_version_constraint("1.0.0", ">= 1.0.0")
+        assert check_version_constraint("1.0.0", "== 1.0.0")
+
 
 # ---------------------------------------------------------------------------
 # InstalledCollection
@@ -172,9 +217,7 @@ class TestCollectionManager:
 
         d = tmp_path / "info-test"
         d.mkdir()
-        mgr._installed["info-test"] = InstalledCollection(
-            name="info-test", path=str(d)
-        )
+        mgr._installed["info-test"] = InstalledCollection(name="info-test", path=str(d))
         entry = mgr.info("info-test")
         assert entry is not None
         assert entry.name == "info-test"
@@ -184,9 +227,7 @@ class TestCollectionManager:
 
         d = tmp_path / "wf-dir"
         d.mkdir()
-        mgr._installed["wf-dir"] = InstalledCollection(
-            name="wf-dir", path=str(d)
-        )
+        mgr._installed["wf-dir"] = InstalledCollection(name="wf-dir", path=str(d))
         dirs = mgr.collection_workflow_dirs()
         assert len(dirs) == 1
         assert dirs[0] == d
@@ -199,7 +240,14 @@ class TestCollectionManager:
 
         assets_file = tmp_path / "assets.json"
         assets_file.write_text(
-            json.dumps({"legacy-coll": {"path": str(legacy_dir), "url": "https://example.com/repo"}})
+            json.dumps(
+                {
+                    "legacy-coll": {
+                        "path": str(legacy_dir),
+                        "url": "https://example.com/repo",
+                    }
+                }
+            )
         )
 
         count = mgr.migrate_from_assets(assets_file)

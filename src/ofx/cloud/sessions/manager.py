@@ -154,12 +154,8 @@ def _launch_remote_detached(
     if has_tmux:
         remote_run_script = f"{remote_work_dir}/run.sh"
         remote_out_log = f"{remote_work_dir}/output.log"
-        tmux_cmd = (
-            f"bash {_shq(remote_run_script)} >> {_shq(remote_out_log)} 2>&1"
-        )
-        remote.run(
-            f"tmux new-session -d -s {_shq(tmux_name)} {_shq(tmux_cmd)}"
-        )
+        tmux_cmd = f"bash {_shq(remote_run_script)} >> {_shq(remote_out_log)} 2>&1"
+        remote.run(f"tmux new-session -d -s {_shq(tmux_name)} {_shq(tmux_cmd)}")
         pid_output = remote.run(
             f"tmux list-panes -t {_shq(tmux_name)} "
             "-F '#{pane_pid}' 2>/dev/null | head -n1"
@@ -169,8 +165,7 @@ def _launch_remote_detached(
     remote_run_script = f"{remote_work_dir}/run.sh"
     remote_out_log = f"{remote_work_dir}/output.log"
     pid_output = remote.run(
-        f"nohup bash {_shq(remote_run_script)} "
-        f"> {_shq(remote_out_log)} 2>&1 & echo $!"
+        f"nohup bash {_shq(remote_run_script)} > {_shq(remote_out_log)} 2>&1 & echo $!"
     ).strip()
     return _parse_pid(pid_output), "nohup", ""
 
@@ -196,7 +191,9 @@ def _remote_is_alive(remote: Any, session: Session) -> bool:
             "&& echo alive || echo dead"
         )
     else:
-        check_cmd = f"kill -0 {session.remote_pid} 2>/dev/null && echo alive || echo dead"
+        check_cmd = (
+            f"kill -0 {session.remote_pid} 2>/dev/null && echo alive || echo dead"
+        )
     output = remote.run(check_cmd, timeout=15).strip().lower()
     return "alive" in output or "true" in output
 
@@ -228,11 +225,12 @@ def _session_to_cloud_config(session: Session) -> Any:
     """Build a CloudConfig-like object from persisted session connection fields."""
     from ofx.models.cloud import CloudConfig
 
-    connection_type = "winrm" if session.os_type == "windows" else "ssh"
+    os_type = session.os_type or "linux"
+    connection_type = "winrm" if os_type == "windows" else "ssh"
     return CloudConfig(
         provider=session.cloud_provider or "static",
-        os=session.os_type or "linux",
-        connection_type=connection_type,
+        os=os_type,  # type: ignore[arg-type]
+        connection_type=connection_type,  # type: ignore[arg-type]
         ssh_user=session.ssh_user or "root",
         ssh_port=session.ssh_port or 22,
         ssh_key=session.ssh_key or "",
@@ -419,20 +417,24 @@ class SessionManager:
         self._stage_script_files(steps, work_dir)
         work_dir.chmod(0o700)
 
-        session = session.model_copy(update={
-            "status": SessionStatus.RUNNING,
-            "remote_work_dir": str(work_dir),
-            "remote_log_file": str(log_file_path),
-            "output_path": str(session_dir),
-            "os_type": "linux",
-            "at_rest_key": at_rest_key,
-            "at_rest_encrypted": True,
-        })
+        session = session.model_copy(
+            update={
+                "status": SessionStatus.RUNNING,
+                "remote_work_dir": str(work_dir),
+                "remote_log_file": str(log_file_path),
+                "output_path": str(session_dir),
+                "os_type": "linux",
+                "at_rest_key": at_rest_key,
+                "at_rest_encrypted": True,
+            }
+        )
 
         proc = subprocess.Popen(
             ["bash", str(script_path)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True, cwd=str(work_dir),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+            cwd=str(work_dir),
             env={**os.environ, "SESSION_ID": session.id, **merged_env},
         )
 
@@ -467,19 +469,23 @@ class SessionManager:
         os_type = getattr(resolved, "os", "linux") or "linux"
         is_windows = os_type == "windows"
 
-        session = self._save_session(session, {
-            "cloud_provider": resolved.provider or "static",
-            "auto_destroy": bool(getattr(resolved, "auto_destroy", True)),
-            "os_type": os_type,
-            "ssh_user": resolved.ssh_user or "root",
-            "ssh_port": resolved.ssh_port or 22,
-            "ssh_key": resolved.ssh_key or "",
-            "ssh_password": resolved.ssh_password or "",
-            "winrm_port": resolved.winrm_port or (5986 if resolved.winrm_ssl else 5985),
-            "winrm_ssl": resolved.winrm_ssl or False,
-            "winrm_transport": resolved.winrm_transport or "ntlm",
-            "winrm_user": resolved.winrm_user or "Administrator",
-        })
+        session = self._save_session(
+            session,
+            {
+                "cloud_provider": resolved.provider or "static",
+                "auto_destroy": bool(getattr(resolved, "auto_destroy", True)),
+                "os_type": os_type,
+                "ssh_user": resolved.ssh_user or "root",
+                "ssh_port": resolved.ssh_port or 22,
+                "ssh_key": resolved.ssh_key or "",
+                "ssh_password": resolved.ssh_password or "",
+                "winrm_port": resolved.winrm_port
+                or (5986 if resolved.winrm_ssl else 5985),
+                "winrm_ssl": resolved.winrm_ssl or False,
+                "winrm_transport": resolved.winrm_transport or "ntlm",
+                "winrm_user": resolved.winrm_user or "Administrator",
+            },
+        )
 
         # Provision
         provider_name = resolved.provider or "static"
@@ -506,14 +512,23 @@ class SessionManager:
                 try:
                     await provider.destroy_instance(instance.instance_id)
                 except Exception as destroy_err:
-                    logger.warning("Failed to destroy orphaned instance %s: %s", instance.instance_id, destroy_err)
+                    logger.warning(
+                        "Failed to destroy orphaned instance %s: %s",
+                        instance.instance_id,
+                        destroy_err,
+                    )
             error_msg = str(instance) if instance else "Instance creation failed"
-            session = self._save_session(session, {"status": SessionStatus.FAILED, "error": error_msg})
+            session = self._save_session(
+                session, {"status": SessionStatus.FAILED, "error": error_msg}
+            )
             raise
 
-        session = self._save_session(session, {"instance_id": instance.instance_id, "instance_ip": instance.ip})
+        session = self._save_session(
+            session, {"instance_id": instance.instance_id, "instance_ip": instance.ip}
+        )
 
         from ofx.cloud.ssh import wait_for_login
+
         await wait_for_connectivity(
             host=instance.ip,
             os_type="windows" if is_windows else "linux",
@@ -529,7 +544,11 @@ class SessionManager:
 
         # Build script — inputs injected as env vars; file paths updated after upload
         sep = "\\" if is_windows else "/"
-        remote_work_dir = f"C:\\Windows\\Temp\\.ses-{session.id}" if is_windows else f"/tmp/.ses-{session.id}"
+        remote_work_dir = (
+            f"C:\\Windows\\Temp\\.ses-{session.id}"
+            if is_windows
+            else f"/tmp/.ses-{session.id}"
+        )
 
         at_rest_key = _secrets.token_hex(32)
 
@@ -547,7 +566,9 @@ class SessionManager:
             os_type=os_type,
             encrypt_at_rest=True,
         )
-        session = session.model_copy(update={"at_rest_key": at_rest_key, "at_rest_encrypted": True})
+        session = session.model_copy(
+            update={"at_rest_key": at_rest_key, "at_rest_encrypted": True}
+        )
 
         remote = create_remote_runner(resolved, instance.ip, max_retries=3)
         try:
@@ -578,9 +599,13 @@ class SessionManager:
                 )
 
             # Upload key and script via temp files
-            _upload_temp_content(remote, at_rest_key, f"{remote_work_dir}{sep}.skey", suffix=".key")
+            _upload_temp_content(
+                remote, at_rest_key, f"{remote_work_dir}{sep}.skey", suffix=".key"
+            )
             ext = ".ps1" if is_windows else ".sh"
-            _upload_temp_content(remote, script_content, f"{remote_work_dir}{sep}run{ext}", suffix=ext)
+            _upload_temp_content(
+                remote, script_content, f"{remote_work_dir}{sep}run{ext}", suffix=ext
+            )
 
             if is_windows:
                 remote.run(
@@ -591,7 +616,9 @@ class SessionManager:
                 remote.run(f"chmod 600 {remote_work_dir}/.skey")
                 remote.run(f"chmod 700 {remote_work_dir}/run.sh")
 
-            self._upload_script_files(steps, remote, remote_work_dir, is_windows=is_windows)
+            self._upload_script_files(
+                steps, remote, remote_work_dir, is_windows=is_windows
+            )
 
             # Start detached
             pid, launcher, tmux_name = _launch_remote_detached(
@@ -602,16 +629,21 @@ class SessionManager:
             )
 
             remote_log = f"{remote_work_dir}{sep}output.log"
-            session = self._save_session(session, {
-                "status": SessionStatus.RUNNING,
-                "remote_pid": pid,
-                "remote_work_dir": remote_work_dir,
-                "remote_log_file": remote_log,
-                "remote_tmux_session": tmux_name,
-                "remote_launcher": launcher,
-                "output_path": str(self.store.session_dir(session.id)),
-            })
-            logger.info("Cloud session %s started on %s (PID %s)", session.id, instance.ip, pid)
+            session = self._save_session(
+                session,
+                {
+                    "status": SessionStatus.RUNNING,
+                    "remote_pid": pid,
+                    "remote_work_dir": remote_work_dir,
+                    "remote_log_file": remote_log,
+                    "remote_tmux_session": tmux_name,
+                    "remote_launcher": launcher,
+                    "output_path": str(self.store.session_dir(session.id)),
+                },
+            )
+            logger.info(
+                "Cloud session %s started on %s (PID %s)", session.id, instance.ip, pid
+            )
         finally:
             _cleanup_remote(remote)
 
@@ -695,7 +727,9 @@ class SessionManager:
             try:
                 remote = self._reconnect(session)
                 try:
-                    tail_cmd = _build_tail_cmd(session.os_type, session.remote_log_file, 5)
+                    tail_cmd = _build_tail_cmd(
+                        session.os_type, session.remote_log_file, 5
+                    )
                     log_tail = remote.run(tail_cmd, timeout=15).strip()
                     marker = _parse_marker(log_tail)
                     if marker == _DONE_MARKER:
@@ -718,11 +752,15 @@ class SessionManager:
                         and session.remote_launcher == "tmux"
                         and session.remote_tmux_session
                     ):
-                        tmux_alive = remote.run(
-                            f"tmux has-session -t {_shq(session.remote_tmux_session)} "
-                            "2>/dev/null && echo alive || echo dead",
-                            timeout=15,
-                        ).strip().lower()
+                        tmux_alive = (
+                            remote.run(
+                                f"tmux has-session -t {_shq(session.remote_tmux_session)} "
+                                "2>/dev/null && echo alive || echo dead",
+                                timeout=15,
+                            )
+                            .strip()
+                            .lower()
+                        )
                         if "alive" in tmux_alive:
                             return session
                 finally:
@@ -853,14 +891,23 @@ class SessionManager:
         # Re-encrypt with user passphrase if requested
         if passphrase:
             enc_path = encrypt_results(results, passphrase)
-            session = self._save_session(session, {
-                "status": SessionStatus.ENCRYPTED, "encrypted": True,
-                "encrypted_file": str(enc_path), "results_path": str(results),
-            })
+            session = self._save_session(
+                session,
+                {
+                    "status": SessionStatus.ENCRYPTED,
+                    "encrypted": True,
+                    "encrypted_file": str(enc_path),
+                    "results_path": str(results),
+                },
+            )
         else:
-            session = self._save_session(session, {
-                "status": SessionStatus.FETCHED, "results_path": str(results),
-            })
+            session = self._save_session(
+                session,
+                {
+                    "status": SessionStatus.FETCHED,
+                    "results_path": str(results),
+                },
+            )
 
         return results if not passphrase else Path(session.encrypted_file)
 
@@ -958,7 +1005,7 @@ class SessionManager:
                         exc,
                     )
                     # Fall through to unencrypted fetch below
-                    local_enc = None
+                    local_enc = None  # type: ignore[assignment]
 
                 if local_enc and local_enc.exists():
                     _decrypt_at_rest_openssl(local_enc, session.at_rest_key, results)
@@ -985,7 +1032,9 @@ class SessionManager:
             files = [f.strip() for f in output.strip().split("\n") if f.strip()]
 
             for fname in files:
-                rpath = _remote_join(session.os_type, session.remote_work_dir, "output", fname)
+                rpath = _remote_join(
+                    session.os_type, session.remote_work_dir, "output", fname
+                )
                 try:
                     remote.download(rpath, str(results / fname))
                 except Exception as exc:
@@ -1054,9 +1103,13 @@ class SessionManager:
             except Exception as exc:
                 logger.debug("Cancel failed for %s: %s", session_id, exc)
 
-        return self._save_session(session, {
-            "status": SessionStatus.CANCELED, "finished_at": datetime.now(UTC),
-        })
+        return self._save_session(
+            session,
+            {
+                "status": SessionStatus.CANCELED,
+                "finished_at": datetime.now(UTC),
+            },
+        )
 
     # ------------------------------------------------------------------
     # Destroy (tear down VPS)
@@ -1103,10 +1156,13 @@ class SessionManager:
                     "Failed to destroy instance %s: %s", session.instance_id, exc
                 )
 
-        return self._save_session(session, {
-            "status": SessionStatus.DESTROYED,
-            "finished_at": session.finished_at or datetime.now(UTC),
-        })
+        return self._save_session(
+            session,
+            {
+                "status": SessionStatus.DESTROYED,
+                "finished_at": session.finished_at or datetime.now(UTC),
+            },
+        )
 
     async def bundle_artifacts(
         self,
@@ -1121,10 +1177,16 @@ class SessionManager:
         results_dir = Path(session.results_path) if session.results_path else None
         if results_dir is None or not results_dir.exists():
             # Attempt fetch for completed sessions if results were not fetched yet.
-            if session.status in (SessionStatus.COMPLETED, SessionStatus.FETCHED, SessionStatus.ENCRYPTED):
+            if session.status in (
+                SessionStatus.COMPLETED,
+                SessionStatus.FETCHED,
+                SessionStatus.ENCRYPTED,
+            ):
                 await self.fetch(session_id)
                 session = self.store.load(session_id)
-                results_dir = Path(session.results_path) if session.results_path else None
+                results_dir = (
+                    Path(session.results_path) if session.results_path else None
+                )
             if results_dir is None or not results_dir.exists():
                 raise RuntimeError(
                     f"No fetched results available for session {session_id}. "
@@ -1144,7 +1206,9 @@ class SessionManager:
             "execution_scope": session.job_id or "full-workflow",
             "project": session.project,
             "started_at": session.started_at.isoformat(),
-            "finished_at": session.finished_at.isoformat() if session.finished_at else None,
+            "finished_at": session.finished_at.isoformat()
+            if session.finished_at
+            else None,
             "instance_ip": session.instance_ip,
             "instance_id": session.instance_id,
             "cloud_profile": session.cloud_profile,
@@ -1165,7 +1229,9 @@ class SessionManager:
                     try:
                         from ofx.commands.project.project_manager import ProjectManager
 
-                        project_path = Path(ProjectManager.resolve_path(session.project))
+                        project_path = Path(
+                            ProjectManager.resolve_path(session.project)
+                        )
                         if project_path.exists():
                             tf.add(project_path / "logs", arcname="project_logs")
                     except Exception as e:
@@ -1282,7 +1348,9 @@ class SessionManager:
 # ======================================================================
 
 
-def _upload_temp_content(remote: Any, content: str, remote_path: str, *, suffix: str = "") -> None:
+def _upload_temp_content(
+    remote: Any, content: str, remote_path: str, *, suffix: str = ""
+) -> None:
     """Write content to a temp file, upload it, then clean up."""
     fd, local_path = tempfile.mkstemp(suffix=suffix)
     os.close(fd)

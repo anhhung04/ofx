@@ -37,8 +37,14 @@ def discover_api_modules() -> dict[str, dict[str, str]]:
             _try_register_module(f"ofx.api.{file.stem}", file.stem, modules)
 
         for subdir in api_path.iterdir():
-            if subdir.is_dir() and not subdir.name.startswith("_") and (subdir / "__init__.py").exists():
-                _try_register_module(f"ofx.api.{subdir.name}", subdir.name, modules, require_all=True)
+            if (
+                subdir.is_dir()
+                and not subdir.name.startswith("_")
+                and (subdir / "__init__.py").exists()
+            ):
+                _try_register_module(
+                    f"ofx.api.{subdir.name}", subdir.name, modules, require_all=True
+                )
 
         return modules
     except Exception as e:
@@ -120,7 +126,13 @@ def get_model_schema(
     return schema
 
 
-def _extract_params(sig: inspect.Signature, type_hints: dict, model_schemas: dict, *, skip: set[str] | None = None) -> list[dict[str, Any]]:
+def _extract_params(
+    sig: inspect.Signature,
+    type_hints: dict,
+    model_schemas: dict,
+    *,
+    skip: set[str] | None = None,
+) -> list[dict[str, Any]]:
     """Extract parameter info from a function/method signature."""
     skip = skip or set()
     parameters = []
@@ -131,17 +143,34 @@ def _extract_params(sig: inspect.Signature, type_hints: dict, model_schemas: dic
         param_type = format_type(param_hint, model_schemas)
 
         if param.kind == param.VAR_KEYWORD:
-            parameters.append({"name": f"**{param_name}", "type": "Any", "default": "", "required": False})
+            parameters.append(
+                {
+                    "name": f"**{param_name}",
+                    "type": "Any",
+                    "default": "",
+                    "required": False,
+                }
+            )
         elif param.kind == param.VAR_POSITIONAL:
-            parameters.append({"name": f"*{param_name}", "type": "Any", "default": "", "required": False})
+            parameters.append(
+                {
+                    "name": f"*{param_name}",
+                    "type": "Any",
+                    "default": "",
+                    "required": False,
+                }
+            )
         else:
             default = "" if param.default is param.empty else str(param.default)
-            parameters.append({
-                "name": param_name,
-                "type": param_type,
-                "default": default,
-                "required": param.default is param.empty and param.kind != param.VAR_POSITIONAL,
-            })
+            parameters.append(
+                {
+                    "name": param_name,
+                    "type": param_type,
+                    "default": default,
+                    "required": param.default is param.empty
+                    and param.kind != param.VAR_POSITIONAL,
+                }
+            )
     return parameters
 
 
@@ -162,7 +191,9 @@ def _normalize_doc_and_example(doc: str) -> tuple[str, str | None]:
     example: str | None = None
     if len(parts) > 1:
         example = "\n".join(
-            line for line in (line.strip() for line in parts[1].strip().split("\n")) if line
+            line
+            for line in (line.strip() for line in parts[1].strip().split("\n"))
+            if line
         )
     return description, example
 
@@ -192,7 +223,9 @@ def _print_data_directories(console: Any, base_data_dir: str, data_dir: str) -> 
 def _print_list_usage(console: Any) -> None:
     console.print("\n⚠️ No module specified.")
     console.print("\nUse one of the following options:")
-    console.print("  • [cyan]--list[/cyan] or [cyan]-l[/cyan] to list all available modules")
+    console.print(
+        "  • [cyan]--list[/cyan] or [cyan]-l[/cyan] to list all available modules"
+    )
     console.print(
         "  • [cyan]--module MODULE[/cyan] or [cyan]-m MODULE[/cyan] to view specific module documentation"
     )
@@ -201,7 +234,9 @@ def _print_list_usage(console: Any) -> None:
     console.print("  [dim]$ ofx docs --module webshell[/dim]")
 
 
-def _print_module_list(console: Any, modules: dict[str, str], descriptions: dict[str, str]) -> None:
+def _print_module_list(
+    console: Any, modules: dict[str, str], descriptions: dict[str, str]
+) -> None:
     from rich.table import Table
 
     console.print("\n[bold blue]Available API Modules:[/bold blue]")
@@ -230,7 +265,9 @@ def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
         sig = inspect.signature(method)
         type_hints = _resolve_type_hints(method)
         model_schemas: dict = {}
-        parameters = _extract_params(sig, type_hints, model_schemas, skip={"self", "cls"})
+        parameters = _extract_params(
+            sig, type_hints, model_schemas, skip={"self", "cls"}
+        )
 
         return {
             "name": method_name,
@@ -264,14 +301,18 @@ def get_module_functions(module) -> list[dict[str, Any]]:
                 model_schemas: dict = {}
                 parameters = _extract_params(sig, type_hints, model_schemas)
 
-                functions.append({
-                    "name": name,
-                    "type": "function",
-                    "doc": inspect.getdoc(func) or "",
-                    "parameters": parameters,
-                    "return_type": format_type(type_hints.get("return", Any), model_schemas),
-                    "models": model_schemas,
-                })
+                functions.append(
+                    {
+                        "name": name,
+                        "type": "function",
+                        "doc": inspect.getdoc(func) or "",
+                        "parameters": parameters,
+                        "return_type": format_type(
+                            type_hints.get("return", Any), model_schemas
+                        ),
+                        "models": model_schemas,
+                    }
+                )
 
             elif name in class_lookup:
                 cls = class_lookup[name]
@@ -283,11 +324,18 @@ def get_module_functions(module) -> list[dict[str, Any]]:
                         sig = inspect.signature(init_func)
                         type_hints = _resolve_type_hints(init_func)
                         model_schemas = {}
-                        parameters = _extract_params(sig, type_hints, model_schemas, skip={"self"})
+                        parameters = _extract_params(
+                            sig, type_hints, model_schemas, skip={"self"}
+                        )
 
                         methods = []
-                        for method_name, method in inspect.getmembers(cls, inspect.isfunction):
-                            if method_name.startswith("_") and method_name not in ("__init__", "__call__"):
+                        for method_name, method in inspect.getmembers(
+                            cls, inspect.isfunction
+                        ):
+                            if method_name.startswith("_") and method_name not in (
+                                "__init__",
+                                "__call__",
+                            ):
                                 continue
                             if method_name == "__init__":
                                 continue
@@ -295,28 +343,42 @@ def get_module_functions(module) -> list[dict[str, Any]]:
                             try:
                                 inspect.signature(method)
                                 method_type_hints = get_type_hints(method)
-                                method_return_type = format_type(method_type_hints.get("return", Any), {})
+                                method_return_type = format_type(
+                                    method_type_hints.get("return", Any), {}
+                                )
                             except Exception:
                                 method_return_type = "Any"
-                            methods.append({
-                                "name": method_name,
-                                "doc": method_doc.split("\n")[0] if method_doc else "",
-                                "return_type": method_return_type,
-                            })
+                            methods.append(
+                                {
+                                    "name": method_name,
+                                    "doc": method_doc.split("\n")[0]
+                                    if method_doc
+                                    else "",
+                                    "return_type": method_return_type,
+                                }
+                            )
 
-                        functions.append({
+                        functions.append(
+                            {
+                                "name": name,
+                                "type": "class",
+                                "doc": doc,
+                                "parameters": parameters,
+                                "methods": methods,
+                                "models": model_schemas,
+                            }
+                        )
+                except Exception:
+                    functions.append(
+                        {
                             "name": name,
                             "type": "class",
                             "doc": doc,
-                            "parameters": parameters,
-                            "methods": methods,
-                            "models": model_schemas,
-                        })
-                except Exception:
-                    functions.append({
-                        "name": name, "type": "class", "doc": doc,
-                        "parameters": [], "methods": [], "models": {},
-                    })
+                            "parameters": [],
+                            "methods": [],
+                            "models": {},
+                        }
+                    )
 
     return sorted(functions, key=lambda x: x["name"])
 

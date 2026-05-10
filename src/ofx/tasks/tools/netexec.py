@@ -21,7 +21,11 @@ class NetexecTask(Task):
     output_types = [UserAccount, Tag]
 
     opts = {
-        "protocol": OptDef(flag="--protocol", type=str, help="Protocol (smb/ldap/winrm/ssh/mssql/rdp/ftp)"),
+        "protocol": OptDef(
+            flag="--protocol",
+            type=str,
+            help="Protocol (smb/ldap/winrm/ssh/mssql/rdp/ftp)",
+        ),
         "username": OptDef(flag="-u", type=str, help="Username"),
         "password": OptDef(flag="-p", type=str, help="Password"),
         "hash": OptDef(flag="-H", type=str, help="NTLM hash"),
@@ -30,10 +34,16 @@ class NetexecTask(Task):
         "users": OptDef(flag="--users", is_flag=True, help="Enumerate users"),
         "groups": OptDef(flag="--groups", is_flag=True, help="Enumerate groups"),
         "sessions": OptDef(flag="--sessions", is_flag=True, help="Enumerate sessions"),
-        "loggedon_users": OptDef(flag="--loggedon-users", is_flag=True, help="Enumerate logged-on users"),
-        "pass_pol": OptDef(flag="--pass-pol", is_flag=True, help="Dump password policy"),
+        "loggedon_users": OptDef(
+            flag="--loggedon-users", is_flag=True, help="Enumerate logged-on users"
+        ),
+        "pass_pol": OptDef(
+            flag="--pass-pol", is_flag=True, help="Dump password policy"
+        ),
         "rid_brute": OptDef(flag="--rid-brute", is_flag=True, help="RID brute force"),
-        "local_auth": OptDef(flag="--local-auth", is_flag=True, help="Use local authentication"),
+        "local_auth": OptDef(
+            flag="--local-auth", is_flag=True, help="Use local authentication"
+        ),
         "sam": OptDef(flag="--sam", is_flag=True, help="Dump SAM hashes"),
         "lsa": OptDef(flag="--lsa", is_flag=True, help="Dump LSA secrets"),
         "ntds": OptDef(flag="--ntds", is_flag=True, help="Dump NTDS.dit"),
@@ -41,11 +51,17 @@ class NetexecTask(Task):
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "module": OptDef(flag="-M", type=str, help="Module to run"),
         "module_option": OptDef(flag="-o", type=str, help="Module option (KEY=VALUE)"),
-        "gen_relay_list": OptDef(flag="--gen-relay-list", type=str, help="Output file for SMB relay targets"),
-        "asreproast": OptDef(flag="--asreproast", type=str, help="Output file for AS-REP roast hashes"),
+        "gen_relay_list": OptDef(
+            flag="--gen-relay-list", type=str, help="Output file for SMB relay targets"
+        ),
+        "asreproast": OptDef(
+            flag="--asreproast", type=str, help="Output file for AS-REP roast hashes"
+        ),
         "gmsa": OptDef(flag="--gmsa", is_flag=True, help="Dump gMSA passwords"),
         "dpapi": OptDef(flag="--dpapi", is_flag=True, help="Dump DPAPI credentials"),
-        "kerberoasting": OptDef(flag="--kerberoasting", type=str, help="Output file for Kerberoast hashes"),
+        "kerberoasting": OptDef(
+            flag="--kerberoasting", type=str, help="Output file for Kerberoast hashes"
+        ),
     }
 
     input_flag = None
@@ -81,7 +97,9 @@ class NetexecTask(Task):
     )
     # user RID:1001
     _USER_RE = re.compile(r"^\S+\s+\d+\s+\S+\s+(.+?)\s+rid:\s*(\d+)", re.IGNORECASE)
-    _SHARE_RE = re.compile(r"^\S+\s+\d+\s+\S+\s+(\S+)\s+(READ|WRITE|NO ACCESS)", re.IGNORECASE)
+    _SHARE_RE = re.compile(
+        r"^\S+\s+\d+\s+\S+\s+(\S+)\s+(READ|WRITE|NO ACCESS)", re.IGNORECASE
+    )
 
     def parse_output(
         self,

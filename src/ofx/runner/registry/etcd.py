@@ -96,7 +96,9 @@ class EtcdJobRegistry(RegistryAdapter):
             try:
                 return json.loads(value.decode())
             except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                logger.warning(
+                    "Failed to decode registry value for key '%s': %s", key, exc
+                )
                 return None
         return None
 
@@ -142,7 +144,9 @@ class EtcdJobRegistry(RegistryAdapter):
                 try:
                     result[key] = json.loads(value.decode())
                 except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                    logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                    logger.warning(
+                        "Failed to decode registry value for key '%s': %s", key, exc
+                    )
 
         return result
 

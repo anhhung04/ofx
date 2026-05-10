@@ -25,6 +25,7 @@ jobs:
         name: API Endpoint Discovery
         steps:
             - task: ffuf
+              log-command: true
               timeout: 15
               name: fuzz-endpoints
               with:
@@ -87,6 +88,7 @@ jobs:
                   for finding in findings:
                       print(f"\n  {finding}")
               log-stdout: true
+              log-command: true
               continue-on-error: true
 
     security-headers:
@@ -152,6 +154,7 @@ jobs:
                   for finding in findings:
                       print(f"  {finding}")
               log-stdout: true
+              log-command: true
               continue-on-error: true
     summary:
         name: Summary

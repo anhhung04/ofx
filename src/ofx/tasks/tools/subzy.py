@@ -19,7 +19,9 @@ class SubzyTask(Task):
     output_types = [Vulnerability]
 
     opts = {
-        "concurrency": OptDef(flag="--concurrency", type=int, help="Number of concurrent checks"),
+        "concurrency": OptDef(
+            flag="--concurrency", type=int, help="Number of concurrent checks"
+        ),
         "timeout": OptDef(flag="--timeout", type=int, help="Timeout in seconds"),
         "https": OptDef(flag="--https", is_flag=True, help="Use HTTPS"),
     }
@@ -53,4 +55,3 @@ class SubzyTask(Task):
                 )
             ]
         return []
-

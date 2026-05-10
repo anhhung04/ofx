@@ -38,10 +38,7 @@ def log_output(
     if len(lines) > limit:
         head = "\n".join(lines[:limit])
         omitted = len(lines) - limit
-        display = (
-            f"{head}\n"
-            f"... [{omitted} more lines — full output saved to logs]"
-        )
+        display = f"{head}\n... [{omitted} more lines — full output saved to logs]"
     else:
         display = content
 

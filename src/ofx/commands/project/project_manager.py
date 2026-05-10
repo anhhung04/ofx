@@ -1,6 +1,4 @@
-import json
 import logging
-import os
 import shutil
 from os import getenv
 from pathlib import Path
@@ -8,28 +6,6 @@ from pathlib import Path
 from ofx.settings import DEFAULT_PROJECTS_PATH
 
 logger = logging.getLogger("ofx")
-
-# Configuration helpers for active project management
-CONFIG_PATH = Path.home() / ".ofx" / "config.json"
-
-
-def _load_config() -> dict:
-    """Load JSON config from CONFIG_PATH. Return empty dict on error."""
-    try:
-        return json.loads(Path(CONFIG_PATH).read_text())
-    except Exception as e:
-        logger.debug("Failed to load config from %s: %s", CONFIG_PATH, e)
-        return {}
-
-
-def _save_config(data: dict) -> None:
-    """Write `data` as JSON to CONFIG_PATH, or delete the file if empty."""
-    Path(CONFIG_PATH).parent.mkdir(parents=True, exist_ok=True)
-    if data:
-        Path(CONFIG_PATH).write_text(json.dumps(data, indent=2))
-    else:
-        # Write empty JSON object when config is empty to keep file present for callers
-        Path(CONFIG_PATH).write_text(json.dumps({}, indent=2))
 
 
 class ProjectManager:
@@ -105,32 +81,17 @@ class ProjectManager:
 
     @classmethod
     def get_active_path(cls) -> Path | None:
-        """Return the active project Path considering env var, Settings, or config."""
-        # 1️⃣ Environment variable override
-        env_name = os.getenv("OFX_ACTIVE_PROJECT")
-        if env_name:
-            try:
-                return Path(cls.resolve_path(env_name))
-            except Exception as e:
-                logger.debug("Failed to resolve project from env var '%s': %s", env_name, e)
-                pass
-        # 2️⃣ Settings field (populated from env var on Settings load)
+        """Return the active project Path as resolved from settings (config.yml / env var).
+
+        Priority is handled by pydantic-settings source order:
+        env var OFX_ACTIVE_PROJECT > config.yml active_project.
+        """
         from ofx.settings import settings
 
-        if getattr(settings, "active_project", None):
-            try:
-                return Path(cls.resolve_path(settings.active_project))
-            except Exception as e:
-                logger.debug("Failed to resolve active project from settings: %s", e)
-                pass
-        # 3️⃣ JSON config fallback
-        cfg = _load_config()
-        name = cfg.get("active_project")
+        name = getattr(settings, "active_project", None)
         if name:
             try:
                 return Path(cls.resolve_path(name))
             except Exception as e:
-                logger.debug("Failed to resolve project from config '%s': %s", name, e)
-                pass
-        # 4️⃣ No active project defined
+                logger.debug("Failed to resolve active project '%s': %s", name, e)
         return None

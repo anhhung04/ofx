@@ -40,7 +40,9 @@ class ProwlerTask(Task):
         "severity": OptDef(flag="--severity", type=str, help="Minimum severity"),
         "region": OptDef(flag="-f", type=str, help="AWS region filter"),
         "profile": OptDef(flag="-p", type=str, help="AWS profile"),
-        "compliance": OptDef(flag="--compliance", type=str, help="Compliance framework"),
+        "compliance": OptDef(
+            flag="--compliance", type=str, help="Compliance framework"
+        ),
         "output_formats": OptDef(flag="-M", type=str, help="Output format"),
         "output_directory": OptDef(flag="-o", type=str, help="Output directory"),
     }
@@ -113,23 +115,37 @@ class ProwlerTask(Task):
         for item in items:
             severity_id = item.get("severity_id", item.get("severity", ""))
             severity = _SEVERITY_MAP.get(
-                severity_id if isinstance(severity_id, int) else str(severity_id).lower(),
+                severity_id
+                if isinstance(severity_id, int)
+                else str(severity_id).lower(),
                 Severity.MEDIUM,
             )
 
             status = str(item.get("status", item.get("status_code", ""))).upper()
             if status in ("PASS", "MANUAL"):
                 # Only emit tags for passing checks
-                check_id = item.get("finding_info", {}).get("uid", item.get("check_id", ""))
+                check_id = item.get("finding_info", {}).get(
+                    "uid", item.get("check_id", "")
+                )
                 if check_id:
-                    results.append(Tag(name=str(check_id), value="PASS", category="cloud_security"))
+                    results.append(
+                        Tag(name=str(check_id), value="PASS", category="cloud_security")
+                    )
                 continue
 
             finding_info = item.get("finding_info", {})
-            check_title = finding_info.get("title", item.get("check_title", item.get("title", "")))
+            check_title = finding_info.get(
+                "title", item.get("check_title", item.get("title", ""))
+            )
             check_id = finding_info.get("uid", item.get("check_id", ""))
-            resource = str(item.get("resources", [{}])[0].get("uid", "")) if item.get("resources") else ""
-            desc = finding_info.get("desc", item.get("description", item.get("status_extended", "")))
+            resource = (
+                str(item.get("resources", [{}])[0].get("uid", ""))
+                if item.get("resources")
+                else ""
+            )
+            desc = finding_info.get(
+                "desc", item.get("description", item.get("status_extended", ""))
+            )
 
             results.append(
                 Vulnerability(

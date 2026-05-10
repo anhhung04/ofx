@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -19,9 +17,7 @@ class GobusterTask(Task):
     cmd = "gobuster"
     description = "Directory/DNS/vhost brute-forcing tool"
     category = "url/fuzz"
-    install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/OJ/gobuster/v3@latest"
-    )
+    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/OJ/gobuster/v3@latest"
     output_types = [Url]
 
     opts = {
@@ -35,9 +31,7 @@ class GobusterTask(Task):
             flag="-x", type=str, help="File extensions to search (e.g. php,html)"
         ),
         "timeout": OptDef(flag="--timeout", type=int, help="HTTP timeout in seconds"),
-        "follow_redirect": OptDef(
-            flag="-r", is_flag=True, help="Follow redirects"
-        ),
+        "follow_redirect": OptDef(flag="-r", is_flag=True, help="Follow redirects"),
         "cookies": OptDef(flag="-c", type=str, help="Cookies to use"),
         "headers": OptDef(flag="-H", type=str, help="HTTP header(s)"),
         "method": OptDef(flag="-m", type=str, help="HTTP method"),
@@ -79,12 +73,7 @@ class GobusterTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            output_file = Path(_path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         parts.extend(["-u", target])
@@ -92,9 +81,7 @@ class GobusterTask(Task):
         return " ".join(parts), output_file
 
     # Pattern: /path (Status: 200) [Size: 1234]
-    _LINE_RE = re.compile(
-        r"^(/\S*)\s+\(Status:\s*(\d+)\)\s+\[Size:\s*(\d+)\]"
-    )
+    _LINE_RE = re.compile(r"^(/\S*)\s+\(Status:\s*(\d+)\)\s+\[Size:\s*(\d+)\]")
 
     def parse_line(self, line: str) -> list[Url]:
         line = line.strip()
@@ -110,4 +97,3 @@ class GobusterTask(Task):
                 content_length=self._safe_int(m.group(3)),
             )
         ]
-

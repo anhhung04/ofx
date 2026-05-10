@@ -13,7 +13,8 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from abc import ABC, abstractmethod
+from abc import ABC
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -71,8 +72,8 @@ class Task(ABC):
     # Set these to auto-inject machine-friendly output flags.
     # They are appended to the command automatically.  Set to ``""``
     # to disable a particular auto-flag.
-    json_flag: str = ""      # e.g. "-json", "--json", "-jsonl"
-    silent_flag: str = ""    # e.g. "-silent", "--silent", "-s"
+    json_flag: str = ""  # e.g. "-json", "--json", "-jsonl"
+    silent_flag: str = ""  # e.g. "-silent", "--silent", "-s"
 
     # ── Exit code handling ─────────────────────────────────────────
     # Exit codes considered successful.  Override in subclasses for tools
@@ -85,6 +86,9 @@ class Task(ABC):
     # ``<output_path>/scans/``.
     export_output: bool = True
 
+    # ── Instance state (set during build_command) ────────────────
+    _temp_target_files: list[str]
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Ensure mutable class attributes are copied per-subclass."""
         super().__init_subclass__(**kwargs)
@@ -96,6 +100,26 @@ class Task(ABC):
                     setattr(cls, attr, dict(inherited))
                 elif isinstance(inherited, list):
                     setattr(cls, attr, list(inherited))
+
+    def __init__(self) -> None:
+        self._temp_target_files: list[str] = []
+
+    # ── Helpers ────────────────────────────────────────────────────
+
+    def _make_output_path(self) -> Path:
+        """Reserve a unique temp path for tool output without pre-creating it.
+
+        Uses mkstemp to guarantee uniqueness, then immediately unlinks the
+        file so the external tool creates it with its own uid/permissions.
+        This avoids "could not open file for writing" errors when the tool
+        runs as a different user (e.g. masscan/nmap via sudo).
+        """
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=f".ofx_task_{self.name}_", suffix=self._output_suffix()
+        )
+        os.close(fd)
+        os.unlink(tmp_path)
+        return Path(tmp_path)
 
     # ── Public API ─────────────────────────────────────────────────
 
@@ -137,11 +161,7 @@ class Task(ABC):
 
         # Output file for tools that write structured output to a file
         if self.output_flag:
-            fd, tmp_path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_", suffix=self._output_suffix()
-            )
-            os.close(fd)
-            output_file = Path(tmp_path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         # Target handling — auto-detect file paths, multi-target lists
@@ -153,7 +173,7 @@ class Task(ABC):
         )
         is_multi = "," in target and not Path(target).is_file() if target else False
 
-        if target_is_file:
+        if target_is_file and self.file_flag:
             parts.extend([self.file_flag, target])
         elif is_multi and self.file_flag:
             parts.extend([self.file_flag, self._write_target_file(target)])
@@ -175,7 +195,7 @@ class Task(ABC):
         stdout: str,
         stderr: str,
         output_file: Path | None = None,
-    ) -> list[OutputType]:
+    ) -> Sequence[OutputType]:
         """Parse raw tool output into structured ``OutputType`` objects.
 
         Default implementation reads lines from output_file (or stdout)
@@ -213,7 +233,7 @@ class Task(ABC):
         """
         return type(self).parse_line is not Task.parse_line
 
-    def parse_line(self, line: str) -> list[OutputType]:
+    def parse_line(self, line: str) -> Sequence[OutputType]:
         """Parse a single stdout line into output items (for live streaming).
 
         Override in subclasses whose tool emits JSONL or line-delimited
@@ -231,11 +251,58 @@ class Task(ABC):
         )
         tf.write("\n".join(t.strip() for t in target.split(",") if t.strip()))
         tf.close()
+        self._temp_target_files.append(tf.name)
         return tf.name
+
+    def cleanup_target_files(self) -> None:
+        """Remove temporary target files created by :meth:`build_command`."""
+        for path in self._temp_target_files:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        self._temp_target_files.clear()
 
     def _output_suffix(self) -> str:
         """File suffix for the structured output file."""
         return ".xml"
+
+    @staticmethod
+    def _parse_json_line(line: str) -> dict | None:
+        """Parse a single JSONL line, returning the dict or ``None``."""
+        import json
+
+        line = line.strip()
+        if not line or not line.startswith("{"):
+            return None
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError:
+            return None
+
+    def _read_json_output(
+        self, stdout: str, output_file: Path | None = None
+    ) -> Any | None:
+        """Read and parse JSON from *output_file* or *stdout*.
+
+        Returns the parsed object or ``None`` on failure.
+        """
+        import json
+
+        raw = ""
+        if output_file and output_file.exists():
+            raw = self._read_output_file(output_file)
+        elif stdout:
+            raw = stdout
+
+        raw = raw.strip()
+        if not raw:
+            return None
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            return None
 
     @staticmethod
     def _read_output_file(path: Path) -> str:

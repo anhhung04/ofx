@@ -5,11 +5,9 @@ from __future__ import annotations
 import io
 import sys
 import textwrap
-import zipfile
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # analyzer
@@ -114,10 +112,14 @@ class TestCollectModules:
         from ofx.api.bundle.collector import collect_modules
 
         files = collect_modules(set())
-        assert set(files.keys()) == {"ofx/__init__.py", "ofx/api/__init__.py", "ofx/api/_compat.py"}
+        assert set(files.keys()) == {
+            "ofx/__init__.py",
+            "ofx/api/__init__.py",
+            "ofx/api/_compat.py",
+        }
 
     def test_stub_content(self):
-        from ofx.api.bundle.collector import collect_modules, _STUB_INIT
+        from ofx.api.bundle.collector import _STUB_INIT, collect_modules
 
         files = collect_modules(set())
         assert files["ofx/__init__.py"] == _STUB_INIT
@@ -145,8 +147,9 @@ class TestBuildBundle:
         assert "opsec" in result.modules
 
     def test_bootstrap_is_valid_python(self):
-        from ofx.api.bundle.builder import build_bundle
         import ast
+
+        from ofx.api.bundle.builder import build_bundle
 
         result = build_bundle("print('hello')")
         # Must parse without error
@@ -163,7 +166,10 @@ class TestBuildBundle:
         old_stdout = sys.stdout
         sys.stdout = captured
         try:
-            exec(compile(result.bootstrap, "<test_bootstrap>", "exec"), {"__name__": "__main__"})
+            exec(
+                compile(result.bootstrap, "<test_bootstrap>", "exec"),
+                {"__name__": "__main__"},
+            )
         finally:
             sys.stdout = old_stdout
 
@@ -173,7 +179,7 @@ class TestBuildBundle:
         from ofx.api.bundle.builder import build_bundle
 
         result = build_bundle("x = 1")
-        with pytest.raises(Exception):
+        with pytest.raises(AttributeError):
             result.script = "changed"  # type: ignore[misc]
 
 
@@ -185,6 +191,7 @@ class TestBuildBundle:
 class TestObfuscateBootstrap:
     def test_obfuscated_is_valid_python(self):
         import ast
+
         from ofx.api.bundle.obfuscator import obfuscate_bootstrap
 
         loader = obfuscate_bootstrap("x = 42")
@@ -334,7 +341,10 @@ class TestObfuscateSources:
         old_stdout = sys.stdout
         sys.stdout = captured
         try:
-            exec(compile(result.bootstrap, "<test_src_obf>", "exec"), {"__name__": "__main__"})
+            exec(
+                compile(result.bootstrap, "<test_src_obf>", "exec"),
+                {"__name__": "__main__"},
+            )
         finally:
             sys.stdout = old_stdout
 
@@ -360,7 +370,6 @@ class TestObfuscateSources:
 
     def test_metadata_stripped_filename(self):
         """co_filename in the bytecode must not contain the original path."""
-        import marshal
         from ofx.api.bundle.obfuscator import _strip_code
 
         code = compile(b"x = 1", "secret/path/mod.py", "exec")
@@ -370,7 +379,6 @@ class TestObfuscateSources:
 
     def test_metadata_stripped_docstrings(self):
         """Module and function docstrings must be removed."""
-        import marshal
         from ofx.api.bundle.obfuscator import _strip_code
 
         src = b'"""Module doc."""\ndef foo():\n    """Func doc."""\n    return 1\n'
@@ -563,7 +571,9 @@ class TestDeliverAndRun:
         from ofx.api.bundle.deliverer import deliver_and_run
 
         runner = self._make_runner()
-        result = deliver_and_run(runner, "print('hi')", method="upload", remote_tmp="/tmp/t.py")
+        result = deliver_and_run(
+            runner, "print('hi')", method="upload", remote_tmp="/tmp/t.py"
+        )
 
         runner.upload.assert_called_once()
         assert runner.run.call_count == 2  # exec + rm
@@ -643,7 +653,9 @@ class TestRunRemote:
         runner = MagicMock()
         runner.run.return_value = "win_ok"
 
-        result = run_remote("x = 1", runner, obfuscate=False, method="upload", windows=True)
+        result = run_remote(
+            "x = 1", runner, obfuscate=False, method="upload", windows=True
+        )
 
         exec_cmd = runner.run.call_args_list[0][0][0]
         assert "python " in exec_cmd  # not python3

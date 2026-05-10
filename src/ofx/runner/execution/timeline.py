@@ -33,9 +33,7 @@ _OOPS_HEADER = "title,command,tool,event_time,source_host,target_address,tags"
 
 _IP_RE = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?)")
 _URL_RE = re.compile(r"https?://([^\s/]+)")
-_FLAG_TARGET_RE = re.compile(
-    r"(?:-h|--host|--url|--target|-t|-u|-d)\s+(\S+)"
-)
+_FLAG_TARGET_RE = re.compile(r"(?:-h|--host|--url|--target|-t|-u|-d)\s+(\S+)")
 
 
 def detect_target(command: str) -> str:
@@ -62,6 +60,7 @@ def _hostname() -> str:
     try:
         return socket.gethostname().split(".")[0]
     except Exception:
+        logger.debug("Failed to resolve hostname", exc_info=True)
         return "unknown"
 
 
@@ -85,7 +84,11 @@ def _source_host() -> str:
         # Try public IP first (matching oops-logger behavior)
         import urllib.request
 
-        for url in ("https://ifconfig.me", "https://api.ipify.org", "https://icanhazip.com"):
+        for url in (
+            "https://ifconfig.me",
+            "https://api.ipify.org",
+            "https://icanhazip.com",
+        ):
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "curl/8.0"})
                 with urllib.request.urlopen(req, timeout=2) as resp:
@@ -94,6 +97,7 @@ def _source_host() -> str:
                         ip = candidate
                         break
             except Exception:
+                logger.debug("Public IP lookup failed for %s", url, exc_info=True)
                 continue
 
     if not ip:
@@ -105,6 +109,7 @@ def _source_host() -> str:
             ip = s.getsockname()[0]
             s.close()
         except Exception:
+            logger.debug("Local IP detection via socket failed", exc_info=True)
             ip = ""
 
     if ip and ip != host:
@@ -207,15 +212,17 @@ def log_step(
     try:
         _ensure_csv(csv_path)
 
-        row = _csv_row([
-            title,
-            command,
-            tool_name,
-            datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            source_host or _source_host(),
-            resolved_target,
-            all_tags,
-        ])
+        row = _csv_row(
+            [
+                title,
+                command,
+                tool_name,
+                datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                source_host or _source_host(),
+                resolved_target,
+                all_tags,
+            ]
+        )
 
         with open(csv_path, "a") as f:
             f.write(row)

@@ -22,6 +22,7 @@ jobs:
       cluster_reachable: '{{ steps["cluster-overview"].outputs.cluster_reachable | default("", true) }}'
     steps:
     - name: cluster-overview
+      log-command: true
       script: |
         import subprocess
         import json
@@ -61,6 +62,7 @@ jobs:
       admin_binding_count: '{{ steps["check-rbac"].outputs.admin_binding_count | default("", true) }}'
     steps:
     - name: check-rbac
+      log-command: true
       script: |
         import subprocess
         import json
@@ -110,6 +112,7 @@ jobs:
       finding_count: '{{ steps["check-pods"].outputs.finding_count | default("", true) }}'
     steps:
     - name: check-pods
+      log-command: true
       script: |
         import subprocess
         import json

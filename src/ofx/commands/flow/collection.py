@@ -19,6 +19,7 @@ def _mgr():
 
     return CollectionManager()
 
+
 # ------------------------------------------------------------------
 # add
 # ------------------------------------------------------------------
@@ -28,9 +29,7 @@ def _mgr():
 def add(
     name_or_url: Annotated[
         str,
-        typer.Argument(
-            help="Collection name, org/repo, or full git URL."
-        ),
+        typer.Argument(help="Collection name, org/repo, or full git URL."),
     ],
     name: Annotated[
         str,
@@ -109,14 +108,7 @@ def update(
 # list
 # ------------------------------------------------------------------
 @app.command("list")
-def list_collections(
-    outdated: Annotated[
-        bool,
-        typer.Option(
-            "--outdated", help="Show only collections with newer remote versions."
-        ),
-    ] = False,
-):
+def list_collections():
     """List installed collections."""
     mgr = _mgr()
     console = get_console()

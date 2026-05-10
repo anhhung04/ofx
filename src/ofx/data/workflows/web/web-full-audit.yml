@@ -35,6 +35,7 @@ jobs:
       allowed_methods: '{{ steps["http-methods"].outputs.allowed_methods | default("", true) }}'
     steps:
       - task: rustscan
+        log-command: true
         timeout: 10
         name: port-discovery
         retry: 2
@@ -45,6 +46,7 @@ jobs:
           batch_size: 4500
         continue-on-error: true
       - task: httpx
+        log-command: true
         timeout: 10
         name: http-probe
         retry: 2
@@ -57,6 +59,7 @@ jobs:
           follow_redirects: true
         continue-on-error: true
       - task: wafw00f
+        log-command: true
         timeout: 10
         name: waf-detect
         retry: 2
@@ -65,6 +68,7 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: whatweb
+        log-command: true
         timeout: 10
         name: whatweb-scan
         retry: 2
@@ -170,6 +174,7 @@ jobs:
       dir_count: '{{ steps["collect-dirs"].outputs.dir_count | default("", true) }}'
     steps:
       - task: feroxbuster
+        log-command: true
         timeout: 20
         name: feroxbuster-deep
         retry: 2
@@ -186,6 +191,7 @@ jobs:
           status_codes: 200,201,204,301,302,307,308,401,403,405,500
         continue-on-error: true
       - task: gobuster
+        log-command: true
         timeout: 10
         name: gobuster-scan
         retry: 2
@@ -198,6 +204,7 @@ jobs:
           status_codes: 200,201,204,301,302,307,401,403
         continue-on-error: true
       - task: dirsearch
+        log-command: true
         timeout: 15
         name: dirsearch-scan
         retry: 2
@@ -233,6 +240,7 @@ jobs:
       js_findings: '{{ steps["collect-crawled"].outputs.js_findings | default("0", true) }}'
     steps:
       - task: katana
+        log-command: true
         timeout: 15
         name: katana-crawl
         retry: 2
@@ -244,6 +252,7 @@ jobs:
           known_files: all
         continue-on-error: true
       - task: hakrawler
+        log-command: true
         timeout: 10
         name: hakrawler-crawl
         retry: 2
@@ -254,6 +263,7 @@ jobs:
           scope: subs
         continue-on-error: true
       - task: gospider
+        log-command: true
         timeout: 15
         name: gospider-crawl
         retry: 2
@@ -263,6 +273,7 @@ jobs:
           depth: 2
         continue-on-error: true
       - task: gau
+        log-command: true
         timeout: 10
         name: gau-archive
         retry: 2
@@ -325,6 +336,7 @@ jobs:
       param_count: '{{ steps["collect-params"].outputs.param_count | default("", true) }}'
     steps:
       - task: arjun
+        log-command: true
         timeout: 10
         name: arjun-params
         retry: 2
@@ -334,6 +346,7 @@ jobs:
           threads: 20
         continue-on-error: true
       - task: x8
+        log-command: true
         timeout: 10
         name: x8-params
         retry: 2
@@ -343,6 +356,7 @@ jobs:
           method: GET
         continue-on-error: true
       - task: paramspider
+        log-command: true
         timeout: 10
         name: paramspider-discover
         retry: 2
@@ -383,6 +397,7 @@ jobs:
       ssti_count: '{{ steps["collect-vulns"].outputs.ssti_count | default("0", true) }}'
     steps:
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-scan
         retry: 2
@@ -392,6 +407,7 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
+        log-command: true
         timeout: 15
         name: xss-scan
         retry: 2
@@ -401,6 +417,7 @@ jobs:
           target: "{{ jobs['param-fuzz'].outputs.param_file }}"
         continue-on-error: true
       - task: sqlmap
+        log-command: true
         timeout: 30
         name: sqli-scan
         retry: 2
@@ -414,6 +431,7 @@ jobs:
           threads: 5
         continue-on-error: true
       - task: commix
+        log-command: true
         timeout: 20
         name: cmdi-scan
         retry: 2
@@ -433,6 +451,7 @@ jobs:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
         continue-on-error: true
       - task: nikto
+        log-command: true
         timeout: 15
         name: nikto-scan
         retry: 2
@@ -492,6 +511,7 @@ jobs:
       secret_count: '{{ steps["collect-secrets"].outputs.secret_count | default("0", true) }}'
     steps:
       - task: nuclei
+        log-command: true
         timeout: 15
         name: nuclei-secrets
         retry: 2

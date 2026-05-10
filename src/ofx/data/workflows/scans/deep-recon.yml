@@ -23,6 +23,7 @@ jobs:
     name: Deep Recon
     steps:
       - name: full-recon
+        log-command: true
         uses: full-recon
         with:
           target: "{{ inputs.target }}"

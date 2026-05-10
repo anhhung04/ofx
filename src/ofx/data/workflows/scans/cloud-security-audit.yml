@@ -32,6 +32,7 @@ jobs:
       typed_outputs: '{{ steps["prowler-audit"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: prowler
+        log-command: true
         timeout: 60
         name: prowler-audit
         with:
@@ -50,6 +51,7 @@ jobs:
       typed_outputs: '{{ steps["cloudfox-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: cloudfox
+        log-command: true
         timeout: 30
         name: cloudfox-scan
         with:

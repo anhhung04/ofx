@@ -82,125 +82,9 @@ def exec_script_in_process(
                     f.write(f"{k}={v}\n")
 
     from ofx.runner.execution.findings_export import export_typed_outputs
+    from ofx.runner.templates.helpers import _asm_helpers
 
-    # ── ASM integration helpers ──────────────────────────────────
-    def _asm_targets(scope: str = "", effective: bool = True, target_type: str = "") -> list[str]:
-        """Pull target values from an ASM scope.
-
-        Returns a list of target strings (domains, IPs, etc.).
-
-        Usage in script::
-
-            targets = asm_targets("my-scope")
-            for t in targets:
-                print(t)
-        """
-        try:
-            from ofx.asm.config import get_asm_client
-            client = get_asm_client()
-            scope_id = _asm_resolve(client, scope)
-            if effective:
-                raw = client.effective_targets(scope_id)
-                return [t.value for t in raw if not t.excluded and (not target_type or t.target_type == target_type)]
-            raw_t = client.list_targets(scope_id)
-            return [t.value for t in raw_t if t.enabled and (not target_type or t.target_type == target_type)]
-        except Exception:
-            return []
-
-    def _asm_push(items: list, scope: str = "", source: str = "ofx") -> int:
-        """Push typed output dicts to an ASM scope.
-
-        Returns count of imported assets.
-
-        Usage in script::
-
-            count = asm_push([
-                {"_type": "subdomain", "host": "sub.example.com"},
-                {"_type": "ip", "ip": "1.2.3.4"},
-            ], scope="my-scope")
-            print(f"Pushed {count} assets")
-        """
-        try:
-            from ofx.asm.config import get_asm_client
-            from ofx.asm.export import batch_convert
-            client = get_asm_client()
-            scope_id = _asm_resolve(client, scope)
-            assets, _ = batch_convert(items, source=source)
-            if not assets:
-                return 0
-            result = client.import_generic(scope_id, assets)
-            return result.get("imported", 0)
-        except Exception:
-            return 0
-
-    def _asm_scopes() -> list[dict]:
-        """List all ASM scopes.
-
-        Returns a list of scope dicts with id, name, scope_type, group.
-
-        Usage in script::
-
-            for s in asm_scopes():
-                print(f"{s['name']} ({s['id']})")
-        """
-        try:
-            from ofx.asm.config import get_asm_client
-            client = get_asm_client()
-            return [s.model_dump() for s in client.list_scopes()]
-        except Exception:
-            return []
-
-    def _asm_scope_assets(scope: str = "", asset_type: str = "", limit: int = 1000) -> list[dict]:
-        """List assets from an ASM scope.
-
-        Returns a list of asset dicts.
-
-        Usage in script::
-
-            assets = asm_scope_assets("my-scope", asset_type="subdomain")
-            for a in assets:
-                print(a["value"])
-        """
-        try:
-            from ofx.asm.config import get_asm_client
-            client = get_asm_client()
-            scope_id = _asm_resolve(client, scope)
-            assets, _ = client.list_assets(scope_id, limit=limit, asset_type=asset_type)
-            return [a.model_dump() for a in assets]
-        except Exception:
-            return []
-
-    def _asm_add_targets(targets: list[str], scope: str = "") -> int:
-        """Add targets to an ASM scope (auto-detect types).
-
-        Returns count of imported targets.
-
-        Usage in script::
-
-            count = asm_add_targets(["example.com", "10.0.0.1"], scope="my-scope")
-            print(f"Added {count} targets")
-        """
-        try:
-            from ofx.asm.config import get_asm_client
-            client = get_asm_client()
-            scope_id = _asm_resolve(client, scope)
-            result = client.bulk_import_targets(scope_id, targets, auto_detect=True)
-            return result.imported
-        except Exception:
-            return 0
-
-    def _asm_resolve(client, scope_ref: str) -> str:
-        if not scope_ref:
-            from ofx.asm.config import get_asm_config
-            scope_ref = get_asm_config().default_scope
-        if not scope_ref:
-            raise ValueError("No ASM scope specified and no default configured")
-        if len(scope_ref) >= 32 and "-" in scope_ref:
-            return scope_ref
-        found = client.find_scope(scope_ref)
-        if found:
-            return found.id
-        raise ValueError(f"ASM scope '{scope_ref}' not found")
+    asm_funcs = _asm_helpers()
 
     globals_dict = {
         "__builtins__": builtins.__dict__,
@@ -219,12 +103,8 @@ def exec_script_in_process(
             channel, condition, timeout=timeout
         ),
         "export_typed_outputs": export_typed_outputs,
-        # ASM integration
-        "asm_targets": _asm_targets,
-        "asm_push": _asm_push,
-        "asm_scopes": _asm_scopes,
-        "asm_scope_assets": _asm_scope_assets,
-        "asm_add_targets": _asm_add_targets,
+        # ASM integration (shared with template helpers)
+        **asm_funcs,
     }
 
     stdout_capture = io.StringIO()

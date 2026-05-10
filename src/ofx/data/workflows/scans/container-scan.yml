@@ -16,12 +16,14 @@ jobs:
     name: Vulnerability Scanning
     steps:
     - task: trivy
+      log-command: true
       timeout: 15
       name: trivy-image
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: grype
+      log-command: true
       timeout: 15
       name: grype-image
       with:
@@ -32,6 +34,7 @@ jobs:
     name: Secret Detection
     steps:
     - name: scan-secrets
+      log-command: true
       run: |
         echo "[+] Scanning image for secrets..."
         if command -v trivy &>/dev/null; then
@@ -55,6 +58,7 @@ jobs:
     name: Misconfiguration Check
     steps:
     - name: check-misconfig
+      log-command: true
       run: |
         echo "[+] Checking image misconfigurations..."
         if command -v trivy &>/dev/null; then

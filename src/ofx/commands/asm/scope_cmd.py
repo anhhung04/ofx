@@ -14,6 +14,7 @@ scope_app = typer.Typer(no_args_is_help=True, help="Manage ASM scopes and target
 # ofx asm scope list
 # ------------------------------------------------------------------
 
+
 @scope_app.command("list")
 def scope_list(
     group: Annotated[str, typer.Option("--group", "-g", help="Filter by group")] = "",
@@ -45,6 +46,7 @@ def scope_list(
 # ------------------------------------------------------------------
 # ofx asm scope show
 # ------------------------------------------------------------------
+
 
 @scope_app.command("show")
 def scope_show(
@@ -84,36 +86,46 @@ def scope_show(
 # ofx asm scope create
 # ------------------------------------------------------------------
 
+
 @scope_app.command("create")
 def scope_create(
     name: Annotated[str, typer.Argument(help="Scope name")],
-    scope_type: Annotated[str, typer.Option("--type", "-t", help="Scope type")] = "domain",
+    scope_type: Annotated[
+        str, typer.Option("--type", "-t", help="Scope type")
+    ] = "domain",
     description: Annotated[str, typer.Option("--desc", "-d", help="Description")] = "",
     group: Annotated[str, typer.Option("--group", "-g", help="Group name")] = "",
-    set_default: Annotated[bool, typer.Option("--default", help="Set as default scope")] = False,
+    set_default: Annotated[
+        bool, typer.Option("--default", help="Set as default scope")
+    ] = False,
 ):
     """Create a new scope on the ASM server."""
     console = get_console()
     from ofx.asm.config import get_asm_client, get_asm_config
 
     client = get_asm_client()
-    s = client.create_scope(name, scope_type=scope_type, description=description, group=group)
+    s = client.create_scope(
+        name, scope_type=scope_type, description=description, group=group
+    )
     console.print(f"[green]✓ Created scope '{s.name}' (ID: {s.id})[/green]")
 
     if set_default:
         cfg = get_asm_config()
         cfg.default_scope = s.id
-        console.print(f"[dim]Set as default scope.[/dim]")
+        console.print("[dim]Set as default scope.[/dim]")
 
 
 # ------------------------------------------------------------------
 # ofx asm scope delete
 # ------------------------------------------------------------------
 
+
 @scope_app.command("delete")
 def scope_delete(
     scope: Annotated[str, typer.Argument(help="Scope ID or name")],
-    force: Annotated[bool, typer.Option("--force", "-f", help="Skip confirmation")] = False,
+    force: Annotated[
+        bool, typer.Option("--force", "-f", help="Skip confirmation")
+    ] = False,
 ):
     """Delete a scope and all its data."""
     console = get_console()
@@ -124,7 +136,9 @@ def scope_delete(
 
     if not force:
         s = client.get_scope(scope_id)
-        if not typer.confirm(f"Delete scope '{s.name}' ({scope_id})? This is irreversible."):
+        if not typer.confirm(
+            f"Delete scope '{s.name}' ({scope_id})? This is irreversible."
+        ):
             raise typer.Abort()
 
     client.delete_scope(scope_id)
@@ -135,11 +149,19 @@ def scope_delete(
 # ofx asm scope targets
 # ------------------------------------------------------------------
 
+
 @scope_app.command("targets")
 def scope_targets(
     scope: Annotated[str, typer.Argument(help="Scope ID or name")] = "",
-    effective: Annotated[bool, typer.Option("--effective", "-e", help="Show effective targets after exclude rules")] = False,
-    target_type: Annotated[str, typer.Option("--type", "-t", help="Filter by type")] = "",
+    effective: Annotated[
+        bool,
+        typer.Option(
+            "--effective", "-e", help="Show effective targets after exclude rules"
+        ),
+    ] = False,
+    target_type: Annotated[
+        str, typer.Option("--type", "-t", help="Filter by type")
+    ] = "",
 ):
     """List targets in a scope."""
     console = get_console()
@@ -185,11 +207,19 @@ def scope_targets(
 # ofx asm scope add-target
 # ------------------------------------------------------------------
 
+
 @scope_app.command("add-target")
 def scope_add_target(
-    targets: Annotated[list[str], typer.Argument(help="Target values (domains, IPs, CIDRs, URLs)")],
+    targets: Annotated[
+        list[str], typer.Argument(help="Target values (domains, IPs, CIDRs, URLs)")
+    ],
     scope: Annotated[str, typer.Option("--scope", "-s", help="Scope ID or name")] = "",
-    target_type: Annotated[str, typer.Option("--type", "-t", help="Target type (auto-detected if not specified)")] = "",
+    target_type: Annotated[
+        str,
+        typer.Option(
+            "--type", "-t", help="Target type (auto-detected if not specified)"
+        ),
+    ] = "",
 ):
     """Add targets to a scope.
 
@@ -221,7 +251,9 @@ def scope_add_target(
 
     if len(all_targets) == 1 and target_type:
         result = client.add_target(scope_id, all_targets[0], target_type=target_type)
-        console.print(f"[green]✓ Added target: {result.value} ({result.target_type})[/green]")
+        console.print(
+            f"[green]✓ Added target: {result.value} ({result.target_type})[/green]"
+        )
     else:
         result = client.bulk_import_targets(scope_id, all_targets, auto_detect=True)
         console.print(
@@ -233,6 +265,7 @@ def scope_add_target(
 # ------------------------------------------------------------------
 # ofx asm scope exclude
 # ------------------------------------------------------------------
+
 
 @scope_app.command("exclude")
 def scope_exclude(
@@ -272,11 +305,17 @@ def scope_exclude(
 # ofx asm scope add-exclude
 # ------------------------------------------------------------------
 
+
 @scope_app.command("add-exclude")
 def scope_add_exclude(
-    value: Annotated[str, typer.Argument(help="Rule value (e.g. '*.internal.com', '10.0.0.0/8')")],
+    value: Annotated[
+        str, typer.Argument(help="Rule value (e.g. '*.internal.com', '10.0.0.0/8')")
+    ],
     scope: Annotated[str, typer.Option("--scope", "-s", help="Scope ID or name")] = "",
-    rule_type: Annotated[str, typer.Option("--type", "-t", help="Rule type: domain, ip, subnet, port, regex")] = "domain",
+    rule_type: Annotated[
+        str,
+        typer.Option("--type", "-t", help="Rule type: domain, ip, subnet, port, regex"),
+    ] = "domain",
     description: Annotated[str, typer.Option("--desc", "-d", help="Description")] = "",
 ):
     """Add an exclude rule to a scope."""
@@ -293,12 +332,19 @@ def scope_add_exclude(
 # ofx asm scope assets
 # ------------------------------------------------------------------
 
+
 @scope_app.command("assets")
 def scope_assets(
     scope: Annotated[str, typer.Argument(help="Scope ID or name")] = "",
-    asset_type: Annotated[str, typer.Option("--type", "-t", help="Filter by asset type")] = "",
-    source: Annotated[str, typer.Option("--source", "-s", help="Filter by source")] = "",
-    search: Annotated[str, typer.Option("--search", "-q", help="Free-text search")] = "",
+    asset_type: Annotated[
+        str, typer.Option("--type", "-t", help="Filter by asset type")
+    ] = "",
+    source: Annotated[
+        str, typer.Option("--source", "-s", help="Filter by source")
+    ] = "",
+    search: Annotated[
+        str, typer.Option("--search", "-q", help="Free-text search")
+    ] = "",
     limit: Annotated[int, typer.Option("--limit", "-l", help="Max results")] = 50,
 ):
     """List assets in a scope."""
@@ -339,17 +385,22 @@ def scope_assets(
 
     console.print(table)
     if meta.total > limit:
-        console.print(f"[dim]Showing {limit} of {meta.total}. Use --limit to see more.[/dim]")
+        console.print(
+            f"[dim]Showing {limit} of {meta.total}. Use --limit to see more.[/dim]"
+        )
 
 
 # ------------------------------------------------------------------
 # ofx asm scope findings
 # ------------------------------------------------------------------
 
+
 @scope_app.command("findings")
 def scope_findings(
     scope: Annotated[str, typer.Argument(help="Scope ID or name")] = "",
-    severity: Annotated[str, typer.Option("--severity", "-s", help="Filter by severity")] = "",
+    severity: Annotated[
+        str, typer.Option("--severity", "-s", help="Filter by severity")
+    ] = "",
     limit: Annotated[int, typer.Option("--limit", "-l", help="Max results")] = 50,
 ):
     """List findings in a scope."""
@@ -389,12 +440,15 @@ def scope_findings(
 
     console.print(table)
     if meta.total > limit:
-        console.print(f"[dim]Showing {limit} of {meta.total}. Use --limit to see more.[/dim]")
+        console.print(
+            f"[dim]Showing {limit} of {meta.total}. Use --limit to see more.[/dim]"
+        )
 
 
 # ------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------
+
 
 def _resolve_scope(client, scope_ref: str) -> str:
     """Resolve scope by ID or name, falling back to default."""
@@ -404,8 +458,12 @@ def _resolve_scope(client, scope_ref: str) -> str:
         cfg = get_asm_config()
         scope_ref = cfg.default_scope
         if not scope_ref:
-            get_console().print("[red]No scope specified and no default scope configured.[/red]")
-            get_console().print("Set a default: [bold]ofx asm config set --default-scope <ID>[/bold]")
+            get_console().print(
+                "[red]No scope specified and no default scope configured.[/red]"
+            )
+            get_console().print(
+                "Set a default: [bold]ofx asm config set --default-scope <ID>[/bold]"
+            )
             raise typer.Exit(code=1)
 
     if len(scope_ref) >= 32 and "-" in scope_ref:

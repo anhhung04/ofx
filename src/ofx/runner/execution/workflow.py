@@ -4,7 +4,7 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunnerContextBuilder
@@ -18,6 +18,10 @@ from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
 from ofx.settings import settings
 from ofx.utils.workflow_utils import add_workflow_dir
 
+if TYPE_CHECKING:
+    from ofx.profiles.models import OFXProfile
+    from ofx.profiles.time_window import TimeWindowGuard
+
 logger = logging.getLogger(settings.app_branding)
 
 
@@ -29,12 +33,20 @@ class WorkflowRunner(BaseRunner[Workflow]):
         parent: BaseRunner | None = None,
         registry: RegistryAdapter | None = None,
     ):
+        """Initialise a workflow runner.
+
+        Args:
+            workflow: Parsed workflow model.
+            ctx: Execution context (inputs, secrets, env, output path).
+            parent: Parent runner when this is a reusable (nested) workflow.
+            registry: Optional shared registry adapter for job/step data.
+        """
         super().__init__(workflow, ctx, parent, registry)
         self._is_reused = self.parent is not None
         if not self._is_reused:
             self.name = f"[RUN-{self.run_id}]:{self.name}"
-        self._profile = None
-        self._time_guard = None
+        self._profile: OFXProfile | None = None
+        self._time_guard: TimeWindowGuard | None = None
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(
@@ -113,8 +125,11 @@ class WorkflowRunner(BaseRunner[Workflow]):
         if self._is_reused:
             job_runners = self._runners.values()
             if any(runner.is_failed for runner in job_runners):
+                failed_ids = [r.model.jid for r in job_runners if r.is_failed]
                 raise RuntimeError(
-                    f"Reusable workflow '{self.model.name}' has failed jobs. Cannot retrieve outputs."
+                    f"Reusable workflow '{self.model.name}': "
+                    f"{len(failed_ids)}/{len(list(job_runners))} job(s) failed "
+                    f"({', '.join(failed_ids)}). Cannot retrieve outputs."
                 )
             # Handle call outputs for reusable workflows
             if self.model.call and self.model.call.outputs:
@@ -151,7 +166,9 @@ class WorkflowRunner(BaseRunner[Workflow]):
                     try:
                         await runner._post_run()
                     except Exception as e:
-                        logger.debug("post_run cleanup failed for %s: %s", runner.model.jid, e)
+                        logger.debug(
+                            "post_run cleanup failed for %s: %s", runner.model.jid, e
+                        )
             await self._store_summaries()
 
             # Build concise error: one line per failed job with root cause
@@ -159,8 +176,10 @@ class WorkflowRunner(BaseRunner[Workflow]):
 
             concise_lines = []
             for job_id in result.failed_job_ids:
-                runner = self._runners.get(job_id)
-                root = extract_root_error(runner._error if runner else None)
+                failed_runner: BaseRunner[Any] | None = self._runners.get(job_id)
+                root = extract_root_error(
+                    failed_runner._error if failed_runner else None
+                )
                 concise_lines.append(f"job '{job_id}': {root}")
 
             error_msg = "Job failure(s):\n" + "\n".join(concise_lines)
@@ -428,7 +447,7 @@ class WorkflowRunner(BaseRunner[Workflow]):
                 f"Unsupported input type '{input_type}' for value '{value}'. "
                 f"Supported types are: {', '.join(type_map.keys())}."
             )
-        return isinstance(value, expected_type)
+        return isinstance(value, expected_type)  # type: ignore[arg-type]
 
     def _expand_list_inputs_to_matrix(self) -> None:
         """Auto-inject matrix strategy when an input is a list.

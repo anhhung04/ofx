@@ -280,6 +280,148 @@ jobs:
 
 ---
 
+## Example 10: Task-Based Recon Pipeline
+
+Use task steps for structured output parsing and data chaining between tools:
+
+```yaml
+name: Task Recon Pipeline
+
+dispatch:
+  inputs:
+    target:
+      required: true
+      description: Target domain or IP
+
+jobs:
+  discover:
+    steps:
+      - task: subfinder
+        name: find-subs
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+
+      - task: httpx
+        name: probe-http
+        with:
+          target: "{{ inputs.target }}"
+          tech_detect: true
+          status_code: true
+
+      - run: |
+          echo "=== Discovery Results ==="
+          echo "Subdomains: {{ subdomains(steps['find-subs'].outputs.typed_outputs) | length }}"
+          echo "Live URLs: {{ urls(steps['probe-http'].outputs.typed_outputs) | length }}"
+
+  vuln-scan:
+    needs: [discover]
+    steps:
+      - task: nuclei
+        name: scan-vulns
+        with:
+          target: "{{ inputs.target }}"
+          severity: "critical,high,medium"
+          tags: "cve"
+
+      - run: |
+          echo "Vulnerabilities: {{ vulns(steps['scan-vulns'].outputs.typed_outputs) | length }}"
+```
+
+---
+
+## Example 11: Matrix Strategy — Multi-Target Scanning
+
+Scan multiple targets in parallel using matrix expansion:
+
+```yaml
+name: Multi-Target Scan
+
+dispatch:
+  inputs:
+    targets:
+      required: true
+      description: Comma-separated target list
+
+jobs:
+  scan:
+    strategy:
+      matrix:
+        target: ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
+      max_parallel: 2
+      fail_fast: false
+    steps:
+      - task: nmap
+        name: port-scan
+        with:
+          target: "{{ matrix.target }}"
+          ports: "1-1000"
+          version_detection: true
+
+      - run: echo "Scanned {{ matrix.target }} — {{ ports(steps['port-scan'].outputs.typed_outputs) | length }} open ports"
+```
+
+---
+
+## Example 12: Cloud Job
+
+Run a scan on a remote VPS provisioned automatically:
+
+```yaml
+name: Cloud Scan
+
+jobs:
+  remote-scan:
+    cloud: do-nyc
+    steps:
+      - task: nmap
+        with:
+          target: "10.0.0.0/24"
+          ports: "1-65535"
+          timing: 4
+
+  analyze:
+    needs: [remote-scan]
+    steps:
+      - run: echo "Analysis complete"
+```
+
+The `cloud` field references a profile from `~/.ofx/cloud.yml`. OFX provisions the VPS, runs the steps remotely, and destroys it on completion.
+
+---
+
+## Example 13: Credential Discovery with Auto-Storage
+
+Combine brute-force tools with automatic credential storage:
+
+```yaml
+name: Credential Discovery
+
+defaults:
+  store-creds: true
+
+jobs:
+  brute:
+    steps:
+      - task: hydra
+        name: ssh-brute
+        with:
+          target: "{{ inputs.target }}"
+
+      - task: kerbrute
+        name: kerberos-enum
+        store-creds: false          # Override — don't store these
+        with:
+          target: "{{ inputs.dc }}"
+```
+
+When `store-creds` is enabled, `UserAccount` outputs from task steps are automatically saved to the credential store.
+
+---
+
 ## See Also
 - [Workflow Stages](stages.md)
 - [Dependencies](dependencies.md)
+- [Tasks](../tasks.md)
+- [Matrix Strategy](../jobs-steps/matrix-strategy.md)
+- [Cloud Runners](../cloud-runners.md)

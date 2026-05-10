@@ -20,6 +20,7 @@ jobs:
       sub_count: '{{ steps["merge-subs"].outputs.sub_count | default("", true) }}'
     steps:
       - task: subfinder
+        log-command: true
         timeout: 10
         name: subfinder-enum
         with:
@@ -27,24 +28,28 @@ jobs:
           all: true
         continue-on-error: true
       - task: findomain
+        log-command: true
         name: findomain-enum
         timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: amass
+        log-command: true
         timeout: 20
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
+        log-command: true
         timeout: 10
         name: assetfinder-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gau
+        log-command: true
         timeout: 10
         name: gau-subs
         with:
@@ -87,6 +92,7 @@ jobs:
       dangling_file: '{{ steps["analyze-cnames"].outputs.dangling_file | default("", true) }}'
     steps:
       - task: dnsx
+        log-command: true
         timeout: 10
         name: dns-resolve
         with:
@@ -159,6 +165,7 @@ jobs:
       takeover_details_file: '{{ steps["collect-takeovers"].outputs.takeover_details_file | default("", true) }}'
     steps:
       - task: subzy
+        log-command: true
         name: subzy-check
         timeout: 5
         with:
@@ -166,6 +173,7 @@ jobs:
           concurrency: 20
         continue-on-error: true
       - task: nuclei
+        log-command: true
         timeout: 20
         name: nuclei-takeover
         with:
@@ -197,6 +205,7 @@ jobs:
       - dns-verify
     steps:
       - task: gowitness
+        log-command: true
         timeout: 10
         name: gowitness-capture
         with:
@@ -204,6 +213,7 @@ jobs:
           threads: 10
         continue-on-error: true
       - task: httpx
+        log-command: true
         timeout: 10
         name: http-fingerprint
         with:
@@ -246,6 +256,7 @@ jobs:
           cat {{ jobs['dns-verify'].outputs.dangling_file }}
           {% endif %}
         log-stdout: true
+        log-command: true
       - name: export-to-project
         script: |
           import shutil

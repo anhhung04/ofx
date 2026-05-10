@@ -31,6 +31,7 @@ jobs:
     - name: init-listener
       timeout: 3
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.oob import Interactsh
 
@@ -57,6 +58,7 @@ jobs:
     - name: send-injections
       timeout: 5
       continue-on-error: true
+      log-command: true
       script: |
         from ofx.api.http import get_http_client
         import time
@@ -190,3 +192,4 @@ jobs:
             print("    The target may not be vulnerable, or callbacks were blocked")
             print("    Consider testing with different payload types or parameters")
       log-stdout: true
+      log-command: true

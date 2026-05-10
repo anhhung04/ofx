@@ -104,7 +104,7 @@ class PHTTPServer(threading.Thread):
                 logger.error("Your machine may not support ipv6")
                 raise RuntimeError("IPv6 not supported")
             self.host_ip = ipv6
-            self.httpserver = HTTPServerV6
+            self.httpserver: type[HTTPServer] = HTTPServerV6
             self.is_ipv6 = True
         else:
             self.is_ipv6 = False
@@ -164,7 +164,9 @@ class PHTTPServer(threading.Thread):
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(datetime.datetime.now(datetime.UTC))
-            .not_valid_after(datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365))
+            .not_valid_after(
+                datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
+            )
             .add_extension(
                 x509.SubjectAlternativeName(
                     [

@@ -23,6 +23,7 @@ jobs:
     name: Subdomain Recon
     steps:
       - name: subdomain-scan
+        log-command: true
         uses: subdomain-scan
         with:
           target: "{{ inputs.target }}"

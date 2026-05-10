@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import os
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -72,12 +69,7 @@ class TrufflehogTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            _fd, _path = tempfile.mkstemp(
-                prefix=f".ofx_task_{self.name}_",
-                suffix=self._output_suffix(),
-            )
-            os.close(_fd)
-            output_file = Path(_path)
+            output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
         parts.append(target)
@@ -85,12 +77,8 @@ class TrufflehogTask(Task):
         return " ".join(parts), output_file
 
     def parse_line(self, line: str) -> list[Tag]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         source_meta = data.get("SourceMetadata", {}).get("Data", {})
@@ -112,4 +100,3 @@ class TrufflehogTask(Task):
                 },
             )
         ]
-

@@ -15,10 +15,10 @@ from typing import Any, TypeVar
 from pydantic import BaseModel
 
 from ofx.runner.core.durable import get_checkpoint, write_checkpoint
+from ofx.runner.core.durable_git import commit_and_push
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.registry import RegistryAdapter, cleanup_registry
-from ofx.runner.services.template_service import TemplateService
 from ofx.runner.templates import TemplateResolver
 from ofx.settings import settings
 
@@ -102,7 +102,6 @@ class BaseRunner[TModel: BaseModel]:
         parent: BaseRunner | None = None,
         registry: RegistryAdapter | None = None,
         logger: logging.Logger | None = None,
-        template_service: TemplateService | None = None,
     ):
         assert model is not None, "Model cannot be None"
         self.run_id = str(uuid.uuid4())
@@ -123,12 +122,6 @@ class BaseRunner[TModel: BaseModel]:
         # Logger injection – default to app branding logger if not provided
         self._logger = (
             logger if logger is not None else logging.getLogger(settings.app_branding)
-        )
-        # Template service injection – default to a new TemplateService if not provided
-        from ofx.runner.services.template_service import TemplateService
-
-        self._template_service = (
-            template_service if template_service is not None else TemplateService()
         )
         self._runners: dict[str, BaseRunner] = {}  # child runners
         self._started_at: float | None = None
@@ -185,7 +178,9 @@ class BaseRunner[TModel: BaseModel]:
                     self._log_debug(f"Cleanup after failure failed: {cleanup_exc}")
         finally:
             self._mark_finish()
-            self._emit_event("runner_finish", {"status": self.status.value, "error": self._error})
+            self._emit_event(
+                "runner_finish", {"status": self.status.value, "error": self._error}
+            )
             initial_checkpoint_status = self._checkpoint_status()
             try:
                 await self._write_checkpoint(initial_checkpoint_status)
@@ -203,6 +198,8 @@ class BaseRunner[TModel: BaseModel]:
                 await cleanup_registry(self._registry)
             except Exception as cleanup_err:
                 self._log_warning(f"registry cleanup failed: {cleanup_err}")
+
+            await self._auto_commit_push()
         return await self.get_result()
 
     async def _on_failure_cleanup(self) -> None:
@@ -220,7 +217,9 @@ class BaseRunner[TModel: BaseModel]:
             return path
         return None
 
-    def _emit_event(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
+    def _emit_event(
+        self, event_type: str, payload: dict[str, Any] | None = None
+    ) -> None:
         """Emit structured runner lifecycle event as NDJSON (best effort)."""
         sink = self._event_sink_path()
         if sink is None:
@@ -339,6 +338,34 @@ class BaseRunner[TModel: BaseModel]:
             status = RunnerStatus.COMPLETED
         return status.value
 
+    async def _auto_commit_push(self) -> None:
+        """Auto-commit and/or push output directory after workflow completion.
+
+        Only runs for top-level runners (no parent) when the durable config
+        has auto_commit or auto_push enabled and the run reached a terminal state.
+        """
+        if self.parent is not None:
+            return
+        config = self._durable_config()
+        if not config:
+            return
+        if not (config.auto_commit or config.auto_push):
+            return
+        if not self.ctx.output_path:
+            return
+        if not self._state_machine.is_terminal:
+            return
+
+        try:
+            await commit_and_push(
+                self.ctx.output_path,
+                do_commit=config.auto_commit,
+                do_push=config.auto_push,
+                message=f"checkpoint: {getattr(self.model, 'name', 'workflow')} [{self.status.value}]",
+            )
+        except Exception as exc:
+            self._log_warning(f"auto-commit/push failed: {exc}")
+
     async def _do_run(self) -> None:
         """Execute the runner's main logic - must be implemented by subclasses"""
         raise NotImplementedError("Subclasses should implement _do_run method.")
@@ -382,7 +409,7 @@ class BaseRunner[TModel: BaseModel]:
         return self.__lazy_template_resolver
 
     async def _resolve_template(self, value: Any) -> Any:
-        """Resolve Jinja2 templates in values using the injected TemplateService.
+        """Resolve Jinja2 templates in values using the TemplateResolver.
         Args:
             value: Value to resolve (can be str, dict, list, primitives)
         Returns:
@@ -403,7 +430,7 @@ class BaseRunner[TModel: BaseModel]:
                 "vars": self.ctx.vars,
             }
         )
-        return await self._template_service.resolve(
+        return await self._template_resolver.resolve(
             value,
             context_vars,
         )

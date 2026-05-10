@@ -19,6 +19,7 @@ jobs:
       xss_count: '{{ steps["export-xss"].outputs.xss_count | default("", true) }}'
     steps:
     - task: dalfox
+      log-command: true
       timeout: 15
       name: dalfox-xss
       with:
@@ -33,6 +34,7 @@ jobs:
       nuclei_count: '{{ steps["export-vulns"].outputs.nuclei_count | default("", true) }}'
     steps:
     - task: nuclei
+      log-command: true
       timeout: 20
       name: nuclei-http
       with:

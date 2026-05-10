@@ -14,7 +14,9 @@ HELP = "AI assistant: workflow generation, output analysis, and interactive chat
 
 @app.command("generate")
 def generate(
-    prompt: Annotated[str, typer.Argument(help="Natural language workflow description")],
+    prompt: Annotated[
+        str, typer.Argument(help="Natural language workflow description")
+    ],
     output: Annotated[
         str | None,
         typer.Option("-o", "--output", help="Save generated YAML to this file path"),
@@ -35,18 +37,22 @@ def analyze(
     output_file: Annotated[
         str | None,
         typer.Option(
-            "--output-file", "-f",
+            "--output-file",
+            "-f",
             help="Workflow run output JSON file to analyze (or pipe via stdin)",
         ),
     ] = None,
     workflow_file: Annotated[
         str | None,
-        typer.Option("--workflow-file", "-w", help="Workflow YAML for additional context"),
+        typer.Option(
+            "--workflow-file", "-w", help="Workflow YAML for additional context"
+        ),
     ] = None,
     skill: Annotated[
         str | None,
         typer.Option(
-            "--skill", "-s",
+            "--skill",
+            "-s",
             help=(
                 "Analysis persona to apply. Built-in skills: "
                 "recon, exploit, search, lateral, persistence, privesc, report, opsec"
@@ -81,7 +87,9 @@ def analyze(
 def chat(
     prompt: Annotated[
         str | None,
-        typer.Option("-p", "--prompt", help="Opening message (skips interactive input)"),
+        typer.Option(
+            "-p", "--prompt", help="Opening message (skips interactive input)"
+        ),
     ] = None,
     model: Annotated[
         str | None,

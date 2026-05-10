@@ -1,7 +1,5 @@
 """Tests for OFX output types, deduplication, and UserAccount model."""
 
-import pytest
-
 from ofx.tasks import (
     Port,
     Subdomain,
@@ -15,9 +13,7 @@ from ofx.tasks.output_types import (
     Exploit,
     Ip,
     Severity,
-    Tag,
 )
-
 
 # ── Output Types ───────────────────────────────────────────────────────────
 
@@ -153,6 +149,7 @@ class TestDeduplication:
 
     def test_dedup_empty(self):
         from ofx.runner.tasks.runner import TaskRunner
+
         assert TaskRunner._deduplicate([]) == []
 
 

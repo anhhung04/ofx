@@ -23,7 +23,9 @@ def image_list(
     """List available images/snapshots."""
     console = get_console()
     provider, cloud = create_cloud_provider(profile, provider)
-    snapshots = run_cloud_sync("list snapshots", lambda: asyncio.run(cloud.list_snapshots()))
+    snapshots = run_cloud_sync(
+        "list snapshots", lambda: asyncio.run(cloud.list_snapshots())
+    )
 
     if not snapshots:
         console.print("[dim]No snapshots found.[/dim]")
@@ -94,5 +96,7 @@ def image_delete(
         if not confirm:
             raise typer.Abort()
 
-    run_cloud_sync("delete snapshot", lambda: asyncio.run(cloud.delete_snapshot(snapshot_id)))
+    run_cloud_sync(
+        "delete snapshot", lambda: asyncio.run(cloud.delete_snapshot(snapshot_id))
+    )
     console.print(f"[green]Snapshot {snapshot_id} deleted.[/green]")

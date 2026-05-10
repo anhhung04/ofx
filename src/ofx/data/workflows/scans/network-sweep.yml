@@ -24,6 +24,7 @@ jobs:
       hosts_file: '{{ steps["host-sweep"].outputs.hosts_file | default("", true) }}'
     steps:
     - name: host-sweep
+      log-command: true
       run: |
         echo "[+] Host discovery: {{ inputs.target }}"
 
@@ -49,6 +50,7 @@ jobs:
       ports_file: '{{ steps["fast-portscan"].outputs.ports_file | default("", true) }}'
     steps:
     - name: fast-portscan
+      log-command: true
       run: |
         echo "[+] Port scanning alive hosts..."
         HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
@@ -81,12 +83,14 @@ jobs:
       service_file: '{{ steps["nmap-svc"].outputs.service_file | default("", true) }}'
     steps:
     - task: nerva
+      log-command: true
       timeout: 10
       name: nerva-fingerprint
       with:
         target: "{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
       continue-on-error: true
     - name: nmap-svc
+      log-command: true
       run: |
         echo "[+] Service identification..."
 
@@ -116,6 +120,7 @@ jobs:
       cred_count: '{{ steps["brute-defaults"].outputs.cred_count }}'
     steps:
     - name: brute-defaults
+      log-command: true
       run: |
         HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
         if [ -f "$HOSTS_FILE" ]; then

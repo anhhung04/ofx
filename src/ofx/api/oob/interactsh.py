@@ -76,8 +76,8 @@ class Interactsh:
         self.domain = f"{guid}.{self.server}"
         self.correlation_id = self.domain[:20]
 
-        self.session = requests.session()
-        self.session.headers = self.headers
+        self.session = requests.Client(verify=False)
+        self.session.headers.update(self.headers)
         self.register()
 
     def register(self) -> None:
@@ -98,7 +98,6 @@ class Interactsh:
                 f"http://{self.server}/register",
                 headers=self.headers,
                 json=data,
-                verify=False,
             )
             if res.status_code == 401:
                 logger.error("[PLUGIN] Interactsh: auth error")
@@ -131,7 +130,7 @@ class Interactsh:
         while count:
             try:
                 url = f"http://{self.server}/poll?id={self.correlation_id}&secret={self.secret}"
-                res = self.session.get(url, headers=self.headers, verify=False).json()
+                res = self.session.get(url, headers=self.headers).json()
                 aes_key, data_list = res["aes_key"], res["data"]
                 for i in data_list:
                     decrypt_data = self.decrypt_data(aes_key, i)

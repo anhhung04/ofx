@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
@@ -19,7 +17,9 @@ class MaigretTask(Task):
     output_types = [UserAccount]
 
     opts = {
-        "timeout": OptDef(flag="--timeout", type=int, help="Request timeout in seconds"),
+        "timeout": OptDef(
+            flag="--timeout", type=int, help="Request timeout in seconds"
+        ),
         "retries": OptDef(flag="-r", type=int, help="Number of retries"),
         "top_sites": OptDef(
             flag="--top-sites", type=int, help="Check only top N popular sites"
@@ -37,12 +37,8 @@ class MaigretTask(Task):
         return ".jsonl"
 
     def parse_line(self, line: str) -> list[UserAccount]:
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return []
-        try:
-            data = json.loads(line)
-        except json.JSONDecodeError:
+        data = self._parse_json_line(line)
+        if data is None:
             return []
 
         site_name = data.get("siteName", data.get("site_name", ""))
@@ -62,4 +58,3 @@ class MaigretTask(Task):
                 extra_data={"url": url_user, "site": site_name},
             )
         ]
-

@@ -38,10 +38,11 @@ Jobs are independent execution units that can run in parallel.
 |----------|-------------|
 | `steps` | List of steps to execute sequentially |
 | `needs` | Dependencies on other jobs |
-| `run_if` | Conditional execution (alias: `if`) |
+| `if` | Conditional execution |
 | `strategy` | Matrix strategy configuration |
-| `envs` | Environment variables for all steps |
+| `env` | Environment variables for all steps |
 | `outputs` | Job outputs (template-resolved) |
+| `cloud` | Cloud VPS configuration (profile name or inline config) |
 
 ```yaml
 jobs:
@@ -67,6 +68,7 @@ Steps execute commands within a job. Each step uses exactly **one** of:
 | `script` | Python code |
 | `script_file` | Python file path |
 | `uses` | Subflow reference |
+| `task` | Pre-built security tool wrapper |
 
 ### Step Properties
 
@@ -75,10 +77,11 @@ Steps execute commands within a job. Each step uses exactly **one** of:
 | `name` | Descriptive step name |
 | `timeout` | Max execution time (minutes) |
 | `retry` | Retry attempts on failure |
-| `retry_delay` | Delay between retries |
-| `continue_on_error` | Continue on failure |
-| `working_directory` | Execution directory |
-| `envs` | Step environment variables |
+| `retry-delay` | Delay between retries |
+| `continue-on-error` | Continue on failure |
+| `working-directory` | Execution directory |
+| `env` | Step environment variables |
+| `store-creds` | Auto-store discovered credentials (task steps) |
 
 ### Examples
 
@@ -187,7 +190,7 @@ Set environment variables at different scopes:
 
 ### Workflow Level
 ```yaml
-envs:
+env:
   GLOBAL_VAR: "value"
 
 jobs:
@@ -225,7 +228,7 @@ jobs:
   resilient:
     steps:
       - run: may-fail-command
-        continue_on_error: true
+        continue-on-error: true
       - run: echo "Still runs even if above fails"
 ```
 
@@ -235,7 +238,7 @@ steps:
   - name: Flaky API call
     run: curl https://api.example.com
     retry: 3
-    retry_delay: 5  # seconds
+    retry-delay: 5  # seconds
 ```
 
 ### Timeout
@@ -270,8 +273,17 @@ Access runtime information via `ctx`:
 
 ---
 
----
+## ✅ Best Practices
+
+### Use Descriptive Names
+```yaml
+# ✅ Good
+name: recon-pipeline
+jobs:
+  subdomain-discovery:
+    steps:
       - name: Run subfinder for subdomain discovery
+        run: subfinder -d {{ inputs.target }}
 
 # ❌ Bad
 name: scan
@@ -279,6 +291,7 @@ jobs:
   job1:
     steps:
       - name: step1
+        run: subfinder -d {{ inputs.target }}
 ```
 
 ### Document Inputs

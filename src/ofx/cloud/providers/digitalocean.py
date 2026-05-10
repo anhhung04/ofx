@@ -96,13 +96,7 @@ class DigitalOceanProvider(CloudProvider):
 
         # If using password auth, enable user data for root password
         if config.ssh_password and not config.ssh_key:
-            body["user_data"] = (
-                "#!/bin/bash\n"
-                f'echo "root:{config.ssh_password}" | chpasswd\n'
-                'sed -i "s/.*PasswordAuthentication.*/PasswordAuthentication yes/" /etc/ssh/sshd_config\n'
-                'sed -i "s/.*PermitRootLogin.*/PermitRootLogin yes/" /etc/ssh/sshd_config\n'
-                "systemctl restart sshd\n"
-            )
+            body["user_data"] = self._linux_password_userdata(config.ssh_password)
 
         resp = await asyncio.to_thread(self._client.droplets.create, body=body)
         droplet = resp.get("droplet", {})
@@ -150,15 +144,7 @@ class DigitalOceanProvider(CloudProvider):
 
     async def _check_ssh(self, host: str, port: int = 22) -> bool:
         """Check if SSH port is open."""
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=10
-            )
-            writer.close()
-            await writer.wait_closed()
-            return True
-        except (TimeoutError, OSError):
-            return False
+        return await self._check_port_open(host, port, timeout=10)
 
     async def destroy_instance(self, instance_id: str) -> None:
         """Delete a DigitalOcean droplet."""

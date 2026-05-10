@@ -92,3 +92,4 @@ jobs:
 
         add_outputs(shells_file=out, shell_count=len(shells))
       log-stdout: true
+      log-command: true

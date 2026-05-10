@@ -39,6 +39,7 @@ jobs:
       output_dir: '{{ steps["bh-collect"].outputs.output_dir | default("", true) }}'
     steps:
     - name: bh-collect
+      log-command: true
       run: |
         echo "[+] BloodHound collection: {{ inputs.domain }}"
         echo "    DC: {{ inputs.target }}"

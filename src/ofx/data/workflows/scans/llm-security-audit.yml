@@ -26,6 +26,7 @@ jobs:
       typed_outputs: '{{ steps["garak-test"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: garak
+        log-command: true
         timeout: 60
         name: garak-test
         with:

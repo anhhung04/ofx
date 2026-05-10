@@ -24,6 +24,7 @@ jobs:
       sub_count: '{{ steps["merge-passive"].outputs.sub_count | default("0", true) }}'
     steps:
       - task: subfinder
+        log-command: true
         name: subfinder-enum
         timeout: 15
         retry: 2
@@ -31,6 +32,7 @@ jobs:
         with: {target: "{{ inputs.target }}", all: true}
         continue-on-error: true
       - task: amass
+        log-command: true
         name: amass-passive
         timeout: 30
         retry: 2
@@ -38,6 +40,7 @@ jobs:
         with: {target: "{{ inputs.target }}"}
         continue-on-error: true
       - task: assetfinder
+        log-command: true
         name: assetfinder-enum
         timeout: 15
         retry: 2
@@ -45,6 +48,7 @@ jobs:
         with: {target: "{{ inputs.target }}"}
         continue-on-error: true
       - task: theharvester
+        log-command: true
         name: harvester-enum
         timeout: 15
         retry: 2
@@ -107,6 +111,7 @@ jobs:
       cert_sub_count: '{{ steps["merge-cert"].outputs.cert_sub_count | default("0", true) }}'
     steps:
       - task: tlsx
+        log-command: true
         name: tls-san-enum
         timeout: 20
         retry: 2
@@ -114,6 +119,7 @@ jobs:
         with: {target: "{{ jobs['passive-enum'].outputs.subs_file }}", san: true, port: "443,8443"}
         continue-on-error: true
       - task: subfinder
+        log-command: true
         name: crtsh-enum
         timeout: 15
         retry: 2
@@ -146,6 +152,7 @@ jobs:
       perm_sub_count: '{{ steps["resolve-perms"].outputs.typed_outputs | default([], true) | length }}'
     steps:
       - task: gotator
+        log-command: true
         name: generate-perms
         timeout: 30
         retry: 2
@@ -153,6 +160,7 @@ jobs:
         with: {target: "{{ jobs['passive-enum'].outputs.subs_file }}"}
         continue-on-error: true
       - task: puredns
+        log-command: true
         name: resolve-perms
         timeout: 20
         retry: 2
@@ -191,6 +199,7 @@ jobs:
           add_outputs(merged_file=merged_path, total_count=len(all_subs))
           print(f"Merged: {len(all_subs)} unique subdomains across all sources")
       - task: dnsx
+        log-command: true
         name: dns-resolve
         timeout: "{{ (steps['merge-all-sources'].outputs.total_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
@@ -289,6 +298,7 @@ jobs:
       waf_detected_count: '{{ steps["waf-report"].outputs.waf_detected_count | default("0", true) }}'
     steps:
       - task: httpx
+        log-command: true
         name: probe-hosts
         timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
@@ -341,6 +351,7 @@ jobs:
               print("No WAF detected")
       # Screenshot all live services for visual recon
       - task: gowitness
+        log-command: true
         name: screenshots
         timeout: 20
         retry: 2
@@ -395,6 +406,7 @@ jobs:
       takeover_count: '{{ steps["report-takeovers"].outputs.takeover_count | default("0", true) }}'
     steps:
       - task: subzy
+        log-command: true
         name: subzy-check
         timeout: 15
         retry: 2
@@ -402,6 +414,7 @@ jobs:
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}"}
         continue-on-error: true
       - task: nuclei
+        log-command: true
         name: nuclei-takeover
         timeout: 20
         retry: 2
@@ -435,6 +448,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
+        log-command: true
         uses: host-scan
         with: {target: "{{ matrix.target }}"}
 

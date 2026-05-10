@@ -29,7 +29,11 @@ class JwtToolTask(Task):
         "target_url": OptDef(flag="-t", type=str, help="URL to send forged tokens"),
         "cookies": OptDef(flag="-C", type=str, help="Cookies"),
         "headers": OptDef(flag="-rh", type=str, help="Request headers"),
-        "exploit": OptDef(flag="-X", type=str, help="Exploit (a=alg:none, n=null sig, k=key confusion, s=spoof JWKS, i=inject)"),
+        "exploit": OptDef(
+            flag="-X",
+            type=str,
+            help="Exploit (a=alg:none, n=null sig, k=key confusion, s=spoof JWKS, i=inject)",
+        ),
         "verify": OptDef(flag="-V", is_flag=True, help="Verify token only"),
     }
 
@@ -60,7 +64,9 @@ class JwtToolTask(Task):
 
         return " ".join(parts), None
 
-    _VULN_RE = re.compile(r"\[\+\]\s*(.*(?:VULNERABILITY|EXPLOITABLE|WEAK).*)", re.IGNORECASE)
+    _VULN_RE = re.compile(
+        r"\[\+\]\s*(.*(?:VULNERABILITY|EXPLOITABLE|WEAK).*)", re.IGNORECASE
+    )
     _CLAIM_RE = re.compile(r"\[\*\]\s*(\w+)\s*=\s*\"?([^\"]+)\"?")
 
     def parse_output(

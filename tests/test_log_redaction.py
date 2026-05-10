@@ -34,9 +34,7 @@ class TestSecretRedactFilter:
         filt = SecretRedactFilter.get_instance()
         filt.register_values({"ab"})  # too short
 
-        record = logging.LogRecord(
-            "test", logging.INFO, "", 0, "value=ab", (), None
-        )
+        record = logging.LogRecord("test", logging.INFO, "", 0, "value=ab", (), None)
         filt.filter(record)
         assert "ab" in record.msg
 
@@ -45,8 +43,13 @@ class TestSecretRedactFilter:
         filt.register_values({"alpha_secret", "beta_secret"})
 
         record = logging.LogRecord(
-            "test", logging.INFO, "", 0,
-            "a=alpha_secret b=beta_secret", (), None,
+            "test",
+            logging.INFO,
+            "",
+            0,
+            "a=alpha_secret b=beta_secret",
+            (),
+            None,
         )
         filt.filter(record)
         assert "alpha_secret" not in record.msg
@@ -79,9 +82,7 @@ class TestSecretRedactFilter:
     def test_no_registered_values_passes_through(self):
         filt = SecretRedactFilter.get_instance()
 
-        record = logging.LogRecord(
-            "test", logging.INFO, "", 0, "hello world", (), None
-        )
+        record = logging.LogRecord("test", logging.INFO, "", 0, "hello world", (), None)
         filt.filter(record)
         assert record.msg == "hello world"
 
@@ -103,25 +104,36 @@ class TestRegisterHelpers:
         filt = SecretRedactFilter.get_instance()
 
         record = logging.LogRecord(
-            "test", logging.INFO, "", 0,
-            "connecting with sk-12345678 and hunter2!", (), None,
+            "test",
+            logging.INFO,
+            "",
+            0,
+            "connecting with sk-12345678 and hunter2!",
+            (),
+            None,
         )
         filt.filter(record)
         assert "sk-12345678" not in record.msg
         assert "hunter2!" not in record.msg
 
     def test_register_sensitive_env_filters_by_key(self):
-        register_sensitive_env({
-            "API_KEY": "secret_api_val_1234",
-            "NORMAL_VAR": "not_a_secret_1234",
-            "DB_PASSWORD": "db_pass_value_123",
-        })
+        register_sensitive_env(
+            {
+                "API_KEY": "secret_api_val_1234",
+                "NORMAL_VAR": "not_a_secret_1234",
+                "DB_PASSWORD": "db_pass_value_123",
+            }
+        )
         filt = SecretRedactFilter.get_instance()
 
         record = logging.LogRecord(
-            "test", logging.INFO, "", 0,
+            "test",
+            logging.INFO,
+            "",
+            0,
             "api=secret_api_val_1234 normal=not_a_secret_1234 db=db_pass_value_123",
-            (), None,
+            (),
+            None,
         )
         filt.filter(record)
         # Sensitive keys should be redacted
@@ -131,11 +143,13 @@ class TestRegisterHelpers:
         assert "not_a_secret_1234" in record.msg
 
     def test_register_sensitive_env_matches_token_pattern(self):
-        register_sensitive_env({
-            "GH_TOKEN": "ghp_abcdefghijk1234",
-            "SSH_PASSWORD": "ssh_pass_1234567",
-            "BEARER_AUTH": "bearer_val_12345",
-        })
+        register_sensitive_env(
+            {
+                "GH_TOKEN": "ghp_abcdefghijk1234",
+                "SSH_PASSWORD": "ssh_pass_1234567",
+                "BEARER_AUTH": "bearer_val_12345",
+            }
+        )
         filt = SecretRedactFilter.get_instance()
 
         msg = "ghp_abcdefghijk1234 ssh_pass_1234567 bearer_val_12345"

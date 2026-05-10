@@ -36,6 +36,7 @@ jobs:
       vuln_file: '{{ steps["certipy-find"].outputs.vuln_file | default("", true) }}'
     steps:
     - name: certipy-find
+      log-command: true
       run: |
         AUTH_ARGS="{{ inputs.domain }}/{{ inputs.user }}"
         {% if inputs.password %}

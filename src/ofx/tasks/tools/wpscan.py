@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
@@ -28,12 +27,8 @@ class WpscanTask(Task):
             type=str,
             help="Enumerate: vp,vt,u,m,ap,at,cb,dbe",
         ),
-        "api_token": OptDef(
-            flag="--api-token", type=str, help="WPScan API token"
-        ),
-        "stealthy": OptDef(
-            flag="--stealthy", is_flag=True, help="Use stealthy mode"
-        ),
+        "api_token": OptDef(flag="--api-token", type=str, help="WPScan API token"),
+        "stealthy": OptDef(flag="--stealthy", is_flag=True, help="Use stealthy mode"),
         "random_user_agent": OptDef(
             flag="--random-user-agent",
             is_flag=True,
@@ -62,19 +57,8 @@ class WpscanTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         results: list[Vulnerability | Tag] = []
@@ -87,9 +71,7 @@ class WpscanTask(Task):
                 for key, item in items.items():
                     if not isinstance(item, dict):
                         continue
-                    self._parse_component(
-                        results, key, item, target_url, section
-                    )
+                    self._parse_component(results, key, item, target_url, section)
 
         return results
 

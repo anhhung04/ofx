@@ -17,15 +17,21 @@ class GowitnessTask(Task):
     cmd = "gowitness"
     description = "Web screenshotting tool"
     category = "url/screenshot"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/sensepost/gowitness@latest"
+    install_cmd = (
+        "GOBIN=~/Tools/bin go install -v github.com/sensepost/gowitness@latest"
+    )
     output_types = [Url, Tag]
 
     opts = {
         "threads": OptDef(flag="--threads", type=int, help="Number of threads"),
         "timeout": OptDef(flag="--timeout", type=int, help="Timeout in seconds"),
         "delay": OptDef(flag="--delay", type=int, help="Delay between requests"),
-        "resolution": OptDef(flag="--resolution", type=str, help="Screenshot resolution (e.g. 1440,900)"),
-        "screenshot_path": OptDef(flag="--screenshot-path", type=str, help="Screenshot output directory"),
+        "resolution": OptDef(
+            flag="--resolution", type=str, help="Screenshot resolution (e.g. 1440,900)"
+        ),
+        "screenshot_path": OptDef(
+            flag="--screenshot-path", type=str, help="Screenshot output directory"
+        ),
         "fullpage": OptDef(flag="--fullpage", is_flag=True, help="Capture full page"),
         "user_agent": OptDef(flag="--user-agent", type=str, help="Custom user agent"),
     }

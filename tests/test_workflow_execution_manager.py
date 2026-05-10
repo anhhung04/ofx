@@ -72,12 +72,8 @@ def test_build_stage_runners_creates_job_runners(monkeypatch):
             created.append(("matrix", job, ctx, parent))
             self.is_success = True
 
-    monkeypatch.setattr(
-        "ofx.runner.execution.job.JobRunner", _DummyJobRunner
-    )
-    monkeypatch.setattr(
-        "ofx.runner.execution.job.MatrixJobRunner", _DummyMatrixRunner
-    )
+    monkeypatch.setattr("ofx.runner.execution.job.JobRunner", _DummyJobRunner)
+    monkeypatch.setattr("ofx.runner.execution.job.MatrixJobRunner", _DummyMatrixRunner)
 
     class _DummyCloudRunner:
         def __init__(self, job, ctx, parent, cloud_config=None):
@@ -100,17 +96,11 @@ def test_build_stage_runners_creates_job_runners(monkeypatch):
     class _Job:
         def __init__(self, matrix=False, cloud=None, fleet=False):
             if matrix and fleet:
-                self.strategy = type(
-                    "S", (), {"matrix": True, "fleet": True}
-                )()
+                self.strategy = type("S", (), {"matrix": True, "fleet": True})()
             elif matrix:
-                self.strategy = type(
-                    "S", (), {"matrix": True, "fleet": None}
-                )()
+                self.strategy = type("S", (), {"matrix": True, "fleet": None})()
             elif fleet:
-                self.strategy = type(
-                    "S", (), {"matrix": None, "fleet": True}
-                )()
+                self.strategy = type("S", (), {"matrix": None, "fleet": True})()
             else:
                 self.strategy = None
             self.cloud = cloud
@@ -175,7 +165,7 @@ def test_build_stage_runners_cloud_matrix(monkeypatch):
             self.strategy = type("S", (), {"matrix": {"os": ["a"]}, "fleet": None})()
 
     staged_jobs = {"d": _Job()}
-    stage_runners = manager._build_stage_runners(["d"], staged_jobs)
+    _stage_runners = manager._build_stage_runners(["d"], staged_jobs)
 
     assert created[0][0] == "cloud_matrix"
 
@@ -203,7 +193,7 @@ def test_build_stage_runners_cloud_fleet(monkeypatch):
             self.strategy = type("S", (), {"matrix": None, "fleet": True})()
 
     staged_jobs = {"e": _Job()}
-    stage_runners = manager._build_stage_runners(["e"], staged_jobs)
+    _stage_runners = manager._build_stage_runners(["e"], staged_jobs)
 
     assert created[0][0] == "cloud_fleet"
 

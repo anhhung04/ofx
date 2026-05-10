@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
@@ -29,9 +28,7 @@ class SshAuditTask(Task):
         "level": OptDef(
             flag="-l", type=str, help="Minimum output level: info/warn/fail"
         ),
-        "policy": OptDef(
-            flag="-P", type=str, help="Policy file to check against"
-        ),
+        "policy": OptDef(flag="-P", type=str, help="Policy file to check against"),
     }
 
     input_flag = None
@@ -45,19 +42,8 @@ class SshAuditTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         results: list[Vulnerability | Tag] = []

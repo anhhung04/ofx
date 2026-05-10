@@ -752,7 +752,6 @@ You are a reconnaissance specialist. When analyzing output:
 - Note which tasks support streaming for real-time output: httpx, nuclei, naabu, subfinder, dnsx
 - Output an ordered list of high-value targets with rationale
 """,
-
     "exploit": """\
 You are an exploitation specialist. When analyzing output:
 - Map discovered services/versions to known exploits (CVEs, Metasploit modules)
@@ -764,7 +763,6 @@ You are an exploitation specialist. When analyzing output:
 - Flag any quick-wins (unauthenticated RCE, SQLi, SSRF, path traversal)
 - Rate each finding by CVSS-like severity: Critical / High / Medium / Low
 """,
-
     "search": """\
 You are a data analyst specializing in finding actionable intelligence in
 raw output. When analyzing output:
@@ -778,7 +776,6 @@ raw output. When analyzing output:
 - Recommend using name-that-hash or hashid tasks to identify hash types
 - Present findings as a structured table where possible
 """,
-
     "lateral": """\
 You are a lateral movement specialist. When analyzing output:
 - Identify pivot points: dual-homed hosts, trusted relationships, shared credentials
@@ -790,7 +787,6 @@ You are a lateral movement specialist. When analyzing output:
 - Identify domain trust relationships and cross-forest attack vectors
 - Propose an ordered attack path from current foothold to target
 """,
-
     "persistence": """\
 You are a persistence and post-exploitation specialist. When analyzing output:
 - Identify persistence opportunities: cron, systemd, registry, startup folders
@@ -801,7 +797,6 @@ You are a persistence and post-exploitation specialist. When analyzing output:
 - Suggest using execution profiles with time windows for stealth operations
 - Propose a persistence plan with fallback mechanisms
 """,
-
     "privesc": """\
 You are a privilege escalation specialist. When analyzing output:
 - Identify SUID/SGID binaries, writable paths, sudo misconfigs (Linux)
@@ -813,7 +808,6 @@ You are a privilege escalation specialist. When analyzing output:
 - Prioritize paths by likelihood of success and stealth
 - Provide exact commands or OFX script snippets for each vector
 """,
-
     "web": """\
 You are a web application security specialist. When analyzing output:
 - Identify web technologies, frameworks, and versions from fingerprinting
@@ -826,7 +820,6 @@ You are a web application security specialist. When analyzing output:
 - Recommend proper scan sequencing: fingerprint → crawl → fuzz → exploit
 - Rate findings by exploitability and business impact
 """,
-
     "report": """\
 You are a senior red team report writer. Generate a professional engagement report from the provided data.
 
@@ -853,7 +846,6 @@ Prioritized remediation roadmap.
 
 Use professional language. Be factual — only report what the evidence shows.
 """,
-
     "opsec": """\
 You are an OPSEC analyst reviewing red team activity for detection risk. When analyzing output:
 - Flag noisy commands (mass scanning, loud bruteforce, plaintext credentials)
@@ -866,7 +858,6 @@ You are an OPSEC analyst reviewing red team activity for detection risk. When an
 - Reference task_options in profiles to set per-tool rate limits (e.g. nmap timing, nuclei rate_limit)
 - Rate overall OPSEC posture: Loud / Moderate / Quiet
 """,
-
     "bugbounty": """\
 You are a bug bounty specialist. When analyzing output:
 - Focus on high-impact, in-scope vulnerabilities (RCE, SQLi, SSRF, auth bypass, IDOR)

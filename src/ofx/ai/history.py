@@ -55,7 +55,9 @@ class ChatHistory:
             "Summarize the conversation so far. Preserve all key findings, "
             "commands run, outputs received, and decisions made. Be concise."
         )
-        summary_msgs = list(self.messages) + [{"role": "user", "content": summary_prompt}]
+        summary_msgs = list(self.messages) + [
+            {"role": "user", "content": summary_prompt}
+        ]
         summary = call_llm(
             summary_msgs,
             model=model,

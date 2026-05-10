@@ -24,7 +24,7 @@ USER_DIR = Path.home()
 
 BASE_DATA_DIR = Path.home() / ".ofx"
 TEMP_DIR = Path(
-    tempfile.TemporaryDirectory(prefix=".tmp_r_", dir=str(tempfile.gettempdir())).name
+    tempfile.mkdtemp(prefix=".tmp_r_", dir=tempfile.gettempdir())
 ).absolute()
 CONFIG_FILE = BASE_DATA_DIR / "config.ini"
 CONFIG_YAML = BASE_DATA_DIR / "config.yml"
@@ -33,7 +33,11 @@ SECRETS_DIR = Path(os.getenv("OFX_SECRETS_DIR", BASE_DATA_DIR / "secrets"))
 DATA_DIR = Path(__file__).parent / "data"
 BUILTIN_WORKFLOWS_DIR = DATA_DIR / "workflows"
 DEFAULT_WORKFLOWS_DIR = BASE_DATA_DIR / "workflows"
-DEFAULT_WORKFLOWS_DIRS = [Path.cwd().absolute(), DEFAULT_WORKFLOWS_DIR.absolute(), BUILTIN_WORKFLOWS_DIR.absolute()]
+DEFAULT_WORKFLOWS_DIRS = [
+    Path.cwd().absolute(),
+    DEFAULT_WORKFLOWS_DIR.absolute(),
+    BUILTIN_WORKFLOWS_DIR.absolute(),
+]
 DEFAULT_PROJECTS_PATH = BASE_DATA_DIR / "projects"
 TOOLS_DIR = USER_DIR / "Tools"
 TOOLS_BIN_DIR = TOOLS_DIR / "bin"
@@ -42,7 +46,6 @@ USER_SHELLCODE_CONNECTORS_DIR = BASE_DATA_DIR / "shellcode" / "connectors"
 USER_WEBSHELL_CONNECTORS_DIR = BASE_DATA_DIR / "webshell" / "connectors"
 SESSIONS_DIR = BASE_DATA_DIR / "sessions"
 COLLECTIONS_DIR = BASE_DATA_DIR / "collections"
-SCRIPT_COMMUNICATION_REGISTRY = TEMP_DIR / "script_channels.json"
 CHANNELS_DIR = TEMP_DIR / "channels"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
@@ -234,15 +237,9 @@ class Settings(BaseSettings):
     ai: AiSettings = Field(default_factory=AiSettings)
 
     # Active project name (populated from env var or CLI)
-    active_project: str | None = Field(
-        default=None, description="Active project name"
-    )
+    active_project: str | None = Field(default=None, description="Active project name")
 
     debug: bool = Field(default=False, description="Enable debug mode")
-    timeout: int = Field(
-        default=24 * 60 * 60,
-        description="Timeout for running flows in seconds",
-    )
     max_output_size: int = Field(
         default=10 * 1024 * 1024,  # 10MB
         description="Maximum output size in bytes before truncation",
@@ -285,20 +282,12 @@ class Settings(BaseSettings):
         description="Default remote registry URL for cloning repositories",
     )
 
-    # Collection / Index Settings
+    # GitHub token
     github_token: SecretStr = Field(
         default=SecretStr(""),
         description=(
             "GitHub personal access token for private collection repos and index. "
             "Set via OFX_GITHUB_TOKEN env var."
-        ),
-    )
-    collection_index_url: str = Field(
-        default="",
-        description=(
-            "Override the default community index URL. "
-            "Set via OFX_COLLECTION_INDEX_URL env var. "
-            "Defaults to the ofx-workflows/index repo on GitHub."
         ),
     )
 
@@ -311,13 +300,9 @@ class Settings(BaseSettings):
         default=None,
         description="File path for file-based registry (defaults to ~/.ofx/job_registry.json)",
     )
-    script_communication_registry_path: str = Field(
-        default=str(SCRIPT_COMMUNICATION_REGISTRY),
-        description="File path for script inter-job communication registry",
-    )
     channels_dir: str = Field(
         default=str(CHANNELS_DIR),
-        description="Directory for per-channel files used by inter-job communication",
+        description="Directory for inter-job channel files (env: OFX_CHANNELS_DIR)",
     )
     registry_redis: RedisRegistrySettings | None = Field(
         default=None,
@@ -333,19 +318,19 @@ class Settings(BaseSettings):
     )
     registry_cache_enabled: bool = Field(
         default=True,
-        description="Enable in-process caching layer for registry reads/writes.",
+        description="Enable in-process caching layer for registry reads (env: OFX_REGISTRY_CACHE_ENABLED)",
     )
     registry_cache_ttl: float = Field(
         default=0.25,
-        description="Cache TTL (seconds) for registry entries inside a process.",
+        description="Cache TTL in seconds for registry entries (env: OFX_REGISTRY_CACHE_TTL)",
     )
     registry_cache_max_entries: int = Field(
         default=1024,
-        description="Maximum number of registry entries cached per process.",
+        description="Maximum cached registry entries per process (env: OFX_REGISTRY_CACHE_MAX_ENTRIES)",
     )
     registry_failover_enabled: bool = Field(
         default=True,
-        description="Switch to in-memory registry if the configured backend errors.",
+        description="Fall back to in-memory registry on backend errors (env: OFX_REGISTRY_FAILOVER_ENABLED)",
     )
 
     model_config = SettingsConfigDict(
@@ -375,7 +360,11 @@ class Settings(BaseSettings):
             env_settings,
             dotenv_settings,
             YamlConfigSettingsSource(settings_cls, yaml_file=CONFIG_YAML),
-            NestedSecretsSettingsSource(file_secret_settings, secrets_nested_subdir=True, secrets_dir=SECRETS_DIR.absolute()),
+            NestedSecretsSettingsSource(
+                file_secret_settings,
+                secrets_nested_subdir=True,
+                secrets_dir=SECRETS_DIR.absolute(),
+            ),
         )
 
 
@@ -384,14 +373,18 @@ class Settings(BaseSettings):
 # ------------------------------------------------------------------
 
 # Fields excluded from config.yml — internal / runtime-only values that
-# should not be persisted or edited by the user.
-_CONFIG_EXCLUDE_FIELDS = frozenset({
-    "app_name",
-    "app_branding",
-    "active_project",
-    "script_communication_registry_path",
-    "channels_dir",
-})
+# should not be persisted or edited by the user directly.
+# NOTE: active_project is excluded from the auto-generated defaults but CAN
+# appear in config.yml when written by update_config_field(); pydantic-settings'
+# YamlConfigSettingsSource will load it from there regardless.
+_CONFIG_EXCLUDE_FIELDS = frozenset(
+    {
+        "app_name",
+        "app_branding",
+        "active_project",
+        "channels_dir",
+    }
+)
 
 _CONFIG_YAML_HEADER = """\
 # OFX Configuration — ~/.ofx/config.yml
@@ -433,7 +426,9 @@ def _dump_default_config() -> str:
 
         data[name] = value
 
-    body = yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+    body = yaml.dump(
+        data, default_flow_style=False, sort_keys=False, allow_unicode=True
+    )
     return _CONFIG_YAML_HEADER + body
 
 
@@ -447,6 +442,107 @@ def _ensure_default_config() -> None:
 
 
 _ensure_default_config()
+
+
+def update_config_field(key: str, value: object) -> None:
+    """Update a single field in ``~/.ofx/config.yml``, preserving other values.
+
+    Uses a lock file and atomic rename so concurrent callers and crashes
+    cannot corrupt or lose data.  Locking uses ``fcntl`` on Unix and a
+    busy-retry loop on Windows (where ``fcntl`` is unavailable).
+    """
+    import tempfile
+
+    import yaml
+
+    CONFIG_YAML.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = CONFIG_YAML.with_suffix(".yml.lock")
+
+    def _do_update() -> None:
+        data: dict = {}
+        if CONFIG_YAML.exists():
+            try:
+                data = yaml.safe_load(CONFIG_YAML.read_text()) or {}
+            except Exception:
+                data = {}
+
+        if value is None:
+            data.pop(key, None)
+        else:
+            data[key] = value
+
+        content = _CONFIG_YAML_HEADER + yaml.dump(
+            data, default_flow_style=False, sort_keys=False, allow_unicode=True
+        )
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            dir=CONFIG_YAML.parent, prefix=".config_tmp_"
+        )
+        try:
+            with os.fdopen(tmp_fd, "w") as fh:
+                fh.write(content)
+            os.replace(tmp_path, CONFIG_YAML)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    if IS_WINDOWS:
+        import time
+
+        deadline = time.monotonic() + 5.0
+        while True:
+            try:
+                fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.close(fd)
+                break
+            except FileExistsError:
+                if time.monotonic() > deadline:
+                    break
+                time.sleep(0.05)
+        try:
+            _do_update()
+        finally:
+            try:
+                os.unlink(lock_path)
+            except OSError:
+                pass
+    else:
+        import fcntl
+
+        with open(lock_path, "w") as lock_fh:
+            fcntl.flock(lock_fh, fcntl.LOCK_EX)
+            try:
+                _do_update()
+            finally:
+                fcntl.flock(lock_fh, fcntl.LOCK_UN)
+
+
+def _migrate_json_config() -> None:
+    """One-time migration: move active_project from legacy config.json to config.yml."""
+    legacy = BASE_DATA_DIR / "config.json"
+    if not legacy.exists():
+        return
+    try:
+        import json
+
+        data = json.loads(legacy.read_text())
+        project = data.get("active_project")
+        if project:
+            import yaml
+
+            existing: dict = {}
+            if CONFIG_YAML.exists():
+                existing = yaml.safe_load(CONFIG_YAML.read_text()) or {}
+            if not existing.get("active_project"):
+                update_config_field("active_project", project)
+        legacy.unlink()
+    except Exception:
+        pass
+
+
+_migrate_json_config()
 
 settings = Settings()
 reload_logging_config(settings)

@@ -1,15 +1,17 @@
 """Template resolver for Jinja2-based workflow templates"""
 
 import json
+import logging
 import threading
-from pathlib import Path
-from typing import Any
+from collections import OrderedDict
+from typing import Any, Self
 
 from jinja2 import Environment
 from pydantic import BaseModel
 
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
 
+_logger = logging.getLogger("ofx.templates")
 _resolver_lock = threading.Lock()
 
 
@@ -21,9 +23,6 @@ def _tojson_python(value: Any, indent: int | None = None) -> str:
     in inline ``script:`` blocks.
     """
     raw = json.dumps(value, indent=indent, default=str)
-    # Replace JSON booleans/null with Python equivalents.
-    # Only replace standalone tokens, not substrings inside strings.
-    # json.dumps quotes string values, so bare true/false/null are safe to replace.
     raw = raw.replace(": true", ": True")
     raw = raw.replace(": false", ": False")
     raw = raw.replace(": null", ": None")
@@ -36,7 +35,7 @@ def _tojson_python(value: Any, indent: int | None = None) -> str:
     return raw
 
 
-def _build_jinja_env() -> Environment:
+def _build_jinja_env():
     """Create a Jinja2 Environment with Python-safe ``tojson`` filter."""
     env = Environment(enable_async=True)
     env.filters["tojson"] = _tojson_python
@@ -100,16 +99,23 @@ class _StepAccessor(dict):
 class TemplateResolver:
     """Handles template resolution with caching and optimization"""
 
-    _instance = None
+    _instance: Self | None = None
+    _template_cache: OrderedDict[str, Any]
+    _support_funcs_cache: dict[str, Any] | None
+    _template_cache_max_size: int
+    _cache_hits: int
+    _cache_misses: int
 
     def __new__(cls):
         if cls._instance is None:
             with _resolver_lock:
                 if cls._instance is None:
                     inst = super().__new__(cls)
-                    inst._template_cache = {}
+                    inst._template_cache = OrderedDict()
                     inst._support_funcs_cache = None
-                    inst._template_cache_max_size = 1000
+                    inst._template_cache_max_size = 2048
+                    inst._cache_hits = 0
+                    inst._cache_misses = 0
                     cls._instance = inst
         return cls._instance
 
@@ -159,10 +165,13 @@ class TemplateResolver:
 
         support_funcs = await self._build_support_functions(context_vars, memo)
 
-        if value_str not in self._template_cache:
+        if value_str in self._template_cache:
+            self._template_cache.move_to_end(value_str)
+            self._cache_hits += 1
+        else:
+            self._cache_misses += 1
             if len(self._template_cache) >= self._template_cache_max_size:
-                first_key = next(iter(self._template_cache))
-                del self._template_cache[first_key]
+                self._template_cache.popitem(last=False)
             self._template_cache[value_str] = _jinja_env.from_string(value_str)
 
         template = self._template_cache[value_str]
@@ -173,11 +182,16 @@ class TemplateResolver:
         try:
             result = await template.render_async(template_vars)
         except Exception as e:
-            # Provide actionable context for template errors
+            # Redact secret values from the error preview to avoid leaking
             preview = value_str[:120] + ("…" if len(value_str) > 120 else "")
+            secrets_dict = context_vars.get("secrets")
+            if isinstance(secrets_dict, dict):
+                for secret_val in secrets_dict.values():
+                    sv = str(secret_val)
+                    if len(sv) >= 4:
+                        preview = preview.replace(sv, "***")
             raise type(e)(
-                f"Template rendering failed: {e}\n"
-                f"  Template: {preview}"
+                f"Template rendering failed: {e}\n  Template: {preview}"
             ) from e
 
         resolve_stack.pop()
@@ -199,327 +213,12 @@ class TemplateResolver:
 
     def get_support_functions(self) -> dict[str, Any]:
         """Get template support functions with caching"""
-        import base64
-        import hashlib
-        import json
-        import random
-        import re
-        import secrets
-        import socket
-        import string
-        import uuid
-        from datetime import datetime
-        from urllib.parse import quote, unquote
-
-        from ofx.runner.commands.shell_functions import get_shell_exports
-        from ofx.settings import IS_WINDOWS
-
-        # File utilities
-        def _read_file(path: str) -> str:
-            file_path = Path(path)
-            if not file_path.exists():
-                return ""
-            return file_path.read_text()
-
-        def _write_file(path: str, content: str) -> None:
-            file_path = Path(path)
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(content)
-
-        def _append_file(path: str, content: str) -> None:
-            file_path = Path(path)
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            with file_path.open("a") as f:
-                f.write(content)
-
-        def _file_lines(path: str) -> list[str]:
-            file_path = Path(path)
-            if not file_path.exists():
-                return []
-            return file_path.read_text().splitlines()
-
-        # String encoding utilities
-        def _b64encode(s: str) -> str:
-            return base64.b64encode(s.encode()).decode()
-
-        def _b64decode(s: str) -> str:
-            return base64.b64decode(s.encode()).decode()
-
-        def _url_encode(s: str) -> str:
-            return quote(s, safe="")
-
-        def _url_decode(s: str) -> str:
-            return unquote(s)
-
-        def _hex_encode(s: str) -> str:
-            return s.encode().hex()
-
-        def _hex_decode(s: str) -> str:
-            return bytes.fromhex(s).decode()
-
-        # Hash functions
-        def _md5(s: str) -> str:
-            return hashlib.md5(s.encode()).hexdigest()
-
-        def _sha1(s: str) -> str:
-            return hashlib.sha1(s.encode()).hexdigest()
-
-        def _sha256(s: str) -> str:
-            return hashlib.sha256(s.encode()).hexdigest()
-
-        # Random generators
-        def _random_string(length: int = 8, charset: str = "alphanumeric") -> str:
-            if charset == "alpha":
-                chars = string.ascii_letters
-            elif charset == "numeric":
-                chars = string.digits
-            elif charset == "hex":
-                chars = string.hexdigits[:16]
-            else:  # alphanumeric
-                chars = string.ascii_letters + string.digits
-            return "".join(random.choices(chars, k=length))
-
-        def _random_int(min_val: int = 0, max_val: int = 100) -> int:
-            return random.randint(min_val, max_val)
-
-        def _random_port(start: int = 1024, end: int = 65535) -> int:
-            return random.randint(start, end)
-
-        # Network utilities
-        def _get_local_ip() -> str:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                s.connect(("8.8.8.8", 80))
-                ip = s.getsockname()[0]
-                s.close()
-                return ip
-            except Exception:
-                return "127.0.0.1"
-
-        def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
-            try:
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(timeout)
-                result = s.connect_ex((host, port))
-                s.close()
-                return result == 0
-            except Exception:
-                return False
-
-        # Date/time utilities
-        def _now(fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
-            return datetime.now().strftime(fmt)
-
-        def _timestamp() -> int:
-            return int(datetime.now().timestamp())
-
-        # JSON utilities
-        def _to_json(obj: Any) -> str:
-            try:
-                return json.dumps(obj, default=str)
-            except (TypeError, ValueError):
-                return ""
-
-        def _from_json(s: str) -> Any:
-            try:
-                return json.loads(s)
-            except (json.JSONDecodeError, TypeError, ValueError):
-                return None
-
-        # Path utilities
-        def _join_path(*parts: str) -> str:
-            return str(Path(*parts))
-
-        def _basename(path: str) -> str:
-            return Path(path).name
-
-        def _dirname(path: str) -> str:
-            return str(Path(path).parent)
-
-        def _glob(pattern: str, directory: str = ".") -> list[str]:
-            return [str(p) for p in Path(directory).glob(pattern)]
-
-        # ── Task typed-output helpers ──────────────────────────────
-        def _of_type(items: list, type_name: str) -> list:
-            """Filter a list of typed_output dicts to those matching *type_name*."""
-            if not isinstance(items, list):
-                return []
-            return [i for i in items if isinstance(i, dict) and i.get("_type") == type_name]
-
-        def _ports(items: list) -> list:
-            return _of_type(items, "port")
-
-        def _urls(items: list) -> list:
-            return _of_type(items, "url")
-
-        def _vulns(items: list) -> list:
-            return _of_type(items, "vulnerability")
-
-        def _subdomains(items: list) -> list:
-            return _of_type(items, "subdomain")
-
-        def _ips(items: list) -> list:
-            return _of_type(items, "ip")
-
-        def _tags(items: list) -> list:
-            return _of_type(items, "tag")
-
-        def _records(items: list) -> list:
-            return _of_type(items, "record")
-
-        def _domains(items: list) -> list:
-            return _of_type(items, "domain")
-
-        def _users(items: list) -> list:
-            return _of_type(items, "user_account")
-
-        # ── ASM integration helpers ────────────────────────────────
-        def _asm_targets(scope: str = "", effective: bool = True, target_type: str = "") -> list[str]:
-            """Pull target values from an ASM scope.
-
-            Returns a list of target strings (domains, IPs, etc.) ready
-            for use in workflow inputs or matrix variables.
-            """
-            try:
-                from ofx.asm.config import get_asm_client
-                client = get_asm_client()
-            except Exception:
-                return []
-            try:
-                scope_id = _asm_resolve_scope(client, scope)
-                if effective:
-                    raw = client.effective_targets(scope_id)
-                    return [
-                        t.value for t in raw
-                        if not t.excluded and (not target_type or t.target_type == target_type)
-                    ]
-                else:
-                    raw_t = client.list_targets(scope_id)
-                    return [
-                        t.value for t in raw_t
-                        if t.enabled and (not target_type or t.target_type == target_type)
-                    ]
-            except Exception:
-                return []
-
-        def _asm_push(items: list, scope: str = "", source: str = "ofx") -> int:
-            """Push typed output dicts to an ASM scope. Returns count of imported assets."""
-            try:
-                from ofx.asm.config import get_asm_client
-                from ofx.asm.export import batch_convert
-                client = get_asm_client()
-            except Exception:
-                return 0
-            try:
-                scope_id = _asm_resolve_scope(client, scope)
-                assets, _ = batch_convert(items, source=source)
-                if not assets:
-                    return 0
-                result = client.import_generic(scope_id, assets)
-                return result.get("imported", 0)
-            except Exception:
-                return 0
-
-        def _asm_scopes() -> list[dict]:
-            """List ASM scopes as dicts with id/name/scope_type/group."""
-            try:
-                from ofx.asm.config import get_asm_client
-                client = get_asm_client()
-                return [s.model_dump() for s in client.list_scopes()]
-            except Exception:
-                return []
-
-        def _asm_resolve_scope(client, scope_ref: str) -> str:
-            """Resolve scope by name or ID, falling back to default."""
-            if not scope_ref:
-                from ofx.asm.config import get_asm_config
-                scope_ref = get_asm_config().default_scope
-            if not scope_ref:
-                raise ValueError("No ASM scope specified")
-            if len(scope_ref) >= 32 and "-" in scope_ref:
-                return scope_ref
-            found = client.find_scope(scope_ref)
-            if found:
-                return found.id
-            raise ValueError(f"ASM scope '{scope_ref}' not found")
-
         if self._support_funcs_cache is None:
-            from ofx.runner.execution.findings_export import export_typed_outputs
-            shell_exports = get_shell_exports()
+            from ofx.runner.templates.helpers import build_all_helpers
 
-            self._support_funcs_cache = {
-                # Shell variables
-                **shell_exports,
-                # Platform info
-                "is_windows": IS_WINDOWS,
-                "platform": "windows" if IS_WINDOWS else "unix",
-                # File utilities
-                "file_read": _read_file,
-                "file_write": _write_file,
-                "file_append": _append_file,
-                "file_lines": _file_lines,
-                "file_exists": lambda path: Path(path).exists(),
-                "is_file": lambda path: Path(path).is_file(),
-                "is_dir": lambda path: Path(path).is_dir(),
-                # Path utilities
-                "join_path": _join_path,
-                "basename": _basename,
-                "dirname": _dirname,
-                "glob": _glob,
-                "cwd": lambda: str(Path.cwd()),
-                "home": lambda: str(Path.home()),
-                # String encoding
-                "b64encode": _b64encode,
-                "b64decode": _b64decode,
-                "url_encode": _url_encode,
-                "url_decode": _url_decode,
-                "hex_encode": _hex_encode,
-                "hex_decode": _hex_decode,
-                # Hash functions
-                "md5": _md5,
-                "sha1": _sha1,
-                "sha256": _sha256,
-                # Random generators
-                "random_string": _random_string,
-                "random_int": _random_int,
-                "random_port": _random_port,
-                "uuid": lambda: str(uuid.uuid4()),
-                "token": lambda n=32: secrets.token_urlsafe(n),
-                # Network utilities
-                "local_ip": _get_local_ip,
-                "is_port_open": _is_port_open,
-                # Date/time
-                "now": _now,
-                "timestamp": _timestamp,
-                # JSON
-                "to_json": _to_json,
-                "from_json": _from_json,
-                # Regex
-                "regex_match": lambda pattern, s: bool(re.match(pattern, s)),
-                "regex_search": lambda pattern, s: bool(re.search(pattern, s)),
-                "regex_findall": lambda pattern, s: re.findall(pattern, s),
-                "regex_sub": lambda pattern, repl, s: re.sub(pattern, repl, s),
-                # Task output helpers
-                "of_type": _of_type,
-                "ports": _ports,
-                "urls": _urls,
-                "vulns": _vulns,
-                "subdomains": _subdomains,
-                "ips": _ips,
-                "tags": _tags,
-                "records": _records,
-                "domains": _domains,
-                "users": _users,
-                "export_typed_outputs": export_typed_outputs,
-                # ASM integration
-                "asm_targets": _asm_targets,
-                "asm_push": _asm_push,
-                "asm_scopes": _asm_scopes,
-            }
+            self._support_funcs_cache = build_all_helpers()
 
-        support_funcs = self._support_funcs_cache.copy()
-
-        return support_funcs
+        return self._support_funcs_cache.copy()
 
     async def _build_support_functions(
         self, context_vars: dict[str, Any], memo: dict[str, Any]
@@ -631,8 +330,22 @@ class TemplateResolver:
             current = getattr(current, "parent", None)
         return None
 
-    def clear_cache(self):
-        """Clear the template cache"""
+    def clear_cache(self) -> None:
+        """Clear the template cache and reset counters."""
         self._template_cache.clear()
-        if self._support_funcs_cache:
-            self._support_funcs_cache.clear()
+        self._cache_hits = 0
+        self._cache_misses = 0
+        self._support_funcs_cache = None
+
+    def cache_info(self) -> dict[str, int]:
+        """Return cache statistics for debugging.
+
+        Returns:
+            Dict with ``hits``, ``misses``, ``size``, ``maxsize``.
+        """
+        return {
+            "hits": self._cache_hits,
+            "misses": self._cache_misses,
+            "size": len(self._template_cache),
+            "maxsize": self._template_cache_max_size,
+        }

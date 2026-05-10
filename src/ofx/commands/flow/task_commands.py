@@ -14,7 +14,10 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 @app.command("run")
 def run_task(
     task_name: Annotated[
-        str, typer.Argument(help="Name of the registered task to run (e.g. nmap, httpx, nuclei)")
+        str,
+        typer.Argument(
+            help="Name of the registered task to run (e.g. nmap, httpx, nuclei)"
+        ),
     ],
     target: Annotated[
         str, typer.Argument(help="Target for the task (IP, domain, URL, or file path)")
@@ -90,6 +93,7 @@ def run_task(
     if exit_code:
         raise typer.Exit(exit_code)
 
+
 @app.command("list")
 def list_tasks(
     category: Annotated[
@@ -112,7 +116,11 @@ def list_tasks(
     if category:
         entries = TaskRegistry.get_by_category(category)
     else:
-        entries = [(n, TaskRegistry.get(n)) for n in TaskRegistry.list_tasks()]
+        entries = [
+            (n, t)
+            for n in TaskRegistry.list_tasks()
+            if (t := TaskRegistry.get(n)) is not None
+        ]
 
     if not entries:
         console.print("[yellow]No tasks found.[/yellow]")
@@ -177,9 +185,7 @@ def task_info(
 
     # Options table
     if task.opts:
-        opts_table = Table(
-            title="Options", show_header=True, header_style="bold cyan"
-        )
+        opts_table = Table(title="Options", show_header=True, header_style="bold cyan")
         opts_table.add_column("Name", style="green")
         opts_table.add_column("Flag", style="cyan")
         opts_table.add_column("Type", style="blue")
@@ -194,6 +200,19 @@ def task_info(
     # Install command
     if task.install_cmd:
         console.print(f"\n[bold]Install:[/bold] [dim]{task.install_cmd}[/dim]")
+
+    # Capabilities
+    caps: list[str] = []
+    if task.supports_streaming:
+        caps.append("[green]streaming[/green]")
+    if task.export_output:
+        caps.append("export")
+    if task.extra_flags:
+        caps.append(f"extra_flags: {' '.join(task.extra_flags)}")
+    if task.success_codes != [0]:
+        caps.append(f"success_codes: {task.success_codes}")
+    if caps:
+        console.print(f"\n[bold]Capabilities:[/bold] {', '.join(caps)}")
 
     # Example YAML
     example_opts = []

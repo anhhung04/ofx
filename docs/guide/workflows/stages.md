@@ -48,7 +48,7 @@ jobs:
 ---
 
 ## Visualizing Stages
-Use `ofx flow run <workflow.yml> --debug` to see stage breakdowns and job execution order.
+Use `ofx flow visualize <workflow.yml>` to render the dependency graph and see stage breakdowns. The `--format` flag supports `terminal` (default), `dot`, and `json`. Convert DOT output to images with GraphViz (e.g. `dot -Tpng`).
 
 ---
 

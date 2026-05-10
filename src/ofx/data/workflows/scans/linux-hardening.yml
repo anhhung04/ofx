@@ -142,3 +142,4 @@ jobs:
         for finding in findings:
             print(f"  {finding}")
       log-stdout: true
+      log-command: true

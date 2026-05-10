@@ -7,7 +7,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
-from ofx.commands.ui_helpers import print_error, print_success, print_warning
+from ofx.commands.ui_helpers import error_exit, print_success, print_warning
 from ofx.settings import get_console
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
@@ -143,6 +143,9 @@ def list_projects():
         )
         return
 
+    active_path = ProjectManager.get_active_path()
+    active_name = active_path.name if active_path else None
+
     table = Table(
         title=f"[+] OFX Projects ({len(projects)})",
         show_header=True,
@@ -153,10 +156,12 @@ def list_projects():
     table.add_column("#", style="dim", width=4)
     table.add_column("Project Name", style="cyan")
     table.add_column("Path", style="dim")
+    table.add_column("", width=2)  # active indicator
 
     for idx, p in enumerate(projects, 1):
         full_path = ProjectManager._get_default_path() / p
-        table.add_row(str(idx), p, str(full_path))
+        indicator = "[green]✓[/]" if p == active_name else ""
+        table.add_row(str(idx), p, str(full_path), indicator)
 
     console.print(table)
 
@@ -170,12 +175,11 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
     project_path = ProjectManager._get_default_path() / name
 
     if not project_path.exists():
-        print_error(
+        error_exit(
             "Project Not Found",
             f"Project '{name}' not found",
             details="Use 'ofx project list' to see available projects",
         )
-        return
 
     print_warning(
         "Delete Project",
@@ -194,7 +198,7 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
             details={"Name": name, "Path": str(project_path)},
         )
     else:
-        print_error(
+        error_exit(
             "Delete Failed",
             f"Failed to delete project '{name}'",
         )
@@ -202,19 +206,22 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
 
 @app.command(name="use")
 def use(
-    name: Annotated[str, typer.Argument(help="Project name or path (empty when clearing)")] = "",
-    clear: Annotated[bool, typer.Option("--clear", "-c", help="Clear the active project setting")] = False,
+    name: Annotated[
+        str, typer.Argument(help="Project name or path (empty when clearing)")
+    ] = "",
+    clear: Annotated[
+        bool, typer.Option("--clear", "-c", help="Clear the active project setting")
+    ] = False,
 ):
     """Set or clear the active/working project."""
     console = get_console()
-    from .project_manager import ProjectManager, _load_config, _save_config
+    from ofx.settings import settings, update_config_field
+
+    from .project_manager import ProjectManager
+
     if clear:
-        cfg = _load_config()
-        cfg.pop("active_project", None)
-        _save_config(cfg)
-        # Also clear environment variable and Settings field
+        update_config_field("active_project", None)
         os.environ.pop("OFX_ACTIVE_PROJECT", None)
-        from ofx.settings import settings
         settings.active_project = None
         console.print("[yellow]Active project cleared.[/]")
         return
@@ -225,14 +232,11 @@ def use(
     if not Path(resolved).exists():
         console.print(f"[red]Project '{name}' not found at {resolved}[/]")
         raise typer.Exit(code=1)
-    cfg = _load_config()
-    cfg["active_project"] = name
-    _save_config(cfg)
-    # Export to env var and Settings for this and downstream processes
+    update_config_field("active_project", name)
     os.environ["OFX_ACTIVE_PROJECT"] = name
-    from ofx.settings import settings
     settings.active_project = name
     console.print(f"[green]Active project set to:[/] {name} → {resolved}")
+
 
 @app.command()
 def status(
@@ -250,19 +254,17 @@ def status(
     if not name:
         active = ProjectManager.get_active_path()
         if not active:
-            print_error(
+            error_exit(
                 "No Project",
                 "No active project set",
                 details="Use 'ofx project use <name>' or pass a project name",
             )
-            raise typer.Exit(code=1)
         project_path = active
     else:
         project_path = Path(ProjectManager.resolve_path(name))
 
     if not project_path.exists():
-        print_error("Not Found", f"Project not found: {project_path}")
-        raise typer.Exit(code=1)
+        error_exit("Not Found", f"Project not found: {project_path}")
 
     from rich.panel import Panel
     from rich.text import Text
@@ -270,14 +272,27 @@ def status(
     # Count files in key directories
     dir_stats: list[tuple[str, int]] = []
     key_dirs = [
-        "hosts", "subdomains", "vulns", "web", "certs", "osint",
-        "evidence", "scans", "scope", "targets", "tools", "exploits",
-        "logs", "post-exploits",
+        "hosts",
+        "subdomains",
+        "vulns",
+        "web",
+        "certs",
+        "osint",
+        "evidence",
+        "scans",
+        "scope",
+        "targets",
+        "tools",
+        "exploits",
+        "logs",
+        "post-exploits",
     ]
     for d in key_dirs:
         dp = project_path / d
         if dp.is_dir():
-            count = sum(1 for f in dp.rglob("*") if f.is_file() and f.name != ".gitkeep")
+            count = sum(
+                1 for f in dp.rglob("*") if f.is_file() and f.name != ".gitkeep"
+            )
             if count > 0:
                 dir_stats.append((d, count))
 

@@ -10,24 +10,17 @@ from ofx.models.workflow import Workflow
 from ofx.runner.context import RunnerContextBuilder
 from ofx.runner.core import (
     BaseRunner,
-    ConditionNotMetError,
     RunContext,
     RunnerRegistryKeys,
     RunnerStatus,
     RunResult,
 )
 from ofx.runner.execution.error_helpers import job_step_failed
-from ofx.runner.execution.execution_results import (
-    build_job_execution_result,
-    build_run_if_context,
-)
+from ofx.runner.execution.job_mixin import JobRunnerMixin
 from ofx.runner.execution.step import StepRunner
-from ofx.settings import settings
-
-logger = logging.getLogger(settings.app_branding)
 
 
-class JobRunner(BaseRunner[Job]):
+class JobRunner(JobRunnerMixin, BaseRunner[Job]):
     def __init__(
         self,
         job: Job,
@@ -43,26 +36,7 @@ class JobRunner(BaseRunner[Job]):
         self.ctx = RunnerContextBuilder(self.ctx).with_env(self.model.env)
         self._log_debug(f"Resolved job: {self.model.model_dump(exclude={'steps'})}")
 
-        if isinstance(self.model.needs, str):
-            self.model.needs = [self.model.needs]
-
-        runners: dict[str, BaseRunner] = self.parent.runners  # type: ignore
-        dep_runners = []
-        for job_id in self.model.needs:
-            runner = runners.get(job_id)
-            if not runner:
-                raise RuntimeError(
-                    f"Job dependency '{job_id}' is missing from workflow runners."
-                )
-            dep_runners.append(runner)
-
-        run_if_expr = self.model.run_if
-        if run_if_expr is True and dep_runners:
-            run_if_expr = "success()"
-
-        if not self._evaluate_run_if(run_if_expr, build_run_if_context(dep_runners)):
-            self._state_machine.transition(RunnerStatus.CANCELED)
-            raise ConditionNotMetError(self._produce_log("Job condition is not met"))
+        self._check_dependencies_and_run_if()
 
         job_default_config = self.model.defaults.model_dump(exclude_defaults=True)
         workflow_default_config = self.parent.model.defaults.model_dump()  # type: ignore
@@ -98,12 +72,7 @@ class JobRunner(BaseRunner[Job]):
                 )
 
     async def _post_run(self) -> None:
-        resolved_outputs = await self._resolve_job_outputs()
-        if resolved_outputs:
-            await self.reg_update(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
-
-        job_exec = build_job_execution_result(self, self._runners)
-        await self.reg_set(RunnerRegistryKeys.EXECUTION, job_exec.to_dict())
+        await self._save_job_results()
 
         # Clean up non-exported task temp files that were kept for
         # subsequent steps (export_output=False tasks).
@@ -122,7 +91,11 @@ class JobRunner(BaseRunner[Job]):
                     if p.exists():
                         p.unlink(missing_ok=True)
             except Exception:
-                pass
+                # Best-effort cleanup; log failures at debug level so they
+                # don't obscure the real job output.
+                self._log_debug(
+                    f"Job '{self.model.jid}': failed to clean up temp task file"
+                )
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
@@ -130,10 +103,6 @@ class JobRunner(BaseRunner[Job]):
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
-
-    @property
-    def total_steps(self) -> int:
-        return len(self.model.steps)
 
 
 class MatrixJobRunner(BaseRunner[Job]):
@@ -203,7 +172,11 @@ class MatrixJobRunner(BaseRunner[Job]):
                 )
 
         if errors:
-            raise RuntimeError("; ".join(errors))
+            detail = "\n  ".join(errors[:10])
+            suffix = f"\n  ... and {len(errors) - 10} more" if len(errors) > 10 else ""
+            raise RuntimeError(
+                f"Matrix job '{self.model.jid}' failed ({len(errors)} combination(s)):\n  {detail}{suffix}"
+            )
 
     async def _run_single_job(self, matrix_idx: int, matrix_values: dict[str, Any]):
         """Run a single job instance with specific matrix values"""
@@ -248,10 +221,8 @@ class MatrixJobRunner(BaseRunner[Job]):
                         parsed = json.loads(val)
                         if isinstance(parsed, list):
                             self.model.strategy.matrix[key] = parsed
-                            logger.debug(
-                                self._produce_log(
-                                    f"Matrix key '{key}' resolved to {len(parsed)} item(s)"
-                                )
+                            self._log_debug(
+                                f"Matrix key '{key}' resolved to {len(parsed)} item(s)"
                             )
                         else:
                             self.model.strategy.matrix[key] = [parsed]
@@ -272,7 +243,9 @@ class MatrixJobRunner(BaseRunner[Job]):
             return []
 
         # Detect empty source lists before expansion so the warning is accurate.
-        empty_keys = [k for k, v in strategy.matrix.items() if isinstance(v, list) and len(v) == 0]
+        empty_keys = [
+            k for k, v in strategy.matrix.items() if isinstance(v, list) and len(v) == 0
+        ]
         if empty_keys:
             self._log_warning(
                 f"Matrix produced 0 combinations: key(s) {empty_keys} resolved to an empty list. "
@@ -281,7 +254,10 @@ class MatrixJobRunner(BaseRunner[Job]):
             return []
 
         combos = generate_matrix_combinations(
-            strategy.matrix,
+            {
+                k: ([v] if not isinstance(v, list) else v)
+                for k, v in strategy.matrix.items()
+            },
             include=strategy.include,
             exclude=strategy.exclude,
             enforce_limit=True,

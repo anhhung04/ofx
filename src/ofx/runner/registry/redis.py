@@ -93,7 +93,9 @@ class RedisJobRegistry(RegistryAdapter):
             try:
                 return json.loads(value)
             except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                logger.warning(
+                    "Failed to decode registry value for key '%s': %s", key, exc
+                )
                 return None
         return None
 
@@ -134,7 +136,9 @@ class RedisJobRegistry(RegistryAdapter):
                 try:
                     result[key] = json.loads(value)
                 except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                    logger.warning("Failed to decode registry value for key '%s': %s", key, exc)
+                    logger.warning(
+                        "Failed to decode registry value for key '%s': %s", key, exc
+                    )
 
         return result
 

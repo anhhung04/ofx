@@ -99,3 +99,4 @@ jobs:
 
         add_outputs(output_dir=output_dir, variants=json.dumps(variants), variant_count=len(variants))
       log-stdout: true
+      log-command: true

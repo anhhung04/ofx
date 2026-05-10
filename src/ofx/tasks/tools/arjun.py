@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -21,13 +20,9 @@ class ArjunTask(Task):
     output_types = [Url, Tag]
 
     opts = {
-        "method": OptDef(
-            flag="-m", type=str, help="HTTP method GET/POST/JSON/XML"
-        ),
+        "method": OptDef(flag="-m", type=str, help="HTTP method GET/POST/JSON/XML"),
         "headers": OptDef(flag="--headers", type=str, help="Custom headers"),
-        "include": OptDef(
-            flag="--include", type=str, help="Include params pattern"
-        ),
+        "include": OptDef(flag="--include", type=str, help="Include params pattern"),
         "threads": OptDef(flag="-t", type=int, help="Number of threads"),
         "delay": OptDef(flag="-d", type=int, help="Delay between requests"),
         "timeout": OptDef(flag="--timeout", type=int, help="Request timeout"),
@@ -51,19 +46,8 @@ class ArjunTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Url | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
-        if not raw:
-            return []
-
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError:
+        data = self._read_json_output(stdout, output_file)
+        if data is None:
             return []
 
         results: list[Url | Tag] = []

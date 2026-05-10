@@ -38,6 +38,7 @@ jobs:
       verified_hosts_json: '{{ steps["export-verified"].outputs.verified_hosts_json | default("[]", true) }}'
     steps:
       - name: full-subdomain-scan
+        log-command: true
         uses: subdomain-scan
         with:
           target: "{{ inputs.target }}"
@@ -75,6 +76,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
+        log-command: true
         uses: host-scan
         with:
           target: "{{ matrix.target }}"

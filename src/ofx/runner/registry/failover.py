@@ -42,7 +42,8 @@ class FailoverRegistryAdapter(RegistryAdapter):
             # Periodically retry primary when in fallback mode
             if (
                 self._use_fallback
-                and (time.monotonic() - self._last_primary_attempt) >= _RECONNECT_INTERVAL
+                and (time.monotonic() - self._last_primary_attempt)
+                >= _RECONNECT_INTERVAL
             ):
                 self._last_primary_attempt = time.monotonic()
                 try:

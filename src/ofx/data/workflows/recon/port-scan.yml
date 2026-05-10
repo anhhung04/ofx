@@ -70,3 +70,4 @@ jobs:
 
         add_outputs(open_ports=json.dumps(open_ports), port_count=len(open_ports), results_file=out_file)
       log-stdout: true
+      log-command: true

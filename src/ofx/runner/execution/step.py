@@ -4,7 +4,6 @@ import asyncio
 import os
 import tempfile
 from pathlib import Path
-from random import uniform
 from typing import Any
 
 from ofx.models.job import Job
@@ -26,12 +25,22 @@ from ofx.runner.execution.error_helpers import (
 from ofx.runner.execution.execution_results import (
     build_step_execution_result,
 )
+from ofx.runner.execution.step_mixin import StepRunnerMixin
 from ofx.runner.logging import get_logger
+
+
+def _timeout_int(value: int | str) -> int:
+    """Coerce a template-resolved timeout (may arrive as str) to int."""
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return 60 * 24  # default: 24 hours
+
 
 logger = get_logger()
 
 
-class StepRunner(BaseRunner[Step]):
+class StepRunner(StepRunnerMixin, BaseRunner[Step]):
     def __init__(
         self,
         step: Step,
@@ -59,6 +68,7 @@ class StepRunner(BaseRunner[Step]):
             "shell",
             "working_directory",
             "log_stdout",
+            "log_command",
             "env",
             "run_if",
         ]
@@ -76,13 +86,7 @@ class StepRunner(BaseRunner[Step]):
         await self._resolve_template_fields(resolve_fields)
 
         # Resolve timeout (may be a Jinja2 expression for dynamic scaling)
-        if isinstance(self.model.timeout, str):
-            resolved = await self._resolve_template(self.model.timeout)
-            try:
-                self.model.timeout = int(float(resolved))
-            except (ValueError, TypeError):
-                self._log_warning(f"Invalid timeout expression result: {resolved!r}, using 60 min")
-                self.model.timeout = 60
+        await self._resolve_timeout_field()
 
         if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
             self._state_machine.transition(RunnerStatus.CANCELED)
@@ -94,28 +98,6 @@ class StepRunner(BaseRunner[Step]):
             RunnerRegistryKeys.MODEL,
             self.model.model_dump(exclude={"env", "secrets", "run_with"}),
         )
-
-    def _apply_retry_profile_defaults(self) -> None:
-        """Apply retry policy defaults only when step fields are not explicit."""
-        profile = self.ctx.vars.get("profile_model")
-        if profile is None:
-            return
-
-        policy_name = getattr(profile, "retry_policy", "standard") or "standard"
-        profiles = getattr(profile, "retry_profiles", {}) or {}
-        policy = profiles.get(policy_name)
-        if not isinstance(policy, dict):
-            return
-
-        # Respect explicit user-provided step fields.
-        explicitly_set = set(getattr(self.model, "model_fields_set", set()))
-
-        if "retry" not in explicitly_set and "retry" in policy:
-            self.model.retry = int(policy["retry"])
-        if "retry_delay" not in explicitly_set and "retry_delay" in policy:
-            self.model.retry_delay = int(policy["retry_delay"])
-        if "timeout" not in explicitly_set and "timeout" in policy:
-            self.model.timeout = int(policy["timeout"])
 
     async def _on_failure_cleanup(self) -> None:
         """Save execution data and clean up temp outputs file on failure.
@@ -145,7 +127,7 @@ class StepRunner(BaseRunner[Step]):
         Execute the step's action with retry logic, timeout handling.
         """
         max_attempts = self.model.retry + 1
-        timeout_seconds = self.model.timeout * 60
+        timeout_seconds = _timeout_int(self.model.timeout) * 60
 
         last_res = None
         attempt_errors: list[str] = []
@@ -162,7 +144,9 @@ class StepRunner(BaseRunner[Step]):
                 else:
                     raise RuntimeError(step_execution_error(res.status, res.error))
             except TimeoutError as e:
-                raise RuntimeError(step_timeout_error(self.model.timeout)) from e
+                raise RuntimeError(
+                    step_timeout_error(_timeout_int(self.model.timeout))
+                ) from e
             except Exception as e:
                 err_msg = str(e)
                 attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
@@ -198,17 +182,7 @@ class StepRunner(BaseRunner[Step]):
         stderr = result.outputs.get("stderr", "")
 
         # For task steps with typed outputs, show formatted tables
-        typed_outputs = result.outputs.get("typed_outputs")
-        if typed_outputs and isinstance(typed_outputs, list) and len(typed_outputs) > 0:
-            from ofx.runner.execution.output_formatter import format_typed_outputs
-            from ofx.settings import get_console
-
-            format_typed_outputs(
-                typed_outputs,
-                task_name=self.model.name or self.model.task or "",
-                console=get_console(),
-            )
-        else:
+        if not self._format_typed_outputs(result):
             self._log_output("stdout", stdout)
 
         self._log_output("stderr", stderr)
@@ -236,14 +210,9 @@ class StepRunner(BaseRunner[Step]):
         if self._outputs_file:
             self._outputs_file.unlink(missing_ok=True)
 
-        # Log to project timeline CSV
-        self._log_timeline(result, status_value)
-
-    def _log_output(self, stream: str, content: str) -> None:
-        """Log a stdout/stderr stream to the console, truncating long output."""
-        from ofx.runner.core.step_output import log_output
-
-        log_output(self._log_info, stream, content)
+        # Log to project timeline CSV only when step has explicit log-command config
+        if self.model.log_command:
+            self._log_timeline(result, status_value)
 
     def _save_output_file(self, stdout: str, outputs: dict) -> None:
         """Persist full stdout to a log file under output_path/logs/."""
@@ -295,26 +264,6 @@ class StepRunner(BaseRunner[Step]):
             return self.parent._produce_log(msg)
         return msg
 
-    def _run_if_context(self) -> dict[str, Any]:
-        prev_runner = None
-        if self.parent and self.model.step_index > 0:
-            prev_runner = self.parent._runners.get(str(self.model.step_index - 1))
-
-        if not prev_runner:
-            return {
-                "success": lambda: True,
-                "failure": lambda: False,
-                "canceled": lambda: False,
-                "always": lambda: True,
-            }
-
-        return {
-            "success": lambda: prev_runner.is_success,
-            "failure": lambda: prev_runner.is_failed,
-            "canceled": lambda: prev_runner.status == RunnerStatus.CANCELED,
-            "always": lambda: True,
-        }
-
     async def _apply_run_result(self, res: RunResult) -> None:
         self._error = res.error
         await self.reg_set(RunnerRegistryKeys.OUTPUTS, res.outputs)
@@ -322,45 +271,20 @@ class StepRunner(BaseRunner[Step]):
             RunnerRegistryKeys.RESULT, res.model_dump(exclude={"outputs"})
         )
 
-    def _retry_delay_seconds(self, attempt: int, base_delay: int) -> float:
-        """Compute exponential backoff with jitter capped to 5 minutes."""
-        backoff = base_delay * (2**attempt)
-        delay = min(backoff, 300)
-        return delay * uniform(0.5, 1.0)
-
     def _log_timeline(self, result: RunResult, status: str) -> None:
         """Write a timeline entry for this step execution."""
         from ofx.runner.execution.timeline import log_step
 
-        # Determine command/tool/target from run type
-        command = ""
-        tool = ""
-        target = ""
-
-        if self._run_type == RunType.COMMAND:
-            command = self.model.run or ""
-        elif self._run_type == RunType.TASK:
-            task_name = self.model.task or ""
-            tool = task_name
-            target = str(self.model.run_with.get("target", self.model.run_with.get("targets", "")))
-            command = result.outputs.get("command", f"task:{task_name}")
-        elif self._run_type == RunType.SCRIPT:
-            command = f"script:{self.model.name or 'inline'}"
-        elif self._run_type == RunType.SCRIPT_FILE:
-            command = f"script_file:{self.model.script_file or ''}"
-        elif self._run_type == RunType.WORKFLOW:
-            command = f"uses:{self.model.uses or ''}"
+        params = self._build_timeline_params(result)
 
         log_step(
             ctx_vars=self.ctx.vars,
             output_path=self.ctx.output_path,
             step_name=self.model.name or f"step{self.model.step_index}",
-            command=command,
-            tool=tool,
-            target=target,
             status=status,
             duration_ms=self.duration_ms(),
             exit_code=result.outputs.get("exit_code"),
+            **params,
         )
 
     def _resolve_working_dir(self) -> Path:

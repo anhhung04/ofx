@@ -199,7 +199,7 @@ jobs:
         workflow_file = tmp_path / "cached.yml"
         workflow_file.write_text(workflow_content)
 
-        workflow_dirs = tuple([tmp_path])
+        workflow_dirs = (tmp_path,)
 
         workflow1 = find_workflow(str(workflow_file), workflow_dirs)
         workflow2 = find_workflow(str(workflow_file), workflow_dirs)
@@ -224,8 +224,8 @@ jobs:
         workflow_file = tmp_path / "multi.yml"
         workflow_file.write_text(workflow_content)
 
-        dirs1 = tuple([tmp_path])
-        dirs2 = tuple([tmp_path, Path.cwd()])
+        dirs1 = (tmp_path,)
+        dirs2 = (tmp_path, Path.cwd())
 
         workflow1 = find_workflow(str(workflow_file), dirs1)
         workflow2 = find_workflow(str(workflow_file), dirs2)

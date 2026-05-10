@@ -5,15 +5,17 @@ from __future__ import annotations
 import pytest
 
 from ofx.cloud.sessions.script_builder import (
-    _bash_escape,
     _ps_escape,
     _validate_env_key,
     build_session_script,
 )
 from ofx.models.step import Step
+from ofx.utils.shell import bash_dquote_escape
 
 
-def _make_step(run: str | None = None, script: str | None = None, name: str = "s") -> Step:
+def _make_step(
+    run: str | None = None, script: str | None = None, name: str = "s"
+) -> Step:
     data: dict = {"name": name}
     if run is not None:
         data["run"] = run
@@ -23,20 +25,23 @@ def _make_step(run: str | None = None, script: str | None = None, name: str = "s
 
 
 # ---------------------------------------------------------------------------
-# _bash_escape
+# bash_dquote_escape
 # ---------------------------------------------------------------------------
-class TestBashEscape:
+class TestBashDquoteEscape:
     def test_double_quote(self):
-        assert _bash_escape('say "hello"') == 'say \\"hello\\"'
+        assert bash_dquote_escape('say "hello"') == 'say \\"hello\\"'
 
     def test_backslash(self):
-        assert _bash_escape("a\\b") == "a\\\\b"
+        assert bash_dquote_escape("a\\b") == "a\\\\b"
 
     def test_dollar_sign(self):
-        assert _bash_escape("$HOME") == "\\$HOME"
+        assert bash_dquote_escape("$HOME") == "\\$HOME"
 
     def test_combined(self):
-        assert _bash_escape('$HOME\\"') == '\\$HOME\\\\\\"'
+        assert bash_dquote_escape('$HOME\\"') == '\\$HOME\\\\\\"'
+
+    def test_backtick(self):
+        assert bash_dquote_escape("`whoami`") == "\\`whoami\\`"
 
 
 # ---------------------------------------------------------------------------
@@ -74,19 +79,23 @@ class TestEnvKeyValidation:
 class TestBuildBashEnvEscaping:
     def test_dollar_in_env_value(self):
         step = _make_step(run="echo test")
-        script = build_session_script([step], session_id="s1", work_dir="/tmp/s", env={"MY_VAR": "$SECRET"})
+        script = build_session_script(
+            [step], session_id="s1", work_dir="/tmp/s", env={"MY_VAR": "$SECRET"}
+        )
         # Value should be backslash-escaped so it's not expanded
         assert 'export MY_VAR="\\$SECRET"' in script
 
     def test_double_quote_in_env_value(self):
         step = _make_step(run="echo test")
-        script = build_session_script([step], session_id="s1", work_dir="/tmp/s", env={"X": 'say "hi"'})
+        script = build_session_script(
+            [step], session_id="s1", work_dir="/tmp/s", env={"X": 'say "hi"'}
+        )
         assert 'export X="say \\"hi\\""' in script
 
     def test_work_dir_with_spaces_escaped_in_bash(self):
         step = _make_step(run="echo hi")
         script = build_session_script([step], session_id="s1", work_dir="/tmp/my dir/s")
-        # _bash_escape leaves spaces alone — they're inside double-quotes in the assignment
+        # bash_dquote_escape leaves spaces alone — they're inside double-quotes in the assignment
         assert 'WORK_DIR="/tmp/my dir/s"' in script
 
     def test_session_id_escaped_in_bash(self):
@@ -97,7 +106,9 @@ class TestBuildBashEnvEscaping:
     def test_invalid_env_key_raises_bash(self):
         step = _make_step(run="echo hi")
         with pytest.raises(ValueError, match="Invalid environment variable name"):
-            build_session_script([step], session_id="s1", work_dir="/tmp/s", env={"BAD-KEY": "x"})
+            build_session_script(
+                [step], session_id="s1", work_dir="/tmp/s", env={"BAD-KEY": "x"}
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -184,21 +195,33 @@ class TestBuildPowerShellEnvEscaping:
     def test_dollar_in_ps_env_value(self):
         step = _make_step(run="Write-Output test")
         script = build_session_script(
-            [step], session_id="s1", work_dir="C:\\work", env={"MY_VAR": "$secret"}, os_type="windows"
+            [step],
+            session_id="s1",
+            work_dir="C:\\work",
+            env={"MY_VAR": "$secret"},
+            os_type="windows",
         )
         assert '$env:MY_VAR = "`$secret"' in script
 
     def test_backtick_in_ps_env_value(self):
         step = _make_step(run="Write-Output test")
         script = build_session_script(
-            [step], session_id="s1", work_dir="C:\\work", env={"X": "a`b"}, os_type="windows"
+            [step],
+            session_id="s1",
+            work_dir="C:\\work",
+            env={"X": "a`b"},
+            os_type="windows",
         )
         assert '$env:X = "a``b"' in script
 
     def test_double_quote_in_ps_env_value(self):
         step = _make_step(run="Write-Output test")
         script = build_session_script(
-            [step], session_id="s1", work_dir="C:\\work", env={"X": 'say "hi"'}, os_type="windows"
+            [step],
+            session_id="s1",
+            work_dir="C:\\work",
+            env={"X": 'say "hi"'},
+            os_type="windows",
         )
         assert '$env:X = "say `"hi`""' in script
 

@@ -28,7 +28,10 @@ class TestDoctorFleet:
         from ofx.cloud.config import CloudProfileManager
 
         mgr = CloudProfileManager(config_path=tmp_path / "cloud.yml")
-        mgr.add("st", {"provider": "static", "host": "127.0.0.1", "ssh_key": "~/.ssh/id_rsa"})
+        mgr.add(
+            "st",
+            {"provider": "static", "host": "127.0.0.1", "ssh_key": "~/.ssh/id_rsa"},
+        )
         mgr.set_default("st")
         monkeypatch.setattr(
             "ofx.cloud.config.get_cloud_profile_manager",

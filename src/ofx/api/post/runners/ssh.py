@@ -115,6 +115,7 @@ class PostSSH(PostRunnerBase):
         # Paramiko client — lazy-connected
         self._client: paramiko.SSHClient | None = None
         self._sftp: paramiko.SFTPClient | None = None
+        self._jump_client: paramiko.SSHClient | None = None
 
         # Command log
         self._log_file: Path | None = None
@@ -197,7 +198,7 @@ class PostSSH(PostRunnerBase):
         return client
 
     def _close_client(self) -> None:
-        """Close paramiko client and SFTP."""
+        """Close paramiko client, SFTP, and jump host connection."""
         if self._sftp:
             try:
                 self._sftp.close()
@@ -210,6 +211,12 @@ class PostSSH(PostRunnerBase):
             except Exception as e:
                 logger.debug("SSH client close error: %s", e)
             self._client = None
+        if self._jump_client:
+            try:
+                self._jump_client.close()
+            except Exception as e:
+                logger.debug("Jump host close error: %s", e)
+            self._jump_client = None
 
     def _get_sftp(self) -> paramiko.SFTPClient:
         """Get or open an SFTP session."""
@@ -218,6 +225,7 @@ class PostSSH(PostRunnerBase):
                 self._sftp.stat(".")
                 return self._sftp
             except Exception:
+                logger.debug("SFTP session stale, reconnecting")
                 self._sftp = None
         client = self._connect()
         self._sftp = client.open_sftp()
@@ -280,17 +288,25 @@ class PostSSH(PostRunnerBase):
                     jump_kwargs["pkey"] = self._load_key(self.identity_file)
                 except Exception as e:
                     logger.debug("Failed to load key for jump host: %s", e)
-            jump_client.connect(**jump_kwargs)
-            transport = jump_client.get_transport()
-            if not transport or not transport.is_active():
-                raise SSHConnectionError(
-                    f"Failed to connect to jump host {jump_host}:{jump_port}"
+            try:
+                jump_client.connect(**jump_kwargs)
+                transport = jump_client.get_transport()
+                if not transport or not transport.is_active():
+                    raise SSHConnectionError(
+                        f"Failed to connect to jump host {jump_host}:{jump_port}"
+                    )
+                self._jump_client = jump_client
+                return transport.open_channel(
+                    "direct-tcpip",
+                    (self.host, self.port),
+                    ("127.0.0.1", 0),
                 )
-            return transport.open_channel(
-                "direct-tcpip",
-                (self.host, self.port),
-                ("127.0.0.1", 0),
-            )
+            except Exception:
+                try:
+                    jump_client.close()
+                except Exception:
+                    pass
+                raise
 
         return None
 
@@ -463,24 +479,25 @@ class PostSSH(PostRunnerBase):
     # File Transfer (SFTP)
     # -------------------------------------------------------------------------
 
-    def upload(
-        self, local_path: str, remote_path: str, timeout: int | None = None
+    def _sftp_with_retry(
+        self, operation: str, sftp_fn: str, src: str, dst: str
     ) -> None:
-        """Upload a file via SFTP with retry logic.
+        """Execute an SFTP operation with retry logic.
 
         Args:
-            local_path: Local file path.
-            remote_path: Remote destination path.
-            timeout: Ignored (SFTP doesn't have per-op timeout). Kept for compat.
+            operation: Human-readable label (``"UPLOAD"`` or ``"DOWNLOAD"``).
+            sftp_fn: SFTP method name (``"put"`` or ``"get"``).
+            src: Source path (first arg to the SFTP method).
+            dst: Destination path (second arg to the SFTP method).
         """
         last_error: Exception | None = None
 
         for attempt in range(self.max_retries):
             try:
                 sftp = self._get_sftp()
-                sftp.put(local_path, remote_path)
+                getattr(sftp, sftp_fn)(src, dst)
                 self._log_command(
-                    f"[SFTP UPLOAD] {local_path} -> {remote_path}",
+                    f"[SFTP {operation}] {src} -> {dst}",
                     "OK",
                     "",
                     0,
@@ -493,7 +510,16 @@ class PostSSH(PostRunnerBase):
                 self._sftp = None
                 self._close_client()
                 if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
+                    delay = min(2**attempt, 30) * uniform(0.5, 1.5)
+                    logger.debug(
+                        "SFTP %s error, retrying in %.1fs (attempt %d/%d): %s",
+                        operation.lower(),
+                        delay,
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                    )
+                    time.sleep(delay)
             except Exception as e:
                 last_error = e
                 self._sftp = None
@@ -501,8 +527,20 @@ class PostSSH(PostRunnerBase):
                     time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
 
         raise RuntimeError(
-            f"SFTP upload failed after {self.max_retries} attempts: {last_error}"
+            f"SFTP {operation.lower()} failed after {self.max_retries} attempts: {last_error}"
         )
+
+    def upload(
+        self, local_path: str, remote_path: str, timeout: int | None = None
+    ) -> None:
+        """Upload a file via SFTP with retry logic.
+
+        Args:
+            local_path: Local file path.
+            remote_path: Remote destination path.
+            timeout: Ignored (SFTP doesn't have per-op timeout). Kept for compat.
+        """
+        self._sftp_with_retry("UPLOAD", "put", local_path, remote_path)
 
     def download(
         self, remote_path: str, local_path: str, timeout: int | None = None
@@ -514,36 +552,17 @@ class PostSSH(PostRunnerBase):
             local_path: Local destination path.
             timeout: Ignored (SFTP doesn't have per-op timeout). Kept for compat.
         """
-        last_error: Exception | None = None
-
-        for attempt in range(self.max_retries):
-            try:
-                sftp = self._get_sftp()
-                sftp.get(remote_path, local_path)
-                self._log_command(
-                    f"[SFTP DOWNLOAD] {remote_path} -> {local_path}",
-                    "OK",
-                    "",
-                    0,
-                )
-                return
-            except paramiko.AuthenticationException as e:
-                raise SSHAuthError(f"SFTP auth failed: {e}") from e
-            except (paramiko.SSHException, OSError, EOFError) as e:
-                last_error = e
-                self._sftp = None
-                self._close_client()
-                if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
-            except Exception as e:
-                last_error = e
-                self._sftp = None
-                if attempt < self.max_retries - 1:
-                    time.sleep(min(2**attempt, 30) * uniform(0.5, 1.5))
-
-        raise RuntimeError(
-            f"SFTP download failed after {self.max_retries} attempts: {last_error}"
-        )
+        try:
+            self._sftp_with_retry("DOWNLOAD", "get", remote_path, local_path)
+        except Exception:
+            # Remove partial file left by a failed transfer
+            local = Path(local_path)
+            if local.exists():
+                try:
+                    local.unlink()
+                except OSError:
+                    pass
+            raise
 
     # -------------------------------------------------------------------------
     # Interactive Shell

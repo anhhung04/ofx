@@ -79,7 +79,8 @@ class TaskRunHandler:
         # Build run context
         ctx_vars: dict[str, Any] = {}
         if profile:
-            ctx_vars["profile"] = profile
+            ctx_vars["profile_model"] = profile
+            ctx_vars["profile"] = profile.model_dump()
         ctx = RunContext(output_path=output_path, vars=ctx_vars)
 
         # Build task execution model
@@ -136,7 +137,7 @@ class TaskRunHandler:
                 )
             )
         else:
-            _display_results(console, typed_outputs, stdout, exit_code)
+            _display_results(console, typed_outputs, stdout)
 
         return 0
 
@@ -145,7 +146,6 @@ def _display_results(
     console: Any,
     typed_outputs: list[dict],
     stdout: str,
-    exit_code: int | None,
 ) -> None:
     """Display task results using Rich tables."""
     from rich.table import Table
@@ -218,11 +218,7 @@ def _pick_columns(type_name: str, items: list[dict]) -> list[str]:
 
     # Fallback: pick keys from first item, skip internal fields
     if items:
-        return [
-            k
-            for k in items[0]
-            if not k.startswith("_") and k != "extra_data"
-        ][:6]
+        return [k for k in items[0] if not k.startswith("_") and k != "extra_data"][:6]
     return []
 
 

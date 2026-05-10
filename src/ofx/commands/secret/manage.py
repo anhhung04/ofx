@@ -12,7 +12,7 @@ from ofx.commands.secret.helpers import (
     _resolve_secret_input,
 )
 from ofx.commands.ui_helpers import (
-    print_error,
+    error_exit,
     print_info,
     print_success,
     print_warning,
@@ -132,12 +132,11 @@ def get_secret(
     value = secrets_store.get_secret(name)
 
     if value is None:
-        print_error(
+        error_exit(
             "Secret Not Found",
             f"Secret '{name}' not found",
             details="Use 'ofx secret list' to see available secrets",
         )
-        raise typer.Exit(code=1)
 
     if show:
         console = get_console()
@@ -146,7 +145,9 @@ def get_secret(
                 f"[bold cyan]Secret: {name}[/bold cyan]\n{json.dumps(value, indent=2)}"
             )
         else:
-            console.print(f"[bold cyan]Secret: {name}[/bold cyan]\n[cyan]{value}[/cyan]")
+            console.print(
+                f"[bold cyan]Secret: {name}[/bold cyan]\n[cyan]{value}[/cyan]"
+            )
     else:
         print_info(
             "Secret Found",
@@ -419,19 +420,17 @@ def import_secrets(
         _maybe_backup_store(backup_to, None, backup_overwrite)
         imported = secrets_store.import_secrets_from_file(file, overwrite)
     except FileNotFoundError as e:
-        print_error(
+        error_exit(
             "Import Error",
             "File not found",
             details=str(e),
         )
-        raise typer.Exit(code=1) from e
     except ValueError as e:
-        print_error(
+        error_exit(
             "Import Error",
             "Invalid file format",
             details=str(e),
         )
-        raise typer.Exit(code=1) from e
 
     print_success(
         "Import Complete",

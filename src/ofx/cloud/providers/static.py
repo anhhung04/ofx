@@ -112,15 +112,7 @@ class StaticProvider(CloudProvider):
 
     async def _check_ssh_reachable(self, host: str, port: int = 22) -> bool:
         """Check if SSH port is open on host."""
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=5
-            )
-            writer.close()
-            await writer.wait_closed()
-            return True
-        except (TimeoutError, OSError):
-            return False
+        return await self._check_port_open(host, port, timeout=5)
 
     async def destroy_instance(self, instance_id: str) -> None:
         """No-op for static provider. Never destroy pre-existing instances."""

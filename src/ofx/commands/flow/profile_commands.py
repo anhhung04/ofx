@@ -91,7 +91,7 @@ def add_profile(
         typer.Option("--desc", "-d", help="Profile description"),
     ] = "",
     set_values: Annotated[
-        list[str],
+        list[str] | None,
         typer.Option(
             "--set",
             "-s",

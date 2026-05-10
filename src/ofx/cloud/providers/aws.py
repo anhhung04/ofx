@@ -115,15 +115,7 @@ class AWSProvider(CloudProvider):
                 "</powershell>"
             )
         elif config.os == "linux" and config.ssh_password and not config.ssh_key:
-            user_data = (
-                "#!/bin/bash\n"
-                f'echo "root:{config.ssh_password}" | chpasswd\n'
-                'sed -i "s/.*PasswordAuthentication.*/PasswordAuthentication yes/" '
-                "/etc/ssh/sshd_config\n"
-                'sed -i "s/.*PermitRootLogin.*/PermitRootLogin yes/" '
-                "/etc/ssh/sshd_config\n"
-                "systemctl restart sshd\n"
-            )
+            user_data = self._linux_password_userdata(config.ssh_password)
 
         if user_data:
             run_kwargs["UserData"] = user_data
@@ -184,15 +176,8 @@ class AWSProvider(CloudProvider):
     async def _check_connectivity(self, host: str, port: int = 22) -> bool:
         """Check if SSH (22) or WinRM (5985) port is open."""
         for p in [port, 5985]:
-            try:
-                _, writer = await asyncio.wait_for(
-                    asyncio.open_connection(host, p), timeout=5
-                )
-                writer.close()
-                await writer.wait_closed()
+            if await self._check_port_open(host, p, timeout=5):
                 return True
-            except (TimeoutError, OSError):
-                continue
         return False
 
     async def destroy_instance(self, instance_id: str) -> None:
