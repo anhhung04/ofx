@@ -69,8 +69,15 @@ class DigitalOceanProvider(CloudProvider):
         ssh_keys = []
         if config.ssh_key:
             keys_resp = self._client.ssh_keys.list()
-            for key in keys_resp.get("ssh_keys", []):
-                ssh_keys.append(key["id"])
+            available_keys = keys_resp.get("ssh_keys", [])
+            for key in available_keys:
+                if key.get("name") == config.ssh_key or key.get("fingerprint") == config.ssh_key:
+                    ssh_keys.append(key["id"])
+            if not ssh_keys:
+                raise RuntimeError(
+                    f"SSH key '{config.ssh_key}' not found in DigitalOcean account. "
+                    f"Available keys: {[k.get('name') for k in available_keys]}"
+                )
 
         droplet_name = f"ofx-{config.region}-{int(datetime.now().timestamp())}-{secrets.token_hex(3)}"
         tags = list(config.tags) if config.tags else []
@@ -100,7 +107,13 @@ class DigitalOceanProvider(CloudProvider):
 
         resp = await asyncio.to_thread(self._client.droplets.create, body=body)
         droplet = resp.get("droplet", {})
-        droplet_id = str(droplet.get("id", ""))
+        droplet_id = droplet.get("id")
+        if not droplet_id:
+            raise RuntimeError(
+                f"DigitalOcean droplet creation failed: no droplet ID in response. "
+                f"Response: {resp}"
+            )
+        droplet_id = str(droplet_id)
 
         return CloudInstanceInfo(
             instance_id=droplet_id,
@@ -128,6 +141,11 @@ class DigitalOceanProvider(CloudProvider):
         while asyncio.get_running_loop().time() < deadline:
             info = await self.get_instance(instance_id)
             last_info = info
+
+            if info.status == "errored":
+                raise RuntimeError(
+                    f"DigitalOcean droplet {instance_id} entered error state during provisioning"
+                )
 
             if info.is_ready and info.ip:
                 # Verify SSH is actually reachable

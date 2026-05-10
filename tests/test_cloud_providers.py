@@ -172,7 +172,7 @@ class TestAWSGetInstance:
         provider, ec2 = _make_aws_provider()
         ec2.describe_instances.return_value = {"Reservations": []}
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(RuntimeError, match="not found"):
             asyncio.run(provider.get_instance("i-nonexistent"))
 
     def test_get_instance_no_ip(self):
@@ -337,8 +337,8 @@ class TestDOCreateInstance:
         provider, client = _make_do_provider()
         client.ssh_keys.list.return_value = {
             "ssh_keys": [
-                {"id": 111, "fingerprint": "aa:bb:cc"},
-                {"id": 222, "fingerprint": "dd:ee:ff"},
+                {"id": 111, "name": "my-key", "fingerprint": "aa:bb:cc"},
+                {"id": 222, "name": "other-key", "fingerprint": "dd:ee:ff"},
             ]
         }
         client.droplets.create.return_value = {
@@ -348,12 +348,12 @@ class TestDOCreateInstance:
         config = _make_cloud_config(
             provider="digitalocean",
             image="ubuntu-22-04-x64",
-            ssh_key="~/.ssh/id_rsa",
+            ssh_key="my-key",
         )
         asyncio.run(provider.create_instance(config))
 
         body = client.droplets.create.call_args[1]["body"]
-        assert body["ssh_keys"] == [111, 222]
+        assert body["ssh_keys"] == [111]
 
     def test_create_with_password_auth(self):
         provider, client = _make_do_provider()

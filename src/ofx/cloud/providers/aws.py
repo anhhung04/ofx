@@ -146,11 +146,16 @@ class AWSProvider(CloudProvider):
         Uses EC2 waiter then polls for SSH/WinRM reachability.
         """
         waiter = self._ec2.get_waiter("instance_running")
-        await asyncio.to_thread(
-            waiter.wait,
-            InstanceIds=[instance_id],
-            WaiterConfig={"Delay": 10, "MaxAttempts": timeout // 10},
-        )
+        try:
+            await asyncio.to_thread(
+                waiter.wait,
+                InstanceIds=[instance_id],
+                WaiterConfig={"Delay": 10, "MaxAttempts": timeout // 10},
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Instance {instance_id} failed to reach running state: {e}"
+            ) from e
 
         # Get instance info with IP
         info = await self.get_instance(instance_id)
@@ -193,15 +198,15 @@ class AWSProvider(CloudProvider):
             self._ec2.describe_instances, InstanceIds=[instance_id]
         )
         reservations = resp.get("Reservations", [])
-        if not reservations:
-            raise ValueError(f"EC2 instance {instance_id} not found")
+        if not reservations or not reservations[0].get("Instances"):
+            raise RuntimeError(f"Instance {instance_id} not found or has been terminated")
 
         instance = reservations[0]["Instances"][0]
         ip = instance.get("PublicIpAddress", "")
         name_tag = ""
         for tag in instance.get("Tags", []):
-            if tag["Key"] == "Name":
-                name_tag = tag["Value"]
+            if tag.get("Key", "") == "Name":
+                name_tag = tag.get("Value", "")
                 break
 
         return CloudInstanceInfo(
@@ -235,8 +240,8 @@ class AWSProvider(CloudProvider):
                 ip = instance.get("PublicIpAddress", "")
                 name_tag = ""
                 for tag in instance.get("Tags", []):
-                    if tag["Key"] == "Name":
-                        name_tag = tag["Value"]
+                    if tag.get("Key", "") == "Name":
+                        name_tag = tag.get("Value", "")
                         break
 
                 instances.append(
