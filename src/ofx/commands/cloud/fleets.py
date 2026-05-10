@@ -1,6 +1,7 @@
 """Cloud fleet management commands."""
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Annotated
 
@@ -10,6 +11,8 @@ from rich.table import Table
 from ofx.commands.cloud.helpers import create_cloud_provider, run_cloud_sync
 from ofx.commands.ui_helpers import session_status_style
 from ofx.settings import get_console
+
+logger = logging.getLogger(__name__)
 
 fleet_app = typer.Typer(
     no_args_is_help=True, help="Manage cloud fleet (multiple instances)"
@@ -40,7 +43,8 @@ async def _refresh_sessions(mgr, sessions: list):
     for s in sessions:
         try:
             refreshed.append(await mgr.status(s.id))
-        except Exception:
+        except (RuntimeError, OSError, TimeoutError, ValueError):
+            logger.warning("Failed to refresh session %s, using cached state", s.id)
             refreshed.append(s)
     return refreshed
 
@@ -95,7 +99,7 @@ def fleet_create(
                 inst = await cloud.create_instance(cfg)
                 instances.append(inst)
                 console.print(f"  [dim]Created {inst.instance_id}[/dim]")
-            except Exception as e:
+            except (RuntimeError, ValueError, OSError, TimeoutError) as e:
                 console.print(f"  [red]Failed to create {iname}: {e}[/red]")
         return instances
 
@@ -115,7 +119,7 @@ def fleet_create(
                     console.print(
                         f"  [green]{refreshed.instance_id}[/green] → {refreshed.ip or 'no IP'}"
                     )
-            except Exception as e:
+            except (RuntimeError, TimeoutError, OSError) as e:
                 console.print(f"  [yellow]{inst.instance_id}: {e}[/yellow]")
 
     # Wait for all
@@ -271,7 +275,7 @@ def fleet_run(
                     f"  [green]#{i}[/green] session={session.id} "
                     f"ip={session.instance_ip or 'pending'}"
                 )
-            except Exception as exc:
+            except (RuntimeError, OSError, TimeoutError, ValueError, FileNotFoundError) as exc:
                 console.print(f"  [red]#{i} failed: {exc}[/red]")
         return sessions
 
@@ -440,7 +444,8 @@ def fleet_results(
                     )
                 else:
                     fleet_proj = ""
-            except Exception:
+            except (ValueError, OSError):
+                logger.warning("Could not resolve project path for '%s'", fleet_proj)
                 fleet_proj = ""
         if not fleet_proj:
             from ofx.settings import TEMP_DIR, ensure_dir
@@ -457,7 +462,7 @@ def fleet_results(
                 await mgr.fetch(s.id, output_dir=dest)
                 fetched += 1
                 console.print(f"  [green]#{idx_label}[/green] → {dest}")
-            except Exception as exc:
+            except (RuntimeError, OSError, TimeoutError) as exc:
                 console.print(f"  [red]#{idx_label} fetch failed: {exc}[/red]")
         return fetched
 
@@ -512,7 +517,7 @@ def fleet_cancel(
             try:
                 await mgr.cancel(s.id)
                 canceled += 1
-            except Exception as exc:
+            except (RuntimeError, OSError) as exc:
                 console.print(f"  [red]{s.id} cancel failed: {exc}[/red]")
         return canceled
 
@@ -570,7 +575,7 @@ def fleet_destroy(
             try:
                 await cloud.destroy_instance(inst.instance_id)
                 count += 1
-            except Exception as e:
+            except (RuntimeError, OSError, TimeoutError) as e:
                 console.print(f"  [red]Failed to destroy {inst.instance_id}: {e}[/red]")
         return count
 

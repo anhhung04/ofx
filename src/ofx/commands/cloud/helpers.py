@@ -36,7 +36,7 @@ def create_cloud_provider(
 
     try:
         cloud = CloudProviderRegistry.create(provider_name)
-    except Exception as exc:
+    except (ValueError, ImportError, RuntimeError) as exc:
         error_exit(
             "Cloud provider error",
             f"Failed to initialize provider '{provider_name}'.",
@@ -49,7 +49,7 @@ def run_cloud_sync[T](operation: str, fn: Callable[[], T]) -> T:
     """Run a sync cloud operation with consistent CLI error handling."""
     try:
         return fn()
-    except Exception as exc:
+    except (RuntimeError, OSError, TimeoutError, ValueError) as exc:
         error_exit(
             f"{operation} failed",
             f"Failed to {operation.lower()}.",

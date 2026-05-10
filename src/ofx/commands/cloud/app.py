@@ -60,7 +60,7 @@ def cloud_test(
             console.print(
                 f"[green]Connection successful: {host}:{port} ({connection})[/green]"
             )
-        except Exception as e:
+        except (TimeoutError, OSError) as e:
             console.print(f"[red]Connection failed: {e}[/red]")
             raise typer.Exit(code=1) from e
 
