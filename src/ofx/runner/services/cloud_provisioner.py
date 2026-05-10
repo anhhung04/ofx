@@ -11,6 +11,7 @@ from typing import Any
 
 from ofx.cloud.base import CloudProvider
 from ofx.models.cloud import CloudConfig
+from ofx.utils.tempfiles import remote_work_dir
 
 
 class CloudProvisioner:
@@ -70,10 +71,9 @@ class CloudProvisioner:
         await wait_for_login(host=instance.ip, cfg=cfg, timeout=cfg.login_timeout)
 
         remote_runner = self._create_remote_runner(cfg, instance.ip)
-        work_dir = (
-            f"/tmp/.run-{instance.instance_id[:8]}"
-            if not is_windows
-            else f"C:\\Windows\\Temp\\.run-{instance.instance_id[:8]}"
+        work_dir = remote_work_dir(
+            instance.instance_id,
+            is_windows=is_windows,
         )
         return provider, instance, remote_runner, work_dir
 

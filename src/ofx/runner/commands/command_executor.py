@@ -8,7 +8,6 @@ import logging
 import os
 import signal
 import sys
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,7 +70,7 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
 class CommandExecutor:
     """Handles subprocess execution for CommandRunner."""
 
-    def __init__(self, command: Command, envs: dict[str, Any]):
+    def __init__(self, command: Command, envs: dict[str, Any]) -> None:
         self._command = command
         self._envs = envs
         self._outputs_file: Path | None = None
@@ -104,9 +103,9 @@ class CommandExecutor:
             if existing:
                 self._outputs_file = Path(existing)
             else:
-                fd, tmp_path = tempfile.mkstemp(prefix=".tmp_out_", suffix=".txt")
-                os.close(fd)
-                self._outputs_file = Path(tmp_path)
+                from ofx.utils.tempfiles import make_temp_file
+
+                self._outputs_file = make_temp_file(prefix=".tmp_out_")
                 self._envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
 
     async def execute_streaming(

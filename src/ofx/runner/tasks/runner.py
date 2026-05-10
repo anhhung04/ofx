@@ -65,7 +65,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         ctx: RunContext,
         parent: BaseRunner | None = None,
         logger: logging.Logger | None = None,
-    ):
+    ) -> None:
         super().__init__(model, ctx, parent, None, logger=logger)
         self._task: Task | None = None
         self._output_file: Path | None = None

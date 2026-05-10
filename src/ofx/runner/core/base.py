@@ -28,7 +28,7 @@ TModel = TypeVar("TModel", bound=BaseModel)
 class RunnerStateMachine:
     """Finite State Machine for managing runner execution states"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._current_state = RunnerStatus.IDLE
         self._transitions = {
             RunnerStatus.IDLE: [
@@ -102,7 +102,7 @@ class BaseRunner[TModel: BaseModel]:
         parent: BaseRunner | None = None,
         registry: RegistryAdapter | None = None,
         logger: logging.Logger | None = None,
-    ):
+    ) -> None:
         assert model is not None, "Model cannot be None"
         self.run_id = str(uuid.uuid4())
         self.name = f"[RUNNER][{self.run_id}]"
@@ -176,6 +176,15 @@ class BaseRunner[TModel: BaseModel]:
                     await self._on_failure_cleanup()
                 except Exception as cleanup_exc:
                     self._log_debug(f"Cleanup after failure failed: {cleanup_exc}")
+            else:
+                # _pre_run failed partway through — give subclasses a
+                # chance to release resources allocated before the error.
+                try:
+                    await self._on_failure_cleanup()
+                except Exception as cleanup_exc:
+                    self._log_debug(
+                        f"Cleanup after pre_run failure failed: {cleanup_exc}"
+                    )
         finally:
             self._mark_finish()
             self._emit_event(

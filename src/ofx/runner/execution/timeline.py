@@ -103,11 +103,10 @@ def _source_host() -> str:
     if not ip:
         # Fall back to local route source address
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(1)
-            s.connect(("1.1.1.1", 80))
-            ip = s.getsockname()[0]
-            s.close()
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.settimeout(1)
+                s.connect(("1.1.1.1", 80))
+                ip = s.getsockname()[0]
         except Exception:
             logger.debug("Local IP detection via socket failed", exc_info=True)
             ip = ""

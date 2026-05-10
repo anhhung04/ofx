@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import shlex
 import sys
-import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import TYPE_CHECKING, Any
 
@@ -22,6 +20,7 @@ from ofx.runner.core import (
 from ofx.runner.execution.cloud_step import CloudStepRunner
 from ofx.runner.execution.error_helpers import job_step_failed
 from ofx.runner.execution.job_mixin import JobRunnerMixin
+from ofx.utils.tempfiles import remote_work_dir
 
 if TYPE_CHECKING:
     from ofx.cloud.base import CloudProvider
@@ -223,7 +222,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
 
         # Setup working directory on remote
         if not is_windows:
-            self._work_dir = f"/tmp/.run-{self.run_id[:8]}"
+            self._work_dir = remote_work_dir(self.run_id)
             try:
                 await asyncio.to_thread(
                     self._remote_runner.run, f"mkdir -p {shlex.quote(self._work_dir)}"
@@ -232,7 +231,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                 self._log_warning(f"Work dir creation failed, using /tmp: {e}")
                 self._work_dir = "/tmp"
         else:
-            self._work_dir = f"C:\\Windows\\Temp\\.run-{self.run_id[:8]}"
+            self._work_dir = remote_work_dir(self.run_id, is_windows=True)
             try:
                 await asyncio.to_thread(
                     self._remote_runner.run, f'mkdir "{self._work_dir}" 2>nul'
@@ -264,9 +263,9 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                 log_dir.mkdir(parents=True, exist_ok=True)
                 log_path = log_dir / f"{self.model.jid}_{ip}.log"
             else:
-                fd, tmp = tempfile.mkstemp(prefix=".tmp_rcmd_", suffix=".log")
-                os.close(fd)
-                log_path = Path(tmp)
+                from ofx.utils.tempfiles import make_temp_file
+
+                log_path = make_temp_file(prefix=".tmp_rcmd_", suffix=".log")
             self._log_info(
                 f"Command logging enabled. Logs will be saved to: {log_path}"
             )

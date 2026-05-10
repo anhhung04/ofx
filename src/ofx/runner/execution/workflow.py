@@ -156,6 +156,15 @@ class WorkflowRunner(BaseRunner[Workflow]):
             except Exception as e:
                 logger.debug("Failed to clean up run dir %s: %s", run_dir, e)
 
+    async def _on_failure_cleanup(self) -> None:
+        """Clean up temp directory on failure."""
+        run_dir = getattr(self, "_run_dir", None)
+        if run_dir and run_dir.exists():
+            try:
+                shutil.rmtree(run_dir)
+            except Exception as e:
+                logger.debug("Failed to clean up run dir %s on failure: %s", run_dir, e)
+
     async def _run_workflow(self) -> None:
         execution = WorkflowExecutionManager(self)
         result = await execution.run(self._schedule, self._staged_jobs)

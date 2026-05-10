@@ -38,6 +38,15 @@ if TYPE_CHECKING:
 # network latency when executing commands on a remote host.
 _NETWORK_GRACE_SECONDS = 30
 
+_PYTHON_PROBE_CANDIDATES: tuple[str, ...] = (
+    "python3",
+    "python",
+    "/usr/bin/python3",
+    "/usr/local/bin/python3",
+    "/usr/bin/python",
+    "/usr/local/bin/python",
+)
+
 
 class CloudStepRunner(StepRunnerMixin, BaseRunner):
     """Runs a step remotely via PostSSH or PostWinRM.
@@ -297,15 +306,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         if parent_job is not None and parent_job._cached_python:
             return parent_job._cached_python
 
-        candidates = [
-            "python3",
-            "python",
-            "/usr/bin/python3",
-            "/usr/local/bin/python3",
-            "/usr/bin/python",
-            "/usr/local/bin/python",
-        ]
-        for candidate in candidates:
+        for candidate in _PYTHON_PROBE_CANDIDATES:
             try:
                 output = await asyncio.to_thread(
                     self._remote.run,
@@ -323,7 +324,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
 
         raise RuntimeError(
             "No python3 or python executable found on the remote host. "
-            "Checked: " + ", ".join(candidates)
+            "Checked: " + ", ".join(_PYTHON_PROBE_CANDIDATES)
         )
 
     async def _run_remote_script(self, script: str, timeout: int | None = None) -> str:
