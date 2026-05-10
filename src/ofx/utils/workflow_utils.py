@@ -114,6 +114,20 @@ def _find_workflow_cached(
     return workflow
 
 
+def list_available_workflows(search_dirs: tuple[str | Path, ...]) -> list[str]:
+    """List all available workflow names from search directories."""
+    workflows: list[str] = []
+    for d in search_dirs:
+        d = Path(d)
+        if not d.is_dir():
+            continue
+        for f in d.rglob("*.yml"):
+            workflows.append(f.stem)
+        for f in d.rglob("*.yaml"):
+            workflows.append(f.stem)
+    return sorted(set(workflows))
+
+
 def find_all_workflows(search_dirs: list[Path]) -> list[Path]:
     """Find all workflow files in the specified directories.
 

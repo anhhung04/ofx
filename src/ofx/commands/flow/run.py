@@ -22,6 +22,24 @@ from ofx.settings import (
 logger = logging.getLogger(f"{settings.app_branding}.console")
 
 
+def _levenshtein_distance(s1: str, s2: str) -> int:
+    """Compute the Levenshtein edit distance between two strings."""
+    if len(s1) < len(s2):
+        return _levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    prev_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = prev_row[j + 1] + 1
+            deletions = curr_row[j] + 1
+            substitutions = prev_row[j] + (c1 != c2)
+            curr_row.append(min(insertions, deletions, substitutions))
+        prev_row = curr_row
+    return prev_row[-1]
+
+
 class JsonFormatter(logging.Formatter):
     """Simple JSON formatter for cron-friendly logs."""
 
@@ -364,7 +382,9 @@ class FlowRunHandler:
         try:
             wf = find_workflow(self.workflow_name, tuple(get_workflow_search_dirs()))
         except Exception:
-            return  # Validation runs best-effort; workflow resolution errors handled later
+            # Try to suggest similar workflow names
+            self._suggest_similar_workflows()
+            return
 
         if not wf.dispatch or not wf.dispatch.inputs:
             return
@@ -399,9 +419,47 @@ class FlowRunHandler:
                 elif declared_type == "boolean":
                     self.input[name] = value.lower() in ("true", "1", "yes")
 
+        # Warn about inputs that don't match any declared dispatch input
+        declared_names = set(wf.dispatch.inputs.keys())
+        unknown = set(self.input.keys()) - declared_names
+        if unknown:
+            logger.warning(
+                "Unknown input(s) will be ignored: %s. "
+                "Declared inputs: %s",
+                ", ".join(sorted(unknown)),
+                ", ".join(sorted(declared_names)),
+            )
+
         if errors:
             msg = "Input validation failed:\n  " + "\n  ".join(errors)
             raise typer.BadParameter(msg)
+
+    def _suggest_similar_workflows(self) -> None:
+        """Log suggestions for similarly-named workflows when resolution fails."""
+        from ofx.utils.workflow_utils import list_available_workflows
+
+        try:
+            available = list_available_workflows(tuple(get_workflow_search_dirs()))
+        except Exception:
+            return
+        if not available:
+            return
+
+        name = self.workflow_name.lower()
+        # Simple substring + edit distance matching
+        matches = []
+        for wf_name in available:
+            wf_lower = wf_name.lower()
+            if name in wf_lower or wf_lower in name:
+                matches.append(wf_name)
+            elif _levenshtein_distance(name, wf_lower) <= 3:
+                matches.append(wf_name)
+
+        if matches:
+            suggestions = ", ".join(matches[:5])
+            logger.warning(
+                f"Workflow '{self.workflow_name}' not found. Did you mean: {suggestions}?"
+            )
 
     @staticmethod
     def _read_target_file(filepath: Path) -> list[str]:
