@@ -203,7 +203,11 @@ class CollectionManager:
             raise RuntimeError(f"Failed to clone '{source}': {exc}") from exc
 
         # Validate cloned directory structure
-        self._validate_collection_dir(target)
+        try:
+            self._validate_collection_dir(target)
+        except Exception:
+            shutil.rmtree(target, ignore_errors=True)
+            raise
 
         self._installing.add(inferred_name)
         try:
@@ -222,6 +226,11 @@ class CollectionManager:
                 self._install_dependencies(target)
 
             return entry
+        except Exception:
+            # Roll back: remove the cloned directory and registry entry
+            self._installed.pop(inferred_name, None)
+            shutil.rmtree(target, ignore_errors=True)
+            raise
         finally:
             self._installing.discard(inferred_name)
 

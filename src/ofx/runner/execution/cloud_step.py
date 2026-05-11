@@ -177,7 +177,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                     )
 
                 # Store output
-                if output:
+                if output is not None:
                     outputs_dict: dict[str, Any] = {"stdout": output}
                     if run_type == RunType.TASK and self.model.task:
                         outputs_dict["typed_outputs"] = self._parse_task_output(output)

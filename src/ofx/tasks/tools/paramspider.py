@@ -13,7 +13,7 @@ class ParamspiderTask(Task):
     cmd = "paramspider"
     description = "URL parameter mining from web archives"
     category = "url/recon/params"
-    install_cmd = "uv tool install paramspider"
+    install_cmd = "uv tool install git+https://github.com/devanshbatham/paramspider"
     output_types = [Url]
 
     opts = {
@@ -36,6 +36,9 @@ class ParamspiderTask(Task):
         line = line.strip()
         if not line or line.startswith("["):
             return []
-        if "://" in line or line.startswith("/"):
+        # Skip ASCII art banner lines (contain backslashes, underscores, pipes)
+        if any(ch in line for ch in ("\\", "|", "_")):
+            return []
+        if "://" in line or (line.startswith("/") and "=" in line):
             return [Url(url=line)]
         return []

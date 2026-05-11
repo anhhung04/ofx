@@ -68,6 +68,7 @@ jobs:
       - task: gogo
         log-command: true
         name: gogo-scan
+        continue-on-error: true
         with:
           target: "{{ inputs.target }}"
           ports: "{{ inputs.ports }}"
