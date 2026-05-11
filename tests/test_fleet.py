@@ -123,6 +123,11 @@ class TestFleetInputParserRanges:
         targets = FleetInputParser().parse("10.0.0.3-3")
         assert targets == ["10.0.0.3"]
 
+    def test_short_range_invalid_octet_skipped(self):
+        """Short range with octets >255 should produce no results."""
+        targets = FleetInputParser().parse("10.0.0.250-300")
+        assert targets == []
+
 
 # ── FleetInputParser: file reading ──────────────────────────────────────
 

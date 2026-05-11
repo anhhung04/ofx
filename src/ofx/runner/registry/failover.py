@@ -104,26 +104,25 @@ class FailoverRegistryAdapter(RegistryAdapter):
 
             target = self._fallback if self._use_fallback else self._primary
 
-        method = getattr(target, method_name)
-        try:
-            return await method(*args, **kwargs)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            if self._use_fallback:
+            method = getattr(target, method_name)
+            try:
+                return await method(*args, **kwargs)
+            except asyncio.CancelledError:
                 raise
-            logger.warning(
-                "Registry backend error (%s), switching to in-memory fallback. "
-                "⚠ Job state will NOT persist across restarts. Error: %s",
-                type(exc).__name__,
-                exc,
-            )
-            async with self._lock:
+            except Exception as exc:
+                if self._use_fallback:
+                    raise
+                logger.warning(
+                    "Registry backend error (%s), switching to in-memory fallback. "
+                    "⚠ Job state will NOT persist across restarts. Error: %s",
+                    type(exc).__name__,
+                    exc,
+                )
                 self._use_fallback = True
                 self._consecutive_failures = 1
                 self._last_primary_attempt = time.monotonic()
-            method = getattr(self._fallback, method_name)
-            return await method(*args, **kwargs)
+                method = getattr(self._fallback, method_name)
+                return await method(*args, **kwargs)
 
     async def _set(self, key: str, value: Any) -> None:
         await self._call("set", key, value)

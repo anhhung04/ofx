@@ -247,3 +247,47 @@ class TestFailoverCleanup:
         adapter = FailoverRegistryAdapter(BrokenRegistry(), MemoryJobRegistry())
         # Should not raise even if primary.close() fails
         await adapter.close()
+
+
+# ── Concurrency ──────────────────────────────────────────────────────────
+
+
+class TestFailoverConcurrency:
+    """Concurrent operations don't cause split-brain state."""
+
+    async def test_concurrent_writes_after_failover(self):
+        """Multiple concurrent writes all go to fallback after switch."""
+        primary = BrokenRegistry()
+        fallback = MemoryJobRegistry()
+        adapter = FailoverRegistryAdapter(primary, fallback)
+
+        # Trigger failover
+        await adapter.set("init", "v")
+
+        async def writer(i: int):
+            await adapter.set(f"key_{i}", {"value": i})
+
+        await asyncio.gather(*[writer(i) for i in range(20)])
+
+        # All data should be in fallback
+        for i in range(20):
+            result = await adapter.get(f"key_{i}")
+            assert result == {"value": i}
+
+    async def test_concurrent_reads_consistent(self):
+        """Concurrent reads all return consistent data."""
+        adapter = FailoverRegistryAdapter(MemoryJobRegistry())
+        await adapter.set("k", {"status": "ok"})
+
+        results = await asyncio.gather(*[adapter.get("k") for _ in range(30)])
+        for r in results:
+            assert r == {"status": "ok"}
+
+    async def test_health_reflects_state(self):
+        primary = BrokenRegistry()
+        adapter = FailoverRegistryAdapter(primary)
+
+        assert adapter.health["using_fallback"] is False
+        await adapter.set("k", "v")  # triggers failover
+        assert adapter.health["using_fallback"] is True
+        assert adapter.health["consecutive_failures"] == 1

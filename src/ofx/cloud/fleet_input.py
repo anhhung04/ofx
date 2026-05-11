@@ -258,6 +258,13 @@ class FleetInputParser:
         if end < start:
             start, end = end, start
 
+        # Validate octet range
+        if start > 255 or end > 255:
+            logger.warning(
+                "IP range '%s' contains invalid octets (>255); skipping", range_str
+            )
+            return
+
         for i in range(start, end + 1):
             yield f"{prefix}.{i}"
 
