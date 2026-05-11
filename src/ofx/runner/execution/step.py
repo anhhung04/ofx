@@ -82,6 +82,8 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 resolve_fields.extend(["script_file"])
             case RunType.TASK:
                 resolve_fields.extend(["task", "run_with"])
+            case RunType.PIPE:
+                pass  # pipe.input is resolved separately in the handler
         await self._resolve_template_fields(resolve_fields)
 
         # Resolve timeout (may be a Jinja2 expression for dynamic scaling)
@@ -439,6 +441,22 @@ def _create_task_runner(step_runner: StepRunner) -> BaseRunner:
     )
 
 
+def _create_pipe_runner(step_runner: StepRunner) -> BaseRunner:
+    """Build a PipeRunner from the step's pipe configuration."""
+    from ofx.runner.execution.pipe import PipeExecution, PipeRunner
+
+    assert step_runner.model.pipe is not None, (
+        "pipe cannot be None for PIPE run type"
+    )
+
+    model = PipeExecution(pipe=step_runner.model.pipe)
+    return PipeRunner(
+        model,
+        step_runner._child_context(),
+        parent=step_runner,
+    )
+
+
 StepHandlerFn = Callable[[StepRunner], BaseRunner]
 
 _STEP_HANDLERS: dict[RunType, StepHandlerFn] = {
@@ -447,4 +465,5 @@ _STEP_HANDLERS: dict[RunType, StepHandlerFn] = {
     RunType.COMMAND: _create_command_runner,
     RunType.SCRIPT_FILE: _create_script_file_runner,
     RunType.TASK: _create_task_runner,
+    RunType.PIPE: _create_pipe_runner,
 }

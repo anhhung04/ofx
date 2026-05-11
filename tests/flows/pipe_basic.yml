@@ -1,0 +1,38 @@
+name: pipe-basic
+jobs:
+  etl:
+    steps:
+      - name: produce_data
+        script: |
+          import json
+          data = [
+              {"host": "10.0.0.1", "port": 22, "state": "open", "service": "ssh"},
+              {"host": "10.0.0.1", "port": 80, "state": "open", "service": "http"},
+              {"host": "10.0.0.2", "port": 22, "state": "open", "service": "ssh"},
+              {"host": "10.0.0.2", "port": 443, "state": "open", "service": "https"},
+              {"host": "10.0.0.3", "port": 22, "state": "closed", "service": "ssh"},
+              {"host": "10.0.0.1", "port": 8080, "state": "open", "service": "http-alt"},
+          ]
+          add_outputs(scan_results=data)
+
+      - name: filter_http
+        pipe:
+          input: "{{ steps.produce_data.outputs.scan_results }}"
+          filter: "state == 'open' and service in ['http', 'https', 'http-alt']"
+          map:
+            url: "'http://' + host + ':' + str(port)"
+            host: host
+            port: port
+          sort: port
+          unique: host
+          format: json
+
+      - name: verify
+        script: |
+          import json
+          raw = """{{ steps.filter_http.outputs.data }}"""
+          items = json.loads(raw)
+          count = {{ steps.filter_http.outputs.count }}
+          assert count == 2, f"Expected 2 unique hosts, got {count}"
+          assert items[0]["port"] == 80, f"Expected port 80 first, got {items[0]['port']}"
+          print(f"pipe test passed: {count} items")

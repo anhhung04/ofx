@@ -242,6 +242,194 @@ def _type_filter_helpers() -> dict[str, Any]:
     }
 
 
+# ── ETL / pipe helpers ──────────────────────────────────────────────────
+def _etl_helpers() -> dict[str, Any]:
+    """Helpers for data transformation in templates.
+
+    These complement ``pipe:`` steps by enabling lightweight inline
+    transformations via Jinja2 filters and functions.
+    """
+
+    def _pluck(items: list, field: str) -> list:
+        """Extract a single field from each dict in a list."""
+        if not isinstance(items, list):
+            return []
+        return [
+            (i.get(field) if isinstance(i, dict) else getattr(i, field, None))
+            for i in items
+        ]
+
+    def _to_lines(items: list, field: str | None = None, sep: str = "\n") -> str:
+        """Join list items into a newline-separated string."""
+        if not isinstance(items, list):
+            return ""
+        parts: list[str] = []
+        for item in items:
+            if field and isinstance(item, dict):
+                parts.append(str(item.get(field, "")))
+            else:
+                parts.append(str(item))
+        return sep.join(parts)
+
+    def _to_csv(items: list, headers: bool = True) -> str:
+        """Convert a list of dicts to CSV."""
+        import csv as _csv
+        import io as _io
+
+        if not items or not isinstance(items, list):
+            return ""
+        buf = _io.StringIO()
+        if isinstance(items[0], dict):
+            fieldnames = list(items[0].keys())
+            writer = _csv.DictWriter(buf, fieldnames=fieldnames)
+            if headers:
+                writer.writeheader()
+            for item in items:
+                writer.writerow({k: str(v) for k, v in item.items()})
+        return buf.getvalue().rstrip("\r\n")
+
+    def _to_jsonl(items: list) -> str:
+        """Convert a list to JSONL (one JSON object per line)."""
+        if not isinstance(items, list):
+            return ""
+        return "\n".join(json.dumps(item, default=str) for item in items)
+
+    def _sort_by(items: list, field: str, reverse: bool = False) -> list:
+        """Sort a list of dicts by a field."""
+        if not isinstance(items, list):
+            return []
+        try:
+            return sorted(
+                items,
+                key=lambda x: (
+                    x.get(field)
+                    if isinstance(x, dict)
+                    else getattr(x, field, None)
+                )
+                or "",
+                reverse=reverse,
+            )
+        except TypeError:
+            return items
+
+    def _unique_by(items: list, field: str) -> list:
+        """Deduplicate a list of dicts by a field (first occurrence wins)."""
+        if not isinstance(items, list):
+            return []
+        seen: set = set()
+        result: list = []
+        for item in items:
+            key = item.get(field) if isinstance(item, dict) else getattr(item, field, None)
+            if key not in seen:
+                seen.add(key)
+                result.append(item)
+        return result
+
+    def _where(items: list, field: str, value: Any) -> list:
+        """Filter a list of dicts where field equals value."""
+        if not isinstance(items, list):
+            return []
+        return [
+            i
+            for i in items
+            if (i.get(field) if isinstance(i, dict) else getattr(i, field, None))
+            == value
+        ]
+
+    def _where_not(items: list, field: str, value: Any) -> list:
+        """Filter a list of dicts where field does NOT equal value."""
+        if not isinstance(items, list):
+            return []
+        return [
+            i
+            for i in items
+            if (i.get(field) if isinstance(i, dict) else getattr(i, field, None))
+            != value
+        ]
+
+    def _first(items: list, n: int = 1) -> list | Any:
+        """Return the first N items. If n=1, returns a single item."""
+        if not isinstance(items, list):
+            return [] if n > 1 else None
+        if n == 1:
+            return items[0] if items else None
+        return items[:n]
+
+    def _last(items: list, n: int = 1) -> list | Any:
+        """Return the last N items. If n=1, returns a single item."""
+        if not isinstance(items, list):
+            return [] if n > 1 else None
+        if n == 1:
+            return items[-1] if items else None
+        return items[-n:]
+
+    def _group_by(items: list, field: str) -> dict[str, list]:
+        """Group a list of dicts by a field value."""
+        if not isinstance(items, list):
+            return {}
+        groups: dict[str, list] = {}
+        for item in items:
+            key = str(
+                item.get(field) if isinstance(item, dict) else getattr(item, field, "")
+            )
+            groups.setdefault(key, []).append(item)
+        return groups
+
+    def _flatten(items: list, field: str | None = None) -> list:
+        """Flatten nested lists. If field given, flatten that field."""
+        if not isinstance(items, list):
+            return []
+        if field:
+            result: list = []
+            for item in items:
+                nested = (
+                    item.get(field)
+                    if isinstance(item, dict)
+                    else getattr(item, field, None)
+                )
+                if isinstance(nested, list):
+                    result.extend(nested)
+                else:
+                    result.append(item)
+            return result
+        # Flatten one level of nesting
+        result = []
+        for item in items:
+            if isinstance(item, list):
+                result.extend(item)
+            else:
+                result.append(item)
+        return result
+
+    def _count_by(items: list, field: str) -> dict[str, int]:
+        """Count occurrences of each unique value in a field."""
+        if not isinstance(items, list):
+            return {}
+        counts: dict[str, int] = {}
+        for item in items:
+            key = str(
+                item.get(field) if isinstance(item, dict) else getattr(item, field, "")
+            )
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    return {
+        "pluck": _pluck,
+        "to_lines": _to_lines,
+        "to_csv": _to_csv,
+        "to_jsonl": _to_jsonl,
+        "sort_by": _sort_by,
+        "unique_by": _unique_by,
+        "where": _where,
+        "where_not": _where_not,
+        "first": _first,
+        "last": _last,
+        "group_by": _group_by,
+        "flatten": _flatten,
+        "count_by": _count_by,
+    }
+
+
 # ── ASM integration ─────────────────────────────────────────────────────
 def _asm_helpers() -> dict[str, Any]:
     def _asm_resolve_scope(client: Any, scope_ref: str) -> str:
@@ -379,6 +567,7 @@ def build_all_helpers() -> dict[str, Any]:
     helpers.update(_json_helpers())
     helpers.update(_regex_helpers())
     helpers.update(_type_filter_helpers())
+    helpers.update(_etl_helpers())
     helpers.update(_asm_helpers())
     helpers["is_windows"] = IS_WINDOWS
     helpers["platform"] = "windows" if IS_WINDOWS else "unix"

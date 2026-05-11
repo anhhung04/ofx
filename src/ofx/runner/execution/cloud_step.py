@@ -157,6 +157,11 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                     raise RuntimeError(
                         "Reusable workflows ('uses') are not supported in cloud job mode"
                     )
+                elif run_type == RunType.PIPE:
+                    raise RuntimeError(
+                        "Pipe steps run locally — they are not supported in cloud job mode. "
+                        "Use a 'script:' step for remote data processing."
+                    )
                 elif run_type == RunType.TASK:
                     output = await asyncio.wait_for(
                         self._run_remote_task(timeout=timeout_seconds),

@@ -184,5 +184,7 @@ class StepRunnerMixin:
             command = f"script_file:{self.model.script_file or ''}"  # type: ignore[attr-defined]
         elif rt == RunType.WORKFLOW:
             command = f"uses:{self.model.uses or ''}"  # type: ignore[attr-defined]
+        elif rt == RunType.PIPE:
+            command = f"pipe:{self.model.name or 'inline'}"  # type: ignore[attr-defined]
 
         return {"command": command, "tool": tool, "target": target}

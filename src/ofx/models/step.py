@@ -1,5 +1,7 @@
 """Step model for workflow execution."""
 
+from __future__ import annotations
+
 from enum import Enum
 from pathlib import Path
 from typing import Any, Literal
@@ -18,6 +20,7 @@ class RunType(Enum):
     WORKFLOW = "workflow"
     SCRIPT_FILE = "script_file"
     TASK = "task"
+    PIPE = "pipe"
 
 
 class Step(OFXBaseModel):
@@ -98,6 +101,13 @@ class Step(OFXBaseModel):
         default=False,
         description="Enable interactive mode (stdin/stdout passthrough). Only works in single-job stages.",
     )
+    pipe: Any = Field(
+        default=None,
+        description=(
+            "Declarative ETL pipeline. Accepts a PipeConfig dict with "
+            "input, filter, map, sort, unique, format, etc."
+        ),
+    )
     store_creds: bool | None = Field(
         default=None,
         description=(
@@ -115,18 +125,19 @@ class Step(OFXBaseModel):
     def check_run_type(self):
         """Validate step configuration.
 
-        - Exactly one of 'run', 'script', 'uses', 'script_file', or 'task'.
+        - Exactly one of 'run', 'script', 'uses', 'script_file', 'task', or 'pipe'.
         - timeout must be positive (when numeric).
         - retry/retry_delay must be non-negative.
         """
         defined_fields = sum(
             1
-            for field in ["run", "script", "uses", "script_file", "task"]
+            for field in ["run", "script", "uses", "script_file", "task", "pipe"]
             if getattr(self, field) is not None
         )
         if defined_fields != 1:
             raise ValueError(
-                f"Step '{self.name}' must have exactly one of 'run', 'script', 'script_file', 'uses', or 'task' defined."
+                f"Step '{self.name}' must have exactly one of 'run', 'script', "
+                f"'script_file', 'uses', 'task', or 'pipe' defined."
             )
 
         if isinstance(self.timeout, int) and self.timeout <= 0:
@@ -141,6 +152,19 @@ class Step(OFXBaseModel):
             raise ValueError(
                 f"Step '{self.name}' retry_delay must be non-negative, got {self.retry_delay}"
             )
+
+        # Validate and coerce pipe config
+        if self.pipe is not None:
+            from ofx.models.pipe import PipeConfig
+
+            if isinstance(self.pipe, dict):
+                self.pipe = PipeConfig.model_validate(self.pipe)
+            elif not isinstance(self.pipe, PipeConfig):
+                raise ValueError(
+                    f"Step '{self.name}' pipe must be a dict or PipeConfig, "
+                    f"got {type(self.pipe).__name__}"
+                )
+
         return self
 
     def get_run_type(self) -> RunType:
@@ -152,10 +176,13 @@ class Step(OFXBaseModel):
             return RunType.SCRIPT_FILE
         elif self.task:
             return RunType.TASK
+        elif self.pipe is not None:
+            return RunType.PIPE
         elif self.run:
             return RunType.COMMAND
         raise ValueError(
-            f"Step '{self.name}' must have one of 'run', 'script', 'script_file', 'uses', or 'task' defined."
+            f"Step '{self.name}' must have one of 'run', 'script', 'script_file', "
+            f"'uses', 'task', or 'pipe' defined."
         )
 
     def __str__(self):

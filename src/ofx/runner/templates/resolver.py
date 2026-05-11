@@ -43,6 +43,23 @@ def _build_jinja_env():
     return env
 
 
+def _ensure_filters_registered(env: Environment) -> None:
+    """Lazily register ETL and type-filter helpers as Jinja2 filters.
+
+    Called once before the first template render so ``{{ items | ports }}``
+    and ``{{ items | pluck("host") | to_lines }}`` work.
+    """
+    if getattr(env, "_ofx_filters_registered", False):
+        return
+    from ofx.runner.templates.helpers import _etl_helpers, _type_filter_helpers
+
+    for name, fn in _type_filter_helpers().items():
+        env.filters[name] = fn
+    for name, fn in _etl_helpers().items():
+        env.filters[name] = fn
+    env._ofx_filters_registered = True  # type: ignore[attr-defined]
+
+
 _jinja_env = _build_jinja_env()
 
 
@@ -165,6 +182,8 @@ class TemplateResolver:
         resolve_stack.append(value_str)
 
         support_funcs = await self._build_support_functions(context_vars, memo)
+
+        _ensure_filters_registered(_jinja_env)
 
         if value_str in self._template_cache:
             self._template_cache.move_to_end(value_str)
