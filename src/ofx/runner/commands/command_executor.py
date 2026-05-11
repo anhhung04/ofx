@@ -132,16 +132,21 @@ class CommandExecutor:
 
         stdout_lines: list[str] = []
         stderr_bytes = b""
+        stdout_bytes_total = 0
 
         async def _read_stdout():
+            nonlocal stdout_bytes_total
             assert proc.stdout is not None
+            max_size = settings.max_output_size
             async for raw_line in proc.stdout:
                 try:
                     line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
                 except Exception as e:
                     logger.debug("Failed to decode stdout line as UTF-8, using hex: %s", e)
                     line = raw_line.hex()
-                stdout_lines.append(line)
+                stdout_bytes_total += len(raw_line)
+                if stdout_bytes_total <= max_size:
+                    stdout_lines.append(line)
                 if on_line:
                     try:
                         on_line(line)
@@ -171,8 +176,8 @@ class CommandExecutor:
         max_size = settings.max_output_size
         outputs: dict[str, Any] = {}
 
-        if len(stdout_str.encode("utf-8", errors="ignore")) > max_size:
-            stdout_str = stdout_str[:max_size] + "\n... [OUTPUT TRUNCATED]"
+        if stdout_bytes_total > max_size:
+            stdout_str += "\n... [OUTPUT TRUNCATED]"
             outputs["output_truncated"] = True
 
         try:

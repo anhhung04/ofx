@@ -30,22 +30,34 @@ _logger = logging.getLogger("ofx.templates")
 def _file_helpers() -> dict[str, Any]:
     def _read_file(path: str) -> str:
         p = Path(path)
-        return p.read_text() if p.exists() else ""
+        if not p.exists() or not p.is_file():
+            return ""
+        try:
+            return p.read_text(encoding="utf-8", errors="replace")
+        except Exception as e:
+            _logger.debug("file_read(%s) failed: %s", path, e)
+            return ""
 
     def _write_file(path: str, content: str) -> None:
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
+        p.write_text(content, encoding="utf-8")
 
     def _append_file(path: str, content: str) -> None:
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a") as f:
+        with p.open("a", encoding="utf-8") as f:
             f.write(content)
 
     def _file_lines(path: str) -> list[str]:
         p = Path(path)
-        return p.read_text().splitlines() if p.exists() else []
+        if not p.exists() or not p.is_file():
+            return []
+        try:
+            return p.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception as e:
+            _logger.debug("file_lines(%s) failed: %s", path, e)
+            return []
 
     return {
         "file_read": _read_file,
@@ -298,17 +310,20 @@ def _etl_helpers() -> dict[str, Any]:
         """Sort a list of dicts by a field."""
         if not isinstance(items, list):
             return []
+
+        def _key(x):
+            v = x.get(field) if isinstance(x, dict) else getattr(x, field, None)
+            if v is None:
+                return (0, 0, "")
+            if isinstance(v, (int, float)):
+                return (0, v, "")
+            try:
+                return (0, float(v), "")
+            except (ValueError, TypeError):
+                return (1, 0, str(v))
+
         try:
-            return sorted(
-                items,
-                key=lambda x: (
-                    x.get(field)
-                    if isinstance(x, dict)
-                    else getattr(x, field, None)
-                )
-                or "",
-                reverse=reverse,
-            )
+            return sorted(items, key=_key, reverse=reverse)
         except TypeError:
             return items
 

@@ -290,8 +290,16 @@ def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
             vals: list[Any] = []
             for f in sort_fields:
                 v = item.get(f) if isinstance(item, dict) else getattr(item, f, None)
-                # Use empty string for None so sorting doesn't fail on mixed types
-                vals.append(("" if v is None else v,))
+                if v is None:
+                    vals.append((0, "", ""))
+                elif isinstance(v, (int, float)):
+                    vals.append((0, v, ""))
+                else:
+                    # Try numeric parse so "443" sorts numerically
+                    try:
+                        vals.append((0, float(v), ""))
+                    except (ValueError, TypeError):
+                        vals.append((1, 0, str(v)))
             return tuple(vals)
 
         try:
@@ -323,9 +331,8 @@ def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
         field = config.group_by
         groups: dict[str, list] = {}
         for item in items:
-            key_val = str(
-                item.get(field) if isinstance(item, dict) else getattr(item, field, "")
-            )
+            raw = item.get(field) if isinstance(item, dict) else getattr(item, field, None)
+            key_val = str(raw) if raw is not None else "__none__"
             groups.setdefault(key_val, []).append(item)
         # Apply offset/limit to each group? No — apply to the flat list first.
         # Return the grouped dict; offset/limit already applied above.
