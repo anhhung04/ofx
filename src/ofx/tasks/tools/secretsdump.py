@@ -75,7 +75,7 @@ class SecretsdumpTask(Task):
         parts: list[str] = [self.cmd]
 
         if hashes:
-            parts.extend(["-hashes", hashes])
+            parts.extend(["-hashes", self._q(hashes)])
         if kwargs.pop("just_dc", False):
             parts.append("-just-dc")
         if kwargs.pop("just_dc_ntlm", False):
@@ -83,19 +83,9 @@ class SecretsdumpTask(Task):
 
         just_dc_user = kwargs.pop("just_dc_user", "")
         if just_dc_user:
-            parts.extend(["-just-dc-user", just_dc_user])
+            parts.extend(["-just-dc-user", self._q(just_dc_user)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["username", "password", "hash", "domain", "just_dc", "just_dc_ntlm", "just_dc_user"]))
 
         # Build credential string: domain/user:pass@target
         cred = ""
@@ -106,7 +96,7 @@ class SecretsdumpTask(Task):
             if password:
                 cred += f":{password}"
         cred += f"@{target}"
-        parts.append(cred)
+        parts.append(self._q(cred))
 
         return " ".join(parts), None
 

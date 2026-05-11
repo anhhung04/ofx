@@ -60,24 +60,14 @@ class AmassTask(Task):
         if self.silent_flag:
             parts.append(self.silent_flag)
 
-        for key, value in kwargs.items():
-            if key.startswith("_") or key == "active":
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["active"]))
 
         output_file: Path | None = None
         if self.output_flag:
             output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
-        parts.extend([self.input_flag, target])
+        parts.extend([self.input_flag, self._q(target)])
 
         return " ".join(parts), output_file
 

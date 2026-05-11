@@ -54,20 +54,10 @@ class HydraTask(Task):
         service = kwargs.pop("service", "ssh")
         parts: list[str] = [self.cmd]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None or key == "service":
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["service"]))
 
-        parts.append(target)
-        parts.append(service)
+        parts.append(self._q(target))
+        parts.append(self._q(service))
 
         return " ".join(parts), None
 

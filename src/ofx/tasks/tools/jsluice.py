@@ -47,10 +47,10 @@ class JsluiceTask(Task):
                 if value:
                     parts.append(opt.flag)
             elif value is not None:
-                parts.extend([opt.flag, str(value)])
+                parts.extend([opt.flag, self._q(value)])
 
         if target:
-            parts.append(target)
+            parts.append(self._q(target))
 
         return " ".join(parts), None
 

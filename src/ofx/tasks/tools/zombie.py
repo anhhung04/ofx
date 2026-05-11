@@ -105,31 +105,21 @@ class ZombieTask(Task):
 
         parts: list[str] = [self.cmd]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["gogo", "json_input"]))
 
         output_file = self._make_output_path()
         parts.extend(["-f", str(output_file), "-O", "json"])
 
         if gogo_file:
-            parts.extend(["-g", str(gogo_file)])
+            parts.extend(["-g", self._q(gogo_file)])
         elif json_input:
-            parts.extend(["-j", str(json_input)])
+            parts.extend(["-j", self._q(json_input)])
         elif target:
             target_is_file = not target.startswith("http") and Path(target).is_file()
             if target_is_file:
-                parts.extend([self.file_flag, target])
+                parts.extend([self.file_flag, self._q(target)])
             else:
-                parts.extend([self.input_flag, target])
+                parts.extend([self.input_flag, self._q(target)])
         else:
             raise ValueError("zombie requires a target, --gogo file, or --json file")
 

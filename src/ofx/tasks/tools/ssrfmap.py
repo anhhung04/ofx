@@ -49,23 +49,13 @@ class SSRFmapTask(Task):
         """Target can be a request file (-r) or a URL (-u)."""
         parts: list[str] = [self.cmd, *self.extra_flags]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         if target:
             if not target.startswith("http") and Path(target).is_file():
-                parts.extend(["-r", target])
+                parts.extend(["-r", self._q(target)])
             else:
-                parts.extend(["-u", target])
+                parts.extend(["-u", self._q(target)])
 
         return " ".join(parts), None
 

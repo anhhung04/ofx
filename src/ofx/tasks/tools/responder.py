@@ -47,19 +47,9 @@ class ResponderTask(Task):
 
         # Target is typically the interface
         interface = kwargs.pop("interface", target)
-        parts.extend(["-I", interface])
+        parts.extend(["-I", self._q(interface)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["interface"]))
 
         return " ".join(parts), None
 

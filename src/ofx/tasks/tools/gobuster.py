@@ -70,7 +70,7 @@ class GobusterTask(Task):
                 if value:
                     parts.append(opt.flag)
             elif value is not None:
-                parts.extend([opt.flag, str(value)])
+                parts.extend([opt.flag, self._q(value)])
                 if key == "status_codes":
                     has_status_codes = True
 
@@ -84,7 +84,7 @@ class GobusterTask(Task):
             output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
-        parts.extend(["-u", target])
+        parts.extend(["-u", self._q(target)])
 
         return " ".join(parts), output_file
 

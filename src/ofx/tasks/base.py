@@ -107,6 +107,35 @@ class Task(ABC):
 
     # ── Helpers ────────────────────────────────────────────────────
 
+    @staticmethod
+    def _q(value: Any) -> str:
+        """Shell-quote a single value for safe interpolation."""
+        return shlex.quote(str(value))
+
+    def _build_opt_parts(
+        self,
+        kwargs: dict[str, Any],
+        skip_keys: Sequence[str] = (),
+    ) -> list[str]:
+        """Build shell-safe CLI option parts from keyword arguments.
+
+        This is the canonical way for subclass ``build_command()`` overrides
+        to map ``kwargs`` → CLI flags with proper quoting.
+        """
+        parts: list[str] = []
+        for key, value in kwargs.items():
+            if key.startswith("_") or key in skip_keys:
+                continue
+            opt = self.opts.get(key)
+            if opt is None:
+                continue
+            if opt.is_flag:
+                if value:
+                    parts.append(opt.flag)
+            elif value is not None:
+                parts.extend([opt.flag, shlex.quote(str(value))])
+        return parts
+
     def _make_output_path(self) -> Path:
         """Reserve a unique temp path for tool output without pre-creating it.
 

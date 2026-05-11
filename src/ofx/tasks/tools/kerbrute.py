@@ -55,27 +55,17 @@ class KerbruteTask(Task):
         parts: list[str] = [self.cmd, mode]
 
         if dc:
-            parts.extend(["--dc", dc])
+            parts.extend(["--dc", self._q(dc)])
         if domain:
-            parts.extend(["-d", domain])
+            parts.extend(["-d", self._q(domain)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None or key in ("mode", "dc", "domain", "users"):
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode", "dc", "domain", "users"]))
 
         # Wordlist or target is positional
         if users:
-            parts.append(users)
+            parts.append(self._q(users))
         elif target:
-            parts.append(target)
+            parts.append(self._q(target))
 
         return " ".join(parts), None
 

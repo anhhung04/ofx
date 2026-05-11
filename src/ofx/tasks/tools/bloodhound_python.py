@@ -60,21 +60,11 @@ class BloodhoundPythonTask(Task):
         if "collection" not in kwargs:
             kwargs["collection"] = "All"
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         # Use target as domain if -d not specified
         if "-d" not in " ".join(parts) and target:
-            parts.extend(["-d", target])
+            parts.extend(["-d", self._q(target)])
 
         return " ".join(parts), None
 

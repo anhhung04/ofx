@@ -41,17 +41,7 @@ class WinpeasTask(Task):
         """Build: ``winPEASx64.exe [options]``. Target is ignored (runs locally)."""
         parts: list[str] = [self.cmd]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         return " ".join(parts), None
 

@@ -51,19 +51,9 @@ class HakrawlerTask(Task):
         if self.silent_flag:
             parts.append(self.silent_flag)
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
-        cmd_str = f"echo {target!r} | {' '.join(parts)}"
+        cmd_str = f"echo {self._q(target)} | {' '.join(parts)}"
         return cmd_str, None
 
     def parse_line(self, line: str) -> list[Url]:

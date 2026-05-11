@@ -55,20 +55,10 @@ class JohnTask(Task):
         """Build: ``john [options] hashfile``."""
         parts: list[str] = [self.cmd]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         # Hash file is positional
-        parts.append(target)
+        parts.append(self._q(target))
 
         return " ".join(parts), None
 

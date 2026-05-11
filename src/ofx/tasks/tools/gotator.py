@@ -69,12 +69,12 @@ class GotatorTask(Task):
                 if value:
                     parts.append(opt.flag)
             elif value is not None:
-                parts.extend([opt.flag, str(value)])
+                parts.extend([opt.flag, self._q(value)])
 
         if target and Path(target).is_file():
-            parts.extend(["-sub", target])
+            parts.extend(["-sub", self._q(target)])
         elif target:
-            parts.extend(["-sub", target])
+            parts.extend(["-sub", self._q(target)])
 
         output_file = self._make_output_path()
         return f"{' '.join(parts)} > {output_file}", output_file

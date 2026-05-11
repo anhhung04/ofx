@@ -60,22 +60,12 @@ class CoercerTask(Task):
         mode = kwargs.pop("mode", "scan")
         listener = kwargs.pop("listener", "")
 
-        parts: list[str] = [self.cmd, mode, "-t", target]
+        parts: list[str] = [self.cmd, mode, "-t", self._q(target)]
 
         if listener:
-            parts.extend(["-l", listener])
+            parts.extend(["-l", self._q(listener)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode", "listener"]))
 
         return " ".join(parts), None
 

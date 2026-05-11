@@ -55,17 +55,7 @@ class TheHarvesterTask(Task):
 
         parts: list[str] = [self.cmd, *base_flags]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         output_file: Path | None = None
         if self.output_flag:
@@ -73,9 +63,9 @@ class TheHarvesterTask(Task):
             parts.extend([self.output_flag, str(output_file)])
 
         if self.input_flag:
-            parts.extend([self.input_flag, target])
+            parts.extend([self.input_flag, self._q(target)])
         else:
-            parts.append(target)
+            parts.append(self._q(target))
 
         return " ".join(parts), output_file
 

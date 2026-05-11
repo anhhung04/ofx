@@ -48,21 +48,11 @@ class GetTGTTask(Task):
         parts: list[str] = [self.cmd]
 
         if hashes:
-            parts.extend(["-hashes", hashes])
+            parts.extend(["-hashes", self._q(hashes)])
         if aes_key:
-            parts.extend(["-aesKey", aes_key])
+            parts.extend(["-aesKey", self._q(aes_key)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["username", "password", "hash", "aesKey"]))
 
         # Build: domain/user:pass
         cred = target
@@ -70,7 +60,7 @@ class GetTGTTask(Task):
             cred += f"/{username}"
             if password:
                 cred += f":{password}"
-        parts.append(cred)
+        parts.append(self._q(cred))
 
         return " ".join(parts), None
 

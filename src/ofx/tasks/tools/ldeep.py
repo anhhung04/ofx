@@ -50,26 +50,16 @@ class LdeepTask(Task):
         parts: list[str] = [self.cmd, "ldap"]
 
         if username:
-            parts.extend(["-u", username])
+            parts.extend(["-u", self._q(username)])
         if password:
-            parts.extend(["-p", password])
+            parts.extend(["-p", self._q(password)])
         if domain:
-            parts.extend(["-d", domain])
-        parts.extend(["-s", server])
+            parts.extend(["-d", self._q(domain)])
+        parts.extend(["-s", self._q(server)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["action", "username", "password", "domain", "server"]))
 
-        parts.append(action)
+        parts.append(self._q(action))
 
         return " ".join(parts), None
 

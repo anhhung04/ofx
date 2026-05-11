@@ -71,9 +71,9 @@ class CariddiTask(Task):
                 if value:
                     parts.append(opt.flag)
             elif value is not None:
-                parts.extend([opt.flag, str(value)])
+                parts.extend([opt.flag, self._q(value)])
 
-        cmd = f'echo "{target}" | {self.cmd} {" ".join(parts)}'
+        cmd = f'echo {self._q(target)} | {self.cmd} {" ".join(parts)}'
 
         return cmd, None
 

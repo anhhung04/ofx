@@ -68,17 +68,7 @@ class GogoTask(Task):
 
         wf = kwargs.pop("workflow", None)
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["workflow"]))
 
         # Quiet mode + uncompressed jsonlines output
         parts.extend(["-q", "-C", "-O", "jsonlines"])
@@ -87,18 +77,18 @@ class GogoTask(Task):
         parts.extend([self.output_flag, str(output_file)])
 
         if wf:
-            parts.extend(["-w", str(wf)])
+            parts.extend(["-w", self._q(wf)])
             # Workflow already defines target, but -i overrides
             if target:
-                parts.extend([self.input_flag, target])
+                parts.extend([self.input_flag, self._q(target)])
         else:
             target_is_file = (
                 target and not target.startswith("http") and Path(target).is_file()
             )
             if target_is_file:
-                parts.extend([self.file_flag, target])
+                parts.extend([self.file_flag, self._q(target)])
             else:
-                parts.extend([self.input_flag, target])
+                parts.extend([self.input_flag, self._q(target)])
 
         return " ".join(parts), output_file
 

@@ -54,19 +54,9 @@ class PacuTask(Task):
 
         # Target is the module name
         if target and "module" not in kwargs:
-            parts.extend(["--module", target])
+            parts.extend(["--module", self._q(target)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         return " ".join(parts), None
 

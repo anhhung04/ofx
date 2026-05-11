@@ -75,19 +75,9 @@ class NetexecTask(Task):
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Build: ``nxc {protocol} {target} [options]``."""
         protocol = kwargs.pop("protocol", "smb")
-        parts: list[str] = [self.cmd, protocol, target]
+        parts: list[str] = [self.cmd, protocol, self._q(target)]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None or key == "protocol":
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["protocol"]))
 
         return " ".join(parts), None
 

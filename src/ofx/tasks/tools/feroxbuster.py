@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -117,7 +118,7 @@ class FeroxbusterTask(Task):
             self.file_flag = None
             cmd, output_file = super().build_command("", **kwargs)
             self.file_flag = saved
-            cmd = f"cat {file_path} | {cmd} --stdin"
+            cmd = f"cat {shlex.quote(file_path)} | {cmd} --stdin"
             return cmd, output_file
 
         return super().build_command(target, **kwargs)

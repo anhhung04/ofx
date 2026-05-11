@@ -49,21 +49,11 @@ class GowitnessTask(Task):
         file_input = kwargs.pop("_file", None)
 
         if file_input:
-            parts: list[str] = [self.cmd, "scan", "file", "-f", str(file_input)]
+            parts: list[str] = [self.cmd, "scan", "file", "-f", self._q(file_input)]
         else:
-            parts = [self.cmd, "scan", "single", "--url", target]
+            parts = [self.cmd, "scan", "single", "--url", self._q(target)]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         return " ".join(parts), None
 

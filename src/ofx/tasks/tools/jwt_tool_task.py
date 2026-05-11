@@ -48,19 +48,9 @@ class JwtToolTask(Task):
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Build: ``jwt_tool {token} -M {mode} [options]``."""
         mode = kwargs.pop("mode", "at")
-        parts: list[str] = [self.cmd, target, "-M", mode]
+        parts: list[str] = [self.cmd, self._q(target), "-M", self._q(mode)]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None or key == "mode":
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode"]))
 
         return " ".join(parts), None
 

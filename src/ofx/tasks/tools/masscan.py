@@ -64,7 +64,7 @@ class MasscanTask(Task):
                 if value:
                     parts.append(opt.flag)
             elif value is not None:
-                parts.extend([opt.flag, str(value)])
+                parts.extend([opt.flag, self._q(value)])
 
         output_file: Path | None = None
         if self.output_flag:
@@ -77,7 +77,7 @@ class MasscanTask(Task):
 
         # masscan only accepts IPs/CIDRs — resolve hostnames automatically
         resolved = self._resolve_to_ip(target)
-        parts.append(resolved)
+        parts.append(self._q(resolved))
 
         return " ".join(parts), output_file
 

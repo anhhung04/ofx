@@ -56,14 +56,7 @@ class PurednsTask(Task):
         if self.silent_flag:
             parts.append(self.silent_flag)
 
-        for key, val in kwargs.items():
-            opt = self.opts.get(key)
-            if opt and val is not None:
-                if opt.is_flag:
-                    if val:
-                        parts.append(opt.flag)
-                else:
-                    parts.extend([opt.flag, str(val)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         output_file: Path | None = None
         if self.output_flag:
@@ -71,7 +64,7 @@ class PurednsTask(Task):
             parts.extend([self.output_flag, str(output_file)])
 
         if target:
-            parts.append(target)
+            parts.append(self._q(target))
 
         return " ".join(parts), output_file
 

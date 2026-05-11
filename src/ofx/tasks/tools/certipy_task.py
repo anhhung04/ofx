@@ -67,27 +67,17 @@ class CertipyTask(Task):
         parts: list[str] = [self.cmd, mode]
 
         if username:
-            parts.extend(["-u", username])
+            parts.extend(["-u", self._q(username)])
         if password:
-            parts.extend(["-p", password])
+            parts.extend(["-p", self._q(password)])
         if hashes:
-            parts.extend(["-hashes", hashes])
+            parts.extend(["-hashes", self._q(hashes)])
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode", "username", "password", "hash"]))
 
         # If target looks like an IP for dc-ip, and dc_ip not already set
         if target and "-dc-ip" not in " ".join(parts):
-            parts.extend(["-dc-ip", target])
+            parts.extend(["-dc-ip", self._q(target)])
 
         return " ".join(parts), None
 

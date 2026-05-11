@@ -49,17 +49,7 @@ class PromptfooTask(Task):
         """``promptfoo redteam run`` with config or provider as target."""
         parts: list[str] = [self.cmd, *self.extra_flags]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs))
 
         # If target looks like a file path use -c, otherwise --providers
         if target:
@@ -68,9 +58,9 @@ class PromptfooTask(Task):
                 or Path(target).is_file()
             ):
                 if "config" not in kwargs:
-                    parts.extend(["-c", target])
+                    parts.extend(["-c", self._q(target)])
             elif "providers" not in kwargs:
-                parts.extend(["--providers", target])
+                parts.extend(["--providers", self._q(target)])
 
         return " ".join(parts), None
 

@@ -651,7 +651,7 @@ class TestLdapDomainDumpParser:
         cmd, _ = task.build_command("10.0.0.1", username="CORP\\admin", password="pass")
         assert "ldapdomaindump" in cmd
         assert "ldap://10.0.0.1" in cmd
-        assert "-u CORP\\admin" in cmd or "-u CORP\\\\admin" in cmd
+        assert "-u 'CORP\\admin'" in cmd or "-u CORP\\admin" in cmd
 
     def test_build_command_ldap_uri(self):
         task = TaskRegistry.create("ldapdomaindump")

@@ -93,24 +93,14 @@ class HashcatTask(Task):
 
         parts: list[str] = [self.cmd, "-m", str(hash_type), "-a", str(attack_mode)]
 
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, str(value)])
+        parts.extend(self._build_opt_parts(kwargs, skip_keys=["hash_type", "attack_mode", "wordlist"]))
 
         # Hash file (target)
-        parts.append(target)
+        parts.append(self._q(target))
 
         # Wordlist as positional argument
         if wordlist:
-            parts.append(wordlist)
+            parts.append(self._q(wordlist))
 
         return " ".join(parts), None
 
