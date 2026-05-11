@@ -169,3 +169,86 @@ class TestCachedRegistryCopySafety:
         all1["k"] = "mutated"
         all2 = await cache.get_all()
         assert all2["k"] != "mutated"
+
+
+# ── Write invalidation ──────────────────────────────────────────────────
+
+
+class TestCachedRegistryInvalidation:
+    async def test_set_invalidates_get_all_cache(self, backend):
+        cache = CachedRegistryAdapter(backend, ttl=10.0)
+        await cache.set("a", 1)
+        _ = await cache.get_all()  # populate _cache_all
+        await cache.set("b", 2)  # should invalidate _cache_all
+        all_data = await cache.get_all()
+        assert "b" in all_data
+
+    async def test_update_invalidates_get_all_cache(self, backend):
+        cache = CachedRegistryAdapter(backend, ttl=10.0)
+        await cache.set("k", {"a": 1})
+        _ = await cache.get_all()
+        await cache.update("k", {"a": 2})
+        all_data = await cache.get_all()
+        assert all_data["k"]["a"] == 2
+
+    async def test_delete_invalidates_get_all_cache(self, backend):
+        cache = CachedRegistryAdapter(backend, ttl=10.0)
+        await cache.set("a", 1)
+        await cache.set("b", 2)
+        _ = await cache.get_all()
+        await cache.delete("a")
+        all_data = await cache.get_all()
+        assert "a" not in all_data
+
+    async def test_clear_invalidates_all(self, backend):
+        cache = CachedRegistryAdapter(backend, ttl=10.0)
+        await cache.set("a", 1)
+        _ = await cache.get("a")  # populate entry cache
+        _ = await cache.get_all()  # populate _cache_all
+        await cache.clear()
+        assert await cache.get("a") is None
+        assert await cache.get_all() == {}
+
+
+# ── Concurrency ──────────────────────────────────────────────────────────
+
+
+class TestCachedRegistryConcurrency:
+    async def test_concurrent_reads_consistent(self, cache):
+        """Multiple concurrent gets return the same value."""
+        await cache.set("k", {"status": "ok"})
+        results = await asyncio.gather(
+            *[cache.get("k") for _ in range(20)]
+        )
+        for r in results:
+            assert r == {"status": "ok"}
+
+    async def test_concurrent_writes_dont_corrupt(self, cache):
+        """Concurrent sets don't cause data corruption."""
+        async def writer(i: int):
+            await cache.set(f"key_{i}", {"value": i})
+
+        await asyncio.gather(*[writer(i) for i in range(50)])
+        for i in range(50):
+            result = await cache.get(f"key_{i}")
+            assert result == {"value": i}
+
+    async def test_concurrent_mixed_ops(self, cache):
+        """Mix of reads, writes, and deletes under concurrency."""
+        await cache.set("shared", {"count": 0})
+
+        async def read_op():
+            result = await cache.get("shared")
+            return result is not None
+
+        async def write_op(i: int):
+            await cache.update("shared", {"count": i})
+
+        tasks = []
+        for i in range(20):
+            tasks.append(read_op())
+            tasks.append(write_op(i))
+        results = await asyncio.gather(*tasks)
+        # All reads should succeed (return True)
+        reads = [r for r in results if isinstance(r, bool)]
+        assert all(reads)

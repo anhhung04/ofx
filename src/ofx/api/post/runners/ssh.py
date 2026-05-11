@@ -637,7 +637,9 @@ class PostSSH(PostRunnerBase):
         """Clean up remote temp files and close connection."""
         if self._remote_temp_files:
             try:
-                files = " ".join(self._remote_temp_files)
+                import shlex
+
+                files = " ".join(shlex.quote(f) for f in self._remote_temp_files)
                 self._run_direct(f"rm -f {files}", timeout=10)
             except (OSError, paramiko.SSHException, EOFError) as e:
                 logger.warning("Failed to clean remote temp files: %s", e)

@@ -440,13 +440,15 @@ class SessionManager:
             ["bash", str(script_path)],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
             start_new_session=True,
             cwd=str(work_dir),
             env={**os.environ, "SESSION_ID": session.id, **merged_env},
         )
+        pid = proc.pid
 
-        session = self._save_session(session, {"remote_pid": proc.pid})
-        logger.info("Local session %s started (PID %d)", session.id, proc.pid)
+        session = self._save_session(session, {"remote_pid": pid})
+        logger.info("Local session %s started (PID %d)", session.id, pid)
         return session
 
     # ------------------------------------------------------------------

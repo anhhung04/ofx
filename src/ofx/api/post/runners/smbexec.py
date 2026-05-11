@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -9,6 +10,8 @@ from ..base import PostRunnerBase
 from ..registry import RunnerRegistry
 
 __all__ = ["PostSMBExec"]
+
+logger = logging.getLogger(__name__)
 
 
 @RunnerRegistry.register("smbexec")
@@ -70,8 +73,8 @@ class PostSMBExec(PostRunnerBase):
         finally:
             try:
                 smb.logoff()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("SMB logoff failed after run: %s", e)
 
     def upload(self, local_path: str, remote_path: str) -> None:
         """Upload a file via SMB.
@@ -97,8 +100,8 @@ class PostSMBExec(PostRunnerBase):
         finally:
             try:
                 smb.logoff()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("SMB logoff failed after upload: %s", e)
 
     def download(self, remote_path: str, local_path: str) -> None:
         """Download a file via SMB.
@@ -123,5 +126,5 @@ class PostSMBExec(PostRunnerBase):
         finally:
             try:
                 smb.logoff()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("SMB logoff failed after download: %s", e)
