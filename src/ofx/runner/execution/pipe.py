@@ -137,6 +137,11 @@ def _safe_eval(expr: str, namespace: dict[str, Any]) -> Any:
             "__builtins__",
         ):
             raise ValueError(f"Forbidden name in pipe expression: {node.id}")
+        # Block dunder attribute access (e.g. obj.__class__)
+        if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
+            raise ValueError(
+                f"Forbidden dunder attribute access in pipe expression: {node.attr}"
+            )
 
     safe_ns: dict[str, Any] = {"__builtins__": {}}
     safe_ns.update(_SAFE_BUILTINS)

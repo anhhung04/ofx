@@ -10,13 +10,11 @@ import pytest
 from ofx.models.pipe import PipeConfig
 from ofx.models.step import RunType, Step
 from ofx.runner.execution.pipe import (
-    PipeExecution,
     _coerce_to_list,
     _execute_pipeline,
     _format_items,
     _safe_eval,
 )
-
 
 # ── PipeConfig model ────────────────────────────────────────────────────
 
@@ -329,3 +327,148 @@ class TestPipeFlowRun:
         assert result.status == RunnerStatus.COMPLETED, (
             f"Pipe workflow failed: {result.error}"
         )
+
+
+# ── Edge cases ──────────────────────────────────────────────────────────
+
+
+class TestSafeEvalEdgeCases:
+    """Edge cases for the safe expression evaluator."""
+
+    def test_syntax_error_in_filter(self):
+        with pytest.raises((SyntaxError, ValueError)):
+            _safe_eval("port >>>> 80", {"port": 80})
+
+    def test_undefined_variable(self):
+        with pytest.raises((NameError, ValueError)):
+            _safe_eval("undefined_var > 0", {})
+
+    def test_forbidden_exec(self):
+        with pytest.raises(ValueError, match="Forbidden"):
+            _safe_eval("exec('print(1)')", {})
+
+    def test_forbidden_open(self):
+        with pytest.raises(ValueError, match="Forbidden"):
+            _safe_eval("open('/etc/passwd')", {})
+
+    def test_forbidden_getattr(self):
+        with pytest.raises(ValueError, match="Forbidden"):
+            _safe_eval("getattr(object, '__class__')", {})
+
+    def test_forbidden_compile(self):
+        with pytest.raises(ValueError, match="Forbidden"):
+            _safe_eval("compile('1+1', '', 'exec')", {})
+
+    def test_dunder_access(self):
+        with pytest.raises(ValueError, match="Forbidden"):
+            _safe_eval("''.__class__.__mro__", {})
+
+    def test_nested_forbidden(self):
+        with pytest.raises(ValueError, match="Forbidden"):
+            _safe_eval("(lambda: __import__('os'))()", {})
+
+    def test_none_field_access(self):
+        with pytest.raises(AttributeError):
+            _safe_eval("x.nonexistent", {"x": None})
+
+
+class TestPipelineEdgeCases:
+    """Edge cases and combined operations."""
+
+    def test_all_operations_combined(self):
+        """Apply every operation in a single pipeline."""
+        data = [
+            {"host": "10.0.0.1", "port": 22, "state": "open"},
+            {"host": "10.0.0.1", "port": 80, "state": "open"},
+            {"host": "10.0.0.2", "port": 22, "state": "closed"},
+            {"host": "10.0.0.2", "port": 443, "state": "open"},
+            {"host": "10.0.0.3", "port": 80, "state": "open"},
+        ]
+        cfg = PipeConfig(
+            input="{{ x }}",
+            filter="state == 'open'",
+            map={"host": "host", "port": "port"},
+            sort="port",
+            unique="host",
+            limit=2,
+            offset=0,
+            format="jsonl",
+        )
+        result = _execute_pipeline(data.copy(), cfg)
+        assert len(result) <= 2
+        # All remaining items should be open
+        for item in result:
+            assert "host" in item
+            assert "port" in item
+
+    def test_filter_removes_all(self):
+        """Filter that removes every item produces empty result."""
+        data = [{"port": 80}, {"port": 22}]
+        cfg = PipeConfig(input="{{ x }}", filter="port > 9999")
+        result = _execute_pipeline(data.copy(), cfg)
+        assert result == []
+
+    def test_map_expression_error_produces_none(self):
+        """Map expression causing runtime error sets field to None."""
+        data = [{"value": "not_a_number"}]
+        cfg = PipeConfig(input="{{ x }}", map={"result": "int(value)"})
+        result = _execute_pipeline(data.copy(), cfg)
+        assert len(result) == 1
+        assert result[0]["result"] is None
+
+    def test_empty_input_with_all_ops(self):
+        """All operations on empty input should produce empty result."""
+        cfg = PipeConfig(
+            input="{{ x }}",
+            filter="port > 0",
+            sort="port",
+            unique="port",
+            limit=10,
+        )
+        result = _execute_pipeline([], cfg)
+        assert result == []
+
+    def test_sort_with_reverse(self):
+        data = [{"v": 1}, {"v": 3}, {"v": 2}]
+        cfg = PipeConfig(input="{{ x }}", sort="v", reverse=True)
+        result = _execute_pipeline(data.copy(), cfg)
+        assert [r["v"] for r in result] == [3, 2, 1]
+
+    def test_offset_beyond_length(self):
+        data = [{"v": 1}, {"v": 2}]
+        cfg = PipeConfig(input="{{ x }}", offset=10)
+        result = _execute_pipeline(data.copy(), cfg)
+        assert result == []
+
+    def test_group_by_produces_dict(self):
+        data = [
+            {"team": "a", "val": 1},
+            {"team": "b", "val": 2},
+            {"team": "a", "val": 3},
+        ]
+        cfg = PipeConfig(input="{{ x }}", group_by="team")
+        result = _execute_pipeline(data.copy(), cfg)
+        assert isinstance(result, dict)
+        assert set(result.keys()) == {"a", "b"}
+        assert len(result["a"]) == 2
+        assert len(result["b"]) == 1
+
+
+class TestStepPipeEdgeCases:
+    """Validate pipe step model constraints."""
+
+    def test_pipe_task_mutual_exclusivity(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            Step(pipe={"input": "{{ x }}"}, task="nmap")
+
+    def test_pipe_script_mutual_exclusivity(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            Step(pipe={"input": "{{ x }}"}, script="print(1)")
+
+    def test_pipe_uses_mutual_exclusivity(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            Step(pipe={"input": "{{ x }}"}, uses="other/workflow")
+
+    def test_pipe_script_file_mutual_exclusivity(self):
+        with pytest.raises(ValueError, match="exactly one"):
+            Step(pipe={"input": "{{ x }}"}, script_file="test.py")

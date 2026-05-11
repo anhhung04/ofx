@@ -188,8 +188,12 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         if not self._instance or not self._instance.ip:
             iid = self._instance.instance_id if self._instance else "none"
             raise RuntimeError(
-                f"Instance has no IP address (provider={cfg.provider}, "
-                f"instance_id={iid}, job={self.model.jid})"
+                f"Cloud instance has no IP address after provisioning.\n"
+                f"  Job: {self.model.jid}\n"
+                f"  Provider: {cfg.provider}\n"
+                f"  Instance ID: {iid}\n"
+                f"Check cloud provider dashboard for instance status, "
+                f"verify networking config, and retry."
             )
 
         is_windows = cfg.connection_type == "winrm"
@@ -250,7 +254,9 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
 
         if not self._instance:
             raise RuntimeError(
-                f"Cannot create remote runner: no instance provisioned for job '{self.model.jid}'"
+                f"Cloud job '{self.model.jid}' cannot proceed: no instance provisioned.\n"
+                f"This typically means instance provisioning failed earlier. "
+                f"Check logs above for provisioning errors."
             )
         ip = self._instance.ip
         is_log_commands = cfg.log_commands or False

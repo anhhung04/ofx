@@ -27,32 +27,41 @@ dispatch:
       alias: t
 
 jobs:
-  main:
-    name: Main Job
-    outputs:
-      result: '{{{{ steps.hello.outputs.result }}}}'
+  scan:
+    name: Scan Target
     steps:
-      - name: hello
+      - name: port_scan
         run: |
-            echo "Running against {{{{ inputs.target }}}}"
+            echo "Scanning {{{{ inputs.target }}}}..."
             echo "result=success" >> "$OFX_OUTPUTS"
 
       # Uncomment to use a task wrapper:
-      # - name: scan
+      # - name: nmap_scan
       #   task: nmap
       #   with:
       #     target: '{{{{ inputs.target }}}}'
 
-      # Uncomment to use inline Python:
+      # Uncomment for declarative data transformation:
+      # - name: filter_results
+      #   pipe:
+      #     input: '{{{{ steps["nmap_scan"].outputs.typed_outputs }}}}'
+      #     filter: "port > 1024"
+      #     sort: port
+      #     format: csv
+      #     field: host,port
+
+      # Uncomment for inline Python:
       # - name: process
       #   script: |
-      #       print("Processing results...")
+      #       data = {{"target": "{{{{ inputs.target }}}}"}}
+      #       add_outputs(processed=True, data=data)
 
-      # Uncomment to call a reusable workflow:
-      # - name: export
-      #   uses: misc/export-results
-      #   with:
-      #     project: '{{{{ vars.project_path }}}}'
+  # Uncomment for a dependent job:
+  # report:
+  #   name: Generate Report
+  #   needs: [scan]
+  #   steps:
+  #     - run: echo "Scan result: {{{{ jobs.scan.outputs.result }}}}"
 
 """
 

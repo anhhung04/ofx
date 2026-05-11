@@ -17,7 +17,12 @@ def step_timeout_error(timeout_minutes: int) -> str:
 
 
 def step_retry_error(max_attempts: int, error: Any) -> str:
-    return f"Step failed after {max_attempts} attempt(s):\n{error}"
+    return (
+        f"Step failed after {max_attempts} attempt(s).\n"
+        f"Last error: {error}\n"
+        f"If transient, increase 'retry' count. "
+        f"If permanent, fix the root cause before retrying."
+    )
 
 
 def job_step_failed(step_name_or_index: Any, error: Any) -> str:

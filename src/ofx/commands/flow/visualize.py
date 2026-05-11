@@ -53,6 +53,7 @@ def _build_dag_data(workflow: Workflow) -> dict[str, Any]:
             "steps": len(job.steps),
             "cloud": bool(job.cloud),
             "matrix": bool(job.strategy and job.strategy.matrix),
+            "pipe": any(s.pipe is not None for s in job.steps),
             "outputs": list(job.outputs.keys()) if job.outputs else [],
         }
 
@@ -154,6 +155,9 @@ def _render_terminal(workflow: Workflow, detailed: bool) -> None:
             if job.strategy and job.strategy.matrix:
                 keys = list(job.strategy.matrix.keys())
                 badges.append(f"⊞ matrix({','.join(keys)})")
+            has_pipe = any(s.pipe is not None for s in job.steps)
+            if has_pipe:
+                badges.append("🔗 pipe")
 
             box_lines.append(name_line)
             if badges:
@@ -166,7 +170,9 @@ def _render_terminal(workflow: Workflow, detailed: bool) -> None:
             if detailed:
                 for step in job.steps:
                     kind = (
-                        "task"
+                        "pipe"
+                        if step.pipe
+                        else "task"
                         if step.task
                         else "uses"
                         if step.uses
@@ -223,6 +229,8 @@ def _render_dot(workflow: Workflow) -> str:
                 label += "\\n☁ cloud"
             if job.strategy and job.strategy.matrix:
                 label += "\\n⊞ matrix"
+            if any(s.pipe is not None for s in job.steps):
+                label += "\\n🔗 pipe"
             label += f"\\n({len(job.steps)} steps)"
             lines.append(f'    "{jid}" [label="{label}"];')
         lines.append("  }")

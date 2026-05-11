@@ -168,7 +168,13 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
                         timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
                     )
                 else:
-                    raise RuntimeError(f"Unknown run type: {run_type}")
+                    from ofx.models.step import RunType as _RT
+
+                    valid = ", ".join(rt.value for rt in _RT)
+                    raise RuntimeError(
+                        f"Unsupported run type '{run_type}' for cloud step "
+                        f"'{self.model.name}'. Valid types: {valid}"
+                    )
 
                 # Store output
                 if output:
