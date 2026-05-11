@@ -62,7 +62,7 @@ jobs:
         import json
 
         target = "{{ inputs.target }}"
-        ports_raw = '{{ jobs.portscan.outputs.open_ports }}'
+        ports_raw = '{{ jobs.portscan.outputs.open_ports | default("", true) }}'
         open_ports = json.loads(ports_raw) if ports_raw else []
 
         if not open_ports:
@@ -103,7 +103,7 @@ jobs:
         import json
 
         target = "{{ inputs.target }}"
-        banners_file = "{{ jobs.banners.outputs.banners_file }}"
+        banners_file = "{{ jobs.banners.outputs.banners_file | default("", true) }}"
 
         services = []
         if banners_file:
@@ -124,5 +124,5 @@ jobs:
             tls = "yes" if svc["tls"] else "no"
             print(f"  {svc['port']:<10} {svc['protocol']:<14} {tls:<6} {banner}")
 
-        print(f"\n  Total: {{ jobs.portscan.outputs.port_count }} open ports, {{ jobs.banners.outputs.service_count }} services identified")
+        print(f"\n  Total: {{ jobs.portscan.outputs.port_count | default(0, true) }} open ports, {{ jobs.banners.outputs.service_count | default(0, true) }} services identified")
       log-stdout: true

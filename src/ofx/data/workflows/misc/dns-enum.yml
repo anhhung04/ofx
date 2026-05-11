@@ -86,7 +86,7 @@ jobs:
         from ofx.api.dns import resolve_host_sync
         import json
 
-        found_raw = '{{ jobs.bruteforce.outputs.found_subs }}'
+        found_raw = '{{ jobs.bruteforce.outputs.found_subs | default("", true) }}'
         found = json.loads(found_raw) if found_raw else []
 
         if not found:
@@ -124,9 +124,9 @@ jobs:
         from pathlib import Path
 
         domain = "{{ inputs.target }}"
-        found_count = "{{ jobs.bruteforce.outputs.found_count }}"
-        resolved_file = "{{ jobs.resolve.outputs.resolved_file }}"
-        unique_ips_raw = '{{ jobs.resolve.outputs.unique_ips }}'
+        found_count = "{{ jobs.bruteforce.outputs.found_count | default(0, true) }}"
+        resolved_file = "{{ jobs.resolve.outputs.resolved_file | default("", true) }}"
+        unique_ips_raw = '{{ jobs.resolve.outputs.unique_ips | default("", true) }}'
 
         resolved = {}
         if resolved_file:

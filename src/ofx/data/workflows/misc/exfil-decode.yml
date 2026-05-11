@@ -4,9 +4,9 @@ description: |
     via DNS, base64 chunking, or XOR encoding.  Inverse of exfil-prep.
 tags: [misc, exfiltration, decode, data]
 outputs:
-    output_file: "{{ jobs.decode.outputs.output_file }}"
-    decoded_size: "{{ jobs.decode.outputs.decoded_size }}"
-    is_text: "{{ jobs.decode.outputs.is_text }}"
+    output_file: "{{ jobs.decode.outputs.output_file | default('', true) }}"
+    decoded_size: "{{ jobs.decode.outputs.decoded_size | default(0, true) }}"
+    is_text: "{{ jobs.decode.outputs.is_text | default('', true) }}"
 dispatch:
     inputs:
         input_file:

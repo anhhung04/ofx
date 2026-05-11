@@ -90,7 +90,7 @@ jobs:
         log-command: true
         name: dns-resolve
         with:
-          target: "{{ jobs.enum.outputs.subs_file }}"
+          target: "{{ jobs.enum.outputs.subs_file | default('', true) }}"
           a: true
           cname: true
           resp: true
@@ -169,7 +169,7 @@ jobs:
         log-command: true
         name: nuclei-takeover
         with:
-          target: "{{ jobs['dns-verify'].outputs.alive_file }}"
+          target: "{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}"
           tags: subdomain-takeover
         continue-on-error: true
       - name: collect-takeovers
@@ -200,14 +200,14 @@ jobs:
         log-command: true
         name: gowitness-capture
         with:
-          target: "{{ jobs['dns-verify'].outputs.alive_file }}"
+          target: "{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}"
           threads: 10
         continue-on-error: true
       - task: httpx
         log-command: true
         name: http-fingerprint
         with:
-          target: "{{ jobs['dns-verify'].outputs.alive_file }}"
+          target: "{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}"
           tech_detect: true
           status_code: true
           title: true
@@ -226,24 +226,24 @@ jobs:
           echo "======================================================"
           echo ""
           echo "--- Enumeration ---"
-          echo "Total subdomains: {{ jobs.enum.outputs.sub_count }}"
-          echo "Alive subdomains: {{ jobs['dns-verify'].outputs.alive_count }}"
+          echo "Total subdomains: {{ jobs.enum.outputs.sub_count | default(0, true) }}"
+          echo "Alive subdomains: {{ jobs['dns-verify'].outputs.alive_count | default(0, true) }}"
           echo ""
           echo "--- CNAME Analysis ---"
-          echo "CNAME records: {{ jobs['dns-verify'].outputs.cname_count }}"
-          echo "Dangling CNAMEs: {{ jobs['dns-verify'].outputs.dangling_count }}"
+          echo "CNAME records: {{ jobs['dns-verify'].outputs.cname_count | default(0, true) }}"
+          echo "Dangling CNAMEs: {{ jobs['dns-verify'].outputs.dangling_count | default(0, true) }}"
           echo ""
           echo "--- Takeover Results ---"
-          echo "Confirmed vulnerable: {{ jobs['takeover-check'].outputs.takeover_count }}"
-          {% if jobs['takeover-check'].outputs.takeover_details_file %}
+          echo "Confirmed vulnerable: {{ jobs['takeover-check'].outputs.takeover_count | default(0, true) }}"
+          {% if jobs['takeover-check'].outputs.takeover_details_file | default("", true) %}
           echo ""
           echo "--- Details ---"
-          cat {{ jobs['takeover-check'].outputs.takeover_details_file }}
+          cat {{ jobs['takeover-check'].outputs.takeover_details_file | default("", true) }}
           {% endif %}
-          {% if jobs['dns-verify'].outputs.dangling_file %}
+          {% if jobs['dns-verify'].outputs.dangling_file | default("", true) %}
           echo ""
           echo "--- Dangling CNAMEs (investigate manually) ---"
-          cat {{ jobs['dns-verify'].outputs.dangling_file }}
+          cat {{ jobs['dns-verify'].outputs.dangling_file | default("", true) }}
           {% endif %}
         log-stdout: true
         log-command: true

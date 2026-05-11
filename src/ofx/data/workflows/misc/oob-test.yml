@@ -53,7 +53,7 @@ jobs:
         import time
 
         target = "{{ inputs.target }}"
-        callback_url = "{{ jobs.setup.outputs.callback_url }}"
+        callback_url = "{{ jobs.setup.outputs.callback_url | default("", true) }}"
         method = "{{ inputs.method }}"
 
         if not target.startswith("http"):
@@ -105,7 +105,7 @@ jobs:
       script: |
         from ofx.api.oob import Interactsh
 
-        callback_flag = "{{ jobs.setup.outputs.callback_flag }}"
+        callback_flag = "{{ jobs.setup.outputs.callback_flag | default("", true) }}"
 
         print("[*] Verifying OOB interactions...")
 
@@ -132,6 +132,6 @@ jobs:
 
         print(f"\n[*] Target: {{ inputs.target }}")
         print(f"[*] Method: {{ inputs.method }}")
-        print(f"[*] Probes sent: {{ jobs.probe.outputs.probes_sent }}")
+        print(f"[*] Probes sent: {{ jobs.probe.outputs.probes_sent | default(0, true) }}")
       log-stdout: true
       log-command: true
