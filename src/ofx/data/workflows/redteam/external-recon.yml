@@ -31,21 +31,18 @@ jobs:
     steps:
       - task: whois
         log-command: true
-        timeout: 5
         name: whois-lookup
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: dnsrecon
         log-command: true
-        timeout: 10
         name: dnsrecon-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: testssl
         log-command: true
-        timeout: 10
         name: tls-check
         with:
           target: "{{ inputs.target }}:443"
@@ -66,7 +63,6 @@ jobs:
     steps:
       - task: subfinder
         log-command: true
-        timeout: 10
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
@@ -74,21 +70,18 @@ jobs:
         continue-on-error: true
       - task: amass
         log-command: true
-        timeout: 10
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
         log-command: true
-        timeout: 10
         name: assetfinder-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: findomain
         log-command: true
-        timeout: 10
         name: findomain-enum
         with:
           target: "{{ inputs.target }}"
@@ -127,7 +120,6 @@ jobs:
     steps:
       - task: dnsx
         log-command: true
-        timeout: 10
         name: verify-dns
         with:
           target: "{{ jobs['subdomain-enum'].outputs.subs_file }}"
@@ -162,7 +154,6 @@ jobs:
     steps:
       - task: naabu
         log-command: true
-        timeout: 10
         name: naabu-scan
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -171,7 +162,6 @@ jobs:
         continue-on-error: true
       - task: masscan
         log-command: true
-        timeout: 10
         name: masscan-sweep
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file | default(inputs.target, true) }}"
@@ -206,7 +196,6 @@ jobs:
     steps:
       - task: httpx
         log-command: true
-        timeout: 10
         name: probe-subs
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -242,7 +231,6 @@ jobs:
         continue-on-error: true
       - task: wafw00f
         log-command: true
-        timeout: 10
         name: waf-detect
         with:
           target: "{{ inputs.target }}"
@@ -282,7 +270,6 @@ jobs:
     steps:
       - task: katana
         log-command: true
-        timeout: 15
         name: katana-crawl
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
@@ -290,7 +277,6 @@ jobs:
         continue-on-error: true
       - task: gospider
         log-command: true
-        timeout: 15
         name: gospider-crawl
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
@@ -298,7 +284,6 @@ jobs:
         continue-on-error: true
       - task: gau
         log-command: true
-        timeout: 10
         name: gau-archive
         with:
           target: "{{ inputs.target }}"
@@ -310,7 +295,6 @@ jobs:
         continue-on-error: true
       - task: paramspider
         log-command: true
-        timeout: 10
         name: paramspider-discover
         with:
           target: "{{ inputs.target }}"
@@ -356,7 +340,6 @@ jobs:
     steps:
       - task: subzy
         log-command: true
-        timeout: 10
         name: subzy-check
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -385,7 +368,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 15
         name: nuclei-secrets
         with:
           target: "{{ jobs['web-crawl'].outputs.crawled_file | default(inputs.target, true) }}"
@@ -417,7 +399,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-scan
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
@@ -426,7 +407,6 @@ jobs:
       - task: nikto
         log-command: true
         name: nikto-scan
-        timeout: 15
         with:
           target: "{{ inputs.target }}"
           maxtime: 900
@@ -499,7 +479,6 @@ jobs:
           print(f"Harvested {len(emails)} email addresses")
       - task: h8mail
         log-command: true
-        timeout: 15
         name: breach-search
         with:
           target: '{{ steps["collect-emails"].outputs.email_file if steps["collect-emails"].outputs is defined else inputs.target }}'

@@ -31,7 +31,6 @@ jobs:
             is_text: '{{ steps["reassemble"].outputs.is_text | default("", true) }}'
         steps:
             - name: reassemble
-              timeout: 5
               continue-on-error: true
               script: |
                   from pathlib import Path

@@ -24,7 +24,6 @@ jobs:
       perm_count: '{{ steps["gen-perms"].outputs.perm_count | default("", true) }}'
     steps:
     - name: gen-perms
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -49,7 +48,6 @@ jobs:
       registered_count: '{{ steps["dns-resolve"].outputs.registered_count | default("", true) }}'
     steps:
     - name: dns-resolve
-      timeout: 10
       continue-on-error: true
       log-command: true
       script: |
@@ -93,7 +91,6 @@ jobs:
     needs: [generate, resolve]
     steps:
     - name: display-report
-      timeout: 2
       continue-on-error: true
       script: |
         from pathlib import Path

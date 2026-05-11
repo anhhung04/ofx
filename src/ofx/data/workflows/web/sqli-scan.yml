@@ -33,7 +33,6 @@ jobs:
     steps:
     - task: sqlmap
       log-command: true
-      timeout: 15
       name: sqlmap-scan
       with:
         target: '{{ inputs.target }}'

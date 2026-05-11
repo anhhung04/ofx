@@ -35,7 +35,6 @@ jobs:
       - task: subfinder
         log-command: true
         name: subfinder-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -45,7 +44,6 @@ jobs:
       - task: amass
         log-command: true
         name: amass-passive
-        timeout: 30
         retry: 2
         retry-delay: 5
         with:
@@ -54,7 +52,6 @@ jobs:
       - task: assetfinder
         log-command: true
         name: assetfinder-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -63,7 +60,6 @@ jobs:
       - task: theharvester
         log-command: true
         name: harvester-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -71,7 +67,6 @@ jobs:
         continue-on-error: true
       - task: findomain
         name: findomain-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -108,7 +103,6 @@ jobs:
       - task: tlsx
         log-command: true
         name: tls-san-enum
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -119,7 +113,6 @@ jobs:
       - task: subfinder
         log-command: true
         name: crtsh-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -154,7 +147,6 @@ jobs:
       - task: gotator
         log-command: true
         name: generate-perms
-        timeout: 30
         retry: 2
         retry-delay: 5
         with:
@@ -163,7 +155,6 @@ jobs:
       - task: puredns
         log-command: true
         name: resolve-perms
-        timeout: 20
         retry: 2
         retry-delay: 5
         if: "{{ steps['generate-perms'].outputs.output_file | default('', true) | length > 0 }}"
@@ -202,7 +193,6 @@ jobs:
       - task: dnsx
         log-command: true
         name: dns-resolve
-        timeout: "{{ (steps['merge-all-sources'].outputs.total_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with:
@@ -279,7 +269,6 @@ jobs:
       - task: httpx
         log-command: true
         name: probe-hosts
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with:
@@ -312,7 +301,6 @@ jobs:
           print(f"Live HTTP: {len(live)} services")
       - task: wafw00f
         name: waf-detect
-        timeout: 15
         retry: 2
         retry-delay: 5
         if: "{{ steps['export-live'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -321,7 +309,6 @@ jobs:
         continue-on-error: true
       - task: cdncheck
         name: cdn-detect
-        timeout: 10
         retry: 2
         retry-delay: 5
         with:
@@ -336,7 +323,6 @@ jobs:
       - task: gowitness
         log-command: true
         name: screenshots
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -346,7 +332,6 @@ jobs:
       - task: csprecon
         log-command: true
         name: csp-enum
-        timeout: 10
         retry: 2
         retry-delay: 5
         with:
@@ -363,7 +348,6 @@ jobs:
       - task: subzy
         log-command: true
         name: subzy-check
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -372,7 +356,6 @@ jobs:
       - task: nuclei
         log-command: true
         name: nuclei-takeover
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -403,7 +386,6 @@ jobs:
     steps:
       - task: naabu
         name: naabu-scan
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 10 * 5 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with:
@@ -428,7 +410,6 @@ jobs:
     steps:
       - task: testssl
         name: testssl-scan
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int * 3 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with:
@@ -436,7 +417,6 @@ jobs:
         continue-on-error: true
       - task: sslscan
         name: sslscan-check
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int * 2 + 20) | int }}"
         retry: 2
         retry-delay: 5
         with:
@@ -470,7 +450,6 @@ jobs:
       - task: waymore
         log-command: true
         name: waymore-hist
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -480,7 +459,6 @@ jobs:
       - task: gau
         log-command: true
         name: gau-hist
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -490,7 +468,6 @@ jobs:
       - task: katana
         log-command: true
         name: katana-crawl
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -500,7 +477,6 @@ jobs:
       - task: gospider
         log-command: true
         name: gospider-crawl
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -532,7 +508,6 @@ jobs:
           print(f"URL discovery: {len(urls_list)} unique URLs ({len(js_urls)} JS files)")
       - task: jsluice
         name: js-analysis
-        timeout: 15
         retry: 2
         retry-delay: 5
         if: "{{ steps['merge-urls'].outputs.js_url_count | default(0, true) | int > 0 }}"
@@ -549,7 +524,6 @@ jobs:
     steps:
       - task: arjun
         name: arjun-discover
-        timeout: "{{ (jobs['http-probe'].outputs.live_count | default(10, true) | int * 3 + 20) | int }}"
         retry: 2
         retry-delay: 5
         if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -558,7 +532,6 @@ jobs:
         continue-on-error: true
       - task: paramspider
         name: paramspider-discover
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -596,7 +569,6 @@ jobs:
     steps:
       - task: nuclei
         name: nuclei-secrets
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -605,7 +577,6 @@ jobs:
         continue-on-error: true
       - task: gitleaks
         name: gitleaks-scan
-        timeout: 15
         retry: 2
         retry-delay: 5
         with:
@@ -630,7 +601,6 @@ jobs:
       - task: nuclei
         log-command: true
         name: nuclei-scan
-        timeout: 30
         retry: 2
         retry-delay: 5
         with:
@@ -640,7 +610,6 @@ jobs:
       - task: dalfox
         log-command: true
         name: xss-scan
-        timeout: 20
         retry: 2
         retry-delay: 5
         with:
@@ -648,7 +617,6 @@ jobs:
         continue-on-error: true
       - task: sqlmap_task
         name: sqli-scan
-        timeout: 30
         retry: 2
         retry-delay: 5
         if: "{{ jobs['param-discovery'].outputs.param_url_count | default(0, true) | int > 0 }}"
@@ -660,7 +628,6 @@ jobs:
         continue-on-error: true
       - task: crlfuzz
         name: crlf-scan
-        timeout: 15
         retry: 2
         retry-delay: 5
         if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -669,7 +636,6 @@ jobs:
         continue-on-error: true
       - task: commix_task
         name: cmdi-scan
-        timeout: 25
         retry: 2
         retry-delay: 5
         if: "{{ jobs['param-discovery'].outputs.param_url_count | default(0, true) | int > 0 }}"

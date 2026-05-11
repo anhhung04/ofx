@@ -24,7 +24,6 @@ jobs:
     steps:
     - task: fping
       log-command: true
-      timeout: 5
       name: ping-sweep
       with:
         target: '{{ inputs.target }}'
@@ -53,7 +52,6 @@ jobs:
     steps:
     - task: masscan
       log-command: true
-      timeout: 10
       name: masscan-sweep
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }}"
@@ -62,7 +60,6 @@ jobs:
       continue-on-error: true
     - task: naabu
       log-command: true
-      timeout: 10
       name: naabu-scan
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }}"
@@ -100,7 +97,6 @@ jobs:
     steps:
     - task: nmap
       log-command: true
-      timeout: 30
       name: version-detect
       with:
         target: "{{ jobs['port-scan'].outputs.hosts_file | default(inputs.target, true) }}"
@@ -108,7 +104,6 @@ jobs:
       continue-on-error: true
     - task: httpx
       log-command: true
-      timeout: 10
       name: http-probe
       with:
         target: "{{ jobs['port-scan'].outputs.hosts_file | default(inputs.target, true) }}"

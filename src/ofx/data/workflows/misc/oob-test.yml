@@ -23,7 +23,6 @@ jobs:
       callback_flag: '{{ steps["start-listener"].outputs.callback_flag | default("", true) }}'
     steps:
     - name: start-listener
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -47,7 +46,6 @@ jobs:
       probes_sent: '{{ steps["send-probes"].outputs.probes_sent | default("", true) }}'
     steps:
     - name: send-probes
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -103,7 +101,6 @@ jobs:
     needs: [setup, probe]
     steps:
     - name: check-interactions
-      timeout: 3
       continue-on-error: true
       script: |
         from ofx.api.oob import Interactsh

@@ -36,7 +36,6 @@ jobs:
       output_dir: '{{ steps["ldap-summary"].outputs.output_dir | default("", true) }}'
     steps:
       - task: ldapdomaindump
-        timeout: 15
         name: ldap-dump
         with:
           target: "{{ inputs.target }}"
@@ -48,7 +47,6 @@ jobs:
         log-command: true
       - task: netexec
         log-command: true
-        timeout: 10
         name: nxc-users
         with:
           target: "{{ inputs.target }}"
@@ -84,7 +82,6 @@ jobs:
       collection_complete: '{{ steps["bh-status"].outputs.collection_complete | default("", true) }}'
     steps:
       - task: bloodhound-python
-        timeout: 20
         name: bh-collect
         with:
           target: "{{ inputs.domain }}"
@@ -119,7 +116,6 @@ jobs:
     steps:
       - task: netexec
         log-command: true
-        timeout: 10
         name: nxc-groups
         with:
           target: "{{ inputs.target }}"
@@ -131,7 +127,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 10
         name: nxc-sessions
         with:
           target: "{{ inputs.target }}"
@@ -143,7 +138,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 10
         name: nxc-loggedon
         with:
           target: "{{ inputs.target }}"
@@ -155,7 +149,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 10
         name: nxc-pass-pol
         with:
           target: "{{ inputs.target }}"
@@ -200,7 +193,6 @@ jobs:
       valid_count: '{{ steps["kerb-summary"].outputs.valid_count | default("", true) }}'
     steps:
       - task: kerbrute
-        timeout: 15
         name: kerbrute-enum
         with:
           target: "{{ inputs.target }}"
@@ -212,7 +204,6 @@ jobs:
         log-stdout: true
         log-command: true
       - task: getuserspns
-        timeout: 10
         name: spn-enum
         with:
           target: "{{ inputs.domain }}"
@@ -223,7 +214,6 @@ jobs:
         log-stdout: true
         log-command: true
       - task: getnpusers
-        timeout: 10
         name: asrep-enum
         with:
           target: "{{ inputs.domain }}"

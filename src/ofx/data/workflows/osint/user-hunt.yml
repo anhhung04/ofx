@@ -25,7 +25,6 @@ jobs:
     steps:
     - task: maigret
       log-command: true
-      timeout: 10
       name: maigret-search
       with:
         target: '{{ inputs.target }}'
@@ -46,7 +45,6 @@ jobs:
     steps:
     - task: h8mail
       log-command: true
-      timeout: 15
       name: breach-search
       with:
         target: '{{ inputs.target }}'

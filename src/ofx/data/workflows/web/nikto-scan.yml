@@ -25,7 +25,6 @@ jobs:
       - task: nikto
         log-command: true
         name: nikto-scan
-        timeout: 15
         with:
           target: "{{ inputs.target }}"
           tuning: "x"
@@ -45,7 +44,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-web-scan
         with:
           target: "{{ inputs.target }}"

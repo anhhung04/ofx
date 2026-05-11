@@ -26,7 +26,6 @@ jobs:
         steps:
             - task: ffuf
               log-command: true
-              timeout: 15
               name: fuzz-endpoints
               with:
                   target: "{{ inputs.target }}/FUZZ"

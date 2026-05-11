@@ -22,14 +22,12 @@ jobs:
     steps:
     - task: grype
       log-command: true
-      timeout: 15
       name: dependency-vulns
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trivy
       log-command: true
-      timeout: 15
       name: code-vulns
       with:
         target: '{{ inputs.target }}'
@@ -59,14 +57,12 @@ jobs:
     steps:
     - task: gitleaks
       log-command: true
-      timeout: 15
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trufflehog
       log-command: true
-      timeout: 15
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'

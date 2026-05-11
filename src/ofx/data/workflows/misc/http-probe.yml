@@ -23,7 +23,6 @@ jobs:
       alive_count: '{{ steps["probe-targets"].outputs.alive_count | default("", true) }}'
     steps:
     - name: probe-targets
-      timeout: 30
       continue-on-error: true
       log-command: true
       script: |

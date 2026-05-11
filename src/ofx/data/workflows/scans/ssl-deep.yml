@@ -22,7 +22,6 @@ jobs:
     steps:
     - task: testssl
       log-command: true
-      timeout: 10
       name: testssl-scan
       with:
         target: '{{ inputs.target }}:{{ inputs.port }}'
@@ -33,7 +32,6 @@ jobs:
     steps:
     - task: ssh-audit
       log-command: true
-      timeout: 10
       name: ssh-audit
       with:
         target: '{{ inputs.target }}'

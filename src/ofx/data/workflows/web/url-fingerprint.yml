@@ -24,7 +24,6 @@ jobs:
     steps:
     - task: httpx
       log-command: true
-      timeout: 10
       name: http-probe
       with:
         target: '{{ inputs.target }}'
@@ -46,7 +45,6 @@ jobs:
     steps:
     - task: whatweb
       log-command: true
-      timeout: 10
       name: whatweb-scan
       with:
         target: '{{ inputs.target }}'
@@ -75,7 +73,6 @@ jobs:
     steps:
     - task: wafw00f
       log-command: true
-      timeout: 10
       name: wafw00f-scan
       with:
         target: '{{ inputs.target }}'

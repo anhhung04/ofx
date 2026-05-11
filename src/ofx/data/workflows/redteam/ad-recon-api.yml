@@ -38,7 +38,6 @@ jobs:
       commands_file: '{{ steps["collect-enum"].outputs.commands_file | default("", true) }}'
     steps:
     - name: bloodhound-cmd
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -55,7 +54,6 @@ jobs:
 
         add_outputs(bloodhound_cmd=cmd)
     - name: shares-cmd
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -72,7 +70,6 @@ jobs:
 
         add_outputs(shares_cmd=cmd)
     - name: ldap-cmd
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -89,7 +86,6 @@ jobs:
 
         add_outputs(ldap_cmd=cmd)
     - name: collect-enum
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -144,7 +140,6 @@ jobs:
       delegation_cmds: '{{ steps["delegation-cmd"].outputs.delegation_cmds | default("", true) }}'
     steps:
     - name: kerberoast-cmd
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -161,7 +156,6 @@ jobs:
 
         add_outputs(kerberoast_cmd=cmd)
     - name: asreproast-cmd
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -178,7 +172,6 @@ jobs:
 
         add_outputs(asreproast_cmd=cmd)
     - name: delegation-cmd
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -201,7 +194,6 @@ jobs:
     needs: [enumerate, kerberos]
     steps:
     - name: display-summary
-      timeout: 2
       continue-on-error: true
       script: |
         import json

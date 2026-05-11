@@ -27,7 +27,6 @@ jobs:
     steps:
       - task: garak
         log-command: true
-        timeout: 60
         name: garak-test
         with:
           target: "{{ inputs.model_name }}"

@@ -40,7 +40,6 @@ jobs:
       admin_count: '{{ steps["collect-hashes"].outputs.admin_count | default("", true) }}'
     steps:
       - task: secretsdump
-        timeout: 20
         name: dcsync-dump
         with:
           target: "{{ inputs.target }}"
@@ -120,7 +119,6 @@ jobs:
 
           print(f"[+] Prepared {len(unique)} unique hashes for PtH validation")
       - task: netexec
-        timeout: 15
         name: pth-smb
         with:
           target: "{{ inputs.target }}"
@@ -133,7 +131,6 @@ jobs:
         log-command: true
       - task: netexec
         log-command: true
-        timeout: 15
         name: pth-ldap
         with:
           target: "{{ inputs.target }}"

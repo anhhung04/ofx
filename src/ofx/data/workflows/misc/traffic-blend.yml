@@ -32,7 +32,6 @@ jobs:
       sample_count: '{{ steps["blend-demo"].outputs.sample_count | default("", true) }}'
     steps:
       - name: blend-demo
-        timeout: 3
         continue-on-error: true
         script: |
           from ofx.api.opsec.traffic import (

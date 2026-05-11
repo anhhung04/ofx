@@ -26,7 +26,6 @@ jobs:
       command_count: '{{ steps["build-cleanup"].outputs.command_count | default("", true) }}'
     steps:
     - name: build-cleanup
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -99,7 +98,6 @@ jobs:
       timestomp_count: '{{ steps["build-timestomp"].outputs.timestomp_count | default("", true) }}'
     steps:
     - name: build-timestomp
-      timeout: 3
       continue-on-error: true
       script: |
         from ofx.api.opsec import timestomp_command

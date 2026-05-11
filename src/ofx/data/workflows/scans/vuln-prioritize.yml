@@ -26,7 +26,6 @@ jobs:
     steps:
     - task: nuclei
       log-command: true
-      timeout: 20
       name: nuclei-scan
       with:
         target: '{{ inputs.target }}'
@@ -34,7 +33,6 @@ jobs:
       continue-on-error: true
     - task: nmap
       log-command: true
-      timeout: 30
       name: nmap-vuln
       with:
         target: '{{ inputs.target }}'

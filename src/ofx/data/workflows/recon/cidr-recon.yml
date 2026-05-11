@@ -24,7 +24,6 @@ jobs:
     steps:
     - task: mapcidr
       log-command: true
-      timeout: 5
       name: expand-cidr
       with:
         target: '{{ inputs.target }}'
@@ -32,14 +31,12 @@ jobs:
     - task: fping
       log-command: true
       name: fping-discovery
-      timeout: 5
       with:
         target: '{{ inputs.target }}'
         generate: true
       continue-on-error: true
     - task: nmap
       log-command: true
-      timeout: 30
       name: ping-sweep
       with:
         target: '{{ inputs.target }}'
@@ -47,7 +44,6 @@ jobs:
       continue-on-error: true
     - task: naabu
       log-command: true
-      timeout: 10
       name: port-scan
       with:
         target: '{{ inputs.target }}'
@@ -56,7 +52,6 @@ jobs:
       continue-on-error: true
     - task: masscan
       log-command: true
-      timeout: 10
       name: masscan-scan
       with:
         target: '{{ inputs.target }}'
@@ -65,7 +60,6 @@ jobs:
       continue-on-error: true
     - task: gogo
       log-command: true
-      timeout: 15
       name: gogo-scan
       with:
         target: '{{ inputs.target }}'
@@ -105,7 +99,6 @@ jobs:
     steps:
     - task: nmap
       log-command: true
-      timeout: 30
       name: service-detect
       with:
         target: "{{ jobs['host-discovery'].outputs.live_hosts }}"
@@ -113,7 +106,6 @@ jobs:
       continue-on-error: true
     - task: httpx
       log-command: true
-      timeout: 10
       name: http-probe
       with:
         target: "{{ jobs['host-discovery'].outputs.live_hosts }}"
@@ -137,7 +129,6 @@ jobs:
     steps:
     - task: searchsploit
       log-command: true
-      timeout: 5
       name: exploit-search
       with:
         target: '{{ inputs.target }}'

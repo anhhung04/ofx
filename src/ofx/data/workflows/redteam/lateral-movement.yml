@@ -46,7 +46,6 @@ jobs:
     steps:
     - task: netexec
       log-command: true
-      timeout: 15
       name: nxc-smb-test
       with:
         target: '{{ inputs.targets_file }}'
@@ -87,7 +86,6 @@ jobs:
     steps:
     - task: netexec
       log-command: true
-      timeout: 15
       name: nxc-winrm-test
       with:
         target: '{{ inputs.targets_file }}'
@@ -123,7 +121,6 @@ jobs:
     steps:
     - task: netexec
       log-command: true
-      timeout: 15
       name: nxc-ssh-test
       with:
         target: '{{ inputs.targets_file }}'

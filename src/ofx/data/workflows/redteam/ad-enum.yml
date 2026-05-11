@@ -41,7 +41,6 @@ jobs:
     steps:
       - task: netexec
         log-command: true
-        timeout: 15
         name: nxc-smb-shares
         with:
           target: "{{ inputs.target }}"
@@ -52,7 +51,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 15
         name: nxc-smb-users
         with:
           target: "{{ inputs.target }}"
@@ -63,7 +61,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 15
         name: nxc-smb-groups
         with:
           target: "{{ inputs.target }}"
@@ -74,7 +71,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 15
         name: nxc-smb-sessions
         with:
           target: "{{ inputs.target }}"
@@ -85,7 +81,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 15
         name: nxc-smb-passpol
         with:
           target: "{{ inputs.target }}"
@@ -95,7 +90,6 @@ jobs:
           pass_pol: true
         continue-on-error: true
       - task: netexec
-        timeout: 15
         name: nxc-rid-brute
         with:
           target: "{{ inputs.target }}"
@@ -105,7 +99,6 @@ jobs:
           rid_brute: true
         continue-on-error: true
       - task: enum4linux
-        timeout: 10
         name: enum4linux-full
         with:
           target: "{{ inputs.target }}"
@@ -145,7 +138,6 @@ jobs:
     steps:
       - task: kerbrute
         log-command: true
-        timeout: 15
         name: kerbrute-userenum
         with:
           target: "{{ inputs.target }}"
@@ -156,7 +148,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 15
         name: asrep-roast
         with:
           target: "{{ inputs.target }}"
@@ -201,7 +192,6 @@ jobs:
     steps:
       - task: netexec
         log-command: true
-        timeout: 15
         name: nxc-ldap-users
         with:
           target: "{{ inputs.target }}"
@@ -213,7 +203,6 @@ jobs:
         continue-on-error: true
       - task: netexec
         log-command: true
-        timeout: 15
         name: nxc-ldap-gmsa
         if: "{{ inputs.username }}"
         with:

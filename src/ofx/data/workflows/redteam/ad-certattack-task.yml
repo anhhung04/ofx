@@ -36,7 +36,6 @@ jobs:
       template_count: '{{ steps["analyze-certs"].outputs.template_count | default("", true) }}'
     steps:
       - task: certipy
-        timeout: 15
         name: certipy-find
         with:
           target: "{{ inputs.target }}"

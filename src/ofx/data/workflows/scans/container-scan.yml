@@ -17,14 +17,12 @@ jobs:
     steps:
     - task: trivy
       log-command: true
-      timeout: 15
       name: trivy-image
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: grype
       log-command: true
-      timeout: 15
       name: grype-image
       with:
         target: '{{ inputs.target }}'

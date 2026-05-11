@@ -37,7 +37,6 @@ jobs:
             methods: '{{ steps["build-persistence"].outputs.methods | default("", true) }}'
         steps:
             - name: build-persistence
-              timeout: 3
               continue-on-error: true
               script: |
                   from ofx.api.persistence import (

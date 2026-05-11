@@ -43,7 +43,6 @@ jobs:
       hash_count: '{{ steps["save-hashes"].outputs.hash_count | default("", true) }}'
     steps:
       - task: getuserspns
-        timeout: 10
         name: get-spn-tickets
         with:
           target: "{{ inputs.domain }}"
@@ -81,7 +80,6 @@ jobs:
       hash_count: '{{ steps["save-asrep"].outputs.hash_count | default("", true) }}'
     steps:
       - task: getnpusers
-        timeout: 10
         name: get-asrep-hashes
         with:
           target: "{{ inputs.domain }}"
@@ -137,7 +135,6 @@ jobs:
           add_outputs(merged_file=merged_file, total_hashes=len(merged))
           print(f"[+] Merged {len(merged)} hashes for cracking")
       - task: john
-        timeout: 30
         name: john-crack
         with:
           target: "{{ steps['merge-hashes'].outputs.merged_file }}"
@@ -147,7 +144,6 @@ jobs:
         log-stdout: true
         log-command: true
       - task: john
-        timeout: 5
         name: john-show
         with:
           target: "{{ steps['merge-hashes'].outputs.merged_file }}"

@@ -31,7 +31,6 @@ jobs:
     steps:
       - task: grype
         log-command: true
-        timeout: 15
         name: grype-scan
         with:
           target: "{{ inputs.target }}"
@@ -39,7 +38,6 @@ jobs:
 
       - task: trivy
         log-command: true
-        timeout: 15
         name: trivy-scan
         with:
           target: "{{ inputs.target }}"

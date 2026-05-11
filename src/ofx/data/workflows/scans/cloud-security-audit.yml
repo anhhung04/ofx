@@ -33,7 +33,6 @@ jobs:
     steps:
       - task: prowler
         log-command: true
-        timeout: 60
         name: prowler-audit
         with:
           target: "{{ inputs.provider }}"
@@ -52,7 +51,6 @@ jobs:
     steps:
       - task: cloudfox
         log-command: true
-        timeout: 30
         name: cloudfox-scan
         with:
           target: all-checks

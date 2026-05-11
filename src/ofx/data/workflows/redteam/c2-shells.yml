@@ -26,7 +26,6 @@ jobs:
       shell_count: '{{ steps["build-shells"].outputs.shell_count | default("", true) }}'
     steps:
     - name: build-shells
-      timeout: 3
       continue-on-error: true
       script: |
         from ofx.api.c2 import (

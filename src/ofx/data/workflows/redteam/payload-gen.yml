@@ -31,7 +31,6 @@ jobs:
       payload_size: '{{ steps["build-payload"].outputs.payload_size | default("", true) }}'
     steps:
     - name: build-payload
-      timeout: 3
       continue-on-error: true
       script: |
         from ofx.api.payloads import build_hta, build_lnk, inline_base64_ps, save

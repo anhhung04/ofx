@@ -20,7 +20,6 @@ jobs:
     steps:
     - task: dalfox
       log-command: true
-      timeout: 15
       name: dalfox-xss
       with:
         target: '{{ inputs.target }}'
@@ -35,7 +34,6 @@ jobs:
     steps:
     - task: nuclei
       log-command: true
-      timeout: 20
       name: nuclei-http
       with:
         target: '{{ inputs.target }}'

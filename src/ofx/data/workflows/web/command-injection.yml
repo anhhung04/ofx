@@ -27,7 +27,6 @@ jobs:
     steps:
     - task: commix
       log-command: true
-      timeout: 15
       name: commix-scan
       with:
         target: '{{ inputs.target }}'
@@ -54,7 +53,6 @@ jobs:
     steps:
     - task: nuclei
       log-command: true
-      timeout: 20
       name: nuclei-cmdi
       with:
         target: '{{ inputs.target }}'

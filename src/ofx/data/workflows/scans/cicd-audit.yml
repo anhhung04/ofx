@@ -25,7 +25,6 @@ jobs:
     steps:
       - task: poutine
         log-command: true
-        timeout: 20
         name: poutine-scan
         with:
           target: "{{ inputs.target }}"
@@ -40,7 +39,6 @@ jobs:
     steps:
       - task: legitify
         log-command: true
-        timeout: 20
         name: legitify-scan
         with:
           target: "{{ inputs.target }}"

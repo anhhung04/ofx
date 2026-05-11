@@ -35,7 +35,6 @@ jobs:
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
-        timeout: 10
         continue-on-error: true
       - task: dnsx
         log-command: true
@@ -47,7 +46,6 @@ jobs:
           mx: true
           ns: true
           cname: true
-        timeout: 10
         continue-on-error: true
       - name: collect-domain
         script: |
@@ -65,7 +63,6 @@ jobs:
     steps:
       - task: theharvester
         log-command: true
-        timeout: 15
         name: theharvester-search
         with:
           target: "{{ inputs.target }}"
@@ -107,7 +104,6 @@ jobs:
     steps:
       - task: holehe
         log-command: true
-        timeout: 10
         name: holehe-check
         with:
           target: "{{ jobs['email-harvest'].outputs.emails | default(inputs.target, true) }}"
@@ -131,7 +127,6 @@ jobs:
     steps:
       - task: maigret
         log-command: true
-        timeout: 10
         name: maigret-search
         with:
           target: "{{ inputs.username if inputs.username else inputs.target.split('.')[0] }}"
@@ -156,7 +151,6 @@ jobs:
     steps:
       - task: h8mail
         log-command: true
-        timeout: 15
         name: h8mail-breach
         with:
           target: "{{ jobs['email-harvest'].outputs.emails | default(inputs.target, true) }}"
@@ -176,7 +170,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 15
         name: nuclei-secrets
         with:
           target: "{{ inputs.target }}"

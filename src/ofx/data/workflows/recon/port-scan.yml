@@ -28,7 +28,6 @@ jobs:
       results_file: '{{ steps["run-scan"].outputs.results_file | default("", true) }}'
     steps:
     - name: run-scan
-      timeout: 10
       continue-on-error: true
       script: |
         from ofx.api.recon import async_port_scan, PortResult, TOP_100_PORTS

@@ -84,7 +84,6 @@ jobs:
     steps:
     - task: nerva
       log-command: true
-      timeout: 10
       name: nerva-fingerprint
       with:
         target: "{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
@@ -111,7 +110,6 @@ jobs:
           echo "[+] Results: ${OFX_RUN_DIR:-/tmp}/ofx_service_scan.txt"
         fi
       continue-on-error: true
-      timeout: 30
 
   default-cred-check:
     name: Default Credential Check

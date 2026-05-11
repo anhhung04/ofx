@@ -131,4 +131,3 @@ jobs:
       log-stdout: true
       log-command: true
       continue-on-error: true
-      timeout: 30

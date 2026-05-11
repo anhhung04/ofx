@@ -23,7 +23,6 @@ jobs:
       finding_count: '{{ steps["audit-summary"].outputs.finding_count | default("", true) }}'
     steps:
       - task: linpeas
-        timeout: 30
         name: linpeas-scan
         if: "{{ inputs.os == 'linux' }}"
         with:
@@ -33,7 +32,6 @@ jobs:
         log-stdout: true
         log-command: true
       - task: winpeas
-        timeout: 30
         name: winpeas-scan
         if: "{{ inputs.os == 'windows' }}"
         with:

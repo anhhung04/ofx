@@ -22,7 +22,6 @@ jobs:
     steps:
     - task: naabu
       log-command: true
-      timeout: 10
       name: port-scan
       with:
         target: '{{ inputs.target }}'
@@ -31,7 +30,6 @@ jobs:
       continue-on-error: true
     - task: nerva
       log-command: true
-      timeout: 10
       name: fingerprint
       with:
         target: '{{ inputs.target }}'
@@ -164,7 +162,6 @@ jobs:
         print(f"\n[+] Full results: {out_file}")
       log-stdout: true
       log-command: true
-      timeout: 10
 
     - name: export-to-project
       script: |
@@ -198,7 +195,6 @@ jobs:
         naabu -host {{ inputs.target }} -p {{ jobs['port-discovery'].outputs.open_ports | default('22,21,3306,5432,6379', true) }} -silent 2>/dev/null | \
           nerva --json 2>/dev/null | \
           brutus --json 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_svc_brutus.jsonl
-      timeout: 15
       continue-on-error: true
     - name: parse-results
       script: |

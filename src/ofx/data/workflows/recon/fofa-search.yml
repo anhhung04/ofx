@@ -29,7 +29,6 @@ jobs:
       raw_count: '{{ steps["fofa-query"].outputs.raw_count | default("", true) }}'
     steps:
     - name: fofa-query
-      timeout: 5
       continue-on-error: true
       log-command: true
       script: |
@@ -68,7 +67,6 @@ jobs:
       hosts_file: '{{ steps["dedup-results"].outputs.hosts_file | default("", true) }}'
     steps:
     - name: dedup-results
-      timeout: 3
       continue-on-error: true
       script: |
         from pathlib import Path
@@ -116,7 +114,6 @@ jobs:
     needs: [search, deduplicate]
     steps:
     - name: fofa-summary
-      timeout: 2
       continue-on-error: true
       script: |
         from pathlib import Path

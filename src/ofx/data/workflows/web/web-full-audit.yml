@@ -36,7 +36,6 @@ jobs:
     steps:
       - task: rustscan
         log-command: true
-        timeout: 10
         name: port-discovery
         retry: 2
         retry-delay: 5
@@ -47,7 +46,6 @@ jobs:
         continue-on-error: true
       - task: httpx
         log-command: true
-        timeout: 10
         name: http-probe
         retry: 2
         retry-delay: 5
@@ -60,7 +58,6 @@ jobs:
         continue-on-error: true
       - task: wafw00f
         log-command: true
-        timeout: 10
         name: waf-detect
         retry: 2
         retry-delay: 5
@@ -69,7 +66,6 @@ jobs:
         continue-on-error: true
       - task: whatweb
         log-command: true
-        timeout: 10
         name: whatweb-scan
         retry: 2
         retry-delay: 5
@@ -137,7 +133,6 @@ jobs:
       ssl_certs: '{{ steps["collect-ssl"].outputs.ssl_certs | default("0", true) }}'
     steps:
       - task: testssl
-        timeout: 15
         name: testssl-scan
         retry: 2
         retry-delay: 5
@@ -147,7 +142,6 @@ jobs:
           protocols: true
         continue-on-error: true
       - task: sslscan
-        timeout: 10
         name: sslscan-scan
         retry: 2
         retry-delay: 5
@@ -175,7 +169,6 @@ jobs:
     steps:
       - task: feroxbuster
         log-command: true
-        timeout: 20
         name: feroxbuster-deep
         retry: 2
         retry-delay: 5
@@ -192,7 +185,6 @@ jobs:
         continue-on-error: true
       - task: gobuster
         log-command: true
-        timeout: 10
         name: gobuster-scan
         retry: 2
         retry-delay: 5
@@ -205,7 +197,6 @@ jobs:
         continue-on-error: true
       - task: dirsearch
         log-command: true
-        timeout: 15
         name: dirsearch-scan
         retry: 2
         retry-delay: 5
@@ -241,7 +232,6 @@ jobs:
     steps:
       - task: katana
         log-command: true
-        timeout: 15
         name: katana-crawl
         retry: 2
         retry-delay: 5
@@ -253,7 +243,6 @@ jobs:
         continue-on-error: true
       - task: hakrawler
         log-command: true
-        timeout: 10
         name: hakrawler-crawl
         retry: 2
         retry-delay: 5
@@ -264,7 +253,6 @@ jobs:
         continue-on-error: true
       - task: gospider
         log-command: true
-        timeout: 15
         name: gospider-crawl
         retry: 2
         retry-delay: 5
@@ -274,7 +262,6 @@ jobs:
         continue-on-error: true
       - task: gau
         log-command: true
-        timeout: 10
         name: gau-archive
         retry: 2
         retry-delay: 5
@@ -283,7 +270,6 @@ jobs:
           subs: true
         continue-on-error: true
       - task: waymore
-        timeout: 15
         name: waymore-archive
         retry: 2
         retry-delay: 5
@@ -291,7 +277,6 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: jsluice
-        timeout: 10
         name: jsluice-analysis
         retry: 2
         retry-delay: 5
@@ -337,7 +322,6 @@ jobs:
     steps:
       - task: arjun
         log-command: true
-        timeout: 10
         name: arjun-params
         retry: 2
         retry-delay: 5
@@ -347,7 +331,6 @@ jobs:
         continue-on-error: true
       - task: x8
         log-command: true
-        timeout: 10
         name: x8-params
         retry: 2
         retry-delay: 5
@@ -357,7 +340,6 @@ jobs:
         continue-on-error: true
       - task: paramspider
         log-command: true
-        timeout: 10
         name: paramspider-discover
         retry: 2
         retry-delay: 5
@@ -398,7 +380,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-scan
         retry: 2
         retry-delay: 5
@@ -408,7 +389,6 @@ jobs:
         continue-on-error: true
       - task: dalfox
         log-command: true
-        timeout: 15
         name: xss-scan
         retry: 2
         retry-delay: 5
@@ -418,7 +398,6 @@ jobs:
         continue-on-error: true
       - task: sqlmap
         log-command: true
-        timeout: 30
         name: sqli-scan
         retry: 2
         retry-delay: 5
@@ -432,7 +411,6 @@ jobs:
         continue-on-error: true
       - task: commix
         log-command: true
-        timeout: 20
         name: cmdi-scan
         retry: 2
         retry-delay: 5
@@ -443,7 +421,6 @@ jobs:
           level: 2
         continue-on-error: true
       - task: crlfuzz
-        timeout: 10
         name: crlf-scan
         retry: 2
         retry-delay: 5
@@ -452,7 +429,6 @@ jobs:
         continue-on-error: true
       - task: nikto
         log-command: true
-        timeout: 15
         name: nikto-scan
         retry: 2
         retry-delay: 5
@@ -461,7 +437,6 @@ jobs:
           maxtime: 900
         continue-on-error: true
       - task: ssrfmap
-        timeout: 15
         name: ssrf-scan
         retry: 2
         retry-delay: 5
@@ -470,7 +445,6 @@ jobs:
           target: "{{ jobs['param-fuzz'].outputs.param_file }}"
         continue-on-error: true
       - task: tinja
-        timeout: 15
         name: ssti-scan
         retry: 2
         retry-delay: 5
@@ -512,7 +486,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 15
         name: nuclei-secrets
         retry: 2
         retry-delay: 5
@@ -521,7 +494,6 @@ jobs:
           tags: exposure,token,secret
         continue-on-error: true
       - task: trufflehog
-        timeout: 15
         name: trufflehog-scan
         retry: 2
         retry-delay: 5
@@ -529,7 +501,6 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gitleaks
-        timeout: 10
         name: gitleaks-scan
         retry: 2
         retry-delay: 5

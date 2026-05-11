@@ -79,14 +79,12 @@ jobs:
       - task: s3scanner
         log-command: true
         name: s3scanner-scan
-        timeout: 10
         with:
           target: "{{ jobs['generate-names'].outputs.names_file }}"
         continue-on-error: true
 
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-cloud-scan
         with:
           target: '{{ inputs.target }}'

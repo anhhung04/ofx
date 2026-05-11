@@ -27,7 +27,6 @@ jobs:
     steps:
       - task: ffuf
         log-command: true
-        timeout: 15
         name: ffuf-fuzz
         with:
           target: "{{ inputs.target }}/FUZZ"
@@ -39,7 +38,6 @@ jobs:
         continue-on-error: true
       - task: feroxbuster
         log-command: true
-        timeout: 20
         name: feroxbuster-fuzz
         with:
           target: "{{ inputs.target }}"
@@ -75,7 +73,6 @@ jobs:
     steps:
       - task: httpx
         log-command: true
-        timeout: 10
         name: probe-fuzzed
         with:
           target: "{{ jobs.fuzz.outputs.fuzzed_file }}"
@@ -90,7 +87,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 15
         name: hunt-secrets
         with:
           target: "{{ inputs.target }}"

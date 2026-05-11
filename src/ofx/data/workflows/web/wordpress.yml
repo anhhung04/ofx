@@ -29,7 +29,6 @@ jobs:
     steps:
       - task: httpx
         log-command: true
-        timeout: 10
         name: http-probe
         with:
           target: "{{ inputs.target }}"
@@ -46,7 +45,6 @@ jobs:
     steps:
       - task: wpscan
         log-command: true
-        timeout: 15
         name: wpscan-full
         with:
           target: "{{ inputs.target }}"
@@ -55,7 +53,6 @@ jobs:
         continue-on-error: true
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-wordpress
         with:
           target: "{{ inputs.target }}"

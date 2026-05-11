@@ -28,7 +28,6 @@ jobs:
       mx: '{{ steps["email-analysis"].outputs.mx | default("", true) }}'
     steps:
     - task: holehe
-      timeout: 10
       name: account-discovery
       with:
         target: '{{ inputs.target }}'
@@ -36,7 +35,6 @@ jobs:
       log-command: true
       continue-on-error: true
     - task: h8mail
-      timeout: 15
       name: breach-search
       with:
         target: '{{ inputs.target }}'

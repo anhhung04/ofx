@@ -68,7 +68,6 @@ jobs:
       - task: gogo
         log-command: true
         name: gogo-scan
-        timeout: 60
         with:
           target: "{{ inputs.target }}"
           ports: "{{ inputs.ports }}"
@@ -100,7 +99,6 @@ jobs:
       - task: zombie
         log-command: true
         name: zombie-brute
-        timeout: 120
         with:
           target: "{{ inputs.target }}"
           gogo: '{{ jobs["scan"].outputs.scan_file }}'

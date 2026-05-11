@@ -19,7 +19,6 @@ jobs:
       audit_json: '{{ steps["fetch-headers"].outputs.audit_json | default("", true) }}'
     steps:
     - name: fetch-headers
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |

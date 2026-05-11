@@ -30,7 +30,6 @@ jobs:
       - task: dnsx
         log-command: true
         name: dns-records
-        timeout: 10
         with:
           target: "{{ inputs.target }}"
           a: true
@@ -45,7 +44,6 @@ jobs:
       - task: dnsrecon
         log-command: true
         name: dnsrecon-scan
-        timeout: 15
         with:
           target: "{{ inputs.target }}"
           type: std,srv,axfr
@@ -72,7 +70,6 @@ jobs:
       - task: subfinder
         log-command: true
         name: subfinder-enum
-        timeout: 15
         with:
           target: "{{ inputs.target }}"
           all: true
@@ -80,14 +77,12 @@ jobs:
       - task: amass
         log-command: true
         name: amass-passive
-        timeout: 30
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
         log-command: true
         name: assetfinder-enum
-        timeout: 15
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
@@ -95,7 +90,6 @@ jobs:
       - task: tlsx
         log-command: true
         name: tls-san-enum
-        timeout: 15
         with:
           target: "{{ inputs.target }}"
           san: true
@@ -104,7 +98,6 @@ jobs:
       - task: subfinder
         log-command: true
         name: crtsh-enum
-        timeout: 10
         with:
           target: "{{ inputs.target }}"
           sources: "crtsh,certspotter"
@@ -148,7 +141,6 @@ jobs:
       - task: dnsx
         log-command: true
         name: verify-subs
-        timeout: "{{ (jobs['subdomain-discovery'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         with:
           target: "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
           a: true
@@ -182,7 +174,6 @@ jobs:
       - task: naabu
         log-command: true
         name: naabu-scan
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int / 10 * 15 + 20) | int }}"
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           top_ports: "1000"
@@ -191,7 +182,6 @@ jobs:
       - task: masscan
         log-command: true
         name: masscan-sweep
-        timeout: 20
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           top_ports: 100
@@ -200,7 +190,6 @@ jobs:
       - task: nmap
         log-command: true
         name: service-detect
-        timeout: 30
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           version_detection: true
@@ -244,7 +233,6 @@ jobs:
       - task: httpx
         log-command: true
         name: probe-hosts
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           tech_detect: true
@@ -256,21 +244,18 @@ jobs:
       - task: testssl
         log-command: true
         name: ssl-audit
-        timeout: 15
         with:
           target: "{{ inputs.target }}:443"
         continue-on-error: true
       - task: wafw00f
         log-command: true
         name: waf-detect
-        timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: whatweb
         log-command: true
         name: tech-fingerprint
-        timeout: 10
         with:
           target: "{{ inputs.target }}"
           aggression: 3
@@ -308,7 +293,6 @@ jobs:
       - task: nuclei
         log-command: true
         name: nuclei-scan
-        timeout: 30
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
           severity: critical,high,medium
@@ -316,7 +300,6 @@ jobs:
       - task: nuclei
         log-command: true
         name: takeover-check
-        timeout: 20
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           tags: "subdomain-takeover,dns"

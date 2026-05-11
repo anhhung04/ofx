@@ -18,7 +18,6 @@ jobs:
     steps:
     - task: subfinder
       log-command: true
-      timeout: 10
       name: subdomain-find
       with:
         target: '{{ inputs.target }}'

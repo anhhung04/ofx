@@ -26,7 +26,6 @@ jobs:
       - task: subfinder
         log-command: true
         name: subfinder-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}", all: true}
@@ -34,7 +33,6 @@ jobs:
       - task: amass
         log-command: true
         name: amass-passive
-        timeout: 30
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}"}
@@ -42,7 +40,6 @@ jobs:
       - task: assetfinder
         log-command: true
         name: assetfinder-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}"}
@@ -50,7 +47,6 @@ jobs:
       - task: theharvester
         log-command: true
         name: harvester-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}"}
@@ -76,7 +72,6 @@ jobs:
       # Recursive pass: re-run subfinder on the full list to catch deeper subs
       - task: subfinder
         name: recursive-subfinder
-        timeout: "{{ (steps['merge-passive'].outputs.sub_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with: {target: "{{ steps['merge-passive'].outputs.subs_file }}", all: true}
@@ -113,7 +108,6 @@ jobs:
       - task: tlsx
         log-command: true
         name: tls-san-enum
-        timeout: 20
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['passive-enum'].outputs.subs_file }}", san: true, port: "443,8443"}
@@ -121,7 +115,6 @@ jobs:
       - task: subfinder
         log-command: true
         name: crtsh-enum
-        timeout: 15
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}", sources: "crtsh,certspotter,digitorus"}
@@ -154,7 +147,6 @@ jobs:
       - task: gotator
         log-command: true
         name: generate-perms
-        timeout: 30
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['passive-enum'].outputs.subs_file }}"}
@@ -162,7 +154,6 @@ jobs:
       - task: puredns
         log-command: true
         name: resolve-perms
-        timeout: 20
         retry: 2
         retry-delay: 5
         if: "{{ steps['generate-perms'].outputs.output_file | default('', true) | length > 0 }}"
@@ -201,7 +192,6 @@ jobs:
       - task: dnsx
         log-command: true
         name: dns-resolve
-        timeout: "{{ (steps['merge-all-sources'].outputs.total_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with: {target: "{{ steps['merge-all-sources'].outputs.merged_file }}", a: true, aaaa: true, cname: true, mx: true, txt: true, resp: true, wildcard_domain: "{{ inputs.target }}"}
@@ -257,14 +247,12 @@ jobs:
     steps:
       - task: naabu
         name: naabu-scan
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}", top_ports: "1000", rate: 1000}
         continue-on-error: true
       - task: nmap
         name: nmap-version
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 30 + 60) | int }}"
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}", version_detection: true, top_ports: 100, timing: 4}
@@ -300,7 +288,6 @@ jobs:
       - task: httpx
         log-command: true
         name: probe-hosts
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(50, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}", tech_detect: true, status_code: true, title: true, follow_redirects: true, ports: "80,443,8080,8443,8000,8888"}
@@ -332,7 +319,6 @@ jobs:
           print(f"Live HTTP: {len(live)} unique hosts")
       - task: wafw00f
         name: waf-detect
-        timeout: "{{ (steps['export-live'].outputs.live_count | default(10, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ steps['export-live'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -353,7 +339,6 @@ jobs:
       - task: gowitness
         log-command: true
         name: screenshots
-        timeout: 20
         retry: 2
         retry-delay: 5
         with: {target: "{{ steps['export-live'].outputs.live_urls_file }}", screenshot_path: "{{ env('OFX_RUN_DIR', '/tmp') }}/ofx_fullrecon_shots"}
@@ -361,7 +346,6 @@ jobs:
       # CSP header analysis — reveals internal/related domains
       - task: csprecon
         name: csp-enum
-        timeout: 10
         retry: 2
         retry-delay: 5
         with: {target: "{{ steps['export-live'].outputs.live_urls_file }}", domain: "{{ inputs.target }}"}
@@ -376,14 +360,12 @@ jobs:
     steps:
       - task: testssl
         name: testssl-scan
-        timeout: "{{ (jobs['dns-verify'].outputs.verified_count | default(10, true) | int / 10 * 30 + 60) | int }}"
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}", protocols: true, vulnerabilities: true}
         continue-on-error: true
       - task: sslscan
         name: sslscan-check
-        timeout: 30
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}", show_certificate: true}
@@ -408,7 +390,6 @@ jobs:
       - task: subzy
         log-command: true
         name: subzy-check
-        timeout: 15
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}"}
@@ -416,7 +397,6 @@ jobs:
       - task: nuclei
         log-command: true
         name: nuclei-takeover
-        timeout: 20
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}", tags: "subdomain-takeover,takeover,dns"}
@@ -465,14 +445,12 @@ jobs:
       # Passive URL collection from web archives
       - task: waymore
         name: waymore-urls
-        timeout: 30
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}"}
         continue-on-error: true
       - task: gau
         name: gau-urls
-        timeout: 20
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}"}
@@ -480,7 +458,6 @@ jobs:
       # Active crawling on live hosts
       - task: katana
         name: katana-crawl
-        timeout: "{{ (jobs['http-probe'].outputs.live_count | default(10, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -488,7 +465,6 @@ jobs:
         continue-on-error: true
       - task: gospider
         name: gospider-crawl
-        timeout: "{{ (jobs['http-probe'].outputs.live_count | default(10, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -497,14 +473,12 @@ jobs:
       # Parameter discovery
       - task: paramspider
         name: paramspider-mine
-        timeout: 20
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}"}
         continue-on-error: true
       - task: arjun
         name: arjun-discover
-        timeout: "{{ (jobs['http-probe'].outputs.live_count | default(10, true) | int / 10 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -551,7 +525,6 @@ jobs:
     steps:
       - task: nuclei
         name: nuclei-exposure
-        timeout: "{{ (jobs['http-probe'].outputs.live_count | default(10, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
@@ -559,7 +532,6 @@ jobs:
         continue-on-error: true
       - task: gitleaks
         name: gitleaks-scan
-        timeout: 15
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}", source: "{{ env('OFX_RUN_DIR', '/tmp') }}"}
@@ -591,7 +563,6 @@ jobs:
     steps:
       - task: nuclei
         name: nuclei-vuln
-        timeout: "{{ (jobs['url-discovery'].outputs.all_urls_count | default(50, true) | int / 50 * 15 + 60) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['url-discovery'].outputs.all_urls_count | default(0, true) | int > 0 }}"
@@ -599,7 +570,6 @@ jobs:
         continue-on-error: true
       - task: dalfox
         name: dalfox-xss
-        timeout: "{{ (jobs['url-discovery'].outputs.param_urls_count | default(10, true) | int / 10 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['url-discovery'].outputs.param_urls_count | default(0, true) | int > 0 }}"
@@ -607,7 +577,6 @@ jobs:
         continue-on-error: true
       - task: sqlmap
         name: sqlmap-sqli
-        timeout: "{{ (jobs['url-discovery'].outputs.param_urls_count | default(10, true) | int / 10 * 30 + 60) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['url-discovery'].outputs.param_urls_count | default(0, true) | int > 0 }}"
@@ -615,7 +584,6 @@ jobs:
         continue-on-error: true
       - task: crlfuzz
         name: crlfuzz-scan
-        timeout: "{{ (jobs['url-discovery'].outputs.all_urls_count | default(10, true) | int / 50 * 15 + 30) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['url-discovery'].outputs.all_urls_count | default(0, true) | int > 0 }}"
@@ -623,7 +591,6 @@ jobs:
         continue-on-error: true
       - task: commix
         name: commix-cmdi
-        timeout: "{{ (jobs['url-discovery'].outputs.param_urls_count | default(10, true) | int / 10 * 30 + 60) | int }}"
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['url-discovery'].outputs.param_urls_count | default(0, true) | int > 0 }}"

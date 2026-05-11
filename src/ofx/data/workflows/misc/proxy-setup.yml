@@ -33,7 +33,6 @@ jobs:
       proxy_count: '{{ steps["build-config"].outputs.proxy_count | default("", true) }}'
     steps:
       - name: build-config
-        timeout: 3
         continue-on-error: true
         script: |
           from ofx.api.opsec.proxy import build_proxychains_conf, http_proxy_env

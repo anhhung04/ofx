@@ -28,7 +28,6 @@ jobs:
     steps:
     - task: katana
       log-command: true
-      timeout: 15
       name: katana-crawl
       with:
         target: '{{ inputs.target }}'
@@ -36,7 +35,6 @@ jobs:
       continue-on-error: true
     - task: gospider
       log-command: true
-      timeout: 15
       name: gospider-crawl
       with:
         target: '{{ inputs.target }}'
@@ -44,14 +42,12 @@ jobs:
       continue-on-error: true
     - task: gau
       log-command: true
-      timeout: 10
       name: gau-passive
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: httpx
       log-command: true
-      timeout: 10
       name: probe-crawled
       with:
         target: '{{ inputs.target }}'
@@ -82,7 +78,6 @@ jobs:
     steps:
     - task: ffuf
       log-command: true
-      timeout: 15
       name: ffuf-fuzz
       with:
         target: '{{ inputs.target }}/FUZZ'
@@ -93,7 +88,6 @@ jobs:
       continue-on-error: true
     - task: feroxbuster
       log-command: true
-      timeout: 20
       name: feroxbuster-fuzz
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
@@ -108,7 +102,6 @@ jobs:
     steps:
     - task: arjun
       log-command: true
-      timeout: 10
       name: param-discovery
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
@@ -121,7 +114,6 @@ jobs:
     steps:
     - task: nuclei
       log-command: true
-      timeout: 20
       name: nuclei-scan
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
@@ -130,14 +122,12 @@ jobs:
       continue-on-error: true
     - task: dalfox
       log-command: true
-      timeout: 15
       name: xss-scan
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
       continue-on-error: true
     - task: nuclei
       log-command: true
-      timeout: 15
       name: secret-scan
       with:
         target: '{{ inputs.target }}'
@@ -145,7 +135,6 @@ jobs:
       continue-on-error: true
     - task: cariddi
       log-command: true
-      timeout: 10
       name: cariddi-crawl
       with:
         target: '{{ inputs.target }}'
@@ -157,14 +146,12 @@ jobs:
     - task: whatweb
       log-command: true
       name: whatweb-fingerprint
-      timeout: 10
       with:
         target: '{{ inputs.target }}'
         aggression: 3
       continue-on-error: true
     - task: nikto
       log-command: true
-      timeout: 15
       name: nikto-scan
       with:
         target: '{{ inputs.target }}'
@@ -172,7 +159,6 @@ jobs:
       continue-on-error: true
     - task: gobuster
       log-command: true
-      timeout: 10
       name: gobuster-dirs
       with:
         target: '{{ inputs.target }}'

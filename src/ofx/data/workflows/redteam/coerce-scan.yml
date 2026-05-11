@@ -35,7 +35,6 @@ jobs:
       vuln_count: '{{ steps["scan-summary"].outputs.vuln_count | default("", true) }}'
     steps:
       - task: coercer
-        timeout: 15
         name: coercer-scan
         with:
           target: "{{ inputs.target }}"

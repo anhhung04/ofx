@@ -21,7 +21,6 @@ jobs:
     steps:
       - task: subfinder
         log-command: true
-        timeout: 10
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
@@ -30,27 +29,23 @@ jobs:
       - task: findomain
         log-command: true
         name: findomain-enum
-        timeout: 10
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: amass
         log-command: true
-        timeout: 20
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: assetfinder
         log-command: true
-        timeout: 10
         name: assetfinder-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gau
         log-command: true
-        timeout: 10
         name: gau-subs
         with:
           target: "{{ inputs.target }}"
@@ -93,7 +88,6 @@ jobs:
     steps:
       - task: dnsx
         log-command: true
-        timeout: 10
         name: dns-resolve
         with:
           target: "{{ jobs.enum.outputs.subs_file }}"
@@ -167,14 +161,12 @@ jobs:
       - task: subzy
         log-command: true
         name: subzy-check
-        timeout: 5
         with:
           target: ${OFX_RUN_DIR:-/tmp}/ofx_alive_subs.txt
           concurrency: 20
         continue-on-error: true
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-takeover
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -206,7 +198,6 @@ jobs:
     steps:
       - task: gowitness
         log-command: true
-        timeout: 10
         name: gowitness-capture
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"
@@ -214,7 +205,6 @@ jobs:
         continue-on-error: true
       - task: httpx
         log-command: true
-        timeout: 10
         name: http-fingerprint
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file }}"

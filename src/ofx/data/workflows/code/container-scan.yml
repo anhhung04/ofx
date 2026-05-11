@@ -30,7 +30,6 @@ jobs:
     steps:
       - task: trivy
         log-command: true
-        timeout: 20
         name: trivy-image
         with:
           target: "{{ inputs.image }}"
@@ -39,7 +38,6 @@ jobs:
 
       - task: grype
         log-command: true
-        timeout: 20
         name: grype-image
         with:
           target: "{{ inputs.image }}"
@@ -70,7 +68,6 @@ jobs:
     steps:
       - task: trufflehog
         log-command: true
-        timeout: 15
         name: image-secrets
         with:
           target: "docker://{{ inputs.image }}"

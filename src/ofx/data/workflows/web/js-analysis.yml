@@ -27,7 +27,6 @@ jobs:
     steps:
       - task: katana
         log-command: true
-        timeout: 15
         name: katana-js-crawl
         with:
           target: '{{ inputs.target }}'
@@ -37,7 +36,6 @@ jobs:
 
       - task: httpx
         log-command: true
-        timeout: 10
         name: httpx-probe
         with:
           target: '{{ inputs.target }}'
@@ -47,7 +45,6 @@ jobs:
 
       - task: gau
         log-command: true
-        timeout: 10
         name: gau-archive
         with:
           target: '{{ inputs.target }}'
@@ -100,7 +97,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-exposure
         with:
           target: "{{ jobs['discover-js'].outputs.js_file | default(inputs.target, true) }}"

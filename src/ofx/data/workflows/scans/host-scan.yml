@@ -74,7 +74,6 @@ jobs:
                   add_outputs(hostname=hostname, ip=ips[0], all_ips=','.join(ips),
                       ip_count=len(ips), is_multi_ip='true', original_target=original_target)
       - task: cdncheck
-        timeout: 5
         name: cdn-detect
         run_if: "{{ steps['resolve'].outputs.is_multi_ip == 'true' }}"
         with:
@@ -92,7 +91,6 @@ jobs:
     steps:
       - task: rustscan
         log-command: true
-        timeout: 15
         name: rustscan-fast
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -103,7 +101,6 @@ jobs:
         continue-on-error: true
       - task: naabu
         log-command: true
-        timeout: 15
         name: port-discovery
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -114,7 +111,6 @@ jobs:
         continue-on-error: true
       - task: masscan
         log-command: true
-        timeout: 15
         name: masscan-scan
         with:
           target: "{{ jobs['target-resolve'].outputs.ip }}"
@@ -125,7 +121,6 @@ jobs:
         continue-on-error: true
       - task: nmap
         log-command: true
-        timeout: 30
         name: service-detect
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -135,7 +130,6 @@ jobs:
         continue-on-error: true
       - task: nerva
         log-command: true
-        timeout: 10
         name: nerva-fingerprint
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -144,7 +138,6 @@ jobs:
         continue-on-error: true
       - task: ssh-audit
         log-command: true
-        timeout: 10
         name: ssh-audit
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -153,7 +146,6 @@ jobs:
         continue-on-error: true
       - task: httpx
         log-command: true
-        timeout: 15
         name: http-probe
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -164,7 +156,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: wafw00f
-        timeout: 10
         name: waf-detect
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -173,7 +164,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: searchsploit
-        timeout: 5
         name: exploit-search
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -199,7 +189,6 @@ jobs:
       typed_outputs: '{{ (steps["testssl-check"].outputs.typed_outputs | default([], true)) + (steps["sslscan-check"].outputs.typed_outputs | default([], true)) }}'
     steps:
       - task: testssl
-        timeout: 20
         name: testssl-check
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -209,7 +198,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: sslscan
-        timeout: 15
         name: sslscan-check
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -225,7 +213,6 @@ jobs:
       typed_outputs: '{{ steps["brute-services"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: brutespray
-        timeout: 30
         name: brute-services
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -243,7 +230,6 @@ jobs:
       - task: whatweb
         log-command: true
         name: whatweb-fingerprint
-        timeout: 15
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
           aggression: 3
@@ -252,7 +238,6 @@ jobs:
         continue-on-error: true
       - task: nikto
         log-command: true
-        timeout: 20
         name: nikto-scan
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -270,7 +255,6 @@ jobs:
     steps:
       - task: katana
         log-command: true
-        timeout: 20
         name: crawl
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -280,7 +264,6 @@ jobs:
         continue-on-error: true
       - task: gospider
         log-command: true
-        timeout: 20
         name: spider
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -289,7 +272,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: jsluice
-        timeout: 15
         name: js-extract
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -304,7 +286,6 @@ jobs:
       param_urls: '{{ steps["merge-params"].outputs.param_urls | default("", true) }}'
     steps:
       - task: arjun
-        timeout: 20
         name: arjun-discover
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -313,7 +294,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: x8
-        timeout: 20
         name: x8-discover
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -321,7 +301,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: paramspider
-        timeout: 15
         name: paramspider-mine
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -351,7 +330,6 @@ jobs:
       typed_outputs: '{{ (steps["nuclei-secrets"].outputs.typed_outputs | default([], true)) + (steps["gitleaks-scan"].outputs.typed_outputs | default([], true)) }}'
     steps:
       - task: nuclei
-        timeout: 20
         name: nuclei-secrets
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -360,7 +338,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: gitleaks
-        timeout: 15
         name: gitleaks-scan
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -382,7 +359,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 30
         name: nuclei-scan
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -392,7 +368,6 @@ jobs:
         continue-on-error: true
       - task: dalfox
         log-command: true
-        timeout: 20
         name: xss-scan
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -400,7 +375,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: sqlmap
-        timeout: 30
         name: sqli-scan
         run_if: "{{ jobs['param-discovery'].outputs.param_urls != '' }}"
         with:
@@ -412,7 +386,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: crlfuzz
-        timeout: 15
         name: crlf-scan
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -420,7 +393,6 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: commix
-        timeout: 25
         name: cmdi-scan
         run_if: "{{ jobs['param-discovery'].outputs.param_urls != '' }}"
         with:

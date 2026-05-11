@@ -24,7 +24,6 @@ jobs:
     steps:
       - task: httpx
         log-command: true
-        timeout: 10
         name: probe-targets
         with:
           target: '{{ inputs.target }}'
@@ -61,7 +60,6 @@ jobs:
     steps:
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-cache-poison
         with:
           target: '{{ jobs.discover.outputs.live_file | default(inputs.target, true) }}'

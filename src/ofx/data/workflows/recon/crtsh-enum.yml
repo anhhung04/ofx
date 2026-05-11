@@ -22,13 +22,11 @@ jobs:
       log-command: true
       task: subfinder
       continue-on-error: true
-      timeout: 5
       with:
         target: "{{ inputs.target }}"
 
     - name: crtsh-lookup
       continue-on-error: true
-      timeout: 3
       log-command: true
       script: |
         from ofx.api.recon import crtsh_subdomains_sync

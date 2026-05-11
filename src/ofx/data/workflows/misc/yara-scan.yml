@@ -143,4 +143,3 @@ jobs:
             print("  No matches found")
       log-stdout: true
       log-command: true
-      timeout: 5

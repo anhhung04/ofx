@@ -31,16 +31,13 @@ jobs:
       - task: rustscan
         log-command: true
         name: rustscan-sweep
-        timeout: 10
         with:
           target: "{{ inputs.target }}"
           range: 1-65535
           batch_size: 4500
-          timeout: 3000
         continue-on-error: true
       - task: naabu
         log-command: true
-        timeout: 10
         name: naabu-top
         with:
           target: "{{ inputs.target }}"
@@ -49,7 +46,6 @@ jobs:
         continue-on-error: true
       - task: masscan
         log-command: true
-        timeout: 10
         name: masscan-top
         with:
           target: "{{ inputs.target }}"
@@ -106,14 +102,12 @@ jobs:
     steps:
       - task: nerva
         log-command: true
-        timeout: 15
         name: nerva-fingerprint
         with:
           target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
         continue-on-error: true
       - task: nmap
         log-command: true
-        timeout: 30
         name: nmap-version
         with:
           target: "{{ inputs.target }}"
@@ -122,7 +116,6 @@ jobs:
         continue-on-error: true
       - task: httpx
         log-command: true
-        timeout: 10
         name: http-probe
         with:
           target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
@@ -133,14 +126,12 @@ jobs:
         continue-on-error: true
       - task: ssh-audit
         log-command: true
-        timeout: 10
         name: ssh-check
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: searchsploit
         log-command: true
-        timeout: 5
         name: exploit-lookup
         with:
           target: "{{ inputs.target }}"

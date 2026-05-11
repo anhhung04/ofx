@@ -29,7 +29,6 @@ jobs:
     steps:
       - task: graphw00f
         log-command: true
-        timeout: 5
         name: graphql-detect
         with:
           target: "{{ inputs.target }}"
@@ -44,7 +43,6 @@ jobs:
     steps:
       - task: kiterunner
         log-command: true
-        timeout: 20
         name: brute-endpoints
         with:
           target: "{{ inputs.target }}"
@@ -61,7 +59,6 @@ jobs:
     steps:
       - task: schemathesis
         log-command: true
-        timeout: 30
         name: schema-fuzz
         with:
           target: "{{ inputs.schema }}"
@@ -80,7 +77,6 @@ jobs:
     steps:
       - task: cherrybomb
         log-command: true
-        timeout: 15
         name: cherrybomb-scan
         with:
           target: "{{ inputs.schema }}"

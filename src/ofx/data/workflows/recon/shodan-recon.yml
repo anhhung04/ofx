@@ -31,7 +31,6 @@ jobs:
       result_count: '{{ steps["query-shodan"].outputs.result_count | default("", true) }}'
     steps:
     - name: query-shodan
-      timeout: 5
       continue-on-error: true
       log-command: true
       script: |

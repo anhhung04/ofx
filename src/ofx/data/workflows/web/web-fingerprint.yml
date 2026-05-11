@@ -21,7 +21,6 @@ jobs:
       waf: '{{ steps["fetch-and-fingerprint"].outputs.waf | default("", true) }}'
     steps:
     - name: fetch-and-fingerprint
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -63,7 +62,6 @@ jobs:
       robots_content: '{{ steps["check-robots"].outputs.robots_content | default("", true) }}'
     steps:
     - name: audit-headers
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -98,7 +96,6 @@ jobs:
 
         add_outputs(security_audit=json.dumps(audit), missing_count=len(missing))
     - name: check-robots
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -135,7 +132,6 @@ jobs:
     needs: [fingerprint, security]
     steps:
     - name: combined-report
-      timeout: 2
       continue-on-error: true
       script: |
         import json

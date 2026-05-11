@@ -29,7 +29,6 @@ jobs:
       callback_domain: '{{ steps["init-listener"].outputs.callback_domain | default("", true) }}'
     steps:
     - name: init-listener
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -56,7 +55,6 @@ jobs:
       payloads_file: '{{ steps["send-injections"].outputs.payloads_file | default("", true) }}'
     steps:
     - name: send-injections
-      timeout: 5
       continue-on-error: true
       log-command: true
       script: |
@@ -151,7 +149,6 @@ jobs:
     needs: [setup, inject]
     steps:
     - name: poll-interactions
-      timeout: 3
       continue-on-error: true
       script: |
         from ofx.api.oob import Interactsh

@@ -27,7 +27,6 @@ jobs:
       pattern_count: '{{ steps["gen-emails"].outputs.pattern_count | default("", true) }}'
     steps:
     - name: gen-emails
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -56,7 +55,6 @@ jobs:
       perm_count: '{{ steps["gen-perms"].outputs.perm_count | default("", true) }}'
     steps:
     - name: gen-perms
-      timeout: 2
       continue-on-error: true
       log-command: true
       script: |
@@ -83,7 +81,6 @@ jobs:
     needs: [email-patterns, domain-perms]
     steps:
     - name: display-summary
-      timeout: 2
       continue-on-error: true
       script: |
         print("=" * 60)

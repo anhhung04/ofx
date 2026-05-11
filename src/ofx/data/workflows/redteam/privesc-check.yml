@@ -21,7 +21,6 @@ jobs:
       target_os: '{{ steps["gen-commands"].outputs.target_os | default("", true) }}'
     steps:
     - name: gen-commands
-      timeout: 3
       continue-on-error: true
       log-command: true
       script: |
@@ -158,7 +157,6 @@ jobs:
     needs: [enumerate]
     steps:
     - name: format-report
-      timeout: 2
       continue-on-error: true
       script: |
         from ofx.api.privesc.linux import (

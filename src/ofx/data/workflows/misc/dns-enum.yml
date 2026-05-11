@@ -23,7 +23,6 @@ jobs:
       found_count: '{{ steps["dns-brute"].outputs.found_count | default("", true) }}'
     steps:
     - name: dns-brute
-      timeout: 15
       continue-on-error: true
       log-command: true
       script: |
@@ -81,7 +80,6 @@ jobs:
       unique_ips: '{{ steps["resolve-ips"].outputs.unique_ips | default("", true) }}'
     steps:
     - name: resolve-ips
-      timeout: 10
       continue-on-error: true
       log-command: true
       script: |

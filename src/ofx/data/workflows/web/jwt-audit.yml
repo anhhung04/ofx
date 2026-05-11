@@ -31,7 +31,6 @@ jobs:
     steps:
     - task: jwt_tool
       log-command: true
-      timeout: 10
       name: jwt-decode
       with:
         target: '{{ inputs.token }}'
@@ -80,7 +79,6 @@ jobs:
     steps:
     - task: jwt_tool
       log-command: true
-      timeout: 15
       name: jwt-all-tests
       with:
         target: '{{ inputs.token }}'

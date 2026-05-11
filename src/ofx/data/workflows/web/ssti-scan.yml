@@ -24,7 +24,6 @@ jobs:
     steps:
       - task: httpx
         log-command: true
-        timeout: 10
         name: probe-targets
         with:
           target: '{{ inputs.target }}'
@@ -34,7 +33,6 @@ jobs:
 
       - task: arjun
         log-command: true
-        timeout: 10
         name: arjun-params
         with:
           target: '{{ inputs.target }}'
@@ -44,7 +42,6 @@ jobs:
 
       - task: paramspider
         log-command: true
-        timeout: 10
         name: paramspider-mine
         with:
           target: '{{ inputs.target }}'
@@ -102,14 +99,12 @@ jobs:
       - task: tinja
         log-command: true
         name: tinja-scan
-        timeout: 10
         with:
           target: "{{ jobs['param-discovery'].outputs.param_file | default(inputs.target, true) }}"
         continue-on-error: true
 
       - task: nuclei
         log-command: true
-        timeout: 20
         name: nuclei-ssti
         with:
           target: "{{ jobs['param-discovery'].outputs.param_file | default(inputs.target, true) }}"

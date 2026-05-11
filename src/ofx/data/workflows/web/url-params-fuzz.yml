@@ -27,7 +27,6 @@ jobs:
     steps:
     - task: httpx
       log-command: true
-      timeout: 10
       name: probe-url
       with:
         target: '{{ inputs.target }}'
@@ -50,7 +49,6 @@ jobs:
     steps:
     - task: arjun
       log-command: true
-      timeout: 10
       name: find-params
       with:
         target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}"
@@ -74,7 +72,6 @@ jobs:
     steps:
     - task: ffuf
       log-command: true
-      timeout: 15
       name: fuzz-params
       with:
         target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}?FUZZ=test"

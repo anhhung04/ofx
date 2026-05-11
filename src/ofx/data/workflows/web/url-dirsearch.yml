@@ -27,7 +27,6 @@ jobs:
     steps:
       - task: httpx
         log-command: true
-        timeout: 10
         name: http-probe
         with:
           target: "{{ inputs.target }}"
@@ -51,7 +50,6 @@ jobs:
     steps:
       - task: dirsearch
         log-command: true
-        timeout: 15
         name: dirsearch-scan
         with:
           target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}"
@@ -62,7 +60,6 @@ jobs:
         continue-on-error: true
       - task: ffuf
         log-command: true
-        timeout: 15
         name: ffuf-dirs
         with:
           target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}/FUZZ"
@@ -95,7 +92,6 @@ jobs:
     steps:
       - task: katana
         log-command: true
-        timeout: 15
         name: crawl-content
         with:
           target: "{{ jobs['dir-search'].outputs.found_file | default(inputs.target, true) }}"
