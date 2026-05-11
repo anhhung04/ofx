@@ -142,6 +142,7 @@ class StepRunner(StepRunnerMixin, BaseRunner[Step]):
                 if runner.is_success:
                     await self._apply_run_result(res)
                     self._log_debug(f"result: {await self.get_result()}")
+                    return  # Success — stop retrying
                 else:
                     raise RuntimeError(step_execution_error(res.status, res.error))
             except TimeoutError as e:
