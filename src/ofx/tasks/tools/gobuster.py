@@ -59,6 +59,7 @@ class GobusterTask(Task):
         if self.silent_flag:
             parts.append(self.silent_flag)
 
+        has_status_codes = False
         for key, value in kwargs.items():
             if key.startswith("_"):
                 continue
@@ -70,6 +71,13 @@ class GobusterTask(Task):
                     parts.append(opt.flag)
             elif value is not None:
                 parts.extend([opt.flag, str(value)])
+                if key == "status_codes":
+                    has_status_codes = True
+
+        # Gobuster has a default status-codes-blacklist (404) that conflicts
+        # with explicit status-codes; clear it to avoid the mutual-exclusion error.
+        if has_status_codes:
+            parts.extend(["-b", ""])
 
         output_file: Path | None = None
         if self.output_flag:
