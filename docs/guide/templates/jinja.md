@@ -147,6 +147,47 @@ Available helpers: `ports()`, `urls()`, `vulns()`, `subdomains()`, `ips()`, `tag
 
 ---
 
+## ETL & Data Transformation Filters
+
+OFX registers additional Jinja2 filters for transforming lists of data. These are especially useful with [pipe steps](../jobs-steps/steps.md#pipe-steps) and task outputs.
+
+| Filter | Description |
+|--------|-------------|
+| `pluck("key")` | Extract a single field from each dict |
+| `sort_by("key")` | Sort dicts by a field |
+| `unique_by("key")` | Deduplicate dicts by a field |
+| `where("key", "value")` | Keep dicts where field equals value |
+| `where_not("key", "value")` | Exclude dicts where field equals value |
+| `first(n)` | Take the first N items |
+| `last(n)` | Take the last N items |
+| `group_by("key")` | Group into `{value: [items]}` |
+| `flatten` | Flatten nested lists one level |
+| `count_by("key")` | Count occurrences: `{value: count}` |
+| `to_lines` | Join items with newlines |
+| `to_csv("field1,field2")` | Format as CSV rows |
+| `to_jsonl` | Format as JSON Lines |
+
+### Examples
+
+```yaml
+# Extract and deduplicate hosts from scan results
+run: |
+  echo "{{ steps['scan'].outputs.typed_outputs | ports | pluck('host') | unique_by('host') | sort_by('host') | to_lines }}"
+
+# Count ports per host
+run: |
+  {% set counts = steps['scan'].outputs.typed_outputs | ports | count_by('host') %}
+  {% for host, n in counts.items() %}
+  echo "{{ host }}: {{ n }} ports"
+  {% endfor %}
+
+# Filter and format as CSV
+run: |
+  echo "{{ steps['scan'].outputs.typed_outputs | ports | where('state', 'open') | to_csv('host,port,service') }}"
+```
+
+---
+
 ## OFX Template Functions
 
 Beyond standard Jinja2, OFX provides built-in functions accessible in any template expression. See the full list at [Built-in Variables & Functions](../context-variables-functions.md).

@@ -125,6 +125,33 @@ Filter task typed outputs by type. These accept a list of typed output dicts and
 | `exploits(items)` | `exploit` |
 | `of_type(items, "type_name")` | Any custom type |
 
+### ETL & Data Transformation Helpers
+
+These functions transform lists of data and are available both as template functions and as Jinja2 pipe filters (`|`). They pair naturally with [pipe steps](jobs-steps/steps.md#pipe-steps) for declarative data processing.
+
+| Function / Filter | Description |
+|---|---|
+| `pluck(items, key)` | Extract a single attribute from each item. `{{ items \| pluck("host") }}` |
+| `to_lines(items)` | Join items with newlines. `{{ items \| to_lines }}` |
+| `to_csv(items, fields, separator)` | Format dicts as CSV rows. `{{ items \| to_csv("host,port") }}` |
+| `to_jsonl(items)` | Format items as JSON Lines (one JSON object per line). |
+| `sort_by(items, key, reverse=False)` | Sort dicts by a key. `{{ items \| sort_by("port") }}` |
+| `unique_by(items, key)` | Deduplicate dicts by a key. `{{ items \| unique_by("host") }}` |
+| `where(items, key, value)` | Filter dicts where `key == value`. `{{ items \| where("status", "open") }}` |
+| `where_not(items, key, value)` | Filter dicts where `key != value`. |
+| `first(items, n=1)` | Return the first N items. `{{ items \| first(5) }}` |
+| `last(items, n=1)` | Return the last N items. |
+| `group_by(items, key)` | Group items by key, returns `{key_value: [items...]}`. |
+| `flatten(items)` | Flatten nested lists one level. |
+| `count_by(items, key)` | Count occurrences by key value, returns `{value: count}`. |
+
+**Example — chaining filters:**
+```yaml
+run: |
+  echo "Top 10 unique hosts:"
+  echo "{{ steps['scan'].outputs.typed_outputs | ports | pluck('host') | unique_by('host') | first(10) | to_lines }}"
+```
+
 ### Findings Export
 
 | Function | Description |

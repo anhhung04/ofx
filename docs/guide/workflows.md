@@ -69,6 +69,7 @@ jobs:
   - `script_file`
   - `uses`
   - `task`
+  - `pipe`
 
 ## Matrix strategy
 

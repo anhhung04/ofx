@@ -48,6 +48,7 @@ Each step executes exactly **one** action:
 | `script_file` | Python file path |
 | `uses` | Reusable workflow reference |
 | `task` | Pre-built security tool wrapper (see [Tasks](tasks.md)) |
+| `pipe` | Declarative ETL pipeline (see [Pipe Steps](jobs-steps/steps.md#pipe-steps)) |
 
 
 ### Step Properties
@@ -55,7 +56,7 @@ Each step executes exactly **one** action:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `name` | str | - | Descriptive name |
-| `run` / `script` / `script_file` / `uses` / `task` | str | - | **Required.** Exactly one action |
+| `run` / `script` / `script_file` / `uses` / `task` / `pipe` | str/dict | - | **Required.** Exactly one action |
 | `timeout` | int/str | 1440 | Max duration in minutes (supports Jinja2 expressions) |
 | `retry` | int | 0 | Retry attempts on failure |
 | `retry-delay` | int | 5 | Seconds between retries |
@@ -165,6 +166,35 @@ Task outputs are parsed into **typed objects** (Port, Url, Vulnerability, etc.) 
 ```
 
 See the [Tasks guide](tasks.md) for the full list of available tools and options.
+
+---
+
+## 🔄 Pipe Steps (`pipe`)
+
+Pipe steps provide declarative ETL (Extract-Transform-Load) pipelines for transforming data between steps without writing scripts.
+
+```yaml
+steps:
+  - task: nmap
+    name: scan
+    with:
+      target: "{{ inputs.target }}"
+
+  - name: filter-results
+    pipe:
+      input: "{{ steps['scan'].outputs.typed_outputs }}"
+      filter: "port > 1024"
+      sort: port
+      unique: host
+      format: csv
+      field: host,port
+```
+
+Pipe steps support: `input`, `filter`, `map`, `flatten`, `sort`, `reverse`, `unique`, `group_by`, `offset`, `limit`, `format`, `field`, `separator`, and `headers`.
+
+Results are accessible via `{{ steps['filter-results'].outputs.stdout }}` and `{{ steps['filter-results'].outputs.file }}`.
+
+See the [Pipe Steps reference](jobs-steps/steps.md#pipe-steps) for full configuration details and ETL helper functions.
 
 ---
 
