@@ -600,3 +600,52 @@ class TestSupportFuncCache:
         assert f1 is not f2  # Should be a copy
         f1["extra"] = True
         assert "extra" not in resolver.get_support_functions()
+
+
+# ── Recursion depth limit ────────────────────────────────────────────────
+@pytest.mark.asyncio
+class TestRecursionDepthLimit:
+    """Verify that deeply nested data structures are rejected."""
+
+    async def test_deeply_nested_dict_raises(self, resolver):
+        """A dict nested beyond _MAX_RESOLVE_DEPTH should raise RecursionError."""
+        depth = resolver._MAX_RESOLVE_DEPTH + 5
+        value: dict = {"leaf": "{{ 'ok' }}"}
+        for _ in range(depth):
+            value = {"nested": value}
+
+        with pytest.raises(RecursionError, match="maximum depth"):
+            await resolver.resolve(value, {})
+
+    async def test_deeply_nested_list_raises(self, resolver):
+        """A list nested beyond limit should raise RecursionError."""
+        depth = resolver._MAX_RESOLVE_DEPTH + 5
+        value: list = ["{{ 'ok' }}"]
+        for _ in range(depth):
+            value = [value]
+
+        with pytest.raises(RecursionError, match="maximum depth"):
+            await resolver.resolve(value, {})
+
+    async def test_normal_depth_succeeds(self, resolver):
+        """Reasonable nesting depth should resolve without error."""
+        value: dict = {"leaf": "{{ x }}"}
+        for _ in range(10):
+            value = {"nested": value}
+
+        result = await resolver.resolve(value, {"x": "hello"})
+        # Drill down to the leaf
+        current = result
+        for _ in range(10):
+            current = current["nested"]
+        assert current["leaf"] == "hello"
+
+    async def test_depth_resets_between_calls(self, resolver):
+        """Depth counter should reset between separate resolve() calls."""
+        value = {"a": "{{ x }}"}
+        for _ in range(30):
+            value = {"nested": value}
+
+        # Should succeed twice without accumulating depth
+        await resolver.resolve(value, {"x": "1"})
+        await resolver.resolve(value, {"x": "2"})

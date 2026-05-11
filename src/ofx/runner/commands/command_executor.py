@@ -138,7 +138,8 @@ class CommandExecutor:
             async for raw_line in proc.stdout:
                 try:
                     line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
-                except Exception:
+                except Exception as e:
+                    logger.debug("Failed to decode stdout line as UTF-8, using hex: %s", e)
                     line = raw_line.hex()
                 stdout_lines.append(line)
                 if on_line:
@@ -157,12 +158,12 @@ class CommandExecutor:
                 asyncio.gather(_read_stdout(), _read_stderr(), proc.wait()),
                 self._command.timeout_minutes * 60,
             )
-        except TimeoutError:
+        except TimeoutError as te:
             _kill_process_tree(proc)
             await proc.wait()
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
-            ) from None
+            ) from te
         finally:
             self._close_process(proc)
 
@@ -205,12 +206,12 @@ class CommandExecutor:
             exit_code = await asyncio.wait_for(
                 proc.wait(), self._command.timeout_minutes * 60
             )
-        except TimeoutError:
+        except TimeoutError as te:
             _kill_process_tree(proc)
             await proc.wait()
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
-            ) from None
+            ) from te
         finally:
             self._close_process(proc)
 
@@ -240,12 +241,12 @@ class CommandExecutor:
                 proc.communicate(), self._command.timeout_minutes * 60
             )
             exit_code = proc.returncode
-        except TimeoutError:
+        except TimeoutError as te:
             _kill_process_tree(proc)
             await proc.wait()
             raise RuntimeError(
                 f"Command timed out after {self._command.timeout_minutes} minutes"
-            ) from None
+            ) from te
         finally:
             self._close_process(proc)
 
@@ -305,11 +306,11 @@ class CommandExecutor:
         if self._command.interactive:
             if exit_code not in (0, 130, 127):
                 stderr = stderr or f"Command failed with exit code {exit_code}"
-                raise RuntimeError(f"Command failed: {stderr}") from None
+                raise RuntimeError(f"Command failed: {stderr}")
             return
         if exit_code != 0:
             stderr = stderr or f"Command failed with exit code {exit_code}"
-            raise RuntimeError(f"Command failed: {stderr}") from None
+            raise RuntimeError(f"Command failed: {stderr}")
 
     @staticmethod
     def _close_process(proc: asyncio.subprocess.Process) -> None:

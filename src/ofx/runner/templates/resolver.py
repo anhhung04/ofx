@@ -127,6 +127,9 @@ class TemplateResolver:
     _cache_hits: int
     _cache_misses: int
 
+    # Maximum nesting depth for recursive template resolution.
+    _MAX_RESOLVE_DEPTH = 64
+
     def __new__(cls):
         if cls._instance is None:
             with _resolver_lock:
@@ -160,7 +163,29 @@ class TemplateResolver:
         memo = _memo or {}
         if value is None:
             return value
-        elif isinstance(value, dict):
+
+        # Guard against deeply nested structures (malicious or accidental)
+        depth: int = memo.get("_resolve_depth", 0)
+        if depth > self._MAX_RESOLVE_DEPTH:
+            raise RecursionError(
+                f"Template resolution exceeded maximum depth ({self._MAX_RESOLVE_DEPTH}). "
+                f"Check for deeply nested data structures."
+            )
+        memo["_resolve_depth"] = depth + 1
+
+        try:
+            return await self._resolve_inner(value, context_vars, memo)
+        finally:
+            memo["_resolve_depth"] = depth
+
+    async def _resolve_inner(
+        self,
+        value: Any,
+        context_vars: dict[str, Any],
+        memo: dict[str, Any],
+    ) -> Any:
+        """Inner resolve implementation (separated for depth tracking)."""
+        if isinstance(value, dict):
             return {
                 k: await self.resolve(v, context_vars, memo) for k, v in value.items()
             }

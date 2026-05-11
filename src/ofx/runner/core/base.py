@@ -222,8 +222,10 @@ class BaseRunner[TModel: BaseModel]:
             if final_status != initial_checkpoint_status:
                 try:
                     await self._write_checkpoint(final_status)
-                except Exception:
-                    self._log_warning("final checkpoint update skipped due to error")
+                except Exception as checkpoint_err:
+                    self._log_warning(
+                        f"final checkpoint update skipped due to error: {checkpoint_err}"
+                    )
 
             try:
                 await cleanup_registry(self._registry)
