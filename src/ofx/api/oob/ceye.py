@@ -47,8 +47,7 @@ class CEye:
         self.identify = ""
         self.headers = {"User-Agent": "curl/7.80.0"}
         self.token = token
-        self._session = requests.Session()
-        self._session.headers.update(self.headers)
+        self._session = requests.Client(headers=self.headers)
 
         if conf_path is None:
             conf_path = CONFIG_FILE
