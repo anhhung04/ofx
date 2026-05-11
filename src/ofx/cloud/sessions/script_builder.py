@@ -197,6 +197,9 @@ def _step_command_bash(step: Step, step_index: int, work_dir: str) -> str:  # no
     if run_type == RunType.TASK:
         return f'cd "$WORK_DIR" 2>/dev/null; {build_task_command_from_step(step)}'
 
+    if run_type == RunType.PIPE:
+        return 'echo "Pipe steps run locally and cannot be executed in cloud sessions" >&2; exit 1'
+
     return f'echo "Unsupported run type: {run_type}"'
 
 
@@ -435,5 +438,8 @@ def _step_command_ps(step: Step, step_index: int, work_dir: str) -> str:
 
     if run_type == RunType.TASK:
         return f'Set-Location "{escaped_cwd}"; {build_task_command_from_step(step)}'
+
+    if run_type == RunType.PIPE:
+        return 'Write-Error "Pipe steps run locally and cannot be executed in cloud sessions"; exit 1'
 
     return f'Write-Output "Unsupported run type: {run_type}"'

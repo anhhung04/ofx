@@ -155,7 +155,7 @@ def _item_namespace(item: Any) -> dict[str, Any]:
             try:
                 ns[attr] = getattr(item, attr)
             except Exception:
-                pass
+                logger.debug("Failed to read attribute %s from item", attr)
     return ns
 
 
@@ -237,8 +237,8 @@ def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
             try:
                 if _safe_eval(expr, ns):
                     filtered.append(item)
-            except Exception:
-                pass  # items that error out are dropped
+            except Exception as exc:
+                logger.debug("Filter expression failed for item: %s", exc)
         items = filtered
 
     # ── map ───────────────────────────────────────────────────────────
@@ -250,7 +250,8 @@ def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
             for key, expr in config.map.items():
                 try:
                     new_item[key] = _safe_eval(expr, ns)
-                except Exception:
+                except Exception as exc:
+                    logger.debug("Map expression '%s' failed: %s", key, exc)
                     new_item[key] = None
             mapped.append(new_item)
         items = mapped
@@ -355,6 +356,11 @@ class PipeRunner(BaseRunner[PipeExecution]):
         """Resolve the pipe input Jinja2 expression into a concrete list."""
         raw = await self._resolve_template(self.model.pipe.input)
         self.model.resolved_input = _coerce_to_list(raw)
+
+    async def _on_failure_cleanup(self) -> None:
+        """Remove the temp output file when the pipeline fails."""
+        if self._temp_file and self._temp_file.exists():
+            self._temp_file.unlink(missing_ok=True)
 
     async def _do_run(self) -> None:
         items = list(self.model.resolved_input)

@@ -51,13 +51,16 @@ def _ensure_filters_registered(env: Environment) -> None:
     """
     if getattr(env, "_ofx_filters_registered", False):
         return
-    from ofx.runner.templates.helpers import _etl_helpers, _type_filter_helpers
+    with _resolver_lock:
+        if getattr(env, "_ofx_filters_registered", False):
+            return
+        from ofx.runner.templates.helpers import _etl_helpers, _type_filter_helpers
 
-    for name, fn in _type_filter_helpers().items():
-        env.filters[name] = fn
-    for name, fn in _etl_helpers().items():
-        env.filters[name] = fn
-    env._ofx_filters_registered = True  # type: ignore[attr-defined]
+        for name, fn in _type_filter_helpers().items():
+            env.filters[name] = fn
+        for name, fn in _etl_helpers().items():
+            env.filters[name] = fn
+        env._ofx_filters_registered = True  # type: ignore[attr-defined]
 
 
 _jinja_env = _build_jinja_env()

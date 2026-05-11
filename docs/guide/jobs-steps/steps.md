@@ -23,7 +23,7 @@ jobs:
 
 ## Step Fields
 - `name`: (optional) Description of the step. **Must be unique within a job** — duplicate names cause a validation error.
-- `run` / `script` / `script_file` / `uses` / `task`: **Exactly one** action per step
+- `run` / `script` / `script_file` / `uses` / `task` / `pipe`: **Exactly one** action per step
 - `env`: (optional) Environment variables
 - `timeout`: (optional) Max time in minutes (default: 1440). Supports Jinja2 expressions for dynamic scaling (see below).
 - `retry`: (optional) Retry attempts on failure
@@ -60,7 +60,79 @@ If the expression resolves to an invalid value, a default of 60 minutes is used 
 - Use `script_file:` to execute an existing Python file (resolved relative to the workflow directory)
 - Use `uses:` to call a reusable workflow
 - Use `task:` to run a pre-built security tool wrapper (see [Tasks](../tasks.md))
+- Use `pipe:` to declaratively transform data between steps (see [Pipe Steps](#pipe-steps) below)
 - Use `if:` for conditional logic
+
+---
+
+## Pipe Steps
+
+Pipe steps provide declarative ETL (Extract-Transform-Load) pipelines for processing data between steps without writing scripts. Use `pipe:` when you need to filter, map, sort, or format output from a previous step.
+
+```yaml
+steps:
+  - name: scan
+    task: nmap
+    with:
+      target: "{{ inputs.target }}"
+
+  - name: http-targets
+    pipe:
+      input: "{{ steps.scan.outputs.typed_outputs | ports }}"
+      filter: "state == 'open' and port in [80, 443, 8080]"
+      map:
+        url: "'http://' + host + ':' + str(port)"
+        host: host
+      sort: port
+      unique: host
+      format: lines
+      field: url
+
+  - name: screenshot
+    run: gowitness file -f {{ steps.http-targets.outputs.file }}
+```
+
+### Pipe Configuration
+
+| Field | Description |
+|-------|-------------|
+| `input` | **(required)** Jinja2 expression resolving to a list |
+| `filter` | Python expression evaluated per item; item fields are local variables |
+| `map` | Dict of `field: expression` — produces new objects with only mapped fields |
+| `flatten` | Expand a nested list field in-place |
+| `sort` | Sort by field name(s) (string or list) |
+| `reverse` | Reverse the sort order (default: `false`) |
+| `unique` | Deduplicate by field name(s) — first occurrence wins |
+| `group-by` | Group items by a field value (output becomes dict of lists) |
+| `offset` | Skip the first N items |
+| `limit` | Keep at most N items |
+| `format` | Output format: `json` (default), `jsonl`, `lines`, `csv`, `yaml` |
+| `field` | For `lines` format, extract this field from each item |
+| `separator` | Line separator for `lines` format (default: `\n`) |
+| `headers` | Include header row in `csv` format (default: `true`) |
+
+### Pipe Outputs
+
+Access pipe results in subsequent steps:
+
+- `{{ steps.<name>.outputs.items }}` — processed list (or dict if grouped)
+- `{{ steps.<name>.outputs.count }}` — number of items
+- `{{ steps.<name>.outputs.data }}` — formatted string
+- `{{ steps.<name>.outputs.file }}` — path to temp file with formatted output
+
+### ETL Template Helpers
+
+These helpers work as both template functions and Jinja2 filters for inline transformations:
+
+```yaml
+# As filters (chainable):
+run: echo "{{ steps.scan.outputs.typed_outputs | ports | pluck('host') | unique_by('host') | to_lines }}"
+
+# As functions:
+run: echo "{{ to_lines(pluck(ports(steps.scan.outputs.typed_outputs), 'host')) }}"
+```
+
+Available helpers: `pluck`, `to_lines`, `to_csv`, `to_jsonl`, `sort_by`, `unique_by`, `where`, `where_not`, `first`, `last`, `group_by`, `flatten`, `count_by`
 
 ---
 

@@ -20,6 +20,7 @@ from ofx.runner.execution.execution_summary import (
 )
 from ofx.runner.execution.job import JobRunner, MatrixJobRunner
 from ofx.runner.execution.runner_factory import create_job_runner
+from ofx.runner.execution.pipe import PipeRunner
 from ofx.runner.execution.step import StepRunner
 from ofx.runner.execution.tool_installer import ToolInstallation, ToolInstallerRunner
 from ofx.runner.execution.workflow import WorkflowRunner
@@ -36,6 +37,7 @@ __all__ = [
     "CloudStepRunner",
     "JobRunner",
     "MatrixJobRunner",
+    "PipeRunner",
     "StepRunner",
     "ToolInstallerRunner",
     "ToolInstallation",

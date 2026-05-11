@@ -1,36 +1,423 @@
 {
   "$defs": {
-    "DefaultConfig": {
+    "CloudConfig": {
+      "additionalProperties": true,
+      "description": "Cloud configuration for running a job on a cloud VPS or existing host.\n\nCan be specified as a string (profile slug) or an object with full config.\nWhen specified as a string, the profile is loaded from ~/.ofx/cloud.yml.",
       "properties": {
-        "run": {
-          "$ref": "#/$defs/RunConfig",
-          "description": "Default run configuration for the workflow"
-        },
-        "workflows_base_dir": {
-          "default": "/home/hah4/.local/share/ofx/workflows",
-          "description": "Base directory for workflows (if applicable)",
-          "format": "path",
-          "title": "Workflows Base Dir",
+        "profile": {
+          "default": "",
+          "description": "Reference to a named profile in ~/.ofx/cloud.yml",
+          "title": "Profile",
           "type": "string"
-        }
-      },
-      "title": "DefaultConfig",
-      "type": "object"
-    },
-    "Job": {
-      "properties": {
-        "name": {
+        },
+        "provider": {
+          "default": "",
+          "description": "Cloud provider: digitalocean, aws, or static",
+          "title": "Provider",
+          "type": "string"
+        },
+        "region": {
+          "default": "",
+          "description": "Cloud region (e.g., nyc3, us-east-1)",
+          "title": "Region",
+          "type": "string"
+        },
+        "size": {
+          "default": "",
+          "description": "Instance size/type (e.g., s-1vcpu-1gb, t3.medium)",
+          "title": "Size",
+          "type": "string"
+        },
+        "image": {
+          "default": "",
+          "description": "Snapshot/AMI name or ID",
+          "title": "Image",
+          "type": "string"
+        },
+        "tags": {
+          "description": "Instance tags",
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "os": {
+          "default": "linux",
+          "description": "Target OS: linux (SSH) or windows (WinRM)",
+          "enum": [
+            "linux",
+            "windows"
+          ],
+          "title": "Os",
+          "type": "string"
+        },
+        "ssh_user": {
+          "default": "root",
+          "description": "SSH username",
+          "title": "Ssh User",
+          "type": "string"
+        },
+        "ssh_key": {
+          "default": "",
+          "description": "Path to SSH private key file",
+          "title": "Ssh Key",
+          "type": "string"
+        },
+        "ssh_password": {
+          "default": "",
+          "description": "SSH password (if key not used)",
+          "title": "Ssh Password",
+          "type": "string"
+        },
+        "ssh_port": {
+          "default": 22,
+          "description": "SSH port",
+          "title": "Ssh Port",
+          "type": "integer"
+        },
+        "extra": {
+          "additionalProperties": true,
+          "description": "Extra provider-specific config",
+          "title": "Extra",
+          "type": "object"
+        },
+        "winrm_user": {
+          "default": "Administrator",
+          "description": "WinRM username",
+          "title": "Winrm User",
+          "type": "string"
+        },
+        "winrm_password": {
+          "default": "",
+          "description": "WinRM password",
+          "title": "Winrm Password",
+          "type": "string"
+        },
+        "winrm_ssl": {
+          "default": false,
+          "description": "Use HTTPS for WinRM",
+          "title": "Winrm Ssl",
+          "type": "boolean"
+        },
+        "winrm_port": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
+          "description": "WinRM port (auto: 5985/5986)",
+          "title": "Winrm Port"
+        },
+        "winrm_transport": {
+          "default": "ntlm",
+          "description": "WinRM transport: ntlm, kerberos, credssp",
+          "title": "Winrm Transport",
+          "type": "string"
+        },
+        "opsec_mode": {
+          "default": false,
+          "description": "Enable opsec mode: command-to-file execution, avoids ps visibility",
+          "title": "Opsec Mode",
+          "type": "boolean"
+        },
+        "log_commands": {
+          "default": false,
+          "description": "Log all commands and outputs locally for debrief",
+          "title": "Log Commands",
+          "type": "boolean"
+        },
+        "auto_destroy": {
+          "default": true,
+          "description": "Destroy instance after job completes",
+          "title": "Auto Destroy",
+          "type": "boolean"
+        },
+        "startup_timeout": {
+          "default": 300,
+          "description": "Seconds to wait for instance to be ready",
+          "title": "Startup Timeout",
+          "type": "integer"
+        },
+        "host": {
+          "default": "",
+          "description": "Hostname/IP for static provider",
+          "title": "Host",
+          "type": "string"
+        },
+        "hosts": {
+          "description": "Multiple hosts for static fleet",
+          "items": {
+            "$ref": "#/$defs/CloudHostEntry"
+          },
+          "title": "Hosts",
+          "type": "array"
+        },
+        "key_pair_name": {
+          "default": "",
+          "description": "AWS EC2 key pair name",
+          "title": "Key Pair Name",
+          "type": "string"
+        },
+        "security_group": {
+          "default": "",
+          "description": "AWS security group ID",
+          "title": "Security Group",
+          "type": "string"
+        },
+        "subnet_id": {
+          "default": "",
+          "description": "AWS subnet ID",
+          "title": "Subnet Id",
+          "type": "string"
+        },
+        "iam_instance_profile": {
+          "default": "",
+          "description": "AWS IAM instance profile",
+          "title": "Iam Instance Profile",
+          "type": "string"
+        },
+        "vpc_uuid": {
+          "default": "",
+          "description": "DigitalOcean VPC UUID",
+          "title": "Vpc Uuid",
+          "type": "string"
+        },
+        "project_id": {
+          "default": "",
+          "description": "DigitalOcean project ID",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "connection_type": {
+          "default": "ssh",
+          "description": "Connection method to use (ssh or winrm), auto-determined by OS if not set",
+          "enum": [
+            "ssh",
+            "winrm"
+          ],
+          "title": "Connection Type",
+          "type": "string"
+        },
+        "boot_timeout": {
+          "default": 300,
+          "description": "Seconds to wait for instance to boot and be reachable",
+          "title": "Boot Timeout",
+          "type": "integer"
+        },
+        "login_timeout": {
+          "default": 300,
+          "description": "Seconds to wait for successful login after connectivity",
+          "title": "Login Timeout",
+          "type": "integer"
+        }
+      },
+      "title": "CloudConfig",
+      "type": "object"
+    },
+    "CloudHostEntry": {
+      "additionalProperties": false,
+      "description": "A single static host entry for fleet usage.",
+      "properties": {
+        "host": {
+          "description": "Hostname or IP address",
+          "title": "Host",
+          "type": "string"
+        },
+        "ssh_user": {
+          "default": "root",
+          "description": "SSH username for this host",
+          "title": "Ssh User",
+          "type": "string"
+        },
+        "ssh_port": {
+          "default": 22,
+          "description": "SSH port for this host",
+          "title": "Ssh Port",
+          "type": "integer"
+        },
+        "ssh_key": {
+          "default": "",
+          "description": "Override SSH key for this host",
+          "title": "Ssh Key",
+          "type": "string"
+        },
+        "ssh_password": {
+          "default": "",
+          "description": "Override SSH password for this host",
+          "title": "Ssh Password",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "title": "CloudHostEntry",
+      "type": "object"
+    },
+    "DefaultConfig": {
+      "additionalProperties": false,
+      "description": "Default configuration for workflows.",
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/RunConfig",
+          "description": "Default run configuration for the workflow"
+        },
+        "workflows_base_dir": {
+          "default": "/home/hah4/.ofx/workflows",
+          "description": "Base directory for workflows (if applicable)",
+          "format": "path",
+          "title": "Workflows Base Dir",
+          "type": "string"
+        },
+        "flow_registry_url": {
+          "default": "https://github.com",
+          "description": "Base URL for the flow registry",
+          "title": "Flow Registry Url",
+          "type": "string"
+        },
+        "durable": {
+          "$ref": "#/$defs/DurableRunConfig",
+          "description": "Durable execution configuration"
+        },
+        "profile": {
+          "default": "",
+          "description": "Name of a profile from ~/.ofx/profiles.yml to apply. Provides rate limits, time windows, and tool option overrides.",
+          "title": "Profile",
+          "type": "string"
+        },
+        "store-creds": {
+          "default": false,
+          "description": "Automatically store discovered UserAccount credentials from task outputs into the credential store. Can be overridden per-step with 'store-creds: true/false'.",
+          "title": "Store-Creds",
+          "type": "boolean"
+        }
+      },
+      "title": "DefaultConfig",
+      "type": "object"
+    },
+    "DurableRunConfig": {
+      "additionalProperties": false,
+      "description": "Durable execution configuration for workflows.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Enable durable checkpoints for workflow execution",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "resume": {
+          "default": true,
+          "description": "Resume from last completed step when checkpoints exist",
+          "title": "Resume",
+          "type": "boolean"
+        },
+        "backend": {
+          "default": "file",
+          "description": "Durable backend: file or redis",
+          "title": "Backend",
+          "type": "string"
+        },
+        "redis_prefix": {
+          "default": "ofx:durable:",
+          "description": "Redis key prefix for durable checkpoints",
+          "title": "Redis Prefix",
+          "type": "string"
+        },
+        "auto-commit": {
+          "default": false,
+          "description": "Auto-commit output directory to git after workflow completion",
+          "title": "Auto-Commit",
+          "type": "boolean"
+        },
+        "auto-push": {
+          "default": false,
+          "description": "Auto-push committed checkpoint data to git remote (implies auto-commit)",
+          "title": "Auto-Push",
+          "type": "boolean"
+        }
+      },
+      "title": "DurableRunConfig",
+      "type": "object"
+    },
+    "FleetStrategy": {
+      "additionalProperties": false,
+      "description": "Fleet distribution strategy for running across multiple VPS instances.",
+      "properties": {
+        "count": {
+          "description": "Number of fleet instances",
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          ],
+          "default": "",
+          "description": "Input to distribute: file path, CIDR, IP list, or mixed",
+          "title": "Input"
+        },
+        "distribution": {
+          "default": "chunk",
+          "description": "Distribution mode for splitting input across fleet",
+          "enum": [
+            "chunk",
+            "round-robin",
+            "subnet",
+            "line"
+          ],
+          "title": "Distribution",
+          "type": "string"
+        },
+        "expand_cidrs": {
+          "default": true,
+          "description": "Expand CIDRs to individual IPs before splitting",
+          "title": "Expand Cidrs",
+          "type": "boolean"
+        },
+        "min_prefix": {
+          "default": 32,
+          "description": "Minimum prefix length for subnet splitting",
+          "title": "Min Prefix",
+          "type": "integer"
+        },
+        "exclude": {
+          "description": "IPs or CIDRs to exclude from distribution",
+          "items": {
+            "type": "string"
+          },
+          "title": "Exclude",
+          "type": "array"
+        }
+      },
+      "required": [
+        "count"
+      ],
+      "title": "FleetStrategy",
+      "type": "object"
+    },
+    "Job": {
+      "additionalProperties": false,
+      "description": "Job definition within a workflow.",
+      "properties": {
+        "name": {
+          "default": "",
           "description": "Name of the job",
-          "title": "Name"
+          "title": "Name",
+          "type": "string"
         },
         "needs": {
           "anyOf": [
@@ -44,11 +431,10 @@
               "type": "array"
             }
           ],
-          "default": [],
           "description": "Job dependencies (other jobs that must complete before this one)",
           "title": "Needs"
         },
-        "run_if": {
+        "if": {
           "anyOf": [
             {
               "type": "string"
@@ -59,13 +445,24 @@
           ],
           "default": true,
           "description": "Condition to run the job (e.g., 'success()', 'failure()')",
-          "title": "Run If"
+          "title": "If"
+        },
+        "strategy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MatrixStrategy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Matrix strategy for running multiple variations of the job"
         },
         "env": {
           "additionalProperties": {
             "type": "string"
           },
-          "default": {},
           "description": "A map of variables that are available to all steps in the job",
           "title": "Env",
           "type": "object"
@@ -74,7 +471,6 @@
           "additionalProperties": {
             "type": "string"
           },
-          "default": {},
           "description": "Outputs of the job (key-value pairs)",
           "title": "Outputs",
           "type": "object"
@@ -88,6 +484,7 @@
           "items": {
             "$ref": "#/$defs/Step"
           },
+          "minItems": 1,
           "title": "Steps",
           "type": "array"
         },
@@ -96,18 +493,56 @@
           "description": "Job identifier in the workflow",
           "title": "Jid",
           "type": "string"
-        }
-      },
-      "required": [
-        "steps"
-      ],
-      "title": "Job",
-      "type": "object"
-    },
-    "RunConfig": {
-      "properties": {
-        "shell": {
+        },
+        "matrix_values": {
+          "additionalProperties": true,
+          "description": "Matrix values for this job instance (populated during expansion)",
+          "title": "Matrix Values",
+          "type": "object"
+        },
+        "original_job_id": {
+          "default": "",
+          "description": "Original job ID before matrix expansion",
+          "title": "Original Job Id",
+          "type": "string"
+        },
+        "matrix_index": {
           "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Index of this job in the matrix expansion",
+          "title": "Matrix Index"
+        },
+        "max-parallel": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum number of matrix jobs to run in parallel",
+          "title": "Max-Parallel"
+        },
+        "fail-fast": {
+          "default": true,
+          "description": "Whether to fail the entire matrix if one job fails",
+          "title": "Fail-Fast",
+          "type": "boolean"
+        },
+        "cloud": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CloudConfig"
+            },
             {
               "type": "string"
             },
@@ -116,40 +551,120 @@
             }
           ],
           "default": null,
-          "description": "Shell to use for running commands in the workflow",
-          "title": "Shell"
+          "description": "Cloud configuration for running this job on a cloud VPS. String value references a profile slug from ~/.ofx/cloud.yml.",
+          "title": "Cloud"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "title": "Job",
+      "type": "object"
+    },
+    "MatrixStrategy": {
+      "additionalProperties": false,
+      "description": "Matrix strategy for running job variations.",
+      "properties": {
+        "matrix": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "description": "Matrix variables \u2014 lists of values or a template string that resolves to a JSON list at runtime",
+          "title": "Matrix",
+          "type": "object"
         },
-        "working_directory": {
+        "max_parallel": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "integer"
             },
             {
-              "format": "path",
-              "type": "string"
+              "type": "null"
             }
           ],
-          "default": "/home/hah4/code/ofx",
+          "default": 4,
+          "description": "Maximum number of matrix jobs to run in parallel per stage",
+          "title": "Max Parallel"
+        },
+        "fail_fast": {
+          "default": true,
+          "description": "Whether to fail the entire matrix if one job fails (default: true)",
+          "title": "Fail Fast",
+          "type": "boolean"
+        },
+        "include": {
+          "description": "Additional matrix combinations to include",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Include",
+          "type": "array"
+        },
+        "exclude": {
+          "description": "Matrix combinations to exclude from execution",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Exclude",
+          "type": "array"
+        },
+        "fleet": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FleetStrategy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fleet distribution strategy for cloud-based parallel execution"
+        }
+      },
+      "title": "MatrixStrategy",
+      "type": "object"
+    },
+    "RunConfig": {
+      "additionalProperties": false,
+      "description": "Shell and working directory configuration.",
+      "properties": {
+        "shell": {
+          "default": "/bin/bash",
+          "description": "Shell to use for running commands in the workflow",
+          "title": "Shell",
+          "type": "string"
+        },
+        "working_directory": {
           "description": "Working directory for the workflow execution",
-          "title": "Working Directory"
+          "format": "path",
+          "title": "Working Directory",
+          "type": "string"
         }
       },
       "title": "RunConfig",
       "type": "object"
     },
     "Step": {
+      "additionalProperties": false,
+      "description": "Step definition within a job.",
       "properties": {
         "name": {
+          "default": "<should_be_replaced>",
           "description": "Name of the step",
           "title": "Name",
           "type": "string"
         },
-        "id": {
-          "description": "Unique identifier for the step",
-          "title": "Id",
-          "type": "string"
-        },
-        "run_if": {
+        "if": {
           "anyOf": [
             {
               "type": "string"
@@ -160,62 +675,60 @@
           ],
           "default": true,
           "description": "Condition to run the step (e.g., 'success()', 'failure()')",
-          "title": "Run If"
+          "title": "If"
         },
         "env": {
           "additionalProperties": {
             "type": "string"
           },
-          "default": {},
           "description": "Environment variables for the step",
           "title": "Env",
           "type": "object"
         },
-        "continue_on_error": {
+        "continue-on-error": {
           "default": false,
           "description": "Continue execution even if the step fails",
-          "title": "Continue On Error",
+          "title": "Continue-On-Error",
           "type": "boolean"
         },
         "timeout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
           "default": 1440,
-          "description": "Timeout in minutes for the step execution",
-          "title": "Timeout",
+          "description": "Timeout in minutes for the step execution. Supports Jinja2 templates for dynamic values.",
+          "title": "Timeout"
+        },
+        "retry": {
+          "default": 0,
+          "description": "Number of retry attempts on failure (default: 0, no retries)",
+          "title": "Retry",
           "type": "integer"
         },
-        "run": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Command(s) to run in the step",
-          "title": "Run"
-        },
-        "working_directory": {
-          "default": ".",
-          "description": "Working directory for the step execution",
-          "title": "Working Directory",
-          "type": "string"
+        "retry-delay": {
+          "default": 5,
+          "description": "Delay in seconds between retry attempts (default: 5)",
+          "title": "Retry-Delay",
+          "type": "integer"
         },
         "shell": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
+          "default": "/bin/bash",
           "description": "Shell to use for running commands in the step",
-          "title": "Shell"
+          "title": "Shell",
+          "type": "string"
         },
-        "log_stdout": {
+        "working-directory": {
+          "description": "Working directory for the step execution",
+          "format": "path",
+          "title": "Working-Directory",
+          "type": "string"
+        },
+        "log-stdout": {
           "anyOf": [
             {
               "type": "boolean"
@@ -226,7 +739,20 @@
           ],
           "default": false,
           "description": "Whether to capture standard output of the step",
-          "title": "Log Stdout"
+          "title": "Log-Stdout"
+        },
+        "log-command": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": false,
+          "description": "Whether to log the executed command to the oops timeline CSV (~/.oops/logs/)",
+          "title": "Log-Command"
         },
         "uses": {
           "anyOf": [
@@ -241,12 +767,18 @@
           "description": "Select a workflow to run as part of a step in the job",
           "title": "Uses"
         },
-        "run_with": {
-          "additionalProperties": true,
-          "default": {},
-          "description": "Define inputs for the step if it uses a reusable workflow",
-          "title": "Run With",
-          "type": "object"
+        "run": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Command(s) to run in the step",
+          "title": "Run"
         },
         "script": {
           "anyOf": [
@@ -261,6 +793,38 @@
           "description": "Script to run in the step (if applicable)",
           "title": "Script"
         },
+        "script_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Path to a Python script file to execute",
+          "title": "Script File"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Name of a registered task (pre-built tool wrapper) to execute",
+          "title": "Task"
+        },
+        "with": {
+          "additionalProperties": true,
+          "description": "Define inputs for the step if it uses a reusable workflow",
+          "title": "With",
+          "type": "object"
+        },
         "secrets": {
           "anyOf": [
             {
@@ -274,9 +838,32 @@
               "type": "string"
             }
           ],
-          "default": {},
           "description": "Secrets to pass to the step (key-value pairs) if it uses a reusable workflow",
           "title": "Secrets"
+        },
+        "interactive": {
+          "default": false,
+          "description": "Enable interactive mode (stdin/stdout passthrough). Only works in single-job stages.",
+          "title": "Interactive",
+          "type": "boolean"
+        },
+        "pipe": {
+          "default": null,
+          "description": "Declarative ETL pipeline. Accepts a PipeConfig dict with input, filter, map, sort, unique, format, etc.",
+          "title": "Pipe"
+        },
+        "store-creds": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Store discovered UserAccount credentials from task outputs into the credential store. Overrides the global auto_store_creds setting. Only applies to task steps.",
+          "title": "Store-Creds"
         },
         "step_index": {
           "default": -1,
@@ -285,19 +872,59 @@
           "type": "integer"
         }
       },
-      "required": [
-        "name"
-      ],
       "title": "Step",
       "type": "object"
     },
+    "ToolConfig": {
+      "additionalProperties": false,
+      "description": "Configuration for tool installation and verification.",
+      "properties": {
+        "install": {
+          "description": "Command to install the tool",
+          "title": "Install",
+          "type": "string"
+        },
+        "check": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Command to check if tool is already installed (exit 0 = installed)",
+          "title": "Check"
+        },
+        "post_install": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Command to run after successful installation",
+          "title": "Post Install"
+        }
+      },
+      "required": [
+        "install"
+      ],
+      "title": "ToolConfig",
+      "type": "object"
+    },
     "WorkflowCall": {
+      "additionalProperties": false,
+      "description": "Configuration for reusable workflow calls.",
       "properties": {
         "inputs": {
           "additionalProperties": {
             "$ref": "#/$defs/WorkflowInput"
           },
-          "default": {},
           "description": "Inputs for the reusable workflow",
           "title": "Inputs",
           "type": "object"
@@ -306,7 +933,6 @@
           "additionalProperties": {
             "type": "string"
           },
-          "default": {},
           "description": "Outputs of the reusable workflow",
           "title": "Outputs",
           "type": "object"
@@ -315,28 +941,22 @@
           "additionalProperties": {
             "$ref": "#/$defs/WorkflowSecret"
           },
-          "default": {},
           "description": "Secrets to pass to the reusable workflow (key-value pairs)",
           "title": "Secrets",
           "type": "object"
-        },
-        "alias": {
-          "default": null,
-          "description": "Alias for the workflow call, used for mapping in workflow calls",
-          "title": "Alias",
-          "type": "string"
         }
       },
       "title": "WorkflowCall",
       "type": "object"
     },
     "WorkflowDispatch": {
+      "additionalProperties": false,
+      "description": "Configuration for manual workflow triggers.",
       "properties": {
         "inputs": {
           "additionalProperties": {
             "$ref": "#/$defs/WorkflowInput"
           },
-          "default": {},
           "description": "Inputs for the workflow dispatch event",
           "title": "Inputs",
           "type": "object"
@@ -346,6 +966,8 @@
       "type": "object"
     },
     "WorkflowInput": {
+      "additionalProperties": false,
+      "description": "Input parameter definition for workflows.",
       "properties": {
         "required": {
           "default": false,
@@ -371,17 +993,38 @@
           "title": "Type",
           "type": "string"
         },
+        "description": {
+          "default": "",
+          "description": "Human-readable description of the input parameter",
+          "title": "Description",
+          "type": "string"
+        },
         "alias": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "default": null,
           "description": "Alias for the input parameter, used for mapping in workflow calls",
-          "title": "Alias",
-          "type": "string"
+          "title": "Alias"
         }
       },
       "title": "WorkflowInput",
       "type": "object"
     },
     "WorkflowSecret": {
+      "additionalProperties": false,
+      "description": "Secret parameter definition for workflows.",
       "properties": {
         "required": {
           "default": false,
@@ -401,18 +1044,13 @@
           ],
           "title": "Type",
           "type": "string"
-        },
-        "alias": {
-          "default": null,
-          "description": "Alias for the secret parameter, used for mapping in workflow calls",
-          "title": "Alias",
-          "type": "string"
         }
       },
       "title": "WorkflowSecret",
       "type": "object"
     }
   },
+  "description": "Main workflow definition.",
   "properties": {
     "name": {
       "description": "Name of the workflow",
@@ -425,22 +1063,15 @@
       "title": "Description",
       "type": "string"
     },
-    "schedule": {
-      "default": "",
-      "description": "Cron schedule for the workflow",
-      "title": "Schedule",
-      "type": "string"
-    },
-    "env": {
-      "additionalProperties": {
+    "tags": {
+      "description": "Tags associated with the workflow",
+      "items": {
         "type": "string"
       },
-      "default": {},
-      "description": "Environment variables for the workflow",
-      "title": "Env",
-      "type": "object"
+      "title": "Tags",
+      "type": "array"
     },
-    "workflow_dispatch": {
+    "dispatch": {
       "anyOf": [
         {
           "$ref": "#/$defs/WorkflowDispatch"
@@ -452,7 +1083,7 @@
       "default": null,
       "description": "Workflow dispatch configuration for manual triggers"
     },
-    "workflow_call": {
+    "call": {
       "anyOf": [
         {
           "$ref": "#/$defs/WorkflowCall"
@@ -464,32 +1095,40 @@
       "default": null,
       "description": "Workflow call configuration for reusable workflows"
     },
-    "tools": {
-      "anyOf": [
-        {
-          "additionalProperties": true,
-          "type": "object"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Needed tools for the workflow",
-      "title": "Tools"
-    },
-    "tags": {
-      "default": [],
-      "description": "Tags associated with the workflow",
-      "items": {
+    "env": {
+      "additionalProperties": {
         "type": "string"
       },
-      "title": "Tags",
-      "type": "array"
+      "description": "Environment variables for the workflow",
+      "title": "Env",
+      "type": "object"
+    },
+    "tools": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/$defs/ToolConfig"
+          }
+        ]
+      },
+      "description": "Tools configuration - can be simple command string or ToolConfig object",
+      "title": "Tools",
+      "type": "object"
     },
     "defaults": {
       "$ref": "#/$defs/DefaultConfig",
       "description": "Default configuration for the workflow"
+    },
+    "outputs": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Workflow-level outputs mapped from job outputs",
+      "title": "Outputs",
+      "type": "object"
     },
     "jobs": {
       "additionalProperties": {
@@ -498,6 +1137,12 @@
       "description": "List of jobs in the workflow",
       "title": "Jobs",
       "type": "object"
+    },
+    "workflow_path": {
+      "description": "Path to the workflow file (set automatically)",
+      "format": "path",
+      "title": "Workflow Path",
+      "type": "string"
     }
   },
   "required": [

@@ -13,11 +13,11 @@ Convert the user's natural language description into a valid OFX YAML workflow.
 
 ## Generation process
 1. Clarify task — target, technique, scope (local vs cloud, single host vs fleet)
-2. Choose step types — `run:` for shell, `script:` for Python, `task:` for built-in tool wrappers
+2. Choose step types — `run:` for shell, `script:` for Python, `task:` for built-in tool wrappers, `pipe:` for data transformation
 3. Structure jobs — one per logical phase; `needs:` for sequential deps; parallel by default
 4. Wire outputs — capture via `$OFX_OUTPUTS`, reference with `{{ jobs.id.outputs.key }}`
 5. Add cloud/matrix if needed — `cloud:` for VPS, `strategy.matrix` for variations, `strategy.fleet` for distributed lists
-6. Validate mentally — every step has EXACTLY ONE of: run, script, script_file, uses, task
+6. Validate mentally — every step has EXACTLY ONE of: run, script, script_file, uses, task, pipe
 
 ---
 
@@ -115,7 +115,7 @@ steps:
     env:
       STEP_VAR: value
     working_directory: /opt
-    # Then exactly one of: run / script / script_file / uses / task
+    # Then exactly one of: run / script / script_file / uses / task / pipe
 ```
 
 ## Task steps (built-in tool wrappers)
@@ -588,7 +588,7 @@ understand, configure, and use OFX for offensive operations.
 - Top-level: `name`, `description`, `tags`, `dispatch`, `call`, `env`, `tools`, `defaults`, `jobs`
 - Use `dispatch:` for manual trigger inputs (NOT `on:`); ref as `{{ inputs.key }}`
 - Jobs: `needs`, `if`, `strategy`, `cloud`, `env`, `outputs`, `defaults`, `steps`
-- Steps: exactly one of `run`, `script`, `script_file`, `uses`, `task`
+- Steps: exactly one of `run`, `script`, `script_file`, `uses`, `task`, `pipe`
 - Step fields use underscores: `continue_on_error`, `retry_delay`, `working_directory`, `log_stdout`
 - Output capture: shell `echo "key=val" >> $OFX_OUTPUTS`; python `add_outputs(key=val)`; ref as `{{ steps.N.outputs.key }}` or `{{ jobs.id.outputs.key }}`
 
@@ -634,6 +634,28 @@ Cast strings: `{{ inputs.port | int }}`
 
 **Task output filters:** `ports(items)`, `urls(items)`, `vulns(items)`, `subdomains(items)`,
 `ips(items)`, `tags(items)`, `records(items)`, `domains(items)`, `users(items)`, `of_type(items, name)`
+
+**ETL helpers (functions & Jinja2 filters):** `pluck(items, field)`, `to_lines(items, field)`,
+`to_csv(items)`, `to_jsonl(items)`, `sort_by(items, field)`, `unique_by(items, field)`,
+`where(items, field, value)`, `where_not(items, field, value)`, `first(items, n)`,
+`last(items, n)`, `group_by(items, field)`, `flatten(items, field)`, `count_by(items, field)`
+Can be chained as filters: `{{ steps.0.outputs.typed_outputs | ports | pluck("host") | to_lines }}`
+
+### Pipe steps (declarative ETL)
+Use `pipe:` for data transformation between steps without writing scripts:
+```yaml
+- name: http-targets
+  pipe:
+    input: "{{ steps.scan.outputs.typed_outputs | ports }}"
+    filter: "state == 'open' and port in [80, 443]"
+    map:
+      url: "'http://' + host + ':' + str(port)"
+    sort: port
+    unique: host
+    format: lines
+    field: url
+```
+Outputs: `items` (list), `count` (int), `data` (string), `file` (temp file path)
 
 ### API modules (for `script:` steps)
 Modules return `str` or `list[str]`. Always iterate `list[str]` results.

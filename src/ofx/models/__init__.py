@@ -18,6 +18,7 @@ from ofx.models.command import Command, Script
 from ofx.models.config import DefaultConfig, RunConfig
 from ofx.models.inputs import WorkflowInput, WorkflowSecret
 from ofx.models.job import Job
+from ofx.models.pipe import PipeConfig
 from ofx.models.step import RunType, Step
 from ofx.models.strategy import FleetStrategy, MatrixStrategy
 from ofx.models.tools import ToolConfig
@@ -42,6 +43,8 @@ __all__ = [
     "WorkflowSecret",
     # Strategy
     "MatrixStrategy",
+    # Pipe
+    "PipeConfig",
     # Tools
     "ToolConfig",
     # Step

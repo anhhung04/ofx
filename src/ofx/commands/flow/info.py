@@ -21,6 +21,9 @@ def _step_type_label(step) -> str:
         return "script"
     if step.script_file:
         return f"script_file: {step.script_file}"
+    if step.pipe is not None:
+        fmt = step.pipe.format if hasattr(step.pipe, "format") else "json"
+        return f"pipe: → {fmt}"
     if step.run:
         lines = step.run.strip().splitlines()
         first = lines[0][:60]

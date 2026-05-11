@@ -1,4 +1,4 @@
-"""Tests for template helper functions: network, ASM, type filters, encoding, and more."""
+"""Tests for template helper functions: network, ASM, type filters, ETL, encoding, and more."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from ofx.runner.templates.helpers import (
     _asm_helpers,
     _datetime_helpers,
     _encoding_helpers,
+    _etl_helpers,
     _file_helpers,
     _hash_helpers,
     _json_helpers,
@@ -423,3 +424,178 @@ class TestBuildAllHelpers:
         # Misc
         assert "is_windows" in h
         assert "platform" in h
+        # ETL helpers
+        assert "pluck" in h
+        assert "to_lines" in h
+        assert "sort_by" in h
+        assert "unique_by" in h
+        assert "where" in h
+        assert "group_by" in h
+        assert "flatten" in h
+        assert "count_by" in h
+
+
+# ── ETL helpers ──────────────────────────────────────────────────────────
+
+_ETL_ITEMS = [
+    {"host": "10.0.0.1", "port": 22, "state": "open", "svc": "ssh"},
+    {"host": "10.0.0.1", "port": 80, "state": "open", "svc": "http"},
+    {"host": "10.0.0.2", "port": 22, "state": "open", "svc": "ssh"},
+    {"host": "10.0.0.2", "port": 443, "state": "open", "svc": "https"},
+    {"host": "10.0.0.3", "port": 22, "state": "closed", "svc": "ssh"},
+]
+
+
+class TestETLHelpers:
+    def test_pluck(self):
+        h = _etl_helpers()
+        assert h["pluck"](_ETL_ITEMS, "host") == [
+            "10.0.0.1", "10.0.0.1", "10.0.0.2", "10.0.0.2", "10.0.0.3"
+        ]
+
+    def test_pluck_non_list(self):
+        h = _etl_helpers()
+        assert h["pluck"]("not a list", "x") == []
+
+    def test_to_lines(self):
+        h = _etl_helpers()
+        result = h["to_lines"](_ETL_ITEMS, "host")
+        assert result == "10.0.0.1\n10.0.0.1\n10.0.0.2\n10.0.0.2\n10.0.0.3"
+
+    def test_to_lines_custom_sep(self):
+        h = _etl_helpers()
+        result = h["to_lines"](["a", "b", "c"], sep=",")
+        assert result == "a,b,c"
+
+    def test_to_csv(self):
+        h = _etl_helpers()
+        result = h["to_csv"]([{"a": 1, "b": 2}])
+        assert "a" in result and "b" in result
+        lines = result.strip().split("\n")
+        assert len(lines) == 2  # header + 1 data row
+
+    def test_to_csv_no_headers(self):
+        h = _etl_helpers()
+        result = h["to_csv"]([{"a": 1}], headers=False)
+        assert "a" not in result.split("\n")[0] or result.count("\n") == 0
+
+    def test_to_jsonl(self):
+        h = _etl_helpers()
+        result = h["to_jsonl"]([{"a": 1}, {"a": 2}])
+        lines = result.strip().split("\n")
+        assert len(lines) == 2
+
+    def test_sort_by(self):
+        h = _etl_helpers()
+        result = h["sort_by"](_ETL_ITEMS, "port")
+        ports = [r["port"] for r in result]
+        assert ports == sorted(ports)
+
+    def test_sort_by_reverse(self):
+        h = _etl_helpers()
+        result = h["sort_by"](_ETL_ITEMS, "port", reverse=True)
+        ports = [r["port"] for r in result]
+        assert ports == sorted(ports, reverse=True)
+
+    def test_unique_by(self):
+        h = _etl_helpers()
+        result = h["unique_by"](_ETL_ITEMS, "host")
+        hosts = [r["host"] for r in result]
+        assert len(hosts) == len(set(hosts))
+
+    def test_where(self):
+        h = _etl_helpers()
+        result = h["where"](_ETL_ITEMS, "state", "open")
+        assert len(result) == 4
+        assert all(r["state"] == "open" for r in result)
+
+    def test_where_not(self):
+        h = _etl_helpers()
+        result = h["where_not"](_ETL_ITEMS, "state", "open")
+        assert len(result) == 1
+        assert result[0]["state"] == "closed"
+
+    def test_first_single(self):
+        h = _etl_helpers()
+        assert h["first"](_ETL_ITEMS) == _ETL_ITEMS[0]
+
+    def test_first_n(self):
+        h = _etl_helpers()
+        assert len(h["first"](_ETL_ITEMS, 3)) == 3
+
+    def test_first_empty(self):
+        h = _etl_helpers()
+        assert h["first"]([]) is None
+        assert h["first"]([], 5) == []
+
+    def test_last_single(self):
+        h = _etl_helpers()
+        assert h["last"](_ETL_ITEMS) == _ETL_ITEMS[-1]
+
+    def test_last_n(self):
+        h = _etl_helpers()
+        assert len(h["last"](_ETL_ITEMS, 2)) == 2
+
+    def test_group_by(self):
+        h = _etl_helpers()
+        groups = h["group_by"](_ETL_ITEMS, "state")
+        assert "open" in groups
+        assert "closed" in groups
+        assert len(groups["open"]) == 4
+        assert len(groups["closed"]) == 1
+
+    def test_flatten_field(self):
+        h = _etl_helpers()
+        items = [{"host": "a", "ports": [80, 443]}, {"host": "b", "ports": [22]}]
+        result = h["flatten"](items, "ports")
+        assert len(result) == 3
+
+    def test_flatten_nested_lists(self):
+        h = _etl_helpers()
+        assert h["flatten"]([[1, 2], [3], [4, 5]]) == [1, 2, 3, 4, 5]
+
+    def test_count_by(self):
+        h = _etl_helpers()
+        counts = h["count_by"](_ETL_ITEMS, "state")
+        assert counts["open"] == 4
+        assert counts["closed"] == 1
+
+    def test_non_list_input_safety(self):
+        h = _etl_helpers()
+        assert h["sort_by"]("not a list", "x") == []
+        assert h["unique_by"](42, "x") == []
+        assert h["where"](None, "x", 1) == []
+        assert h["group_by"]("bad", "x") == {}
+        assert h["flatten"](None) == []
+        assert h["count_by"](123, "x") == {}
+
+
+# ── Jinja2 filter integration ───────────────────────────────────────────
+
+
+class TestJinjaFilterRegistration:
+    """Verify that type filters and ETL helpers work as Jinja2 pipe filters."""
+
+    def test_filters_registered_in_env(self):
+        from ofx.runner.templates.resolver import _ensure_filters_registered, _jinja_env
+
+        _ensure_filters_registered(_jinja_env)
+        # Type filters
+        assert "ports" in _jinja_env.filters
+        assert "urls" in _jinja_env.filters
+        assert "vulns" in _jinja_env.filters
+        assert "of_type" in _jinja_env.filters
+        # ETL filters
+        assert "pluck" in _jinja_env.filters
+        assert "to_lines" in _jinja_env.filters
+        assert "sort_by" in _jinja_env.filters
+        assert "unique_by" in _jinja_env.filters
+        assert "where" in _jinja_env.filters
+        assert "flatten" in _jinja_env.filters
+
+    def test_idempotent_registration(self):
+        from ofx.runner.templates.resolver import _ensure_filters_registered, _jinja_env
+
+        _ensure_filters_registered(_jinja_env)
+        _ensure_filters_registered(_jinja_env)  # must not raise
+        assert _jinja_env._ofx_filters_registered is True
