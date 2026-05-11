@@ -66,6 +66,7 @@ def bind_shell(host: str = "0.0.0.0", port: int = 4444, shell: str = "/bin/sh") 
         conn.close()
         server.close()
         process.terminate()
+        process.wait()
 
 
 def bind_tcp_shell(host: str = "0.0.0.0", port: int = 4444) -> None:

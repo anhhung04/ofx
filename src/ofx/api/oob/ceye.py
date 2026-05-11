@@ -47,6 +47,8 @@ class CEye:
         self.identify = ""
         self.headers = {"User-Agent": "curl/7.80.0"}
         self.token = token
+        self._session = requests.Session()
+        self._session.headers.update(self.headers)
 
         if conf_path is None:
             conf_path = CONFIG_FILE
@@ -77,7 +79,8 @@ class CEye:
         if self.token:
             try:
                 self.headers["Authorization"] = self.token
-                resp = requests.get(f"{self.url}/identify", headers=self.headers)
+                self._session.headers["Authorization"] = self.token
+                resp = self._session.get(f"{self.url}/identify")
                 if resp and resp.status_code == 200 and "identify" in resp.text:
                     self.identify = resp.json()["data"]["identify"]
                     return True
@@ -157,7 +160,7 @@ class CEye:
         while counts:
             try:
                 time.sleep(1)
-                resp = requests.get(url)
+                resp = self._session.get(url)
                 if resp and resp.status_code == 200 and flag in resp.text:
                     ret_val = True
                     break
@@ -190,7 +193,7 @@ class CEye:
         while counts:
             try:
                 time.sleep(1)
-                resp = requests.get(url)
+                resp = self._session.get(url)
                 if resp and resp.status_code == 200 and flag in resp.text:
                     data = json.loads(resp.text)
                     for item in data["data"]:

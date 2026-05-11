@@ -48,8 +48,11 @@ class StepRunnerMixin:
 
         # ── retry ──────────────────────────────────────────────────
         # Top-level max_retries wins; fall back to policy; then step.
+        from ofx.profiles.models import OFXProfile
+
         max_retries = getattr(profile, "max_retries", None)
-        if max_retries is not None and max_retries != 3:
+        default_max_retries = OFXProfile.model_fields["max_retries"].default
+        if max_retries is not None and max_retries != default_max_retries:
             self.model.retry = int(max_retries)  # type: ignore[attr-defined]
         elif "retry" in policy:
             policy_retry = int(policy["retry"])
@@ -63,7 +66,8 @@ class StepRunnerMixin:
         # ── timeout ────────────────────────────────────────────────
         # Top-level timeout_minutes wins; fall back to policy; then step.
         timeout_minutes = getattr(profile, "timeout_minutes", None)
-        if timeout_minutes is not None and timeout_minutes != 60:
+        default_timeout = OFXProfile.model_fields["timeout_minutes"].default
+        if timeout_minutes is not None and timeout_minutes != default_timeout:
             self.model.timeout = int(timeout_minutes)  # type: ignore[attr-defined]
         elif "timeout" in policy:
             self.model.timeout = int(policy["timeout"])  # type: ignore[attr-defined]

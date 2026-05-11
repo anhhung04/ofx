@@ -74,6 +74,59 @@ class WhatwebTask(Task):
 
         return " ".join(parts), output_file
 
+    def _parse_json_entry(self, entry: dict) -> list[Tag]:
+        """Extract Tag results from a single whatweb JSON entry."""
+        if not isinstance(entry, dict):
+            return []
+
+        target_url = entry.get("target", "")
+        plugins = entry.get("plugins", {})
+
+        if not isinstance(plugins, dict):
+            return []
+
+        results: list[Tag] = []
+        for plugin_name, plugin_data in plugins.items():
+            version = ""
+            string_val = ""
+            if isinstance(plugin_data, dict):
+                versions = plugin_data.get("version", [])
+                if isinstance(versions, list) and versions:
+                    version = str(versions[0])
+                elif isinstance(versions, str):
+                    version = versions
+
+                strings = plugin_data.get("string", [])
+                if isinstance(strings, list) and strings:
+                    string_val = ", ".join(str(s) for s in strings)
+                elif isinstance(strings, str):
+                    string_val = strings
+
+            value = version or string_val
+            if not value:
+                continue
+
+            results.append(
+                Tag(
+                    name=plugin_name,
+                    value=value,
+                    match=target_url,
+                    category="tech",
+                )
+            )
+
+        return results
+
+    def parse_line(self, line: str) -> list[Tag]:
+        line = line.strip()
+        if not line:
+            return []
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            return []
+        return self._parse_json_entry(entry)
+
     def parse_output(
         self,
         stdout: str,
@@ -91,53 +144,7 @@ class WhatwebTask(Task):
             return []
 
         results: list[Tag] = []
-
-        # whatweb JSON log is one JSON object per line
         for line in raw.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            if not isinstance(entry, dict):
-                continue
-
-            target_url = entry.get("target", "")
-            plugins = entry.get("plugins", {})
-
-            if not isinstance(plugins, dict):
-                continue
-
-            for plugin_name, plugin_data in plugins.items():
-                version = ""
-                string_val = ""
-                if isinstance(plugin_data, dict):
-                    versions = plugin_data.get("version", [])
-                    if isinstance(versions, list) and versions:
-                        version = str(versions[0])
-                    elif isinstance(versions, str):
-                        version = versions
-
-                    strings = plugin_data.get("string", [])
-                    if isinstance(strings, list) and strings:
-                        string_val = ", ".join(str(s) for s in strings)
-                    elif isinstance(strings, str):
-                        string_val = strings
-
-                value = version or string_val
-                if not value:
-                    continue
-
-                results.append(
-                    Tag(
-                        name=plugin_name,
-                        value=value,
-                        match=target_url,
-                        category="tech",
-                    )
-                )
+            results.extend(self.parse_line(line))
 
         return results

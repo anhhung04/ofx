@@ -1,3 +1,4 @@
+import logging
 import os
 import platform
 import shutil
@@ -464,6 +465,7 @@ def update_config_field(key: str, value: object) -> None:
             try:
                 data = yaml.safe_load(CONFIG_YAML.read_text()) or {}
             except Exception:
+                logging.debug("Failed to parse config YAML, using empty config", exc_info=True)
                 data = {}
 
         if value is None:
@@ -539,7 +541,7 @@ def _migrate_json_config() -> None:
                 update_config_field("active_project", project)
         legacy.unlink()
     except Exception:
-        pass
+        logging.debug("Failed to migrate legacy config.json", exc_info=True)
 
 
 _migrate_json_config()

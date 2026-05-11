@@ -11,6 +11,7 @@ A *Task* wraps an external CLI tool with:
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import tempfile
 from abc import ABC
@@ -157,7 +158,7 @@ class Task(ABC):
                 if value:
                     parts.append(opt.flag)
             elif value is not None:
-                parts.extend([opt.flag, str(value)])
+                parts.extend([opt.flag, shlex.quote(str(value))])
 
         # Output file for tools that write structured output to a file
         if self.output_flag:
@@ -174,19 +175,19 @@ class Task(ABC):
         is_multi = "," in target and not Path(target).is_file() if target else False
 
         if target_is_file and self.file_flag:
-            parts.extend([self.file_flag, target])
+            parts.extend([self.file_flag, shlex.quote(target)])
         elif is_multi and self.file_flag:
-            parts.extend([self.file_flag, self._write_target_file(target)])
+            parts.extend([self.file_flag, shlex.quote(self._write_target_file(target))])
         elif is_multi and not self.file_flag:
             tfile = self._write_target_file(target)
             if self.input_flag:
-                parts.extend([self.input_flag, tfile])
+                parts.extend([self.input_flag, shlex.quote(tfile)])
             else:
-                parts.append(tfile)
+                parts.append(shlex.quote(tfile))
         elif self.input_flag:
-            parts.extend([self.input_flag, target])
+            parts.extend([self.input_flag, shlex.quote(target)])
         else:
-            parts.append(target)
+            parts.append(shlex.quote(target))
 
         return " ".join(parts), output_file
 

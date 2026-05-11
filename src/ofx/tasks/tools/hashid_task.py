@@ -30,7 +30,7 @@ class HashidTask(Task):
     extra_flags = ["-m"]
 
     def _output_suffix(self) -> str:
-        return ".txt"
+        return ".json"
 
     # [+] MD5 [Hashcat Mode: 0] [JtR Format: raw-md5]
     _TYPE_RE = re.compile(
