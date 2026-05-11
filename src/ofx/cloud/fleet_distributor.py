@@ -186,15 +186,22 @@ def expand_fleet_to_matrix(
     # Parse targets
     targets = parser.parse(input_data) if input_data else []
 
+    if not targets:
+        raise ValueError(
+            f"Fleet: no targets to distribute. "
+            f"Check that 'input' is set and contains valid IPs, CIDRs, hostnames, "
+            f"or file paths (got input={input_data!r})."
+        )
+
     # Distribute once, then write chunk files from the result
     chunks = distributor.distribute(targets, count, distribution, min_prefix)
 
-    # Empty result means no targets or count=0 — skip temp dir creation entirely
+    # Empty result means count=0 — skip temp dir creation entirely
     if not chunks:
-        logger.warning(
-            f"Fleet: no targets to distribute (input={input_data!r}, count={count})"
+        raise ValueError(
+            f"Fleet: distribution produced no chunks (count={count}). "
+            f"Ensure 'count' is at least 1."
         )
-        return [], []
 
     output_dir = Path(tempfile.mkdtemp(prefix="ofx_fleet_"))
     chunk_files: list[Path] = []

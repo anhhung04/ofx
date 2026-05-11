@@ -125,6 +125,33 @@ class TestSessionStore:
         updated = store.update_status("abc12345", SessionStatus.COMPLETED)
         assert updated.status == SessionStatus.COMPLETED
 
+    def test_update_status_preserves_fields(self, tmp_path):
+        """Atomic update must preserve fields not being updated."""
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        store.save(
+            Session(
+                id="abc12345",
+                workflow_file="w.yml",
+                status=SessionStatus.RUNNING,
+                project="myproject",
+            )
+        )
+        updated = store.update_status(
+            "abc12345", SessionStatus.COMPLETED, error="test error"
+        )
+        assert updated.status == SessionStatus.COMPLETED
+        assert updated.project == "myproject"
+        assert updated.error == "test error"
+        # Verify persistence
+        reloaded = store.load("abc12345")
+        assert reloaded.status == SessionStatus.COMPLETED
+        assert reloaded.project == "myproject"
+
+    def test_update_status_missing_session(self, tmp_path):
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        with pytest.raises(FileNotFoundError):
+            store.update_status("nonexistent", SessionStatus.COMPLETED)
+
     def test_list_sessions(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
         store.save(
@@ -292,6 +319,21 @@ class TestScriptBuilder:
         assert "shred" in script
         assert "__TASK_OK__" in script  # marker still present after encryption block
 
+    def test_bash_encrypt_failure_is_fatal(self):
+        """Encryption failure must abort the script, not leave data unencrypted."""
+        steps = [self._make_step(name="scan", run="echo hi")]
+        script = build_session_script(
+            steps,
+            session_id="aabb",
+            work_dir="/tmp/test",
+            encrypt_at_rest=True,
+        )
+        # Encryption failure path must include __TASK_ERR__ and exit
+        assert "FATAL" in script
+        assert "__TASK_ERR__" in script
+        # Should NOT contain a WARNING-only fallback that continues
+        assert "output left unencrypted" not in script
+
     def test_bash_no_encrypt_by_default(self):
         steps = [self._make_step(name="scan", run="echo hi")]
         script = build_session_script(
@@ -315,6 +357,19 @@ class TestScriptBuilder:
         assert ".skey" in script
         assert "output.enc" in script
         assert "AES" in script or "Aes" in script
+
+    def test_powershell_encrypt_failure_is_fatal(self):
+        """PowerShell encryption failure must abort, not leave data unencrypted."""
+        steps = [self._make_step(name="scan", run="Get-Process")]
+        script = build_session_script(
+            steps,
+            session_id="aabb",
+            work_dir="C:\\Temp\\test",
+            os_type="windows",
+            encrypt_at_rest=True,
+        )
+        assert "FATAL" in script
+        assert "__TASK_ERR__" in script
 
 
 # ======================================================================

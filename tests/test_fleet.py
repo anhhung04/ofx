@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ofx.cloud.fleet_distributor import FleetDistributor, expand_fleet_to_matrix
 from ofx.cloud.fleet_input import FleetInputParser, split_subnet
 
@@ -392,9 +394,8 @@ class TestExpandFleetToMatrix:
 
     def test_empty_input(self):
         config = {"count": 2, "input": "", "distribution": "chunk"}
-        combos, chunk_files = expand_fleet_to_matrix(config)
-        assert combos == []
-        assert chunk_files == []
+        with pytest.raises(ValueError, match="no targets to distribute"):
+            expand_fleet_to_matrix(config)
 
     def test_exclusion_integration(self, tmp_path: Path):
         target_file = tmp_path / "targets.txt"

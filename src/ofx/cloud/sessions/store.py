@@ -76,11 +76,39 @@ class SessionStore:
         status: SessionStatus,
         **extra_fields: Any,
     ) -> Session:
-        """Atomically update session status and optional extra fields."""
-        session = self.load(session_id)
-        session = session.model_copy(update={"status": status, **extra_fields})
-        self.save(session)
-        return session
+        """Atomically update session status and optional extra fields.
+
+        Uses an exclusive file lock for the entire read-modify-write cycle
+        to prevent concurrent callers from losing each other's updates.
+        """
+        path = self._session_dir(session_id) / "session.json"
+        if not path.exists():
+            raise FileNotFoundError(f"Session '{session_id}' not found")
+
+        fd = os.open(str(path), os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+
+            # Read current state under lock
+            os.lseek(fd, 0, os.SEEK_SET)
+            raw = os.read(fd, 10_000_000)  # 10 MB cap
+            data = json.loads(raw)
+
+            # Apply updates
+            data["status"] = status.value if hasattr(status, "value") else status
+            data.update(extra_fields)
+
+            # Write back atomically
+            content = json.dumps(data, indent=2, default=str).encode()
+            os.ftruncate(fd, 0)
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.write(fd, content)
+            os.fsync(fd)
+
+            return Session(**data)
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
 
     def list_sessions(
         self,

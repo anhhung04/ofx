@@ -671,29 +671,27 @@ class TestFleetDistributorEdgeCases:
         assert len(chunks) == 2  # capped to target count
 
     def test_expand_fleet_to_matrix_no_input_returns_empty(self):
-        """expand_fleet_to_matrix with no input should return empty, not spawn VPSes."""
+        """expand_fleet_to_matrix with no input should raise, not spawn VPSes."""
         from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
 
-        combos, files = expand_fleet_to_matrix(
-            {"count": 3, "input": "", "distribution": "chunk"}
-        )
-        assert combos == []
-        assert files == []
+        with pytest.raises(ValueError, match="no targets to distribute"):
+            expand_fleet_to_matrix(
+                {"count": 3, "input": "", "distribution": "chunk"}
+            )
 
     def test_expand_fleet_to_matrix_no_matching_targets(self):
-        """All targets excluded → empty result, no chunk files created."""
+        """All targets excluded → raises error, no chunk files created."""
         from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
 
-        combos, files = expand_fleet_to_matrix(
-            {
-                "count": 2,
-                "input": "10.0.0.1",
-                "distribution": "chunk",
-                "exclude": ["10.0.0.1"],
-            },
-        )
-        assert combos == []
-        assert files == []
+        with pytest.raises(ValueError, match="no targets to distribute"):
+            expand_fleet_to_matrix(
+                {
+                    "count": 2,
+                    "input": "10.0.0.1",
+                    "distribution": "chunk",
+                    "exclude": ["10.0.0.1"],
+                },
+            )
 
     def test_expand_fleet_chunk_files_have_content(self):
         """Chunk files written by expand_fleet_to_matrix contain the targets."""
