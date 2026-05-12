@@ -63,14 +63,6 @@ jobs:
         batch_size: 1000
         ulimit: 5000
       continue-on-error: true
-    - task: naabu
-      log-command: true
-      name: naabu-precision
-      with:
-        target: "{{ jobs['host-discovery'].outputs.alive_file }}"
-        top_ports: '1000'
-        rate: 1000
-      continue-on-error: true
     - task: gogo
       log-command: true
       name: gogo-scan
@@ -84,16 +76,6 @@ jobs:
 
         ports = set()
         hosts_with_ports = {}
-
-        # Parse naabu results
-        naabu_out = {{ steps["naabu-precision"].outputs.typed_outputs | tojson }}
-        for item in naabu_out:
-            if item.get('_type') == 'port':
-                host = item.get('host') or item.get('ip', '')
-                port = item.get('port', '')
-                if host and port:
-                    ports.add(f"{host}:{port}")
-                    hosts_with_ports.setdefault(host, set()).add(str(port))
 
         # Parse rustscan results
         for item in {{ ports(steps["rustscan-fast"].outputs.typed_outputs) | default([], true) | tojson }}:

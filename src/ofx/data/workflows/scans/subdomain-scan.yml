@@ -84,28 +84,15 @@ jobs:
           san: true
           port: "443,8443"
         continue-on-error: true
-      - task: subfinder
-        log-command: true
-        name: crtsh-enum
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-          sources: "crtsh,certspotter,digitorus"
-        continue-on-error: true
       - name: merge-cert
         script: |
           from pathlib import Path
           base = '{{ inputs.target }}'
           cert_subs = set()
-          for items in [
-              {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ subdomains(steps["crtsh-enum"].outputs.typed_outputs) | default([], true) | tojson }},
-          ]:
-              for item in items:
-                  h = item.get('host', '')
-                  if h.endswith(f'.{base}') or h == base:
-                      cert_subs.add(h)
+          for item in {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
+              h = item.get('host', '')
+              if h.endswith(f'.{base}') or h == base:
+                  cert_subs.add(h)
           cert_path = f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_subscan_certsubs.txt'
           Path(cert_path).write_text('\n'.join(sorted(cert_subs)))
           add_outputs(cert_subs_file=cert_path, cert_sub_count=len(cert_subs))
