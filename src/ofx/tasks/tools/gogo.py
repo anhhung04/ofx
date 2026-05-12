@@ -17,7 +17,7 @@ class GogoTask(Task):
     description = "Fast port scanner with fingerprinting and nuclei integration"
     category = "port/scan"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/chainreactors/gogo/v2@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/chainreactors/gogo/v2@latest"
     )
     output_types = [Port, Url, Tag, Vulnerability]
 

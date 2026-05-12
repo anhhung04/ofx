@@ -16,7 +16,7 @@ class RustscanTask(Task):
     cmd = "rustscan"
     description = "Ultra-fast port scanner written in Rust"
     category = "port/scan"
-    install_cmd = "cargo install rustscan && mkdir -p ~/Tools/bin && cp ~/.cargo/bin/rustscan ~/Tools/bin/"
+    install_cmd = "cargo install --root $TOOLS_DIR rustscan"
     output_types = [Port]
 
     opts = {

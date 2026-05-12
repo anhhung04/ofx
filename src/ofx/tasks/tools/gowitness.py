@@ -18,7 +18,7 @@ class GowitnessTask(Task):
     description = "Web screenshotting tool"
     category = "url/screenshot"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/sensepost/gowitness@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/sensepost/gowitness@latest"
     )
     output_types = [Url, Tag]
 

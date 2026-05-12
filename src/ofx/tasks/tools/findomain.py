@@ -14,10 +14,10 @@ class FindomainTask(Task):
     description = "Fast cross-platform subdomain enumerator"
     category = "dns/recon"
     install_cmd = (
-        "mkdir -p ~/Tools/bin && curl -sL"
+        "mkdir -p $TOOLS_BIN_DIR && curl -sL"
         " https://github.com/findomain/findomain/releases/latest/download/findomain-linux.zip"
-        " -o /tmp/findomain.zip && unzip -o /tmp/findomain.zip -d ~/Tools/bin"
-        " && chmod +x ~/Tools/bin/findomain && rm /tmp/findomain.zip"
+        " -o /tmp/findomain.zip && unzip -o /tmp/findomain.zip -d $TOOLS_BIN_DIR"
+        " && chmod +x $TOOLS_BIN_DIR/findomain && rm /tmp/findomain.zip"
     )
     output_types = [Subdomain]
 

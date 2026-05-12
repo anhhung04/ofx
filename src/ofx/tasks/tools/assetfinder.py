@@ -14,7 +14,7 @@ class AssetfinderTask(Task):
     description = "Simple subdomain finder using various sources"
     category = "dns/recon"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/tomnomnom/assetfinder@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/tomnomnom/assetfinder@latest"
     )
     output_types = [Subdomain]
 

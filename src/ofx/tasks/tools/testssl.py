@@ -26,7 +26,7 @@ class TestsslTask(Task):
     category = "dns/recon/tls"
     install_cmd = (
         "git clone --depth 1 https://github.com/drwetter/testssl.sh.git"
-        " ~/Tools/testssl && ln -sf ~/Tools/testssl/testssl.sh ~/Tools/bin/testssl.sh"
+        " $TOOLS_DIR/testssl && ln -sf $TOOLS_DIR/testssl/testssl.sh $TOOLS_BIN_DIR/testssl.sh"
     )
     output_types = [Certificate, Vulnerability, Tag]
 

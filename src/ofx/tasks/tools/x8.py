@@ -15,9 +15,7 @@ class X8Task(Task):
     cmd = "x8"
     description = "Hidden parameter discovery tool"
     category = "url/fuzz/params"
-    install_cmd = (
-        "cargo install x8 && mkdir -p ~/Tools/bin && cp ~/.cargo/bin/x8 ~/Tools/bin/"
-    )
+    install_cmd = "cargo install --root $TOOLS_DIR x8"
     output_types = [Tag]
 
     opts = {

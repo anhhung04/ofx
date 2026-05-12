@@ -17,7 +17,7 @@ class KerbruteTask(Task):
     cmd = "kerbrute"
     description = "Kerberos brute force and user enumeration"
     category = "ad/brute"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/ropnop/kerbrute@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/ropnop/kerbrute@latest"
     output_types = [UserAccount]
 
     opts = {

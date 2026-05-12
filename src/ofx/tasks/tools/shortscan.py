@@ -16,7 +16,7 @@ class ShortscanTask(Task):
     cmd = "shortscan"
     description = "IIS shortname vulnerability scanner"
     category = "web/fuzz"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/bitquark/shortscan/cmd/shortscan@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/bitquark/shortscan/cmd/shortscan@latest"
     output_types = [Url, Vulnerability]
 
     opts = {

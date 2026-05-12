@@ -25,7 +25,7 @@ class BrutesprayTask(Task):
     description = "Automated service password spraying from scan output"
     category = "brute/spray"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/x90skysn3k/brutespray@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/x90skysn3k/brutespray@latest"
     )
     output_types = [UserAccount, Port]
 

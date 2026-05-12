@@ -13,7 +13,7 @@ class BrutusTask(Task):
     cmd = "brutus"
     description = "Automated credential brute-forcing for discovered services"
     category = "brute/credential"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/praetorian-inc/brutus/cmd/brutus@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/praetorian-inc/brutus/cmd/brutus@latest"
     output_types = [UserAccount]
 
     opts = {

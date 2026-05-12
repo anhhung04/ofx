@@ -18,9 +18,9 @@ class JwtToolTask(Task):
     description = "JWT vulnerability testing and exploitation"
     category = "vuln/jwt"
     install_cmd = (
-        "git clone --depth 1 https://github.com/ticarpi/jwt_tool ~/Tools/jwt_tool"
-        " && cd ~/Tools/jwt_tool && python3 -m pip install -r requirements.txt"
-        " && ln -sf ~/Tools/jwt_tool/jwt_tool.py ~/Tools/bin/jwt_tool"
+        "git clone --depth 1 https://github.com/ticarpi/jwt_tool $TOOLS_DIR/jwt_tool"
+        " && cd $TOOLS_DIR/jwt_tool && python3 -m pip install -r requirements.txt"
+        " && ln -sf $TOOLS_DIR/jwt_tool/jwt_tool.py $TOOLS_BIN_DIR/jwt_tool"
     )
     output_types = [Vulnerability, Tag]
 

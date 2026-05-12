@@ -13,7 +13,7 @@ class HttpxTask(Task):
     cmd = "httpx"
     description = "Fast and multi-purpose HTTP toolkit"
     category = "url/probe"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest"
     output_types = [Url, Tag]
 
     opts = {

@@ -15,7 +15,7 @@ class FfufTask(Task):
     cmd = "ffuf"
     description = "Fast web fuzzer written in Go"
     category = "url/fuzz"
-    install_cmd = "GOBIN=~/Tools/bin go install github.com/ffuf/ffuf/v2@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install github.com/ffuf/ffuf/v2@latest"
     output_types = [Url]
 
     opts = {

@@ -36,7 +36,7 @@ class ZombieTask(Task):
     description = "Lightweight service credential brute-forcer with gogo integration"
     category = "brute/login"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/chainreactors/zombie@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/chainreactors/zombie@latest"
     )
     output_types = [UserAccount]
 

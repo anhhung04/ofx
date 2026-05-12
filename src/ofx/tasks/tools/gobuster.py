@@ -17,7 +17,7 @@ class GobusterTask(Task):
     cmd = "gobuster"
     description = "Directory/DNS/vhost brute-forcing tool"
     category = "url/fuzz"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/OJ/gobuster/v3@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/OJ/gobuster/v3@latest"
     output_types = [Url]
 
     opts = {

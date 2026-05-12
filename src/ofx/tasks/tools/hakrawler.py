@@ -16,7 +16,7 @@ class HakrawlerTask(Task):
     cmd = "hakrawler"
     description = "Fast web crawler for discovering URLs and endpoints"
     category = "url/crawl"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/hakluke/hakrawler@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/hakluke/hakrawler@latest"
     output_types = [Url]
 
     opts = {

@@ -25,7 +25,7 @@ class GrypeTask(Task):
     category = "vuln/scan"
     install_cmd = (
         "curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh"
-        " | sh -s -- -b ~/Tools/bin"
+        " | sh -s -- -b $TOOLS_BIN_DIR"
     )
     output_types = [Vulnerability]
 

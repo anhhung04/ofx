@@ -23,7 +23,7 @@ class CloudfoxTask(Task):
     cmd = "cloudfox"
     description = "AWS/Azure/GCP cloud enumeration tool"
     category = "recon/cloud"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/BishopFox/cloudfox@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/BishopFox/cloudfox@latest"
     output_types = [Tag, Vulnerability]
 
     opts = {

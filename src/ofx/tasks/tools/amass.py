@@ -17,7 +17,7 @@ class AmassTask(Task):
     description = "OWASP subdomain enumeration engine"
     category = "dns/recon"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/owasp-amass/amass/v3/...@master"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/owasp-amass/amass/v3/...@master"
     )
     output_types = [Subdomain]
 

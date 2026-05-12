@@ -18,7 +18,7 @@ class DnstakeTask(Task):
     description = "DNS takeover detection tool"
     category = "dns/takeover"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/pwnesia/dnstake/cmd/dnstake@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/pwnesia/dnstake/cmd/dnstake@latest"
     )
     output_types = [Vulnerability, Subdomain]
 

@@ -29,7 +29,7 @@ class CherrybombTask(Task):
     cmd = "cherrybomb"
     description = "API security scanner for OpenAPI specifications"
     category = "vuln/api"
-    install_cmd = "cargo install cherrybomb"
+    install_cmd = "cargo install --root $TOOLS_DIR cherrybomb"
     output_types = [Vulnerability, Tag]
 
     opts = {

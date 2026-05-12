@@ -14,7 +14,7 @@ class MapcidrTask(Task):
     description = "CIDR expansion and IP manipulation utility"
     category = "ip/util"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v"
+        "GOBIN=$TOOLS_BIN_DIR go install -v"
         " github.com/projectdiscovery/mapcidr/cmd/mapcidr@latest"
     )
     output_types = [Ip]

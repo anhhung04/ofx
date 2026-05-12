@@ -25,7 +25,7 @@ class TrivyTask(Task):
     category = "vuln/scan"
     install_cmd = (
         "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main"
-        "/contrib/install.sh | sh -s -- -b ~/Tools/bin"
+        "/contrib/install.sh | sh -s -- -b $TOOLS_BIN_DIR"
     )
     output_types = [Vulnerability, Tag]
 

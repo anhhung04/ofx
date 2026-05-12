@@ -19,7 +19,7 @@ class WinpeasTask(Task):
     category = "privesc/windows"
     install_cmd = (
         "curl -fsSL https://github.com/peass-ng/PEASS-ng/releases/latest/download/winPEASx64.exe "
-        "-o ~/Tools/bin/winPEASx64.exe"
+        "-o $TOOLS_BIN_DIR/winPEASx64.exe"
     )
     output_types = [Vulnerability, Tag]
 

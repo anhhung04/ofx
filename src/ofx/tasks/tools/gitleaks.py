@@ -17,7 +17,7 @@ class GitleaksTask(Task):
     description = "Detect secrets in source code and git repositories"
     category = "secret/scan"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/gitleaks/gitleaks/v8@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/gitleaks/gitleaks/v8@latest"
     )
     output_types = [Tag]
 

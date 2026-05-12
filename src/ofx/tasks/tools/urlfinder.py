@@ -13,7 +13,7 @@ class UrlfinderTask(Task):
     cmd = "urlfinder"
     description = "Passive URL extraction from web archives and sources"
     category = "web/recon"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/urlfinder/cmd/urlfinder@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/projectdiscovery/urlfinder/cmd/urlfinder@latest"
     output_types = [Url]
 
     opts = {

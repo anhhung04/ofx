@@ -15,7 +15,7 @@ class WpscanTask(Task):
     cmd = "wpscan"
     description = "WordPress security scanner"
     category = "vuln/scan/wordpress"
-    install_cmd = "GEM_HOME=~/Tools gem install wpscan"
+    install_cmd = "GEM_HOME=$TOOLS_DIR gem install wpscan"
     output_types = [Vulnerability, Tag]
 
     # wpscan: exit 5 = vulnerabilities found — that's expected useful output.

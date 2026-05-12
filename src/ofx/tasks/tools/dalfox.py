@@ -16,7 +16,7 @@ class DalfoxTask(Task):
     cmd = "dalfox"
     description = "Powerful open-source XSS scanner"
     category = "url/fuzz"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/hahwul/dalfox/v2@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/hahwul/dalfox/v2@latest"
     output_types = [Vulnerability, Url]
 
     opts = {

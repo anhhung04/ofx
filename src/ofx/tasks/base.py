@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR
 from ofx.tasks.output_types import OutputType
 
 
@@ -255,8 +256,19 @@ class Task(ABC):
         return shutil.which(self.cmd) is not None
 
     def get_install_command(self) -> str | None:
-        """Return shell command to install the tool, or ``None``."""
-        return self.install_cmd or None
+        """Return shell command to install the tool, or ``None``.
+
+        Placeholders ``$TOOLS_BIN_DIR`` and ``$TOOLS_DIR`` in
+        :attr:`install_cmd` are resolved to the actual paths from
+        :mod:`ofx.settings`.
+        """
+        cmd = self.install_cmd or None
+        if cmd:
+            cmd = (
+                cmd.replace("$TOOLS_BIN_DIR", str(TOOLS_BIN_DIR))
+                .replace("$TOOLS_DIR", str(TOOLS_DIR))
+            )
+        return cmd
 
     # ── Helpers ────────────────────────────────────────────────────
 

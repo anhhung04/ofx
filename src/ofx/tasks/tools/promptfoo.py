@@ -22,7 +22,7 @@ class PromptfooTask(Task):
     cmd = "promptfoo"
     description = "LLM red teaming and evaluation framework"
     category = "vuln/llm"
-    install_cmd = "npm install -g promptfoo"
+    install_cmd = "npm install -g --prefix $TOOLS_DIR promptfoo"
     output_types = [Vulnerability, Tag]
 
     opts = {

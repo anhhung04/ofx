@@ -13,7 +13,7 @@ class NaabuTask(Task):
     cmd = "naabu"
     description = "Fast port scanner written in Go"
     category = "port/scan"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest"
     output_types = [Port]
 
     opts = {

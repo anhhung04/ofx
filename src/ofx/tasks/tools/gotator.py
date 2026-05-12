@@ -16,7 +16,7 @@ class GotatorTask(Task):
     cmd = "gotator"
     description = "Subdomain permutation generator"
     category = "dns/permute"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/Josue87/gotator@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/Josue87/gotator@latest"
     output_types = [Subdomain]
 
     opts = {

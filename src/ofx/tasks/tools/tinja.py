@@ -16,7 +16,7 @@ class TinjaTask(Task):
     cmd = "TInjA"
     description = "Server-Side Template Injection scanner"
     category = "url/fuzz"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/Hackmanit/TInjA@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/Hackmanit/TInjA@latest"
     output_types = [Vulnerability, Url]
 
     opts = {

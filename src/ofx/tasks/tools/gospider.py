@@ -16,7 +16,7 @@ class GospiderTask(Task):
     description = "Fast web spider written in Go"
     category = "url/crawl"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/jaeles-project/gospider@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/jaeles-project/gospider@latest"
     )
     output_types = [Url]
 

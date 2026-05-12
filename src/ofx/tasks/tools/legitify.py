@@ -25,7 +25,7 @@ class LegitifyTask(Task):
     description = "GitHub/GitLab security posture scanner"
     category = "recon/cicd"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/Legit-Labs/legitify@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/Legit-Labs/legitify@latest"
     )
     output_types = [Vulnerability, Tag]
 

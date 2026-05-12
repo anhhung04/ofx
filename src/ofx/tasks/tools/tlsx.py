@@ -13,7 +13,7 @@ class TlsxTask(Task):
     cmd = "tlsx"
     description = "TLS/SSL certificate analysis and subdomain discovery"
     category = "cert/scan"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/tlsx/cmd/tlsx@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/projectdiscovery/tlsx/cmd/tlsx@latest"
     output_types = [Certificate, Subdomain]
 
     opts = {

@@ -13,7 +13,7 @@ class CrlfuzzTask(Task):
     cmd = "crlfuzz"
     description = "CRLF injection vulnerability scanner"
     category = "vuln/injection"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/dwisiswant0/crlfuzz/cmd/crlfuzz@latest"
     output_types = [Vulnerability]
 
     opts = {

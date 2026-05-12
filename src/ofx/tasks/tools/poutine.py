@@ -28,7 +28,7 @@ class PoutineTask(Task):
     description = "CI/CD pipeline security scanner"
     category = "vuln/cicd"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/boostsecurityio/poutine@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/boostsecurityio/poutine@latest"
     )
     output_types = [Vulnerability, Tag]
 

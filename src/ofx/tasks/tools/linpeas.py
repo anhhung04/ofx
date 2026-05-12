@@ -19,7 +19,7 @@ class LinpeasTask(Task):
     category = "privesc/linux"
     install_cmd = (
         "curl -fsSL https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh "
-        "-o ~/Tools/bin/linpeas.sh && chmod +x ~/Tools/bin/linpeas.sh"
+        "-o $TOOLS_BIN_DIR/linpeas.sh && chmod +x $TOOLS_BIN_DIR/linpeas.sh"
     )
     output_types = [Vulnerability, Tag]
 

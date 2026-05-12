@@ -13,7 +13,7 @@ class CspreconTask(Task):
     cmd = "csprecon"
     description = "CSP header subdomain discovery"
     category = "dns/recon"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/edoardottt/csprecon/cmd/csprecon@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/edoardottt/csprecon/cmd/csprecon@latest"
     output_types = [Subdomain]
 
     opts = {

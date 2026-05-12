@@ -15,7 +15,7 @@ class KatanaTask(Task):
     cmd = "katana"
     description = "Next-generation crawling and spidering framework"
     category = "url/crawl"
-    install_cmd = "GOBIN=~/Tools/bin go install github.com/projectdiscovery/katana/cmd/katana@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install github.com/projectdiscovery/katana/cmd/katana@latest"
     output_types = [Url]
 
     opts = {

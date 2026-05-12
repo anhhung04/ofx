@@ -13,7 +13,7 @@ class CdncheckTask(Task):
     cmd = "cdncheck"
     description = "Identify CDN/WAF/cloud providers for IPs and domains"
     category = "recon/cdn"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/projectdiscovery/cdncheck/cmd/cdncheck@latest"
     output_types = [Tag, Ip]
 
     opts = {

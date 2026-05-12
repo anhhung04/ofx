@@ -16,7 +16,7 @@ class PurednsTask(Task):
     description = "Fast DNS bruteforcing and resolution with massdns"
     category = "dns/brute"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v github.com/d3mondev/puredns/v2@latest"
+        "GOBIN=$TOOLS_BIN_DIR go install -v github.com/d3mondev/puredns/v2@latest"
     )
     output_types = [Subdomain]
 

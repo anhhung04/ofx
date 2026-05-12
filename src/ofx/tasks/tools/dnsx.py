@@ -13,7 +13,7 @@ class DnsxTask(Task):
     cmd = "dnsx"
     description = "Fast and multi-purpose DNS toolkit"
     category = "dns/resolve"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest"
     output_types = [Subdomain, Ip, Record]
 
     opts = {

@@ -16,7 +16,7 @@ class TrufflehogTask(Task):
     cmd = "trufflehog"
     description = "Find leaked credentials in git repos, filesystems, and more"
     category = "secret/scan"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/trufflesecurity/trufflehog/v3@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/trufflesecurity/trufflehog/v3@latest"
     output_types = [Tag]
 
     opts = {

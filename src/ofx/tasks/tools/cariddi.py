@@ -17,7 +17,7 @@ class CariddiTask(Task):
     description = "Crawl URLs for secrets, endpoints, and errors"
     category = "url/crawl"
     install_cmd = (
-        "GOBIN=~/Tools/bin go install -v"
+        "GOBIN=$TOOLS_BIN_DIR go install -v"
         " github.com/edoardottt/cariddi/cmd/cariddi@latest"
     )
     output_types = [Url, Tag]

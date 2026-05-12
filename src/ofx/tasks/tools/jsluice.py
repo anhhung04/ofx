@@ -16,7 +16,7 @@ class JsluiceTask(Task):
     cmd = "jsluice"
     description = "JavaScript secret and endpoint extraction"
     category = "web/js"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/BishopFox/jsluice/cmd/jsluice@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/BishopFox/jsluice/cmd/jsluice@latest"
     output_types = [Url, Tag]
 
     opts = {

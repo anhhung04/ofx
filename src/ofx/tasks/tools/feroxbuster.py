@@ -19,7 +19,7 @@ class FeroxbusterTask(Task):
     cmd = "feroxbuster"
     description = "Fast content discovery tool written in Rust"
     category = "url/fuzz"
-    install_cmd = "mkdir -p ~/Tools/bin && cd ~/Tools/bin && curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash"
+    install_cmd = "mkdir -p $TOOLS_BIN_DIR && cd $TOOLS_BIN_DIR && curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash"
     output_types = [Url]
 
     opts = {

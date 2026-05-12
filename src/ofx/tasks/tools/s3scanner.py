@@ -16,7 +16,7 @@ class S3scannerTask(Task):
     cmd = "s3scanner"
     description = "S3/cloud bucket misconfiguration scanner"
     category = "recon/cloud"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/sa7mon/s3scanner@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/sa7mon/s3scanner@latest"
     output_types = [Vulnerability, Tag]
 
     opts = {

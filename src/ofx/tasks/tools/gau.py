@@ -18,7 +18,7 @@ class GauTask(Task):
         "Fetch known URLs from AlienVault OTX, Wayback Machine, and Common Crawl"
     )
     category = "url/recon"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/lc/gau/v2/cmd/gau@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/lc/gau/v2/cmd/gau@latest"
     output_types = [Url, Subdomain]
 
     opts = {

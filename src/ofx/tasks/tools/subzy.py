@@ -15,7 +15,7 @@ class SubzyTask(Task):
     cmd = "subzy"
     description = "Subdomain takeover vulnerability checker"
     category = "vuln/takeover"
-    install_cmd = "GOBIN=~/Tools/bin go install -v github.com/PentestPad/subzy@latest"
+    install_cmd = "GOBIN=$TOOLS_BIN_DIR go install -v github.com/PentestPad/subzy@latest"
     output_types = [Vulnerability]
 
     opts = {
