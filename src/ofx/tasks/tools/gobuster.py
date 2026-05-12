@@ -77,7 +77,7 @@ class GobusterTask(Task):
         # Gobuster has a default status-codes-blacklist (404) that conflicts
         # with explicit status-codes; clear it to avoid the mutual-exclusion error.
         if has_status_codes:
-            parts.extend(["-b", ""])
+            parts.extend(["-b", self._q("")])
 
         output_file: Path | None = None
         if self.output_flag:
