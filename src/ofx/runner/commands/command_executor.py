@@ -120,6 +120,11 @@ class CommandExecutor:
         shell_funcs = get_shell_functions(self._command.shell)
         full_cmd = f"{shell_funcs}\n{self._command.cmd}"
 
+        # Raise the StreamReader line-buffer limit to 10 MB.
+        # The default 64 KB causes "Separator is not found, and chunk exceed
+        # the limit" errors when tools like katana emit long JSONL lines.
+        _STREAM_LIMIT = 10 * 1024 * 1024  # 10 MB
+
         proc = await asyncio.create_subprocess_shell(
             full_cmd,
             executable=self._command.shell,
@@ -128,6 +133,7 @@ class CommandExecutor:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
+            limit=_STREAM_LIMIT,
         )
 
         stdout_lines: list[str] = []
@@ -138,20 +144,27 @@ class CommandExecutor:
             nonlocal stdout_bytes_total
             assert proc.stdout is not None
             max_size = settings.max_output_size
-            async for raw_line in proc.stdout:
-                try:
-                    line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
-                except Exception as e:
-                    logger.debug("Failed to decode stdout line as UTF-8, using hex: %s", e)
-                    line = raw_line.hex()
-                stdout_bytes_total += len(raw_line)
-                if stdout_bytes_total <= max_size:
-                    stdout_lines.append(line)
-                if on_line:
+            try:
+                async for raw_line in proc.stdout:
                     try:
-                        on_line(line)
+                        line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
                     except Exception as e:
-                        logger.debug("on_line callback failed: %s", e)
+                        logger.debug("Failed to decode stdout line as UTF-8, using hex: %s", e)
+                        line = raw_line.hex()
+                    stdout_bytes_total += len(raw_line)
+                    if stdout_bytes_total <= max_size:
+                        stdout_lines.append(line)
+                    if on_line:
+                        try:
+                            on_line(line)
+                        except Exception as e:
+                            logger.debug("on_line callback failed: %s", e)
+            except ValueError as e:
+                # asyncio raises ValueError("Separator is not found, and chunk
+                # exceed the limit") when a single line exceeds the StreamReader
+                # buffer limit even after we raised it. Log and stop reading
+                # rather than crashing the whole task.
+                logger.debug("stdout readline limit exceeded, stopping stream: %s", e)
 
         async def _read_stderr():
             nonlocal stderr_bytes

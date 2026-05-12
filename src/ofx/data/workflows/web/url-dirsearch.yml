@@ -58,27 +58,13 @@ jobs:
           extensions: php,asp,aspx,jsp,html,js,json,xml,txt,bak,old,conf,env,sql,zip
           include_status: "200,201,204,301,302,307,401,403,405,500"
         continue-on-error: true
-      - task: ffuf
-        log-command: true
-        name: ffuf-dirs
-        with:
-          target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}/FUZZ"
-          wordlist: "{{ inputs.wordlist }}"
-          auto_calibration: true
-          follow_redirects: true
-          match_codes: "200,201,204,301,302,307,401,403,405,500"
-        continue-on-error: true
       - name: collect-dirs
         script: |
-          import json
-
           urls = set()
-          for step_idx in [0, 1]:
-              step_data = {{ steps | tojson }}
-              typed = step_data.get(str(step_idx), {}).get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'url':
-                      urls.add(item['url'])
+          for item in {{ urls(steps["dirsearch-scan"].outputs.typed_outputs) | default([], true) | tojson }}:
+              url = item.get('url', '')
+              if url:
+                  urls.add(url)
 
           with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_dir_urls.txt', 'w') as f:
               f.write('\n'.join(sorted(urls)))

@@ -49,29 +49,6 @@ jobs:
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
-      - task: assetfinder
-        log-command: true
-        name: assetfinder-enum
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-      - task: theharvester
-        log-command: true
-        name: harvester-enum
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-      - task: findomain
-        name: findomain-enum
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
       - name: merge-passive
         script: |
           from pathlib import Path
@@ -80,9 +57,6 @@ jobs:
           for items in [
               {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }},
               {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ subdomains(steps["harvester-enum"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ subdomains(steps["findomain-enum"].outputs.typed_outputs) | default([], true) | tojson }},
           ]:
               for item in items:
                   h = item.get('host', '')
@@ -415,25 +389,14 @@ jobs:
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
         continue-on-error: true
-      - task: sslscan
-        name: sslscan-check
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
-        continue-on-error: true
       - name: ssl-report
         script: |
           weak_keywords = ['deprecated', 'weak', 'sslv', 'tls 1.0', 'tls 1.1', 'rc4', 'des', 'null', 'export', 'sweet32', 'poodle', 'heartbleed']
           issues = []
-          for items in [
-              {{ vulns(steps["testssl-scan"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ vulns(steps["sslscan-check"].outputs.typed_outputs) | default([], true) | tojson }},
-          ]:
-              for item in items:
-                  name = item.get('name', '')
-                  if any(k in name.lower() for k in weak_keywords):
-                      issues.append(f"{item.get('host','')}: {name}")
+          for item in {{ vulns(steps["testssl-scan"].outputs.typed_outputs) | default([], true) | tojson }}:
+              name = item.get('name', '')
+              if any(k in name.lower() for k in weak_keywords):
+                  issues.append(f"{item.get('host','')}: {name}")
           unique_issues = sorted(set(issues))
           add_outputs(ssl_issues_count=len(unique_issues))
           print(f"SSL/TLS issues: {len(unique_issues)}" + (f"\n" + '\n'.join(f"  {i}" for i in unique_issues[:10]) if unique_issues else " — none found"))
@@ -473,15 +436,7 @@ jobs:
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
           depth: 3
-        continue-on-error: true
-      - task: gospider
-        log-command: true
-        name: gospider-crawl
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
-          depth: 2
+          js_crawl: true
         continue-on-error: true
       - name: merge-urls
         script: |
@@ -492,7 +447,6 @@ jobs:
               {{ urls(steps["waymore-hist"].outputs.typed_outputs) | default([], true) | tojson }},
               {{ urls(steps["gau-hist"].outputs.typed_outputs) | default([], true) | tojson }},
               {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ urls(steps["gospider-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
           ]:
               for item in items:
                   if item.get('url'):

@@ -74,18 +74,6 @@ jobs:
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
-      - task: assetfinder
-        log-command: true
-        name: assetfinder-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-      - task: findomain
-        log-command: true
-        name: findomain-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
       - name: collect-subdomains
         script: |
           import json
@@ -93,16 +81,11 @@ jobs:
           subs = set()
           subs.add('{{ inputs.target }}')
 
-          # From subfinder
-          sf_outputs = {{ steps["subfinder-enum"].outputs.typed_outputs | tojson }}
-          for item in sf_outputs:
-              if item.get('_type') == 'subdomain':
-                  subs.add(item['host'])
-
-          # From amass, assetfinder, findomain
-          for step_name in ["amass-passive", "assetfinder-enum", "findomain-enum"]:
-              for item in {{ subdomains(steps[step_name].outputs.typed_outputs) | default([], true) | tojson }}:
-                  subs.add(item['host'])
+          for item in (
+              {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }} +
+              {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}
+          ):
+              subs.add(item['host'])
 
           sub_list = '\n'.join(sorted(subs))
           with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_ext_subs.txt', 'w') as f:
@@ -274,13 +257,7 @@ jobs:
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
           depth: 3
-        continue-on-error: true
-      - task: gospider
-        log-command: true
-        name: gospider-crawl
-        with:
-          target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
-          depth: 2
+          js_crawl: true
         continue-on-error: true
       - task: gau
         log-command: true
@@ -288,10 +265,6 @@ jobs:
         with:
           target: "{{ inputs.target }}"
           subs: true
-        continue-on-error: true
-      - name: hakrawler-crawl
-        run: |
-          echo "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}" | hakrawler -d 2 -subs 2>/dev/null | tee ${OFX_RUN_DIR:-/tmp}/ofx_hakrawler_urls.txt
         continue-on-error: true
       - task: paramspider
         log-command: true
@@ -305,28 +278,15 @@ jobs:
           import json
 
           urls = set()
-          for idx in ["0", "1", "2"]:
-              step_data = {{ steps | tojson }}
-              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
-              for item in typed:
-                  if item.get('_type') == 'url':
-                      urls.add(item['url'])
-
-          # From hakrawler
-          try:
-              with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_hakrawler_urls.txt') as f:
-                  for line in f:
-                      u = line.strip()
-                      if u and u.startswith('http'):
-                          urls.add(u)
-          except FileNotFoundError:
-              pass
-
-          # From paramspider
-          for item in {{ urls(steps["paramspider-discover"].outputs.typed_outputs) | default([], true) | tojson }}:
-              u = item.get('url', '')
-              if u and u.startswith('http'):
-                  urls.add(u)
+          for source in [
+              {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ urls(steps["gau-archive"].outputs.typed_outputs) | default([], true) | tojson }},
+              {{ urls(steps["paramspider-discover"].outputs.typed_outputs) | default([], true) | tojson }},
+          ]:
+              for item in source:
+                  u = item.get('url', '')
+                  if u and u.startswith('http'):
+                      urls.add(u)
 
           open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_crawled.txt', 'w').write('\n'.join(sorted(urls)))
           add_outputs(crawled_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_extrecon_crawled.txt", crawl_count=len(urls))

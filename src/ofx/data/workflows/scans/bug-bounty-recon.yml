@@ -48,22 +48,6 @@ jobs:
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
-      - task: assetfinder
-        log-command: true
-        name: assetfinder-enum
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-      - task: findomain
-        log-command: true
-        name: findomain-enum
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
       - task: tlsx
         log-command: true
         name: tls-san-enum
@@ -84,8 +68,6 @@ jobs:
           all_typed = (
               {{ subdomains(steps["subfinder-scan"].outputs.typed_outputs) | default([], true) | tojson }} +
               {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }} +
-              {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }} +
-              {{ subdomains(steps["findomain-enum"].outputs.typed_outputs) | default([], true) | tojson }} +
               {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }}
           )
           for item in all_typed:
@@ -354,14 +336,6 @@ jobs:
           depth: 3
           js_crawl: true
         continue-on-error: true
-      - task: gospider
-        name: gospider-crawl
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ jobs['subdomain-discovery'].outputs.live_urls_file }}"
-          depth: 2
-        continue-on-error: true
       - task: waymore
         name: waymore-crawl
         retry: 2
@@ -392,7 +366,6 @@ jobs:
           crawled = set()
           for source in [
               {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ urls(steps["gospider-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
               {{ urls(steps["waymore-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
               {{ urls(steps["gau-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
           ]:

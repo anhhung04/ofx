@@ -80,12 +80,6 @@ jobs:
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
-      - task: assetfinder
-        log-command: true
-        name: assetfinder-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
       # CT log enumeration
       - task: tlsx
         log-command: true
@@ -94,13 +88,6 @@ jobs:
           target: "{{ inputs.target }}"
           san: true
           port: "443,8443"
-        continue-on-error: true
-      - task: subfinder
-        log-command: true
-        name: crtsh-enum
-        with:
-          target: "{{ inputs.target }}"
-          sources: "crtsh,certspotter"
         continue-on-error: true
       - name: merge-subs
         script: |
@@ -115,13 +102,7 @@ jobs:
           for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
               if base in item.get('host', ''):
                   subs.add(item['host'])
-          for item in {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  subs.add(item['host'])
           for item in {{ subdomains(steps["tls-san-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
-              if base in item.get('host', ''):
-                  subs.add(item['host'])
-          for item in {{ subdomains(steps["crtsh-enum"].outputs.typed_outputs) | default([], true) | tojson }}:
               if base in item.get('host', ''):
                   subs.add(item['host'])
 
@@ -171,44 +152,20 @@ jobs:
       open_ports_json: '{{ steps["collect-ports"].outputs.open_ports_json | default("[]", true) }}'
       port_count: '{{ steps["collect-ports"].outputs.port_count | default("0", true) }}'
     steps:
-      - task: naabu
-        log-command: true
-        name: naabu-scan
-        with:
-          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
-          top_ports: "1000"
-          rate: 1000
-        continue-on-error: true
-      - task: masscan
-        log-command: true
-        name: masscan-sweep
-        with:
-          target: "{{ jobs['dns-verify'].outputs.verified_file }}"
-          top_ports: 100
-          rate: 1000
-        continue-on-error: true
       - task: nmap
         log-command: true
         name: service-detect
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
           version_detection: true
+          top_ports: 1000
+          timing: 4
         continue-on-error: true
       - name: collect-ports
         script: |
           import json
 
           port_set = set()
-          for item in {{ ports(steps["naabu-scan"].outputs.typed_outputs) | default([], true) | tojson }}:
-              h = item.get('host') or item.get('ip', '')
-              p = item.get('port', '')
-              if h and p:
-                  port_set.add(f"{h}:{p}")
-          for item in {{ ports(steps["masscan-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
-              h = item.get('host') or item.get('ip', '')
-              p = item.get('port', '')
-              if h and p:
-                  port_set.add(f"{h}:{p}")
           for item in {{ ports(steps["service-detect"].outputs.typed_outputs) | default([], true) | tojson }}:
               h = item.get('host') or item.get('ip', '')
               p = item.get('port', '')

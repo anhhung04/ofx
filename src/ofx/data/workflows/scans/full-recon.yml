@@ -37,20 +37,6 @@ jobs:
         retry-delay: 5
         with: {target: "{{ inputs.target }}"}
         continue-on-error: true
-      - task: assetfinder
-        log-command: true
-        name: assetfinder-enum
-        retry: 2
-        retry-delay: 5
-        with: {target: "{{ inputs.target }}"}
-        continue-on-error: true
-      - task: theharvester
-        log-command: true
-        name: harvester-enum
-        retry: 2
-        retry-delay: 5
-        with: {target: "{{ inputs.target }}"}
-        continue-on-error: true
       - name: merge-passive
         script: |
           from pathlib import Path
@@ -58,9 +44,7 @@ jobs:
           subs = {base}
           for item in (
               {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }} +
-              {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }} +
-              {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }} +
-              {{ subdomains(steps["harvester-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+              {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}
           ):
               h = item.get('host', '')
               if h.endswith(f'.{base}') or h == base:
@@ -364,19 +348,10 @@ jobs:
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}", protocols: true, vulnerabilities: true}
         continue-on-error: true
-      - task: sslscan
-        name: sslscan-check
-        retry: 2
-        retry-delay: 5
-        with: {target: "{{ inputs.target }}", show_certificate: true}
-        continue-on-error: true
       - name: ssl-report
         script: |
           issues = []
-          for item in (
-              {{ vulns(steps["testssl-scan"].outputs.typed_outputs) | default([], true) | tojson }} +
-              {{ vulns(steps["sslscan-check"].outputs.typed_outputs) | default([], true) | tojson }}
-          ):
+          for item in {{ vulns(steps["testssl-scan"].outputs.typed_outputs) | default([], true) | tojson }}:
               issues.append(f"{item.get('severity', '').upper()} {item.get('host', '')} — {item.get('name', '')}")
           add_outputs(ssl_issues_count=len(issues))
 
@@ -463,13 +438,6 @@ jobs:
         run_if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
         with: {target: "{{ jobs['http-probe'].outputs.live_urls_file }}", depth: 3, js_crawl: true, scope: "{{ inputs.target }}"}
         continue-on-error: true
-      - task: gospider
-        name: gospider-crawl
-        retry: 2
-        retry-delay: 5
-        run_if: "{{ jobs['http-probe'].outputs.live_count | default(0, true) | int > 0 }}"
-        with: {target: "{{ jobs['http-probe'].outputs.live_urls_file }}", depth: 3, include_subs: true}
-        continue-on-error: true
       # Parameter discovery
       - task: paramspider
         name: paramspider-mine
@@ -495,7 +463,6 @@ jobs:
               {{ urls(steps["waymore-urls"].outputs.typed_outputs) | default([], true) | tojson }} +
               {{ urls(steps["gau-urls"].outputs.typed_outputs) | default([], true) | tojson }} +
               {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }} +
-              {{ urls(steps["gospider-crawl"].outputs.typed_outputs) | default([], true) | tojson }} +
               {{ urls(steps["paramspider-mine"].outputs.typed_outputs) | default([], true) | tojson }} +
               {{ urls(steps["arjun-discover"].outputs.typed_outputs) | default([], true) | tojson }}
           ):
