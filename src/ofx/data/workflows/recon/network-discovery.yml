@@ -50,14 +50,6 @@ jobs:
     needs:
     - host-discovery
     steps:
-    - task: masscan
-      log-command: true
-      name: masscan-sweep
-      with:
-        target: "{{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }}"
-        top_ports: '100'
-        rate: 1000
-      continue-on-error: true
     - task: naabu
       log-command: true
       name: naabu-scan

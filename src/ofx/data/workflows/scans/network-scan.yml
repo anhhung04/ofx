@@ -53,15 +53,6 @@ jobs:
           top_ports: "1000"
           rate: 2000
         continue-on-error: true
-      - task: masscan
-        log-command: true
-        name: masscan-sweep
-        with:
-          target: "{{ inputs.target }}"
-          top_ports: "100"
-          rate: 2000
-          wait: 0
-        continue-on-error: true
       - name: collect-hosts
         script: |
           import json
@@ -78,11 +69,6 @@ jobs:
                   hosts.add(item.get('ip', ''))
 
           for item in {{ ports(steps["port-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
-              h = item.get('host') or item.get('ip', '')
-              if h:
-                  hosts.add(h)
-
-          for item in {{ ports(steps["masscan-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
               h = item.get('host') or item.get('ip', '')
               if h:
                   hosts.add(h)

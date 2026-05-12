@@ -143,27 +143,16 @@ jobs:
           top_ports: "1000"
           rate: 1000
         continue-on-error: true
-      - task: masscan
-        log-command: true
-        name: masscan-sweep
-        with:
-          target: "{{ jobs['dns-verify'].outputs.alive_file | default(inputs.target, true) }}"
-          top_ports: "100"
-          rate: 1000
-        continue-on-error: true
       - name: collect-ports
         script: |
-          import json
-
           ports = set()
           hosts = set()
-          for step_name in ["naabu-scan", "masscan-sweep"]:
-              for item in {{ ports(steps[step_name].outputs.typed_outputs) | default([], true) | tojson }}:
-                  host = item.get('host') or item.get('ip', '')
-                  port = item.get('port', '')
-                  if host and port:
-                      ports.add(f"{host}:{port}")
-                      hosts.add(host)
+          for item in {{ ports(steps["naabu-scan"].outputs.typed_outputs) | default([], true) | tojson }}:
+              host = item.get('host') or item.get('ip', '')
+              port = item.get('port', '')
+              if host and port:
+                  ports.add(f"{host}:{port}")
+                  hosts.add(host)
 
           open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_ports.txt', 'w').write('\n'.join(sorted(ports)))
           open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_extrecon_porthosts.txt', 'w').write('\n'.join(sorted(hosts)))
@@ -350,7 +339,6 @@ jobs:
       critical_count: '{{ steps["export-vulns"].outputs.critical_count | default("", true) }}'
       high_count: '{{ steps["export-vulns"].outputs.high_count | default("", true) }}'
       medium_count: '{{ steps["export-vulns"].outputs.medium_count | default("", true) }}'
-      nikto_count: '{{ steps["export-vulns"].outputs.nikto_count | default("", true) }}'
       crlf_count: '{{ steps["export-vulns"].outputs.crlf_count | default("", true) }}'
     needs:
       - web-crawl
@@ -363,13 +351,6 @@ jobs:
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls | default(inputs.target, true) }}"
           severity: critical,high,medium
-        continue-on-error: true
-      - task: nikto
-        log-command: true
-        name: nikto-scan
-        with:
-          target: "{{ inputs.target }}"
-          maxtime: 900
         continue-on-error: true
       - name: crlfuzz-scan
         run: |
@@ -386,7 +367,6 @@ jobs:
           import json
 
           nuclei_vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | tojson }}
-          nikto_vulns = {{ vulns(steps["nikto-scan"].outputs.typed_outputs) | tojson }}
           critical = [v for v in nuclei_vulns if v.get('severity') == 'critical']
           high = [v for v in nuclei_vulns if v.get('severity') == 'high']
           medium = [v for v in nuclei_vulns if v.get('severity') == 'medium']
@@ -401,9 +381,8 @@ jobs:
           except FileNotFoundError:
               pass
 
-          add_outputs(vuln_count=len(nuclei_vulns), critical_count=len(critical), high_count=len(high), medium_count=len(medium), nikto_count=len(nikto_vulns), crlf_count=crlf_count)
+          add_outputs(vuln_count=len(nuclei_vulns), critical_count=len(critical), high_count=len(high), medium_count=len(medium), crlf_count=crlf_count)
           print(f"Nuclei: {len(nuclei_vulns)} (C:{len(critical)} H:{len(high)} M:{len(medium)})")
-          print(f"Nikto: {len(nikto_vulns)}")
           print(f"CRLF injections: {crlf_count}")
   osint:
     name: OSINT & Credential Hunting
@@ -481,7 +460,6 @@ jobs:
           echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
           echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
           echo "  Medium: {{ jobs['vuln-scan'].outputs.medium_count }}"
-          echo "Nikto findings: {{ jobs['vuln-scan'].outputs.nikto_count }}"
           echo "CRLF injections: {{ jobs['vuln-scan'].outputs.crlf_count }}"
           echo "Secrets/Leaks: {{ jobs['secret-hunt'].outputs.secrets_count }}"
           echo "Subdomain takeovers: {{ jobs['takeover-check'].outputs.takeover_count }}"

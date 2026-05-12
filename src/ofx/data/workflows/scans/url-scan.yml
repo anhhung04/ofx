@@ -32,13 +32,8 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         depth: 3
-      continue-on-error: true
-    - task: gospider
-      log-command: true
-      name: gospider-crawl
-      with:
-        target: '{{ inputs.target }}'
-        depth: 2
+        js_crawl: true
+        known_files: all
       continue-on-error: true
     - task: gau
       log-command: true
@@ -57,12 +52,10 @@ jobs:
       continue-on-error: true
     - name: collect-urls
       script: |
-        import json
-
         urls = set()
-        for idx in ["0", "1", "2", "3"]:
+        for step_name in ["katana-crawl", "gau-passive", "probe-crawled"]:
             step_data = {{ steps | tojson }}
-            typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
+            typed = step_data.get(step_name, {}).get('outputs', {}).get('typed_outputs', [])
             for item in typed:
                 if item.get('_type') == 'url':
                     urls.add(item['url'])
@@ -76,16 +69,6 @@ jobs:
     needs:
     - url-crawl
     steps:
-    - task: ffuf
-      log-command: true
-      name: ffuf-fuzz
-      with:
-        target: '{{ inputs.target }}/FUZZ'
-        wordlist: '{{ inputs.wordlist }}'
-        threads: 50
-        auto_calibration: true
-        follow_redirect: true
-      continue-on-error: true
     - task: feroxbuster
       log-command: true
       name: feroxbuster-fuzz
@@ -94,6 +77,9 @@ jobs:
         wordlist: '{{ inputs.wordlist }}'
         depth: 2
         threads: 50
+        smart: true
+        extract_links: true
+        auto_tune: true
       continue-on-error: true
   param-fuzz:
     name: Parameter Discovery
@@ -149,24 +135,6 @@ jobs:
       with:
         target: '{{ inputs.target }}'
         aggression: 3
-      continue-on-error: true
-    - task: nikto
-      log-command: true
-      name: nikto-scan
-      with:
-        target: '{{ inputs.target }}'
-        maxtime: 900
-      continue-on-error: true
-    - task: gobuster
-      log-command: true
-      name: gobuster-dirs
-      with:
-        target: '{{ inputs.target }}'
-        mode: dir
-        wordlist: '{{ inputs.wordlist }}'
-        threads: 50
-        follow_redirect: true
-        no_tls_validation: true
       continue-on-error: true
     - name: final-summary
       script: |

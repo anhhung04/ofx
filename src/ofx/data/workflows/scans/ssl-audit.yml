@@ -16,44 +16,6 @@ dispatch:
       description: Target host:port (e.g. example.com:443)
       alias: t
 jobs:
-  sslscan-check:
-    name: SSLScan Analysis
-    outputs:
-      weak_protocols_file: '{{ steps["collect-sslscan"].outputs.weak_protocols_file | default("", true) }}'
-      weak_protocol_count: '{{ steps["collect-sslscan"].outputs.weak_protocol_count | default("", true) }}'
-      weak_cipher_count: '{{ steps["collect-sslscan"].outputs.weak_cipher_count | default("", true) }}'
-    steps:
-    - task: sslscan
-      log-command: true
-      name: sslscan-run
-      with:
-        target: '{{ inputs.target }}'
-      continue-on-error: true
-    - name: collect-sslscan
-      script: |
-        sslscan_out = {{ steps["sslscan-run"].outputs.typed_outputs | default([], true) | tojson }}
-
-        weak_protocols = []
-        weak_ciphers = []
-        deprecated = {'SSLv2', 'SSLv3', 'TLSv1.0', 'TLSv1.1'}
-
-        for item in sslscan_out:
-            t = item.get('_type', '')
-            if t == 'tag':
-                name = item.get('name', '')
-                if any(p in name for p in deprecated):
-                    weak_protocols.append(name)
-                if any(kw in name for kw in ['NULL', 'RC4', 'DES', 'EXPORT']):
-                    weak_ciphers.append(name)
-            elif t == 'vulnerability':
-                weak_ciphers.append(item.get('name', 'unknown'))
-
-        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_sslaudit_protocols.txt', 'w') as tf:
-            tf.write('\n'.join(weak_protocols) if weak_protocols else 'none')
-
-        add_outputs(weak_protocols_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_sslaudit_protocols.txt", weak_protocol_count=len(weak_protocols), weak_cipher_count=len(weak_ciphers))
-        print(f"Weak protocols: {len(weak_protocols)}")
-        print(f"Weak ciphers: {len(weak_ciphers)}")
   testssl-check:
     name: TestSSL Analysis
     outputs:
@@ -64,12 +26,10 @@ jobs:
       log-command: true
       name: testssl-scan
       with:
-        target: '{{ inputs.target }}:443'
+        target: '{{ inputs.target }}'
       continue-on-error: true
     - name: export-testssl
       script: |
-        import json
-
         results = {{ steps["testssl-scan"].outputs.typed_outputs | tojson }}
 
         vuln_count = 0
@@ -82,12 +42,11 @@ jobs:
                     cert_issues += 1
 
         add_outputs(testssl_vulns=vuln_count, cert_issues=cert_issues)
-        print(f"TestSSL vulnerabilities: {vuln_count}")
+        print(f"TLS vulnerabilities: {vuln_count}")
         print(f"Certificate issues: {cert_issues}")
   summary:
     name: SSL Audit Summary
     needs:
-    - sslscan-check
     - testssl-check
     steps:
     - name: report
@@ -95,8 +54,6 @@ jobs:
         echo "======================================="
         echo " SSL/TLS Audit: {{ inputs.target }}"
         echo "======================================="
-        echo "Weak protocols: {{ jobs['sslscan-check'].outputs.weak_protocol_count }}"
-        echo "Weak ciphers: {{ jobs['sslscan-check'].outputs.weak_cipher_count }}"
         echo "TLS vulnerabilities: {{ jobs['testssl-check'].outputs.testssl_vulns }}"
         echo "Certificate issues: {{ jobs['testssl-check'].outputs.cert_issues }}"
       log-stdout: true
@@ -109,12 +66,7 @@ jobs:
         if not project:
             print('No --project set, skipping file export')
         else:
-            all_typed = []
-            for typed in [
-            {{ jobs['sslscan-check'].outputs.typed_outputs | default([], true) | tojson }},
-            {{ jobs['testssl-check'].outputs.typed_outputs | default([], true) | tojson }},
-            ]:
-                all_typed.extend(typed)
+            all_typed = {{ jobs['testssl-check'].outputs.typed_outputs | default([], true) | tojson }}
             summaries = export_typed_outputs(project, all_typed)
             for s in summaries:
                 print(s)

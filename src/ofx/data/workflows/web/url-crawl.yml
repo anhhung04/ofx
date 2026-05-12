@@ -30,13 +30,6 @@ jobs:
           js_crawl: true
           known_files: all
         continue-on-error: true
-      - task: gospider
-        log-command: true
-        name: gospider-crawl
-        with:
-          target: "{{ inputs.target }}"
-          depth: 2
-        continue-on-error: true
       - task: gau
         log-command: true
         name: gau-passive
@@ -45,13 +38,12 @@ jobs:
         continue-on-error: true
       - name: collect-urls
         script: |
-          import json
           from urllib.parse import urlparse
 
           urls = set()
-          for step_idx in [0, 1, 2]:
+          for step_name in ["katana-crawl", "gau-passive"]:
               step_data = {{ steps | tojson }}
-              typed = step_data.get(str(step_idx), {}).get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(step_name, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   if item.get('_type') == 'url':
                       urls.add(item['url'])

@@ -278,15 +278,6 @@ jobs:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
           threads: 20
         continue-on-error: true
-      - task: x8
-        log-command: true
-        name: x8-params
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
-          method: GET
-        continue-on-error: true
       - task: paramspider
         log-command: true
         name: paramspider-discover
@@ -298,9 +289,9 @@ jobs:
       - name: collect-params
         script: |
           param_urls = set()
-          for idx in range(3):
+          for step_name in ["arjun-params", "paramspider-discover"]:
               step_data = {{ steps | tojson }}
-              typed = step_data.get(str(idx), {}).get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(step_name, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   url = item.get('url', '')
                   if url and ('=' in url or '?' in url):

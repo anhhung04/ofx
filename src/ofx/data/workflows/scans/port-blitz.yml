@@ -1,6 +1,6 @@
 name: port-blitz
 description:
-  "Fast multi-engine port scanning — chains rustscan (speed), naabu (accuracy), and masscan (breadth) then feeds discovered ports into nmap for service fingerprinting and exploit lookup.
+  "Fast multi-engine port scanning — uses rustscan for full-range discovery (1-65535) then feeds discovered ports into nmap for service fingerprinting and exploit lookup.
 
   "
 tags:
@@ -36,42 +36,11 @@ jobs:
           range: 1-65535
           batch_size: 4500
         continue-on-error: true
-      - task: naabu
-        log-command: true
-        name: naabu-top
-        with:
-          target: "{{ inputs.target }}"
-          top_ports: "1000"
-          rate: "{{ inputs.rate }}"
-        continue-on-error: true
-      - task: masscan
-        log-command: true
-        name: masscan-top
-        with:
-          target: "{{ inputs.target }}"
-          ports: 0-1024,1433,1521,3306,3389,5432,5900,6379,8080,8443,9090,9200,11211,27017
-          rate: "{{ inputs.rate }}"
-        continue-on-error: true
       - name: merge-ports
         script: |
           ports_by_host = {}
 
-          # Merge from rustscan
           for item in {{ ports(steps["rustscan-sweep"].outputs.typed_outputs) | tojson }}:
-              host = item.get('host') or item.get('ip', '')
-              port = str(item.get('port', ''))
-              if host and port:
-                  ports_by_host.setdefault(host, set()).add(port)
-
-          # Merge from naabu
-          for item in {{ ports(steps["naabu-top"].outputs.typed_outputs) | tojson }}:
-              host = item.get('host') or item.get('ip', '')
-              port = str(item.get('port', ''))
-              if host and port:
-                  ports_by_host.setdefault(host, set()).add(port)
-
-          # Merge from masscan
-          for item in {{ ports(steps["masscan-top"].outputs.typed_outputs) | tojson }}:
               host = item.get('host') or item.get('ip', '')
               port = str(item.get('port', ''))
               if host and port:
@@ -88,7 +57,7 @@ jobs:
               tf.write('\n'.join(all_hosts))
 
           add_outputs(hosts_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_portblitz_hosts.txt", merged_ports=port_csv, host_count=len(all_hosts), port_count=len(all_ports))
-          print(f"Merged {len(all_ports)} unique ports across {len(all_hosts)} hosts")
+          print(f"Found {len(all_ports)} unique ports across {len(all_hosts)} hosts")
   service-detect:
     name: Service Fingerprinting
     needs:
@@ -173,7 +142,7 @@ jobs:
           echo " PORT BLITZ COMPLETE: {{ inputs.target }}"
           echo "======================================================"
           echo ""
-          echo "--- Discovery (3 engines) ---"
+          echo "--- Discovery ---"
           echo "Unique hosts: {{ jobs['fast-scan'].outputs.host_count }}"
           echo "Unique ports: {{ jobs['fast-scan'].outputs.port_count }}"
           echo "Merged port list: {{ jobs['fast-scan'].outputs.merged_ports }}"

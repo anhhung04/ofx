@@ -26,21 +26,9 @@ jobs:
           target: "{{ inputs.target }}"
           all: true
         continue-on-error: true
-      - task: findomain
-        log-command: true
-        name: findomain-enum
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
       - task: amass
         log-command: true
         name: amass-passive
-        with:
-          target: "{{ inputs.target }}"
-        continue-on-error: true
-      - task: assetfinder
-        log-command: true
-        name: assetfinder-enum
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
@@ -57,9 +45,9 @@ jobs:
           subs = set()
           subs.add('{{ inputs.target }}')
 
-          for idx in range(5):
+          for step_name in ["subfinder-enum", "amass-passive", "gau-subs"]:
               step_data = {{ steps | tojson }}
-              typed = step_data.get(idx, {}).get('outputs', {}).get('typed_outputs', [])
+              typed = step_data.get(step_name, {}).get('outputs', {}).get('typed_outputs', [])
               for item in typed:
                   host = item.get('host', '')
                   if host and '{{ inputs.target }}' in host:
@@ -74,7 +62,7 @@ jobs:
               f.write('\n'.join(sorted(subs)))
 
           add_outputs(subs_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_all_subs.txt", sub_count=len(subs))
-          print(f"Enumerated {len(subs)} unique subdomains from 5 sources")
+          print(f"Enumerated {len(subs)} unique subdomains from 3 sources")
   dns-verify:
     name: DNS Verification & CNAME Check
     needs:
