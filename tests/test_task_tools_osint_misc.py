@@ -413,6 +413,33 @@ class TestTrufflehogParser:
         task = TaskRegistry.create("trufflehog")
         assert task.name == "trufflehog"
 
+    def test_bare_domain_normalized_to_https(self):
+        task = TaskRegistry.create("trufflehog")
+        cmd, _ = task.build_command("nhi.cocay.me")
+        assert "https://nhi.cocay.me" in cmd
+
+    def test_bare_domain_with_path_normalized(self):
+        task = TaskRegistry.create("trufflehog")
+        cmd, _ = task.build_command("github.com/org/repo")
+        assert "https://github.com/org/repo" in cmd
+
+    def test_https_url_unchanged(self):
+        task = TaskRegistry.create("trufflehog")
+        cmd, _ = task.build_command("https://github.com/org/repo")
+        assert "https://github.com/org/repo" in cmd
+
+    def test_ssh_uri_unchanged(self):
+        task = TaskRegistry.create("trufflehog")
+        cmd, _ = task.build_command("git@github.com:org/repo.git")
+        assert "git@github.com:org/repo.git" in cmd
+
+    def test_filesystem_mode_skips_normalization(self):
+        task = TaskRegistry.create("trufflehog")
+        cmd, _ = task.build_command("nhi.cocay.me", mode="filesystem")
+        # No https:// prefix in filesystem mode
+        assert "https://" not in cmd
+        assert "nhi.cocay.me" in cmd
+
 
 # ── Grype Parser ───────────────────────────────────────────────────────
 

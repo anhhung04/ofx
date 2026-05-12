@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag
 from ofx.tasks.registry import TaskRegistry
+
+_BARE_DOMAIN_RE = re.compile(
+    r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+(/.*)?$"
+)
 
 
 @TaskRegistry.register("trufflehog")
@@ -42,12 +47,47 @@ class TrufflehogTask(Task):
     json_flag = "--json"
     extra_flags = ["--no-update"]
 
+    @staticmethod
+    def _normalize_git_target(target: str) -> str:
+        """Ensure *target* is a valid Git URI for ``trufflehog git``.
+
+        Bare domains like ``example.com`` or ``example.com/org/repo`` are
+        prefixed with ``https://`` so trufflehog can clone them.  Targets
+        that already carry a scheme, look like SSH URIs, or point to a
+        local path are returned unchanged.
+        """
+        stripped = target.strip()
+        if not stripped:
+            return stripped
+
+        # Already has a scheme (https://, http://, ssh://, git://, file://)
+        if re.match(r"^[a-zA-Z][a-zA-Z0-9+\-.]*://", stripped):
+            return stripped
+
+        # SSH-style URI  (git@host:org/repo)
+        if re.match(r"^[^/@]+@[^:]+:", stripped):
+            return stripped
+
+        # Local filesystem path
+        if stripped.startswith(("/", ".", "~")) or Path(stripped).is_dir():
+            return stripped
+
+        # Bare domain with optional path — add https://
+        if _BARE_DOMAIN_RE.match(stripped):
+            return f"https://{stripped}"
+
+        return stripped
+
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Prepend scan mode subcommand before flags and target.
 
         Use ``mode`` kwarg to select git (default), filesystem, s3, etc.
         """
         mode = kwargs.pop("mode", "git")
+
+        if mode == "git":
+            target = self._normalize_git_target(target)
+
         parts: list[str] = [self.cmd, mode, *self.extra_flags]
 
         if self.json_flag:
