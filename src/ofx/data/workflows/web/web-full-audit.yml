@@ -207,15 +207,6 @@ jobs:
           js_crawl: true
           known_files: all
         continue-on-error: true
-      - task: gau
-        log-command: true
-        name: gau-archive
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-          subs: true
-        continue-on-error: true
       - task: waymore
         name: waymore-archive
         retry: 2
@@ -235,7 +226,6 @@ jobs:
           urls = set()
           for source in [
               {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ urls(steps["gau-archive"].outputs.typed_outputs) | default([], true) | tojson }},
               {{ urls(steps["waymore-archive"].outputs.typed_outputs) | default([], true) | tojson }},
           ]:
               for item in source:

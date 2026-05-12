@@ -406,15 +406,6 @@ jobs:
           target: "{{ inputs.target }}"
           mode: U
         continue-on-error: true
-      - task: gau
-        log-command: true
-        name: gau-hist
-        retry: 2
-        retry-delay: 5
-        with:
-          target: "{{ inputs.target }}"
-          subs: true
-        continue-on-error: true
       - task: katana
         log-command: true
         name: katana-crawl
@@ -432,7 +423,6 @@ jobs:
           all_urls = set()
           for items in [
               {{ urls(steps["waymore-hist"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ urls(steps["gau-hist"].outputs.typed_outputs) | default([], true) | tojson }},
               {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
           ]:
               for item in items:
