@@ -3,24 +3,19 @@
 from __future__ import annotations
 
 import asyncio
-import shlex
 import sys
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.core import (
-    BaseRunner,
-    RunContext,
-    RunnerRegistryKeys,
-    RunnerStatus,
-)
-from ofx.runner.execution.cloud_step import CloudStepRunner
-from ofx.runner.execution.error_helpers import job_step_failed
+from ofx.runner.context import RunnerContextBuilder
+from ofx.runner.core import BaseRunner, RunContext, RunnerRegistryKeys, RunnerStatus
+from ofx.runner.executors.cloud import CloudExecutor
+from ofx.runner.executors.job import JobExecutor, MatrixExecutor
 from ofx.runner.execution.job_mixin import JobRunnerMixin
-from ofx.utils.tempfiles import remote_work_dir
+from ofx.runner.logging import LogContext
 
 if TYPE_CHECKING:
     from ofx.cloud.base import CloudProvider
@@ -64,8 +59,18 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         ctx: RunContext,
         parent: BaseRunner[Workflow],
         cloud_config: CloudConfig | None = None,
+        executor: JobExecutor | MatrixExecutor | None = None,
+        cloud_executor: CloudExecutor | None = None,
     ):
-        super().__init__(job, ctx, parent, parent.registry)
+        self._job_executor = executor or JobExecutor()
+        self._cloud_executor = cloud_executor or CloudExecutor()
+        super().__init__(
+            job,
+            ctx,
+            parent,
+            parent.registry,
+            executor=self._job_executor,
+        )
         self._cloud_config: CloudConfig = cloud_config or job.cloud  # type: ignore[assignment]
         self._provider: CloudProvider | None = None
         self._instance: CloudInstanceInfo | None = None
@@ -93,8 +98,6 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         await self._resolve_template_fields(
             ["name", "needs", "run_if", "env", "defaults"]
         )
-        from ofx.runner.context import RunnerContextBuilder
-
         self.ctx = RunnerContextBuilder(self.ctx).with_env(self.model.env)
 
         # Resolve cloud profile
@@ -162,85 +165,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
 
     async def _provision_instance(self, cfg: CloudConfig) -> None:
         """Create and connect to cloud instance."""
-        from ofx.cloud import CloudProviderRegistry
-        from ofx.cloud.ssh import wait_for_connectivity, wait_for_login
-
-        provider_name = cfg.provider or "static"
-        provider_kwargs = self._build_provider_kwargs(cfg)
-        self._provider = CloudProviderRegistry.create(provider_name, **provider_kwargs)
-
-        self._instance = await self._provider.create_instance(cfg)
-
-        if provider_name != "static":
-            self._log_info(
-                f"Waiting for instance '{self._instance.name}'[{self._instance.instance_id}] to be ready..."
-            )
-            self._instance = await self._provider.wait_until_ready(
-                self._instance.instance_id,
-                timeout=cfg.startup_timeout or 300,
-            )
-
-            # Refresh IP (may be assigned after creation)
-            refreshed = await self._provider.get_instance(self._instance.instance_id)
-            if refreshed and refreshed.ip:
-                self._instance = refreshed
-
-        if not self._instance or not self._instance.ip:
-            iid = self._instance.instance_id if self._instance else "none"
-            raise RuntimeError(
-                f"Cloud instance has no IP address after provisioning.\n"
-                f"  Job: {self.model.jid}\n"
-                f"  Provider: {cfg.provider}\n"
-                f"  Instance ID: {iid}\n"
-                f"Check cloud provider dashboard for instance status, "
-                f"verify networking config, and retry."
-            )
-
-        is_windows = cfg.connection_type == "winrm"
-        self._log_info(
-            f"Waiting for connectivity to {self._instance.ip} "
-            f"on {'WinRM' if is_windows else 'SSH'}..."
-        )
-        await wait_for_connectivity(
-            host=self._instance.ip,
-            ssh_port=cfg.ssh_port or 22,
-            winrm_port=cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985),
-            timeout=cfg.boot_timeout or 180,
-            os_type="windows" if is_windows else "linux",
-        )
-        self._log_info(
-            f"Instance {self._instance.ip} is reachable. Waiting for SSH service..."
-        )
-        await wait_for_login(
-            host=self._instance.ip,
-            cfg=cfg,
-            timeout=cfg.login_timeout,
-        )
-        # Create remote runner
-        self._remote_runner = self._create_remote_runner(cfg)
-        self._log_info(
-            f"Connected to {self._instance.ip} via {'WinRM' if is_windows else 'SSH'}"
-        )
-
-        # Setup working directory on remote
-        if not is_windows:
-            self._work_dir = remote_work_dir(self.run_id)
-            try:
-                await asyncio.to_thread(
-                    self._remote_runner.run, f"mkdir -p {shlex.quote(self._work_dir)}"
-                )
-            except Exception as e:
-                self._log_warning(f"Work dir creation failed, using /tmp: {e}")
-                self._work_dir = "/tmp"
-        else:
-            self._work_dir = remote_work_dir(self.run_id, is_windows=True)
-            try:
-                await asyncio.to_thread(
-                    self._remote_runner.run, f'mkdir "{self._work_dir}" 2>nul'
-                )
-            except Exception as e:
-                self._log_warning(f"Work dir creation failed, using Temp: {e}")
-                self._work_dir = "C:\\Windows\\Temp"
+        await self._cloud_executor.provision_instance(self, cfg)
 
     def _build_provider_kwargs(self, cfg: CloudConfig) -> dict[str, Any]:
         """Build kwargs for CloudProviderRegistry.create()."""
@@ -250,35 +175,7 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
 
     def _create_remote_runner(self, cfg: CloudConfig):
         """Create PostSSH or PostWinRM instance for the provisioned instance."""
-        from ofx.cloud.runtime import create_remote_runner
-
-        if not self._instance:
-            raise RuntimeError(
-                f"Cloud job '{self.model.jid}' cannot proceed: no instance provisioned.\n"
-                f"This typically means instance provisioning failed earlier. "
-                f"Check logs above for provisioning errors."
-            )
-        ip = self._instance.ip
-        is_log_commands = cfg.log_commands or False
-        log_path = None
-        if is_log_commands:
-            if self.ctx.output_path:
-                log_dir = Path(self.ctx.output_path) / "logs" / "cloud_commands"
-                log_dir.mkdir(parents=True, exist_ok=True)
-                log_path = log_dir / f"{self.model.jid}_{ip}.log"
-            else:
-                from ofx.utils.tempfiles import make_temp_file
-
-                log_path = make_temp_file(prefix=".tmp_rcmd_", suffix=".log")
-            self._log_info(
-                f"Command logging enabled. Logs will be saved to: {log_path}"
-            )
-        return create_remote_runner(
-            cfg,
-            ip,
-            log_path=str(log_path) if log_path else None,
-            max_retries=3,
-        )
+        return self._cloud_executor.build_remote_runner(self, cfg)
 
     # ------------------------------------------------------------------
     # Do-run: execute steps remotely
@@ -304,31 +201,11 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         with different *matrix_combo* dicts to iterate over matrix
         combinations on the same host.
         """
-        loop_ctx = self._child_context()
-        if matrix_combo:
-            if "matrix" not in loop_ctx.vars:
-                loop_ctx.vars["matrix"] = {}
-            loop_ctx.vars["matrix"].update(matrix_combo)
-
-        for step in self.model.steps:
-            step_ctx = loop_ctx.model_copy(deep=True)
-            if step.secrets != "inherit":
-                step_ctx.secrets = {}
-
-            step_runner = CloudStepRunner(
-                step,
-                step_ctx,
-                self,
-                remote_runner=self._remote_runner,
-                work_dir=self._work_dir,
-            )
-            runner_key = f"{step.step_index}{suffix}"
-            self._runners[runner_key] = step_runner
-            result = await step_runner.run()
-            if step_runner.is_failed and not step.continue_on_error:
-                raise RuntimeError(
-                    job_step_failed(step.name or step.step_index, result.error)
-                )
+        await self._cloud_executor.dispatch_remote_steps(
+            self,
+            matrix_combo,
+            suffix=suffix,
+        )
 
     # ------------------------------------------------------------------
     # Post-run: collect outputs, destroy
@@ -343,103 +220,15 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
 
     async def _download_outputs(self) -> None:
         """Download output files from remote VPS."""
-        if not self.ctx.output_path or not self._remote_runner:
-            return
-
-        is_windows = self._cloud_config.connection_type == "winrm"
-        assert self._work_dir is not None, (
-            "_work_dir must be set before fetching outputs"
-        )
-
-        try:
-            if is_windows:
-                files_output = await asyncio.to_thread(
-                    self._remote_runner.run,
-                    f"powershell \"Get-ChildItem -Path '{self._work_dir}\\output' "
-                    f'-File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name"',
-                )
-            else:
-                files_output = await asyncio.to_thread(
-                    self._remote_runner.run,
-                    f"ls -1 {shlex.quote(self._work_dir + '/output')} 2>/dev/null || true",
-                )
-
-            files = [f.strip() for f in files_output.strip().splitlines() if f.strip()]
-            if not files:
-                return
-
-            local_out = Path(self.ctx.output_path) / self.model.jid
-            local_out.mkdir(parents=True, exist_ok=True)
-
-            for fname in files:
-                # Sanitize filename to prevent path traversal
-                safe_name = (
-                    PureWindowsPath(fname).name
-                    if is_windows
-                    else PurePosixPath(fname).name
-                )
-                if not safe_name or safe_name in (".", ".."):
-                    continue
-                if is_windows:
-                    remote = f"{self._work_dir}\\output\\{safe_name}"
-                else:
-                    remote = f"{self._work_dir}/output/{safe_name}"
-                local = str(local_out / safe_name)
-                try:
-                    await asyncio.to_thread(self._remote_runner.download, remote, local)
-                except Exception as e:
-                    self._log_debug(f"Failed to download {remote}: {e}")
-        except Exception as e:
-            self._log_debug(f"Output download failed: {e}")
+        await self._cloud_executor.download_outputs(self)
 
     async def _destroy_instance(self) -> None:
         """Destroy cloud instance if auto_destroy is enabled."""
-        cfg = self._cloud_config
-        if not cfg or not getattr(cfg, "auto_destroy", True):
-            return
-        if not self._provider or not self._instance:
-            return
-        if (cfg.provider or "static") == "static":
-            return  # Never destroy static hosts
-
-        try:
-            self._log_info(
-                f"Destroying instance '{self._instance.name}'[{self._instance.instance_id}] "
-                f"(provider={self._instance.provider})"
-            )
-            await self._provider.destroy_instance(self._instance.instance_id)
-        except Exception as e:
-            self._log_warning(f"Instance destroy failed: {e}")
+        await self._cloud_executor.destroy_instance(self)
 
     async def _emergency_deprovision(self) -> None:
-        """Best-effort cleanup of a partially-provisioned instance.
-
-        Called when ``_provision_instance()`` raises *before* the normal
-        lifecycle reaches ``_post_run``.  Tries to destroy the VPS if one
-        was created and close any SSH/WinRM transport.
-        """
-        if self._provider and self._instance:
-            is_static = (
-                self._cloud_config
-                and (self._cloud_config.provider or "static") == "static"
-            )
-            if not is_static:
-                try:
-                    self._log_warning(
-                        f"Emergency cleanup: destroying partially-provisioned "
-                        f"instance {self._instance.instance_id}"
-                    )
-                    await self._provider.destroy_instance(self._instance.instance_id)
-                except Exception as e:
-                    self._log_warning(
-                        f"Emergency instance destroy failed "
-                        f"(may require manual cleanup): {e}"
-                    )
-        if self._remote_runner and hasattr(self._remote_runner, "cleanup"):
-            try:
-                await asyncio.to_thread(self._remote_runner.cleanup)
-            except Exception as e:
-                self._log_debug(f"Remote runner cleanup failed: {e}")
+        """Best-effort cleanup of a partially-provisioned instance."""
+        await self._cloud_executor.emergency_deprovision(self)
 
     async def _on_failure_cleanup(self) -> None:
         """Handle failure: salvage outputs, ensure VPS destruction."""
@@ -453,85 +242,8 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
 
     async def _cleanup_remote(self) -> None:
         """Clean up remote working directory and runner resources."""
-        if not self._remote_runner:
-            return
-        # Remove remote work dir and all contents
-        if self._work_dir and self._work_dir not in ("/tmp", "C:\\Windows\\Temp"):
-            try:
-                is_windows = (
-                    self._cloud_config and self._cloud_config.connection_type == "winrm"
-                )
-                if is_windows:
-                    await asyncio.to_thread(
-                        self._remote_runner.run,
-                        f"powershell \"Remove-Item -Path '{self._work_dir}' -Recurse -Force -ErrorAction SilentlyContinue\"",
-                        15,
-                    )
-                else:
-                    await asyncio.to_thread(
-                        self._remote_runner.run,
-                        f"rm -rf {shlex.quote(self._work_dir)}",
-                        15,
-                    )
-            except Exception as e:
-                self._log_debug(f"Failed to clean remote work dir: {e}")
-        if hasattr(self._remote_runner, "cleanup"):
-            try:
-                await asyncio.to_thread(self._remote_runner.cleanup)
-            except Exception as e:
-                self._log_debug(f"Remote runner cleanup failed: {e}")
+        await self._cloud_executor.cleanup_remote(self)
 
-    async def _handle_failure(self, *, prompt_destroy: bool = True) -> None:
-        """Salvage outputs from the remote VPS, then ask user about destruction.
-
-        Args:
-            prompt_destroy: Whether to interactively prompt about VPS
-                destruction.  Set to ``False`` when the caller (e.g.
-                ``CloudMatrixJobRunner``) will handle the prompt for all
-                surviving instances in a single batch.
-
-        Order of operations:
-        1. Download any outputs that were produced before the failure.
-        2. If *prompt_destroy* and the provider is not static, prompt the
-           user (TTY) or log a warning (non-TTY) with instance details.
-        3. Clean up the SSH/WinRM transport.
-        """
-        # 1. Try to salvage outputs
-        try:
-            await self._download_outputs()
-        except Exception as e:
-            self._log_warning(f"Output salvage on failure failed: {e}")
-
-        if not prompt_destroy:
-            # Caller will handle destroy prompt — just clean transport.
-            await self._cleanup_remote()
-            return
-
-        # 2. Decide whether to destroy
-        is_static = (
-            self._cloud_config and (self._cloud_config.provider or "static") == "static"
-        )
-        has_instance = self._provider and self._instance
-
-        if has_instance and not is_static and self._instance:
-            instance_desc = (
-                f"{self._instance.name} [{self._instance.instance_id}] "
-                f"@ {self._instance.ip} "
-                f"(provider={self._instance.provider})"
-            )
-
-            should_destroy = await _prompt_destroy_instance(instance_desc)
-
-            if should_destroy:
-                await self._destroy_instance()
-            else:
-                self._log_warning(
-                    f"Instance left running: {instance_desc}  — "
-                    "destroy manually when done."
-                )
-
-        # 3. Clean up SSH/WinRM transport (does NOT destroy the VPS)
-        await self._cleanup_remote()
 
     async def _upload_fleet_input(self) -> None:
         """Upload the local fleet chunk file to the remote host.
@@ -546,6 +258,8 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         # Inject other fleet variables as remote env vars.
         # fleet_input is a Python list — export as newline-joined string so it
         # is usable inside shell scripts without parsing Python repr.
+        remote_env_updates: dict[str, str] = {}
+        remote_var_updates: dict[str, Any] = {}
         for k, v in fleet_vars.items():
             if k == "fleet_input_file":
                 continue
@@ -554,8 +268,13 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
                 str_val = "\n".join(str(x) for x in v)
             else:
                 str_val = str(v)
-            self.ctx.envs[remote_key] = str_val
-            self.ctx.vars[f"remote_{k}"] = v
+            remote_env_updates[remote_key] = str_val
+            remote_var_updates[f"remote_{k}"] = v
+
+        if remote_env_updates:
+            self.ctx = RunnerContextBuilder(self.ctx).with_env(remote_env_updates)
+        if remote_var_updates:
+            self.ctx = RunnerContextBuilder(self.ctx).with_vars(remote_var_updates)
 
         if not local_path:
             return
@@ -578,8 +297,12 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         try:
             await asyncio.to_thread(self._remote_runner.upload, str(local), remote_path)
             # Use explicit "remote" prefix to avoid runtime env modification anti-pattern
-            self.ctx.envs["REMOTE_FLEET_INPUT_FILE"] = remote_path
-            self.ctx.vars["remote_fleet_input_file"] = remote_path
+            self.ctx = RunnerContextBuilder(self.ctx).with_env(
+                {"REMOTE_FLEET_INPUT_FILE": remote_path}
+            )
+            self.ctx = RunnerContextBuilder(self.ctx).with_vars(
+                {"remote_fleet_input_file": remote_path}
+            )
             self._log_info(f"Uploaded fleet input → {remote_path}")
         except Exception as e:
             raise RuntimeError(
@@ -595,7 +318,8 @@ class CloudJobRunner(JobRunnerMixin, BaseRunner[Job]):
         workflow_name = ""
         if self.parent and getattr(self.parent, "model", None):
             workflow_name = getattr(self.parent.model, "name", "") or ""
-        msg = f"workflow[{workflow_name}] job[{self.model.jid}] [cloud] › {message_str}"
+        prefix = LogContext(model_name=workflow_name, model_jid=self.model.jid).prefix
+        msg = f"{prefix} [cloud] › {message_str}" if prefix else f"[cloud] › {message_str}"
         if self.parent:
             return self.parent._produce_log(msg)
         return msg

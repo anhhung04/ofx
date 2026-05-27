@@ -82,7 +82,11 @@ class ToolInstallerRunner(BaseRunner[ToolInstallation]):
         current_path = self.ctx.envs.get("PATH", os.environ.get("PATH", ""))
         if str(TOOLS_BIN_DIR) not in current_path:
             ensure_dir(TOOLS_BIN_DIR)
-            self.ctx.envs["PATH"] = f"{TOOLS_BIN_DIR}:{current_path}"
+            from ofx.runner.context import RunnerContextBuilder
+
+            self.ctx = RunnerContextBuilder(self.ctx).with_env(
+                {"PATH": f"{TOOLS_BIN_DIR}:{current_path}"}
+            )
 
         for tool_bin, tool_config in self.model.tools.items():
             await self._install_tool(tool_bin, tool_config)

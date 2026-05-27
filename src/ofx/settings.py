@@ -8,11 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import BaseModel, Field, SecretStr
-from pydantic_settings import (
-    BaseSettings,
-    NestedSecretsSettingsSource,
-    SettingsConfigDict,
-)
+from pydantic_settings import BaseSettings, SecretsSettingsSource, SettingsConfigDict
 from rich.console import Console
 from rich.theme import Theme
 
@@ -361,11 +357,7 @@ class Settings(BaseSettings):
             env_settings,
             dotenv_settings,
             YamlConfigSettingsSource(settings_cls, yaml_file=CONFIG_YAML),
-            NestedSecretsSettingsSource(
-                file_secret_settings,
-                secrets_nested_subdir=True,
-                secrets_dir=SECRETS_DIR.absolute(),
-            ),
+            SecretsSettingsSource(settings_cls, secrets_dir=SECRETS_DIR.absolute()),
         )
 
 

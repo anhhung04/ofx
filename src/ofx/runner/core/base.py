@@ -3,82 +3,27 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
-import time
 import uuid
-from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from ofx.runner.core.durable import get_checkpoint, write_checkpoint
-from ofx.runner.core.durable_git import commit_and_push
+from ofx.models.config import DurableRunConfig
 from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
 from ofx.runner.core.registry_keys import RunnerRegistryKeys
-from ofx.runner.registry import RegistryAdapter, cleanup_registry
+from ofx.runner.lifecycle import LifecycleManager, RunnerStateMachine
+from ofx.runner.registry import RegistryAdapter
 from ofx.runner.templates import TemplateResolver
+from ofx.runner.executors import Executor
 from ofx.settings import settings
 
 TModel = TypeVar("TModel", bound=BaseModel)
 
 
-class RunnerStateMachine:
-    """Finite State Machine for managing runner execution states"""
-
-    def __init__(self) -> None:
-        self._current_state = RunnerStatus.IDLE
-        self._transitions = {
-            RunnerStatus.IDLE: [
-                RunnerStatus.RUNNING,
-                RunnerStatus.CANCELED,
-                RunnerStatus.FAILED,
-            ],
-            RunnerStatus.RUNNING: [
-                RunnerStatus.FINISHED,
-                RunnerStatus.FAILED,
-                RunnerStatus.CANCELED,
-            ],
-            RunnerStatus.FINISHED: [
-                RunnerStatus.COMPLETED,
-                RunnerStatus.FAILED,
-                RunnerStatus.CANCELED,
-            ],
-            RunnerStatus.FAILED: [],
-            RunnerStatus.COMPLETED: [],
-            RunnerStatus.CANCELED: [],
-        }
-
-    def can_transition(self, to_state: RunnerStatus) -> bool:
-        """Check if transition to the given state is allowed"""
-        return to_state in self._transitions[self._current_state]
-
-    def transition(self, to_state: RunnerStatus) -> None:
-        """Transition to the given state if allowed"""
-        if not self.can_transition(to_state):
-            raise ValueError(
-                f"Invalid state transition from {self._current_state} to {to_state}"
-            )
-        self._current_state = to_state
-
-    @property
-    def current_state(self) -> RunnerStatus:
-        """Get the current state"""
-        return self._current_state
-
-    @property
-    def is_terminal(self) -> bool:
-        """Check if current state is terminal (no further transitions allowed)"""
-        return not self._transitions[self._current_state]
-
-    def set_state(self, state: RunnerStatus) -> None:
-        """Set the state directly (for internal use, bypassing transition checks)"""
-        self._current_state = state
-
-
 class BaseRunner[TModel: BaseModel]:
+    _cached_durable_config: DurableRunConfig | None
     __slots__ = (
         "run_id",
         "name",
@@ -101,6 +46,8 @@ class BaseRunner[TModel: BaseModel]:
         "_logger",
         "_template_service",
         "_cached_key_prefix",
+        "_lifecycle",
+        "_executor",
     )
 
     def __init__(
@@ -110,6 +57,7 @@ class BaseRunner[TModel: BaseModel]:
         parent: BaseRunner | None = None,
         registry: RegistryAdapter | None = None,
         logger: logging.Logger | None = None,
+        executor: Executor | None = None,
     ) -> None:
         assert model is not None, "Model cannot be None"
         self.run_id = str(uuid.uuid4())
@@ -120,302 +68,91 @@ class BaseRunner[TModel: BaseModel]:
 
         self._state_machine = RunnerStateMachine()
         self._error: str | None = None
-        # Lazy import RegistryFactory to avoid import overhead
         if registry is None:
             from ofx.runner.registry.factory import RegistryFactory
 
             self._registry = RegistryFactory.create("memory")
         else:
             self._registry = registry
-        # Logger injection – default to app branding logger if not provided
         self._logger = (
             logger if logger is not None else logging.getLogger(settings.app_branding)
         )
-        self._runners: dict[str, BaseRunner] = {}  # child runners
+        self._runners: dict[str, BaseRunner] = {}
         self._started_at: float | None = None
         self._finished_at: float | None = None
         self._started_at_utc: str | None = None
         self._finished_at_utc: str | None = None
         self._log_level = self._logger.getEffectiveLevel()
         self._durable_outputs: dict[str, Any] | None = None
+        self._cached_durable_config = None
+        self._lifecycle = LifecycleManager(self)
+        self._executor = executor
 
     async def run(self) -> RunResult:
         """Execute the runner's lifecycle: pre_run -> do_run -> post_run"""
-        self._mark_start()
-        self._emit_event("runner_start")
-        if await self._restore_from_checkpoint():
-            self._emit_event("runner_resume")
-            return await self.get_result()
-        await self._write_checkpoint("running")
-        pre_run_ok = False
-        try:
-            await self.reg_set_many(
-                {
-                    "metadata": {
-                        "run_id": self.run_id,
-                        "name": self.name,
-                        "type": str(type(self.model)),
-                    },
-                    "context": self.ctx.model_dump(exclude={"secrets", "envs"}),
-                }
-            )
-
-            # Execute lifecycle
-            await self._pre_run()
-            pre_run_ok = True
-            self._state_machine.transition(RunnerStatus.RUNNING)
-            await self._do_run()
-            self._state_machine.transition(RunnerStatus.FINISHED)
-            await self._post_run()
-            # cleanup_registry handled in finally block
-            self._state_machine.transition(RunnerStatus.COMPLETED)
-        except (asyncio.CancelledError, KeyboardInterrupt) as e:
-            self._error = f"Cancelled: {type(e).__name__}"
-            if self._state_machine.can_transition(RunnerStatus.CANCELED):
-                self._state_machine.transition(RunnerStatus.CANCELED)
-            elif self._state_machine.current_state not in (
-                RunnerStatus.FAILED,
-                RunnerStatus.CANCELED,
-            ):
-                self._state_machine.transition(RunnerStatus.FAILED)
-            if pre_run_ok:
-                try:
-                    await self._on_failure_cleanup()
-                except Exception as cleanup_exc:
-                    self._log_debug(f"Cleanup after cancellation failed: {cleanup_exc}")
-        except Exception as e:
-            self._error = str(e)
-            if self._state_machine.current_state not in [
-                RunnerStatus.FAILED,
-                RunnerStatus.CANCELED,
-            ]:
-                self._state_machine.transition(RunnerStatus.FAILED)
-            # Run _post_run for cleanup when _pre_run succeeded but
-            # _do_run or _post_run itself failed. This ensures resources
-            # allocated in _pre_run (temp files, connections) are released.
-            if pre_run_ok:
-                try:
-                    await self._on_failure_cleanup()
-                except Exception as cleanup_exc:
-                    self._log_debug(f"Cleanup after failure failed: {cleanup_exc}")
-            else:
-                # _pre_run failed partway through — give subclasses a
-                # chance to release resources allocated before the error.
-                try:
-                    await self._on_failure_cleanup()
-                except Exception as cleanup_exc:
-                    self._log_debug(
-                        f"Cleanup after pre_run failure failed: {cleanup_exc}"
-                    )
-        finally:
-            self._mark_finish()
-            self._emit_event(
-                "runner_finish", {"status": self.status.value, "error": self._error}
-            )
-            initial_checkpoint_status = self._checkpoint_status()
-            try:
-                await self._write_checkpoint(initial_checkpoint_status)
-            except Exception as checkpoint_err:
-                self._log_warning(f"checkpoint write failed: {checkpoint_err}")
-
-            final_status = self._checkpoint_status()
-            if final_status != initial_checkpoint_status:
-                try:
-                    await self._write_checkpoint(final_status)
-                except Exception as checkpoint_err:
-                    self._log_warning(
-                        f"final checkpoint update skipped due to error: {checkpoint_err}"
-                    )
-
-            try:
-                await cleanup_registry(self._registry)
-            except Exception as cleanup_err:
-                self._log_warning(f"registry cleanup failed: {cleanup_err}")
-
-            await self._auto_commit_push()
-        return await self.get_result()
+        return await self._lifecycle.execute()
 
     async def _on_failure_cleanup(self) -> None:
         """Hook for subclasses to perform cleanup when execution fails.
 
         Called only when ``_pre_run`` succeeded but ``_do_run`` or
-        ``_post_run`` raised an exception.  Override this instead of
-        relying on ``_post_run`` for cleanup — ``_post_run`` is only
+        ``_post_run`` raised an exception. Override this instead of
+        relying on ``_post_run`` for cleanup - ``_post_run`` is only
         called on the success path.
         """
+        if self._executor is not None:
+            await self._executor.on_failure(self)
 
-    def _event_sink_path(self) -> Path | None:
-        path = getattr(self.ctx, "event_sink_path", None)
-        if path:
-            return path
-        return None
+    def add_event_listener(self, event_type: str, callback: Any) -> None:
+        self._lifecycle.add_event_listener(event_type, callback)
 
     def _emit_event(
         self, event_type: str, payload: dict[str, Any] | None = None
     ) -> None:
         """Emit structured runner lifecycle event as NDJSON (best effort)."""
-        sink = self._event_sink_path()
-        if sink is None:
-            return
-        try:
-            sink.parent.mkdir(parents=True, exist_ok=True)
-            entry = {
-                "ts": datetime.now(UTC).isoformat(),
-                "event_type": event_type,
-                "runner_type": self.__class__.__name__,
-                "run_id": self.run_id,
-                "status": self.status.value,
-                "name": getattr(self.model, "name", ""),
-                "job_id": getattr(self.model, "jid", None),
-                "step_index": getattr(self.model, "step_index", None),
-                "parent_run_id": self.parent.run_id if self.parent else None,
-            }
-            if payload:
-                entry.update(payload)
-            with open(sink, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry, default=str) + "\n")
-        except Exception as exc:
-            self._log_warning(f"event emit failed: {exc}")
+        self._lifecycle.emit_event(event_type, payload)
 
     async def _write_checkpoint(self, status: str) -> None:
-        config = self._durable_config()
-        if not config or not self.ctx.output_path:
-            return
-
-        payload: dict[str, Any] = {
-            "run_id": self.run_id,
-            "checkpoint_id": self._checkpoint_id(),
-            "status": status,
-            "runner_type": self.__class__.__name__,
-            "model_type": type(self.model).__name__,
-            "name": getattr(self.model, "name", None),
-            "parent_run_id": self.parent.run_id if self.parent else None,
-            "started_at": self._started_at_utc,
-            "finished_at": self._finished_at_utc,
-            "duration_ms": self.duration_ms(),
-            "error": self._error,
-            "job_id": getattr(self.model, "jid", None),
-            "step_index": getattr(self.model, "step_index", None),
-        }
-
-        if status != "running":
-            try:
-                result = await self.get_result()
-                payload["outputs"] = result.outputs
-            except Exception as e:
-                self._log_warning(f"Failed to retrieve outputs for checkpoint: {e}")
-                payload["outputs"] = {}
-
-        await write_checkpoint(
-            self.ctx.output_path,
-            config,
-            self._checkpoint_id(),
-            payload,
-        )
+        await self._lifecycle.write_checkpoint(status)
 
     async def _restore_from_checkpoint(self) -> bool:
-        config = self._durable_config()
-        if not config or not config.resume or not self.ctx.output_path:
-            return False
-
-        checkpoint = await get_checkpoint(
-            self.ctx.output_path,
-            config,
-            self._checkpoint_id(),
-        )
-        if not checkpoint or checkpoint.get("status") != "completed":
-            return False
-
-        self._error = checkpoint.get("error")
-        self._durable_outputs = checkpoint.get("outputs", {})
-        self._started_at_utc = checkpoint.get("started_at")
-        self._finished_at_utc = checkpoint.get("finished_at")
-        self._state_machine.set_state(RunnerStatus.COMPLETED)
-        if self._durable_outputs is not None:
-            await self.reg_set(RunnerRegistryKeys.OUTPUTS, self._durable_outputs)
-        return True
+        return await self._lifecycle.restore_from_checkpoint()
 
     def _durable_config(self):
-        """Return the durable config, cached after first lookup.
-        This avoids repeated attribute traversal for each checkpoint operation.
-        """
-        if (
-            hasattr(self, "_cached_durable_config")
-            and self._cached_durable_config is not None
-        ):
-            return self._cached_durable_config
-        if self.ctx.durable and self.ctx.durable.enabled:
-            self._cached_durable_config = self.ctx.durable
-            return self._cached_durable_config
-        if self.parent and self.parent.ctx.durable and self.parent.ctx.durable.enabled:
-            self._cached_durable_config = self.parent.ctx.durable
-            return self._cached_durable_config
-        self._cached_durable_config = None
-        return None
+        """Return the durable config, cached after first lookup."""
+        return self._lifecycle.durable_config()
 
     def _checkpoint_id(self) -> str:
-        parent_id = self.parent._checkpoint_id() if self.parent else "workflow"
-        if hasattr(self.model, "jid") and hasattr(self.model, "step_index"):
-            local_id = f"job:{self.model.jid}:{self.model.step_index}"
-        elif hasattr(self.model, "jid"):
-            local_id = f"job:{self.model.jid}"
-        elif hasattr(self.model, "name"):
-            local_id = f"{self.__class__.__name__}:{self.model.name}"
-        else:
-            local_id = f"{self.__class__.__name__}:{self.run_id}"
-        return f"{parent_id}/{local_id}"
+        return self._lifecycle.checkpoint_id()
 
     def _checkpoint_status(self) -> str:
-        status = self.status
-        if status == RunnerStatus.FINISHED:
-            status = RunnerStatus.COMPLETED
-        return status.value
+        return self._lifecycle.checkpoint_status()
 
     async def _auto_commit_push(self) -> None:
-        """Auto-commit and/or push output directory after workflow completion.
-
-        Only runs for top-level runners (no parent) when the durable config
-        has auto_commit or auto_push enabled and the run reached a terminal state.
-        """
-        if self.parent is not None:
-            return
-        config = self._durable_config()
-        if not config:
-            return
-        if not (config.auto_commit or config.auto_push):
-            return
-        if not self.ctx.output_path:
-            return
-        if not self._state_machine.is_terminal:
-            return
-
-        try:
-            await commit_and_push(
-                self.ctx.output_path,
-                do_commit=config.auto_commit,
-                do_push=config.auto_push,
-                message=f"checkpoint: {getattr(self.model, 'name', 'workflow')} [{self.status.value}]",
-            )
-        except Exception as exc:
-            self._log_warning(f"auto-commit/push failed: {exc}")
+        await self._lifecycle.auto_commit_push()
 
     async def _do_run(self) -> None:
-        """Execute the runner's main logic - must be implemented by subclasses"""
+        """Execute the runner's main logic - must be implemented by subclasses."""
+        if self._executor is not None:
+            await self._executor.do_run(self)
+            return
         raise NotImplementedError("Subclasses should implement _do_run method.")
 
     async def _pre_run(self) -> None:
         """Pre-run hook. Default is no-op; override in subclasses."""
-        pass
+        if self._executor is not None:
+            await self._executor.pre_run(self)
 
     async def _post_run(self) -> None:
         """Post-run hook. Default is no-op; override in subclasses."""
-        pass
+        if self._executor is not None:
+            await self._executor.post_run(self)
 
     async def _resolve_job_outputs(self) -> dict[str, Any]:
         """Resolve template expressions in ``model.outputs``.
 
         Used by both ``JobRunner`` and ``CloudJobRunner`` post-run to
-        expand Jinja2 expressions in declared job outputs.  Returns
+        expand Jinja2 expressions in declared job outputs. Returns
         the resolved dict (empty if the model has no outputs).
         """
         outputs = getattr(self.model, "outputs", None)
@@ -441,31 +178,38 @@ class BaseRunner[TModel: BaseModel]:
             self.__lazy_template_resolver = TemplateResolver()
         return self.__lazy_template_resolver
 
-    async def _resolve_template(self, value: Any) -> Any:
-        """Resolve Jinja2 templates in values using the TemplateResolver.
-        Args:
-            value: Value to resolve (can be str, dict, list, primitives)
-        Returns:
-            Resolved value with templates expanded
-        """
+    def _build_template_context(self) -> dict[str, Any]:
+        """Build the template context for runner-scoped template resolution."""
         context_vars = self.ctx.vars.copy()
         context_vars.update(self.ctx.model_dump(exclude={"vars"}))
-        _envs = context_vars.get("envs", {})
+        envs = context_vars.get("envs", {})
         context_vars.update(
             {
                 "self": self.model,
                 "registry": self._registry,
                 "runner": self,
                 "ctx": self.ctx,
-                "env": lambda key, default="": _envs.get(
+                "env": lambda key, default="": envs.get(
                     key, os.environ.get(key, default)
                 ),
                 "vars": self.ctx.vars,
             }
         )
+        return context_vars
+
+    async def _resolve_template(
+        self, value: Any, context_vars: dict[str, Any] | None = None
+    ) -> Any:
+        """Resolve Jinja2 templates in values using the TemplateResolver.
+        Args:
+            value: Value to resolve (can be str, dict, list, primitives)
+            context_vars: Optional pre-built template context
+        Returns:
+            Resolved value with templates expanded
+        """
         return await self._template_resolver.resolve(
             value,
-            context_vars,
+            context_vars or self._build_template_context(),
         )
 
     def _evaluate_run_if(
@@ -532,13 +276,10 @@ class BaseRunner[TModel: BaseModel]:
         self._logger.error(self._produce_log(message))
 
     def _mark_start(self) -> None:
-        self._started_at = time.perf_counter()
-        self._started_at_utc = datetime.now(UTC).isoformat()
+        self._lifecycle.mark_start()
 
     def _mark_finish(self) -> None:
-        if self._finished_at is None:
-            self._finished_at = time.perf_counter()
-            self._finished_at_utc = datetime.now(UTC).isoformat()
+        self._lifecycle.mark_finish()
 
     @property
     def started_at(self) -> str | None:
@@ -549,10 +290,10 @@ class BaseRunner[TModel: BaseModel]:
         return self._finished_at_utc
 
     def duration_ms(self) -> int | None:
-        if self._started_at is None:
-            return None
-        end = self._finished_at or time.perf_counter()
-        return int((end - self._started_at) * 1000)
+        return self._lifecycle.duration_ms()
+
+    def duration_seconds(self) -> float | None:
+        return self._lifecycle.duration_seconds()
 
     @property
     def status(self) -> RunnerStatus:

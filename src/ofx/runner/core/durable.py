@@ -11,7 +11,7 @@ from typing import Any
 from ofx.models.config import DurableRunConfig
 from ofx.runner.registry import RegistryAdapter
 from ofx.runner.registry.factory import RegistryFactory
-from ofx.runner.registry.file import FileRegistry
+from ofx.runner.registry_backends.file import FileRegistry
 from ofx.settings import settings
 
 DURABLE_DIR_NAME = ".durable"

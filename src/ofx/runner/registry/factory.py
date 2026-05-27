@@ -1,6 +1,9 @@
 """Factory for creating registry adapters."""
 
+from __future__ import annotations
+
 import logging
+import warnings
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -8,8 +11,8 @@ from pydantic import BaseModel
 from ofx.runner.registry.base import RegistryAdapter
 from ofx.runner.registry.cache import CachedRegistryAdapter
 from ofx.runner.registry.failover import FailoverRegistryAdapter
-from ofx.runner.registry.file import FileRegistry
-from ofx.runner.registry.memory import MemoryJobRegistry
+from ofx.runner.registry_backends.file import FileRegistry
+from ofx.runner.registry_backends.memory import MemoryJobRegistry
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -22,7 +25,7 @@ DEFAULT_CACHE_MAX_ENTRIES = 1024
 # Backend definitions: (module_path, class_name, defaults, pip_extra, package_name)
 _EXTERNAL_BACKENDS: dict[str, tuple[str, str, dict, str, str]] = {
     "redis": (
-        "ofx.runner.registry.redis",
+        "ofx.runner.registry_backends.redis",
         "RedisJobRegistry",
         {
             "host": "localhost",
@@ -35,14 +38,14 @@ _EXTERNAL_BACKENDS: dict[str, tuple[str, str, dict, str, str]] = {
         "redis",
     ),
     "memcached": (
-        "ofx.runner.registry.memcached",
+        "ofx.runner.registry_backends.memcached",
         "MemcachedJobRegistry",
         {"host": "localhost", "port": 11211, "prefix": "ofx:job:"},
         "memcached",
         "aiomcache",
     ),
     "etcd": (
-        "ofx.runner.registry.etcd",
+        "ofx.runner.registry_backends.etcd",
         "EtcdJobRegistry",
         {"host": "localhost", "port": 2379, "prefix": "/ofx/job/"},
         "etcd",
@@ -94,6 +97,12 @@ class RegistryFactory:
     ) -> RegistryAdapter:
         """Create an external (redis/memcached/etcd) registry backend."""
         mod_path, cls_name, defaults, pip_extra, pkg_name = _EXTERNAL_BACKENDS[backend]
+        if backend in {"memcached", "etcd"}:
+            warnings.warn(
+                f"Registry backend '{backend}' is deprecated and may be removed in a future release.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         try:
             import importlib
 
@@ -168,42 +177,18 @@ class RegistryFactory:
             f"Supported: memory, file, redis, memcached, etcd"
         )
 
+
+
     @classmethod
-    def create_from_settings(cls) -> RegistryAdapter:
-        """Create a registry based on application settings."""
-        backend = settings.registry_backend
-        kwargs: dict[str, Any] = {}
-
-        if backend == "file":
-            kwargs["filepath"] = settings.registry_file_path
-        elif backend in _EXTERNAL_BACKENDS:
-            config_map = {
-                "redis": "registry_redis",
-                "memcached": "registry_memcached",
-                "etcd": "registry_etcd",
-            }
-            kwargs["config"] = getattr(settings, config_map.get(backend, ""), None)
-
-        try:
-            registry = cls.create(
-                backend,  # type: ignore[arg-type]
-                enable_cache=settings.registry_cache_enabled,
-                enable_failover=settings.registry_failover_enabled,
-                cache_ttl=settings.registry_cache_ttl,
-                cache_max_entries=settings.registry_cache_max_entries,
-                **kwargs,
-            )
-            if backend not in ("memory",):
-                logger.debug("Using %s registry backend", backend)
-            return registry
-        except Exception as exc:
-            logger.warning(
-                "Registry backend '%s' failed (%s). "
-                "Falling back to in-memory registry — data will not persist across runs.",
-                backend,
-                exc,
-            )
-            return cls.create("memory", enable_cache=settings.registry_cache_enabled)
+    def create_from_settings(cls, *args: Any, **kwargs: Any) -> RegistryAdapter:
+        warnings.warn(
+            "RegistryFactory.create_from_settings() is deprecated. "
+            "Use RegistryFactory.create() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        backend = kwargs.pop("backend", getattr(settings, "registry_backend", "memory"))
+        return cls.create(backend=backend, *args, **kwargs)
 
 
 async def cleanup_registry(registry: RegistryAdapter) -> None:

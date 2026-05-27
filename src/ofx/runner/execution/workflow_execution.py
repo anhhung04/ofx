@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 from ofx.runner.core import BaseRunner
 from ofx.runner.execution.runner_factory import create_job_runner
@@ -156,8 +157,8 @@ class WorkflowExecutionManager:
         }
         task_to_job = {t: jid for jid, t in tasks.items()}
         failed_jobs: list[str] = []
+        pending: set[asyncio.Task[Any]] = set(tasks.values())
         try:
-            pending = set(tasks.values())
             while pending:
                 done, pending = await asyncio.wait(
                     pending, return_when=asyncio.FIRST_COMPLETED
@@ -183,15 +184,3 @@ class WorkflowExecutionManager:
             raise
         return failed_jobs
 
-    def _matrix_combo_count(self, runner) -> int:
-        """Estimate the number of matrix combinations for a runner."""
-        from ofx.runner.core.matrix_utils import estimate_matrix_count
-
-        strategy = runner.model.strategy
-        if not strategy or not strategy.matrix:
-            return 1
-        return estimate_matrix_count(
-            strategy.matrix,
-            include=strategy.include,
-            exclude=strategy.exclude,
-        )

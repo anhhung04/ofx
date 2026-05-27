@@ -1,33 +1,35 @@
-"""Job runner for orchestrating step execution"""
+"""Job runners delegating orchestration to executor classes."""
 
-import asyncio
-import logging
+from __future__ import annotations
+
 from typing import Any
 
 from ofx.models.config import DefaultConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.context import RunnerContextBuilder
-from ofx.runner.core import (
-    BaseRunner,
-    RunContext,
-    RunnerRegistryKeys,
-    RunnerStatus,
-    RunResult,
-)
-from ofx.runner.execution.error_helpers import job_step_failed
-from ofx.runner.execution.job_mixin import JobRunnerMixin
-from ofx.runner.execution.step import StepRunner
+from ofx.runner.core import BaseRunner, RunContext, RunnerRegistryKeys
+from ofx.runner.executors.job import JobExecutor, MatrixExecutor
+from ofx.runner.logging import LogContext
 
 
-class JobRunner(JobRunnerMixin, BaseRunner[Job]):
+class JobRunner(BaseRunner[Job]):
     def __init__(
         self,
         job: Job,
         ctx: RunContext,
         parent: BaseRunner[Workflow],
+        executor: JobExecutor | None = None,
     ):
-        super().__init__(job, ctx, parent, parent.registry)
+        job_executor = executor or JobExecutor()
+        self._job_executor: JobExecutor = job_executor
+        super().__init__(
+            job,
+            ctx,
+            parent,
+            parent.registry,
+            executor=job_executor,
+        )
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(
@@ -36,10 +38,10 @@ class JobRunner(JobRunnerMixin, BaseRunner[Job]):
         self.ctx = RunnerContextBuilder(self.ctx).with_env(self.model.env)
         self._log_debug(f"Resolved job: {self.model.model_dump(exclude={'steps'})}")
 
-        self._check_dependencies_and_run_if()
+        self._job_executor.check_dependencies_and_run_if(self)
 
         job_default_config = self.model.defaults.model_dump(exclude_defaults=True)
-        workflow_default_config = self.parent.model.defaults.model_dump()  # type: ignore
+        workflow_default_config = self.parent.model.defaults.model_dump()  # type: ignore[union-attr]
         for key, value in job_default_config.items():
             workflow_default_config[key] = value
         self.model.defaults = DefaultConfig.model_validate(workflow_default_config)
@@ -49,147 +51,62 @@ class JobRunner(JobRunnerMixin, BaseRunner[Job]):
             self.model.model_dump(exclude={"steps", "env"}),
         )
 
-    async def _do_run(self) -> None:
-        self._log_info(f"Starting job '{self.model.name or self.model.jid}'")
-        for step in self.model.steps:
-            step_ctx = self._child_context(
-                update={
-                    "secrets": self.ctx.secrets if step.secrets != "inherit" else {},
-                },
-            )
-
-            step_runner = StepRunner(
-                step,
-                step_ctx,
-                self,
-            )
-            step_runner.log_level = logging.CRITICAL
-            self._runners[str(step.step_index)] = step_runner
-            result = await step_runner.run()
-            if step_runner.is_failed and not step.continue_on_error:
-                raise RuntimeError(
-                    job_step_failed(step.name or step.step_index, result.error)
-                )
-
-    async def _post_run(self) -> None:
-        await self._save_job_results()
-
-        # Clean up non-exported task temp files that were kept for
-        # subsequent steps (export_output=False tasks).
-        await self._cleanup_temp_task_files()
+    async def _save_job_results(self) -> None:
+        await self._job_executor._save_job_results(self)
 
     async def _cleanup_temp_task_files(self) -> None:
-        """Remove temp output files from non-exported tasks after all steps finish."""
-        from pathlib import Path
+        await self._job_executor._cleanup_temp_task_files(self)
 
-        for step_runner in self._runners.values():
-            try:
-                result = await step_runner.get_result()
-                output_file = result.outputs.get("output_file", "")
-                if output_file and ".ofx_task_" in output_file:
-                    p = Path(output_file)
-                    if p.exists():
-                        p.unlink(missing_ok=True)
-            except Exception:
-                # Best-effort cleanup; log failures at debug level so they
-                # don't obscure the real job output.
-                self._log_debug(
-                    f"Job '{self.model.jid}': failed to clean up temp task file"
-                )
+    @property
+    def total_steps(self) -> int:
+        return len(self.model.steps)
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        msg = f"'{self.model.jid}' › {message_str}"
+        prefix = LogContext(model_jid=self.model.jid).prefix
+        msg = f"{prefix} › {message_str}" if prefix else message_str
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
 
 
 class MatrixJobRunner(BaseRunner[Job]):
-    """Runner for jobs with matrix strategy, handling multiple matrix combinations"""
+    """Runner for jobs with matrix strategy, handling multiple combinations."""
 
     def __init__(
         self,
         job: Job,
         ctx: RunContext,
         parent: BaseRunner[Workflow],
+        executor: MatrixExecutor | None = None,
     ):
-        super().__init__(job, ctx, parent)
+        matrix_executor = executor or MatrixExecutor()
+        self._matrix_executor: MatrixExecutor = matrix_executor
+        super().__init__(job, ctx, parent, executor=matrix_executor)
         self.name = f"Matrix{self.name}"
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)
-        msg = f"'{self.model.jid}' › {message_str}"
+        prefix = LogContext(model_jid=self.model.jid).prefix
+        msg = f"{prefix} › {message_str}" if prefix else message_str
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
 
-    async def _do_run(self) -> None:
-        """Run all matrix combinations with optional parallelism limit"""
-        if not self._matrix_combinations:
-            return
-
-        strategy = self.model.strategy
-        max_parallel = (
-            strategy.max_parallel if strategy else len(self._matrix_combinations)
-        )
-        fail_fast = strategy.fail_fast if strategy else True
-
-        semaphore = asyncio.Semaphore(max_parallel)
-        failed_event = asyncio.Event()
-
-        async def run_instance(matrix_idx: int, matrix_values: dict[str, Any]):
-            if fail_fast and failed_event.is_set():
-                return None
-            async with semaphore:
-                if fail_fast and failed_event.is_set():
-                    return None
-                try:
-                    return await self._run_single_job(matrix_idx, matrix_values)
-                except Exception:
-                    if fail_fast:
-                        failed_event.set()
-                    raise
-
-        tasks = [
-            asyncio.create_task(run_instance(idx, combo))
-            for idx, combo in enumerate(self._matrix_combinations)
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        errors = []
-        for i, result in enumerate(results):
-            combo = self._matrix_combinations[i]
-            combo_label = ", ".join(f"{k}={v}" for k, v in combo.items())
-            if isinstance(result, Exception):
-                errors.append(f"Combination {i} ({combo_label}): {result}")
-            elif (
-                isinstance(result, RunResult)
-                and result.status != RunnerStatus.COMPLETED
-            ):
-                errors.append(
-                    f"Combination {i} ({combo_label}): {result.error or 'Failed'}"
-                )
-
-        if errors:
-            detail = "\n  ".join(errors[:10])
-            suffix = f"\n  ... and {len(errors) - 10} more" if len(errors) > 10 else ""
-            raise RuntimeError(
-                f"Matrix job '{self.model.jid}' failed ({len(errors)} combination(s)):\n  {detail}{suffix}"
-            )
-
     async def _run_single_job(self, matrix_idx: int, matrix_values: dict[str, Any]):
-        """Run a single job instance with specific matrix values"""
         job_ctx = self._child_context()
+        vars_update: dict[str, Any] = {"matrix": matrix_values}
         if self.model.strategy:
-            job_ctx.vars["strategy"] = self.model.strategy.model_dump()
-        job_ctx.vars["matrix"] = matrix_values
+            vars_update["strategy"] = self.model.strategy.model_dump()
+        job_ctx = RunnerContextBuilder(job_ctx).with_vars(vars_update)
 
-        # Propagate auto-expanded matrix values back into inputs so that
-        # {{ inputs.target }} resolves to the current matrix target value.
-        for key in job_ctx.vars.get("_matrix_input_keys", []):
-            if key in matrix_values:
-                job_ctx.inputs[key] = matrix_values[key]
+        matrix_input_updates = {
+            key: matrix_values[key]
+            for key in job_ctx.vars.get("_matrix_input_keys", [])
+            if key in matrix_values
+        }
+        if matrix_input_updates:
+            job_ctx = RunnerContextBuilder(job_ctx).with_inputs(matrix_input_updates)
 
         new_jid = f"{self.model.jid}_{str(matrix_idx)}"
         runner = JobRunner(
@@ -203,15 +120,13 @@ class MatrixJobRunner(BaseRunner[Job]):
                 },
             ),
             job_ctx,
-            parent=self.parent,  # type: ignore
+            parent=self.parent,  # type: ignore[arg-type]
         )
         self._runners[new_jid] = runner
         return await runner.run()
 
     async def _pre_run(self) -> None:
         await self._resolve_template_fields(["strategy"])
-        # After template resolution, matrix values that were template strings
-        # may now be JSON-encoded list strings — parse them into real lists.
         if self.model.strategy and self.model.strategy.matrix:
             import json
 
@@ -227,45 +142,5 @@ class MatrixJobRunner(BaseRunner[Job]):
                         else:
                             self.model.strategy.matrix[key] = [parsed]
                     except (json.JSONDecodeError, ValueError):
-                        # Wrap scalar string as single-element list
                         self.model.strategy.matrix[key] = [val]
-        self._matrix_combinations = self._generate_matrix_combinations()
-
-    async def _post_run(self) -> None:
-        pass
-
-    def _generate_matrix_combinations(self) -> list[dict[str, Any]]:
-        """Generate all matrix combinations with include/exclude rules."""
-        from ofx.runner.core.matrix_utils import generate_matrix_combinations
-
-        strategy = self.model.strategy
-        if not strategy or not strategy.matrix:
-            return []
-
-        # Detect empty source lists before expansion so the warning is accurate.
-        empty_keys = [
-            k for k, v in strategy.matrix.items() if isinstance(v, list) and len(v) == 0
-        ]
-        if empty_keys:
-            self._log_warning(
-                f"Matrix produced 0 combinations: key(s) {empty_keys} resolved to an empty list. "
-                "Check that upstream job outputs are non-empty."
-            )
-            return []
-
-        combos = generate_matrix_combinations(
-            {
-                k: ([v] if not isinstance(v, list) else v)
-                for k, v in strategy.matrix.items()
-            },
-            include=strategy.include,
-            exclude=strategy.exclude,
-            enforce_limit=True,
-        )
-
-        if not combos:
-            self._log_warning(
-                "Matrix produced 0 combinations after include/exclude filtering"
-            )
-
-        return combos
+        self._matrix_combinations = self._matrix_executor.generate_matrix_combinations(self)

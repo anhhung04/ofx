@@ -7,6 +7,8 @@ model.
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from random import uniform
 from typing import Any
 
@@ -94,6 +96,39 @@ class StepRunnerMixin:
                     f"Invalid timeout expression result: {resolved!r}, using 60 min"
                 )
                 self.model.timeout = _DEFAULT_TIMEOUT_MINUTES  # type: ignore[attr-defined]
+
+    async def _run_with_retries(
+        self,
+        operation: Callable[[], Awaitable[Any]],
+        *,
+        max_attempts: int,
+        timeout_error_factory: Callable[[Exception], Exception],
+        final_error_factory: Callable[[Exception | None, list[str]], Exception],
+    ) -> Any:
+        """Run an async operation with shared retry and backoff handling."""
+        last_error: Exception | None = None
+        attempt_errors: list[str] = []
+
+        for attempt in range(max_attempts):
+            try:
+                return await operation()
+            except TimeoutError as exc:
+                raise timeout_error_factory(exc) from exc
+            except Exception as exc:
+                last_error = exc
+                err_msg = str(exc)
+                attempt_errors.append(f"attempt {attempt + 1}: {err_msg}")
+                if attempt < max_attempts - 1:
+                    next_delay = self._retry_delay_seconds(  # type: ignore[attr-defined]
+                        attempt=attempt,
+                        base_delay=self.model.retry_delay,  # type: ignore[attr-defined]
+                    )
+                    self._log_info(  # type: ignore[attr-defined]
+                        f"Retry {attempt + 2}/{max_attempts} in {next_delay:.1f}s — {err_msg}"
+                    )
+                    await asyncio.sleep(next_delay)
+
+        raise final_error_factory(last_error, attempt_errors)
 
     # ------------------------------------------------------------------
     # Output helpers

@@ -1,14 +1,18 @@
-"""Job registry adapters using the adapter pattern"""
+"""Compatibility exports for registry adapters.
+
+Canonical backend implementations live under `ofx.runner.registry_backends`.
+Importing through `ofx.runner.registry` continues to work for backward
+compatibility.
+"""
+
+from __future__ import annotations
 
 from ofx.runner.registry.base import RegistryAdapter
 from ofx.runner.registry.cache import CachedRegistryAdapter
-from ofx.runner.registry.factory import (
-    RegistryFactory,
-    cleanup_registry,
-)
+from ofx.runner.registry.factory import RegistryFactory, cleanup_registry
 from ofx.runner.registry.failover import FailoverRegistryAdapter
-from ofx.runner.registry.file import FileRegistry
-from ofx.runner.registry.memory import MemoryJobRegistry, RegistryOverflowError
+from ofx.runner.registry_backends.file import FileRegistry
+from ofx.runner.registry_backends.memory import MemoryJobRegistry, RegistryOverflowError
 
 __all__ = [
     "RegistryAdapter",
@@ -21,24 +25,36 @@ __all__ = [
     "cleanup_registry",
 ]
 
+
 try:
-    from ofx.runner.registry.redis import RedisJobRegistry
+    from ofx.runner.registry_backends.redis import RedisJobRegistry
 
     __all__.append("RedisJobRegistry")
 except ImportError:
     pass
 
-try:
-    from ofx.runner.registry.memcached import MemcachedJobRegistry
 
-    __all__.append("MemcachedJobRegistry")
-except ImportError:
-    pass
+def __getattr__(name: str):
+    if name == "MemcachedJobRegistry":
+        import warnings
+        from ofx.runner.registry_backends.memcached import MemcachedJobRegistry
 
-try:
-    from ofx.runner.registry.etcd import EtcdJobRegistry
+        warnings.warn(
+            "Importing MemcachedJobRegistry from 'ofx.runner.registry' is deprecated. "
+            "Import it from 'ofx.runner.registry_backends.memcached' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return MemcachedJobRegistry
+    if name == "EtcdJobRegistry":
+        import warnings
+        from ofx.runner.registry_backends.etcd import EtcdJobRegistry
 
-    __all__.append("EtcdJobRegistry")
-except Exception:
-    # Keep registry importable; the backend can be enabled by fixing env deps.
-    pass
+        warnings.warn(
+            "Importing EtcdJobRegistry from 'ofx.runner.registry' is deprecated. "
+            "Import it from 'ofx.runner.registry_backends.etcd' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return EtcdJobRegistry
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

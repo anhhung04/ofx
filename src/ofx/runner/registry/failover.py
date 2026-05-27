@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from ofx.runner.registry.base import RegistryAdapter
-from ofx.runner.registry.memory import MemoryJobRegistry
+from ofx.runner.registry_backends.memory import MemoryJobRegistry
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)

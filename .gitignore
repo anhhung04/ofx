@@ -239,3 +239,4 @@ __marimo__/
 plans/recon
 # Cython build cache
 build/.cython_cache.json
+REFACTORING_PLAN.md

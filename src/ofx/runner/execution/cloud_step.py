@@ -618,21 +618,11 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
             self._run_type.value if self._run_type else self.model.get_run_type().value
         )
         step_name = self.model.name or f"step_{self.model.step_index}"
-        job_id = ""
-        workflow_name = ""
-        if self.parent and getattr(self.parent, "model", None):
-            job_id = getattr(getattr(self.parent, "model", None), "jid", "") or ""
-            if getattr(self.parent, "parent", None) and getattr(
-                getattr(self.parent, "parent", None), "model", None
-            ):
-                workflow_name = (
-                    getattr(
-                        getattr(getattr(self.parent, "parent", None), "model", None),
-                        "name",
-                        "",
-                    )
-                    or ""
-                )
+        parent_model = getattr(self.parent, "model", None) if self.parent else None
+        parent_parent = getattr(self.parent, "parent", None) if self.parent else None
+        workflow_model = getattr(parent_parent, "model", None) if parent_parent else None
+        job_id = getattr(parent_model, "jid", "") or ""
+        workflow_name = getattr(workflow_model, "name", "") or ""
         msg = (
             f"workflow[{workflow_name}]"
             f"job[{job_id}]"

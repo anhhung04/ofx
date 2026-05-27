@@ -1,18 +1,14 @@
-"""Cloud matrix job runner — provisions one VPS and runs all matrix combos on it.
-
-Extends ``CloudJobRunner`` to inherit VPS provisioning. Overrides
-``_do_run`` to iterate over matrix combinations on the same remote host.
-"""
+"""Cloud matrix job runner - provisions one VPS and runs all matrix combos on it."""
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.runner.core import BaseRunner, RunContext
+from ofx.runner.executors.job import MatrixExecutor
 from ofx.runner.execution.cloud_job import CloudJobRunner
 from ofx.runner.logging import get_logger
 
@@ -20,36 +16,23 @@ logger = get_logger()
 
 
 class CloudMatrixJobRunner(CloudJobRunner):
-    """Provisions a single VPS, then runs all matrix combinations on it.
-
-    Inherits provisioning, output download, and teardown from
-    ``CloudJobRunner``.  Overrides ``_do_run`` to loop over the expanded
-    matrix combinations, running every job step for each combination on
-    the same remote host.
-
-    YAML example::
-
-        jobs:
-          exploit:
-            cloud:
-              provider: aws
-              region: us-east-1
-            strategy:
-              matrix:
-                tool: [sqlmap, nuclei]
-                target: [app1.com, app2.com]
-            steps:
-              - run: ${{ matrix.tool }} -u ${{ matrix.target }}
-    """
-
     def __init__(
         self,
         job: Job,
         ctx: RunContext,
         parent: BaseRunner[Workflow],
         cloud_config: CloudConfig | None = None,
+        executor: MatrixExecutor | None = None,
     ):
-        super().__init__(job, ctx, parent, cloud_config)
+        matrix_executor = executor or MatrixExecutor()
+        self._matrix_executor: MatrixExecutor = matrix_executor
+        super().__init__(
+            job,
+            ctx,
+            parent,
+            cloud_config,
+            executor=matrix_executor,
+        )
         self._matrix_combinations: list[dict[str, Any]] = []
 
     def _produce_log(self, message: Any) -> str:
@@ -64,10 +47,6 @@ class CloudMatrixJobRunner(CloudJobRunner):
         if self.parent:
             return self.parent._produce_log(msg)
         return msg
-
-    # ------------------------------------------------------------------
-    # Do-run: expand matrix → run each combo on the same VPS
-    # ------------------------------------------------------------------
 
     async def _do_run(self) -> None:
         self._log_info(
@@ -86,57 +65,8 @@ class CloudMatrixJobRunner(CloudJobRunner):
             await self._run_steps(None)
             return
 
-        strategy = self.model.strategy
-        max_parallel = getattr(strategy, "max_parallel", None) or len(
-            self._matrix_combinations
-        )
-        fail_fast = getattr(strategy, "fail_fast", True)
-        semaphore = asyncio.Semaphore(max_parallel)
-        failed_event = asyncio.Event()
-
-        async def run_combo(idx: int, combo: dict[str, Any]) -> Any:
-            if fail_fast and failed_event.is_set():
-                return None
-            async with semaphore:
-                if fail_fast and failed_event.is_set():
-                    return None
-                try:
-                    await self._run_steps(combo, suffix=f"_{idx}")
-                    return
-                except Exception as exc:
-                    failed_event.set()
-                    raise exc
-
-        tasks = [
-            asyncio.create_task(run_combo(idx, combo))
-            for idx, combo in enumerate(self._matrix_combinations)
-        ]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        errors = [
-            f"Matrix {i}: {r}"
-            for i, r in enumerate(results)
-            if r is not None and isinstance(r, Exception)
-        ]
-        if errors:
-            raise RuntimeError("; ".join(errors))
+        await self._matrix_executor.do_run(self)
 
     def _generate_matrix_combinations(self) -> list[dict[str, Any]]:
-        """Generate all matrix combinations with include/exclude rules."""
-        from ofx.runner.core.matrix_utils import generate_matrix_combinations
-
-        strategy = self.model.strategy
-        if not strategy or not strategy.matrix:
-            return []
-
-        # Normalize: wrap scalar/str values in a list so generate_matrix_combinations accepts them
-        matrix: dict[str, list[Any]] = {
-            k: ([v] if not isinstance(v, list) else v)
-            for k, v in strategy.matrix.items()
-        }
-        return generate_matrix_combinations(
-            matrix,
-            include=strategy.include,
-            exclude=strategy.exclude,
-            enforce_limit=True,
-        )
+        matrix_executor = getattr(self, "_matrix_executor", None) or MatrixExecutor()
+        return matrix_executor.generate_matrix_combinations(self)

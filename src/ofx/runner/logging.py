@@ -1,9 +1,31 @@
 import logging
+from dataclasses import dataclass
 
 from ofx.settings import settings
 from ofx.utils.log import reload_logging_config
 
 _logger: logging.Logger | None = None
+
+
+@dataclass(frozen=True)
+class LogContext:
+    run_id: str | None = None
+    model_name: str | None = None
+    model_jid: str | None = None
+    step_index: int | str | None = None
+
+    @property
+    def prefix(self) -> str:
+        parts: list[str] = []
+        if self.run_id:
+            parts.append(f"[RUN-{self.run_id}]")
+        if self.model_name:
+            parts.append(f"'{self.model_name}'")
+        if self.model_jid:
+            parts.append(f"'{self.model_jid}'")
+        if self.step_index is not None:
+            parts.append(f"'step{self.step_index}'")
+        return " › ".join(parts)
 
 
 def get_logger() -> logging.Logger:
