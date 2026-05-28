@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -7,6 +8,29 @@ from ofx.utils.workflow_utils import find_workflow
 
 
 class TestFlowRun:
+    def test_build_run_context_merges_explicit_env_and_workflow_dir(self, tmp_path):
+        from ofx.runner.api import _build_run_context
+
+        workflow_path = tmp_path / "child" / "workflow.yml"
+        ctx = _build_run_context(
+            inputs={"target": "example.com"},
+            output_dir=tmp_path,
+            runner_secrets={"API_KEY": "secret"},
+            search_paths=[tmp_path / "search"],
+            resolved_workflow=SimpleNamespace(workflow_path=workflow_path),
+            durable_config=None,
+            vars={"project": "demo"},
+            event_sink_path=tmp_path / "events.ndjson",
+            env={"OFX_TEST_FLAG": "1"},
+        )
+
+        assert ctx.inputs == {"target": "example.com"}
+        assert ctx.secrets == {"API_KEY": "secret"}
+        assert ctx.vars == {"project": "demo"}
+        assert ctx.envs["OFX_TEST_FLAG"] == "1"
+        assert (tmp_path / "search").absolute() in ctx.workflow_dirs
+        assert workflow_path.parent.absolute() in ctx.workflow_dirs
+
     @pytest.mark.asyncio
     async def test_flow(self, caplog):
         with caplog.at_level("DEBUG"):

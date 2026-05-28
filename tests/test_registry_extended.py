@@ -6,7 +6,7 @@ import importlib
 
 import pytest
 
-from ofx.runner.core import RegistryFactory
+from ofx.runner import RegistryFactory
 
 
 def _can_import(module: str) -> bool:
@@ -89,7 +89,10 @@ class TestEtcdJobRegistry:
             await registry.close()
         except Exception as e:
             # Connection errors are expected if etcd server is not running
-            if "Connection refused" in str(e) or "ECONNREFUSED" in str(e):
+            if any(
+                marker in str(e).lower()
+                for marker in ("connection refused", "econnrefused", "connection failed")
+            ):
                 pytest.skip("etcd server not available")
             raise
 
@@ -101,11 +104,7 @@ class TestRegistryFactoryExtended:
         """Test that factory recognizes memcached backend"""
         if _can_import("aiomcache"):
             registry = RegistryFactory.create("memcached")
-            # Factory wraps: base → CachedRegistryAdapter → FailoverRegistryAdapter
-            assert registry.__class__.__name__ == "FailoverRegistryAdapter"
-            cached = registry._primary
-            assert cached.__class__.__name__ == "CachedRegistryAdapter"
-            assert cached._backend.__class__.__name__ == "MemcachedJobRegistry"
+            assert registry.__class__.__name__ == "MemcachedJobRegistry"
         else:
             with pytest.raises(ImportError, match="aiomcache"):
                 RegistryFactory.create("memcached")
@@ -114,11 +113,7 @@ class TestRegistryFactoryExtended:
         """Test that factory recognizes etcd backend"""
         if _can_import("etcd3"):
             registry = RegistryFactory.create("etcd")
-            # Factory wraps: base → CachedRegistryAdapter → FailoverRegistryAdapter
-            assert registry.__class__.__name__ == "FailoverRegistryAdapter"
-            cached = registry._primary
-            assert cached.__class__.__name__ == "CachedRegistryAdapter"
-            assert cached._backend.__class__.__name__ == "EtcdJobRegistry"
+            assert registry.__class__.__name__ == "EtcdJobRegistry"
         else:
             with pytest.raises(ImportError, match="etcd3"):
                 RegistryFactory.create("etcd")

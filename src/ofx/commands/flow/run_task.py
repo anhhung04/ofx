@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from ofx.runner.core import RunContext, RunnerRegistryKeys
+from ofx.runner import RunContext, RunnerRegistryKeys
 from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 from ofx.settings import settings
 

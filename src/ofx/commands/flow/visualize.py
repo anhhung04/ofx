@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from typing import Any
 
 from ofx.models.job import Job
@@ -14,10 +15,8 @@ from ofx.utils.workflow_utils import find_workflow
 def _find_workflow_fuzzy(name: str) -> Workflow:
     """Find workflow by name, with recursive fallback for bare names."""
     dirs = tuple(DEFAULT_WORKFLOWS_DIRS)
-    try:
+    with suppress(RuntimeError):
         return find_workflow(name, dirs)
-    except RuntimeError:
-        pass
     from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
     for d in DEFAULT_WORKFLOWS_DIRS:
@@ -36,7 +35,7 @@ def _find_workflow_fuzzy(name: str) -> Workflow:
 
 def _build_dag_data(workflow: Workflow) -> dict[str, Any]:
     """Build a serialisable DAG structure from a workflow."""
-    from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+    from ofx.runner.workflow_scheduler import WorkflowScheduler
 
     scheduler = WorkflowScheduler(jobs=workflow.jobs)
     schedule = scheduler.plan()
@@ -81,7 +80,7 @@ def _render_terminal(workflow: Workflow, detailed: bool) -> None:
     from rich.panel import Panel
     from rich.table import Table
 
-    from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+    from ofx.runner.workflow_scheduler import WorkflowScheduler
 
     console = get_console()
     scheduler = WorkflowScheduler(jobs=workflow.jobs)
@@ -204,7 +203,7 @@ def _render_terminal(workflow: Workflow, detailed: bool) -> None:
 
 def _render_dot(workflow: Workflow) -> str:
     """Generate GraphViz DOT format."""
-    from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+    from ofx.runner.workflow_scheduler import WorkflowScheduler
 
     scheduler = WorkflowScheduler(jobs=workflow.jobs)
     schedule = scheduler.plan()

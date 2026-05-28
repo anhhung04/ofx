@@ -1,11 +1,9 @@
 """etcd-based registry adapter for distributed coordination"""
 
-import json
-import logging
 import warnings
 from typing import Any
 
-from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry_adapter import RegistryAdapter
 
 try:
     import etcd3
@@ -14,11 +12,6 @@ try:
 except Exception:
     ETCD_AVAILABLE = False
     etcd3 = None  # type: ignore
-
-from ofx.settings import settings
-
-logger = logging.getLogger(settings.app_branding)
-
 
 class EtcdJobRegistry(RegistryAdapter):
     """etcd-based implementation of registry
@@ -87,10 +80,8 @@ class EtcdJobRegistry(RegistryAdapter):
     async def _set(self, key: str, value: Any) -> None:
         """Store data in etcd"""
         etcd_key = self._make_key(key)
-        try:
-            json_value = json.dumps(value, default=str)
-        except (TypeError, ValueError) as exc:
-            logger.warning("Failed to serialize value for key '%s': %s", key, exc)
+        json_value = self._serialize_value(key, value)
+        if json_value is None:
             return
         client = self._client
         assert client is not None
@@ -104,13 +95,7 @@ class EtcdJobRegistry(RegistryAdapter):
         assert client is not None
         value, _ = client.get(etcd_key)
         if value:
-            try:
-                return json.loads(value.decode())
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.warning(
-                    "Failed to decode registry value for key '%s': %s", key, exc
-                )
-                return None
+            return self._deserialize_value(key, value)
         return None
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
@@ -158,12 +143,9 @@ class EtcdJobRegistry(RegistryAdapter):
                 # Extract the key from the full etcd key
                 etcd_key = metadata.key.decode()
                 key = etcd_key[len(prefix) :]
-                try:
-                    result[key] = json.loads(value.decode())
-                except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                    logger.warning(
-                        "Failed to decode registry value for key '%s': %s", key, exc
-                    )
+                decoded = self._deserialize_value(key, value)
+                if decoded is not None:
+                    result[key] = decoded
 
         return result
 
@@ -181,7 +163,3 @@ class EtcdJobRegistry(RegistryAdapter):
             self._client.close()
             self._client = None
         self._log_debug("Closed EtcdJobRegistry")
-
-    @staticmethod
-    def _log_debug(message: str) -> None:
-        logger.debug(message)

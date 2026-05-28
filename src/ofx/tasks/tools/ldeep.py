@@ -57,7 +57,7 @@ class LdeepTask(Task):
             parts.extend(["-d", self._q(domain)])
         parts.extend(["-s", self._q(server)])
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["action", "username", "password", "domain", "server"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         parts.append(self._q(action))
 
@@ -74,9 +74,9 @@ class LdeepTask(Task):
             return self._parse_json_list(data)
 
         # Plain text output — one entry per line
-        raw = stdout or ""
+        raw = self._raw_output(stdout)
         results: list[UserAccount | Tag] = []
-        for line in raw.strip().splitlines():
+        for line in raw.splitlines():
             line = line.strip()
             if not line:
                 continue

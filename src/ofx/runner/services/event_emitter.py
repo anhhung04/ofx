@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ofx.runner.core.base import BaseRunner
+    from ofx.runner.runner import Runner
 
 
 class EventEmitter:
@@ -16,7 +17,7 @@ class EventEmitter:
 
     __slots__ = ("_runner", "_listeners")
 
-    def __init__(self, runner: BaseRunner[Any]) -> None:
+    def __init__(self, runner: Runner[Any]) -> None:
         self._runner = runner
         self._listeners: dict[str, list[Callable[[dict[str, Any]], None]]] = {}
 

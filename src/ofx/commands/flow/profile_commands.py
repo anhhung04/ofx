@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import Annotated
 
 import typer
@@ -185,14 +186,10 @@ def _parse_value(value: str):
         return True
     if value.lower() in ("false", "no"):
         return False
-    try:
+    with suppress(ValueError):
         return int(value)
-    except ValueError:
-        pass
-    try:
+    with suppress(ValueError):
         return float(value)
-    except ValueError:
-        pass
     # Handle lists: "[a,b,c]"
     if value.startswith("[") and value.endswith("]"):
         inner = value[1:-1]

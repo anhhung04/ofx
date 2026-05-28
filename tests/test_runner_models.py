@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from ofx.models.step import RunType
-from ofx.runner.core.models import RunContext, RunnerStatus, RunResult
+from ofx.runner.context import RunContext, RunnerStatus, RunResult
+from ofx.runner.runner import Runner
 
 
 class TestRunnerStatus:
@@ -52,6 +53,7 @@ class TestRunContext:
         assert isinstance(ctx.envs, dict)
         assert "PATH" in ctx.envs
         assert ctx.output_path is None
+        assert ctx.workflow_dir is None
         assert ctx.vars == {}
         assert ctx.allow_interactive is False
         assert isinstance(ctx.workflow_dirs, list)
@@ -63,6 +65,7 @@ class TestRunContext:
             secrets={"secret_key": "secret_value"},
             envs={"CUSTOM_VAR": "custom_value"},
             output_path=Path("/tmp/test"),
+            workflow_dir=Path("/tmp/workflow"),
             vars={"custom": "data"},
             allow_interactive=True,
             workflow_dirs=[Path("/custom/dir")],
@@ -71,6 +74,7 @@ class TestRunContext:
         assert ctx.secrets == {"secret_key": "secret_value"}
         assert ctx.envs["CUSTOM_VAR"] == "custom_value"
         assert ctx.output_path == Path("/tmp/test")
+        assert ctx.workflow_dir == Path("/tmp/workflow")
         assert ctx.vars == {"custom": "data"}
         assert ctx.allow_interactive is True
         assert ctx.workflow_dirs == [Path("/custom/dir")]
@@ -100,6 +104,22 @@ class TestRunContext:
         copy = original.model_copy(deep=True)
         copy.vars["nested"]["key"] = "modified"
         assert original.vars["nested"]["key"] == "value"
+
+
+class TestRunnerContextUpdates:
+    def test_update_env_and_vars_merges_both_maps(self):
+        runner = object.__new__(Runner)
+        runner.ctx = RunContext(envs={"A": "1"}, vars={"role": "base"})
+
+        updated = Runner.update_env_and_vars(
+            runner,
+            {"B": "2"},
+            {"role": "scan"},
+        )
+
+        assert updated.envs["A"] == "1"
+        assert updated.envs["B"] == "2"
+        assert updated.vars["role"] == "scan"
 
 
 class TestRunResult:

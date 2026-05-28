@@ -152,6 +152,23 @@ class TestDeduplication:
 
         assert TaskRunner._deduplicate([]) == []
 
+    def test_deduplicate_incremental_skips_already_streamed_items(self):
+        from ofx.runner import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        runner = TaskRunner(TaskExecution(task_name="scan"), RunContext())
+        runner._streamed_items = [Port(port=80, ip="10.0.0.1")]
+
+        result = runner._deduplicate_incremental(
+            [
+                Port(port=80, ip="10.0.0.1"),
+                Port(port=443, ip="10.0.0.1"),
+            ]
+        )
+
+        assert len(result) == 1
+        assert result[0].port == 443
+
 
 # ── UserAccount Output Type ────────────────────────────────────────────
 

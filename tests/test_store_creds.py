@@ -13,7 +13,7 @@ class TestStoreCredentials:
     """Unit tests for TaskRunner._store_credentials()."""
 
     def _make_runner(self, store_creds: bool = True) -> TaskRunner:
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
 
         model = TaskExecution(
             task_name="hydra", target="10.0.0.1", store_creds=store_creds
@@ -240,6 +240,13 @@ class TestStoreCredsResolution:
         """TaskExecution defaults store_creds to False."""
         model = TaskExecution(task_name="hydra", target="10.0.0.1")
         assert model.store_creds is False
+
+    def test_task_execution_default_shell_matches_platform_default(self):
+        from ofx.settings import DEFAULT_SHELL
+
+        model = TaskExecution(task_name="hydra", target="10.0.0.1")
+
+        assert model.shell == DEFAULT_SHELL
 
 
 class TestDefaultConfigStoreCreds:

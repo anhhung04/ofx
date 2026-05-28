@@ -46,21 +46,16 @@ class GetTGTTask(Task):
         aes_key = kwargs.pop("aesKey", "")
 
         parts: list[str] = [self.cmd]
+        parts.extend(
+            self._build_value_flag_parts(
+                [("-hashes", hashes), ("-aesKey", aes_key)]
+            )
+        )
+        parts.extend(self._build_opt_parts(kwargs))
 
-        if hashes:
-            parts.extend(["-hashes", self._q(hashes)])
-        if aes_key:
-            parts.extend(["-aesKey", self._q(aes_key)])
-
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["username", "password", "hash", "aesKey"]))
-
-        # Build: domain/user:pass
-        cred = target
-        if username:
-            cred += f"/{username}"
-            if password:
-                cred += f":{password}"
-        parts.append(self._q(cred))
+        parts.append(
+            self._q(self._domain_user_credential(target, username, password))
+        )
 
         return " ".join(parts), None
 
@@ -73,8 +68,7 @@ class GetTGTTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Tag]:
-        raw = stdout or ""
-        raw = raw.strip()
+        raw = self._raw_output(stdout)
         if not raw:
             return []
 

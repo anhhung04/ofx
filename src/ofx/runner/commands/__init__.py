@@ -1,11 +1,6 @@
-"""Command runners and helpers."""
+"""Compatibility package for command helpers.
 
-from ofx.runner.commands.command import CommandRunner, ScriptRunner
-from ofx.runner.commands.command_executor import CommandExecutionResult, CommandExecutor
+Avoid eager imports here to prevent circular imports during runner bootstrap.
+"""
 
-__all__ = [
-    "CommandRunner",
-    "ScriptRunner",
-    "CommandExecutor",
-    "CommandExecutionResult",
-]
+__all__: list[str] = []

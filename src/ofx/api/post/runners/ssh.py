@@ -8,6 +8,7 @@ import secrets
 import socket
 import tempfile
 import time
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from random import uniform
@@ -264,10 +265,8 @@ class PostSSH(PostRunnerBase):
                 jump_user, jh = jh.rsplit("@", 1)
             if ":" in jh:
                 jh, port_str = jh.rsplit(":", 1)
-                try:
+                with suppress(ValueError):
                     jump_port = int(port_str)
-                except ValueError:
-                    pass
             jump_host = jh
 
             # Connect to jump host
@@ -302,10 +301,8 @@ class PostSSH(PostRunnerBase):
                     ("127.0.0.1", 0),
                 )
             except (paramiko.SSHException, OSError, EOFError):
-                try:
+                with suppress(OSError, paramiko.SSHException):
                     jump_client.close()
-                except (OSError, paramiko.SSHException):
-                    pass
                 raise
 
         return None
@@ -548,10 +545,8 @@ class PostSSH(PostRunnerBase):
             # Remove partial file left by a failed transfer
             local = Path(local_path)
             if local.exists():
-                try:
+                with suppress(OSError):
                     local.unlink()
-                except OSError:
-                    pass
             raise
 
     # -------------------------------------------------------------------------

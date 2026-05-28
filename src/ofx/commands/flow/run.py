@@ -4,6 +4,7 @@ import logging
 import os
 import tempfile
 import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -242,7 +243,7 @@ class FlowRunHandler:
 
     def _print_failure_details(self, result) -> None:
         """Show structured failure details when a workflow fails."""
-        from ofx.runner.execution.error_helpers import extract_root_error
+        from ofx.runner.error_helpers import extract_root_error
 
         error_str = result.error or ""
         # Parse job failures from the error string
@@ -557,7 +558,5 @@ class FlowRunHandler:
             os.close(fd)
         finally:
             if self.lock_path:
-                try:
+                with suppress(OSError):
                     self.lock_path.unlink(missing_ok=True)
-                except OSError:
-                    pass

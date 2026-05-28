@@ -77,7 +77,7 @@ class NetexecTask(Task):
         protocol = kwargs.pop("protocol", "smb")
         parts: list[str] = [self.cmd, protocol, self._q(target)]
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["protocol"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         return " ".join(parts), None
 
@@ -97,13 +97,7 @@ class NetexecTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[UserAccount | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

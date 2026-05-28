@@ -61,9 +61,9 @@ class LdapDomainDumpTask(Task):
         if isinstance(data, list):
             return self._parse_entries(data)
 
-        raw = stdout or ""
+        raw = self._raw_output(stdout)
         results: list[UserAccount | Tag] = []
-        for line in raw.strip().splitlines():
+        for line in raw.splitlines():
             line = line.strip()
             if "Writing" in line and "to" in line:
                 results.append(Tag(name="output_file", value=line, category="ldap"))

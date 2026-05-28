@@ -8,6 +8,7 @@ Subcommands:
     sync    — bidirectional sync (push results + pull new targets)
 """
 
+from contextlib import suppress
 from typing import Annotated
 
 import typer
@@ -210,10 +211,8 @@ def asm_sync(
 
     # Push phase
     console.print("[bold]Phase 1: Push results → ASM[/bold]")
-    try:
+    with suppress(SystemExit):
         asm_push.callback(scope=scope_id, output_dir=output_dir, source=source)  # type: ignore[attr-defined]
-    except SystemExit:
-        pass
 
     # Pull phase
     console.print("\n[bold]Phase 2: Pull targets ← ASM[/bold]")

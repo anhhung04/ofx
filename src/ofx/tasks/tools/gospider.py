@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from urllib.parse import urlparse
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
 from ofx.tasks.registry import TaskRegistry
@@ -55,10 +53,4 @@ class GospiderTask(Task):
         if not url:
             return []
 
-        host = ""
-        try:
-            host = urlparse(url).hostname or ""
-        except ValueError:
-            pass
-
-        return [Url(url=url, host=host)]
+        return [Url(url=url, host=self._url_host(url))]

@@ -27,7 +27,7 @@ class StaticProvider(CloudProvider):
 
     def __init__(self, **kwargs):
         """Static provider needs no credentials."""
-        pass
+        ...
 
     async def create_instance(self, config: CloudConfig) -> CloudInstanceInfo:
         """Return instance info for the static host. No actual provisioning."""

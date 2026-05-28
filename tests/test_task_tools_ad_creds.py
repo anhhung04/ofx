@@ -1128,4 +1128,43 @@ class TestBrutusParser:
         assert task.supports_streaming is True
 
 
+class TestZombieParser:
+    def test_zombie_parse_json_array(self):
+        task = TaskRegistry.create("zombie")
+        stdout = json.dumps(
+            [
+                {
+                    "host": "10.0.0.1",
+                    "user": "admin",
+                    "password": "admin",
+                    "service": "ssh",
+                    "port": 22,
+                    "status": "success",
+                }
+            ]
+        )
+
+        results = task.parse_output(stdout, "")
+
+        assert len(results) == 1
+        assert results[0].username == "admin"
+        assert results[0].comment == "service=ssh port=22"
+
+    def test_zombie_parse_mixed_jsonl_and_string_output(self):
+        task = TaskRegistry.create("zombie")
+        stdout = "\n".join(
+            [
+                json.dumps({"status": "metadata"}),
+                "ssh://root:toor@10.0.0.5:22",
+            ]
+        )
+
+        results = task.parse_output(stdout, "")
+
+        assert len(results) == 1
+        assert results[0].username == "root"
+        assert results[0].password == "toor"
+        assert results[0].host == "10.0.0.5"
+
+
 # ── Secretsdump Parser ────────────────────────────────────────────────────

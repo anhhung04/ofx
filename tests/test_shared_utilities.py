@@ -8,7 +8,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # MatrixCombinationBuilder
 # ---------------------------------------------------------------------------
-from ofx.runner.core.matrix_utils import (
+from ofx.runner.matrix_utils import (
     estimate_matrix_count,
     generate_matrix_combinations,
 )
@@ -93,11 +93,29 @@ class TestMatrixCombinationBuilder:
         )
         assert result == []
 
+    def test_value_processor_applies_to_combos_filters_and_includes(self):
+        def bool_strings(value):
+            return value == "true" if value in {"true", "false"} else value
+
+        result = generate_matrix_combinations(
+            {"enabled": ["true", "false"]},
+            exclude=[{"enabled": "false"}],
+            include=[{"enabled": "manual"}],
+            value_processor=bool_strings,
+        )
+
+        assert result == [{"enabled": True}, {"enabled": "manual"}]
+
+    def test_scalar_matrix_value_is_single_dimension_value(self):
+        assert generate_matrix_combinations({"target": "example.com"}) == [
+            {"target": "example.com"}
+        ]
+
 
 # ---------------------------------------------------------------------------
 # CredentialStore
 # ---------------------------------------------------------------------------
-from ofx.runner.core.credential_store import (  # noqa: E402
+from ofx.runner.services.credential_store import (  # noqa: E402
     should_store_creds,
     store_from_typed_outputs,
 )
@@ -151,7 +169,12 @@ class TestStoreFromTypedOutputs:
 # ---------------------------------------------------------------------------
 # StepOutputHandler
 # ---------------------------------------------------------------------------
-from ofx.runner.core.step_output import log_output, save_output_file  # noqa: E402
+from ofx.runner.step_descriptors import (  # noqa: E402
+    step_output_header_line,
+    step_timeline_params,
+    step_type_label,
+)
+from ofx.runner.step_output import log_output, save_output_file  # noqa: E402
 
 
 class TestLogOutput:
@@ -239,6 +262,28 @@ class TestSaveOutputFile:
         result = save_output_file(None, "j", SimpleNamespace(), "data")
         assert result is None
 
+    def test_save_runner_output_file_warns_when_output_path_missing(self):
+        from ofx.runner.step_output import save_runner_output_file
+
+        warnings: list[str] = []
+        result = save_runner_output_file(
+            None,
+            "job",
+            SimpleNamespace(),
+            "data",
+            missing_output_path_message="missing output path",
+            warn_fn=warnings.append,
+        )
+
+        assert result is None
+        assert warnings == ["missing output path"]
+
+    def test_save_runner_output_file_skips_missing_job_id(self, tmp_path):
+        from ofx.runner.step_output import save_runner_output_file
+
+        result = save_runner_output_file(tmp_path, None, SimpleNamespace(), "data")
+        assert result is None
+
     def test_save_with_script_base64(self, tmp_path):
         step = SimpleNamespace(
             name="py",
@@ -254,12 +299,59 @@ class TestSaveOutputFile:
         assert ">> script (base64):" in content
 
 
+class TestStepDescriptors:
+    def test_step_type_label_for_pipe(self):
+        step = SimpleNamespace(pipe=SimpleNamespace(format="yaml"), task=None, uses=None, script=None, script_file=None, run=None)
+
+        assert step_type_label(step) == "pipe: → yaml"
+
+    def test_step_output_header_line_for_workflow(self):
+        step = SimpleNamespace(run=None, uses="./child.yml", script_file=None, script=None, task=None, pipe=None)
+
+        assert step_output_header_line(step) == ">> workflow: ./child.yml"
+
+    def test_step_timeline_params_for_task(self):
+        step = SimpleNamespace(
+            run=None,
+            uses=None,
+            script_file=None,
+            script=None,
+            task="nmap",
+            pipe=None,
+            run_with={"targets": ["a", "b"], "ports": "80"},
+            name="scan",
+        )
+
+        assert step_timeline_params(step, outputs={}) == {
+            "command": "task:nmap",
+            "tool": "nmap",
+            "target": "a,b",
+        }
+
+    def test_step_timeline_params_for_pipe(self):
+        step = SimpleNamespace(
+            run=None,
+            uses=None,
+            script_file=None,
+            script=None,
+            task=None,
+            pipe=SimpleNamespace(format="yaml"),
+            name="transform",
+        )
+
+        assert step_timeline_params(step, outputs={}) == {
+            "command": "pipe:transform",
+            "tool": "",
+            "target": "",
+        }
+
+
 # ---------------------------------------------------------------------------
 # Cloud step retry backoff (matching local StepRunner behavior)
 # ---------------------------------------------------------------------------
 class TestCloudRetryBackoff:
     def test_retry_delay_exponential(self):
-        from ofx.runner.execution.cloud_step import CloudStepRunner
+        from ofx.runner.cloud_step import CloudStepRunner
 
         # attempt=0 → base_delay * 2^0 = base_delay
         # attempt=1 → base_delay * 2^1 = 2*base_delay
@@ -272,15 +364,15 @@ class TestCloudRetryBackoff:
             assert expected_capped * 0.5 <= delay <= expected_capped * 1.0
 
     def test_retry_delay_capped_at_300(self):
-        from ofx.runner.execution.cloud_step import CloudStepRunner
+        from ofx.runner.cloud_step import CloudStepRunner
 
         # attempt=10 with base_delay=10 → 10*1024 = 10240, capped at 300
         delay = CloudStepRunner._retry_delay_seconds(10, base_delay=10)
         assert delay <= 300
 
     def test_matches_local_step_runner(self):
-        from ofx.runner.execution.cloud_step import CloudStepRunner
-        from ofx.runner.execution.step import StepRunner
+        from ofx.runner.cloud_step import CloudStepRunner
+        from ofx.runner.step import StepRunner
 
         # Both should use the same formula
         for attempt in range(5):

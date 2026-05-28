@@ -73,19 +73,16 @@ class SecretsdumpTask(Task):
         domain = kwargs.pop("domain", "")
 
         parts: list[str] = [self.cmd]
-
-        if hashes:
-            parts.extend(["-hashes", self._q(hashes)])
+        parts.extend(self._build_value_flag_parts([("-hashes", hashes)]))
         if kwargs.pop("just_dc", False):
             parts.append("-just-dc")
         if kwargs.pop("just_dc_ntlm", False):
             parts.append("-just-dc-ntlm")
 
         just_dc_user = kwargs.pop("just_dc_user", "")
-        if just_dc_user:
-            parts.extend(["-just-dc-user", self._q(just_dc_user)])
+        parts.extend(self._build_value_flag_parts([("-just-dc-user", just_dc_user)]))
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["username", "password", "hash", "domain", "just_dc", "just_dc_ntlm", "just_dc_user"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         # Build credential string: domain/user:pass@target
         cred = ""
@@ -115,13 +112,7 @@ class SecretsdumpTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[UserAccount]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

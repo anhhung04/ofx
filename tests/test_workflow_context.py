@@ -6,7 +6,24 @@ import pytest
 import yaml
 
 from ofx.runner import RunContext, WorkflowRunner
-from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
+from ofx.utils.workflow_utils import (
+    add_workflow_dir,
+    find_workflow,
+    workflow_dirs_with_path,
+)
+
+
+class _ReusableWorkflowParentStub:
+    """Minimal parent surface for reused workflow runner tests."""
+
+    parent = None
+    run_id = "parent-run"
+
+    def _namespace(self) -> str:
+        return "ParentRunner:stub"
+
+    def _produce_log(self, message):
+        return str(message)
 
 
 class TestWorkflowDirectoryOperations:
@@ -40,6 +57,15 @@ class TestWorkflowDirectoryOperations:
         result = add_workflow_dir(workflow_dirs, string_path)
 
         assert Path(string_path).absolute() in result
+
+    def test_workflow_dirs_with_path_returns_updated_copy(self):
+        original = [Path("/existing/path").absolute()]
+
+        result = workflow_dirs_with_path(original, "/new/path")
+
+        assert result is not original
+        assert original == [Path("/existing/path").absolute()]
+        assert Path("/new/path").absolute() in result
 
     def test_context_has_default_workflow_dirs(self):
         """Test that RunContext initializes with default workflow_dirs"""
@@ -183,6 +209,13 @@ jobs:
         assert workflow.workflow_path.exists()
         assert workflow.workflow_path.name == "myworkflow.yml"
 
+    def test_find_workflow_with_invalid_yaml_reports_path(self, tmp_path):
+        workflow_file = tmp_path / "broken.yml"
+        workflow_file.write_text("name: [unterminated\n")
+
+        with pytest.raises(RuntimeError, match="Invalid YAML in workflow file"):
+            find_workflow(str(workflow_file), (tmp_path,))
+
     def test_find_workflow_caching(self, tmp_path):
         """Test that find_workflow uses LRU cache"""
         workflow_content = """
@@ -261,7 +294,76 @@ jobs:
 
         await runner._pre_run()
 
+        assert runner.ctx.workflow_dir == workflow_file.parent
         assert subworkflow_dir.absolute() in runner.ctx.workflow_dirs
+
+    @pytest.mark.asyncio
+    async def test_dispatch_inputs_survive_workflow_dir_update(self, tmp_path):
+        """Dispatch alias/default processing must survive later context updates."""
+        workflow_content = """
+name: dispatch_workflow
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      alias: domain
+    mode:
+      type: string
+      default: fast
+defaults:
+  workflows_base_dir: .
+jobs:
+  test:
+    steps:
+      - name: Test step
+        run: echo "test"
+"""
+        workflow_file = tmp_path / "dispatch.yml"
+        workflow_file.write_text(workflow_content)
+
+        workflow = find_workflow(str(workflow_file), (tmp_path,))
+        ctx = RunContext(inputs={"domain": "example.com"}, output_path=tmp_path / "output")
+        runner = WorkflowRunner(workflow, ctx)
+
+        await runner._pre_run()
+
+        assert runner.ctx.inputs["target"] == "example.com"
+        assert runner.ctx.inputs["mode"] == "fast"
+
+    @pytest.mark.asyncio
+    async def test_reusable_call_inputs_survive_workflow_dir_update(self, tmp_path):
+        """Reusable workflow call input processing must survive later context updates."""
+        workflow_content = """
+name: reusable_workflow
+call:
+  inputs:
+    target:
+      required: true
+      type: string
+      alias: domain
+    mode:
+      type: string
+      default: fast
+defaults:
+  workflows_base_dir: .
+jobs:
+  test:
+    steps:
+      - name: Test step
+        run: echo "test"
+"""
+        workflow_file = tmp_path / "reusable.yml"
+        workflow_file.write_text(workflow_content)
+
+        workflow = find_workflow(str(workflow_file), (tmp_path,))
+        ctx = RunContext(inputs={"domain": "example.com"}, output_path=tmp_path / "output")
+        runner = WorkflowRunner(workflow, ctx, parent=_ReusableWorkflowParentStub())
+
+        await runner._pre_run()
+
+        assert runner.ctx.inputs["target"] == "example.com"
+        assert runner.ctx.inputs["mode"] == "fast"
 
     def test_model_copy_preserves_workflow_dirs(self):
         """Test that model_copy preserves workflow_dirs"""

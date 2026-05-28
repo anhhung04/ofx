@@ -178,7 +178,7 @@ class TestProfileCommonOptInjection:
     """Verify that profile-level settings auto-map to task opts."""
 
     def _make_runner(self, profile, task_name="httpx", user_opts=None):
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         ctx = RunContext(vars={"profile_model": profile})

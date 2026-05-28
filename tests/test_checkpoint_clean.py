@@ -9,14 +9,14 @@ import pytest
 import typer
 
 from ofx.models.config import DurableRunConfig
-from ofx.runner.core.durable import (
+from ofx.runner.durable import (
     clean_all_checkpoints,
     clean_checkpoints,
     clean_stale_checkpoints,
     list_checkpoints,
     write_checkpoint,
 )
-from ofx.runner.core.durable_git import (
+from ofx.runner.durable_git import (
     auto_commit,
     auto_push,
     commit_and_push,

@@ -6,7 +6,6 @@ import shlex
 import tempfile
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
@@ -143,7 +142,7 @@ class FeroxbusterTask(Task):
         return [
             Url(
                 url=url,
-                host=urlparse(url).hostname or "",
+                host=self._url_host(url),
                 status_code=self._safe_int(data.get("status", 0)),
                 content_length=self._safe_int(data.get("content_length", 0)),
                 words=self._safe_int(data.get("word_count", 0)),

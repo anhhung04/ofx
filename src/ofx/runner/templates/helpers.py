@@ -135,23 +135,19 @@ def _random_helpers() -> dict[str, Any]:
 def _network_helpers() -> dict[str, Any]:
     def _get_local_ip() -> str:
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except Exception:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                sock.connect(("8.8.8.8", 80))
+                return sock.getsockname()[0]
+        except OSError:
             _logger.debug("local_ip() socket probe failed", exc_info=True)
             return "127.0.0.1"
 
     def _is_port_open(host: str, port: int, timeout: float = 1.0) -> bool:
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(timeout)
-            result = s.connect_ex((host, port))
-            s.close()
-            return result == 0
-        except Exception:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(timeout)
+                return sock.connect_ex((host, port)) == 0
+        except (OSError, OverflowError, ValueError):
             _logger.debug("is_port_open(%s, %s) failed", host, port, exc_info=True)
             return False
 
@@ -447,6 +443,15 @@ def _etl_helpers() -> dict[str, Any]:
 
 # ── ASM integration ─────────────────────────────────────────────────────
 def _asm_helpers() -> dict[str, Any]:
+    def _get_asm_client(helper_name: str) -> Any | None:
+        try:
+            from ofx.asm.config import get_asm_client
+
+            return get_asm_client()
+        except Exception:
+            _logger.debug("ASM client unavailable for %s()", helper_name, exc_info=True)
+            return None
+
     def _asm_resolve_scope(client: Any, scope_ref: str) -> str:
         if not scope_ref:
             from ofx.asm.config import get_asm_config
@@ -464,13 +469,10 @@ def _asm_helpers() -> dict[str, Any]:
     def _asm_targets(
         scope: str = "", effective: bool = True, target_type: str = ""
     ) -> list[str]:
-        try:
-            from ofx.asm.config import get_asm_client
-
-            client = get_asm_client()
-        except Exception:
-            _logger.debug("ASM client unavailable for asm_targets()", exc_info=True)
+        client = _get_asm_client("asm_targets")
+        if client is None:
             return []
+
         try:
             scope_id = _asm_resolve_scope(client, scope)
             if effective:
@@ -493,14 +495,16 @@ def _asm_helpers() -> dict[str, Any]:
             return []
 
     def _asm_push(items: list, scope: str = "", source: str = "ofx") -> int:
-        try:
-            from ofx.asm.config import get_asm_client
-            from ofx.asm.export import batch_convert
-
-            client = get_asm_client()
-        except Exception:
-            _logger.debug("ASM client unavailable for asm_push()", exc_info=True)
+        client = _get_asm_client("asm_push")
+        if client is None:
             return 0
+
+        try:
+            from ofx.asm.export import batch_convert
+        except Exception:
+            _logger.debug("ASM export unavailable for asm_push()", exc_info=True)
+            return 0
+
         try:
             scope_id = _asm_resolve_scope(client, scope)
             assets, _ = batch_convert(items, source=source)
@@ -513,10 +517,11 @@ def _asm_helpers() -> dict[str, Any]:
             return 0
 
     def _asm_scopes() -> list[dict]:
-        try:
-            from ofx.asm.config import get_asm_client
+        client = _get_asm_client("asm_scopes")
+        if client is None:
+            return []
 
-            client = get_asm_client()
+        try:
             return [s.model_dump() for s in client.list_scopes()]
         except Exception:
             _logger.debug("asm_scopes() failed", exc_info=True)
@@ -526,10 +531,11 @@ def _asm_helpers() -> dict[str, Any]:
         scope: str = "", asset_type: str = "", limit: int = 1000
     ) -> list[dict]:
         """List assets from an ASM scope."""
-        try:
-            from ofx.asm.config import get_asm_client
+        client = _get_asm_client("asm_scope_assets")
+        if client is None:
+            return []
 
-            client = get_asm_client()
+        try:
             scope_id = _asm_resolve_scope(client, scope)
             assets, _ = client.list_assets(scope_id, limit=limit, asset_type=asset_type)
             return [a.model_dump() for a in assets]
@@ -539,10 +545,11 @@ def _asm_helpers() -> dict[str, Any]:
 
     def _asm_add_targets(targets: list[str], scope: str = "") -> int:
         """Add targets to an ASM scope (auto-detect types)."""
-        try:
-            from ofx.asm.config import get_asm_client
+        client = _get_asm_client("asm_add_targets")
+        if client is None:
+            return 0
 
-            client = get_asm_client()
+        try:
             scope_id = _asm_resolve_scope(client, scope)
             result = client.bulk_import_targets(scope_id, targets, auto_detect=True)
             return result.imported
@@ -567,7 +574,7 @@ def build_all_helpers() -> dict[str, Any]:
     usable in tests for direct validation.
     """
     from ofx.runner.commands.shell_functions import get_shell_exports
-    from ofx.runner.execution.findings_export import export_typed_outputs
+    from ofx.runner.findings_export import export_typed_outputs
     from ofx.settings import IS_WINDOWS
 
     helpers: dict[str, Any] = {}

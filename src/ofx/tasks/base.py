@@ -16,9 +16,11 @@ import shutil
 import tempfile
 from abc import ABC
 from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR
 from ofx.tasks.output_types import OutputType
@@ -113,11 +115,7 @@ class Task(ABC):
         """Shell-quote a single value for safe interpolation."""
         return shlex.quote(str(value))
 
-    def _build_opt_parts(
-        self,
-        kwargs: dict[str, Any],
-        skip_keys: Sequence[str] = (),
-    ) -> list[str]:
+    def _build_opt_parts(self, kwargs: dict[str, Any]) -> list[str]:
         """Build shell-safe CLI option parts from keyword arguments.
 
         This is the canonical way for subclass ``build_command()`` overrides
@@ -125,7 +123,7 @@ class Task(ABC):
         """
         parts: list[str] = []
         for key, value in kwargs.items():
-            if key.startswith("_") or key in skip_keys:
+            if key.startswith("_"):
                 continue
             opt = self.opts.get(key)
             if opt is None:
@@ -135,6 +133,14 @@ class Task(ABC):
                     parts.append(opt.flag)
             elif value is not None:
                 parts.extend([opt.flag, shlex.quote(str(value))])
+        return parts
+
+    def _build_value_flag_parts(self, pairs: Sequence[tuple[str, Any]]) -> list[str]:
+        """Build shell-safe ``flag value`` parts for explicit options."""
+        parts: list[str] = []
+        for flag, value in pairs:
+            if value:
+                parts.extend([flag, self._q(value)])
         return parts
 
     def _make_output_path(self) -> Path:
@@ -177,18 +183,7 @@ class Task(ABC):
         if self.silent_flag:
             parts.append(self.silent_flag)
 
-        # Map keyword arguments to CLI flags
-        for key, value in kwargs.items():
-            if key.startswith("_"):
-                continue
-            opt = self.opts.get(key)
-            if opt is None:
-                continue
-            if opt.is_flag:
-                if value:
-                    parts.append(opt.flag)
-            elif value is not None:
-                parts.extend([opt.flag, shlex.quote(str(value))])
+        parts.extend(self._build_opt_parts(kwargs))
 
         # Output file for tools that write structured output to a file
         if self.output_flag:
@@ -304,10 +299,8 @@ class Task(ABC):
     def cleanup_target_files(self) -> None:
         """Remove temporary target files created by :meth:`build_command`."""
         for path in self._temp_target_files:
-            try:
+            with suppress(OSError):
                 os.unlink(path)
-            except OSError:
-                pass
         self._temp_target_files.clear()
 
     def _output_suffix(self) -> str:
@@ -327,6 +320,31 @@ class Task(ABC):
         except json.JSONDecodeError:
             return None
 
+    @classmethod
+    def _parse_json_records(cls, raw: str) -> list[dict[str, Any]]:
+        """Parse JSON array/object output with a JSONL fallback."""
+        import json
+
+        raw = raw.strip()
+        if not raw:
+            return []
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            records: list[dict[str, Any]] = []
+            for line in raw.splitlines():
+                record = cls._parse_json_line(line)
+                if record is not None:
+                    records.append(record)
+            return records
+
+        if isinstance(parsed, dict):
+            return [parsed]
+        if isinstance(parsed, list):
+            return [item for item in parsed if isinstance(item, dict)]
+        return []
+
     def _read_json_output(
         self, stdout: str, output_file: Path | None = None
     ) -> Any | None:
@@ -336,13 +354,7 @@ class Task(ABC):
         """
         import json
 
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return None
 
@@ -350,6 +362,46 @@ class Task(ABC):
             return json.loads(raw)
         except json.JSONDecodeError:
             return None
+
+    def _raw_output(self, stdout: str, output_file: Path | None = None) -> str:
+        """Return stripped parser input from an output file or stdout."""
+        if output_file is not None and output_file.exists():
+            return self._read_output_file(output_file).strip()
+        return stdout.strip() if stdout else ""
+
+    @staticmethod
+    def _domain_user_credential(
+        target: str,
+        username: str = "",
+        password: str = "",
+        *,
+        trailing_slash_without_username: bool = False,
+    ) -> str:
+        """Build an Impacket-style ``domain/user:password`` credential."""
+        credential = target
+        if username:
+            credential += f"/{username}"
+            if password:
+                credential += f":{password}"
+        elif trailing_slash_without_username:
+            credential += "/"
+        return credential
+
+    @staticmethod
+    def _url_host(url: str) -> str:
+        """Return the hostname for a URL, or an empty string for invalid URLs."""
+        try:
+            return urlparse(url).hostname or ""
+        except ValueError:
+            return ""
+
+    @staticmethod
+    def _url_netloc(url: str) -> str:
+        """Return the network location for a URL, or an empty string if invalid."""
+        try:
+            return urlparse(url).netloc
+        except ValueError:
+            return ""
 
     @staticmethod
     def _read_output_file(path: Path) -> str:

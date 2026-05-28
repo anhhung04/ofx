@@ -4,6 +4,7 @@ import platform
 import shutil
 import subprocess
 import tempfile
+from contextlib import suppress
 from functools import lru_cache
 from pathlib import Path
 
@@ -136,7 +137,7 @@ def _gh_cli_token() -> str:
         if result.returncode == 0:
             return result.stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
-        pass
+        return ""
     return ""
 
 
@@ -189,38 +190,6 @@ class AiSettings(BaseModel):
     max_tokens: int = Field(default=8192, description="Maximum response tokens")
     max_history_tokens: int = Field(
         default=30000, description="Chat history token threshold before compaction"
-    )
-
-
-class RedisRegistrySettings(BaseModel):
-    """Redis registry configuration"""
-
-    host: str = Field(default="localhost", description="Redis server host")
-    port: int = Field(default=6379, description="Redis server port")
-    db: int = Field(default=0, description="Redis database number")
-    password: SecretStr | None = Field(default=None, description="Redis password")
-    prefix: str = Field(
-        default="ofx:run:", description="Key prefix for registry entries"
-    )
-
-
-class MemcachedRegistrySettings(BaseModel):
-    """Memcached registry configuration"""
-
-    host: str = Field(default="localhost", description="Memcached server host")
-    port: int = Field(default=11211, description="Memcached server port")
-    prefix: str = Field(
-        default="ofx:run:", description="Key prefix for registry entries"
-    )
-
-
-class EtcdRegistrySettings(BaseModel):
-    """etcd registry configuration"""
-
-    host: str = Field(default="localhost", description="etcd server host")
-    port: int = Field(default=2379, description="etcd gRPC port")
-    prefix: str = Field(
-        default="/ofx/run/", description="Key prefix for registry entries"
     )
 
 
@@ -288,46 +257,9 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Job Registry Settings
-    registry_backend: str = Field(
-        default="memory",
-        description="Job registry backend type: 'memory', 'file', 'redis', 'memcached', or 'etcd'",
-    )
-    registry_file_path: str | None = Field(
-        default=None,
-        description="File path for file-based registry (defaults to ~/.ofx/job_registry.json)",
-    )
     channels_dir: str = Field(
         default=str(CHANNELS_DIR),
         description="Directory for inter-job channel files (env: OFX_CHANNELS_DIR)",
-    )
-    registry_redis: RedisRegistrySettings | None = Field(
-        default=None,
-        description="Redis registry configuration",
-    )
-    registry_memcached: MemcachedRegistrySettings | None = Field(
-        default=None,
-        description="Memcached registry configuration",
-    )
-    registry_etcd: EtcdRegistrySettings | None = Field(
-        default=None,
-        description="etcd registry configuration",
-    )
-    registry_cache_enabled: bool = Field(
-        default=True,
-        description="Enable in-process caching layer for registry reads (env: OFX_REGISTRY_CACHE_ENABLED)",
-    )
-    registry_cache_ttl: float = Field(
-        default=0.25,
-        description="Cache TTL in seconds for registry entries (env: OFX_REGISTRY_CACHE_TTL)",
-    )
-    registry_cache_max_entries: int = Field(
-        default=1024,
-        description="Maximum cached registry entries per process (env: OFX_REGISTRY_CACHE_MAX_ENTRIES)",
-    )
-    registry_failover_enabled: bool = Field(
-        default=True,
-        description="Fall back to in-memory registry on backend errors (env: OFX_REGISTRY_FAILOVER_ENABLED)",
     )
 
     model_config = SettingsConfigDict(
@@ -391,33 +323,29 @@ def _dump_default_config() -> str:
     """Build a YAML string with all user-facing settings and their defaults."""
     import yaml
 
-    defaults = Settings()
     data: dict = {}
 
-    for name, _field_info in Settings.model_fields.items():
+    def _serialize_default(value: object) -> object:
+        if isinstance(value, SecretStr):
+            return value.get_secret_value()
+        if isinstance(value, BaseModel):
+            return {
+                field_name: _serialize_default(getattr(value, field_name))
+                for field_name in value.__class__.model_fields
+            }
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, dict):
+            return {key: _serialize_default(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_serialize_default(item) for item in value]
+        return value
+
+    for name, field_info in Settings.model_fields.items():
         if name in _CONFIG_EXCLUDE_FIELDS:
             continue
-        value = getattr(defaults, name)
-
-        # Unwrap SecretStr to plain string for YAML serialization
-        if isinstance(value, SecretStr):
-            value = value.get_secret_value()
-        # Serialize nested BaseModel to dict, unwrapping SecretStr inside
-        elif isinstance(value, BaseModel):
-            raw = value.model_dump()
-            for k, v in raw.items():
-                if isinstance(v, SecretStr):
-                    raw[k] = v.get_secret_value()
-                # Also handle the field on the actual model instance
-                actual = getattr(value, k, v)
-                if isinstance(actual, SecretStr):
-                    raw[k] = actual.get_secret_value()
-            value = raw
-        # Convert Path-like objects to strings
-        elif isinstance(value, Path):
-            value = str(value)
-
-        data[name] = value
+        value = field_info.get_default(call_default_factory=True)
+        data[name] = _serialize_default(value)
 
     body = yaml.dump(
         data, default_flow_style=False, sort_keys=False, allow_unicode=True
@@ -428,12 +356,55 @@ def _dump_default_config() -> str:
 def _ensure_default_config() -> None:
     """Create ``~/.ofx/config.yml`` with all defaults on first run."""
     if not CONFIG_YAML.exists():
-        try:
+        with suppress(OSError):
             CONFIG_YAML.write_text(_dump_default_config())
-        except OSError:
-            pass
 
 
+def _migrate_json_config() -> None:
+    """Move legacy ``config.json`` fields into ``config.yml`` once.
+
+    Older OFX releases stored the active project in ``~/.ofx/config.json``.
+    Keep migration deliberately narrow: preserve an existing YAML
+    ``active_project`` value and remove the legacy file after a successful read.
+    """
+    import json
+
+    import yaml
+
+    legacy_path = BASE_DATA_DIR / "config.json"
+    if not legacy_path.exists():
+        return
+
+    try:
+        legacy_data = json.loads(legacy_path.read_text()) or {}
+    except (json.JSONDecodeError, OSError):
+        logging.debug("Failed to read legacy config JSON", exc_info=True)
+        return
+    if not isinstance(legacy_data, dict):
+        logging.debug("Legacy config JSON is not an object; skipping migration")
+        return
+
+    data = yaml.safe_load(_dump_default_config()) or {}
+    if CONFIG_YAML.exists():
+        try:
+            loaded = yaml.safe_load(CONFIG_YAML.read_text()) or {}
+            data = loaded if isinstance(loaded, dict) else {}
+        except (OSError, yaml.YAMLError):
+            logging.debug("Failed to parse config YAML during migration", exc_info=True)
+
+    if "active_project" not in data and legacy_data.get("active_project"):
+        data["active_project"] = legacy_data["active_project"]
+        CONFIG_YAML.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_YAML.write_text(
+            _CONFIG_YAML_HEADER
+            + yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        )
+
+    with suppress(OSError):
+        legacy_path.unlink()
+
+
+_migrate_json_config()
 _ensure_default_config()
 
 
@@ -476,10 +447,8 @@ def update_config_field(key: str, value: object) -> None:
                 fh.write(content)
             os.replace(tmp_path, CONFIG_YAML)
         except Exception:
-            try:
+            with suppress(OSError):
                 os.unlink(tmp_path)
-            except OSError:
-                pass
             raise
 
     if IS_WINDOWS:
@@ -498,10 +467,8 @@ def update_config_field(key: str, value: object) -> None:
         try:
             _do_update()
         finally:
-            try:
+            with suppress(OSError):
                 os.unlink(lock_path)
-            except OSError:
-                pass
     else:
         import fcntl
 
@@ -513,30 +480,6 @@ def update_config_field(key: str, value: object) -> None:
                 fcntl.flock(lock_fh, fcntl.LOCK_UN)
 
 
-def _migrate_json_config() -> None:
-    """One-time migration: move active_project from legacy config.json to config.yml."""
-    legacy = BASE_DATA_DIR / "config.json"
-    if not legacy.exists():
-        return
-    try:
-        import json
-
-        data = json.loads(legacy.read_text())
-        project = data.get("active_project")
-        if project:
-            import yaml
-
-            existing: dict = {}
-            if CONFIG_YAML.exists():
-                existing = yaml.safe_load(CONFIG_YAML.read_text()) or {}
-            if not existing.get("active_project"):
-                update_config_field("active_project", project)
-        legacy.unlink()
-    except Exception:
-        logging.debug("Failed to migrate legacy config.json", exc_info=True)
-
-
-_migrate_json_config()
 
 settings = Settings()
 reload_logging_config(settings)

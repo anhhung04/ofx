@@ -7,12 +7,17 @@ import yaml
 
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, WorkflowRunner
+from ofx.runner.executors.workflow import WorkflowExecutor
 from ofx.utils.matrix import get_expanded_job_ids
 
 
 @pytest.fixture
 def workflow_dir():
     return Path(__file__).parent / "flows"
+
+
+async def plan_jobs(runner: WorkflowRunner) -> None:
+    await WorkflowExecutor().plan_jobs(runner)
 
 
 class TestMatrixStrategy:
@@ -33,7 +38,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -61,7 +66,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -96,7 +101,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -125,7 +130,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -156,7 +161,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -179,7 +184,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -202,7 +207,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -245,7 +250,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 2
         assert len(runner._schedule) == 2
@@ -272,7 +277,7 @@ jobs:
     #     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
     #     runner = WorkflowRunner(workflow, RunContext())
 
-    #     await runner._plan_jobs()
+    #     await plan_jobs(runner)
 
     #     await runner._registry.set("test_0", {"status": RunnerStatus.COMPLETED})
     #     await runner._registry.set("test_1", {"status": RunnerStatus.RUNNING})
@@ -304,7 +309,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -332,7 +337,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -354,7 +359,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         assert "test" in runner._staged_jobs
@@ -382,7 +387,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
@@ -414,7 +419,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         assert runner._staged_jobs["test"].name == "Build for {{ matrix.platform }}"
@@ -439,7 +444,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         matrix_ids = get_expanded_job_ids(runner._staged_jobs, "matrix_job")
         assert matrix_ids == ["matrix_job"]
@@ -462,7 +467,7 @@ jobs:
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         runner = WorkflowRunner(workflow, RunContext())
 
-        await runner._plan_jobs()
+        await plan_jobs(runner)
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]

@@ -3,10 +3,10 @@
 import getpass
 import time
 from base64 import b64encode
-from configparser import ConfigParser
 from pathlib import Path
 
 from ofx.api._compat import CONFIG_FILE, get_logger
+from ofx.api.credential_config import load_section_values, save_section_values
 from ofx.api.http import requests
 
 logger = get_logger()
@@ -65,15 +65,14 @@ class ZoomEye:
             conf_path = CONFIG_FILE
 
         self.conf_path = conf_path
-        self.parser = ConfigParser()
-
-        if self.conf_path and self.conf_path.exists():
-            self.parser.read(self.conf_path)
-            try:
-                self.token = self.token or self.parser.get("ZoomEye", "token")
-                self.url = self.url or self.parser.get("ZoomEye", "url")
-            except Exception:
-                logger.debug("ZoomEye credentials not found in config file")
+        self.parser, credentials = load_section_values(
+            self.conf_path,
+            "ZoomEye",
+            ("token", "url"),
+            logger=logger,
+        )
+        self.token = self.token or credentials.get("token")
+        self.url = self.url or credentials.get("url")
 
         self.check_token()
 
@@ -140,15 +139,13 @@ class ZoomEye:
         Creates config directory if needed and persists API token and server URL
         to config.ini in INI format.
         """
-        if not self.parser.has_section("ZoomEye"):
-            self.parser.add_section("ZoomEye")
         try:
-            self.parser.set("ZoomEye", "token", self.token)
-            self.parser.set("ZoomEye", "url", self.url)
-            if self.conf_path:
-                self.conf_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.conf_path, "w") as f:
-                    self.parser.write(f)
+            save_section_values(
+                self.conf_path,
+                self.parser,
+                "ZoomEye",
+                {"token": self.token, "url": self.url},
+            )
         except Exception as ex:
             logger.error(str(ex))
 

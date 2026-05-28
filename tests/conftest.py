@@ -57,7 +57,7 @@ def _mock_registry_backends() -> None:
     """Replace memcached/redis clients with in-memory fakes for tests."""
     monkeypatch = pytest.MonkeyPatch()
     try:
-        import ofx.runner.registry.memcached as memcached_module
+        import ofx.runner.registry_backends.memcached as memcached_module
     except Exception:
         memcached_module = None
 
@@ -69,7 +69,7 @@ def _mock_registry_backends() -> None:
         )
 
     try:
-        import ofx.runner.registry.redis as redis_module
+        import ofx.runner.registry_backends.redis as redis_module
     except Exception:
         redis_module = None
 

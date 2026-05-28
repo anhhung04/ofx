@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import base64
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -132,13 +133,11 @@ class UploadAdapter:
             self.runner.upload(local_path, self.remote_tmp)
             output = self.runner.run(f"{self.python} {self.remote_tmp}")
             # Clean up remote temp file (best effort)
-            try:
+            with suppress(Exception):
                 if self.windows:
                     self.runner.run(f"del /f /q {self.remote_tmp}")
                 else:
                     self.runner.run(f"rm -f {self.remote_tmp}")
-            except Exception:
-                pass
             return output
         finally:
             Path(local_path).unlink(missing_ok=True)

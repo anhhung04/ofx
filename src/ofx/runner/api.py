@@ -8,16 +8,18 @@ import re
 import signal
 import tempfile
 import threading
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from ofx.models.config import DurableRunConfig
 from ofx.models.workflow import Workflow
-from ofx.runner.context import RunContext
-from ofx.runner.core import RunResult
-from ofx.runner.core.durable import find_running_checkpoints
-from ofx.runner.execution.workflow import WorkflowRunner
+from ofx.runner.context import RunContext, RunnerContextBuilder, RunResult
+from ofx.runner.durable import find_running_checkpoints
+from ofx.runner.executors.workflow import WorkflowExecutor
+from ofx.runner.registry import RegistryFactory
+from ofx.runner.workflow import WorkflowRunner
 from ofx.settings import (
     SECRETS_DIR,
     TEMP_DIR,
@@ -27,7 +29,7 @@ from ofx.settings import (
 )
 from ofx.utils.log import register_secrets, register_sensitive_env
 from ofx.utils.secrets import load_secrets_by_keys
-from ofx.utils.workflow_utils import add_workflow_dir, find_workflow
+from ofx.utils.workflow_utils import find_workflow, workflow_dirs_with_path
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -100,14 +102,10 @@ def _remove_empty_dirs(root: Path) -> None:
         return
     for child in sorted(root.rglob("*"), reverse=True):
         if child.is_dir():
-            try:
+            with suppress(OSError):
                 child.rmdir()  # only succeeds if empty
-            except OSError:
-                pass
-    try:
+    with suppress(OSError):
         root.rmdir()
-    except OSError:
-        pass
 
 
 def _get_tmp_dir(output: str | Path | None = None) -> Path:
@@ -128,6 +126,35 @@ def _get_tmp_dir(output: str | Path | None = None) -> Path:
     )
 
 
+def _build_run_context(
+    *,
+    inputs: dict[str, Any] | None,
+    output_dir: Path,
+    runner_secrets: dict[str, str],
+    search_paths: list[Path],
+    resolved_workflow: Workflow,
+    durable_config: DurableRunConfig | None,
+    vars: dict[str, Any] | None,
+    event_sink_path: Path | None,
+    env: dict[str, str] | None,
+) -> RunContext:
+    """Build the workflow run context with merged workflow search paths and env."""
+    ctx = RunContext(
+        inputs=inputs or {},
+        output_path=output_dir,
+        secrets=runner_secrets,
+        workflow_dirs=workflow_dirs_with_path(
+            search_paths, resolved_workflow.workflow_path.parent
+        ),
+        durable=durable_config,
+        vars=vars or {},
+        event_sink_path=event_sink_path,
+    )
+    if env:
+        ctx = RunnerContextBuilder(ctx).with_env(env)
+    return ctx
+
+
 async def run_workflow(
     workflow: str | Path,
     inputs: dict[str, Any] | None = None,
@@ -139,6 +166,8 @@ async def run_workflow(
     durable_overrides: DurableRunConfig | None = None,
     vars: dict[str, Any] | None = None,
     event_sink_path: Path | None = None,
+    registry_backend: Literal["memory", "file", "redis", "memcached", "etcd"] = "memory",
+    registry_config: dict[str, Any] | None = None,
 ) -> RunResult:
     """
     Run an OFX workflow programmatically.
@@ -158,6 +187,9 @@ async def run_workflow(
             (e.g. project metadata).
         event_sink_path: Optional path to write structured lifecycle events
             as newline-delimited JSON.
+        registry_backend: Registry backend name to use for runner state.
+        registry_config: Explicit backend configuration passed to the registry
+            factory.
 
     Returns:
         RunResult object containing the execution status and outputs.
@@ -215,23 +247,29 @@ async def run_workflow(
     if resolved_workflow.env:
         register_sensitive_env(resolved_workflow.env)
 
-    ctx = RunContext(
-        inputs=inputs or {},
-        output_path=output_dir,
-        secrets=runner_secrets,
-        workflow_dirs=add_workflow_dir(
-            search_paths, resolved_workflow.workflow_path.parent
-        ),
-        durable=durable_config,
-        vars=vars or {},
+    ctx = _build_run_context(
+        inputs=inputs,
+        output_dir=output_dir,
+        runner_secrets=runner_secrets,
+        search_paths=search_paths,
+        resolved_workflow=resolved_workflow,
+        durable_config=durable_config,
+        vars=vars,
         event_sink_path=event_sink_path,
+        env=env,
     )
 
-    # Merge explicit env vars on top of inherited os.environ
-    if env:
-        ctx.envs.update(env)
+    registry = RegistryFactory.create(
+        registry_backend,
+        **(registry_config or {}),
+    )
 
-    runner = WorkflowRunner(resolved_workflow, ctx=ctx)
+    runner = WorkflowRunner(
+        resolved_workflow,
+        ctx=ctx,
+        registry=registry,
+        executor=WorkflowExecutor(),
+    )
 
     if quiet:
         runner.log_level = logging.ERROR
@@ -257,11 +295,9 @@ async def run_workflow(
     if threading.current_thread() is threading.main_thread():
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
+            with suppress(NotImplementedError, OSError):
                 loop.add_signal_handler(sig, _handle_shutdown, sig)
                 _registered_signals.append(sig)
-            except (NotImplementedError, OSError):
-                pass  # Windows or restricted environments
 
     try:
         result = await runner.run()
@@ -274,8 +310,6 @@ async def run_workflow(
         if _registered_signals and threading.current_thread() is threading.main_thread():
             loop = asyncio.get_running_loop()
             for sig in _registered_signals:
-                try:
+                with suppress(NotImplementedError, OSError):
                     loop.remove_signal_handler(sig)
-                except (NotImplementedError, OSError):
-                    pass
         _cleanup_run(output_dir)

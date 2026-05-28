@@ -1,9 +1,11 @@
 """Tests for Task base class, registry, step model, command building, flags, and defaults."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import ofx.tasks.registry as registry_module
 from ofx.models.step import RunType, Step
 from ofx.tasks import (
     OptDef,
@@ -92,6 +94,65 @@ class TestTaskBase:
     def test_safe_float(self):
         assert Task._safe_float("3.14") == 3.14
         assert Task._safe_float("bad") == 0.0
+
+    def test_parse_json_records_accepts_array_object_and_jsonl(self):
+        assert Task._parse_json_records('[{"a": 1}, {"b": 2}]') == [
+            {"a": 1},
+            {"b": 2},
+        ]
+        assert Task._parse_json_records('{"a": 1}') == [{"a": 1}]
+        assert Task._parse_json_records('{"a": 1}\nnot json\n{"b": 2}') == [
+            {"a": 1},
+            {"b": 2},
+        ]
+
+    def test_parse_json_records_ignores_non_object_values(self):
+        assert Task._parse_json_records('[{"a": 1}, 2, [3]]') == [{"a": 1}]
+        assert Task._parse_json_records('not json') == []
+
+    def test_raw_output_prefers_existing_output_file(self, tmp_path):
+        t = DummyTask()
+        output_file = tmp_path / "out.txt"
+        output_file.write_text("  from file  ")
+
+        assert t._raw_output("from stdout", output_file) == "from file"
+
+    def test_raw_output_missing_file_falls_back_to_stdout(self, tmp_path):
+        t = DummyTask()
+        assert t._raw_output("from stdout", tmp_path / "missing.txt") == "from stdout"
+
+    def test_domain_user_credential_with_password(self):
+        assert (
+            Task._domain_user_credential("CORP.LOCAL", "admin", "pass")
+            == "CORP.LOCAL/admin:pass"
+        )
+
+    def test_domain_user_credential_without_username(self):
+        assert Task._domain_user_credential("CORP.LOCAL") == "CORP.LOCAL"
+
+    def test_domain_user_credential_can_force_trailing_slash(self):
+        assert (
+            Task._domain_user_credential(
+                "CORP.LOCAL",
+                trailing_slash_without_username=True,
+            )
+            == "CORP.LOCAL/"
+        )
+
+    def test_url_host_returns_hostname_or_empty_string(self):
+        assert Task._url_host("https://example.com:8443/path") == "example.com"
+        assert Task._url_host("http://[::1") == ""
+
+    def test_url_netloc_returns_network_location_or_empty_string(self):
+        assert Task._url_netloc("https://example.com:8443/path") == "example.com:8443"
+        assert Task._url_netloc("http://[::1") == ""
+
+    def test_build_value_flag_parts_quotes_truthy_values(self):
+        t = DummyTask()
+
+        assert t._build_value_flag_parts(
+            [("--name", "Jane Doe"), ("--empty", ""), ("--none", None)]
+        ) == ["--name", "'Jane Doe'"]
 
     def test_success_codes_default(self):
         t = DummyTask()
@@ -242,6 +303,59 @@ class TestTaskRegistry:
         assert TaskRegistry.get("temp_test_tool") is not None
         TaskRegistry.unregister("temp_test_tool")
         assert TaskRegistry.get("temp_test_tool") is None
+
+    def test_ensure_loaded_continues_after_module_import_error(self, monkeypatch):
+        class LocalRegistry(TaskRegistry):
+            _tasks = {}
+            _loaded = False
+
+        package = SimpleNamespace(__path__=["fake-tools"])
+        imported = []
+
+        def fake_import_module(name):
+            imported.append(name)
+            if name == "ofx.tasks.tools":
+                return package
+            if name.endswith(".broken"):
+                raise ImportError("missing optional dependency")
+            return SimpleNamespace()
+
+        monkeypatch.setattr(
+            registry_module.importlib, "import_module", fake_import_module
+        )
+        monkeypatch.setattr(
+            registry_module.pkgutil,
+            "iter_modules",
+            lambda path: [
+                SimpleNamespace(name="broken"),
+                SimpleNamespace(name="working"),
+            ],
+        )
+
+        LocalRegistry._ensure_loaded()
+
+        assert imported == [
+            "ofx.tasks.tools",
+            "ofx.tasks.tools.broken",
+            "ofx.tasks.tools.working",
+        ]
+        assert LocalRegistry._loaded is True
+
+    def test_ensure_loaded_retries_after_package_import_error(self, monkeypatch):
+        class LocalRegistry(TaskRegistry):
+            _tasks = {}
+            _loaded = False
+
+        def fake_import_module(name):
+            raise ImportError("task package unavailable")
+
+        monkeypatch.setattr(
+            registry_module.importlib, "import_module", fake_import_module
+        )
+
+        LocalRegistry._ensure_loaded()
+
+        assert LocalRegistry._loaded is False
 
 
 # ── Step Model Integration ─────────────────────────────────────────────────

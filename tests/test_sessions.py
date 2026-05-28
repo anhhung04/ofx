@@ -1531,3 +1531,83 @@ class TestSessionManagerScriptBundling:
         bundled_text = bundled.read_text()
         assert "BUNDLE_FILE_OK" not in bundled_text
         assert "_m.loads" in bundled_text or "base64.b64decode" in bundled_text
+
+    def test_stage_script_files_resolves_relative_script_file_from_workflow_dir(
+        self,
+        tmp_path,
+    ):
+        from ofx.cloud.sessions.manager import SessionManager
+
+        workflow_dir = tmp_path / "workflow"
+        workflow_dir.mkdir()
+        src = workflow_dir / "relative.py"
+        src.write_text('print("RELATIVE_BUNDLE_OK")\n')
+        mgr = SessionManager(store=SessionStore(base_dir=tmp_path / "sessions"))
+        work_dir = tmp_path / "work"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        steps = [self._make_step(name="s0", script_file="relative")]
+
+        mgr._stage_script_files(steps, work_dir, workflow_dir=workflow_dir)
+
+        bundled = work_dir / ".ofx_step_0.py"
+        assert bundled.exists()
+        bundled_text = bundled.read_text()
+        assert "RELATIVE_BUNDLE_OK" not in bundled_text
+        assert "_m.loads" in bundled_text or "base64.b64decode" in bundled_text
+
+    def test_upload_script_files_uploads_only_python_steps(self, tmp_path):
+        from ofx.cloud.sessions.manager import SessionManager
+
+        uploads: list[tuple[str, str, str]] = []
+
+        class _Remote:
+            def upload(self, local_path, remote_path):
+                uploads.append((local_path, remote_path, Path(local_path).read_text()))
+
+        src = tmp_path / "in.py"
+        src.write_text('print("BUNDLE_UPLOAD_OK")\n')
+        mgr = SessionManager(store=SessionStore(base_dir=tmp_path / "sessions"))
+        steps = [
+            self._make_step(name="inline", script='print("INLINE_OK")'),
+            self._make_step(name="cmd", run="echo hi"),
+            self._make_step(name="file", script_file=str(src)),
+        ]
+
+        mgr._upload_script_files(steps, _Remote(), "/tmp/ofx-run", is_windows=False)
+
+        assert [item[1] for item in uploads] == [
+            "/tmp/ofx-run/.ofx_step_0.py",
+            "/tmp/ofx-run/.ofx_step_2.py",
+        ]
+        assert all("INLINE_OK" not in content for _, _, content in uploads)
+        assert all("BUNDLE_UPLOAD_OK" not in content for _, _, content in uploads)
+
+    def test_upload_script_files_resolves_relative_script_file_from_workflow_dir(
+        self,
+        tmp_path,
+    ):
+        from ofx.cloud.sessions.manager import SessionManager
+
+        uploads: list[tuple[str, str, str]] = []
+
+        class _Remote:
+            def upload(self, local_path, remote_path):
+                uploads.append((local_path, remote_path, Path(local_path).read_text()))
+
+        workflow_dir = tmp_path / "workflow"
+        workflow_dir.mkdir()
+        src = workflow_dir / "relative.py"
+        src.write_text('print("RELATIVE_UPLOAD_OK")\n')
+        mgr = SessionManager(store=SessionStore(base_dir=tmp_path / "sessions"))
+        steps = [self._make_step(name="s0", script_file="relative")]
+
+        mgr._upload_script_files(
+            steps,
+            _Remote(),
+            "/tmp/ofx-run",
+            is_windows=False,
+            workflow_dir=workflow_dir,
+        )
+
+        assert [item[1] for item in uploads] == ["/tmp/ofx-run/.ofx_step_0.py"]
+        assert "RELATIVE_UPLOAD_OK" not in uploads[0][2]

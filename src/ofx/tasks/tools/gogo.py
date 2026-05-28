@@ -68,7 +68,7 @@ class GogoTask(Task):
 
         wf = kwargs.pop("workflow", None)
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["workflow"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         # Quiet mode + uncompressed jsonlines output
         parts.extend(["-q", "-C", "-O", "jsonlines"])

@@ -13,15 +13,25 @@ import shutil
 import signal
 import subprocess
 import tarfile
-import tempfile
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from ofx.cloud.sessions.encryption import decrypt_results, encrypt_results
 from ofx.cloud.sessions.models import Session, SessionStatus, SessionTarget
+from ofx.cloud.sessions.python_steps import (
+    build_step_bundle_source as _build_step_bundle_source,
+)
+from ofx.cloud.sessions.python_steps import (
+    iter_python_steps as _iter_python_steps,
+)
+from ofx.cloud.sessions.python_steps import (
+    step_bundle_filename as _step_bundle_filename,
+)
 from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.sessions.store import SessionStore
+from ofx.cloud.temp_upload import upload_temp_content
 
 logger = logging.getLogger("ofx")
 
@@ -249,22 +259,6 @@ def _session_to_cloud_config(session: Session) -> Any:
     )
 
 
-def _step_bundle_filename(step_index: int) -> str:
-    """Deterministic bundle filename for Python-backed session steps."""
-    return f".ofx_step_{step_index}.py"
-
-
-def _build_step_bundle_source(step: Any) -> str:
-    """Build bundled Python bootstrap source for `script`/`script_file` steps."""
-    from ofx.cloud.script_runtime import (
-        build_python_payload,
-        resolve_python_step_source,
-    )
-
-    source = resolve_python_step_source(step)
-    return build_python_payload(source, opsec_mode=True, obfuscate_sources=True)
-
-
 class SessionManager:
     """High-level API for detached session lifecycle.
 
@@ -344,6 +338,7 @@ class SessionManager:
                 session,
                 session_steps,
                 env or {},
+                workflow_dir=workflow.workflow_path.parent if workflow.workflow_path else None,
                 workflow_name=workflow_name,
             )
         else:
@@ -352,6 +347,7 @@ class SessionManager:
                 session_steps,
                 env or {},
                 cloud_profile,
+                workflow_dir=workflow.workflow_path.parent if workflow.workflow_path else None,
                 workflow_name=workflow_name,
             )
 
@@ -373,6 +369,7 @@ class SessionManager:
         steps: list[Any],
         env: dict[str, str],
         *,
+        workflow_dir: Path | None,
         workflow_name: str,
     ) -> Session:
         """Start workflow steps as a detached local background process."""
@@ -421,7 +418,7 @@ class SessionManager:
         script_path.chmod(0o700)
 
         log_file_path = work_dir / "output.log"
-        self._stage_script_files(steps, work_dir)
+        self._stage_script_files(steps, work_dir, workflow_dir=workflow_dir)
         work_dir.chmod(0o700)
 
         session = session.model_copy(
@@ -462,6 +459,7 @@ class SessionManager:
         env: dict[str, str],
         cloud_profile: str,
         *,
+        workflow_dir: Path | None,
         workflow_name: str,
     ) -> Session:
         """Provision a VPS, upload the script, and start detached via SSH/WinRM."""
@@ -608,11 +606,11 @@ class SessionManager:
                 )
 
             # Upload key and script via temp files
-            _upload_temp_content(
+            upload_temp_content(
                 remote, at_rest_key, f"{remote_work_dir}{sep}.skey", suffix=".key"
             )
             ext = ".ps1" if is_windows else ".sh"
-            _upload_temp_content(
+            upload_temp_content(
                 remote, script_content, f"{remote_work_dir}{sep}run{ext}", suffix=ext
             )
 
@@ -626,7 +624,11 @@ class SessionManager:
                 remote.run(f"chmod 700 {remote_work_dir}/run.sh")
 
             self._upload_script_files(
-                steps, remote, remote_work_dir, is_windows=is_windows
+                steps,
+                remote,
+                remote_work_dir,
+                is_windows=is_windows,
+                workflow_dir=workflow_dir,
             )
 
             # Start detached
@@ -1183,10 +1185,8 @@ class SessionManager:
                 try:
                     os.killpg(os.getpgid(session.remote_pid), signal.SIGTERM)
                 except (ProcessLookupError, PermissionError):
-                    try:
+                    with suppress(ProcessLookupError, PermissionError):
                         os.kill(session.remote_pid, signal.SIGTERM)
-                    except (ProcessLookupError, PermissionError):
-                        pass
         else:
             # SSH in and kill
             try:
@@ -1380,7 +1380,7 @@ class SessionManager:
                 raise ValueError(f"Job '{job_id}' not found in workflow")
             return list(job.steps), job.jid
 
-        from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+        from ofx.runner.workflow_scheduler import WorkflowScheduler
 
         schedule = WorkflowScheduler(jobs).plan().schedule
         selected_steps: list[Any] = []
@@ -1401,62 +1401,48 @@ class SessionManager:
         cfg = _session_to_cloud_config(session)
         return create_remote_runner(cfg, session.instance_ip, max_retries=2)
 
-    def _stage_script_files(self, steps: list, work_dir: Path) -> None:
+    def _stage_script_files(
+        self,
+        steps: list,
+        work_dir: Path,
+        *,
+        workflow_dir: Path | None = None,
+    ) -> None:
         """Stage bundled Python step artifacts into the local workspace."""
-        from ofx.models.step import RunType
-
-        for idx, step in enumerate(steps):
-            if step.get_run_type() not in (RunType.SCRIPT, RunType.SCRIPT_FILE):
-                continue
+        for idx, step in _iter_python_steps(steps):
             dest = work_dir / _step_bundle_filename(idx)
-            dest.write_text(_build_step_bundle_source(step))
+            dest.write_text(_build_step_bundle_source(step, workflow_dir=workflow_dir))
             dest.chmod(0o600)
 
     def _upload_script_files(
-        self, steps: list, remote: Any, remote_work_dir: str, *, is_windows: bool
+        self,
+        steps: list,
+        remote: Any,
+        remote_work_dir: str,
+        *,
+        is_windows: bool,
+        workflow_dir: Path | None = None,
     ) -> None:
         """Upload bundled Python step artifacts to the remote host."""
-        from ofx.models.step import RunType
-
-        for idx, step in enumerate(steps):
-            if step.get_run_type() not in (RunType.SCRIPT, RunType.SCRIPT_FILE):
-                continue
-            bundle_source = _build_step_bundle_source(step)
+        for idx, step in _iter_python_steps(steps):
+            bundle_source = _build_step_bundle_source(step, workflow_dir=workflow_dir)
             filename = _step_bundle_filename(idx)
             remote_path = (
                 f"{remote_work_dir}\\{filename}"
                 if is_windows
                 else f"{remote_work_dir}/{filename}"
             )
-            fd, local_path = tempfile.mkstemp(prefix=".ofx_step_", suffix=".py")
-            os.close(fd)
-            Path(local_path).write_text(bundle_source)
-            os.chmod(local_path, 0o600)
-            try:
-                remote.upload(local_path, remote_path)
-            finally:
-                Path(local_path).unlink(missing_ok=True)
+            upload_temp_content(
+                remote,
+                bundle_source,
+                remote_path,
+                suffix=".py",
+            )
 
 
 # ======================================================================
 # Module-level helpers
 # ======================================================================
-
-
-def _upload_temp_content(
-    remote: Any, content: str, remote_path: str, *, suffix: str = ""
-) -> None:
-    """Write content to a temp file, upload it, then clean up."""
-    fd, local_path = tempfile.mkstemp(suffix=suffix)
-    os.close(fd)
-    Path(local_path).write_text(content)
-    os.chmod(local_path, 0o600)
-    try:
-        remote.upload(local_path, remote_path)
-    finally:
-        Path(local_path).unlink(missing_ok=True)
-
-
 def _decrypt_at_rest_openssl(
     enc_file: Path, at_rest_key: str, output_dir: Path
 ) -> None:
@@ -1539,7 +1525,7 @@ def _pid_alive(pid: int) -> bool:
                 if line.startswith("State:"):
                     return "Z" not in line  # 'Z (zombie)'
     except (FileNotFoundError, PermissionError, OSError):
-        pass
+        return True
     return True
 
 

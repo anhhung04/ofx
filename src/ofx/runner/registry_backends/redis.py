@@ -1,10 +1,8 @@
 """Redis-based registry adapter for distributed storage"""
 
-import json
-import logging
 from typing import Any
 
-from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry_adapter import RegistryAdapter
 
 try:
     import redis.asyncio as aioredis
@@ -14,11 +12,6 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
     Redis = None  # type: ignore
-
-from ofx.settings import settings
-
-logger = logging.getLogger(settings.app_branding)
-
 
 class RedisJobRegistry(RegistryAdapter):
     """Redis-based implementation of registry
@@ -77,10 +70,8 @@ class RedisJobRegistry(RegistryAdapter):
     async def _set(self, key: str, value: Any) -> None:
         """Store data in Redis"""
         redis_key = self._make_key(key)
-        try:
-            json_value = json.dumps(value, default=str)
-        except (TypeError, ValueError) as exc:
-            logger.warning("Failed to serialize value for key '%s': %s", key, exc)
+        json_value = self._serialize_value(key, value)
+        if json_value is None:
             return
         await self._client.set(redis_key, json_value)
         self._log_debug(f"Set key '{key}' in RedisJobRegistry")
@@ -90,13 +81,7 @@ class RedisJobRegistry(RegistryAdapter):
         redis_key = self._make_key(key)
         value = await self._client.get(redis_key)
         if value:
-            try:
-                return json.loads(value)
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.warning(
-                    "Failed to decode registry value for key '%s': %s", key, exc
-                )
-                return None
+            return self._deserialize_value(key, value)
         return None
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
@@ -133,12 +118,9 @@ class RedisJobRegistry(RegistryAdapter):
             key = redis_key[len(self.prefix) :]
             value = await self._client.get(redis_key)
             if value:
-                try:
-                    result[key] = json.loads(value)
-                except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                    logger.warning(
-                        "Failed to decode registry value for key '%s': %s", key, exc
-                    )
+                decoded = self._deserialize_value(key, value)
+                if decoded is not None:
+                    result[key] = decoded
 
         return result
 
@@ -154,7 +136,3 @@ class RedisJobRegistry(RegistryAdapter):
         """Close the Redis connection"""
         await self._client.close()
         self._log_debug("Closed RedisJobRegistry")
-
-    @staticmethod
-    def _log_debug(message: str) -> None:
-        logger.debug(message)

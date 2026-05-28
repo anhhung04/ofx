@@ -66,7 +66,6 @@ class ProjectManager:
             gitignore_path.write_text(".ofx-encryption-key\n*.enc\n")
         except Exception as e:
             logger.debug("Failed to init git repo for project '%s': %s", safe_name, e)
-            pass
 
         return str(project_path)
 

@@ -2,35 +2,21 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
+from ofx.runner.step_descriptors import step_type_label
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, get_console
 from ofx.utils.workflow_utils import find_workflow
 
 
 def _step_type_label(step) -> str:
-    if step.task:
-        return f"task: {step.task}"
-    if step.uses:
-        return f"uses: {step.uses}"
-    if step.script:
-        return "script"
-    if step.script_file:
-        return f"script_file: {step.script_file}"
-    if step.pipe is not None:
-        fmt = step.pipe.format if hasattr(step.pipe, "format") else "json"
-        return f"pipe: → {fmt}"
-    if step.run:
-        lines = step.run.strip().splitlines()
-        first = lines[0][:60]
-        if len(lines) > 1 or len(lines[0]) > 60:
-            first += "…"
-        return f"run: {first}"
-    return "unknown"
+    return step_type_label(step)
 
 
 def _build_overview_table(workflow: Workflow) -> Table:
@@ -96,7 +82,7 @@ def _build_inputs_table(workflow: Workflow) -> Table | None:
 
 
 def _build_jobs_tree(workflow: Workflow, detailed: bool) -> Tree:
-    from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+    from ofx.runner.workflow_scheduler import WorkflowScheduler
 
     scheduler = WorkflowScheduler(jobs=workflow.jobs)
     schedule = scheduler.plan()
@@ -167,10 +153,8 @@ def _build_outputs_table(workflow: Workflow) -> Table | None:
 def _find_workflow_fuzzy(name: str) -> Workflow:
     """Find workflow by name, with recursive fallback for bare names."""
     dirs = tuple(DEFAULT_WORKFLOWS_DIRS)
-    try:
+    with suppress(RuntimeError):
         return find_workflow(name, dirs)
-    except RuntimeError:
-        pass
     # Fallback: search recursively for <name>.yml in all search dirs
     from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 

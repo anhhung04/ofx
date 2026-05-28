@@ -1,6 +1,7 @@
 import asyncio
 import enum
 import logging
+from contextlib import suppress
 from typing import Annotated
 
 import typer
@@ -109,15 +110,13 @@ def _complete_tag_names(incomplete: str) -> list[str]:
             continue
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
             for path in d.rglob(f"*{ext}"):
-                try:
+                with suppress(Exception):
                     data = yaml.safe_load(path.read_text())
                     if isinstance(data, dict):
                         for t in data.get("tags") or []:
                             t_lower = str(t).lower()
                             if t_lower.startswith(incomplete):
                                 tags.add(t_lower)
-                except Exception:
-                    pass
     return sorted(tags)
 
 

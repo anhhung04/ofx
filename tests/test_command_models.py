@@ -58,6 +58,16 @@ class TestCommandModel:
         assert cmd.cmd == "test command"
         assert cmd.shell == "/bin/bash"
 
+    def test_command_model_default_shell_not_marked_explicit(self):
+        cmd = Command(cmd="echo hello")
+
+        assert "shell" not in cmd.model_fields_set
+
+    def test_command_model_default_working_directory_not_marked_explicit(self):
+        cmd = Command(cmd="echo hello")
+
+        assert "working_directory" not in cmd.model_fields_set
+
 
 class TestScriptModel:
     """Test Script model"""
@@ -107,3 +117,8 @@ class TestScriptModel:
         script = Script.model_validate(script_dict)
         assert script.script == "import os; os.getcwd()"
         assert script.interactive is True
+
+    def test_script_model_default_working_directory_not_marked_explicit(self):
+        script = Script(script="print('hello')")
+
+        assert "working_directory" not in script.model_fields_set

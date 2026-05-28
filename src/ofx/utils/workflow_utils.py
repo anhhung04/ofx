@@ -2,6 +2,7 @@
 
 import json
 import logging
+from contextlib import suppress
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -75,12 +76,10 @@ def coerce_input_value(value: Any, expected_type: str, name: str = "") -> Any:
         if isinstance(value, list):
             return value
         if isinstance(value, str):
-            try:
+            with suppress(json.JSONDecodeError, TypeError):
                 parsed = json.loads(value)
                 if isinstance(parsed, list):
                     return parsed
-            except (json.JSONDecodeError, TypeError):
-                pass
             raise ValueError(
                 f"Cannot convert '{value}' to array for input '{name}' "
                 '(use JSON array syntax: ["a", "b"])'
@@ -93,12 +92,10 @@ def coerce_input_value(value: Any, expected_type: str, name: str = "") -> Any:
         if isinstance(value, dict):
             return value
         if isinstance(value, str):
-            try:
+            with suppress(json.JSONDecodeError, TypeError):
                 parsed = json.loads(value)
                 if isinstance(parsed, dict):
                     return parsed
-            except (json.JSONDecodeError, TypeError):
-                pass
             raise ValueError(
                 f"Cannot convert '{value}' to object for input '{name}' "
                 '(use JSON object syntax: {{"key": "value"}})'
@@ -130,6 +127,29 @@ def add_workflow_dir(workflow_dirs: list[Path], path: Path | str) -> list[Path]:
     if abs_path not in workflow_dirs:
         workflow_dirs.append(abs_path)
     return workflow_dirs
+
+
+def workflow_dirs_with_path(
+    workflow_dirs: list[Path] | tuple[Path, ...],
+    path: Path | str,
+) -> list[Path]:
+    """Return a copy of workflow search paths with one extra directory added."""
+    return add_workflow_dir(list(workflow_dirs), path)
+
+
+def _load_workflow_yaml(text: str, *, source: str) -> Workflow:
+    """Parse workflow YAML text into a validated workflow model."""
+    try:
+        return Workflow.model_validate(yaml.safe_load(text.strip()))
+    except yaml.YAMLError as e:
+        raise RuntimeError(f"Invalid YAML in {source}: {e}") from None
+
+
+def _load_workflow_from_path(path: Path) -> Workflow:
+    """Load and validate a workflow from a local file path."""
+    workflow = _load_workflow_yaml(path.read_text(), source=f"workflow file {path}")
+    workflow.workflow_path = path
+    return workflow
 
 
 def find_workflow(
@@ -169,31 +189,13 @@ def _find_workflow_cached(
     if workflow_name.startswith(("/", ".")):
         flow_path = Path(workflow_name)
         if flow_path.is_absolute():
-            try:
-                flow = Workflow.model_validate(
-                    yaml.safe_load(flow_path.read_text().strip())
-                )
-            except yaml.YAMLError as e:
-                raise RuntimeError(
-                    f"Invalid YAML in workflow file {flow_path}: {e}"
-                ) from None
-            flow.workflow_path = flow_path
-            return flow
+            return _load_workflow_from_path(flow_path)
 
         for directory in search_dirs_tuple:
             path = find_valid_flow(directory, workflow_name)
             if not path:
                 continue
-            try:
-                workflow = Workflow.model_validate(
-                    yaml.safe_load(path.read_text().strip())
-                )
-            except yaml.YAMLError as e:
-                raise RuntimeError(
-                    f"Invalid YAML in workflow file {path}: {e}"
-                ) from None
-            workflow.workflow_path = path
-            return workflow
+            return _load_workflow_from_path(path)
         else:
             raise RuntimeError(f"Workflow {workflow_name} not found in local paths.")
 
@@ -202,28 +204,15 @@ def _find_workflow_cached(
         path = find_valid_flow(directory, workflow_name)
         if not path:
             continue
-        try:
-            workflow = Workflow.model_validate(
-                yaml.safe_load(path.read_text().strip())
-            )
-        except yaml.YAMLError as e:
-            raise RuntimeError(
-                f"Invalid YAML in workflow file {path}: {e}"
-            ) from None
-        workflow.workflow_path = path
-        return workflow
+        return _load_workflow_from_path(path)
 
     if is_remote_path(workflow_name) and not is_git_repo(workflow_name):
         response = httpx.get(workflow_name, timeout=30)
         response.raise_for_status()
-        try:
-            workflow = Workflow.model_validate(
-                yaml.safe_load(response.text.strip())
-            )
-        except yaml.YAMLError as e:
-            raise RuntimeError(
-                f"Invalid YAML in remote workflow {workflow_name}: {e}"
-            ) from None
+        workflow = _load_workflow_yaml(
+            response.text,
+            source=f"remote workflow {workflow_name}",
+        )
         workflow.workflow_path = Path.cwd()
         return workflow
 
@@ -236,16 +225,7 @@ def _find_workflow_cached(
         raise RuntimeError(
             f"No main workflow file found in cloned repo {workflow_name}."
         )
-    try:
-        workflow = Workflow.model_validate(
-            yaml.safe_load(main_path.read_text().strip())
-        )
-    except yaml.YAMLError as e:
-        raise RuntimeError(
-            f"Invalid YAML in cloned workflow {main_path}: {e}"
-        ) from None
-    workflow.workflow_path = main_path
-    return workflow
+    return _load_workflow_from_path(main_path)
 
 
 def list_available_workflows(search_dirs: tuple[str | Path, ...]) -> list[str]:

@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from ofx.runner.core import RegistryFactory, cleanup_registry
+from ofx.runner import RegistryFactory, cleanup_registry
 from ofx.runner.registry import (
     FileRegistry,
     MemoryJobRegistry,
+    RegistryAdapter,
 )
-from ofx.runner.registry.base import RegistryAdapter
 
 
 @pytest.fixture

@@ -74,7 +74,7 @@ class BloodhoundPythonTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Tag]:
-        raw = stdout or ""
+        raw = self._raw_output(stdout)
         results: list[Tag] = []
 
         for line in raw.splitlines():

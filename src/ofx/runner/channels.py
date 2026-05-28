@@ -19,6 +19,7 @@ import logging
 import os
 import time
 from collections.abc import Callable, Generator
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -228,10 +229,8 @@ class ChannelStore:
         while True:
             # Wait for notification or poll timeout
             event.clear()
-            try:
+            with suppress(TimeoutError):
                 await asyncio.wait_for(event.wait(), timeout=poll_interval)
-            except TimeoutError:
-                pass
 
             loop = asyncio.get_running_loop()
             value = await loop.run_in_executor(None, self._read, channel)
@@ -262,12 +261,10 @@ class ChannelStore:
             if remaining <= 0:
                 raise TimeoutError(f"Timeout waiting for channel '{channel}'")
             event.clear()
-            try:
+            with suppress(TimeoutError):
                 await asyncio.wait_for(
                     event.wait(), timeout=min(poll_interval, remaining)
                 )
-            except TimeoutError:
-                pass
 
     # ------------------------------------------------------------------
     # Management
@@ -277,11 +274,9 @@ class ChannelStore:
         """Remove a channel file and its lock."""
         removed = False
         for p in (self._channel_path(channel), self._lock_path(channel)):
-            try:
+            with suppress(FileNotFoundError):
                 p.unlink()
                 removed = True
-            except FileNotFoundError:
-                pass
         self._cache.pop(channel, None)
         self._events.pop(channel, None)
         return removed
@@ -297,21 +292,17 @@ class ChannelStore:
     def clear(self) -> None:
         """Remove all channels."""
         for p in self._dir.iterdir():
-            try:
+            with suppress(FileNotFoundError):
                 p.unlink()
-            except FileNotFoundError:
-                pass
         self._cache.clear()
         self._events.clear()
 
     def close(self) -> None:
         """Clear all channels and remove the channels directory."""
         self.clear()
-        try:
+        with suppress(OSError):
             self._dir.rmdir()
             logger.debug("Removed channels directory %s", self._dir)
-        except OSError:
-            pass
 
 
 # ------------------------------------------------------------------

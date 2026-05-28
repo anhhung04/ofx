@@ -100,7 +100,7 @@ class TestWorkflowScheduler:
         )
 
     def test_plan_no_deps(self):
-        from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+        from ofx.runner.workflow_scheduler import WorkflowScheduler
 
         jobs = {"a": self._make_job(), "b": self._make_job()}
         ws = WorkflowScheduler(jobs)
@@ -110,7 +110,7 @@ class TestWorkflowScheduler:
         assert result.staged_jobs is jobs
 
     def test_plan_with_deps(self):
-        from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+        from ofx.runner.workflow_scheduler import WorkflowScheduler
 
         jobs = {
             "build": self._make_job(),
@@ -125,7 +125,7 @@ class TestWorkflowScheduler:
         assert result.schedule[2] == ["deploy"]
 
     def test_dependencies_static_method(self):
-        from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+        from ofx.runner.workflow_scheduler import WorkflowScheduler
 
         jobs = {
             "a": self._make_job(),
@@ -135,7 +135,7 @@ class TestWorkflowScheduler:
         assert ("a", "b") in deps
 
     def test_job_ids_static_method(self):
-        from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+        from ofx.runner.workflow_scheduler import WorkflowScheduler
 
         jobs = {"x": self._make_job(), "y": self._make_job()}
         ids = list(WorkflowScheduler.job_ids(jobs))

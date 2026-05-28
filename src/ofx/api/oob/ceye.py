@@ -4,10 +4,10 @@ import getpass
 import json
 import re
 import time
-from configparser import ConfigParser
 from pathlib import Path
 
 from ofx.api._compat import CONFIG_FILE, get_logger
+from ofx.api.credential_config import load_section_values, save_section_values
 from ofx.api.exploitation.exploit.utils import get_middle_text, random_str
 from ofx.api.http import requests
 
@@ -53,14 +53,13 @@ class CEye:
             conf_path = CONFIG_FILE
 
         self.conf_path = conf_path
-        self.parser = ConfigParser()
-
-        if self.conf_path and self.conf_path.exists():
-            self.parser.read(self.conf_path)
-            try:
-                self.token = self.token or self.parser.get("CEye", "token")
-            except Exception:
-                logger.debug("CEye token not found in config file")
+        self.parser, credentials = load_section_values(
+            self.conf_path,
+            "CEye",
+            ("token",),
+            logger=logger,
+        )
+        self.token = self.token or credentials.get("token")
 
         self.check_token()
 
@@ -125,14 +124,8 @@ class CEye:
         Creates config file and directories if they don't exist.
         Stores token securely in INI format.
         """
-        if not self.parser.has_section("CEye"):
-            self.parser.add_section("CEye")
         try:
-            self.parser.set("CEye", "token", self.token)
-            if self.conf_path:
-                self.conf_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.conf_path, "w") as f:
-                    self.parser.write(f)
+            save_section_values(self.conf_path, self.parser, "CEye", {"token": self.token})
         except Exception as ex:
             logger.error(str(ex))
 

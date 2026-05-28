@@ -1,15 +1,9 @@
 """In-memory job registry adapter (default implementation)"""
 
 import asyncio
-import copy
-import logging
 from typing import Any
 
-from ofx.runner.registry.base import RegistryAdapter
-from ofx.settings import settings
-
-logger = logging.getLogger(settings.app_branding)
-
+from ofx.runner.registry_adapter import RegistryAdapter
 
 _DEFAULT_MAX_SIZE = 100_000
 
@@ -54,7 +48,7 @@ class MemoryJobRegistry(RegistryAdapter):
         async with self._lock:
             if key not in self._registry:
                 self._check_capacity()
-            self._registry[key] = copy.deepcopy(value)
+            self._registry[key] = self._clone_value(value)
         self._log_debug(f"Set key '{key}' in MemoryJobRegistry")
 
     async def _get(self, key: str) -> Any | None:
@@ -63,7 +57,7 @@ class MemoryJobRegistry(RegistryAdapter):
             value = self._registry.get(key)
             if value is None:
                 return None
-            return copy.deepcopy(value)
+            return self._clone_value(value)
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data (atomic read-modify-write)."""
@@ -71,10 +65,10 @@ class MemoryJobRegistry(RegistryAdapter):
             existing = self._registry.get(key)
             if isinstance(existing, dict):
                 merged = dict(existing)
-                merged.update(copy.deepcopy(updates))
+                merged.update(self._clone_value(updates))
                 self._registry[key] = merged
             else:
-                self._registry[key] = copy.deepcopy(updates)
+                self._registry[key] = self._clone_value(updates)
         self._log_debug(f"Updated key '{key}' in MemoryJobRegistry")
 
     async def _delete(self, key: str) -> bool:
@@ -94,7 +88,7 @@ class MemoryJobRegistry(RegistryAdapter):
     async def _get_all(self) -> dict[str, Any]:
         """Get all entries from memory (deep-copied)."""
         async with self._lock:
-            return copy.deepcopy(self._registry)
+            return self._clone_value(self._registry)
 
     async def _clear(self) -> None:
         """Clear all entries from memory."""
@@ -105,7 +99,3 @@ class MemoryJobRegistry(RegistryAdapter):
     async def _close(self) -> None:
         """Close the registry (no-op for memory adapter)."""
         self._log_debug("Closed MemoryJobRegistry")
-
-    @staticmethod
-    def _log_debug(message: str) -> None:
-        logger.debug(message)

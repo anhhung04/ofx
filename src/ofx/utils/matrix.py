@@ -1,6 +1,5 @@
 """Matrix utilities for OFX framework."""
 
-import itertools
 import json
 from typing import Any
 
@@ -36,90 +35,15 @@ def expand_jobs(jobs: dict[str, Job]) -> dict[str, Job]:
 
 
 def _generate_matrix_combinations(strategy: MatrixStrategy) -> list[dict[str, Any]]:
-    """Generate all matrix combinations with include/exclude rules
+    """Generate matrix combinations, parsing JSON-like matrix values."""
+    from ofx.runner.matrix_utils import generate_matrix_combinations
 
-    Args:
-        strategy: Matrix strategy configuration
-
-    Returns:
-        List of matrix value combinations
-
-    Raises:
-        ValueError: If the estimated combination count exceeds 10,000
-    """
-    MAX_MATRIX_COMBINATIONS = 10_000
-
-    matrix_keys = list(strategy.matrix.keys())
-    matrix_values = [strategy.matrix[key] for key in matrix_keys]
-
-    # Pre-check: estimate combination count without materializing
-    estimated = 1
-    for vals in matrix_values:
-        estimated *= len(vals) if isinstance(vals, list) else 1
-        if estimated > MAX_MATRIX_COMBINATIONS:
-            raise ValueError(
-                f"Matrix would produce ~{estimated} combinations "
-                f"(limit: {MAX_MATRIX_COMBINATIONS}). "
-                f"Reduce matrix values or add exclude rules."
-            )
-
-    # Generate base combinations (cartesian product)
-    base_combinations = [
-        dict(zip(matrix_keys, combination, strict=True))
-        for combination in itertools.product(*matrix_values)
-    ]
-
-    # Process matrix values (e.g., parse JSON strings)
-    processed_combinations = []
-    for combo in base_combinations:
-        processed_combo = {}
-        for key, value in combo.items():
-            processed_combo[key] = process_matrix_value(value)
-        processed_combinations.append(processed_combo)
-    base_combinations = processed_combinations
-
-    # Apply exclude rules
-    if strategy.exclude:
-        processed_exclude = []
-        for exclude_filter in strategy.exclude:
-            processed_filter = {}
-            for key, value in exclude_filter.items():
-                processed_filter[key] = process_matrix_value(value)
-            processed_exclude.append(processed_filter)
-        base_combinations = [
-            combo
-            for combo in base_combinations
-            if not _matches_matrix_filter(combo, processed_exclude)
-        ]
-
-    # Apply include rules
-    if strategy.include:
-        for include_combo in strategy.include:
-            processed_include = {}
-            for key, value in include_combo.items():
-                processed_include[key] = process_matrix_value(value)
-            if processed_include not in base_combinations:
-                base_combinations.append(processed_include)
-
-    return base_combinations
-
-
-def _matches_matrix_filter(
-    combo: dict[str, Any], filters: list[dict[str, Any]]
-) -> bool:
-    """Check if a combination matches any filter
-
-    Args:
-        combo: Matrix combination to check
-        filters: List of filter dictionaries
-
-    Returns:
-        True if combination matches any filter
-    """
-    for filter_dict in filters:
-        if all(combo.get(key) == value for key, value in filter_dict.items()):
-            return True
-    return False
+    return generate_matrix_combinations(
+        strategy.matrix,
+        include=strategy.include,
+        exclude=strategy.exclude,
+        value_processor=process_matrix_value,
+    )
 
 
 def process_matrix_value(value: Any) -> Any:

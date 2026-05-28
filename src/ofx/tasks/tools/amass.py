@@ -49,7 +49,7 @@ class AmassTask(Task):
         parts: list[str] = [self.cmd, "enum"]
 
         # If active mode is requested, don't include -passive
-        active = kwargs.get("active", False)
+        active = kwargs.pop("active", False)
         if active:
             parts.append("-active")
         else:
@@ -60,7 +60,7 @@ class AmassTask(Task):
         if self.silent_flag:
             parts.append(self.silent_flag)
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["active"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         output_file: Path | None = None
         if self.output_flag:

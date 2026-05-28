@@ -4,8 +4,8 @@ import pytest
 import yaml
 
 from ofx.models.workflow import Workflow
-from ofx.runner.core import RunContext, RunnerStatus
-from ofx.runner.execution.workflow import WorkflowRunner
+from ofx.runner import RunContext, RunnerStatus
+from ofx.runner.workflow import WorkflowRunner
 
 
 class TestRunIfConditions:

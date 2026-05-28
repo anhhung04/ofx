@@ -2,10 +2,7 @@
 
 import pytest
 
-from ofx.runner.execution.workflow_execution import (
-    ExecutionResult,
-    WorkflowExecutionManager,
-)
+from ofx.runner.workflow_execution import ExecutionResult, WorkflowExecutionManager
 
 
 class _ParentStub:
@@ -62,36 +59,13 @@ def test_build_stage_runners_creates_job_runners(monkeypatch):
 
     created = []
 
-    class _DummyJobRunner:
-        def __init__(self, job, ctx, parent):
-            created.append(("job", job, ctx, parent))
-            self.is_success = True
+    def _factory(job, ctx, parent):
+        kind = "matrix" if getattr(job.strategy, "matrix", None) else "job"
+        runner = _RunnerStub(success=True)
+        created.append((kind, job, ctx, parent))
+        return runner
 
-    class _DummyMatrixRunner:
-        def __init__(self, job, ctx, parent):
-            created.append(("matrix", job, ctx, parent))
-            self.is_success = True
-
-    monkeypatch.setattr("ofx.runner.execution.job.JobRunner", _DummyJobRunner)
-    monkeypatch.setattr("ofx.runner.execution.job.MatrixJobRunner", _DummyMatrixRunner)
-
-    class _DummyCloudRunner:
-        def __init__(self, job, ctx, parent, cloud_config=None):
-            created.append(("cloud", job, ctx, parent))
-            self.is_success = True
-
-    class _DummyCloudMatrixRunner:
-        def __init__(self, job, ctx, parent):
-            created.append(("cloud_matrix", job, ctx, parent))
-            self.is_success = True
-
-    monkeypatch.setattr(
-        "ofx.runner.execution.cloud_job.CloudJobRunner", _DummyCloudRunner
-    )
-    monkeypatch.setattr(
-        "ofx.runner.execution.cloud_matrix.CloudMatrixJobRunner",
-        _DummyCloudMatrixRunner,
-    )
+    monkeypatch.setattr("ofx.runner.workflow_execution.create_job_runner", _factory)
 
     class _Job:
         def __init__(self, matrix=False, cloud=None, fleet=False):
@@ -121,14 +95,12 @@ def test_build_stage_runners_cloud_job(monkeypatch):
 
     created = []
 
-    class _DummyCloudRunner:
-        def __init__(self, job, ctx, parent, cloud_config=None):
-            created.append(("cloud", job))
-            self.is_success = True
+    def _factory(job, ctx, parent):
+        runner = _RunnerStub(success=True)
+        created.append(("cloud", job, ctx, parent))
+        return runner
 
-    monkeypatch.setattr(
-        "ofx.runner.execution.cloud_job.CloudJobRunner", _DummyCloudRunner
-    )
+    monkeypatch.setattr("ofx.runner.workflow_execution.create_job_runner", _factory)
 
     class _Job:
         def __init__(self):
@@ -149,15 +121,12 @@ def test_build_stage_runners_cloud_matrix(monkeypatch):
 
     created = []
 
-    class _DummyCloudMatrixRunner:
-        def __init__(self, job, ctx, parent):
-            created.append(("cloud_matrix", job))
-            self.is_success = True
+    def _factory(job, ctx, parent):
+        runner = _RunnerStub(success=True)
+        created.append(("cloud_matrix", job, ctx, parent))
+        return runner
 
-    monkeypatch.setattr(
-        "ofx.runner.execution.cloud_matrix.CloudMatrixJobRunner",
-        _DummyCloudMatrixRunner,
-    )
+    monkeypatch.setattr("ofx.runner.workflow_execution.create_job_runner", _factory)
 
     class _Job:
         def __init__(self):
@@ -177,15 +146,12 @@ def test_build_stage_runners_cloud_fleet(monkeypatch):
 
     created = []
 
-    class _DummyCloudFleetRunner:
-        def __init__(self, job, ctx, parent):
-            created.append(("cloud_fleet", job))
-            self.is_success = True
+    def _factory(job, ctx, parent):
+        runner = _RunnerStub(success=True)
+        created.append(("cloud_fleet", job, ctx, parent))
+        return runner
 
-    monkeypatch.setattr(
-        "ofx.runner.execution.cloud_fleet.CloudFleetRunner",
-        _DummyCloudFleetRunner,
-    )
+    monkeypatch.setattr("ofx.runner.workflow_execution.create_job_runner", _factory)
 
     class _Job:
         def __init__(self):

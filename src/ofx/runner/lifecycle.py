@@ -7,13 +7,13 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from ofx.runner.core.models import ConditionNotMetError, RunnerStatus, RunResult
+from ofx.runner.context import ConditionNotMetError, RunnerStatus, RunResult
 from ofx.runner.registry import cleanup_registry
 from ofx.runner.services.checkpoint import CheckpointManager
 from ofx.runner.services.event_emitter import EventEmitter
 
 if TYPE_CHECKING:
-    from ofx.runner.core.base import BaseRunner
+    from ofx.runner.runner import Runner
 
 
 class RunnerStateMachine:
@@ -71,7 +71,7 @@ class LifecycleManager:
 
     __slots__ = ("_runner", "_event_emitter", "_checkpoint_manager")
 
-    def __init__(self, runner: BaseRunner[Any]) -> None:
+    def __init__(self, runner: Runner[Any]) -> None:
         self._runner = runner
         self._event_emitter = EventEmitter(runner)
         self._checkpoint_manager = CheckpointManager(runner)
@@ -160,7 +160,8 @@ class LifecycleManager:
                     )
 
             try:
-                await cleanup_registry(self._runner._registry)
+                if self._runner._registry is not None:
+                    await cleanup_registry(self._runner._registry)
             except Exception as cleanup_err:
                 self._runner._log_warning(f"registry cleanup failed: {cleanup_err}")
 

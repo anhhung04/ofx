@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from urllib.parse import urlparse
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Subdomain, Url
 from ofx.tasks.registry import TaskRegistry
@@ -49,9 +46,8 @@ class GauTask(Task):
         results: list[Url | Subdomain] = []
 
         if line.startswith("{"):
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
+            data = self._parse_json_line(line)
+            if data is None:
                 return []
 
             url = data.get("url", "")
@@ -61,11 +57,7 @@ class GauTask(Task):
             status_code = self._safe_int(data.get("status", 0))
             results.append(Url(url=url, status_code=status_code))
 
-            try:
-                host = urlparse(url).hostname or ""
-            except ValueError:
-                host = ""
-
+            host = self._url_host(url)
             if host and "." in host:
                 domain = ".".join(host.rsplit(".", 2)[-2:])
                 results.append(Subdomain(host=host, domain=domain))

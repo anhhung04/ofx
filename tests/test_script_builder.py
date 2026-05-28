@@ -110,6 +110,18 @@ class TestBuildBashEnvEscaping:
                 [step], session_id="s1", work_dir="/tmp/s", env={"BAD-KEY": "x"}
             )
 
+    def test_reserved_env_keys_are_skipped_in_bash(self):
+        step = _make_step(run="echo hi")
+        script = build_session_script(
+            [step],
+            session_id="s1",
+            work_dir="/tmp/s",
+            env={"PATH": "/tmp/bin", "HOME": "/tmp/home", "SAFE": "ok"},
+        )
+        assert 'export SAFE="ok"' in script
+        assert 'export PATH=' not in script
+        assert 'export HOME=' not in script
+
 
 # ---------------------------------------------------------------------------
 # build_session_script (bash) — step command uses $WORK_DIR not literal
@@ -126,6 +138,13 @@ class TestBashStepUsesWorkDirVar:
 
     def test_script_step_uses_work_dir_var(self):
         step = _make_step(script="print('hello')")
+        script = build_session_script([step], session_id="s1", work_dir="/some/path")
+        lines = [line for line in script.split("\n") if '".ofx_step_0.py"' in line]
+        assert lines
+        assert "/some/path" not in lines[0]
+
+    def test_script_file_step_uses_work_dir_var(self):
+        step = Step.model_validate({"name": "sf", "script_file": "worker.py"})
         script = build_session_script([step], session_id="s1", work_dir="/some/path")
         lines = [line for line in script.split("\n") if '".ofx_step_0.py"' in line]
         assert lines
@@ -176,6 +195,28 @@ class TestTaskStepCommands:
             [step], session_id="s1", work_dir="C:\\work", os_type="windows"
         )
         assert 'Set-Location "C:\\work"; nmap' in script
+
+    def test_bash_pipe_step_reports_local_only_error(self):
+        step = Step.model_validate(
+            {
+                "name": "pipe-step",
+                "pipe": {"input": "{{ values }}"},
+            }
+        )
+        script = build_session_script([step], session_id="s1", work_dir="/tmp/s")
+        assert "Pipe steps run locally and cannot be executed in cloud sessions" in script
+
+    def test_powershell_pipe_step_reports_local_only_error(self):
+        step = Step.model_validate(
+            {
+                "name": "pipe-step",
+                "pipe": {"input": "{{ values }}"},
+            }
+        )
+        script = build_session_script(
+            [step], session_id="s1", work_dir="C:\\work", os_type="windows"
+        )
+        assert "Pipe steps run locally and cannot be executed in cloud sessions" in script
 
 
 class TestScriptOpsecPayload:
@@ -236,6 +277,19 @@ class TestBuildPowerShellEnvEscaping:
                 os_type="windows",
             )
 
+    def test_reserved_env_keys_are_skipped_in_powershell(self):
+        step = _make_step(run="Write-Output test")
+        script = build_session_script(
+            [step],
+            session_id="s1",
+            work_dir="C:\\work",
+            env={"PATH": "C:\\tmp", "USER": "demo", "SAFE": "ok"},
+            os_type="windows",
+        )
+        assert '$env:SAFE = "ok"' in script
+        assert '$env:PATH =' not in script
+        assert '$env:USER =' not in script
+
 
 # ---------------------------------------------------------------------------
 # build_session_script (powershell) — inline script uses here-string
@@ -264,3 +318,11 @@ class TestPowerShellInlineScriptHereString:
         )
         assert 'Set-Location "C:\\work```"`$env:W"' in script
         assert '$__ofx_py = Join-Path $WORK_DIR ".ofx_step_0.py"' in script
+
+    def test_script_file_uses_python_temp_file(self):
+        step = Step.model_validate({"name": "sf", "script_file": "worker.py"})
+        script = build_session_script(
+            [step], session_id="s1", work_dir="C:\\work", os_type="windows"
+        )
+        assert '$__ofx_py = Join-Path $WORK_DIR ".ofx_step_0.py"' in script
+        assert "& py -3 $__ofx_py" in script

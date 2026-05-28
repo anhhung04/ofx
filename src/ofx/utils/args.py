@@ -2,6 +2,7 @@
 
 import json
 import logging
+from contextlib import suppress
 from typing import Any
 
 from ofx.settings import settings
@@ -33,10 +34,8 @@ def parse_key_value_pairs(
             ) from None
         if not keep_string:
             # Try JSON parsing for value
-            try:
+            with suppress(json.JSONDecodeError):
                 value = json.loads(value)
-            except json.JSONDecodeError:
-                pass
 
         if key not in processed_inputs:
             processed_inputs[key] = [value]

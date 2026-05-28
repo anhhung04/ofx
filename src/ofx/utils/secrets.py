@@ -5,6 +5,7 @@ import json
 import logging
 import os
 from collections.abc import Set as AbstractSet
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -270,10 +271,8 @@ def migrate_from_directory(
     for secret_file in directory.glob("*"):
         if secret_file.is_file():
             content = secret_file.read_text()
-            try:
+            with suppress(json.JSONDecodeError):
                 content = json.loads(content)
-            except json.JSONDecodeError:
-                pass
             secrets[secret_file.name] = content
     _with_store(store_path, passphrase).import_unencrypted(secrets, overwrite=False)
     return len(secrets)
@@ -394,10 +393,8 @@ def _load_dir_secrets(
         if keys and secret_file.name not in keys:
             continue
         content = secret_file.read_text()
-        try:
+        with suppress(json.JSONDecodeError, ValueError):
             content = json.loads(content)
-        except (json.JSONDecodeError, ValueError):
-            pass
         result[secret_file.name] = content
     return result
 

@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from ofx.models.pipe import PipeConfig
 from ofx.models.step import RunType, Step
-from ofx.runner.execution.pipe import (
+from ofx.runner.pipe import (
     _coerce_to_list,
+    _dump_json_lines,
+    _dump_json_pretty,
     _execute_pipeline,
     _format_items,
     _safe_eval,
@@ -192,6 +195,14 @@ class TestExecutePipeline:
         ports = [r["port"] for r in result]
         assert ports == sorted(ports, reverse=True)
 
+    def test_sort_object_items_by_attribute(self):
+        data = [SimpleNamespace(port=443), SimpleNamespace(port=80)]
+        cfg = PipeConfig(input="{{ x }}", sort="port")
+
+        result = _execute_pipeline(data, cfg)
+
+        assert [item.port for item in result] == [80, 443]
+
     def test_unique(self):
         cfg = PipeConfig(input="{{ x }}", unique="host")
         result = _execute_pipeline(SAMPLE_DATA.copy(), cfg)
@@ -203,6 +214,18 @@ class TestExecutePipeline:
         cfg = PipeConfig(input="{{ x }}", unique=["host", "svc"])
         result = _execute_pipeline(SAMPLE_DATA.copy(), cfg)
         assert len(result) == 5  # all unique by (host, svc) pair
+
+    def test_unique_object_items_by_attribute(self):
+        data = [
+            SimpleNamespace(host="a", port=80),
+            SimpleNamespace(host="a", port=443),
+            SimpleNamespace(host="b", port=80),
+        ]
+        cfg = PipeConfig(input="{{ x }}", unique="host")
+
+        result = _execute_pipeline(data, cfg)
+
+        assert [item.host for item in result] == ["a", "b"]
 
     def test_limit(self):
         cfg = PipeConfig(input="{{ x }}", limit=2)
@@ -226,6 +249,14 @@ class TestExecutePipeline:
         assert isinstance(result, dict)
         assert "10.0.0.1" in result
         assert len(result["10.0.0.1"]) == 2
+
+    def test_group_object_items_by_attribute(self):
+        data = [SimpleNamespace(host="a"), SimpleNamespace(host="b")]
+        cfg = PipeConfig(input="{{ x }}", group_by="host", format="json")
+
+        result = _execute_pipeline(data, cfg)
+
+        assert list(result) == ["a", "b"]
 
     def test_flatten(self):
         data = [
@@ -261,6 +292,13 @@ class TestExecutePipeline:
 
 
 class TestFormatItems:
+    def test_dump_json_pretty(self):
+        assert json.loads(_dump_json_pretty([{"a": 1}])) == [{"a": 1}]
+
+    def test_dump_json_lines(self):
+        result = _dump_json_lines([{"a": 1}, {"a": 2}])
+        assert result.splitlines() == ['{"a": 1}', '{"a": 2}']
+
     def test_json(self):
         cfg = PipeConfig(input="{{ x }}", format="json")
         result = _format_items([{"a": 1}], cfg)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -228,7 +229,6 @@ def _discover_workflow_files() -> list[Path]:
                 dirs.append(coll_path)
     except Exception as e:
         logger.debug("Failed to load installed collections for linting: %s", e)
-        pass
 
     for d in dirs:
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
@@ -244,12 +244,10 @@ def _find_workflow_file(name: str) -> list[Path]:
     """Find a single workflow file by name."""
     from ofx.utils.workflow_utils import find_workflow
 
-    try:
+    with suppress(RuntimeError):
         wf = find_workflow(name, tuple(DEFAULT_WORKFLOWS_DIRS))
         if wf.workflow_path:
             return [wf.workflow_path]
-    except RuntimeError:
-        pass
 
     # Recursive fallback
     for d in DEFAULT_WORKFLOWS_DIRS:

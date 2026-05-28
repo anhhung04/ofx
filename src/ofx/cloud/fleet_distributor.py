@@ -9,6 +9,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -213,14 +214,10 @@ def expand_fleet_to_matrix(
     except Exception:
         # Clean up any written files before propagating
         for f in chunk_files:
-            try:
+            with suppress(OSError):
                 f.unlink(missing_ok=True)
-            except OSError:
-                pass
-        try:
+        with suppress(OSError):
             output_dir.rmdir()
-        except OSError:
-            pass
         raise
 
     logger.debug(

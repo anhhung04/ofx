@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -111,9 +110,8 @@ class WhatwebTask(Task):
         line = line.strip()
         if not line:
             return []
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
+        entry = self._parse_json_line(line)
+        if entry is None:
             return []
         return self._parse_json_entry(entry)
 
@@ -123,13 +121,7 @@ class WhatwebTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

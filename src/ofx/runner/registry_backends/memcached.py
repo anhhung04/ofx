@@ -1,11 +1,10 @@
 """Memcached-based registry adapter for distributed caching"""
 
-import json
 import logging
 import warnings
 from typing import Any
 
-from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry_adapter import RegistryAdapter
 
 try:
     import aiomcache
@@ -90,53 +89,46 @@ class MemcachedJobRegistry(RegistryAdapter):
         """Create the index key that stores all registry keys"""
         return f"{self.prefix}_index"
 
-    async def _add_to_index(self, key: str) -> None:
-        """Add a key to the index of all keys"""
+    async def _get_index(self) -> list[str]:
+        """Load the index of registry keys from Memcached."""
         client = await self._get_client()
         index_key = self._make_index_key()
+        index_data = await client.get(index_key.encode())
+        if not index_data:
+            return []
 
+        decoded = self._deserialize_value(index_key, index_data)
+        if isinstance(decoded, list):
+            return decoded
+        return []
+
+    async def _set_index(self, keys: list[str]) -> None:
+        """Persist the index of registry keys to Memcached."""
+        client = await self._get_client()
+        index_key = self._make_index_key()
+        json_value = self._serialize_value(index_key, keys)
+        if json_value is not None:
+            await client.set(index_key.encode(), json_value.encode())
+
+    async def _add_to_index(self, key: str) -> None:
+        """Add a key to the index of all keys"""
         try:
-            index_data = await client.get(index_key.encode())
-            if index_data:
-                keys = json.loads(index_data.decode())
-            else:
-                keys = []
+            keys = await self._get_index()
         except Exception as exc:
-            logger.warning(
-                "Failed to fetch memcached index for '%s': %s", index_key, exc
-            )
+            logger.warning("Failed to fetch memcached index: %s", exc)
             keys = []
 
         if key not in keys:
             keys.append(key)
-            try:
-                await client.set(
-                    index_key.encode(), json.dumps(keys, default=str).encode()
-                )
-            except (TypeError, ValueError) as exc:
-                logger.warning("Failed to serialize index for key '%s': %s", key, exc)
+            await self._set_index(keys)
 
     async def _remove_from_index(self, key: str) -> None:
         """Remove a key from the index of all keys"""
-        client = await self._get_client()
-        index_key = self._make_index_key()
-
         try:
-            index_data = await client.get(index_key.encode())
-            if index_data:
-                keys = json.loads(index_data.decode())
-                if key in keys:
-                    keys.remove(key)
-                    try:
-                        await client.set(
-                            index_key.encode(), json.dumps(keys, default=str).encode()
-                        )
-                    except (TypeError, ValueError) as exc:
-                        logger.warning(
-                            "Failed to serialize index after removing key '%s': %s",
-                            key,
-                            exc,
-                        )
+            keys = await self._get_index()
+            if key in keys:
+                keys.remove(key)
+                await self._set_index(keys)
         except Exception as e:
             logger.warning("Memcached delete failed for key removal: %s", e)
 
@@ -144,10 +136,8 @@ class MemcachedJobRegistry(RegistryAdapter):
         """Store data in Memcached"""
         client = await self._get_client()
         cache_key = self._make_key(key)
-        try:
-            json_value = json.dumps(value, default=str)
-        except (TypeError, ValueError) as exc:
-            logger.warning("Failed to serialize value for key '%s': %s", key, exc)
+        json_value = self._serialize_value(key, value)
+        if json_value is None:
             return
         await client.set(cache_key.encode(), json_value.encode())
         await self._add_to_index(key)
@@ -159,13 +149,7 @@ class MemcachedJobRegistry(RegistryAdapter):
         cache_key = self._make_key(key)
         value = await client.get(cache_key.encode())
         if value:
-            try:
-                return json.loads(value.decode())
-            except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                logger.warning(
-                    "Failed to decode registry value for key '%s': %s", key, exc
-                )
-                return None
+            return self._deserialize_value(key, value)
         return None
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
@@ -202,21 +186,16 @@ class MemcachedJobRegistry(RegistryAdapter):
     async def _get_all(self) -> dict[str, Any]:
         """Get all entries from Memcached"""
         client = await self._get_client()
-        index_key = self._make_index_key()
 
         try:
-            index_data = await client.get(index_key.encode())
-            if not index_data:
-                return {}
-
-            keys = json.loads(index_data.decode())
             result = {}
-
-            for key in keys:
+            for key in await self._get_index():
                 cache_key = self._make_key(key)
                 value = await client.get(cache_key.encode())
                 if value:
-                    result[key] = json.loads(value.decode())
+                    decoded = self._deserialize_value(key, value)
+                    if decoded is not None:
+                        result[key] = decoded
 
             return result
         except Exception as e:
@@ -229,15 +208,11 @@ class MemcachedJobRegistry(RegistryAdapter):
         index_key = self._make_index_key()
 
         try:
-            index_data = await client.get(index_key.encode())
-            if index_data:
-                keys = json.loads(index_data.decode())
-                for key in keys:
-                    cache_key = self._make_key(key)
-                    await client.delete(cache_key.encode())
+            for key in await self._get_index():
+                cache_key = self._make_key(key)
+                await client.delete(cache_key.encode())
 
-                # Clear the index itself
-                await client.delete(index_key.encode())
+            await client.delete(index_key.encode())
         except Exception as e:
             logger.warning("Memcached clear failed: %s", e)
 
@@ -249,7 +224,3 @@ class MemcachedJobRegistry(RegistryAdapter):
             await self._client.close()
             self._client = None
         self._log_debug("Closed MemcachedJobRegistry")
-
-    @staticmethod
-    def _log_debug(message: str) -> None:
-        logger.debug(message)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
 from ofx.tasks.registry import TaskRegistry
@@ -79,23 +77,22 @@ class KatanaTask(Task):
 
         # Try JSON first (katana -jsonl output)
         if line.startswith("{"):
-            try:
-                data = json.loads(line)
-                url = data.get("request", {}).get("endpoint", data.get("url", ""))
-                if not url:
-                    return []
-                return [
-                    Url(
-                        url=url,
-                        host=data.get("request", {}).get("host", ""),
-                        status_code=self._safe_int(
-                            data.get("response", {}).get("status_code", 0)
-                        ),
-                        method=data.get("request", {}).get("method", "GET"),
-                    )
-                ]
-            except json.JSONDecodeError:
+            data = self._parse_json_line(line)
+            if data is None:
                 return []
+            url = data.get("request", {}).get("endpoint", data.get("url", ""))
+            if not url:
+                return []
+            return [
+                Url(
+                    url=url,
+                    host=data.get("request", {}).get("host", ""),
+                    status_code=self._safe_int(
+                        data.get("response", {}).get("status_code", 0)
+                    ),
+                    method=data.get("request", {}).get("method", "GET"),
+                )
+            ]
         else:
             # Plain URL line
             if line.startswith("http://") or line.startswith("https://"):

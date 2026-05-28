@@ -107,10 +107,7 @@ def _stream_to_stdout(cfg: dict, messages: list[dict]) -> str:
             refresh_per_second=12,
             transient=True,
         ):
-            try:
-                first_chunk = next(stream)
-            except StopIteration:
-                pass
+            first_chunk = next(stream, None)
     except KeyboardInterrupt:
         console.print("\n[dim]Interrupted.[/dim]")
         return ""
@@ -418,9 +415,6 @@ def list_skills() -> None:
 
 
 class SetupHandler:
-    def __init__(self):
-        pass
-
     def run(self) -> None:
         import os
 

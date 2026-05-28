@@ -65,7 +65,7 @@ class CoercerTask(Task):
         if listener:
             parts.extend(["-l", self._q(listener)])
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode", "listener"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         return " ".join(parts), None
 
@@ -80,7 +80,7 @@ class CoercerTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability | Tag]:
-        raw = stdout or ""
+        raw = self._raw_output(stdout)
         results: list[Vulnerability | Tag] = []
 
         for line in raw.splitlines():

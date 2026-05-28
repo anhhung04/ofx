@@ -11,6 +11,33 @@ from ofx.models.cloud import CloudConfig
 logger = logging.getLogger("ofx")
 
 
+async def _wait_for_port(
+    host: str,
+    port: int,
+    *,
+    label: str,
+    timeout: int,
+    interval: int,
+) -> bool:
+    deadline = asyncio.get_running_loop().time() + timeout
+    attempts = 0
+
+    while asyncio.get_running_loop().time() < deadline:
+        attempts += 1
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=10
+            )
+            writer.close()
+            await writer.wait_closed()
+            logger.debug("%s reachable on %s:%s after %s attempts", label, host, port, attempts)
+            return True
+        except (TimeoutError, OSError):
+            await asyncio.sleep(interval)
+
+    raise TimeoutError(f"{label} on {host}:{port} not reachable after {timeout}s")
+
+
 async def wait_for_ssh(
     host: str, port: int = 22, timeout: int = 300, interval: int = 5
 ) -> bool:
@@ -28,24 +55,13 @@ async def wait_for_ssh(
     Raises:
         TimeoutError: If SSH not reachable within timeout.
     """
-    deadline = asyncio.get_running_loop().time() + timeout
-    attempts = 0
-
-    while asyncio.get_running_loop().time() < deadline:
-        attempts += 1
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=10
-            )
-            writer.close()
-            await writer.wait_closed()
-            logger.debug(f"SSH reachable on {host}:{port} after {attempts} attempts")
-            return True
-        except (TimeoutError, OSError):
-            pass
-        await asyncio.sleep(interval)
-
-    raise TimeoutError(f"SSH on {host}:{port} not reachable after {timeout}s")
+    return await _wait_for_port(
+        host,
+        port,
+        label="SSH",
+        timeout=timeout,
+        interval=interval,
+    )
 
 
 async def wait_for_winrm(
@@ -65,24 +81,13 @@ async def wait_for_winrm(
     Raises:
         TimeoutError: If WinRM not reachable within timeout.
     """
-    deadline = asyncio.get_running_loop().time() + timeout
-    attempts = 0
-
-    while asyncio.get_running_loop().time() < deadline:
-        attempts += 1
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=10
-            )
-            writer.close()
-            await writer.wait_closed()
-            logger.debug(f"WinRM reachable on {host}:{port} after {attempts} attempts")
-            return True
-        except (TimeoutError, OSError):
-            pass
-        await asyncio.sleep(interval)
-
-    raise TimeoutError(f"WinRM on {host}:{port} not reachable after {timeout}s")
+    return await _wait_for_port(
+        host,
+        port,
+        label="WinRM",
+        timeout=timeout,
+        interval=interval,
+    )
 
 
 async def wait_for_connectivity(

@@ -2,26 +2,28 @@
 
 from __future__ import annotations
 
-from ofx.models.step import RunType
-from ofx.runner.core.base import BaseRunner
-from ofx.runner.handlers import get_handler_registry
+from typing import TYPE_CHECKING
 
-registry = get_handler_registry()
+from ofx.models.step import RunType
+from ofx.runner.handlers.registry import registry
+from ofx.runner.handlers.shared import (
+    build_child_runner,
+    resolved_execution_model_kwargs,
+)
+
+if TYPE_CHECKING:
+    from ofx.runner.runner import BaseRunner
 
 
 @registry.register(RunType.TASK)
 def _create_task_runner(step_runner) -> BaseRunner:
+    from ofx.runner.task_step import extract_task_target_and_opts
     from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
     assert step_runner.model.task is not None, (
         "task cannot be None for TASK run type"
     )
-    task_opts = dict(step_runner.model.run_with)
-    raw_target = task_opts.pop("target", task_opts.pop("targets", ""))
-    if isinstance(raw_target, list):
-        target = ",".join(str(t) for t in raw_target)
-    else:
-        target = str(raw_target)
+    target, task_opts = extract_task_target_and_opts(step_runner.model.run_with)
     if not target:
         step_runner._log_warning(
             f"Task '{step_runner.model.task}' has no 'target' in 'with:' - "
@@ -31,13 +33,12 @@ def _create_task_runner(step_runner) -> BaseRunner:
         task_name=step_runner.model.task,
         target=target,
         opts=task_opts,
-        shell=step_runner.model.shell,
-        working_directory=step_runner._resolve_working_dir(),
+        **resolved_execution_model_kwargs(step_runner),
         timeout_minutes=step_runner.model.timeout,
         store_creds=step_runner._resolve_store_creds(),
     )
-    return TaskRunner(
+    return build_child_runner(
         task_model,
-        step_runner._child_context(),
-        parent=step_runner,
+        TaskRunner,
+        step_runner,
     )

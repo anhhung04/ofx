@@ -3,9 +3,9 @@ from pathlib import Path
 import pytest
 
 from ofx.models.config import DurableRunConfig
+from ofx.runner import RunnerStatus
 from ofx.runner.api import run_workflow
-from ofx.runner.core import RunnerStatus
-from ofx.runner.core.durable import (
+from ofx.runner.durable import (
     get_checkpoint,
     list_checkpoints,
     write_checkpoint,

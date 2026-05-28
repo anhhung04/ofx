@@ -315,4 +315,4 @@ class AWSProvider(CloudProvider):
 
     async def close(self) -> None:
         """Clean up boto3 resources."""
-        pass
+        return None

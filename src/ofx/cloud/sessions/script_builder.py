@@ -8,12 +8,16 @@ detect completion by tailing the log file.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
+from ofx.cloud.script_runtime import is_python_step_run_type
+from ofx.cloud.sessions.python_steps import step_bundle_filename
 from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.models.step import RunType, Step
 from ofx.utils.shell import bash_dquote_escape
 
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_RESERVED_ENV_KEYS = frozenset({"PATH", "HOME", "USER", "SHELL"})
 
 
 def _validate_env_key(key: str) -> None:
@@ -23,6 +27,21 @@ def _validate_env_key(key: str) -> None:
             f"Invalid environment variable name: {key!r}. "
             "Expected [A-Za-z_][A-Za-z0-9_]*."
         )
+
+
+def _iter_session_env_assignments(
+    env: dict[str, str],
+    *,
+    render_assignment,
+) -> list[str]:
+    """Render validated non-reserved env assignments for generated session scripts."""
+    lines: list[str] = []
+    for key, value in env.items():
+        _validate_env_key(key)
+        if key in _RESERVED_ENV_KEYS:
+            continue
+        lines.append(render_assignment(key, str(value)))
+    return lines
 
 
 def build_session_script(
@@ -95,11 +114,12 @@ def _build_bash(
     ]
 
     # Environment variables
-    for key, value in env.items():
-        _validate_env_key(key)
-        if key in ("PATH", "HOME", "USER", "SHELL"):
-            continue
-        lines.append(f'export {key}="{bash_dquote_escape(str(value))}"')
+    lines.extend(
+        _iter_session_env_assignments(
+            env,
+            render_assignment=lambda key, value: f'export {key}="{bash_dquote_escape(value)}"',
+        )
+    )
     if env:
         lines.append("")
 
@@ -117,7 +137,7 @@ def _build_bash(
         step_desc = bash_dquote_escape(_step_log_descriptor(step, idx))
         lines.append(f'_log ">>> Step {idx}: {step_desc}"')
 
-        cmd = _step_command_bash(step, idx, work_dir)
+        cmd = _step_command_bash(step, idx)
         if step.continue_on_error:
             lines.append(
                 f'({cmd}) >> "$LOG_FILE" 2>&1 || _log "Step {idx} ({step_desc}) failed (continue_on_error)"'
@@ -162,50 +182,36 @@ def _build_bash(
     return "\n".join(lines) + "\n"
 
 
-def _step_command_bash(step: Step, step_index: int, work_dir: str) -> str:  # noqa: ARG001
+def _step_command_bash(step: Step, step_index: int) -> str:
     """Extract the shell command(s) from a step for bash.
 
-    Uses ``$WORK_DIR`` rather than hard-coding *work_dir* so that paths with
+    Uses ``$WORK_DIR`` rather than hard-coding the working directory so that paths with
     spaces continue to work (the outer script always sets WORK_DIR as a
     quoted double-quoted assignment).
     """
-    run_type = step.get_run_type()
-
-    if run_type == RunType.COMMAND:
-        return f'cd "$WORK_DIR" 2>/dev/null; {step.run}'
-
-    if run_type == RunType.SCRIPT:
-        script_name = _python_step_filename(step_index)
-        escaped_name = bash_dquote_escape(script_name)
-        return (
-            'cd "$WORK_DIR" 2>/dev/null; '
-            "__OFX_PY_BIN=$(command -v python3 || command -v python); "
-            'if [ -z "$__OFX_PY_BIN" ]; then echo "Python interpreter not found" >&2; exit 127; fi; '
-            f'"$__OFX_PY_BIN" "{escaped_name}"'
-        )
-
-    if run_type == RunType.SCRIPT_FILE:
-        script_name = _python_step_filename(step_index)
-        escaped_name = bash_dquote_escape(script_name)
-        return (
-            'cd "$WORK_DIR" 2>/dev/null; '
-            "__OFX_PY_BIN=$(command -v python3 || command -v python); "
-            'if [ -z "$__OFX_PY_BIN" ]; then echo "Python interpreter not found" >&2; exit 127; fi; '
-            f'"$__OFX_PY_BIN" "{escaped_name}"'
-        )
-
-    if run_type == RunType.TASK:
-        return f'cd "$WORK_DIR" 2>/dev/null; {build_task_command_from_step(step)}'
-
-    if run_type == RunType.PIPE:
-        return 'echo "Pipe steps run locally and cannot be executed in cloud sessions" >&2; exit 1'
-
-    return f'echo "Unsupported run type: {run_type}"'
+    return _step_command_for_session_script(
+        step,
+        prefix='cd "$WORK_DIR" 2>/dev/null; ',
+        python_command=_python_step_command_bash(step_index),
+        pipe_command='echo "Pipe steps run locally and cannot be executed in cloud sessions" >&2; exit 1',
+        unsupported_command=lambda run_type: f'echo "Unsupported run type: {run_type}"',
+    )
 
 
 def _python_step_filename(step_index: int) -> str:
     """Return deterministic filename for staged inline step scripts."""
-    return f".ofx_step_{step_index}.py"
+    return step_bundle_filename(step_index)
+
+
+def _python_step_command_bash(step_index: int) -> str:
+    """Return the bash command used for staged Python step files."""
+    escaped_name = bash_dquote_escape(_python_step_filename(step_index))
+    return (
+        'cd "$WORK_DIR" 2>/dev/null; '
+        "__OFX_PY_BIN=$(command -v python3 || command -v python); "
+        'if [ -z "$__OFX_PY_BIN" ]; then echo "Python interpreter not found" >&2; exit 127; fi; '
+        f'"$__OFX_PY_BIN" "{escaped_name}"'
+    )
 
 
 def _step_log_descriptor(step: Step, step_index: int) -> str:
@@ -213,6 +219,31 @@ def _step_log_descriptor(step: Step, step_index: int) -> str:
     step_name = step.name or f"step_{step_index}"
     run_type = step.get_run_type().value
     return f"{step_name} [{run_type}]"
+
+
+def _step_command_for_session_script(
+    step: Step,
+    *,
+    prefix: str,
+    python_command: str,
+    pipe_command: str,
+    unsupported_command: Callable[[RunType], str],
+) -> str:
+    """Build a shell-specific session command from shared step run-type rules."""
+    run_type = step.get_run_type()
+
+    if run_type == RunType.COMMAND:
+        suffix = step.run or ""
+    elif is_python_step_run_type(run_type):
+        suffix = python_command
+    elif run_type == RunType.TASK:
+        suffix = build_task_command_from_step(step)
+    elif run_type == RunType.PIPE:
+        return pipe_command
+    else:
+        return unsupported_command(run_type)
+
+    return f"{prefix}{suffix}"
 
 
 def _bash_encrypt_epilogue() -> list[str]:
@@ -286,11 +317,12 @@ def _build_powershell(
     ]
 
     # Environment variables
-    for key, value in env.items():
-        _validate_env_key(key)
-        if key in ("PATH", "HOME", "USER", "SHELL"):
-            continue
-        lines.append(f'$env:{key} = "{_ps_escape(str(value))}"')
+    lines.extend(
+        _iter_session_env_assignments(
+            env,
+            render_assignment=lambda key, value: f'$env:{key} = "{_ps_escape(value)}"',
+        )
+    )
     if env:
         lines.append("")
 
@@ -404,6 +436,19 @@ def _ps_escape(s: str) -> str:
     return s.replace("`", "``").replace('"', '`"').replace("$", "`$")
 
 
+def _python_step_command_ps(step_index: int) -> str:
+    """Return the PowerShell command used for staged Python step files."""
+    script_name = _python_step_filename(step_index)
+    return (
+        f'$__ofx_py = Join-Path $WORK_DIR "{_ps_escape(script_name)}"; '
+        "if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 $__ofx_py } "
+        "elseif (Get-Command python -ErrorAction SilentlyContinue) { & python $__ofx_py } "
+        "elseif (Get-Command python3 -ErrorAction SilentlyContinue) { & python3 $__ofx_py } "
+        'else { throw "Python interpreter not found" }; '
+        "$__ofx_rc = $LASTEXITCODE; if ($__ofx_rc -ne 0) { exit $__ofx_rc }"
+    )
+
+
 def _step_command_ps(step: Step, step_index: int, work_dir: str) -> str:
     """Extract PowerShell command from a step.
 
@@ -411,41 +456,11 @@ def _step_command_ps(step: Step, step_index: int, work_dir: str) -> str:
     and piped to a temp script file, avoiding double-quote and backtick
     escaping issues inside ``Invoke-Expression``.
     """
-    run_type = step.get_run_type()
     escaped_cwd = _ps_escape(work_dir)
-
-    if run_type == RunType.COMMAND:
-        return f'Set-Location "{escaped_cwd}"; {step.run}'
-
-    if run_type == RunType.SCRIPT:
-        script_name = _python_step_filename(step_index)
-        return (
-            f'Set-Location "{escaped_cwd}"; '
-            f'$__ofx_py = Join-Path $WORK_DIR "{_ps_escape(script_name)}"; '
-            "if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 $__ofx_py } "
-            "elseif (Get-Command python -ErrorAction SilentlyContinue) { & python $__ofx_py } "
-            "elseif (Get-Command python3 -ErrorAction SilentlyContinue) { & python3 $__ofx_py } "
-            'else { throw "Python interpreter not found" }; '
-            "$__ofx_rc = $LASTEXITCODE; if ($__ofx_rc -ne 0) { exit $__ofx_rc }"
-        )
-
-    if run_type == RunType.SCRIPT_FILE:
-        script_name = _python_step_filename(step_index)
-        return (
-            f'Set-Location "{escaped_cwd}"; '
-            f'$__ofx_py = Join-Path $WORK_DIR "{_ps_escape(script_name)}"; '
-            "if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 $__ofx_py } "
-            "elseif (Get-Command python -ErrorAction SilentlyContinue) { & python $__ofx_py } "
-            "elseif (Get-Command python3 -ErrorAction SilentlyContinue) { & python3 $__ofx_py } "
-            'else { throw "Python interpreter not found" }; '
-            "$__ofx_rc = $LASTEXITCODE; "
-            "if ($__ofx_rc -ne 0) { exit $__ofx_rc }"
-        )
-
-    if run_type == RunType.TASK:
-        return f'Set-Location "{escaped_cwd}"; {build_task_command_from_step(step)}'
-
-    if run_type == RunType.PIPE:
-        return 'Write-Error "Pipe steps run locally and cannot be executed in cloud sessions"; exit 1'
-
-    return f'Write-Output "Unsupported run type: {run_type}"'
+    return _step_command_for_session_script(
+        step,
+        prefix=f'Set-Location "{escaped_cwd}"; ',
+        python_command=_python_step_command_ps(step_index),
+        pipe_command='Write-Error "Pipe steps run locally and cannot be executed in cloud sessions"; exit 1',
+        unsupported_command=lambda run_type: f'Write-Output "Unsupported run type: {run_type}"',
+    )

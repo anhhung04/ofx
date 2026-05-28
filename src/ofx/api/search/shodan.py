@@ -3,10 +3,10 @@
 import getpass
 import time
 import urllib.parse
-from configparser import ConfigParser
 from pathlib import Path
 
 from ofx.api._compat import CONFIG_FILE, get_logger
+from ofx.api.credential_config import load_section_values, save_section_values
 from ofx.api.http import requests
 
 logger = get_logger()
@@ -57,14 +57,13 @@ class Shodan:
             conf_path = CONFIG_FILE
 
         self.conf_path = conf_path
-        self.parser = ConfigParser()
-
-        if self.conf_path and self.conf_path.exists():
-            self.parser.read(self.conf_path)
-            try:
-                self.token = self.token or self.parser.get("Shodan", "Token")
-            except Exception:
-                logger.debug("Shodan token not found in config file")
+        self.parser, credentials = load_section_values(
+            self.conf_path,
+            "Shodan",
+            ("Token",),
+            logger=logger,
+        )
+        self.token = self.token or credentials.get("Token")
 
         self.check_token()
 
@@ -119,14 +118,8 @@ class Shodan:
         Creates config directory if needed and persists API token to config.ini
         in INI format.
         """
-        if not self.parser.has_section("Shodan"):
-            self.parser.add_section("Shodan")
         try:
-            self.parser.set("Shodan", "Token", self.token)
-            if self.conf_path:
-                self.conf_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.conf_path, "w") as f:
-                    self.parser.write(f)
+            save_section_values(self.conf_path, self.parser, "Shodan", {"Token": self.token})
         except Exception as ex:
             logger.error(str(ex))
 

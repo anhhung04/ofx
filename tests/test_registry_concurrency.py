@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from ofx.runner.core import cleanup_registry
+from ofx.runner import cleanup_registry
 from ofx.runner.registry import MemoryJobRegistry
 
 

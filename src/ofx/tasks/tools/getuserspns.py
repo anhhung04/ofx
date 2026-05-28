@@ -58,19 +58,12 @@ class GetUserSPNsTask(Task):
         hashes = kwargs.pop("hash", "")
 
         parts: list[str] = [self.cmd]
+        parts.extend(self._build_value_flag_parts([("-hashes", hashes)]))
+        parts.extend(self._build_opt_parts(kwargs))
 
-        if hashes:
-            parts.extend(["-hashes", self._q(hashes)])
-
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["username", "password", "hash"]))
-
-        # Build: domain/user:pass (target is the domain)
-        cred = target
-        if username:
-            cred += f"/{username}"
-            if password:
-                cred += f":{password}"
-        parts.append(self._q(cred))
+        parts.append(
+            self._q(self._domain_user_credential(target, username, password))
+        )
 
         return " ".join(parts), None
 
@@ -85,13 +78,7 @@ class GetUserSPNsTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[UserAccount]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

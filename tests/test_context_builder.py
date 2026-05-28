@@ -2,8 +2,8 @@
 
 import pytest
 
-from ofx.runner.context import RunnerContextBuilder
-from ofx.runner.core import RunContext
+from ofx.runner import RunContext
+from ofx.runner.context import RunnerContextBuilder, build_env_context
 
 
 def test_with_env_merges_and_copies():
@@ -42,6 +42,18 @@ def test_with_vars_merges_and_copies():
     assert ctx.vars["nested"]["k"] == "v2"
     assert ctx.vars["m"] == 1
     assert base.vars["nested"]["k"] == "v"
+
+
+def test_with_env_and_vars_merges_both_maps():
+    base = RunContext(envs={"A": "1"}, vars={"role": "base"})
+    builder = RunnerContextBuilder(base)
+    ctx = builder.with_env_and_vars({"B": "2"}, {"role": "scan"})
+
+    assert ctx.envs["A"] == "1"
+    assert ctx.envs["B"] == "2"
+    assert ctx.vars["role"] == "scan"
+    assert base.envs == {"A": "1"}
+    assert base.vars == {"role": "base"}
 
 
 def test_with_update_replaces_fields():
@@ -105,3 +117,13 @@ def test_frozen_builder():
     builder = RunnerContextBuilder(base)
     with pytest.raises(FrozenInstanceError):
         builder.base = RunContext()  # type: ignore[misc]
+
+
+def test_build_env_context_copies_env():
+    env = {"A": "1"}
+
+    ctx = build_env_context(env)
+    ctx.envs["B"] = "2"
+
+    assert ctx.envs["A"] == "1"
+    assert env == {"A": "1"}

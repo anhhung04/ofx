@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel
 
-from ofx.runner.core import BaseRunner, RunContext
+from ofx.runner import BaseRunner, RunContext
 
 
 class _Model(BaseModel):

@@ -1,4 +1,4 @@
-"""Tests for ofx.runner.execution.output_formatter."""
+"""Tests for ofx.runner.output_formatter."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import io
 
 from rich.console import Console
 
-from ofx.runner.execution.output_formatter import (
+from ofx.runner.output_formatter import (
     _cell_style,
     _cell_value,
     format_typed_outputs,

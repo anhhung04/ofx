@@ -9,6 +9,7 @@ import os
 import signal
 import sys
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,9 @@ from ofx.settings import settings
 
 logger = logging.getLogger("ofx")
 
+RUNNER_OUTPUTS_ENV = "RUNNER_OUTPUTS"
+OFX_OUTPUTS_ENV = "OFX_OUTPUTS"
+
 
 @dataclass
 class CommandExecutionResult:
@@ -26,6 +30,61 @@ class CommandExecutionResult:
     stdout: str
     stderr: str
     outputs: dict[str, Any]
+
+
+def parse_outputs_file(
+    outputs_file: Path,
+    log_fn: Callable[[str], None],
+) -> dict[str, str]:
+    """Parse and remove a RUNNER_OUTPUTS-style ``key=value`` file."""
+    parsed: dict[str, str] = {}
+    if not outputs_file.exists():
+        return parsed
+    try:
+        outputs_content = outputs_file.read_text().strip()
+        if outputs_content:
+            for line in outputs_content.splitlines():
+                line = line.strip()
+                if line and "=" in line:
+                    key_name, value = line.split("=", 1)
+                    key_name = key_name.strip()
+                    value = value.strip()
+                    if key_name:
+                        parsed[key_name] = value
+                        log_fn(f"Captured output: {key_name}={value}")
+    except Exception as e:
+        log_fn(f"Failed to parse RUNNER_OUTPUTS: {e}")
+    finally:
+        try:
+            outputs_file.unlink(missing_ok=True)
+        except Exception as e:
+            log_fn(f"Failed to remove outputs file: {e}")
+    return parsed
+
+
+def prepare_outputs_file_env(
+    envs: dict[str, Any],
+    *,
+    interactive: bool,
+    include_ofx_alias: bool = False,
+) -> Path | None:
+    """Create or reuse the outputs file path injected into a command environment."""
+    if interactive:
+        return None
+
+    existing = envs.get(RUNNER_OUTPUTS_ENV)
+    if existing:
+        outputs_file = Path(existing)
+    else:
+        from ofx.utils.tempfiles import make_temp_file
+
+        outputs_file = make_temp_file(prefix=".tmp_out_")
+        envs[RUNNER_OUTPUTS_ENV] = str(outputs_file)
+
+    if include_ofx_alias:
+        envs[OFX_OUTPUTS_ENV] = str(outputs_file)
+
+    return outputs_file
 
 
 def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
@@ -45,10 +104,8 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
         return
 
     # SIGTERM the group first for graceful shutdown
-    try:
+    with suppress(OSError, ProcessLookupError):
         os.killpg(pgid, signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        pass
 
     # Give children 2 seconds to exit, then force-kill
     import time
@@ -61,10 +118,8 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
             return  # all dead
         time.sleep(0.1)
 
-    try:
+    with suppress(OSError, ProcessLookupError):
         os.killpg(pgid, signal.SIGKILL)
-    except (OSError, ProcessLookupError):
-        pass
 
 
 class CommandExecutor:
@@ -97,16 +152,10 @@ class CommandExecutor:
         write ``key=value`` lines that are later parsed by
         :meth:`capture_outputs_file`.
         """
-        if not self._command.interactive:
-            # Reuse outputs file if already created by StepRunner
-            existing = self._envs.get("RUNNER_OUTPUTS")
-            if existing:
-                self._outputs_file = Path(existing)
-            else:
-                from ofx.utils.tempfiles import make_temp_file
-
-                self._outputs_file = make_temp_file(prefix=".tmp_out_")
-                self._envs["RUNNER_OUTPUTS"] = str(self._outputs_file)
+        self._outputs_file = prepare_outputs_file_env(
+            self._envs,
+            interactive=self._command.interactive,
+        )
 
     async def execute_streaming(
         self,
@@ -117,16 +166,13 @@ class CommandExecutor:
         Each line is passed to *on_line* as it arrives.  The full stdout
         is still collected and returned in the result.
         """
-        shell_funcs = get_shell_functions(self._command.shell)
-        full_cmd = f"{shell_funcs}\n{self._command.cmd}"
-
         # Raise the StreamReader line-buffer limit to 10 MB.
         # The default 64 KB causes "Separator is not found, and chunk exceed
         # the limit" errors when tools like katana emit long JSONL lines.
         _STREAM_LIMIT = 10 * 1024 * 1024  # 10 MB
 
         proc = await asyncio.create_subprocess_shell(
-            full_cmd,
+            self._full_command(),
             executable=self._command.shell,
             cwd=self._command.working_directory,
             env=self._envs,
@@ -206,12 +252,8 @@ class CommandExecutor:
         )
 
     async def _run_interactive(self) -> CommandExecutionResult:
-        # Prepend shell helper functions to the command
-        shell_funcs = get_shell_functions(self._command.shell)
-        full_cmd = f"{shell_funcs}\n{self._command.cmd}"
-
         proc = await asyncio.create_subprocess_shell(
-            full_cmd,
+            self._full_command(),
             executable=self._command.shell,
             cwd=self._command.working_directory,
             env=self._envs,
@@ -241,12 +283,8 @@ class CommandExecutor:
         )
 
     async def _run_non_interactive(self) -> CommandExecutionResult:
-        # Prepend shell helper functions to the command
-        shell_funcs = get_shell_functions(self._command.shell)
-        full_cmd = f"{shell_funcs}\n{self._command.cmd}"
-
         proc = await asyncio.create_subprocess_shell(
-            full_cmd,
+            self._full_command(),
             executable=self._command.shell,
             cwd=self._command.working_directory,
             env=self._envs,
@@ -273,51 +311,78 @@ class CommandExecutor:
             exit_code=exit_code, stdout=stdout, stderr=stderr, outputs=outputs
         )
 
+    def _full_command(self) -> str:
+        """Return the command with shell helper functions prepended."""
+        return f"{get_shell_functions(self._command.shell)}\n{self._command.cmd}"
+
     def _decode_output(
         self, stdout_bytes: bytes, stderr_bytes: bytes
     ) -> tuple[str, str, dict[str, Any]]:
         max_size = settings.max_output_size
         outputs: dict[str, Any] = {}
         try:
-            stderr = stderr_bytes.decode("utf-8").strip()
-            stdout = stdout_bytes.decode("utf-8").strip()
-
-            if len(stdout_bytes) > max_size:
-                stdout = (
-                    stdout_bytes[:max_size].decode("utf-8", errors="ignore")
-                    + "\n... [OUTPUT TRUNCATED]"
-                )
-                outputs["output_truncated"] = True
-
-            if len(stderr_bytes) > max_size:
-                stderr = (
-                    stderr_bytes[:max_size].decode("utf-8", errors="ignore")
-                    + "\n... [STDERR TRUNCATED]"
-                )
-                outputs["stderr_truncated"] = True
+            stdout = self._decode_utf8_output(
+                stdout_bytes,
+                max_size=max_size,
+                truncated_suffix="\n... [OUTPUT TRUNCATED]",
+                truncated_flag="output_truncated",
+                outputs=outputs,
+            )
+            stderr = self._decode_utf8_output(
+                stderr_bytes,
+                max_size=max_size,
+                truncated_suffix="\n... [STDERR TRUNCATED]",
+                truncated_flag="stderr_truncated",
+                outputs=outputs,
+            )
 
         except UnicodeDecodeError:
-            if len(stdout_bytes) > max_size:
-                stdout = (
-                    base64.b64encode(stdout_bytes[:max_size]).decode("utf-8")
-                    + "... [BINARY OUTPUT TRUNCATED]"
-                )
-                outputs["binary_output"] = True
-                outputs["output_truncated"] = True
-            else:
-                stdout = base64.b64encode(stdout_bytes).decode("utf-8")
-                outputs["binary_output"] = True
-
-            if len(stderr_bytes) > max_size:
-                stderr = (
-                    base64.b64encode(stderr_bytes[:max_size]).decode("utf-8")
-                    + "... [BINARY STDERR TRUNCATED]"
-                )
-                outputs["stderr_truncated"] = True
-            else:
-                stderr = base64.b64encode(stderr_bytes).decode("utf-8")
+            outputs["binary_output"] = True
+            stdout = self._encode_binary_output(
+                stdout_bytes,
+                max_size=max_size,
+                truncated_suffix="... [BINARY OUTPUT TRUNCATED]",
+                truncated_flag="output_truncated",
+                outputs=outputs,
+            )
+            stderr = self._encode_binary_output(
+                stderr_bytes,
+                max_size=max_size,
+                truncated_suffix="... [BINARY STDERR TRUNCATED]",
+                truncated_flag="stderr_truncated",
+                outputs=outputs,
+            )
 
         return stdout, stderr, outputs
+
+    @staticmethod
+    def _decode_utf8_output(
+        output_bytes: bytes,
+        *,
+        max_size: int,
+        truncated_suffix: str,
+        truncated_flag: str,
+        outputs: dict[str, Any],
+    ) -> str:
+        text = output_bytes.decode("utf-8").strip()
+        if len(output_bytes) > max_size:
+            text = output_bytes[:max_size].decode("utf-8", errors="ignore") + truncated_suffix
+            outputs[truncated_flag] = True
+        return text
+
+    @staticmethod
+    def _encode_binary_output(
+        output_bytes: bytes,
+        *,
+        max_size: int,
+        truncated_suffix: str,
+        truncated_flag: str,
+        outputs: dict[str, Any],
+    ) -> str:
+        if len(output_bytes) > max_size:
+            outputs[truncated_flag] = True
+            return base64.b64encode(output_bytes[:max_size]).decode("utf-8") + truncated_suffix
+        return base64.b64encode(output_bytes).decode("utf-8")
 
     def raise_for_status(self, exit_code: int | None, stderr: str) -> None:
         """Raise :class:`RuntimeError` if the exit code indicates failure."""
@@ -335,11 +400,9 @@ class CommandExecutor:
         """Close process transport and streams; ensure the process tree is reaped."""
         pid = proc.pid
         if pid is not None:
-            try:
+            with suppress(OSError, ProcessLookupError):
                 pgid = os.getpgid(pid)
                 os.killpg(pgid, signal.SIGTERM)
-            except (OSError, ProcessLookupError):
-                pass
 
         # Close the subprocess transport (owns the underlying pipe fds)
         transport = getattr(proc, "_transport", None)
@@ -354,21 +417,7 @@ class CommandExecutor:
 
         The file is deleted after parsing regardless of success or failure.
         """
-        if not self._outputs_file or not self._outputs_file.exists():
+        if not self._outputs_file:
             return
-        try:
-            outputs_content = self._outputs_file.read_text().strip()
-            if outputs_content:
-                for line in outputs_content.splitlines():
-                    line = line.strip()
-                    if line and "=" in line:
-                        key_name, value = line.split("=", 1)
-                        key_name = key_name.strip()
-                        value = value.strip()
-                        if key_name:
-                            await runner.reg_update(key, {key_name: value})
-                            log_fn(f"Captured output: {key_name}={value}")
-        except Exception as e:
-            log_fn(f"Failed to parse RUNNER_OUTPUTS: {e}")
-        finally:
-            self._outputs_file.unlink(missing_ok=True)
+        for key_name, value in parse_outputs_file(self._outputs_file, log_fn).items():
+            await runner.reg_update(key, {key_name: value})

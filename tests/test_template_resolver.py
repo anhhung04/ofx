@@ -58,6 +58,16 @@ class TestTojsonPython:
         result = _tojson_python({"val": "true is not false"})
         assert '"true is not false"' in result
 
+    def test_preserves_json_keywords_inside_strings(self):
+        result = _tojson_python({"val": ": true, false, null [true"})
+        assert result == '{"val": ": true, false, null [true"}'
+
+    def test_replaces_nested_values_without_touching_strings(self):
+        result = _tojson_python(
+            {"items": [True, {"enabled": False, "label": "null"}]}
+        )
+        assert result == '{"items": [True, {"enabled": False, "label": "null"}]}'
+
     def test_indent(self):
         result = _tojson_python({"a": 1}, indent=2)
         assert "\n" in result

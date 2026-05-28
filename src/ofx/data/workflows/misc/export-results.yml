@@ -25,7 +25,7 @@ jobs:
       script: |
         import json
         from pathlib import Path
-        from ofx.runner.execution.findings_export import export_typed_outputs
+        from ofx.runner.findings_export import export_typed_outputs
 
         typed = json.loads('''{{ inputs.typed_outputs }}''')
         project = '{{ inputs.project_path }}'

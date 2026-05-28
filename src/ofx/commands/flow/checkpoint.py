@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from pathlib import Path
 from typing import Annotated
 
@@ -53,12 +54,10 @@ def _resolve_output_path(output: str) -> Path:
             resolved_project = active_path.name
 
     if resolved_project:
-        try:
+        with suppress(Exception):
             project_path = Path(ProjectManager.resolve_path(resolved_project))
             if project_path.is_dir():
                 return project_path
-        except Exception:
-            pass
 
     raise typer.BadParameter(
         "No output directory specified and no active project found. "
@@ -84,7 +83,7 @@ def checkpoint_list(
     ] = "file",
 ):
     """List durable checkpoints in an output directory."""
-    from ofx.runner.core.durable import list_checkpoints
+    from ofx.runner.durable import list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
     path = _resolve_output_path(output)
@@ -155,7 +154,7 @@ def checkpoint_show(
     """Show details of a specific checkpoint or all checkpoints as JSON."""
     import json
 
-    from ofx.runner.core.durable import get_checkpoint, list_checkpoints
+    from ofx.runner.durable import get_checkpoint, list_checkpoints
 
     config = DurableRunConfig(enabled=True, backend=backend)
     path = _resolve_output_path(output)
@@ -223,7 +222,7 @@ def checkpoint_clean(
     ] = False,
 ):
     """Clean durable checkpoints from an output directory."""
-    from ofx.runner.core.durable import (
+    from ofx.runner.durable import (
         clean_all_checkpoints,
         clean_checkpoints,
         clean_stale_checkpoints,

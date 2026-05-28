@@ -51,13 +51,10 @@ class NmapTask(Task):
     ) -> list[Port | Vulnerability]:
         results: list[Port | Vulnerability] = []
 
-        xml_source = None
-        if output_file and output_file.exists():
-            xml_source = self._read_output_file(output_file)
-            if not xml_source:
-                return []
-        elif "<nmaprun" in stdout:
-            xml_source = stdout
+        xml_source = self._raw_output(
+            stdout if "<nmaprun" in stdout else "",
+            output_file,
+        )
 
         if not xml_source:
             return results

@@ -141,6 +141,17 @@ class TestParseLineEdgeCases:
         # Lines without "type":"response" should be skipped
         assert task.parse_line('{"type": "statistics", "data": {}}') == []
 
+    def test_invalid_url_host_is_empty(self):
+        task = TaskRegistry.create("feroxbuster")
+        line = json.dumps(
+            {"type": "response", "url": "http://[::1", "status": 200}
+        )
+
+        result = task.parse_line(line)
+
+        assert len(result) == 1
+        assert result[0].host == ""
+
     def test_dnsx_empty_json(self):
         from ofx.tasks.tools.dnsx import DnsxTask
 

@@ -1,4 +1,4 @@
-"""Tests for ofx.runner.execution.timeline."""
+"""Tests for ofx.runner.timeline."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import csv
 import io
 from pathlib import Path
 
-import ofx.runner.execution.timeline as tmod
-from ofx.runner.execution.timeline import (
+import ofx.runner.timeline as tmod
+from ofx.runner.timeline import (
     _csv_row,
     _format_duration,
     _resolve_oops_csv,

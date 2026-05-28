@@ -7,12 +7,15 @@ Uses the same decorator-based pattern as ``RunnerRegistry`` and
 from __future__ import annotations
 
 import importlib
+import logging
 import pkgutil
 import threading
 from collections.abc import Callable
 from typing import Any
 
 from ofx.tasks.base import Task
+
+logger = logging.getLogger(__name__)
 
 
 class TaskRegistry:
@@ -93,14 +96,19 @@ class TaskRegistry:
         with cls._lock:
             if cls._loaded:
                 return
-            cls._loaded = True
             try:
-                import ofx.tasks.tools as _pkg
+                _pkg = importlib.import_module("ofx.tasks.tools")
+            except ImportError as exc:
+                logger.debug("Failed to import task tools package: %s", exc)
+                return
 
-                for info in pkgutil.iter_modules(_pkg.__path__):
+            for info in pkgutil.iter_modules(_pkg.__path__):
+                try:
                     importlib.import_module(f"ofx.tasks.tools.{info.name}")
-            except ImportError:
-                pass
+                except ImportError as exc:
+                    logger.debug("Skipping task module %s: %s", info.name, exc)
+
+            cls._loaded = True
 
     @classmethod
     def unregister(cls, name: str) -> None:

@@ -57,13 +57,7 @@ class CommixTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

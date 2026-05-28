@@ -12,7 +12,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from ofx.models.command import Command
-from ofx.runner.commands.command_executor import CommandExecutionResult, CommandExecutor
+from ofx.runner.commands.command_executor import (
+    CommandExecutionResult,
+    CommandExecutor,
+    prepare_outputs_file_env,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -104,6 +108,36 @@ class TestDecodeOutput:
         assert "BINARY OUTPUT TRUNCATED" in stdout
 
 
+class TestDecodeOutputHelpers:
+    def test_decode_utf8_output_marks_truncation(self):
+        outputs: dict[str, Any] = {}
+
+        text = CommandExecutor._decode_utf8_output(
+            b"A" * 10,
+            max_size=4,
+            truncated_suffix="...",
+            truncated_flag="flag",
+            outputs=outputs,
+        )
+
+        assert text == "AAAA..."
+        assert outputs == {"flag": True}
+
+    def test_encode_binary_output_marks_truncation(self):
+        outputs: dict[str, Any] = {}
+
+        text = CommandExecutor._encode_binary_output(
+            b"abcdef",
+            max_size=3,
+            truncated_suffix="...",
+            truncated_flag="flag",
+            outputs=outputs,
+        )
+
+        assert text == base64.b64encode(b"abc").decode("utf-8") + "..."
+        assert outputs == {"flag": True}
+
+
 # ===================================================================
 # 2. TestRaiseForStatus
 # ===================================================================
@@ -192,6 +226,39 @@ class TestPrepareOutputsFile:
         )
         executor.prepare_outputs_file()
         assert executor.outputs_file is None
+
+
+class TestPrepareOutputsFileEnv:
+    def test_sets_ofx_alias_when_requested(self):
+        envs = dict(os.environ)
+
+        outputs_file = prepare_outputs_file_env(
+            envs,
+            interactive=False,
+            include_ofx_alias=True,
+        )
+
+        assert outputs_file is not None
+        assert envs["RUNNER_OUTPUTS"] == str(outputs_file)
+        assert envs["OFX_OUTPUTS"] == str(outputs_file)
+        outputs_file.unlink(missing_ok=True)
+
+    def test_reuses_existing_runner_outputs_for_ofx_alias(self):
+        fd, tmp_path = tempfile.mkstemp(prefix=".test_out_", suffix=".txt")
+        os.close(fd)
+        try:
+            envs = {**os.environ, "RUNNER_OUTPUTS": tmp_path}
+
+            outputs_file = prepare_outputs_file_env(
+                envs,
+                interactive=False,
+                include_ofx_alias=True,
+            )
+
+            assert outputs_file == Path(tmp_path)
+            assert envs["OFX_OUTPUTS"] == tmp_path
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
 
 
 # ===================================================================
@@ -291,6 +358,18 @@ class TestExecuteStreaming:
         result = await executor.execute_streaming(on_line=lambda _: None)
         assert "out" in result.stdout
         assert "err" in result.stderr
+
+
+class TestCommandExecutionHelpers:
+    """Small helper tests for command construction."""
+
+    def test_full_command_prepends_shell_helpers(self):
+        executor = _make_executor(cmd="echo marker")
+
+        full_command = executor._full_command()
+
+        assert full_command.endswith("\necho marker")
+        assert len(full_command) > len("echo marker")
 
 
 # ===================================================================

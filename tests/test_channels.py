@@ -319,8 +319,8 @@ class TestScriptRunnerChannelPrimitives:
     @pytest.mark.asyncio
     async def test_script_publish_primitive_string(self):
         from ofx.models.command import Script
+        from ofx.runner import RunContext, RunnerStatus
         from ofx.runner.commands.command import ScriptRunner
-        from ofx.runner.core import RunContext, RunnerStatus
 
         script_model = Script(
             script="""
@@ -339,8 +339,8 @@ print(f"Type: {type(val).__name__}")
     @pytest.mark.asyncio
     async def test_script_publish_primitive_int(self):
         from ofx.models.command import Script
+        from ofx.runner import RunContext, RunnerStatus
         from ofx.runner.commands.command import ScriptRunner
-        from ofx.runner.core import RunContext, RunnerStatus
 
         script_model = Script(
             script="""
@@ -359,8 +359,8 @@ print(f"Type: {type(val).__name__}")
     @pytest.mark.asyncio
     async def test_script_publish_dict(self):
         from ofx.models.command import Script
+        from ofx.runner import RunContext, RunnerStatus
         from ofx.runner.commands.command import ScriptRunner
-        from ofx.runner.core import RunContext, RunnerStatus
 
         script_model = Script(
             script="""
@@ -379,8 +379,8 @@ print(f"Type: {type(val).__name__}")
     @pytest.mark.asyncio
     async def test_script_publish_list(self):
         from ofx.models.command import Script
+        from ofx.runner import RunContext, RunnerStatus
         from ofx.runner.commands.command import ScriptRunner
-        from ofx.runner.core import RunContext, RunnerStatus
 
         script_model = Script(
             script="""

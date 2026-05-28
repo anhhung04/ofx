@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 # ---------------------------------------------------------------------------
-# A. _apply_cli_time_window tests
+# A. CLI time-window executor tests
 # ---------------------------------------------------------------------------
 
 
@@ -26,14 +26,25 @@ def _make_runner(*, vars_: dict | None = None, time_guard=None, is_reused=False)
 
 
 def _call_apply(runner):
-    """Invoke the real _apply_cli_time_window bound to our mock."""
-    from ofx.runner.execution.workflow import WorkflowRunner
+    """Invoke the real WorkflowExecutor time-window helper."""
+    from ofx.runner.executors.workflow import WorkflowExecutor
 
-    WorkflowRunner._apply_cli_time_window(runner)
+    WorkflowExecutor().apply_cli_time_window(runner)
+
+
+def _call_activate(runner, window, *, denied_message: str, active_message: str | None = None):
+    from ofx.runner.executors.workflow import WorkflowExecutor
+
+    WorkflowExecutor()._activate_time_window(
+        runner,
+        window,
+        denied_message=denied_message,
+        active_message=active_message,
+    )
 
 
 class TestApplyCliTimeWindow:
-    """Tests for WorkflowRunner._apply_cli_time_window."""
+    """Tests for WorkflowExecutor.apply_cli_time_window."""
 
     def test_skipped_when_time_guard_already_set(self):
         existing_guard = MagicMock()
@@ -136,6 +147,45 @@ class TestApplyCliTimeWindow:
         window_arg = mock_check.call_args[0][0]
         assert window_arg.start == "08:30"
         assert window_arg.end == "16:30"
+
+
+class TestActivateTimeWindow:
+    @patch("ofx.profiles.time_window.check_time_window")
+    @patch("ofx.profiles.time_window.TimeWindowGuard")
+    def test_starts_guard_and_logs_optional_info(self, MockGuard, mock_check):
+        mock_check.return_value = {
+            "allowed": True,
+            "remaining_minutes": 120,
+            "message": "",
+        }
+        guard_instance = MagicMock()
+        MockGuard.return_value = guard_instance
+
+        runner = _make_runner()
+        window = MagicMock()
+
+        _call_activate(
+            runner,
+            window,
+            denied_message="denied",
+            active_message="active",
+        )
+
+        MockGuard.assert_called_once()
+        guard_instance.start.assert_called_once()
+        runner._log_info.assert_called_once_with("active")
+
+    @patch("ofx.profiles.time_window.check_time_window")
+    def test_raises_with_composed_denied_message(self, mock_check):
+        mock_check.return_value = {
+            "allowed": False,
+            "remaining_minutes": 0,
+            "message": "outside",
+        }
+        runner = _make_runner()
+
+        with pytest.raises(RuntimeError, match="outside. denied"):
+            _call_activate(runner, MagicMock(), denied_message="denied")
 
 
 # ---------------------------------------------------------------------------

@@ -207,7 +207,6 @@ def _discover_all_workflows() -> list[Path]:
                 dirs.append(coll_path)
     except Exception as e:
         logger.debug("Failed to load installed collections for validation: %s", e)
-        pass
 
     for d in dirs:
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:

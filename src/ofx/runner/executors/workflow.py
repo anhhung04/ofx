@@ -2,18 +2,70 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from ofx.runner.core.registry_keys import RunnerRegistryKeys
 from ofx.runner.executors import Executor
-from ofx.runner.logging import LogContext
-from ofx.utils.workflow_utils import add_workflow_dir
+from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.settings import settings
+from ofx.utils.workflow_utils import workflow_dirs_with_path
+
+logger = logging.getLogger(settings.app_branding)
+
+
+def build_profile_envs(profile) -> dict[str, str]:
+    """Build runtime environment variables from an OFX profile."""
+    profile_envs: dict[str, str] = {}
+    if profile.rate_limit:
+        profile_envs["OFX_RATE_LIMIT"] = str(profile.rate_limit)
+    if profile.threads != 10:
+        profile_envs["OFX_THREADS"] = str(profile.threads)
+    if profile.timeout_minutes != 60:
+        profile_envs["OFX_TIMEOUT"] = str(profile.timeout_minutes)
+    if profile.delay:
+        profile_envs["OFX_DELAY"] = str(profile.delay)
+    if profile.jitter:
+        profile_envs["OFX_JITTER"] = str(profile.jitter)
+    if profile.proxy:
+        profile_envs["OFX_PROXY"] = profile.proxy
+    if profile.user_agent:
+        profile_envs["OFX_USER_AGENT"] = profile.user_agent
+    return profile_envs
 
 
 class WorkflowExecutor(Executor):
+    @staticmethod
+    def _activate_time_window(
+        runner,
+        window,
+        *,
+        denied_message: str,
+        active_message: str | None = None,
+    ) -> None:
+        from ofx.profiles.time_window import TimeWindowGuard, check_time_window
+
+        result = check_time_window(window)
+        if not result["allowed"]:
+            raise RuntimeError(f"Workflow aborted: {result['message']}. {denied_message}")
+
+        if result["message"]:
+            runner._log_warning(result["message"])
+
+        runner._time_guard = TimeWindowGuard(
+            window=window,
+            on_warn=lambda msg: runner._log_warning(msg),
+            on_abort=lambda msg: runner._log_error(
+                f"🛑 {msg} - workflow will be aborted"
+            ),
+        )
+        runner._time_guard.start()
+
+        if active_message:
+            runner._log_info(active_message)
+
     async def pre_run(self, runner) -> None:
         await runner._resolve_template_fields(
             ["name", "description", "tags", "env", "defaults"]
@@ -27,20 +79,20 @@ class WorkflowExecutor(Executor):
             output_path.mkdir(parents=True, exist_ok=True)
 
         runner._run_dir = Path(tempfile.mkdtemp(prefix="ofx_run_"))
+
         from ofx.runner.context import RunnerContextBuilder
 
-        runner.ctx = (
-            RunnerContextBuilder(runner.ctx)
-            .with_env({"OFX_RUN_DIR": str(runner._run_dir)})
-            .model_copy(
-                update={
-                    "vars": {
-                        **runner.ctx.vars,
-                        "working_directory": runner.model.defaults.run.working_directory,
-                    },
-                    "workflow_dir": runner.model.workflow_path.parent,
-                }
-            )
+        runner.ctx = RunnerContextBuilder(runner.ctx).with_env(
+            {"OFX_RUN_DIR": str(runner._run_dir)}
+        )
+        runner.ctx = RunnerContextBuilder(runner.ctx).with_update(
+            {
+                "vars": {
+                    **runner.ctx.vars,
+                    "working_directory": runner.model.defaults.run.working_directory,
+                },
+                "workflow_dir": runner.model.workflow_path.parent,
+            }
         )
 
         runner._log_debug(f"Workflow Dispatch: {runner.model.dispatch}")
@@ -72,13 +124,14 @@ class WorkflowExecutor(Executor):
                     runner.model.call.secrets,
                 )
             )
+
             from ofx.utils.log import register_secrets
 
             register_secrets(runner.ctx.secrets)
 
-        runner.ctx = ctx_builder.with_update(
+        runner.ctx = RunnerContextBuilder(runner.ctx).with_update(
             {
-                "workflow_dirs": add_workflow_dir(
+                "workflow_dirs": workflow_dirs_with_path(
                     runner.ctx.workflow_dirs,
                     runner.model.defaults.workflows_base_dir.absolute(),
                 )
@@ -121,11 +174,6 @@ class WorkflowExecutor(Executor):
                     resolved_outputs[key] = await runner._resolve_template(value)
                 await runner.reg_set(RunnerRegistryKeys.OUTPUTS, resolved_outputs)
 
-        job_results = {}
-        for job_id, job_runner in runner._runners.items():
-            result = await job_runner.get_result()
-            job_results[job_id] = result.model_dump()
-        await runner.reg_set_global("jobs:results", job_results)
         await self.store_summaries(runner)
         runner._log_debug(f"result: {await runner.get_result()}")
         self._cleanup_run_dir(runner)
@@ -153,6 +201,7 @@ class WorkflowExecutor(Executor):
                     return candidate
             return None
 
+        req_inputs = dict(req_inputs)
         inputs_names = set(req_inputs.keys())
 
         for key, constraint in input_blueprint.items():
@@ -171,9 +220,7 @@ class WorkflowExecutor(Executor):
                 else:
                     value = req_inputs[key]
 
-                if isinstance(value, list) and constraint.type == "string":
-                    pass
-                elif not self.check_input_type(value, constraint.type):
+                if not self.check_input_type(value, constraint.type):
                     raise ValueError(
                         f"Input '{key}' has invalid type: {type(value).__name__}. "
                         f"Expected type: {constraint.type}."
@@ -191,6 +238,9 @@ class WorkflowExecutor(Executor):
         return req_inputs
 
     def check_input_type(self, value: Any, input_type: str) -> bool:
+        if input_type == "string" and isinstance(value, list):
+            return True
+
         type_map = {
             "string": str,
             "number": (int, float),
@@ -204,7 +254,7 @@ class WorkflowExecutor(Executor):
                 f"Unsupported input type '{input_type}' for value '{value}'. "
                 f"Supported types are: {', '.join(type_map.keys())}."
             )
-        return isinstance(value, expected_type)  # type: ignore[arg-type]
+        return isinstance(value, expected_type)
 
     def expand_list_inputs_to_matrix(self, runner) -> None:
         if not runner.model.dispatch or runner._is_reused:
@@ -267,7 +317,6 @@ class WorkflowExecutor(Executor):
             return
 
         from ofx.profiles.manager import get_profile_manager
-        from ofx.runner.context import RunnerContextBuilder
 
         mgr = get_profile_manager()
         profile = mgr.resolve_or_default(profile_name)
@@ -277,58 +326,26 @@ class WorkflowExecutor(Executor):
         runner._profile = profile
         runner._log_info(f"Applying profile: {profile_name}")
 
-        if profile.env:
-            runner.ctx = RunnerContextBuilder(runner.ctx).with_env(profile.env)
-
-        profile_envs: dict[str, str] = {}
-        if profile.rate_limit:
-            profile_envs["OFX_RATE_LIMIT"] = str(profile.rate_limit)
-        if profile.threads != 10:
-            profile_envs["OFX_THREADS"] = str(profile.threads)
-        if profile.timeout_minutes != 60:
-            profile_envs["OFX_TIMEOUT"] = str(profile.timeout_minutes)
-        if profile.delay:
-            profile_envs["OFX_DELAY"] = str(profile.delay)
-        if profile.jitter:
-            profile_envs["OFX_JITTER"] = str(profile.jitter)
-        if profile.proxy:
-            profile_envs["OFX_PROXY"] = profile.proxy
-        if profile.user_agent:
-            profile_envs["OFX_USER_AGENT"] = profile.user_agent
-        if profile_envs:
-            runner.ctx = RunnerContextBuilder(runner.ctx).with_env(profile_envs)
-
-        runner.ctx = RunnerContextBuilder(runner.ctx).with_vars(
+        profile_envs = build_profile_envs(profile)
+        runner.update_env_and_vars(
+            (profile.env or {}) | profile_envs,
             {
                 "profile": profile.model_dump(),
                 "profile_model": profile,
-            }
+            },
         )
 
         if profile.time_window.enabled:
-            from ofx.profiles.time_window import TimeWindowGuard, check_time_window
-
-            result = check_time_window(profile.time_window)
-            if not result["allowed"]:
-                raise RuntimeError(
-                    f"Workflow aborted: {result['message']}. "
+            self._activate_time_window(
+                runner,
+                profile.time_window,
+                denied_message=(
                     f"Profile '{profile_name}' restricts execution to "
                     f"{profile.time_window.start}–{profile.time_window.end} "
                     f"on {', '.join(day.title() for day in profile.time_window.days)} "
                     f"({profile.time_window.timezone})."
-                )
-
-            if result["message"]:
-                runner._log_warning(result["message"])
-
-            runner._time_guard = TimeWindowGuard(
-                window=profile.time_window,
-                on_warn=lambda msg: runner._log_warning(msg),
-                on_abort=lambda msg: runner._log_error(
-                    f"🛑 {msg} - workflow will be aborted"
                 ),
             )
-            runner._time_guard.start()
 
     def apply_cli_time_window(self, runner) -> None:
         if runner._time_guard or runner._is_reused:
@@ -343,7 +360,6 @@ class WorkflowExecutor(Executor):
             return
 
         from ofx.profiles.models import TimeWindow
-        from ofx.profiles.time_window import TimeWindowGuard, check_time_window
 
         window = TimeWindow(
             enabled=True,
@@ -352,32 +368,21 @@ class WorkflowExecutor(Executor):
             abort_on_expire=True,
         )
 
-        result = check_time_window(window)
-        if not result["allowed"]:
-            raise RuntimeError(
-                f"Workflow aborted: {result['message']}. "
+        self._activate_time_window(
+            runner,
+            window,
+            denied_message=(
                 f"CLI --time-window restricts execution to {window.start}–{window.end}."
-            )
-
-        if result["message"]:
-            runner._log_warning(result["message"])
-
-        runner._time_guard = TimeWindowGuard(
-            window=window,
-            on_warn=lambda msg: runner._log_warning(msg),
-            on_abort=lambda msg: runner._log_error(
-                f"🛑 {msg} - workflow will be aborted"
             ),
+            active_message=f"Time window active: {window.start}–{window.end}",
         )
-        runner._time_guard.start()
-        runner._log_info(f"Time window active: {window.start}–{window.end}")
 
     async def install_tools(self, runner) -> None:
         tools = runner.model.tools
         if not tools:
             return
 
-        from ofx.runner.execution.tool_installer import ToolInstallerRunner
+        from ofx.runner.tool_installer import ToolInstallerRunner
 
         installer = ToolInstallerRunner(
             tools=tools,
@@ -388,7 +393,7 @@ class WorkflowExecutor(Executor):
         await installer.run()
 
     async def plan_jobs(self, runner) -> None:
-        from ofx.runner.execution.workflow_scheduler import WorkflowScheduler
+        from ofx.runner.workflow_scheduler import WorkflowScheduler
 
         schedule = WorkflowScheduler(runner.model.jobs).plan()
         runner._staged_jobs = schedule.staged_jobs
@@ -396,13 +401,18 @@ class WorkflowExecutor(Executor):
         runner._log_debug(f"Stages: {runner._schedule}")
 
     async def run_workflow(self, runner) -> None:
-        from ofx.runner.execution.workflow_execution import WorkflowExecutionManager
+        from ofx.runner.workflow_execution import WorkflowExecutionManager
 
-        execution = WorkflowExecutionManager(runner)
-        result = await execution.run(runner._schedule, runner._staged_jobs)
-        if result.failed_job_ids:
-            from ofx.runner.core import BaseRunner
-            from ofx.runner.execution.error_helpers import extract_root_error
+        result = await WorkflowExecutionManager(runner).run(
+            runner._schedule,
+            runner._staged_jobs,
+        )
+        failed_job_ids = result.failed_job_ids
+        failed_stage_indices = result.failed_stage_indices
+
+        if failed_job_ids:
+            from ofx.runner.error_helpers import extract_root_error
+            from ofx.runner.runner import BaseRunner
 
             for job_runner in runner._runners.values():
                 if isinstance(job_runner, BaseRunner):
@@ -415,7 +425,7 @@ class WorkflowExecutor(Executor):
             await self.store_summaries(runner)
 
             concise_lines = []
-            for job_id in result.failed_job_ids:
+            for job_id in failed_job_ids:
                 failed_runner = runner._runners.get(job_id)
                 root = extract_root_error(
                     failed_runner._error if failed_runner else None
@@ -427,14 +437,14 @@ class WorkflowExecutor(Executor):
                 RunnerRegistryKeys.ERRORS,
                 {
                     "message": error_msg,
-                    "failed_jobs": result.failed_job_ids,
-                    "failed_stages": result.failed_stage_indices,
+                    "failed_jobs": failed_job_ids,
+                    "failed_stages": failed_stage_indices,
                 },
             )
             raise RuntimeError(error_msg)
 
     async def store_summaries(self, runner) -> None:
-        from ofx.runner.execution.execution_summary import ExecutionSummaryReporter
+        from ofx.runner.execution_summary import ExecutionSummaryReporter
 
         reporter = ExecutionSummaryReporter(runner)
         summary = await reporter.build()
@@ -443,21 +453,21 @@ class WorkflowExecutor(Executor):
         if runner._time_guard:
             from ofx.profiles.time_window import check_time_window
 
-            tw = runner._time_guard._window
-            tw_result = check_time_window(tw)
+            time_window = runner._time_guard._window
+            time_window_result = check_time_window(time_window)
             unified["time_window"] = {
-                "start": tw.start,
-                "end": tw.end,
-                "remaining_minutes": tw_result.get("remaining_minutes"),
+                "start": time_window.start,
+                "end": time_window.end,
+                "remaining_minutes": time_window_result.get("remaining_minutes"),
                 "aborted": runner._time_guard.should_abort,
             }
 
         await runner.reg_set(RunnerRegistryKeys.SUMMARY, summary.to_dict())
         await runner.reg_set(RunnerRegistryKeys.SUMMARY_UNIFIED, unified)
-        existing = await runner.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
-        existing["__summary__"] = unified
-        await runner.reg_set(RunnerRegistryKeys.OUTPUTS, existing)
-        await self.auto_export_findings(runner, existing)
+        existing_outputs = await runner.reg_get(RunnerRegistryKeys.OUTPUTS) or {}
+        existing_outputs["__summary__"] = unified
+        await runner.reg_set(RunnerRegistryKeys.OUTPUTS, existing_outputs)
+        await self.auto_export_findings(runner, existing_outputs)
 
     async def auto_export_findings(self, runner, existing_outputs: dict) -> None:
         project_path = runner.ctx.vars.get("project_path")
@@ -465,7 +475,7 @@ class WorkflowExecutor(Executor):
             return
 
         try:
-            from ofx.runner.execution.findings_export import auto_export_findings
+            from ofx.runner.findings_export import auto_export_findings
 
             summaries = await auto_export_findings(
                 runner._runners,
@@ -478,20 +488,10 @@ class WorkflowExecutor(Executor):
         except Exception as exc:
             runner._log_debug(f"Findings export failed: {exc}")
 
-    def produce_log(self, runner, message: Any) -> str:
-        message_str = str(message)
-        prefix = LogContext(model_name=runner.model.name).prefix
-        msg = f"{prefix} › {message_str}" if prefix else message_str
-        if runner.parent:
-            return runner.parent._produce_log(msg)
-        return msg
-
     def _cleanup_run_dir(self, runner) -> None:
         run_dir = getattr(runner, "_run_dir", None)
         if run_dir and run_dir.exists():
             try:
                 shutil.rmtree(run_dir)
             except Exception as exc:
-                from ofx.runner.execution.workflow import logger
-
                 logger.debug("Failed to clean up run dir %s: %s", run_dir, exc)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from ofx.commands.ui_helpers import print_info, print_warning
 from ofx.runner import RunContext
-from ofx.runner.execution.tool_installer import ToolInstallerRunner
+from ofx.runner.tool_installer import ToolInstallerRunner
 from ofx.settings import TOOLS_BIN_DIR, get_workflow_search_dirs, settings
 
 logger = logging.getLogger(settings.app_branding)

@@ -8,10 +8,11 @@ import pytest
 
 from ofx.cloud.script_runtime import (
     build_python_payload,
+    is_python_step_run_type,
     resolve_python_step_source,
 )
 from ofx.cloud.task_runtime import build_task_command_from_step
-from ofx.models.step import Step
+from ofx.models.step import RunType, Step
 
 # =========================================================================
 # resolve_python_step_source
@@ -62,6 +63,20 @@ class TestResolvePythonStepSource:
         step = Step(run="echo hello")
         with pytest.raises(ValueError, match="Unsupported step run type"):
             resolve_python_step_source(step)
+
+
+class TestIsPythonStepRunType:
+    @pytest.mark.parametrize(
+        ("run_type", "expected"),
+        [
+            (RunType.SCRIPT, True),
+            (RunType.SCRIPT_FILE, True),
+            (RunType.COMMAND, False),
+            (RunType.TASK, False),
+        ],
+    )
+    def test_recognizes_python_backed_step_types(self, run_type, expected):
+        assert is_python_step_run_type(run_type) is expected
 
 
 # =========================================================================
@@ -159,4 +174,23 @@ class TestBuildTaskCommandFromStep:
         call_args = mock_task.build_command.call_args
         assert call_args[0][0] == "target.com"
         assert "target" not in call_args[1]
+        assert call_args[1]["verbose"] is True
+
+    def test_target_list_is_joined_consistently(self):
+        mock_task_cls = MagicMock()
+        mock_task = MagicMock()
+        mock_task.output_flag = None
+        mock_task.build_command.return_value = ("tool a,b", [])
+        mock_task_cls.return_value = mock_task
+
+        step = Step(task="tool", run_with={"targets": ["a", "b"], "verbose": True})
+
+        with patch("ofx.tasks.registry.TaskRegistry") as mock_reg:
+            mock_reg.get.return_value = mock_task_cls
+            build_task_command_from_step(step)
+
+        call_args = mock_task.build_command.call_args
+        assert call_args[0][0] == "a,b"
+        assert "target" not in call_args[1]
+        assert "targets" not in call_args[1]
         assert call_args[1]["verbose"] is True

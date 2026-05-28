@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import urlparse
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
@@ -60,7 +59,7 @@ class ArjunTask(Task):
             results.append(
                 Url(
                     url=url_key,
-                    host=urlparse(url_key).netloc,
+                    host=self._url_netloc(url_key),
                     method=method,
                     extra_data={"params": params, "method": method},
                 )

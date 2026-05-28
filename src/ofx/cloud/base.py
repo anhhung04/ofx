@@ -125,7 +125,7 @@ class CloudProvider(ABC):
     @abstractmethod
     async def close(self) -> None:
         """Clean up any resources (HTTP sessions, etc.)."""
-        pass
+        ...
 
     # ── Shared helpers for subclasses ─────────────────────────────
 

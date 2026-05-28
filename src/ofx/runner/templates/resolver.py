@@ -10,7 +10,7 @@ from typing import Any, Self
 from jinja2 import Environment
 from pydantic import BaseModel
 
-from ofx.runner.core.registry_keys import RunnerRegistryKeys
+from ofx.runner.registry_keys import RunnerRegistryKeys
 
 _logger = logging.getLogger("ofx.templates")
 _resolver_lock = threading.Lock()
@@ -19,21 +19,70 @@ _resolver_lock = threading.Lock()
 def _tojson_python(value: Any, indent: int | None = None) -> str:
     """JSON serialization that outputs Python-compatible literals.
 
-    Replaces JSON ``true``/``false``/``null`` with Python's
-    ``True``/``False``/``None`` so the output can be used directly
-    in inline ``script:`` blocks.
+    Emits Python's ``True``/``False``/``None`` so the output can be used
+    directly in inline ``script:`` blocks.
     """
-    raw = json.dumps(value, indent=indent, default=str)
-    raw = raw.replace(": true", ": True")
-    raw = raw.replace(": false", ": False")
-    raw = raw.replace(": null", ": None")
-    raw = raw.replace("[true", "[True")
-    raw = raw.replace("[false", "[False")
-    raw = raw.replace("[null", "[None")
-    raw = raw.replace(", true", ", True")
-    raw = raw.replace(", false", ", False")
-    raw = raw.replace(", null", ", None")
-    return raw
+    normalized = json.loads(json.dumps(value, default=str))
+    return _python_literal(normalized, indent=indent)
+
+
+def _python_literal(value: Any, indent: int | None = None, level: int = 0) -> str:
+    """Render JSON-compatible data as a Python literal."""
+    if value is True:
+        return "True"
+    if value is False:
+        return "False"
+    if value is None:
+        return "None"
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, list):
+        return _python_sequence_literal(value, indent, level)
+    if isinstance(value, dict):
+        return _python_mapping_literal(value, indent, level)
+    return json.dumps(str(value))
+
+
+def _python_sequence_literal(
+    items: list[Any], indent: int | None, level: int
+) -> str:
+    if not items:
+        return "[]"
+    if indent is None:
+        rendered = (_python_literal(item) for item in items)
+        return f"[{', '.join(rendered)}]"
+
+    inner_prefix = " " * indent * (level + 1)
+    outer_prefix = " " * indent * level
+    rendered = [
+        f"{inner_prefix}{_python_literal(item, indent, level + 1)}"
+        for item in items
+    ]
+    return "[\n" + ",\n".join(rendered) + f"\n{outer_prefix}]"
+
+
+def _python_mapping_literal(
+    mapping: dict[str, Any], indent: int | None, level: int
+) -> str:
+    if not mapping:
+        return "{}"
+    if indent is None:
+        rendered = (
+            f"{_python_literal(key)}: {_python_literal(value)}"
+            for key, value in mapping.items()
+        )
+        return f"{{{', '.join(rendered)}}}"
+
+    inner_prefix = " " * indent * (level + 1)
+    outer_prefix = " " * indent * level
+    rendered = [
+        f"{inner_prefix}{_python_literal(key)}: "
+        f"{_python_literal(value, indent, level + 1)}"
+        for key, value in mapping.items()
+    ]
+    return "{\n" + ",\n".join(rendered) + f"\n{outer_prefix}}}"
 
 
 def _build_jinja_env():
@@ -142,10 +191,6 @@ class TemplateResolver:
                     inst._cache_misses = 0
                     cls._instance = inst
         return cls._instance
-
-    def __init__(self):
-        # Initialization moved to __new__ to avoid resetting on repeated calls
-        pass
 
     async def resolve(
         self,
@@ -296,31 +341,17 @@ class TemplateResolver:
 
         support_funcs = self.get_support_functions()
 
-        # Add registry-based data for accessing job and step data
-        if "registry" in context_vars:
-            registry = context_vars["registry"]
+        runner = context_vars.get("runner")
+        if runner is not None:
             jobs_data: dict[str, Any] = memo.get("jobs_data", {})
             steps_data: dict[str, Any] = memo.get("steps_data", {})
-
-            runner = context_vars.get("runner")
-            if runner is not None and not jobs_data and not steps_data:
+            if not jobs_data and not steps_data:
                 jobs_data, steps_data = await asyncio.gather(
                     self._jobs_from_runner(runner),
                     self._steps_from_runner(runner),
                 )
                 memo["jobs_data"] = jobs_data
                 memo["steps_data"] = steps_data
-
-            # Fallbacks for legacy registry usage
-            if not jobs_data:
-                jobs_data = await registry.get("jobs:results") or {}
-                memo["jobs_data"] = jobs_data
-            if not steps_data and "current_job_id" in context_vars:
-                job_id = context_vars["current_job_id"]
-                step_results = await registry.get(f"jobs:{job_id}:steps") or {}
-                steps_data = dict(step_results)
-                memo["steps_data"] = steps_data
-
             support_funcs["jobs"] = jobs_data
             support_funcs["steps"] = steps_data
 

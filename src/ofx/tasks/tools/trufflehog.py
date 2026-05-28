@@ -95,7 +95,7 @@ class TrufflehogTask(Task):
         if self.silent_flag:
             parts.append(self.silent_flag)
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         output_file: Path | None = None
         if self.output_flag:

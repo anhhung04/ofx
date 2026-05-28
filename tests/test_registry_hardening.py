@@ -14,9 +14,9 @@ import json
 
 import pytest
 
-from ofx.runner.registry.base import RegistryAdapter
-from ofx.runner.registry.file import FileRegistry
-from ofx.runner.registry.memory import MemoryJobRegistry, RegistryOverflowError
+from ofx.runner.registry import FileRegistry, MemoryJobRegistry, RegistryAdapter
+from ofx.runner.registry_backends.memcached import MemcachedJobRegistry
+from ofx.runner.registry_backends.memory import RegistryOverflowError
 
 # ── MemoryJobRegistry maxsize ────────────────────────────────────────────
 
@@ -188,3 +188,90 @@ class TestProtocolConformance:
             result["mutated"] = True
             original = await adapter.get("k")
             assert "mutated" not in original
+
+    async def test_set_isolates_nested_values_from_caller(self, adapter):
+        """Mutating caller-owned nested data after set() must not leak in."""
+        payload = {"nested": {"status": "original"}}
+        await adapter.set("k", payload)
+
+        payload["nested"]["status"] = "mutated"
+
+        stored = await adapter.get("k")
+        assert stored["nested"]["status"] == "original"
+
+    async def test_get_all_returns_deep_copy(self, adapter):
+        """Mutating get_all() results must not affect stored nested data."""
+        await adapter.set("k", {"nested": {"count": 1}})
+
+        all_data = await adapter.get_all()
+        all_data["k"]["nested"]["count"] = 2
+
+        stored = await adapter.get("k")
+        assert stored["nested"]["count"] == 1
+
+    async def test_update_isolates_nested_values_from_caller(self, adapter):
+        """Mutating caller-owned nested data after update() must not leak in."""
+        await adapter.set("k", {"status": "running"})
+        updates = {"nested": {"status": "complete"}}
+
+        await adapter.update("k", updates)
+        updates["nested"]["status"] = "mutated"
+
+        stored = await adapter.get("k")
+        assert stored["nested"]["status"] == "complete"
+
+
+class TestRegistrySerializationHelpers:
+    def test_serialize_value_keeps_default_string_fallback(self):
+        class NotJsonSerializable:
+            def __str__(self):
+                return "fallback"
+
+        serialized = MemoryJobRegistry._serialize_value(
+            "k", {"value": NotJsonSerializable()}
+        )
+
+        assert serialized == '{"value": "fallback"}'
+
+    def test_deserialize_value_handles_bytes_and_malformed_json(self):
+        assert MemoryJobRegistry._deserialize_value("k", b'{"a": 1}') == {"a": 1}
+        assert MemoryJobRegistry._deserialize_value("bad", b'{"a":') is None
+
+
+class FakeMemcachedClient:
+    def __init__(self):
+        self.store: dict[bytes, bytes] = {}
+
+    async def get(self, key: bytes) -> bytes | None:
+        return self.store.get(key)
+
+    async def set(self, key: bytes, value: bytes) -> None:
+        self.store[key] = value
+
+    async def delete(self, key: bytes) -> None:
+        self.store.pop(key, None)
+
+
+class FakeMemcachedRegistry(MemcachedJobRegistry):
+    def __init__(self, client: FakeMemcachedClient):
+        self.prefix = "ofx:job:"
+        self._client = client
+
+    async def _get_client(self):
+        return self._client
+
+
+class TestMemcachedRegistryIndexHelpers:
+    async def test_index_helpers_track_set_delete_and_clear(self):
+        registry = FakeMemcachedRegistry(FakeMemcachedClient())
+
+        await registry.set("a", {"value": 1})
+        await registry.set("b", [1, 2])
+
+        assert await registry.get_all() == {"a": {"value": 1}, "b": [1, 2]}
+
+        assert await registry.delete("a") is True
+        assert await registry.get_all() == {"b": [1, 2]}
+
+        await registry.clear()
+        assert await registry.get_all() == {}

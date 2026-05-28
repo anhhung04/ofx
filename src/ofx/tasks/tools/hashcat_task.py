@@ -93,7 +93,7 @@ class HashcatTask(Task):
 
         parts: list[str] = [self.cmd, "-m", str(hash_type), "-a", str(attack_mode)]
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["hash_type", "attack_mode", "wordlist"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         # Hash file (target)
         parts.append(self._q(target))
@@ -113,13 +113,7 @@ class HashcatTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[UserAccount]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

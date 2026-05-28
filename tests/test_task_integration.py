@@ -422,7 +422,7 @@ class TestProfileTaskOptions:
 
     def test_task_options_merge_into_opts(self):
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         profile = OFXProfile(task_options={"httpx": {"threads": 5, "rate_limit": 20}})
@@ -441,7 +441,7 @@ class TestProfileTaskOptions:
         assert runner.model.opts["rate_limit"] == 20
 
     def test_no_profile_does_nothing(self):
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         ctx = RunContext()
@@ -454,7 +454,7 @@ class TestProfileTaskOptions:
 
     def test_no_matching_task_options(self):
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         profile = OFXProfile(task_options={"nuclei": {"rate_limit": 50}})
@@ -469,7 +469,7 @@ class TestProfileTaskOptions:
     def test_common_auto_mapping_injects_proxy_threads_delay(self):
         """Layer 1: profile common fields auto-map to matching task opts."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
         from ofx.tasks.registry import TaskRegistry
 
@@ -498,7 +498,7 @@ class TestProfileTaskOptions:
     def test_common_auto_mapping_user_opts_win(self):
         """Layer 1: user-provided opts are never overridden by profile."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
         from ofx.tasks.registry import TaskRegistry
 
@@ -518,7 +518,7 @@ class TestProfileTaskOptions:
 
     def test_dict_at_profile_key_does_not_crash(self):
         """Regression: the old 'profile' key holds a dict — must not crash."""
-        from ofx.runner.core.models import RunContext
+        from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         # Simulate real runtime: 'profile' is dict, 'profile_model' missing
@@ -537,53 +537,36 @@ class TestProfileEnvInjection:
     def test_profile_env_vars_set(self):
         """Verify profile fields generate OFX_* env vars in context."""
         from ofx.profiles.models import OFXProfile
+        from ofx.runner.executors.workflow import build_profile_envs
 
         profile = OFXProfile(
             rate_limit=30,
             threads=5,
+            timeout_minutes=90,
             delay=2.0,
+            jitter=0.5,
             proxy="socks5://127.0.0.1:9050",
             user_agent="CustomAgent/1.0",
         )
 
-        # Simulate what _apply_profile does: build env dict
-        profile_envs: dict[str, str] = {}
-        if profile.rate_limit:
-            profile_envs["OFX_RATE_LIMIT"] = str(profile.rate_limit)
-        if profile.threads != 10:
-            profile_envs["OFX_THREADS"] = str(profile.threads)
-        if profile.delay:
-            profile_envs["OFX_DELAY"] = str(profile.delay)
-        if profile.proxy:
-            profile_envs["OFX_PROXY"] = profile.proxy
-        if profile.user_agent:
-            profile_envs["OFX_USER_AGENT"] = profile.user_agent
+        profile_envs = build_profile_envs(profile)
 
         assert profile_envs["OFX_RATE_LIMIT"] == "30"
         assert profile_envs["OFX_THREADS"] == "5"
+        assert profile_envs["OFX_TIMEOUT"] == "90"
         assert profile_envs["OFX_DELAY"] == "2.0"
+        assert profile_envs["OFX_JITTER"] == "0.5"
         assert profile_envs["OFX_PROXY"] == "socks5://127.0.0.1:9050"
         assert profile_envs["OFX_USER_AGENT"] == "CustomAgent/1.0"
 
     def test_default_profile_no_extra_envs(self):
         """Default profile values should not generate env vars."""
         from ofx.profiles.models import OFXProfile
+        from ofx.runner.executors.workflow import build_profile_envs
 
         profile = OFXProfile()
 
-        profile_envs: dict[str, str] = {}
-        if profile.rate_limit:
-            profile_envs["OFX_RATE_LIMIT"] = str(profile.rate_limit)
-        if profile.threads != 10:
-            profile_envs["OFX_THREADS"] = str(profile.threads)
-        if profile.delay:
-            profile_envs["OFX_DELAY"] = str(profile.delay)
-        if profile.proxy:
-            profile_envs["OFX_PROXY"] = profile.proxy
-        if profile.user_agent:
-            profile_envs["OFX_USER_AGENT"] = profile.user_agent
-
-        assert profile_envs == {}
+        assert build_profile_envs(profile) == {}
 
 
 # ── Cloud Task Profile Integration ─────────────────────────────────────
@@ -668,7 +651,7 @@ class TestStepRetryProfileDefaults:
     def test_max_retries_fallback_when_policy_has_no_retry(self):
         """profile.max_retries is used when retry_profiles has no retry key."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(
             max_retries=5,
@@ -693,7 +676,7 @@ class TestStepRetryProfileDefaults:
     def test_max_retries_overrides_policy_when_non_default(self):
         """Non-default max_retries overrides retry_profiles[policy].retry."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(
             max_retries=5,
@@ -717,7 +700,7 @@ class TestStepRetryProfileDefaults:
     def test_default_max_retries_uses_policy(self):
         """Default max_retries=3 does NOT override policy.retry."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(
             # max_retries=3 (default)
@@ -741,7 +724,7 @@ class TestStepRetryProfileDefaults:
     def test_timeout_minutes_fallback(self):
         """profile.timeout_minutes is used when policy has no timeout."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(
             timeout_minutes=30,
@@ -765,7 +748,7 @@ class TestStepRetryProfileDefaults:
     def test_timeout_minutes_overrides_default_policy_timeout(self):
         """Non-default timeout_minutes overrides default policy timeout=1440."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         # User sets timeout_minutes=15 but uses default retry_profiles
         # which has standard.timeout=1440
@@ -788,7 +771,7 @@ class TestStepRetryProfileDefaults:
     def test_default_timeout_minutes_uses_policy(self):
         """Default timeout_minutes=60 does NOT override policy.timeout."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         # Default profile with stealth policy (timeout=180)
         profile = OFXProfile(retry_policy="stealth")
@@ -812,7 +795,7 @@ class TestStepRetryProfileDefaults:
     def test_explicit_step_timeout_overridden_by_profile(self):
         """Profile timeout_minutes overrides even explicit step timeout."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(
             timeout_minutes=30,
@@ -836,7 +819,7 @@ class TestStepRetryProfileDefaults:
     def test_explicit_step_retry_overridden_by_profile(self):
         """Profile max_retries overrides even explicit step retry."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(max_retries=1)
         step = self._make_step(retry=5)
@@ -857,7 +840,7 @@ class TestStepRetryProfileDefaults:
     def test_policy_retry_delay_overrides_step(self):
         """Profile retry_delay from policy overrides step value."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(
             retry_profiles={"standard": {"retry_delay": 30}},
@@ -880,7 +863,7 @@ class TestStepRetryProfileDefaults:
     def test_step_values_kept_when_profile_is_default(self):
         """Default profile values do not override explicit step values."""
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step_mixin import StepRunnerMixin
+        from ofx.runner.step_mixin import StepRunnerMixin
 
         # All defaults — timeout_minutes=60, max_retries=3
         profile = OFXProfile()

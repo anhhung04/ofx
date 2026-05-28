@@ -50,7 +50,7 @@ class JwtToolTask(Task):
         mode = kwargs.pop("mode", "at")
         parts: list[str] = [self.cmd, self._q(target), "-M", self._q(mode)]
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         return " ".join(parts), None
 
@@ -65,13 +65,7 @@ class JwtToolTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

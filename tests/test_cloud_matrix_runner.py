@@ -7,16 +7,20 @@ from pathlib import Path
 import pytest
 
 from ofx.models.strategy import FleetStrategy, MatrixStrategy
+from ofx.runner.executors.fleet import FleetExecutor
+from ofx.runner.executors.matrix import MatrixExecutor
 
 
 class TestCloudFleetRunner:
     """Test the fleet expansion logic in CloudFleetRunner."""
 
+    fleet_executor = FleetExecutor()
+
     def _make_runner(self, strategy: MatrixStrategy | None = None):
         """Create a CloudFleetRunner with stubbed parent/context."""
         from ofx.models.job import Job
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_fleet import CloudFleetRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_fleet import CloudFleetRunner
 
         job = Job(
             jid="test-job",
@@ -51,7 +55,7 @@ class TestCloudFleetRunner:
             ),
         )
         runner = self._make_runner(strategy)
-        combos = runner._expand_fleet()
+        combos = self.fleet_executor.expand_fleet(runner)
 
         assert len(combos) == 2
         for c in combos:
@@ -66,7 +70,7 @@ class TestCloudFleetRunner:
         for f in runner._chunk_files:
             assert Path(f).exists()
 
-        runner._cleanup_chunk_files()
+        self.fleet_executor.cleanup_chunk_files(runner)
 
     def test_fleet_with_matrix_expansion(self, tmp_path):
         """Cloud + matrix + fleet → fleet chunks only (matrix on each VPS)."""
@@ -82,7 +86,7 @@ class TestCloudFleetRunner:
             ),
         )
         runner = self._make_runner(strategy)
-        combos = runner._expand_fleet()
+        combos = self.fleet_executor.expand_fleet(runner)
 
         # 3 fleet chunks (matrix combos are handled by CloudMatrixJobRunner)
         assert len(combos) == 3
@@ -90,13 +94,13 @@ class TestCloudFleetRunner:
             assert "fleet_index" in c
             assert "fleet_input_file" in c
 
-        runner._cleanup_chunk_files()
+        self.fleet_executor.cleanup_chunk_files(runner)
 
     def test_no_fleet_returns_default(self):
         """No fleet → single empty combo."""
         strategy = MatrixStrategy()
         runner = self._make_runner(strategy)
-        combos = runner._expand_fleet()
+        combos = self.fleet_executor.expand_fleet(runner)
         assert combos == [{}]
 
     def test_fleet_cleanup(self, tmp_path):
@@ -108,11 +112,11 @@ class TestCloudFleetRunner:
             fleet=FleetStrategy(count=2, input=str(targets)),
         )
         runner = self._make_runner(strategy)
-        runner._expand_fleet()
+        self.fleet_executor.expand_fleet(runner)
 
         assert all(Path(f).exists() for f in runner._chunk_files)
 
-        runner._cleanup_chunk_files()
+        self.fleet_executor.cleanup_chunk_files(runner)
         assert runner._chunk_files == []
 
     def test_fleet_ip_input(self):
@@ -125,13 +129,13 @@ class TestCloudFleetRunner:
             ),
         )
         runner = self._make_runner(strategy)
-        combos = runner._expand_fleet()
+        combos = self.fleet_executor.expand_fleet(runner)
 
         assert len(combos) == 2
         assert combos[0]["fleet_target_count"] == 2
         assert combos[1]["fleet_target_count"] == 2
 
-        runner._cleanup_chunk_files()
+        self.fleet_executor.cleanup_chunk_files(runner)
 
     def test_fleet_reduces_count_when_few_targets(self):
         """Fleet count reduced when fewer targets than instances."""
@@ -142,11 +146,11 @@ class TestCloudFleetRunner:
             ),
         )
         runner = self._make_runner(strategy)
-        combos = runner._expand_fleet()
+        combos = self.fleet_executor.expand_fleet(runner)
 
         # Only 2 targets → reduced to 2 instances
         assert len(combos) == 2
-        runner._cleanup_chunk_files()
+        self.fleet_executor.cleanup_chunk_files(runner)
 
     def test_fleet_min_prefix_passed_through(self):
         """min_prefix from FleetStrategy is forwarded to expand_fleet_to_matrix."""
@@ -159,24 +163,112 @@ class TestCloudFleetRunner:
             ),
         )
         runner = self._make_runner(strategy)
-        combos = runner._expand_fleet()
+        combos = self.fleet_executor.expand_fleet(runner)
 
         # Two /16 subnets → two instances, each with 2 targets
         assert len(combos) == 2
         assert combos[0]["fleet_target_count"] == 2
         assert combos[1]["fleet_target_count"] == 2
-        runner._cleanup_chunk_files()
+        self.fleet_executor.cleanup_chunk_files(runner)
+
+    @pytest.mark.asyncio
+    async def test_run_single_fleet_job_builds_child_context_without_mutating_parent(
+        self,
+        monkeypatch,
+    ):
+        from types import SimpleNamespace
+
+        import ofx.runner.cloud_job as cloud_job_module
+        from ofx.models.job import Job
+        from ofx.runner import RunContext, RunnerStatus, RunResult
+
+        captured = {}
+
+        class _ChildRunner:
+            def __init__(self, job_copy, ctx, parent):
+                captured["job"] = job_copy
+                captured["ctx"] = ctx
+                captured["parent"] = parent
+                self.ctx = ctx
+                self.is_failed = False
+
+            async def run(self):
+                return RunResult(name="child", run_id="run-1", status=RunnerStatus.COMPLETED)
+
+        class _Runner:
+            def __init__(self):
+                self.ctx = RunContext(vars={"base": "keep"})
+                self.model = Job(
+                    jid="fleet-job",
+                    cloud={"provider": "static", "host": "10.0.0.1"},
+                    strategy=MatrixStrategy(
+                        fleet=FleetStrategy(count=2, input="10.0.0.1,10.0.0.2"),
+                    ),
+                    steps=[{"run": "echo hi"}],
+                )
+                self.parent = SimpleNamespace()
+                self._runners = {}
+
+            def _child_context(self):
+                return self.ctx.model_copy(deep=True)
+
+        monkeypatch.setattr(cloud_job_module, "CloudJobRunner", _ChildRunner)
+
+        runner = _Runner()
+        combo = {
+            "fleet_name": "chunk-a",
+            "fleet_index": 1,
+            "fleet_target_count": 2,
+        }
+
+        result = await self.fleet_executor.run_single_fleet_job(runner, 0, combo)
+
+        assert result.status == RunnerStatus.COMPLETED
+        assert captured["job"].name == "[fleet-job]{0}"
+        assert captured["ctx"].vars["fleet"] == combo
+        assert captured["ctx"].vars["strategy"]["fleet"]["count"] == 2
+        assert runner.ctx.vars == {"base": "keep"}
+        assert "fleet-job_0" in runner._runners
 
 
 class TestCloudMatrixProduceLog:
     """Test _produce_log helpers for fleet/matrix runners."""
 
+    def test_cloud_job_log_prefix_variants(self):
+        from ofx.runner.cloud_job import cloud_job_log_prefix
+
+        assert cloud_job_log_prefix("job-1") == "job=job-1"
+        assert cloud_job_log_prefix("job-1", workflow_name="recon") == "name=recon | job=job-1"
+        assert cloud_job_log_prefix("job-1", quote_job_id=True) == "'job-1'"
+        assert (
+            cloud_job_log_prefix("job-1", fleet_name="chunk-a", quote_job_id=True)
+            == "'job-1' [chunk-a]"
+        )
+
+    def test_cloud_fleet_runner_produce_log(self):
+        from ofx.models.job import Job
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_fleet import CloudFleetRunner
+
+        runner = CloudFleetRunner.__new__(CloudFleetRunner)
+        runner.model = Job(
+            jid="fleet-job",
+            cloud={"provider": "static", "host": "10.0.0.1"},
+            steps=[{"run": "echo hi"}],
+        )
+        runner.parent = None
+        runner.ctx = RunContext()
+
+        msg = runner._produce_log("fleet")
+        assert "fleet-job" in msg
+        assert "cloud-fleet" in msg
+
     def test_produce_log_with_fleet_vars(self):
         """_produce_log reads fleet_name from ctx.vars['fleet'], not top-level."""
         from ofx.models.job import Job
         from ofx.models.strategy import MatrixStrategy
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
         job = Job(
             jid="test-job",
@@ -204,8 +296,8 @@ class TestCloudMatrixProduceLog:
         """_produce_log without fleet shows job id only."""
         from ofx.models.job import Job
         from ofx.models.strategy import MatrixStrategy
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
         job = Job(
             jid="test-job",
@@ -222,14 +314,74 @@ class TestCloudMatrixProduceLog:
         assert "test-job" in msg
         assert "cloud-matrix" in msg
 
+    def test_cloud_job_produce_log_includes_workflow_and_cloud_tag(self):
+        from ofx.models.job import Job
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_job import CloudJobRunner
+
+        class _ParentStub:
+            model = type("W", (), {"name": "recon"})()
+
+            def _produce_log(self, msg):
+                return msg
+
+        runner = CloudJobRunner.__new__(CloudJobRunner)
+        runner.model = Job(
+            jid="cloud-job",
+            cloud={"provider": "static", "host": "10.0.0.1"},
+            steps=[{"run": "echo hi"}],
+        )
+        runner.parent = _ParentStub()
+        runner.ctx = RunContext()
+
+        msg = runner._produce_log("hello")
+        assert "name=recon | job=cloud-job" in msg
+        assert "[cloud]" in msg
+
+
+class TestCloudMatrixExecutor:
+    """Cloud matrix combinations should dispatch on the cloud runner."""
+
+    @pytest.mark.asyncio
+    async def test_matrix_combinations_dispatch_remote_steps(self):
+        from ofx.runner.cloud_matrix import CloudMatrixExecutor
+
+        calls = []
+
+        class _Strategy:
+            max_parallel = 1
+            fail_fast = True
+
+        class _Model:
+            jid = "cloud-matrix-job"
+            strategy = _Strategy()
+
+        class _Runner:
+            name = "runner"
+            run_id = "run-id"
+            model = _Model()
+            _matrix_combinations = [{"tool": "nmap"}, {"tool": "nuclei"}]
+
+            async def dispatch_remote_steps(self, matrix_combo, suffix=""):
+                calls.append((matrix_combo, suffix))
+
+        await CloudMatrixExecutor().do_run(_Runner())
+
+        assert calls == [
+            ({"tool": "nmap"}, "_0"),
+            ({"tool": "nuclei"}, "_1"),
+        ]
+
 
 class TestCloudMatrixExpansion:
     """Test the matrix expansion logic in CloudMatrixJobRunner."""
 
+    matrix_executor = MatrixExecutor()
+
     def test_matrix_expansion(self):
-        """CloudMatrixJobRunner._generate_matrix_combinations produces correct combos."""
+        """MatrixExecutor.generate_matrix_combinations produces correct combos."""
         from ofx.models.job import Job
-        from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
         strategy = MatrixStrategy(
             matrix={"tool": ["nmap", "masscan"], "mode": ["fast", "thorough"]},
@@ -243,7 +395,7 @@ class TestCloudMatrixExpansion:
         # We only test the expansion helper, no need for real parent
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._generate_matrix_combinations()
+        combos = self.matrix_executor.generate_matrix_combinations(runner)
 
         assert len(combos) == 4
         for c in combos:
@@ -253,7 +405,7 @@ class TestCloudMatrixExpansion:
     def test_matrix_with_exclude(self):
         """Matrix expansion with exclude filter."""
         from ofx.models.job import Job
-        from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
         strategy = MatrixStrategy(
             matrix={"tool": ["nmap", "masscan"], "mode": ["fast", "thorough"]},
@@ -267,7 +419,7 @@ class TestCloudMatrixExpansion:
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._generate_matrix_combinations()
+        combos = self.matrix_executor.generate_matrix_combinations(runner)
 
         assert len(combos) == 3
         assert {"tool": "masscan", "mode": "thorough"} not in combos
@@ -275,7 +427,7 @@ class TestCloudMatrixExpansion:
     def test_matrix_with_include(self):
         """Matrix expansion with extra include."""
         from ofx.models.job import Job
-        from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
         strategy = MatrixStrategy(
             matrix={"tool": ["nmap"]},
@@ -289,7 +441,7 @@ class TestCloudMatrixExpansion:
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._generate_matrix_combinations()
+        combos = self.matrix_executor.generate_matrix_combinations(runner)
 
         assert len(combos) == 2
         assert {"tool": "nmap"} in combos
@@ -298,7 +450,7 @@ class TestCloudMatrixExpansion:
     def test_no_matrix_returns_empty(self):
         """No matrix → empty list."""
         from ofx.models.job import Job
-        from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
         job = Job(
             jid="test-job",
@@ -308,7 +460,7 @@ class TestCloudMatrixExpansion:
         )
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
-        combos = runner._generate_matrix_combinations()
+        combos = self.matrix_executor.generate_matrix_combinations(runner)
         assert combos == []
 
 
@@ -320,8 +472,8 @@ class TestCloudStepRunnerEnvPrefix:
     ):
         """Build a CloudStepRunner with minimal stubs — no real SSH needed."""
         from ofx.models.step import Step
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_step import CloudStepRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_step import CloudStepRunner
 
         step = Step(step_index=0, run="echo hi", env=step_env or {})
 
@@ -421,10 +573,12 @@ class TestCloudStepRunnerEnvPrefix:
 class TestCloudMatrixFailFast:
     """Tests for fail_fast behavior in CloudMatrixJobRunner."""
 
+    matrix_executor = MatrixExecutor()
+
     def _make_runner_with_strategy(self, strategy):
         from ofx.models.job import Job
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
         job = Job(
             jid="test-job",
@@ -457,7 +611,7 @@ class TestCloudMatrixFailFast:
             fail_fast=True,
         )
         runner = self._make_runner_with_strategy(strategy)
-        combos = runner._generate_matrix_combinations()
+        combos = self.matrix_executor.generate_matrix_combinations(runner)
         assert len(combos) == 2
 
         assert getattr(runner.model.strategy, "fail_fast", True) is True
@@ -480,9 +634,9 @@ class TestDiscoverPythonCache:
     def _make_step_runner_with_parent(self):
         """Return a CloudStepRunner whose parent is a minimal CloudJobRunner stub."""
         from ofx.models.step import Step
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_job import CloudJobRunner
-        from ofx.runner.execution.cloud_step import CloudStepRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_job import CloudJobRunner
+        from ofx.runner.cloud_step import CloudStepRunner
 
         # Minimal CloudJobRunner stub — only needs _cached_python
         parent_job = object.__new__(CloudJobRunner)
@@ -563,11 +717,103 @@ class TestFleetInputUploadFailure:
     """Tests that fleet input upload failure raises, not warns."""
 
     @pytest.mark.asyncio
+    async def test_fleet_runtime_updates_populate_env_and_vars_without_upload(self):
+        from ofx.models.job import Job
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_job import CloudJobRunner
+
+        job = Job(
+            jid="fleet-job",
+            cloud={"provider": "static", "host": "10.0.0.1"},
+            steps=[{"run": "echo hi"}],
+        )
+        ctx = RunContext()
+        ctx.vars["fleet"] = {
+            "fleet_name": "chunk-a",
+            "fleet_index": 2,
+            "fleet_input": ["10.0.0.1", "10.0.0.2"],
+        }
+
+        runner = CloudJobRunner.__new__(CloudJobRunner)
+        runner.model = job
+        runner.ctx = ctx
+        runner.parent = None
+        runner._remote_runner = None
+        runner._work_dir = None
+        runner._cloud_config = job.cloud
+
+        await runner._upload_fleet_input()
+
+        assert runner.ctx.envs["REMOTE_FLEET_NAME"] == "chunk-a"
+        assert runner.ctx.envs["REMOTE_FLEET_INDEX"] == "2"
+        assert runner.ctx.envs["REMOTE_FLEET_INPUT"] == "10.0.0.1\n10.0.0.2"
+        assert runner.ctx.vars["remote_fleet_name"] == "chunk-a"
+        assert runner.ctx.vars["remote_fleet_index"] == 2
+        assert runner.ctx.vars["remote_fleet_input"] == ["10.0.0.1", "10.0.0.2"]
+        assert "fleet_name" not in runner.ctx.envs
+
+    @pytest.mark.asyncio
+    async def test_upload_fleet_input_sets_remote_path_metadata(self, tmp_path):
+        from ofx.models.job import Job
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_job import CloudJobRunner
+
+        chunk = tmp_path / "chunk.txt"
+        chunk.write_text("10.0.0.1\n")
+
+        uploaded: list[tuple[str, str]] = []
+
+        class _Remote:
+            def upload(self, src, dst):
+                uploaded.append((src, dst))
+
+        job = Job(
+            jid="fleet-job",
+            cloud={"provider": "static", "host": "10.0.0.1"},
+            steps=[{"run": "echo hi"}],
+        )
+        ctx = RunContext()
+        ctx.vars["fleet"] = {"fleet_input_file": str(chunk), "fleet_name": "test"}
+
+        runner = CloudJobRunner.__new__(CloudJobRunner)
+        runner.model = job
+        runner.ctx = ctx
+        runner.parent = None
+        runner._remote_runner = _Remote()
+        runner._work_dir = "/tmp/ofx-run"
+        runner._cloud_config = job.cloud
+        runner._log_info = lambda _message: None
+
+        await runner._upload_fleet_input()
+
+        assert uploaded == [(str(chunk), "/tmp/ofx-run/fleet_targets.txt")]
+        assert runner.ctx.envs["REMOTE_FLEET_INPUT_FILE"] == "/tmp/ofx-run/fleet_targets.txt"
+        assert runner.ctx.vars["remote_fleet_input_file"] == "/tmp/ofx-run/fleet_targets.txt"
+
+    def test_apply_remote_fleet_input_path_sets_env_and_vars(self):
+        from ofx.models.job import Job
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_job import CloudJobRunner
+
+        runner = CloudJobRunner.__new__(CloudJobRunner)
+        runner.model = Job(
+            jid="fleet-job",
+            cloud={"provider": "static", "host": "10.0.0.1"},
+            steps=[{"run": "echo hi"}],
+        )
+        runner.ctx = RunContext()
+
+        runner._apply_remote_fleet_input_path("/tmp/fleet_targets.txt")
+
+        assert runner.ctx.envs["REMOTE_FLEET_INPUT_FILE"] == "/tmp/fleet_targets.txt"
+        assert runner.ctx.vars["remote_fleet_input_file"] == "/tmp/fleet_targets.txt"
+
+    @pytest.mark.asyncio
     async def test_upload_failure_raises(self, tmp_path):
         """If _remote_runner.upload raises, _upload_fleet_input should propagate it."""
         from ofx.models.job import Job
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_job import CloudJobRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_job import CloudJobRunner
 
         # Create a real chunk file to pass the is_file() check
         chunk = tmp_path / "chunk.txt"
@@ -609,8 +855,8 @@ class TestCloudStepRunIfContext:
 
     def _make_step_runner(self, step_index: int = 0):
         from ofx.models.step import Step
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_step import CloudStepRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_step import CloudStepRunner
 
         step = Step(run="echo hi", step_index=step_index)
         ctx = RunContext()
@@ -629,7 +875,7 @@ class TestCloudStepRunIfContext:
         return step_runner
 
     def _make_prev_runner_stub(self, *, is_success=True, is_failed=False):
-        from ofx.runner.core import RunnerStatus
+        from ofx.runner import RunnerStatus
 
         class _Stub:
             pass
@@ -699,9 +945,9 @@ class TestCloudStepWindowsSupport:
     def _make_runner(self, connection_type: str = "ssh"):
         from ofx.models.cloud import CloudConfig
         from ofx.models.step import Step
-        from ofx.runner.core import RunContext
-        from ofx.runner.execution.cloud_job import CloudJobRunner
-        from ofx.runner.execution.cloud_step import CloudStepRunner
+        from ofx.runner import RunContext
+        from ofx.runner.cloud_job import CloudJobRunner
+        from ofx.runner.cloud_step import CloudStepRunner
 
         class _FakeRemote:
             def run(self, cmd, timeout=None):

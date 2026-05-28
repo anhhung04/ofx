@@ -3,10 +3,10 @@
 import getpass
 import time
 from base64 import b64encode
-from configparser import ConfigParser
 from pathlib import Path
 
 from ofx.api._compat import CONFIG_FILE, get_logger
+from ofx.api.credential_config import load_section_values, save_section_values
 from ofx.api.http import requests
 
 logger = get_logger()
@@ -65,15 +65,14 @@ class Fofa:
             conf_path = CONFIG_FILE
 
         self.conf_path = conf_path
-        self.parser = ConfigParser()
-
-        if self.conf_path and self.conf_path.exists():
-            self.parser.read(self.conf_path)
-            try:
-                self.user = self.user or self.parser.get("Fofa", "user")
-                self.token = self.token or self.parser.get("Fofa", "token")
-            except Exception:
-                logger.debug("Fofa credentials not found in config file")
+        self.parser, credentials = load_section_values(
+            self.conf_path,
+            "Fofa",
+            ("User", "Token"),
+            logger=logger,
+        )
+        self.user = self.user or credentials.get("User")
+        self.token = self.token or credentials.get("Token")
 
         self.check_token()
 
@@ -129,15 +128,13 @@ class Fofa:
         Creates config directory if needed and persists user email and API key
         to config.ini in INI format.
         """
-        if not self.parser.has_section("Fofa"):
-            self.parser.add_section("Fofa")
         try:
-            self.parser.set("Fofa", "Token", self.token)
-            self.parser.set("Fofa", "User", self.user)
-            if self.conf_path:
-                self.conf_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(self.conf_path, "w") as f:
-                    self.parser.write(f)
+            save_section_values(
+                self.conf_path,
+                self.parser,
+                "Fofa",
+                {"Token": self.token, "User": self.user},
+            )
         except Exception as ex:
             logger.error(str(ex))
 

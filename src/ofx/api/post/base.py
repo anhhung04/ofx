@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from .detect import detect_os
 from .privilege import is_admin_from_whoami, is_root_from_id
 from .transfer import build_download_command
-
-if TYPE_CHECKING:
-    pass
 
 __all__ = [
     "AuthenticationError",
@@ -58,13 +55,13 @@ class PostRunnerError(Exception):
 class ConnectionError(PostRunnerError):  # noqa: A001
     """Failed to establish connection to target host."""
 
-    pass
+    ...
 
 
 class AuthenticationError(PostRunnerError):
     """Authentication failed (bad credentials, key, etc.)."""
 
-    pass
+    ...
 
 
 @runtime_checkable

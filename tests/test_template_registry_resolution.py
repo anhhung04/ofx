@@ -5,7 +5,7 @@ import yaml
 
 from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, RunnerStatus
-from ofx.runner.execution.workflow import WorkflowRunner
+from ofx.runner.workflow import WorkflowRunner
 
 
 @pytest.mark.asyncio

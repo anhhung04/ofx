@@ -65,15 +65,13 @@ class CertipyTask(Task):
         hashes = kwargs.pop("hash", "")
 
         parts: list[str] = [self.cmd, mode]
+        parts.extend(
+            self._build_value_flag_parts(
+                [("-u", username), ("-p", password), ("-hashes", hashes)]
+            )
+        )
 
-        if username:
-            parts.extend(["-u", self._q(username)])
-        if password:
-            parts.extend(["-p", self._q(password)])
-        if hashes:
-            parts.extend(["-hashes", self._q(hashes)])
-
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["mode", "username", "password", "hash"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         # If target looks like an IP for dc-ip, and dc_ip not already set
         if target and "-dc-ip" not in " ".join(parts):

@@ -5,6 +5,7 @@ import atexit
 import builtins
 import contextlib
 import io
+import json
 import logging
 import os
 from concurrent.futures import ProcessPoolExecutor
@@ -13,18 +14,38 @@ from typing import Any
 
 from ofx.models.command import Command, Script
 from ofx.runner.channels import ChannelStore
-from ofx.runner.commands.command_executor import CommandExecutionResult, CommandExecutor
-from ofx.runner.core import (
-    BaseRunner,
-    RunContext,
-    RunnerRegistryKeys,
-    RunnerStatus,
-    RunResult,
+from ofx.runner.commands.command_executor import (
+    OFX_OUTPUTS_ENV,
+    RUNNER_OUTPUTS_ENV,
+    CommandExecutionResult,
+    CommandExecutor,
+    parse_outputs_file,
 )
-from ofx.settings import DEFAULT_SHELL, settings
+from ofx.runner.context import RunContext, RunnerStatus, RunResult
+from ofx.runner.logging import bubble_log
+from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.runner.run_defaults import (
+    resolve_model_shell,
+    resolve_model_working_directory,
+)
+from ofx.runner.runner import BaseRunner
+from ofx.settings import settings
 
 # Shared ProcessPoolExecutor — avoids creating a new executor per script call.
 _shared_executor: ProcessPoolExecutor | None = None
+
+
+def write_outputs_file(outputs_file: str | os.PathLike[str] | None, **kwargs: Any) -> None:
+    """Append `key=value` output lines, JSON-encoding structured values."""
+    if not outputs_file:
+        return
+
+    with open(outputs_file, "a") as handle:
+        for key, value in kwargs.items():
+            if isinstance(value, (dict, list)):
+                handle.write(f"{key}={json.dumps(value)}\n")
+            else:
+                handle.write(f"{key}={value}\n")
 
 
 def _get_shared_executor() -> ProcessPoolExecutor:
@@ -61,8 +82,8 @@ def exec_script_in_process(
 
     # Make RUNNER_OUTPUTS / OFX_OUTPUTS available inside scripts
     if outputs_file:
-        os.environ["RUNNER_OUTPUTS"] = outputs_file
-        os.environ["OFX_OUTPUTS"] = outputs_file
+        os.environ[RUNNER_OUTPUTS_ENV] = outputs_file
+        os.environ[OFX_OUTPUTS_ENV] = outputs_file
 
     def _add_outputs(**kwargs):
         """Write key=value pairs to the OFX_OUTPUTS file.
@@ -70,18 +91,9 @@ def exec_script_in_process(
         Lists and dicts are serialized as JSON. All other values
         are converted to strings.
         """
-        if not outputs_file:
-            return
-        import json as _json
+        write_outputs_file(outputs_file, **kwargs)
 
-        with open(outputs_file, "a") as f:
-            for k, v in kwargs.items():
-                if isinstance(v, (dict, list)):
-                    f.write(f"{k}={_json.dumps(v)}\n")
-                else:
-                    f.write(f"{k}={v}\n")
-
-    from ofx.runner.execution.findings_export import export_typed_outputs
+    from ofx.runner.findings_export import export_typed_outputs
     from ofx.runner.templates.helpers import _asm_helpers
 
     asm_funcs = _asm_helpers()
@@ -135,9 +147,39 @@ def exec_script_in_process(
     }
 
 
-class CommandRunner(BaseRunner[Command]):
-    _shell_cache: dict[str, str] = {}
+class _ExecutionDefaultsMixin:
+    """Shared inherited shell/working-directory resolution for command-like runners."""
 
+    model: Command | Script
+
+    def _resolve_shell(self) -> str:
+        """Resolve shell path from explicit model state or parent defaults."""
+        return resolve_model_shell(self, self.model)
+
+    def _resolve_working_directory(self) -> Path:
+        return resolve_model_working_directory(self, self.model)
+
+    def _apply_execution_defaults(self) -> None:
+        self.model.shell = self._resolve_shell()
+        self.model.working_directory = self._resolve_working_directory()
+
+    async def _pre_run(self) -> None:
+        self._apply_execution_defaults()
+
+    async def _post_run_execution_log(
+        self,
+        *,
+        failure_label: str,
+        result_label: str,
+    ) -> None:
+        if self._error:
+            self._log_error(f"{failure_label} failed: {self._error}")
+        self._log_debug(
+            f"{result_label} result: \n---\n{await self.get_result()}\n---\n with context: \n---\n{self.ctx}\n---"
+        )
+
+
+class CommandRunner(_ExecutionDefaultsMixin, BaseRunner[Command]):
     def __init__(
         self,
         command_model: Command,
@@ -145,7 +187,7 @@ class CommandRunner(BaseRunner[Command]):
         parent: BaseRunner | None = None,
         logger: logging.Logger | None = None,
     ):
-        """Optimized command runner with caching."""
+        """Run shell commands with inherited execution defaults."""
         super().__init__(command_model, ctx, parent, None, logger=logger)
         self._outputs_file: Path | None = None
 
@@ -193,42 +235,28 @@ class CommandRunner(BaseRunner[Command]):
                 lambda msg: self._log_debug(msg),
             )
 
-    async def _pre_run(self) -> None:
-        self.model.shell = self._resolve_shell()
-
     async def _post_run(self) -> None:
-        if self._error:
-            self._log_error(f"Command failed: {self._error}")
-        self._log_debug(
-            f"cmd result: \n---\n{await self.get_result()}\n---\n with context: \n---\n{self.ctx}\n---"
+        await self._post_run_execution_log(
+            failure_label="Command",
+            result_label="cmd",
         )
 
     def _produce_log(self, message: Any) -> str:
-        msg = str(message)
-        if self.parent:
-            return self.parent._produce_log(msg)
-        return msg
-
-    def _resolve_shell(self) -> str:
-        """Resolve shell path from hierarchy or use default /bin/bash"""
-        if self.model.shell:
-            return self.model.shell
-
-        parent = getattr(self, "parent", None)
-        if parent and getattr(parent, "parent", None):
-            grandparent = parent.parent
-            grandparent_model = getattr(grandparent, "model", None)
-            if grandparent_model:
-                defaults = getattr(grandparent_model, "defaults", None)
-                if defaults and hasattr(defaults, "run"):
-                    parent_shell = getattr(defaults.run, "shell", None)
-                    if parent_shell:
-                        return parent_shell
-
-        return DEFAULT_SHELL
+        return bubble_log(self.parent, str(message))
 
 
-class ScriptRunner(BaseRunner[Script]):
+class ScriptRunner(_ExecutionDefaultsMixin, BaseRunner[Script]):
+    def _script_scope_models(self) -> tuple[Any | None, Any | None, Any | None]:
+        """Return workflow step scope models exposed inside executed scripts."""
+        step_runner = self.parent
+        job_runner = step_runner.parent if step_runner else None
+        workflow_runner = job_runner.parent if job_runner else None
+        return (
+            getattr(job_runner, "model", None),
+            getattr(step_runner, "model", None),
+            getattr(workflow_runner, "model", None),
+        )
+
     async def _do_run(self) -> None:
         """Execute a Python script using exec"""
         try:
@@ -241,29 +269,11 @@ class ScriptRunner(BaseRunner[Script]):
                 "stderr": result["stderr"],
             }
 
-            # Parse outputs file (like CommandExecutor does for run: steps)
             outputs_file_path = self.ctx.envs.get("RUNNER_OUTPUTS")
             if outputs_file_path:
-                outputs_file = Path(outputs_file_path)
-                if outputs_file.exists():
-                    try:
-                        content = outputs_file.read_text().strip()
-                        if content:
-                            for line in content.splitlines():
-                                line = line.strip()
-                                if line and "=" in line:
-                                    k, v = line.split("=", 1)
-                                    k, v = k.strip(), v.strip()
-                                    if k:
-                                        outputs[k] = v
-                                        self._log_debug(f"Captured output: {k}={v}")
-                    except Exception as e:
-                        self._log_debug(f"Failed to parse RUNNER_OUTPUTS: {e}")
-                    finally:
-                        try:
-                            outputs_file.unlink(missing_ok=True)
-                        except Exception as e:
-                            self._log_debug(f"Failed to remove outputs file: {e}")
+                outputs.update(
+                    parse_outputs_file(Path(outputs_file_path), self._log_debug)
+                )
 
             await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
             status = (
@@ -290,20 +300,17 @@ class ScriptRunner(BaseRunner[Script]):
         """Run the script execution in a separate process"""
         # Use shared channels directory for inter-job communication
         channels_dir = settings.channels_dir
-        outputs_file = self.ctx.envs.get("RUNNER_OUTPUTS")
+        outputs_file = self.ctx.envs.get(RUNNER_OUTPUTS_ENV)
+        job_model, step_model, workflow_model = self._script_scope_models()
 
         executor = _get_shared_executor()
         future = executor.submit(
             exec_script_in_process,
             self.model.script,
             str(self.model.working_directory),
-            self.parent.parent.model
-            if self.parent and self.parent.parent
-            else None,
-            self.parent.model if self.parent else None,
-            self.parent.parent.parent.model
-            if self.parent and self.parent.parent and self.parent.parent.parent
-            else None,
+            job_model,
+            step_model,
+            workflow_model,
             self.ctx,
             self.ctx.inputs,
             self.ctx.secrets,
@@ -314,8 +321,7 @@ class ScriptRunner(BaseRunner[Script]):
         return result
 
     async def _post_run(self) -> None:
-        if self._error:
-            self._log_error(f"Script failed: {self._error}")
-        self._log_debug(
-            f"script result: \n---\n{await self.get_result()}\n---\n with context: \n---\n{self.ctx}\n---"
+        await self._post_run_execution_log(
+            failure_label="Script",
+            result_label="script",
         )

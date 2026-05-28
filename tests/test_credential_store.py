@@ -5,12 +5,12 @@ from __future__ import annotations
 
 class TestShouldStoreCreds:
     def test_step_true_overrides_all(self):
-        from ofx.runner.core.credential_store import should_store_creds
+        from ofx.runner.services.credential_store import should_store_creds
 
         assert should_store_creds(True, parent_model=None, global_default=False) is True
 
     def test_step_false_overrides_all(self):
-        from ofx.runner.core.credential_store import should_store_creds
+        from ofx.runner.services.credential_store import should_store_creds
 
         assert (
             should_store_creds(False, parent_model=None, global_default=True) is False
@@ -19,7 +19,7 @@ class TestShouldStoreCreds:
     def test_parent_defaults_store_creds_true(self):
         from unittest.mock import MagicMock
 
-        from ofx.runner.core.credential_store import should_store_creds
+        from ofx.runner.services.credential_store import should_store_creds
 
         parent = MagicMock()
         parent.defaults.store_creds = True
@@ -30,7 +30,7 @@ class TestShouldStoreCreds:
     def test_parent_defaults_store_creds_false(self):
         from unittest.mock import MagicMock
 
-        from ofx.runner.core.credential_store import should_store_creds
+        from ofx.runner.services.credential_store import should_store_creds
 
         parent = MagicMock()
         parent.defaults.store_creds = False
@@ -40,7 +40,7 @@ class TestShouldStoreCreds:
         )
 
     def test_global_default_used_when_no_step_or_parent(self):
-        from ofx.runner.core.credential_store import should_store_creds
+        from ofx.runner.services.credential_store import should_store_creds
 
         assert should_store_creds(None, parent_model=None, global_default=True) is True
         assert (
@@ -48,8 +48,8 @@ class TestShouldStoreCreds:
         )
 
     def test_falls_back_to_settings(self, monkeypatch):
-        import ofx.runner.core.credential_store as mod
-        from ofx.runner.core.credential_store import should_store_creds
+        import ofx.runner.services.credential_store as mod
+        from ofx.runner.services.credential_store import should_store_creds
 
         monkeypatch.setattr(mod.settings, "auto_store_creds", True)
         assert should_store_creds(None, parent_model=None) is True
@@ -59,7 +59,7 @@ class TestShouldStoreCreds:
 
     def test_parent_without_defaults_attr(self):
         """parent_model without 'defaults' attribute falls through gracefully."""
-        from ofx.runner.core.credential_store import should_store_creds
+        from ofx.runner.services.credential_store import should_store_creds
 
         class NoDefaults:
             pass
@@ -72,19 +72,19 @@ class TestShouldStoreCreds:
 
 class TestStoreFromTypedOutputs:
     def test_returns_zero_for_empty_list(self):
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
 
         assert store_from_typed_outputs([]) == 0
 
     def test_returns_zero_for_non_useraccount_outputs(self):
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
         from ofx.tasks.output_types import Port
 
         port = Port(ip="10.0.0.1", port=22, protocol="tcp")
         assert store_from_typed_outputs([port]) == 0
 
     def test_skips_useraccount_without_username(self):
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
         from ofx.tasks.output_types import UserAccount
 
         account = UserAccount(username="", password="pass")
@@ -93,7 +93,7 @@ class TestStoreFromTypedOutputs:
     def test_graceful_when_db_unavailable(self, monkeypatch):
         """Should return 0 and log debug when pykeepass is missing."""
 
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
         from ofx.tasks.output_types import UserAccount
 
         account = UserAccount(username="admin", password="secret")
@@ -119,7 +119,7 @@ class TestStoreFromTypedOutputs:
 
     def test_accepts_sequence(self):
         """Should accept any Sequence, not just list."""
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
 
         # Empty tuple — no UserAccount
         result = store_from_typed_outputs(())
@@ -129,7 +129,7 @@ class TestStoreFromTypedOutputs:
         """When add_credential raises, exception is caught and stored count is 0."""
         from unittest.mock import MagicMock, patch
 
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
         from ofx.tasks.output_types import UserAccount
 
         account = UserAccount(username="alice", password="pw")
@@ -149,7 +149,7 @@ class TestStoreFromTypedOutputs:
         """When add_credential succeeds, stored count increments."""
         from unittest.mock import MagicMock, patch
 
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
         from ofx.tasks.output_types import UserAccount
 
         accounts = [
@@ -172,7 +172,7 @@ class TestStoreFromTypedOutputs:
         """Existing credential with same password/hash/domain is skipped."""
         from unittest.mock import MagicMock, patch
 
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
         from ofx.tasks.output_types import UserAccount
 
         account = UserAccount(username="user1", password="secret")
@@ -198,7 +198,7 @@ class TestStoreFromTypedOutputs:
         """log_fn parameter should be called when DB is unavailable."""
         import builtins
 
-        from ofx.runner.core.credential_store import store_from_typed_outputs
+        from ofx.runner.services.credential_store import store_from_typed_outputs
         from ofx.tasks.output_types import UserAccount
 
         account = UserAccount(username="bob", password="pw")

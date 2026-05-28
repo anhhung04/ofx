@@ -1,5 +1,6 @@
 import json
 import logging
+from contextlib import suppress
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -101,10 +102,8 @@ def set_secret(
             typer.secho("Cancelled", fg=typer.colors.YELLOW)
             raise typer.Exit()
 
-    try:
+    with suppress(json.JSONDecodeError):
         secret_value = json.loads(secret_value)
-    except json.JSONDecodeError:
-        pass
 
     secrets_store.set_secret(name, secret_value)
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import socket
 import ssl
+from contextlib import suppress
 from dataclasses import dataclass
-from typing import Optional
 
 __all__ = ["ServiceInfo", "scan_banner", "detect_protocol"]
 
@@ -23,7 +23,7 @@ def _recv_banner(sock: socket.socket, max_bytes: int) -> str | None:
     try:
         data = sock.recv(max_bytes)
         return data.decode(errors="ignore").strip() if data else None
-    except Exception:
+    except OSError:
         return None
 
 
@@ -78,7 +78,5 @@ def scan_banner(
         )
     finally:
         if sock:
-            try:
+            with suppress(OSError):
                 sock.close()
-            except Exception:
-                pass

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -77,13 +76,7 @@ class GarakTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 
@@ -96,11 +89,8 @@ class GarakTask(Task):
 
             # Try JSONL report lines first
             if line.startswith("{"):
-                try:
-                    data = json.loads(line)
-                except json.JSONDecodeError:
-                    pass
-                else:
+                data = self._parse_json_line(line)
+                if data is not None:
                     status = data.get("status", data.get("result", ""))
                     probe = data.get("probe", data.get("probe_name", ""))
                     detector = data.get("detector", "")

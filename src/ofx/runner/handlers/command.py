@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from ofx.models.step import RunType
-from ofx.runner.core.base import BaseRunner
-from ofx.runner.handlers import get_handler_registry
+from typing import TYPE_CHECKING
 
-registry = get_handler_registry()
+from ofx.models.step import RunType
+from ofx.runner.handlers.registry import registry
+from ofx.runner.handlers.shared import (
+    build_child_runner,
+    resolved_execution_model_kwargs,
+)
+
+if TYPE_CHECKING:
+    from ofx.runner.runner import BaseRunner
 
 
 @registry.register(RunType.COMMAND)
@@ -17,13 +23,12 @@ def _create_command_runner(step_runner) -> BaseRunner:
     assert step_runner.model.run is not None, "Run cannot be None for COMMAND run type"
     cmd = Command(
         cmd=step_runner.model.run,
-        shell=step_runner.model.shell,
-        working_directory=step_runner._resolve_working_dir(),
+        **resolved_execution_model_kwargs(step_runner),
         timeout_minutes=step_runner.model.timeout,
         interactive=is_interactive,
     )
-    return CommandRunner(
+    return build_child_runner(
         cmd,
-        step_runner._child_context(),
-        parent=step_runner,
+        CommandRunner,
+        step_runner,
     )

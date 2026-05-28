@@ -74,11 +74,10 @@ class SslscanTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Certificate | Vulnerability]:
-        xml_source = ""
-        if output_file and output_file.exists():
-            xml_source = self._read_output_file(output_file)
-        elif stdout and "<document>" in stdout:
-            xml_source = stdout
+        xml_source = self._raw_output(
+            stdout if "<document>" in stdout else "",
+            output_file,
+        )
 
         if not xml_source:
             return []

@@ -19,7 +19,6 @@ Usage in OFX workflows::
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -105,7 +104,7 @@ class ZombieTask(Task):
 
         parts: list[str] = [self.cmd]
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["gogo", "json_input"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         output_file = self._make_output_path()
         parts.extend(["-f", str(output_file), "-O", "json"])
@@ -139,27 +138,23 @@ class ZombieTask(Task):
     ) -> list[UserAccount]:
         results: list[UserAccount] = []
 
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return results
 
-        # Try JSON array first
-        try:
-            data = json.loads(raw)
-            if isinstance(data, list):
-                for entry in data:
-                    acct = self._parse_json_entry(entry)
-                    if acct:
-                        results.append(acct)
-                return results
-        except json.JSONDecodeError:
-            pass
+        # Try full JSON array/object first.
+        json_output = self._read_json_output(raw)
+        if isinstance(json_output, list):
+            for entry in json_output:
+                if not isinstance(entry, dict):
+                    continue
+                acct = self._parse_json_entry(entry)
+                if acct:
+                    results.append(acct)
+            return results
+        if isinstance(json_output, dict):
+            acct = self._parse_json_entry(json_output)
+            return [acct] if acct else []
 
         # Fall back to line-by-line
         for line in raw.splitlines():
@@ -169,14 +164,12 @@ class ZombieTask(Task):
 
             # Try JSON line
             if line.startswith("{"):
-                try:
-                    entry = json.loads(line)
+                entry = self._parse_json_line(line)
+                if entry is not None:
                     acct = self._parse_json_entry(entry)
                     if acct:
                         results.append(acct)
                     continue
-                except json.JSONDecodeError:
-                    pass
 
             # Try string format
             m = self._STRING_RE.search(line)

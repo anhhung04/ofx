@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -72,35 +71,14 @@ class ProwlerTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[Vulnerability | Tag]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 
         results: list[Vulnerability | Tag] = []
 
         # Prowler OCSF JSON output can be a JSON array or newline-delimited JSON
-        items: list[dict[str, Any]] = []
-        try:
-            parsed = json.loads(raw)
-            if isinstance(parsed, list):
-                items = parsed
-            elif isinstance(parsed, dict):
-                items = [parsed]
-        except json.JSONDecodeError:
-            # Try newline-delimited JSON
-            for line in raw.splitlines():
-                line = line.strip()
-                if line.startswith("{"):
-                    try:
-                        items.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
+        items = self._parse_json_records(raw)
 
         for item in items:
             severity_id = item.get("severity_id", item.get("severity", ""))

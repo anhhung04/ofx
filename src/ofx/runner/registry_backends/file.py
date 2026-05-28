@@ -8,7 +8,7 @@ from typing import Any
 
 from filelock import FileLock
 
-from ofx.runner.registry.base import RegistryAdapter
+from ofx.runner.registry_adapter import RegistryAdapter
 from ofx.settings import BASE_DATA_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
@@ -99,7 +99,7 @@ class FileRegistry(RegistryAdapter):
     async def _set(self, key: str, value: Any) -> None:
         """Store data in file"""
         registry = await self._read_registry()
-        registry[key] = value
+        registry[key] = self._clone_value(value)
         await self._write_registry(registry)
         self._log_debug(f"Set key '{key}' in FileJobRegistry")
 
@@ -107,18 +107,18 @@ class FileRegistry(RegistryAdapter):
         """Retrieve data from file (returns a copy to prevent shared mutation)"""
         registry = await self._read_registry()
         value = registry.get(key)
-        if isinstance(value, dict):
-            return value.copy()
-        return value
+        return self._clone_value(value)
 
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
         registry = await self._read_registry()
         existing = registry.get(key)
         if isinstance(existing, dict):
-            existing.update(updates)
+            merged = self._clone_value(existing)
+            merged.update(self._clone_value(updates))
+            registry[key] = merged
         else:
-            registry[key] = updates
+            registry[key] = self._clone_value(updates)
         await self._write_registry(registry)
         self._log_debug(f"Updated key '{key}' in FileJobRegistry")
 
@@ -140,7 +140,7 @@ class FileRegistry(RegistryAdapter):
     async def _get_all(self) -> dict[str, Any]:
         """Get all entries from file (returns a copy to prevent shared mutation)"""
         registry = await self._read_registry()
-        return registry.copy()
+        return self._clone_value(registry)
 
     async def _clear(self) -> None:
         """Clear all entries from file"""
@@ -152,7 +152,3 @@ class FileRegistry(RegistryAdapter):
         self._cache = None
         self._cache_mtime = 0.0
         self._log_debug("Closed FileJobRegistry")
-
-    @staticmethod
-    def _log_debug(message: str) -> None:
-        logger.debug(message)

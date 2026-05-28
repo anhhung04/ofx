@@ -3,7 +3,7 @@
 import pytest
 from pydantic import BaseModel
 
-from ofx.runner.core import BaseRunner, RunContext, RunnerStatus
+from ofx.runner import BaseRunner, RunContext, RunnerStatus
 
 
 class _DummyModel(BaseModel):

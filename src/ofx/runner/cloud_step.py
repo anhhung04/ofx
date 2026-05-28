@@ -1,0 +1,514 @@
+"""Cloud step runner — executes steps remotely via PostSSH or PostWinRM.
+
+Extracted from ``cloud_job.py`` to follow the File-Per-Struct rule.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import secrets as _secrets
+import shlex
+from collections.abc import Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from ofx.cloud.script_runtime import (
+    build_python_step_payload,
+    is_python_step_run_type,
+)
+from ofx.cloud.task_runtime import build_task_command_from_step
+from ofx.cloud.temp_upload import upload_temp_content
+from ofx.models.step import RunType
+from ofx.runner.context import (
+    RunContext,
+    RunnerContextBuilder,
+    RunnerStatus,
+)
+from ofx.runner.execution_results import (
+    build_step_execution_result,
+)
+from ofx.runner.logging import bubble_log
+from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.runner.run_defaults import model_field_is_explicitly_set
+from ofx.runner.runner import BaseRunner
+from ofx.runner.step_mixin import StepRunnerMixin
+from ofx.utils.shell import bash_dquote_escape
+
+if TYPE_CHECKING:
+    from ofx.runner.cloud_job import CloudJobRunner
+
+# Grace period (seconds) added to the configured timeout to account for
+# network latency when executing commands on a remote host.
+_NETWORK_GRACE_SECONDS = 30
+
+_PYTHON_PROBE_CANDIDATES: tuple[str, ...] = (
+    "python3",
+    "python",
+    "/usr/bin/python3",
+    "/usr/local/bin/python3",
+    "/usr/bin/python",
+    "/usr/local/bin/python",
+)
+
+
+class CloudStepRunner(StepRunnerMixin, BaseRunner):
+    """Runs a step remotely via PostSSH or PostWinRM.
+
+    Instead of using local subprocess (like the normal StepRunner),
+    this sends commands to the remote host via the provided remote_runner.
+    """
+
+    def __init__(
+        self,
+        step,
+        ctx: RunContext,
+        parent: CloudJobRunner,
+        remote_runner,
+        work_dir: str | None = None,
+        executor=None,
+        handler_registry=None,
+    ):
+        from ofx.runner.executors.step import StepExecutor
+        from ofx.runner.handlers import registry as default_handler_registry
+
+        step_executor = executor or StepExecutor()
+        super().__init__(
+            step,
+            ctx,
+            parent,
+            parent.registry,
+            executor=step_executor,
+        )
+        self._handler_registry = handler_registry or default_handler_registry
+        self._remote = remote_runner
+        self._work_dir = work_dir or "/tmp"
+        self._run_type = None
+
+    @property
+    def _is_windows(self) -> bool:
+        """True when the remote host is Windows (WinRM connection)."""
+        from ofx.runner.cloud_job import CloudJobRunner
+
+        if isinstance(self.parent, CloudJobRunner) and self.parent._cloud_config:
+            return self.parent._cloud_config.connection_type == "winrm"
+        return False
+
+    async def _pre_run(self) -> None:
+        self._prepare_step_run_type()
+        self.ctx = RunnerContextBuilder(self.ctx).with_vars(
+            {"remote_work_dir": self._resolve_remote_work_dir()}
+        )
+        await self._resolve_step_pre_run_fields(resolve_workflow=False)
+
+        if not self._evaluate_run_if(self.model.run_if, self._run_if_context()):
+            self._cancel_step_for_unmet_condition(
+                self._produce_log("Step condition not met")
+            )
+
+    async def _on_failure_cleanup(self) -> None:
+        """Best-effort cleanup of remote temp files on step failure."""
+        # Remote scripts are cleaned in their own finally blocks, but
+        # this hook ensures any leaked temp files in the work dir are noted.
+        self._log_debug("Cloud step failure cleanup completed")
+
+    async def _post_run(self) -> None:
+        result = await self.get_result()
+        stdout = result.outputs.get("stdout", "")
+
+        # For task steps with typed outputs, show formatted tables
+        if not self._format_typed_outputs(result):
+            self._log_output("stdout", stdout)
+
+        # Save full output to log file if configured
+        if self.model.log_stdout and stdout and self.ctx.output_path:
+            self._save_output(stdout)
+
+        status_value = (
+            RunnerStatus.COMPLETED.value
+            if result.status == RunnerStatus.FINISHED
+            else result.status.value
+        )
+        execution = build_step_execution_result(
+            step_index=self.model.step_index,
+            name=self.model.name,
+            run_type=self._run_type.value
+            if self._run_type
+            else self.model.get_run_type().value,
+            status=status_value,
+            error=result.error,
+            outputs=result.outputs,
+            duration_ms=self.duration_ms(),
+        )
+        await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
+
+        # Log to project timeline CSV only when step has explicit log-command config
+        if self.model.log_command:
+            self._log_timeline(result, status_value)
+
+    def _log_timeline(self, result, status: str) -> None:
+        """Write a timeline entry for this cloud step execution."""
+        from ofx.runner.timeline import log_step
+
+        params = self._build_timeline_params(result)
+
+        # Get VPS host/IP as source — this is where commands actually run
+        cloud_host = ""
+        from ofx.runner.cloud_job import CloudJobRunner
+
+        if isinstance(self.parent, CloudJobRunner) and hasattr(
+            self.parent, "_cloud_config"
+        ):
+            cfg = self.parent._cloud_config
+            if cfg:
+                cloud_host = getattr(cfg, "host", "") or ""
+
+        tags = "cloud"
+
+        log_step(
+            ctx_vars=self.ctx.vars,
+            output_path=self.ctx.output_path,
+            step_name=self.model.name or f"step{self.model.step_index}",
+            status=status,
+            duration_ms=self.duration_ms(),
+            exit_code=result.outputs.get("exit_code"),
+            tags=tags,
+            source_host=cloud_host,
+            **params,
+        )
+
+    # ------------------------------------------------------------------
+    # Remote execution methods
+    # ------------------------------------------------------------------
+
+    async def _run_remote_command(
+        self, command: str, timeout: int | None = None
+    ) -> str:
+        """Run a shell command on the remote host.
+
+        Builds the full command string with env-var injection and working
+        directory change.  Uses platform-appropriate syntax: bash ``&&``
+        chains on Linux and CMD ``&&`` with ``SET`` on Windows.
+        """
+        full_cmd = self._build_remote_exec_command(command)
+
+        return await asyncio.to_thread(self._remote.run, full_cmd, timeout)
+
+    async def _discover_python(self) -> str:
+        """Find a working python3/python executable on the remote host.
+
+        The result is cached on the parent ``CloudJobRunner`` so that all steps
+        in the same job share a single probe, avoiding repeated SSH round-trips.
+        """
+        # Check parent-level cache first (shared across steps on the same VPS)
+        from ofx.runner.cloud_job import CloudJobRunner
+
+        parent_job: CloudJobRunner | None = (
+            self.parent if isinstance(self.parent, CloudJobRunner) else None
+        )
+        if parent_job is not None and parent_job._cached_python:
+            return parent_job._cached_python
+
+        for candidate in _PYTHON_PROBE_CANDIDATES:
+            try:
+                output = await asyncio.to_thread(
+                    self._remote.run,
+                    f"command -v {candidate} 2>/dev/null && {candidate} --version 2>&1",
+                    10,
+                )
+                if output.strip():
+                    self._log_info(f"Discovered Python: {candidate}")
+                    if parent_job is not None:
+                        parent_job._cached_python = candidate
+                    return candidate
+            except Exception as e:
+                self._log_debug(f"Python candidate {candidate} failed: {e}")
+                continue
+
+        raise RuntimeError(
+            "No python3 or python executable found on the remote host. "
+            "Checked: " + ", ".join(_PYTHON_PROBE_CANDIDATES)
+        )
+
+    async def _run_remote_python_step(self, timeout: int | None = None) -> str:
+        """Resolve, bundle, upload, and execute a Python-backed step remotely."""
+        workflow_dir = self.ctx.workflow_dir or Path.cwd()
+        payload = build_python_step_payload(
+            self.model,
+            workflow_dir=workflow_dir,
+            opsec_mode=self._remote_opsec_mode(),
+            obfuscate_sources=self._remote_opsec_mode(),
+        )
+        return await self._run_remote_python_payload(payload, timeout=timeout)
+
+    def _remote_opsec_mode(self) -> bool:
+        """Return whether remote execution should obfuscate staged Python payloads."""
+        if self.parent and getattr(self.parent, "_cloud_config", None):
+            return bool(
+                getattr(
+                    getattr(self.parent, "_cloud_config", None), "opsec_mode", False
+                )
+            )
+        return False
+
+    async def _run_remote_python_payload(
+        self,
+        payload: str,
+        *,
+        timeout: int | None = None,
+    ) -> str:
+        """Upload a bundled Python payload, execute it remotely, then clean up."""
+
+        python_bin = await self._discover_python()
+        remote_path = "/tmp/__UNKNOWN__"
+        try:
+            remote_name = f".tmp_py_{_secrets.token_hex(6)}.py"
+            if self._is_windows:
+                remote_path = f"{self._work_dir}\\{remote_name}"
+            else:
+                remote_path = f"{self._work_dir}/{remote_name}"
+            await asyncio.to_thread(
+                upload_temp_content,
+                self._remote,
+                payload,
+                remote_path,
+                suffix=".py",
+            )
+
+            exec_cmd = self._build_remote_exec_command(
+                f'{shlex.quote(python_bin)} {shlex.quote(remote_path)}'
+                if not self._is_windows
+                else f'"{python_bin}" "{remote_path}"'
+            )
+            return await asyncio.to_thread(self._remote.run, exec_cmd, timeout)
+        finally:
+            try:
+                rm_cmd = (
+                    f'del /f "{remote_path}"'
+                    if self._is_windows
+                    else f"rm -f {shlex.quote(remote_path)}"
+                )
+                await asyncio.to_thread(self._remote.run, rm_cmd, 10)
+            except Exception as e:
+                self._log_debug(f"Failed to remove remote file {remote_path}: {e}")
+    # ------------------------------------------------------------------
+    # Task execution (remote)
+    # ------------------------------------------------------------------
+
+    async def _run_remote_task(self, timeout: int | None = None) -> str:
+        """Build a task command locally and run it on the remote host.
+
+        The task's ``build_command`` generates the CLI invocation.  Since
+        the structured output file lives on the remote host we cannot
+        parse it locally, so we rely on stdout/stderr parsing only.
+
+        Profile auto-mapping and per-task overrides are applied when the
+        execution context carries a ``profile_model``.
+        """
+        profile = self.ctx.vars.get("profile_model")
+        cmd_str = build_task_command_from_step(self.model, profile=profile)
+        return await self._run_remote_command(cmd_str, timeout=timeout)
+
+    async def _execute_remote_run_type(
+        self,
+        run_type: RunType,
+        *,
+        timeout_seconds: int,
+    ) -> str:
+        """Dispatch the current step to the appropriate remote execution path."""
+        if run_type == RunType.COMMAND:
+            return await self._run_remote_command(
+                self.model.run,
+                timeout=timeout_seconds,
+            )
+        if is_python_step_run_type(run_type):
+            return await self._run_remote_python_step(timeout=timeout_seconds)
+        if run_type == RunType.TASK:
+            return await self._run_remote_task(timeout=timeout_seconds)
+        raise self._unsupported_remote_run_type_error(run_type)
+
+    def _unsupported_remote_run_type_error(self, run_type: RunType) -> RuntimeError:
+        """Build a user-facing error for unsupported remote-only step types."""
+        if run_type == RunType.WORKFLOW:
+            return RuntimeError(
+                "Reusable workflows ('uses') are not supported in cloud job mode"
+            )
+        if run_type == RunType.PIPE:
+            return RuntimeError(
+                "Pipe steps run locally - they are not supported in cloud job mode. "
+                "Use a 'script:' step for remote data processing."
+            )
+        valid = ", ".join(rt.value for rt in RunType)
+        return RuntimeError(
+            f"Unsupported run type '{run_type}' for cloud step "
+            f"'{self.model.name}'. Valid types: {valid}"
+        )
+
+    def _remote_outputs(self, run_type: RunType, stdout: str) -> dict[str, Any]:
+        """Build the output payload returned by remote step execution."""
+        outputs_dict: dict[str, Any] = {"stdout": stdout}
+        if run_type == RunType.TASK and self.model.task:
+            outputs_dict["typed_outputs"] = self._parse_task_output(stdout)
+        return outputs_dict
+
+    def _create_runner(self):
+        run_type = self._run_type or self.model.get_run_type()
+        timeout_seconds = self.model.timeout * 60
+
+        class _RemoteHandlerRunner:
+            def __init__(self, outer):
+                self._outer = outer
+                self.is_success = True
+
+            async def run(self):
+                output = await asyncio.wait_for(
+                    self._outer._execute_remote_run_type(
+                        run_type,
+                        timeout_seconds=timeout_seconds,
+                    ),
+                    timeout=timeout_seconds + _NETWORK_GRACE_SECONDS,
+                )
+
+                outputs_dict = self._outer._remote_outputs(run_type, output)
+                await self._outer.reg_set(RunnerRegistryKeys.OUTPUTS, outputs_dict)
+                return await self._outer.get_result()
+
+        return _RemoteHandlerRunner(self)
+
+    def _parse_task_output(self, stdout: str) -> list[dict]:
+        """Parse stdout through the registered task's parser."""
+        try:
+            from ofx.tasks.registry import TaskRegistry
+
+            task_cls = TaskRegistry.get(self.model.task)
+            if task_cls is None:
+                return []
+            task = task_cls()
+            results = task.parse_output(stdout=stdout, stderr="")
+
+            # Auto-store credentials if enabled
+            if results and self._should_store_creds():
+                self._store_credentials(results)
+
+            return [r.to_dict() for r in results]
+        except Exception as e:
+            self._log_debug(f"Failed to parse task output for '{self.model.task}': {e}")
+            return []
+
+    def _should_store_creds(self) -> bool:
+        """Check if credential storage is enabled for this step."""
+        from ofx.runner.services.credential_store import should_store_creds
+
+        parent_model = self.parent.model if self.parent else None
+        return should_store_creds(self.model.store_creds, parent_model)
+
+    def _store_credentials(self, typed_outputs: list | Sequence) -> None:
+        """Store UserAccount outputs in the credential store."""
+        from ofx.runner.services.credential_store import store_from_typed_outputs
+
+        stored = store_from_typed_outputs(typed_outputs, log_fn=self._log_debug)
+        if stored:
+            self._log_info(f"Stored {stored} credential(s) in credential store")
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _resolve_remote_work_dir(self) -> str:
+        """Resolve the working directory for remote execution.
+
+        Uses the remote work dir (e.g. /tmp/.run-xxxx) unless the step
+        explicitly set its own working directory.
+        """
+        model_wd = getattr(self.model, "working_directory", None)
+        if model_field_is_explicitly_set(self.model, "working_directory") and model_wd not in (
+            ".",
+            "",
+        ):
+            return str(model_wd)
+        return self._work_dir
+
+    def _build_remote_exec_command(self, command: str) -> str:
+        """Build a platform-appropriate remote command with env and cwd setup."""
+        env_prefix = self._build_env_prefix()
+        work_dir = self._resolve_remote_work_dir()
+
+        if self._is_windows:
+            parts = [part for part in [env_prefix, f'cd /d "{work_dir}"', command] if part]
+            return " && ".join(parts)
+
+        parts = []
+        if env_prefix:
+            parts.append(env_prefix)
+        parts.append(f"cd {shlex.quote(work_dir)} && {command}")
+        return " ".join(parts)
+
+    def _build_env_prefix(self) -> str:
+        """Build environment variable export prefix for remote command.
+
+        Exports env vars from:
+        1. Runner-injected context envs (fleet/remote vars set by CloudJobRunner)
+        2. Workflow/job-level ``env:`` fields (propagated through parent model)
+        3. Step-level ``env:`` field
+
+        Later sources override earlier ones. Local OS environment is never leaked.
+        Values are shell-escaped to prevent command injection via embedded
+        ``$(...)`` or backtick sequences.
+        """
+        env_vars: dict[str, str] = {}
+
+        # Runner-injected env vars: fleet expansion sets both FLEET_* and REMOTE_*
+        # keys in ctx.envs.  Export all keys with known runner prefixes.
+        _RUNNER_ENV_PREFIXES = ("FLEET_", "REMOTE_")
+        for k, v in self.ctx.envs.items():
+            if any(k.startswith(p) for p in _RUNNER_ENV_PREFIXES):
+                env_vars[k] = str(v)
+
+        # Workflow-level env (propagated through parent job model)
+        parent = self.parent
+        if parent and hasattr(parent, "model") and hasattr(parent.model, "env"):
+            parent_env = parent.model.env
+            if parent_env:
+                env_vars.update(parent_env)
+
+        # Step-level env
+        if hasattr(self.model, "env") and self.model.env:
+            env_vars.update(self.model.env)
+
+        if not env_vars:
+            return ""
+
+        if self._is_windows:
+            # CMD syntax: SET FOO=bar (no quoting needed; && chaining handled by caller)
+            exports = " && ".join(f"SET {k}={str(v)}" for k, v in env_vars.items())
+            return f"{exports} &&" if exports else ""
+
+        exports = " ".join(
+            f'{k}="{bash_dquote_escape(str(v))}"' for k, v in env_vars.items()
+        )
+        return f"export {exports} &&" if exports else ""
+
+    def _save_output(self, output: str) -> None:
+        """Save step output to local log file (mirrors StepRunner format)."""
+        self._save_runner_output(
+            output,
+        )
+
+    def _produce_log(self, message: Any) -> str:
+        message_str = str(message)
+        run_type = (
+            self._run_type.value if self._run_type else self.model.get_run_type().value
+        )
+        step_name = self.model.name or f"step_{self.model.step_index}"
+        parent_model = getattr(self.parent, "model", None) if self.parent else None
+        parent_parent = getattr(self.parent, "parent", None) if self.parent else None
+        workflow_model = getattr(parent_parent, "model", None) if parent_parent else None
+        job_id = getattr(parent_model, "jid", "") or ""
+        workflow_name = getattr(workflow_model, "name", "") or ""
+        msg = (
+            f"workflow[{workflow_name}]"
+            f"job[{job_id}]"
+            f"step[{self.model.step_index}]"
+            f"[{step_name}]"
+            f"[{run_type}] › {message_str}"
+        )
+        return bubble_log(self.parent, msg)

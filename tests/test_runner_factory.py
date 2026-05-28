@@ -5,12 +5,12 @@ from unittest.mock import MagicMock
 import yaml
 
 from ofx.models.workflow import Workflow
-from ofx.runner.core import RunContext
-from ofx.runner.execution.cloud_fleet import CloudFleetRunner
-from ofx.runner.execution.cloud_job import CloudJobRunner
-from ofx.runner.execution.cloud_matrix import CloudMatrixJobRunner
-from ofx.runner.execution.job import JobRunner, MatrixJobRunner
-from ofx.runner.execution.runner_factory import create_job_runner
+from ofx.runner import RunContext
+from ofx.runner.cloud_fleet import CloudFleetRunner
+from ofx.runner.cloud_job import CloudJobRunner
+from ofx.runner.cloud_matrix import CloudMatrixJobRunner
+from ofx.runner.job import JobRunner, MatrixJobRunner
+from ofx.runner.runner_factory import create_job_runner
 
 
 def _job(spec: str):

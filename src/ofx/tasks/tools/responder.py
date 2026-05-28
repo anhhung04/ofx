@@ -49,7 +49,7 @@ class ResponderTask(Task):
         interface = kwargs.pop("interface", target)
         parts.extend(["-I", self._q(interface)])
 
-        parts.extend(self._build_opt_parts(kwargs, skip_keys=["interface"]))
+        parts.extend(self._build_opt_parts(kwargs))
 
         return " ".join(parts), None
 
@@ -75,13 +75,7 @@ class ResponderTask(Task):
         stderr: str,
         output_file: Path | None = None,
     ) -> list[UserAccount]:
-        raw = ""
-        if output_file and output_file.exists():
-            raw = self._read_output_file(output_file)
-        elif stdout:
-            raw = stdout
-
-        raw = raw.strip()
+        raw = self._raw_output(stdout, output_file)
         if not raw:
             return []
 

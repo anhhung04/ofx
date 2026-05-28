@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 
 __all__ = [
@@ -107,16 +108,12 @@ async def _probe(host: str, port: int, timeout: float) -> PortResult:
             asyncio.open_connection(host, port), timeout=timeout
         )
         banner = ""
-        try:
+        with suppress(OSError, TimeoutError):
             data = await asyncio.wait_for(reader.read(256), timeout=1.0)
             banner = data.decode(errors="ignore").strip()
-        except (OSError, TimeoutError):
-            pass  # best-effort banner grab
         writer.close()
-        try:
+        with suppress(OSError):
             await writer.wait_closed()
-        except OSError:
-            pass  # best-effort cleanup
         return PortResult(host=host, port=port, open=True, banner=banner)
     except (OSError, TimeoutError):
         return PortResult(host=host, port=port, open=False)

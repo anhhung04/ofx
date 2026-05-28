@@ -3,24 +3,22 @@
 from __future__ import annotations
 
 from ofx.models.step import RunType
-from ofx.runner.core.base import BaseRunner
-from ofx.runner.handlers import get_handler_registry
-
-registry = get_handler_registry()
+from ofx.runner.handlers.registry import registry
+from ofx.runner.handlers.shared import build_child_runner
 
 
 @registry.register(RunType.PIPE)
-def _create_pipe_runner(step_runner) -> BaseRunner:
+def _create_pipe_runner(step_runner):
     """Build a PipeRunner from the step's pipe configuration."""
-    from ofx.runner.execution.pipe import PipeExecution, PipeRunner
+    from ofx.runner.pipe import PipeExecution, PipeRunner
 
     assert step_runner.model.pipe is not None, (
         "pipe cannot be None for PIPE run type"
     )
 
     model = PipeExecution(pipe=step_runner.model.pipe)
-    return PipeRunner(
+    return build_child_runner(
         model,
-        step_runner._child_context(),
-        parent=step_runner,
+        PipeRunner,
+        step_runner,
     )

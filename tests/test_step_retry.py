@@ -2,7 +2,7 @@
 
 import pytest
 
-from ofx.runner.execution.step_mixin import (
+from ofx.runner.step_mixin import (
     _JITTER_MAX,
     _JITTER_MIN,
     _MAX_BACKOFF_SECONDS,

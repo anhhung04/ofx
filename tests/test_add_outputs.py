@@ -6,6 +6,7 @@ import pytest
 
 from ofx.models.command import Script
 from ofx.runner import RunContext, RunnerStatus, ScriptRunner
+from ofx.runner.commands.command import write_outputs_file
 
 # ---------------------------------------------------------------------------
 # Unit tests for _add_outputs logic (inline, no subprocess)
@@ -98,15 +99,8 @@ class TestAddOutputsUnit:
 
 
 def _write_outputs(outputs_file, **kwargs):
-    """Mimic the add_outputs function from command.py."""
-    if not outputs_file:
-        return
-    with open(outputs_file, "a") as f:
-        for k, v in kwargs.items():
-            if isinstance(v, (dict, list)):
-                f.write(f"{k}={json.dumps(v)}\n")
-            else:
-                f.write(f"{k}={v}\n")
+    """Delegate to the runtime add_outputs file writer."""
+    write_outputs_file(outputs_file, **kwargs)
 
 
 # ---------------------------------------------------------------------------

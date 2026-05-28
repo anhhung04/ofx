@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ofx.runner.core.durable import get_checkpoint, write_checkpoint
-from ofx.runner.core.durable_git import commit_and_push
-from ofx.runner.core.models import RunnerStatus
-from ofx.runner.core.registry_keys import RunnerRegistryKeys
+from ofx.runner.context import RunnerStatus
+from ofx.runner.durable import get_checkpoint, write_checkpoint
+from ofx.runner.durable_git import commit_and_push
+from ofx.runner.registry_keys import RunnerRegistryKeys
 
 if TYPE_CHECKING:
-    from ofx.runner.core.base import BaseRunner
+    from ofx.runner.runner import Runner
 
 
 class CheckpointManager:
@@ -18,7 +18,7 @@ class CheckpointManager:
 
     __slots__ = ("_runner",)
 
-    def __init__(self, runner: BaseRunner[Any]) -> None:
+    def __init__(self, runner: Runner[Any]) -> None:
         self._runner = runner
 
     async def write_checkpoint(self, status: str) -> None:

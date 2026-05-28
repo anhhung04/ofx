@@ -1,8 +1,8 @@
-"""Tests for ofx.runner.execution.error_helpers."""
+"""Tests for ofx.runner.error_helpers."""
 
 from __future__ import annotations
 
-from ofx.runner.execution.error_helpers import (
+from ofx.runner.error_helpers import (
     extract_root_error,
     job_failure_summary,
     job_step_failed,

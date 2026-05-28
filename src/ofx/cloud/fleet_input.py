@@ -11,6 +11,7 @@ import logging
 import math
 import re
 from collections.abc import Iterator
+from contextlib import suppress
 from pathlib import Path
 
 logger = logging.getLogger("ofx")
@@ -197,16 +198,12 @@ class FleetInputParser:
         if _RANGE_SHORT.match(line):
             return "range_short"
         if "/" in line:
-            try:
+            with suppress(ValueError):
                 ipaddress.ip_network(line, strict=False)
                 return "cidr"
-            except ValueError:
-                pass
-        try:
+        with suppress(ValueError):
             ipaddress.ip_address(line)
             return "ip"
-        except ValueError:
-            pass
         return "hostname"
 
     def _expand_cidr(self, cidr: str) -> Iterator[str]:
@@ -278,7 +275,7 @@ class FleetInputParser:
                 if addr in net:
                     return True
         except ValueError:
-            pass
+            return False
         return False
 
 

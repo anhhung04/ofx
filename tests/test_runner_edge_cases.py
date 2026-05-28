@@ -3,14 +3,15 @@
 import asyncio
 from collections import OrderedDict
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from ofx.models.command import Command, Script
 from ofx.models.workflow import ToolConfig
+from ofx.runner import RunContext, RunnerStatus
 from ofx.runner.commands.command import CommandRunner, ScriptRunner
-from ofx.runner.core import RunContext, RunnerStatus
-from ofx.runner.execution.tool_installer import ToolInstallation, ToolInstallerRunner
+from ofx.runner.tool_installer import ToolInstallation, ToolInstallerRunner
 
 
 class TestCommandRunnerEdgeCases:
@@ -158,7 +159,7 @@ class TestCommandRunnerEdgeCases:
         import yaml
 
         from ofx.models.workflow import Workflow
-        from ofx.runner.execution.workflow import WorkflowRunner
+        from ofx.runner.workflow import WorkflowRunner
 
         workflow_yaml = """
 name: Test Workflow
@@ -179,8 +180,59 @@ jobs:
             parent=workflow_runner,
         )
         await cmd._pre_run()
-        # Shell can be /bin/bash (default) or /bin/sh depending on resolution logic
-        assert cmd.model.shell in ["/bin/bash", "/bin/sh"]
+        assert cmd.model.shell == "/bin/sh"
+
+    @pytest.mark.asyncio
+    async def test_command_working_directory_resolution_from_parent(self):
+        """Direct command runners inherit workflow default working directory."""
+        import yaml
+
+        from ofx.models.workflow import Workflow
+        from ofx.runner.workflow import WorkflowRunner
+
+        workflow_yaml = """
+name: Test Workflow
+defaults:
+  run:
+    working_directory: /tmp
+jobs:
+  test:
+    steps:
+      - run: echo \"test\"
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        workflow_runner = WorkflowRunner(workflow, RunContext())
+
+        cmd = CommandRunner(
+            Command(cmd="echo test"),
+            ctx=RunContext(),
+            parent=workflow_runner,
+        )
+        await cmd._pre_run()
+
+        assert cmd.model.working_directory == Path("/tmp")
+
+    @pytest.mark.asyncio
+    async def test_command_post_run_logs_shared_result_format(self):
+        cmd = object.__new__(CommandRunner)
+        cmd._error = "boom"
+        cmd.ctx = RunContext()
+        errors: list[str] = []
+        debugs: list[str] = []
+        cmd._log_error = errors.append
+        cmd._log_debug = debugs.append
+
+        async def _get_result():
+            return "RESULT"
+
+        cmd.get_result = _get_result
+
+        await cmd._post_run()
+
+        assert errors == ["Command failed: boom"]
+        assert len(debugs) == 1
+        assert debugs[0].startswith("cmd result: \n---\nRESULT\n---\n")
+        assert "RunContext(" in debugs[0]
 
 
 class TestScriptRunnerEdgeCases:
@@ -243,10 +295,63 @@ print(json.dumps(data))
         # assert "test" in result.outputs.get("stdout", "")
 
     @pytest.mark.asyncio
+    async def test_script_runner_inherits_parent_shell_and_working_directory(self):
+        import yaml
+
+        from ofx.models.workflow import Workflow
+        from ofx.runner.workflow import WorkflowRunner
+
+        workflow_yaml = """
+name: Test Workflow
+defaults:
+  run:
+    shell: /bin/sh
+    working_directory: /tmp
+jobs:
+  test:
+    steps:
+      - run: echo \"test\"
+"""
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
+        workflow_runner = WorkflowRunner(workflow, RunContext())
+
+        script = ScriptRunner(
+            Script(script="print('hello')"),
+            ctx=RunContext(),
+            parent=workflow_runner,
+        )
+        await script._pre_run()
+
+        assert script.model.shell == "/bin/sh"
+        assert script.model.working_directory == Path("/tmp")
+
+    @pytest.mark.asyncio
+    async def test_script_post_run_logs_shared_result_format(self):
+        script = object.__new__(ScriptRunner)
+        script._error = "boom"
+        script.ctx = RunContext()
+        errors: list[str] = []
+        debugs: list[str] = []
+        script._log_error = errors.append
+        script._log_debug = debugs.append
+
+        async def _get_result():
+            return "RESULT"
+
+        script.get_result = _get_result
+
+        await script._post_run()
+
+        assert errors == ["Script failed: boom"]
+        assert len(debugs) == 1
+        assert debugs[0].startswith("script result: \n---\nRESULT\n---\n")
+        assert "RunContext(" in debugs[0]
+
+    @pytest.mark.asyncio
     async def test_script_with_injected_variables(self):
         """Test script with injected internal variables"""
         from ofx.models.command import Script
-        from ofx.runner.core import RunContext
+        from ofx.runner import RunContext
 
         script_model = Script(
             script="""
@@ -272,6 +377,29 @@ print("Injected variables work!")
         assert "Workflow: None" in stdout
         assert "Context has inputs: True" in stdout
         assert "Injected variables work!" in stdout
+
+    def test_script_scope_models_returns_none_without_parent(self):
+        script = object.__new__(ScriptRunner)
+        script.parent = None
+
+        assert script._script_scope_models() == (None, None, None)
+
+    def test_script_scope_models_returns_step_job_and_workflow_models(self):
+        workflow_model = object()
+        job_model = object()
+        step_model = object()
+
+        workflow_runner = SimpleNamespace(model=workflow_model)
+        job_runner = SimpleNamespace(model=job_model, parent=workflow_runner)
+        step_runner = SimpleNamespace(model=step_model, parent=job_runner)
+        script = object.__new__(ScriptRunner)
+        script.parent = step_runner
+
+        assert script._script_scope_models() == (
+            job_model,
+            step_model,
+            workflow_model,
+        )
 
 
 class TestToolInstallerEdgeCases:
@@ -373,6 +501,57 @@ class TestToolInstallerEdgeCases:
         assert isinstance(installer.model.tools["simple_tool"], (str, dict, ToolConfig))
 
     @pytest.mark.asyncio
+    async def test_tool_installer_command_runners_use_isolated_env_contexts(
+        self,
+        monkeypatch,
+    ):
+        captured_envs = []
+
+        class _FakeCommandRunner:
+            def __init__(self, command_model, ctx):
+                self.command_model = command_model
+                self.ctx = ctx
+
+            async def run(self):
+                self.ctx.envs["MUTATED_BY"] = self.command_model.cmd
+                captured_envs.append(dict(self.ctx.envs))
+                exit_code = 1 if self.command_model.cmd == "false" else 0
+                return SimpleNamespace(
+                    status=SimpleNamespace(value="completed"),
+                    outputs={"exit_code": exit_code},
+                    error=None,
+                )
+
+        monkeypatch.setattr(
+            "ofx.runner.tool_installer.CommandRunner",
+            _FakeCommandRunner,
+        )
+
+        installer = ToolInstallerRunner(
+            tools={
+                "test_tool": ToolConfig(
+                    install="echo install",
+                    check="false",
+                    post_install="echo post",
+                )
+            },
+            ctx=RunContext(envs={"BASE": "1"}),
+            show_console=False,
+        )
+
+        result = await installer.run()
+
+        assert result.status == RunnerStatus.COMPLETED
+        assert installer.ctx.envs["BASE"] == "1"
+        assert "MUTATED_BY" not in installer.ctx.envs
+        assert [env["MUTATED_BY"] for env in captured_envs] == [
+            "false",
+            "echo install",
+            "echo post",
+        ]
+        assert all(env["BASE"] == "1" for env in captured_envs)
+
+    @pytest.mark.asyncio
     async def test_tool_installation_model(self):
         """Test ToolInstallation model"""
         config = ToolInstallation(
@@ -421,7 +600,7 @@ class TestStepRetryProfileDefaults:
     def test_retry_profile_applies_when_step_not_explicit(self):
         from ofx.models.step import Step
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step import StepRunner
+        from ofx.runner.step import StepRunner
 
         step = Step.model_validate({"name": "s1", "run": "echo hi"})
         parent = type(
@@ -443,7 +622,7 @@ class TestStepRetryProfileDefaults:
     def test_retry_profile_overrides_explicit_step(self):
         from ofx.models.step import Step
         from ofx.profiles.models import OFXProfile
-        from ofx.runner.execution.step import StepRunner
+        from ofx.runner.step import StepRunner
 
         step = Step.model_validate(
             {"name": "s1", "run": "echo hi", "retry": 9, "retry-delay": 11}
@@ -609,7 +788,7 @@ class TestWorkflowExecutionCancellation:
         """WorkflowExecutionManager cancels pending tasks on KeyboardInterrupt."""
         from unittest.mock import AsyncMock, MagicMock
 
-        from ofx.runner.execution.workflow_execution import WorkflowExecutionManager
+        from ofx.runner.workflow_execution import WorkflowExecutionManager
 
         parent = MagicMock()
         parent._log_info = MagicMock()

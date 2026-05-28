@@ -6,7 +6,14 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
-from ofx.runner.execution.findings_export import (
+from ofx.runner.findings_export import (
+    _collect_typed_outputs_from_runner,
+    _display_lines,
+    _existing_lines,
+    _jsonl_lines,
+    _prefixed_filename,
+    _summary_label,
+    _write_export_target,
     auto_export_findings,
     collect_typed_outputs,
     export_typed_outputs,
@@ -147,6 +154,51 @@ class TestExportTypedOutputs:
         content = (tmp_path / "subdomains" / "subdomains.txt").read_text()
         lines = content.strip().splitlines()
         assert len(lines) == 2
+
+    def test_jsonl_lines_serializes_items(self):
+        lines = _jsonl_lines([
+            {"ok": 1},
+            {"name": object()},
+        ])
+
+        assert lines[0] == '{"ok": 1}'
+        assert len(lines) == 2
+
+    def test_display_lines_collects_unique_values(self):
+        values = _display_lines(
+            "subdomain",
+            [
+                {"_type": "subdomain", "host": "a.example.com"},
+                {"_type": "subdomain", "host": "a.example.com"},
+                {"_type": "subdomain", "host": "b.example.com"},
+            ],
+        )
+
+        assert values == {"a.example.com", "b.example.com"}
+
+    def test_existing_lines_skips_blanks(self, tmp_path):
+        fpath = tmp_path / "findings.txt"
+        fpath.write_text("a\n\n b \n")
+
+        assert _existing_lines(fpath) == {"a", " b "}
+
+    def test_prefixed_filename_adds_prefix(self):
+        assert _prefixed_filename("subdomain", "domain-scan") == "domain-scan-subdomains.txt"
+
+    def test_summary_label_includes_new_count_when_deduped(self):
+        assert _summary_label(3, 2) == "3 items, 2 new"
+
+    def test_write_export_target_returns_summary_for_target_path(self, tmp_path):
+        summary = _write_export_target(
+            project_root=tmp_path,
+            type_name="subdomain",
+            items=[{"_type": "subdomain", "host": "a.example.com"}],
+            prefix="scan",
+            target_slug="example.com",
+        )
+
+        assert summary == "  [+] subdomains/example.com/scan-subdomains.txt (1 items)"
+        assert (tmp_path / "subdomains" / "example.com" / "scan-subdomains.txt").exists()
 
     def test_deduplicates_jsonl(self, tmp_path):
         item = {"_type": "vulnerability", "name": "XSS", "url": "https://x.com"}
@@ -321,7 +373,7 @@ class TestCollectTypedOutputs:
         return runner
 
     def _make_job_runner(self, step_outputs: list[list]) -> MagicMock:
-        from ofx.runner.execution.job import JobRunner
+        from ofx.runner.job import JobRunner
 
         runner = MagicMock(spec=JobRunner)
         runner._runners = {}
@@ -330,7 +382,7 @@ class TestCollectTypedOutputs:
         return runner
 
     def _make_matrix_runner(self, job_outputs: list[list[list]]) -> MagicMock:
-        from ofx.runner.execution.job import JobRunner, MatrixJobRunner
+        from ofx.runner.job import JobRunner, MatrixJobRunner
 
         runner = MagicMock(spec=MatrixJobRunner)
         runner._runners = {}
@@ -386,6 +438,24 @@ class TestCollectTypedOutputs:
         result = asyncio.run(collect_typed_outputs({}))
         assert result == []
 
+    def test_collect_typed_outputs_from_runner_returns_only_list_payloads(self):
+        runner = MagicMock()
+        runner.reg_get = AsyncMock(
+            return_value={"typed_outputs": [{"_type": "ip", "ip": "10.0.0.1"}]}
+        )
+
+        result = asyncio.run(_collect_typed_outputs_from_runner(runner))
+
+        assert result == [{"_type": "ip", "ip": "10.0.0.1"}]
+
+    def test_collect_typed_outputs_from_runner_ignores_non_list_payloads(self):
+        runner = MagicMock()
+        runner.reg_get = AsyncMock(return_value={"typed_outputs": {"bad": True}})
+
+        result = asyncio.run(_collect_typed_outputs_from_runner(runner))
+
+        assert result == []
+
     def test_runners_with_no_typed_outputs(self):
         runner = MagicMock()
         runner.reg_get = AsyncMock(return_value={"stdout": "hello"})
@@ -395,7 +465,7 @@ class TestCollectTypedOutputs:
         assert result == []
 
     def test_handles_step_runner_error(self):
-        from ofx.runner.execution.job import JobRunner
+        from ofx.runner.job import JobRunner
 
         runner = MagicMock(spec=JobRunner)
         failing_step = MagicMock()
@@ -424,7 +494,7 @@ class TestAutoExportFindings:
         assert result == []
 
     def test_exports_to_project(self, tmp_path):
-        from ofx.runner.execution.job import JobRunner
+        from ofx.runner.job import JobRunner
 
         step = MagicMock()
         step.reg_get = AsyncMock(
@@ -453,7 +523,7 @@ class TestAutoExportFindings:
         assert len(log_lines) >= 1  # At least header + one summary line
 
     def test_logs_export_summary(self, tmp_path):
-        from ofx.runner.execution.job import JobRunner
+        from ofx.runner.job import JobRunner
 
         step = MagicMock()
         step.reg_get = AsyncMock(

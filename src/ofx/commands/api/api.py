@@ -67,7 +67,6 @@ def _try_register_module(
             registry[name] = {"path": module_path, "description": doc.split("\n")[0]}
     except Exception as e:
         logger.debug("Failed to register API module '%s': %s", name, e)
-        pass
 
 
 def format_type(type_hint: Any, model_registry: dict[str, Any]) -> str:

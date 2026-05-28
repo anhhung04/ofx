@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import urlparse
 
 from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
@@ -75,7 +74,7 @@ class DirsearchTask(Task):
             results.append(
                 Url(
                     url=url,
-                    host=urlparse(url).netloc,
+                    host=self._url_netloc(url),
                     status_code=self._safe_int(item.get("status", 0)),
                     content_type=item.get("content-type", ""),
                     content_length=self._safe_int(item.get("content-length", 0)),
