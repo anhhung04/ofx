@@ -83,6 +83,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         self._remote = remote_runner
         self._work_dir = work_dir or "/tmp"
         self._run_type = None
+        self._outputs_file = None
 
     @property
     def _is_windows(self) -> bool:
@@ -112,70 +113,24 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
         self._log_debug("Cloud step failure cleanup completed")
 
     async def _post_run(self) -> None:
-        result = await self.get_result()
-        stdout = result.outputs.get("stdout", "")
+        # Delegate to executor for shared step post-run logic
+        if self._executor is not None:
+            await self._executor.post_run(self)
 
-        # For task steps with typed outputs, show formatted tables
-        if not self._format_typed_outputs(result):
-            self._log_output("stdout", stdout)
-
-        # Save full output to log file if configured
-        if self.model.log_stdout and stdout and self.ctx.output_path:
-            self._save_output(stdout)
-
-        status_value = (
-            RunnerStatus.COMPLETED.value
-            if result.status == RunnerStatus.FINISHED
-            else result.status.value
-        )
-        execution = build_step_execution_result(
-            step_index=self.model.step_index,
-            name=self.model.name,
-            run_type=self._run_type.value
-            if self._run_type
-            else self.model.get_run_type().value,
-            status=status_value,
-            error=result.error,
-            outputs=result.outputs,
-            duration_ms=self.duration_ms(),
-        )
-        await self.reg_set(RunnerRegistryKeys.EXECUTION, execution.to_dict())
-
-        # Log to project timeline CSV only when step has explicit log-command config
-        if self.model.log_command:
-            self._log_timeline(result, status_value)
-
-    def _log_timeline(self, result, status: str) -> None:
-        """Write a timeline entry for this cloud step execution."""
-        from ofx.runner.timeline import log_step
-
-        params = self._build_timeline_params(result)
-
-        # Get VPS host/IP as source — this is where commands actually run
+    def _build_timeline_params(self, result) -> dict[str, str]:
+        """Build timeline params including cloud host and tags."""
+        params = super()._build_timeline_params(result)
         cloud_host = ""
         from ofx.runner.cloud_job import CloudJobRunner
-
         if isinstance(self.parent, CloudJobRunner) and hasattr(
             self.parent, "_cloud_config"
         ):
             cfg = self.parent._cloud_config
             if cfg:
                 cloud_host = getattr(cfg, "host", "") or ""
-
-        tags = "cloud"
-
-        log_step(
-            ctx_vars=self.ctx.vars,
-            output_path=self.ctx.output_path,
-            step_name=self.model.name or f"step{self.model.step_index}",
-            status=status,
-            duration_ms=self.duration_ms(),
-            exit_code=result.outputs.get("exit_code"),
-            tags=tags,
-            source_host=cloud_host,
-            **params,
-        )
-
+        params["source_host"] = cloud_host
+        params["tags"] = "cloud"
+        return params
     # ------------------------------------------------------------------
     # Remote execution methods
     # ------------------------------------------------------------------
@@ -489,9 +444,7 @@ class CloudStepRunner(StepRunnerMixin, BaseRunner):
 
     def _save_output(self, output: str) -> None:
         """Save step output to local log file (mirrors StepRunner format)."""
-        self._save_runner_output(
-            output,
-        )
+        self._save_runner_output(output)
 
     def _produce_log(self, message: Any) -> str:
         message_str = str(message)

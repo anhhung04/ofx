@@ -243,3 +243,12 @@ class StepRunnerMixin:
         from ofx.runner.step_descriptors import step_timeline_params
 
         return step_timeline_params(self.model, outputs=result.outputs)  # type: ignore[attr-defined]
+
+    def _save_output_file(self, stdout: str, outputs: dict[str, Any] | None = None) -> None:
+        """Persist step stdout to the configured output path."""
+        self._save_runner_output(
+            stdout,
+            outputs,
+            missing_output_path_message="No output_path configured, skipping log file save.",
+            warn_on_missing_output_path=True,
+        )

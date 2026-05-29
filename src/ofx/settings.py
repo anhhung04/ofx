@@ -359,52 +359,6 @@ def _ensure_default_config() -> None:
         with suppress(OSError):
             CONFIG_YAML.write_text(_dump_default_config())
 
-
-def _migrate_json_config() -> None:
-    """Move legacy ``config.json`` fields into ``config.yml`` once.
-
-    Older OFX releases stored the active project in ``~/.ofx/config.json``.
-    Keep migration deliberately narrow: preserve an existing YAML
-    ``active_project`` value and remove the legacy file after a successful read.
-    """
-    import json
-
-    import yaml
-
-    legacy_path = BASE_DATA_DIR / "config.json"
-    if not legacy_path.exists():
-        return
-
-    try:
-        legacy_data = json.loads(legacy_path.read_text()) or {}
-    except (json.JSONDecodeError, OSError):
-        logging.debug("Failed to read legacy config JSON", exc_info=True)
-        return
-    if not isinstance(legacy_data, dict):
-        logging.debug("Legacy config JSON is not an object; skipping migration")
-        return
-
-    data = yaml.safe_load(_dump_default_config()) or {}
-    if CONFIG_YAML.exists():
-        try:
-            loaded = yaml.safe_load(CONFIG_YAML.read_text()) or {}
-            data = loaded if isinstance(loaded, dict) else {}
-        except (OSError, yaml.YAMLError):
-            logging.debug("Failed to parse config YAML during migration", exc_info=True)
-
-    if "active_project" not in data and legacy_data.get("active_project"):
-        data["active_project"] = legacy_data["active_project"]
-        CONFIG_YAML.parent.mkdir(parents=True, exist_ok=True)
-        CONFIG_YAML.write_text(
-            _CONFIG_YAML_HEADER
-            + yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        )
-
-    with suppress(OSError):
-        legacy_path.unlink()
-
-
-_migrate_json_config()
 _ensure_default_config()
 
 
