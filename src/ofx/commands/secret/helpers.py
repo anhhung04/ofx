@@ -6,42 +6,6 @@ import typer
 from ofx.utils import secrets as secrets_store
 
 
-def _resolve_secret_input(name: str, value: str | None, file: Path | None) -> str:
-    """Resolve a secret value from CLI options or interactive prompt.
-
-    - Prevents using --value and --file together.
-    - Validates file existence when provided.
-    - Prompts interactively if neither option is supplied.
-    """
-    if value is not None and file is not None:
-        typer.secho("❌ Use either --value or --file, not both", fg=typer.colors.RED)
-        raise typer.Exit(code=1)
-
-    if file is not None:
-        if not file.exists():
-            typer.secho(f"❌ File not found: {file}", fg=typer.colors.RED)
-            raise typer.Exit(code=1)
-        return file.read_text().strip()
-
-    if value is not None:
-        return value
-
-    return typer.prompt(f"Enter value for secret '{name}'", hide_input=True)
-
-
-def _resolve_passphrase(passphrase: str, ask: bool) -> str | None:
-    """Return the passphrase from flag or prompt; prompt wins when requested."""
-    if ask:
-        return (
-            typer.prompt(
-                "Enter passphrase for secrets store (leave blank for none)",
-                hide_input=True,
-            ).strip()
-            or None
-        )
-    return passphrase if passphrase else None
-
-
 def _maybe_backup_store(
     backup_path: str, passphrase: str | None, overwrite: bool
 ) -> None:

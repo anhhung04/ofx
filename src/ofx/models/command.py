@@ -25,15 +25,8 @@ class Command(OFXBaseModel):
         default=False, description="Enable interactive mode (stdin/stdout passthrough)"
     )
 
-    def __str__(self):
-        cmd = self.cmd.split(" ")[0]
-        return f"Command(cmd='{cmd}',cwd='{self.working_directory}')"
-
 
 class Script(Command):
     """Model for Python script execution."""
 
     script: str = Field(..., description="Python script code to execute")
-
-    def __str__(self):
-        return f"Script(inline,cwd='{self.working_directory}')"

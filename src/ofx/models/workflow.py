@@ -74,9 +74,6 @@ class Workflow(BaseModel):
         description="Path to the workflow file (set automatically)",
     )
 
-    def __str__(self):
-        return f"Workflow(name='{self.name}',jobs='{'|'.join(self.jobs.keys())}')"
-
     @model_validator(mode="after")
     def validate_jobs(self):
         """

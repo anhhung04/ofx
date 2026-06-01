@@ -8,7 +8,6 @@ from ofx.commands.secret.helpers import (
     _format_file_size,
     _get_secret_type,
     _maybe_backup_store,
-    _resolve_passphrase,
 )
 from ofx.commands.ui_helpers import (
     error_exit,
@@ -20,6 +19,18 @@ from ofx.utils import secrets as secrets_store
 
 backup_app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 logger = logging.getLogger(settings.app_branding)
+
+
+def _resolve_passphrase(passphrase: str, ask_passphrase: bool) -> str | None:
+    if ask_passphrase:
+        return (
+            typer.prompt(
+                "Enter passphrase for secrets store (leave blank for none)",
+                hide_input=True,
+            ).strip()
+            or None
+        )
+    return passphrase or None
 
 
 @backup_app.command("create")

@@ -2,7 +2,7 @@
 
 Provides:
 - `Result` type for functional error handling.
-- `BaseRunner` protocol for post‑execution runners.
+- `PostRunnerProtocol` for post‑execution runners.
 - `SearchClient` abstract base class for external search services.
 - `WebShellGenerator` protocol for language‑specific web‑shell generators.
 """
@@ -68,7 +68,7 @@ class Result[T]:
 
 
 @runtime_checkable
-class BaseRunner(Protocol):
+class PostRunnerProtocol(Protocol):
     """Protocol for post‑execution runners (SSH, WinRM, etc.)."""
 
     def run(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -89,8 +89,6 @@ class SearchClient(Protocol):
 
 @runtime_checkable
 class WebShellGenerator(Protocol):
-    """Web shell generator protocol."""
-
     """Protocol for language‑specific web‑shell generators.
 
     ``generate`` receives a payload string and optional keyword arguments and

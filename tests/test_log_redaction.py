@@ -116,6 +116,23 @@ class TestRegisterHelpers:
         assert "sk-12345678" not in record.msg
         assert "hunter2!" not in record.msg
 
+    def test_register_secrets_accepts_iterable_values(self):
+        register_secrets(["sk-12345678", None, "hunter2!"])
+        filt = SecretRedactFilter.get_instance()
+
+        record = logging.LogRecord(
+            "test",
+            logging.INFO,
+            "",
+            0,
+            "connecting with sk-12345678 and hunter2!",
+            (),
+            None,
+        )
+        filt.filter(record)
+        assert "sk-12345678" not in record.msg
+        assert "hunter2!" not in record.msg
+
     def test_register_sensitive_env_filters_by_key(self):
         register_sensitive_env(
             {

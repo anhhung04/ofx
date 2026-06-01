@@ -1,5 +1,7 @@
 """Tests for OFX output types, deduplication, and UserAccount model."""
 
+from types import SimpleNamespace
+
 from ofx.tasks import (
     Port,
     Subdomain,
@@ -123,7 +125,7 @@ class TestOutputTypes:
 
 
 class TestDeduplication:
-    def test_dedup_removes_duplicates(self):
+    def test_deduplicate_with_seen_removes_duplicates(self):
         from ofx.runner.tasks.runner import TaskRunner
 
         items = [
@@ -131,12 +133,12 @@ class TestDeduplication:
             Port(port=80, ip="10.0.0.1"),  # duplicate
             Port(port=443, ip="10.0.0.1"),
         ]
-        result = TaskRunner._deduplicate(items)
+        result = TaskRunner._deduplicate_with_seen(items, set())
         assert len(result) == 2
         assert result[0].port == 80
         assert result[1].port == 443
 
-    def test_dedup_preserves_unique(self):
+    def test_deduplicate_with_seen_preserves_unique(self):
         from ofx.runner.tasks.runner import TaskRunner
 
         items = [
@@ -144,30 +146,138 @@ class TestDeduplication:
             Url(url="https://b.com"),
             Url(url="https://c.com"),
         ]
-        result = TaskRunner._deduplicate(items)
+        result = TaskRunner._deduplicate_with_seen(items, set())
         assert len(result) == 3
 
-    def test_dedup_empty(self):
+    def test_deduplicate_with_seen_empty(self):
         from ofx.runner.tasks.runner import TaskRunner
 
-        assert TaskRunner._deduplicate([]) == []
+        assert TaskRunner._deduplicate_with_seen([], set()) == []
 
-    def test_deduplicate_incremental_skips_already_streamed_items(self):
+    def test_deduplicate_with_seen_skips_already_streamed_items(self):
+        from ofx.runner.tasks.runner import TaskRunner
+
+        streamed = Port(port=80, ip="10.0.0.1")
+        result = TaskRunner._deduplicate_with_seen(
+            [
+                Port(port=80, ip="10.0.0.1"),
+                Port(port=443, ip="10.0.0.1"),
+            ],
+            {streamed._uuid},
+        )
+
+        assert len(result) == 1
+        assert result[0].port == 443
+
+    def test_parse_outputs_combines_streamed_and_parsed_items(self):
         from ofx.runner import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
         runner = TaskRunner(TaskExecution(task_name="scan"), RunContext())
         runner._streamed_items = [Port(port=80, ip="10.0.0.1")]
-
-        result = runner._deduplicate_incremental(
-            [
-                Port(port=80, ip="10.0.0.1"),
-                Port(port=443, ip="10.0.0.1"),
-            ]
+        runner._task = SimpleNamespace(
+            parse_output=lambda **_kwargs: [Port(port=443, ip="10.0.0.1")]
         )
 
-        assert len(result) == 1
-        assert result[0].port == 443
+        merged = runner._parse_outputs(SimpleNamespace(stdout="", stderr=""))
+
+        assert [item.port for item in merged] == [80, 443]
+
+    def test_on_stdout_line_records_and_publishes_new_items(self, monkeypatch):
+        from ofx.runner import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        published: list[tuple[str, dict]] = []
+
+        class _Store:
+            def publish(self, channel, item_dict):
+                published.append((channel, item_dict))
+
+        class _Task:
+            def parse_line(self, line):
+                assert line == "line"
+                return [Port(port=80, ip="10.0.0.1"), Port(port=80, ip="10.0.0.1")]
+
+        monkeypatch.setattr("ofx.runner.channels.get_channel_store", lambda: _Store())
+
+        runner = TaskRunner(TaskExecution(task_name="scan"), RunContext())
+        runner._task = _Task()
+
+        runner._on_stdout_line("line")
+
+        assert len(runner._streamed_items) == 1
+        assert published == [
+            (
+                "task:scan:items",
+                runner._streamed_items[0].to_dict(),
+            )
+        ]
+
+    def test_parse_outputs_falls_back_to_streamed_items_on_parse_error(self):
+        from ofx.runner import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        runner = TaskRunner(TaskExecution(task_name="scan"), RunContext())
+        runner._streamed_items = [Port(port=80, ip="10.0.0.1")]
+        runner._task = SimpleNamespace(
+            parse_output=lambda **_kwargs: (_ for _ in ()).throw(ValueError("boom"))
+        )
+        warnings: list[str] = []
+        runner._log_warning = warnings.append
+
+        result = runner._parse_outputs(SimpleNamespace(stdout="", stderr=""))
+
+        assert result == runner._streamed_items
+        assert result is not runner._streamed_items
+        assert warnings == ["Output parsing failed: boom"]
+
+    def test_export_output_file_uses_sanitized_target_and_suffix(self, tmp_path):
+        from ofx.runner import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        runner = TaskRunner(
+            TaskExecution(task_name="httpx", target="https://example.com:8443/path"),
+            RunContext(output_path=tmp_path),
+        )
+        runner._output_file = tmp_path / "result.json"
+        runner._output_file.write_text("data")
+
+        exported = runner._export_output_file()
+
+        assert exported == tmp_path / "scans" / "httpx_example.com_8443.json"
+
+    def test_export_output_file_without_target_uses_task_name_only(self, tmp_path):
+        from ofx.runner import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        runner = TaskRunner(TaskExecution(task_name="httpx", target=""), RunContext(output_path=tmp_path))
+        runner._output_file = tmp_path / "result"
+        runner._output_file.write_text("data")
+
+        exported = runner._export_output_file()
+
+        assert exported == tmp_path / "scans" / "httpx.txt"
+
+    def test_export_output_file_requires_existing_nonempty_output_and_output_path(self, tmp_path):
+        from ofx.runner import RunContext
+        from ofx.runner.tasks.runner import TaskExecution, TaskRunner
+
+        runner = TaskRunner(TaskExecution(task_name="httpx", target="x"), RunContext())
+        assert runner._export_output_file() is None
+
+        runner.ctx.output_path = tmp_path
+        runner._output_file = tmp_path / "result.txt"
+        runner._output_file.write_text("")
+        assert runner._export_output_file() is None
+
+        runner._output_file.write_text("data")
+        assert runner._export_output_file() == tmp_path / "scans" / "httpx_x.txt"
+
+    def test_sanitize_target_slug_reuses_shared_url_and_cidr_rules(self):
+        from ofx.runner.target_paths import sanitize_target_slug
+
+        assert sanitize_target_slug("https://example.com:8443/path") == "example.com_8443"
+        assert sanitize_target_slug("192.168.1.0/24") == "192.168.1.0_24"
 
 
 # ── UserAccount Output Type ────────────────────────────────────────────

@@ -16,12 +16,12 @@ import shutil
 import tempfile
 from abc import ABC
 from collections.abc import Sequence
-from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from ofx.utils.file_cleanup import remove_file, remove_files
 from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR
 from ofx.tasks.output_types import OutputType
 
@@ -155,7 +155,7 @@ class Task(ABC):
             prefix=f".ofx_task_{self.name}_", suffix=self._output_suffix()
         )
         os.close(fd)
-        os.unlink(tmp_path)
+        remove_file(tmp_path)
         return Path(tmp_path)
 
     # ── Public API ─────────────────────────────────────────────────
@@ -190,31 +190,33 @@ class Task(ABC):
             output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
-        # Target handling — auto-detect file paths, multi-target lists
-        target_is_file = (
+        parts.extend(self._target_parts(target))
+
+        return " ".join(parts), output_file
+
+    def _target_parts(self, target: str) -> list[str]:
+        is_target_file = (
             self.file_flag
             and target
             and not target.startswith("http")
             and Path(target).is_file()
         )
-        is_multi = "," in target and not Path(target).is_file() if target else False
+        is_multi_target = bool(target and "," in target and not Path(target).is_file())
 
-        if target_is_file and self.file_flag:
-            parts.extend([self.file_flag, shlex.quote(target)])
-        elif is_multi and self.file_flag:
-            parts.extend([self.file_flag, shlex.quote(self._write_target_file(target))])
-        elif is_multi and not self.file_flag:
-            tfile = self._write_target_file(target)
+        if is_target_file and self.file_flag:
+            return [self.file_flag, shlex.quote(target)]
+
+        if is_multi_target:
+            target_file = self._write_target_file(target)
+            if self.file_flag:
+                return [self.file_flag, shlex.quote(target_file)]
             if self.input_flag:
-                parts.extend([self.input_flag, shlex.quote(tfile)])
-            else:
-                parts.append(shlex.quote(tfile))
-        elif self.input_flag:
-            parts.extend([self.input_flag, shlex.quote(target)])
-        else:
-            parts.append(shlex.quote(target))
+                return [self.input_flag, shlex.quote(target_file)]
+            return [shlex.quote(target_file)]
 
-        return " ".join(parts), output_file
+        if self.input_flag:
+            return [self.input_flag, shlex.quote(target)]
+        return [shlex.quote(target)]
 
     def parse_output(
         self,
@@ -228,19 +230,12 @@ class Task(ABC):
         and delegates to :meth:`parse_line`.  Tasks with custom parsing
         (XML, full JSON, etc.) should override this method.
         """
+        raw_output = self._raw_output(stdout, output_file)
+        if not raw_output:
+            return []
+
         results: list[OutputType] = []
-        lines: list[str] = []
-
-        if output_file:
-            if not output_file.exists():
-                return []
-            content = self._read_output_file(output_file)
-            if not content.strip():
-                return []
-            lines = content.strip().splitlines()
-        elif stdout:
-            lines = stdout.strip().splitlines()
-
+        lines = raw_output.splitlines()
         for line in lines:
             results.extend(self.parse_line(line))
 
@@ -298,27 +293,11 @@ class Task(ABC):
 
     def cleanup_target_files(self) -> None:
         """Remove temporary target files created by :meth:`build_command`."""
-        for path in self._temp_target_files:
-            with suppress(OSError):
-                os.unlink(path)
-        self._temp_target_files.clear()
+        remove_files(self._temp_target_files, clear=self._temp_target_files)
 
     def _output_suffix(self) -> str:
         """File suffix for the structured output file."""
         return ".xml"
-
-    @staticmethod
-    def _parse_json_line(line: str) -> dict | None:
-        """Parse a single JSONL line, returning the dict or ``None``."""
-        import json
-
-        line = line.strip()
-        if not line or not line.startswith("{"):
-            return None
-        try:
-            return json.loads(line)
-        except json.JSONDecodeError:
-            return None
 
     @classmethod
     def _parse_json_records(cls, raw: str) -> list[dict[str, Any]]:
@@ -334,8 +313,14 @@ class Task(ABC):
         except json.JSONDecodeError:
             records: list[dict[str, Any]] = []
             for line in raw.splitlines():
-                record = cls._parse_json_line(line)
-                if record is not None:
+                line = line.strip()
+                if not line or not line.startswith("{"):
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(record, dict):
                     records.append(record)
             return records
 

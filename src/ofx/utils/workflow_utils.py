@@ -113,28 +113,16 @@ def coerce_input_value(value: Any, expected_type: str, name: str = "") -> Any:
     return value
 
 
-def add_workflow_dir(workflow_dirs: list[Path], path: Path | str) -> list[Path]:
-    """Add a workflow directory to the search path if not already present.
-
-    Args:
-        workflow_dirs: Current list of workflow directories
-        path: Path to add
-
-    Returns:
-        Updated list of workflow directories
-    """
-    abs_path = Path(path).absolute()
-    if abs_path not in workflow_dirs:
-        workflow_dirs.append(abs_path)
-    return workflow_dirs
-
-
 def workflow_dirs_with_path(
     workflow_dirs: list[Path] | tuple[Path, ...],
     path: Path | str,
 ) -> list[Path]:
     """Return a copy of workflow search paths with one extra directory added."""
-    return add_workflow_dir(list(workflow_dirs), path)
+    updated = list(workflow_dirs)
+    abs_path = Path(path).absolute()
+    if abs_path not in updated:
+        updated.append(abs_path)
+    return updated
 
 
 def _load_workflow_yaml(text: str, *, source: str) -> Workflow:
@@ -143,14 +131,6 @@ def _load_workflow_yaml(text: str, *, source: str) -> Workflow:
         return Workflow.model_validate(yaml.safe_load(text.strip()))
     except yaml.YAMLError as e:
         raise RuntimeError(f"Invalid YAML in {source}: {e}") from None
-
-
-def _load_workflow_from_path(path: Path) -> Workflow:
-    """Load and validate a workflow from a local file path."""
-    workflow = _load_workflow_yaml(path.read_text(), source=f"workflow file {path}")
-    workflow.workflow_path = path
-    return workflow
-
 
 def find_workflow(
     workflow_name: str,
@@ -185,26 +165,27 @@ def _find_workflow_cached(
     """Internal cached loader — returns a shared reference. Do NOT mutate."""
     logger.debug(f"Searching for workflow: {workflow_name} in {search_dirs_tuple}")
     workflow_name = workflow_name.strip()
+    flow_path = Path(workflow_name)
 
-    if workflow_name.startswith(("/", ".")):
-        flow_path = Path(workflow_name)
-        if flow_path.is_absolute():
-            return _load_workflow_from_path(flow_path)
+    if flow_path.is_absolute():
+        workflow = _load_workflow_yaml(
+            flow_path.read_text(), source=f"workflow file {flow_path}"
+        )
+        workflow.workflow_path = flow_path
+        return workflow
 
-        for directory in search_dirs_tuple:
-            path = find_valid_flow(directory, workflow_name)
-            if not path:
-                continue
-            return _load_workflow_from_path(path)
-        else:
-            raise RuntimeError(f"Workflow {workflow_name} not found in local paths.")
-
-    # Search for workflow by name in search directories
     for directory in search_dirs_tuple:
         path = find_valid_flow(directory, workflow_name)
         if not path:
             continue
-        return _load_workflow_from_path(path)
+        workflow = _load_workflow_yaml(
+            path.read_text(), source=f"workflow file {path}"
+        )
+        workflow.workflow_path = path
+        return workflow
+
+    if workflow_name.startswith(("/", ".")):
+        raise RuntimeError(f"Workflow {workflow_name} not found in local paths.")
 
     if is_remote_path(workflow_name) and not is_git_repo(workflow_name):
         response = httpx.get(workflow_name, timeout=30)
@@ -225,7 +206,11 @@ def _find_workflow_cached(
         raise RuntimeError(
             f"No main workflow file found in cloned repo {workflow_name}."
         )
-    return _load_workflow_from_path(main_path)
+    workflow = _load_workflow_yaml(
+        main_path.read_text(), source=f"workflow file {main_path}"
+    )
+    workflow.workflow_path = main_path
+    return workflow
 
 
 def list_available_workflows(search_dirs: tuple[str | Path, ...]) -> list[str]:

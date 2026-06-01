@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from ofx.cloud.models import CloudInstanceInfo, SnapshotInfo
@@ -100,9 +100,7 @@ class CloudProvider(ABC):
         Raises:
             NotImplementedError: If provider doesn't support snapshots.
         """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} does not support snapshot creation"
-        )
+        raise self._unsupported_operation("snapshot creation")
 
     async def list_snapshots(self) -> list[SnapshotInfo]:
         """List available snapshots/images.
@@ -118,9 +116,7 @@ class CloudProvider(ABC):
         Args:
             snapshot_id: Snapshot to delete.
         """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} does not support snapshot deletion"
-        )
+        raise self._unsupported_operation("snapshot deletion")
 
     @abstractmethod
     async def close(self) -> None:
@@ -128,6 +124,11 @@ class CloudProvider(ABC):
         ...
 
     # ── Shared helpers for subclasses ─────────────────────────────
+
+    def _unsupported_operation(self, operation: str) -> NotImplementedError:
+        return NotImplementedError(
+            f"{self.__class__.__name__} does not support {operation}"
+        )
 
     @staticmethod
     async def _check_port_open(host: str, port: int = 22, timeout: float = 5) -> bool:
@@ -161,6 +162,31 @@ class CloudProvider(ABC):
             "systemctl restart sshd\n"
         )
 
+    @staticmethod
+    def _poll_deadline(timeout: int, *, limit: int | None = None) -> float:
+        duration = min(timeout, limit) if limit is not None else timeout
+        return __import__("asyncio").get_running_loop().time() + duration
+
+    @staticmethod
+    async def _poll_until(
+        probe: Callable[[], Awaitable[Any]],
+        *,
+        timeout: int,
+        interval: float,
+        is_ready: Callable[[Any], bool],
+        limit: int | None = None,
+    ) -> Any:
+        import asyncio as _aio
+
+        deadline = CloudProvider._poll_deadline(timeout, limit=limit)
+        last_result: Any = None
+        while _aio.get_running_loop().time() < deadline:
+            last_result = await probe()
+            if is_ready(last_result):
+                return last_result
+            await _aio.sleep(interval)
+        return last_result
+
 
 class CloudProviderRegistry:
     """Registry for cloud provider implementations.
@@ -175,6 +201,18 @@ class CloudProviderRegistry:
 
     _providers: dict[str, type[CloudProvider]] = {}
 
+    @staticmethod
+    def _normalized_name(name: str) -> str:
+        return name.lower()
+
+    @classmethod
+    def _available_provider_names(cls) -> str:
+        return ", ".join(sorted(cls._providers.keys()))
+
+    @classmethod
+    def _provider_class(cls, name: str) -> type[CloudProvider] | None:
+        return cls._providers.get(cls._normalized_name(name))
+
     @classmethod
     def register(cls, name: str) -> Callable:
         """Decorator to register a cloud provider.
@@ -187,7 +225,7 @@ class CloudProviderRegistry:
         """
 
         def decorator(provider_cls: type[CloudProvider]) -> type[CloudProvider]:
-            cls._providers[name.lower()] = provider_cls
+            cls._providers[cls._normalized_name(name)] = provider_cls
             logger.debug(f"Registered cloud provider: {name}")
             return provider_cls
 
@@ -207,11 +245,11 @@ class CloudProviderRegistry:
         Raises:
             ValueError: If provider name is not registered.
         """
-        name_lower = name.lower()
-        if name_lower not in cls._providers:
-            available = ", ".join(sorted(cls._providers.keys()))
+        provider_cls = cls._provider_class(name)
+        if provider_cls is None:
+            available = cls._available_provider_names()
             raise ValueError(f"Unknown cloud provider '{name}'. Available: {available}")
-        return cls._providers[name_lower](**kwargs)
+        return provider_cls(**kwargs)
 
     @classmethod
     def list_providers(cls) -> list[str]:
@@ -221,9 +259,9 @@ class CloudProviderRegistry:
     @classmethod
     def get(cls, name: str) -> type[CloudProvider] | None:
         """Get a provider class by name without instantiation."""
-        return cls._providers.get(name.lower())
+        return cls._provider_class(name)
 
     @classmethod
     def unregister(cls, name: str) -> None:
         """Remove a provider from the registry."""
-        cls._providers.pop(name.lower(), None)
+        cls._providers.pop(cls._normalized_name(name), None)

@@ -1,8 +1,5 @@
 """Matrix utilities for OFX framework."""
 
-import json
-from typing import Any
-
 from ofx.models.job import Job, MatrixStrategy
 
 
@@ -32,36 +29,6 @@ def expand_jobs(jobs: dict[str, Job]) -> dict[str, Job]:
             processed_jobs[job_id] = processed_job
 
     return processed_jobs
-
-
-def _generate_matrix_combinations(strategy: MatrixStrategy) -> list[dict[str, Any]]:
-    """Generate matrix combinations, parsing JSON-like matrix values."""
-    from ofx.runner.matrix_utils import generate_matrix_combinations
-
-    return generate_matrix_combinations(
-        strategy.matrix,
-        include=strategy.include,
-        exclude=strategy.exclude,
-        value_processor=process_matrix_value,
-    )
-
-
-def process_matrix_value(value: Any) -> Any:
-    """Process a matrix value, attempting JSON parsing if it's a string
-
-    Args:
-        value: Raw matrix value
-
-    Returns:
-        Processed value (parsed JSON if applicable)
-    """
-    if not isinstance(value, str):
-        return value
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, ValueError):
-        return value
-
 
 def get_expanded_job_ids(
     expanded_jobs: dict[str, Job], original_job_id: str

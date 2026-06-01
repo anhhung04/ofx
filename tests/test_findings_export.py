@@ -7,64 +7,10 @@ import json
 from unittest.mock import AsyncMock, MagicMock
 
 from ofx.runner.findings_export import (
-    _collect_typed_outputs_from_runner,
-    _display_lines,
-    _existing_lines,
-    _jsonl_lines,
-    _prefixed_filename,
-    _summary_label,
-    _write_export_target,
-    auto_export_findings,
     collect_typed_outputs,
     export_typed_outputs,
-    type_display_key,
 )
-
-# ── type_display_key ──────────────────────────────────────────────
-
-
-class TestTypeDisplayKey:
-    def test_subdomain(self):
-        assert (
-            type_display_key("subdomain", {"host": "sub.example.com"})
-            == "sub.example.com"
-        )
-
-    def test_url(self):
-        assert (
-            type_display_key("url", {"url": "https://example.com/path"})
-            == "https://example.com/path"
-        )
-
-    def test_ip(self):
-        assert type_display_key("ip", {"ip": "10.0.0.1"}) == "10.0.0.1"
-
-    def test_port_with_ip(self):
-        assert type_display_key("port", {"ip": "10.0.0.1", "port": 80}) == "10.0.0.1:80"
-
-    def test_port_with_host(self):
-        assert (
-            type_display_key("port", {"host": "example.com", "port": 443})
-            == "example.com:443"
-        )
-
-    def test_tag(self):
-        assert type_display_key("tag", {"name": "Laravel"}) == "Laravel"
-
-    def test_domain(self):
-        assert type_display_key("domain", {"domain": "example.com"}) == "example.com"
-
-    def test_record(self):
-        result = type_display_key(
-            "record", {"name": "example.com", "type": "A", "host": "10.0.0.1"}
-        )
-        assert result == "example.com A 10.0.0.1"
-
-    def test_unknown_type(self):
-        assert type_display_key("unknown", {"foo": "bar"}) == ""
-
-    def test_missing_field(self):
-        assert type_display_key("subdomain", {}) == ""
+from ofx.runner.target_paths import sanitize_target_slug
 
 
 # ── export_typed_outputs ──────────────────────────────────────────
@@ -155,18 +101,26 @@ class TestExportTypedOutputs:
         lines = content.strip().splitlines()
         assert len(lines) == 2
 
-    def test_jsonl_lines_serializes_items(self):
-        lines = _jsonl_lines([
-            {"ok": 1},
-            {"name": object()},
-        ])
+    def test_jsonl_export_serializes_with_default_str(self, tmp_path):
+        export_typed_outputs(
+            str(tmp_path),
+            [
+                {"_type": "vulnerability", "ok": 1},
+                {"_type": "vulnerability", "name": object()},
+            ],
+        )
 
-        assert lines[0] == '{"ok": 1}'
+        lines = (tmp_path / "vulns" / "vulnerabilities.jsonl").read_text().splitlines()
+        assert lines[0] == '{"_type": "vulnerability", "ok": 1}'
         assert len(lines) == 2
 
-    def test_display_lines_collects_unique_values(self):
-        values = _display_lines(
-            "subdomain",
+    def test_text_export_collects_unique_values_and_skips_blank_existing_lines(self, tmp_path):
+        fpath = tmp_path / "subdomains" / "subdomains.txt"
+        fpath.parent.mkdir(parents=True)
+        fpath.write_text("a.example.com\n\n b.example.com \n")
+
+        export_typed_outputs(
+            str(tmp_path),
             [
                 {"_type": "subdomain", "host": "a.example.com"},
                 {"_type": "subdomain", "host": "a.example.com"},
@@ -174,31 +128,34 @@ class TestExportTypedOutputs:
             ],
         )
 
-        assert values == {"a.example.com", "b.example.com"}
+        assert set(fpath.read_text().splitlines()) == {"a.example.com", " b.example.com ", "b.example.com"}
 
-    def test_existing_lines_skips_blanks(self, tmp_path):
-        fpath = tmp_path / "findings.txt"
-        fpath.write_text("a\n\n b \n")
+    def test_export_typed_outputs_adds_prefix_and_summary_label(self, tmp_path):
+        summary = export_typed_outputs(
+            str(tmp_path),
+            [
+                {"_type": "subdomain", "host": "a.example.com"},
+                {"_type": "subdomain", "host": "a.example.com"},
+                {"_type": "subdomain", "host": "b.example.com"},
+            ],
+            prefix="domain-scan",
+        )[0]
 
-        assert _existing_lines(fpath) == {"a", " b "}
+        assert summary == "  [+] subdomains/domain-scan-subdomains.txt (3 items, 2 new)"
 
-    def test_prefixed_filename_adds_prefix(self):
-        assert _prefixed_filename("subdomain", "domain-scan") == "domain-scan-subdomains.txt"
-
-    def test_summary_label_includes_new_count_when_deduped(self):
-        assert _summary_label(3, 2) == "3 items, 2 new"
-
-    def test_write_export_target_returns_summary_for_target_path(self, tmp_path):
-        summary = _write_export_target(
-            project_root=tmp_path,
-            type_name="subdomain",
-            items=[{"_type": "subdomain", "host": "a.example.com"}],
+    def test_export_typed_outputs_returns_summary_for_target_path(self, tmp_path):
+        summary = export_typed_outputs(
+            str(tmp_path),
+            [{"_type": "subdomain", "host": "a.example.com", "_target": "example.com"}],
             prefix="scan",
-            target_slug="example.com",
-        )
+        )[1]
 
         assert summary == "  [+] subdomains/example.com/scan-subdomains.txt (1 items)"
         assert (tmp_path / "subdomains" / "example.com" / "scan-subdomains.txt").exists()
+
+    def test_sanitize_target_slug_strips_url_path_and_collapses_separators(self):
+        assert sanitize_target_slug("https://example.com:8443/path") == "example.com_8443"
+        assert sanitize_target_slug("api///v1") == "api_v1"
 
     def test_deduplicates_jsonl(self, tmp_path):
         item = {"_type": "vulnerability", "name": "XSS", "url": "https://x.com"}
@@ -438,24 +395,6 @@ class TestCollectTypedOutputs:
         result = asyncio.run(collect_typed_outputs({}))
         assert result == []
 
-    def test_collect_typed_outputs_from_runner_returns_only_list_payloads(self):
-        runner = MagicMock()
-        runner.reg_get = AsyncMock(
-            return_value={"typed_outputs": [{"_type": "ip", "ip": "10.0.0.1"}]}
-        )
-
-        result = asyncio.run(_collect_typed_outputs_from_runner(runner))
-
-        assert result == [{"_type": "ip", "ip": "10.0.0.1"}]
-
-    def test_collect_typed_outputs_from_runner_ignores_non_list_payloads(self):
-        runner = MagicMock()
-        runner.reg_get = AsyncMock(return_value={"typed_outputs": {"bad": True}})
-
-        result = asyncio.run(_collect_typed_outputs_from_runner(runner))
-
-        assert result == []
-
     def test_runners_with_no_typed_outputs(self):
         runner = MagicMock()
         runner.reg_get = AsyncMock(return_value={"stdout": "hello"})
@@ -476,68 +415,19 @@ class TestCollectTypedOutputs:
         result = asyncio.run(collect_typed_outputs(runners))
         assert result == []
 
+    def test_collect_typed_outputs_recurses_to_step_leaves(self):
+        leaf_a = MagicMock()
+        leaf_a.reg_get = AsyncMock(return_value={"typed_outputs": [{"_type": "ip", "ip": "1.1.1.1"}]})
+        leaf_b = MagicMock()
+        leaf_b.reg_get = AsyncMock(return_value={"typed_outputs": [{"_type": "ip", "ip": "2.2.2.2"}]})
+        child = MagicMock()
+        child._runners = {"0": leaf_a, "1": leaf_b}
+        root = MagicMock()
+        root._runners = {"job": child}
 
-# ── auto_export_findings ──────────────────────────────────────────
+        leaves = asyncio.run(collect_typed_outputs({"root": root}))
 
-
-class TestAutoExportFindings:
-    def test_no_project_path(self):
-        result = asyncio.run(auto_export_findings({}, None))
-        assert result == []
-
-    def test_empty_project_path(self):
-        result = asyncio.run(auto_export_findings({}, ""))
-        assert result == []
-
-    def test_no_typed_outputs(self):
-        result = asyncio.run(auto_export_findings({}, "/tmp/test-project"))
-        assert result == []
-
-    def test_exports_to_project(self, tmp_path):
-        from ofx.runner.job import JobRunner
-
-        step = MagicMock()
-        step.reg_get = AsyncMock(
-            return_value={
-                "typed_outputs": [
-                    {"_type": "subdomain", "host": "a.example.com"},
-                    {"_type": "subdomain", "host": "b.example.com"},
-                ]
-            }
-        )
-
-        job = MagicMock(spec=JobRunner)
-        job._runners = {"0": step}
-
-        log_lines = []
-        result = asyncio.run(
-            auto_export_findings(
-                {"recon": job},
-                str(tmp_path),
-                log_fn=lambda msg: log_lines.append(msg),
-            )
-        )
-        assert len(result) == 1
-        assert "subdomains/subdomains.txt" in result[0]
-        assert (tmp_path / "subdomains" / "subdomains.txt").exists()
-        assert len(log_lines) >= 1  # At least header + one summary line
-
-    def test_logs_export_summary(self, tmp_path):
-        from ofx.runner.job import JobRunner
-
-        step = MagicMock()
-        step.reg_get = AsyncMock(
-            return_value={"typed_outputs": [{"_type": "ip", "ip": "10.0.0.1"}]}
-        )
-        job = MagicMock(spec=JobRunner)
-        job._runners = {"0": step}
-
-        log_lines = []
-        asyncio.run(
-            auto_export_findings(
-                {"job": job},
-                str(tmp_path),
-                log_fn=lambda msg: log_lines.append(msg),
-            )
-        )
-        assert any("Findings exported" in lst for lst in log_lines)
+        assert leaves == [
+            {"_type": "ip", "ip": "1.1.1.1"},
+            {"_type": "ip", "ip": "2.2.2.2"},
+        ]

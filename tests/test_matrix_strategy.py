@@ -9,6 +9,7 @@ from ofx.models.workflow import Workflow
 from ofx.runner import RunContext, WorkflowRunner
 from ofx.runner.executors.workflow import WorkflowExecutor
 from ofx.utils.matrix import get_expanded_job_ids
+from ofx.runner.matrix_utils import generate_matrix_combinations
 
 
 @pytest.fixture
@@ -18,6 +19,23 @@ def workflow_dir():
 
 async def plan_jobs(runner: WorkflowRunner) -> None:
     await WorkflowExecutor().plan_jobs(runner)
+
+
+def _strategy_combinations(strategy):
+    def _parse_matrix_value(value):
+        if not isinstance(value, str):
+            return value
+        try:
+            return __import__("json").loads(value)
+        except (__import__("json").JSONDecodeError, ValueError):
+            return value
+
+    return generate_matrix_combinations(
+        strategy.matrix,
+        include=strategy.include,
+        exclude=strategy.exclude,
+        value_processor=_parse_matrix_value,
+    )
 
 
 class TestMatrixStrategy:
@@ -42,9 +60,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
         assert len(combinations) == 3
         assert combinations[0]["value"] == 1
         assert combinations[1]["value"] == 2
@@ -70,9 +86,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
         assert len(combinations) == 4
 
         assert {"os": "linux", "arch": "amd64"} in combinations
@@ -105,9 +119,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
         assert len(combinations) == 7
         assert {"os": "windows", "browser": "safari"} not in combinations
         assert {"os": "macos", "browser": "safari"} in combinations
@@ -134,9 +146,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
         assert len(combinations) == 4
         platforms = [combo["platform"] for combo in combinations]
         assert "x86" in platforms
@@ -211,9 +221,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
 
         assert len(combinations) == 4
 
@@ -313,9 +321,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
         assert len(combinations) == 1
         assert combinations[0]["only"] == "single"
 
@@ -341,9 +347,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
         assert len(combinations) == 8
 
     @pytest.mark.asyncio
@@ -391,9 +395,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
 
         assert len(combinations) == 6
         assert {"env": "prod", "version": 1.0} not in combinations
@@ -471,9 +473,7 @@ jobs:
 
         assert len(runner._staged_jobs) == 1
         job = runner._staged_jobs["test"]
-        from ofx.utils.matrix import _generate_matrix_combinations
-
-        combinations = _generate_matrix_combinations(job.strategy)
+        combinations = _strategy_combinations(job.strategy)
         assert len(combinations) == 3
         values = [combo["value"] for combo in combinations]
         assert "plain" in values

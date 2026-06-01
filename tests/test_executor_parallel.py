@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
-from ofx.runner.executors.parallel import run_limited_fail_fast
+from ofx.runner import RunResult, RunnerStatus
+from ofx.runner.executors.parallel import (
+    collect_parallel_run_errors,
+    parallel_run_settings,
+    run_limited_fail_fast,
+    run_parallel_runner_items,
+)
 
 
 @pytest.mark.asyncio
@@ -90,3 +97,69 @@ async def test_run_limited_fail_fast_false_runs_remaining_items_after_exception(
 
     assert isinstance(results[0], RuntimeError)
     assert results[1] == "ok"
+
+
+def test_collect_parallel_run_errors_includes_exception_and_failed_results():
+    results = [
+        RuntimeError("boom"),
+        RunResult(name="job", run_id="2", status=RunnerStatus.FAILED, error="bad"),
+        RunResult(name="job", run_id="3", status=RunnerStatus.COMPLETED),
+        None,
+    ]
+
+    errors = collect_parallel_run_errors(
+        ["a", "b", "c", "d"],
+        results,
+        describe_item=lambda idx, item: f"Item {idx} ({item})",
+    )
+
+    assert errors == [
+        "Item 0 (a): boom",
+        "Item 1 (b): bad",
+    ]
+
+
+def test_collect_parallel_run_errors_uses_default_failed_message():
+    results = [
+        RunResult(name="job", run_id="1", status=RunnerStatus.FAILED, error=None),
+    ]
+
+    errors = collect_parallel_run_errors(
+        ["a"],
+        results,
+        describe_item=lambda idx, item: f"Item {idx} ({item})",
+    )
+
+    assert errors == ["Item 0 (a): Failed"]
+
+
+@pytest.mark.asyncio
+async def test_run_parallel_runner_items_collects_failed_results_and_exceptions():
+    async def run_item(index: int, value: str) -> RunResult:
+        if index == 0:
+            return RunResult(name=value, run_id="1", status=RunnerStatus.FAILED, error="bad")
+        if index == 1:
+            raise RuntimeError("boom")
+        return RunResult(name=value, run_id="3", status=RunnerStatus.COMPLETED)
+
+    errors = await run_parallel_runner_items(
+        ["a", "b", "c"],
+        max_parallel=2,
+        fail_fast=False,
+        run_item=run_item,
+        describe_item=lambda idx, item: f"Item {idx} ({item})",
+    )
+
+    assert errors == [
+        "Item 0 (a): bad",
+        "Item 1 (b): boom",
+    ]
+
+
+def test_parallel_run_settings_defaults_when_strategy_missing():
+    assert parallel_run_settings(None, item_count=3) == (3, True)
+
+
+def test_parallel_run_settings_uses_strategy_values():
+    strategy = SimpleNamespace(max_parallel=2, fail_fast=False)
+    assert parallel_run_settings(strategy, item_count=9) == (2, False)

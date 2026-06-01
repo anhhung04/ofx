@@ -7,7 +7,6 @@ import yaml
 
 from ofx.runner import RunContext, WorkflowRunner
 from ofx.utils.workflow_utils import (
-    add_workflow_dir,
     find_workflow,
     workflow_dirs_with_path,
 )
@@ -25,36 +24,36 @@ class _ReusableWorkflowParentStub:
     def _produce_log(self, message):
         return str(message)
 
-
 class TestWorkflowDirectoryOperations:
     """Test workflow directory management and isolation"""
 
-    def test_add_workflow_dir_adds_new_path(self):
-        """Test that add_workflow_dir adds a new path to the list"""
+    def test_workflow_dirs_with_path_adds_new_path(self):
+        """Test that workflow_dirs_with_path adds a new path to the copy"""
         workflow_dirs = [Path("/existing/path")]
         new_path = Path("/new/path")
 
-        result = add_workflow_dir(workflow_dirs, new_path)
+        result = workflow_dirs_with_path(workflow_dirs, new_path)
 
         assert new_path.absolute() in result
         assert len(result) == 2
+        assert workflow_dirs == [Path("/existing/path")]
 
-    def test_add_workflow_dir_ignores_duplicate(self):
-        """Test that add_workflow_dir doesn't add duplicates"""
+    def test_workflow_dirs_with_path_ignores_duplicate(self):
+        """Test that workflow_dirs_with_path doesn't add duplicates"""
         existing_path = Path("/existing/path").absolute()
         workflow_dirs = [existing_path]
 
-        result = add_workflow_dir(workflow_dirs, existing_path)
+        result = workflow_dirs_with_path(workflow_dirs, existing_path)
 
         assert len(result) == 1
         assert result[0] == existing_path
 
-    def test_add_workflow_dir_converts_string_to_path(self):
-        """Test that add_workflow_dir accepts string paths"""
+    def test_workflow_dirs_with_path_converts_string_to_path(self):
+        """Test that workflow_dirs_with_path accepts string paths"""
         workflow_dirs = []
         string_path = "/some/path"
 
-        result = add_workflow_dir(workflow_dirs, string_path)
+        result = workflow_dirs_with_path(workflow_dirs, string_path)
 
         assert Path(string_path).absolute() in result
 
@@ -131,6 +130,56 @@ jobs:
         runner = WorkflowRunner(workflow_obj, ctx)
 
         assert custom_dir in runner.ctx.workflow_dirs
+
+    def test_workflow_runner_root_name_and_reuse_helpers(self):
+        test_workflow_content = """
+name: test
+defaults:
+  workflows_base_dir: .
+jobs:
+  test:
+    steps:
+      - run: echo test
+"""
+        workflow = yaml.safe_load(test_workflow_content)
+        from ofx.models.workflow import Workflow
+
+        workflow_obj = Workflow.model_validate(workflow)
+
+        root_runner = WorkflowRunner(workflow_obj, RunContext())
+        reused_runner = WorkflowRunner(
+            workflow_obj,
+            RunContext(),
+            parent=_ReusableWorkflowParentStub(),
+        )
+
+        assert root_runner._is_reused is False
+        assert root_runner.name.startswith(f"[RUN-{root_runner.run_id}]:")
+        assert reused_runner._is_reused is True
+
+    def test_workflow_runner_exposes_registered_child_runners(self):
+        test_workflow_content = """
+name: test
+defaults:
+  workflows_base_dir: .
+jobs:
+  test:
+    steps:
+      - run: echo test
+"""
+        workflow = yaml.safe_load(test_workflow_content)
+        from ofx.models.workflow import Workflow
+
+        workflow_obj = Workflow.model_validate(workflow)
+        runner = WorkflowRunner(workflow_obj, RunContext())
+        child_runner = WorkflowRunner(
+            workflow_obj,
+            RunContext(),
+            parent=_ReusableWorkflowParentStub(),
+        )
+        runner._runners = {"ok": child_runner}
+
+        assert runner.runners == {"ok": child_runner}
 
     @pytest.mark.asyncio
     async def test_context_isolation_between_runners(self):
@@ -215,6 +264,30 @@ jobs:
 
         with pytest.raises(RuntimeError, match="Invalid YAML in workflow file"):
             find_workflow(str(workflow_file), (tmp_path,))
+
+    def test_find_workflow_with_invalid_remote_yaml_reports_source(self, monkeypatch):
+        class _Response:
+            text = "name: [unterminated\n"
+
+            def raise_for_status(self):
+                return None
+
+        monkeypatch.setattr("ofx.utils.workflow_utils.is_remote_path", lambda path: True)
+        monkeypatch.setattr("ofx.utils.workflow_utils.is_git_repo", lambda path: False)
+        monkeypatch.setattr("ofx.utils.workflow_utils.httpx.get", lambda url, timeout=30: _Response())
+
+        with pytest.raises(RuntimeError, match="Invalid YAML in remote workflow https://example.com/test.yml"):
+            find_workflow("https://example.com/test.yml", tuple())
+
+    def test_find_workflow_with_invalid_cloned_yaml_reports_action_path(self, monkeypatch, tmp_path):
+        repo_dir = tmp_path / "repo"
+        repo_dir.mkdir()
+        (repo_dir / "action.yml").write_text("name: [unterminated\n")
+
+        monkeypatch.setattr("ofx.utils.workflow_utils.clone_remote_repo", lambda workflow_name, flow_registry_url: repo_dir)
+
+        with pytest.raises(RuntimeError, match=r"Invalid YAML in workflow file .*action.yml"):
+            find_workflow("org/repo", tuple())
 
     def test_find_workflow_caching(self, tmp_path):
         """Test that find_workflow uses LRU cache"""
@@ -332,6 +405,46 @@ jobs:
         assert runner.ctx.inputs["mode"] == "fast"
 
     @pytest.mark.asyncio
+    async def test_dispatch_list_inputs_expand_to_matrix_without_direct_ctx_mutation(
+        self, tmp_path
+    ):
+        """Dispatch list inputs should become matrix values and leave scalar inputs clean."""
+        workflow_content = """
+name: dispatch_matrix_workflow
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+defaults:
+  workflows_base_dir: .
+jobs:
+  test:
+    steps:
+      - name: Test step
+        run: "echo ${{ inputs.target }}"
+"""
+        workflow_file = tmp_path / "dispatch-matrix.yml"
+        workflow_file.write_text(workflow_content)
+
+        workflow = find_workflow(str(workflow_file), (tmp_path,))
+        ctx = RunContext(
+            inputs={"target": ["example.com", "example.org"]},
+            output_path=tmp_path / "output",
+        )
+        runner = WorkflowRunner(workflow, ctx)
+
+        await runner._pre_run()
+
+        assert "target" not in runner.ctx.inputs
+        assert runner.ctx.vars["_matrix_input_keys"] == ["target"]
+        assert runner.model.jobs["test"].strategy is not None
+        assert runner.model.jobs["test"].strategy.matrix["target"] == [
+            "example.com",
+            "example.org",
+        ]
+
+    @pytest.mark.asyncio
     async def test_reusable_call_inputs_survive_workflow_dir_update(self, tmp_path):
         """Reusable workflow call input processing must survive later context updates."""
         workflow_content = """
@@ -385,107 +498,3 @@ jobs:
 
         assert copied_ctx.workflow_dirs == new_dirs
         assert ctx.workflow_dirs == original_dirs
-
-
-class TestExtractSecretRefs:
-    """Test selective secret extraction from workflow models."""
-
-    def _make_workflow(self, yaml_str: str):
-        from ofx.models.workflow import Workflow
-
-        data = yaml.safe_load(yaml_str)
-        return Workflow.model_validate(data)
-
-    def test_dot_access(self):
-        from ofx.runner.api import _extract_secret_refs
-
-        wf = self._make_workflow("""
-            name: test
-            jobs:
-              a:
-                steps:
-                  - run: "echo ${{ secrets.API_KEY }}"
-        """)
-        assert _extract_secret_refs(wf) == {"API_KEY"}
-
-    def test_bracket_access(self):
-        from ofx.runner.api import _extract_secret_refs
-
-        wf = self._make_workflow("""
-            name: test
-            jobs:
-              a:
-                steps:
-                  - run: 'echo ${{ secrets["DB_PASS"] }}'
-        """)
-        assert _extract_secret_refs(wf) == {"DB_PASS"}
-
-    def test_multiple_secrets_across_jobs(self):
-        from ofx.runner.api import _extract_secret_refs
-
-        wf = self._make_workflow("""
-            name: test
-            jobs:
-              a:
-                steps:
-                  - run: "curl -H 'Authorization: ${{ secrets.TOKEN }}' ${{ secrets.URL }}"
-              b:
-                steps:
-                  - run: "psql ${{ secrets.DB_CONN }}"
-        """)
-        assert _extract_secret_refs(wf) == {"TOKEN", "URL", "DB_CONN"}
-
-    def test_no_secrets(self):
-        from ofx.runner.api import _extract_secret_refs
-
-        wf = self._make_workflow("""
-            name: test
-            jobs:
-              a:
-                steps:
-                  - run: echo hello
-        """)
-        assert _extract_secret_refs(wf) == set()
-
-    def test_secrets_in_env(self):
-        from ofx.runner.api import _extract_secret_refs
-
-        wf = self._make_workflow("""
-            name: test
-            env:
-              API_KEY: "${{ secrets.MY_API_KEY }}"
-            jobs:
-              a:
-                steps:
-                  - run: echo $API_KEY
-        """)
-        assert "MY_API_KEY" in _extract_secret_refs(wf)
-
-    def test_secrets_in_step_env(self):
-        from ofx.runner.api import _extract_secret_refs
-
-        wf = self._make_workflow("""
-            name: test
-            jobs:
-              a:
-                steps:
-                  - run: echo $TOKEN
-                    env:
-                      TOKEN: "${{ secrets.GH_TOKEN }}"
-        """)
-        assert _extract_secret_refs(wf) == {"GH_TOKEN"}
-
-    def test_deduplication(self):
-        from ofx.runner.api import _extract_secret_refs
-
-        wf = self._make_workflow("""
-            name: test
-            jobs:
-              a:
-                steps:
-                  - run: "${{ secrets.KEY }} and ${{ secrets.KEY }}"
-              b:
-                steps:
-                  - run: "${{ secrets.KEY }}"
-        """)
-        assert _extract_secret_refs(wf) == {"KEY"}

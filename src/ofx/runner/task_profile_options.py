@@ -31,7 +31,6 @@ def merge_profile_task_options(
     merged = dict(user_opts)
     declared = task_declared_opts or {}
     injected: list[str] = []
-
     for profile_attr, candidate_names in COMMON_TASK_PROFILE_MAPPING:
         value = getattr(profile, profile_attr, None)
         if value is None:
@@ -41,21 +40,30 @@ def merge_profile_task_options(
         if isinstance(value, str) and not value:
             continue
 
-        for opt_name in candidate_names:
-            if opt_name in declared and opt_name not in merged:
-                merged[opt_name] = value
-                injected.append(f"{opt_name}={value}")
-                break
+        opt_name = next(
+            (
+                candidate_name
+                for candidate_name in candidate_names
+                if candidate_name in declared and candidate_name not in merged
+            ),
+            None,
+        )
+        if opt_name is None:
+            continue
+        merged[opt_name] = value
+        injected.append(f"{opt_name}={value}")
 
     task_options = getattr(profile, "task_options", None) or {}
-    overrides = task_options.get(task_name, {})
+    overrides = dict(task_options.get(task_name, {}) or {})
     override_keys = list(overrides.keys()) if overrides else []
     if overrides:
-        base = dict(overrides)
-        base.update(merged)
-        merged = base
+        overrides.update(merged)
+        merged = overrides
 
     return merged, injected, override_keys
 
 
-__all__ = ["COMMON_TASK_PROFILE_MAPPING", "merge_profile_task_options"]
+__all__ = [
+    "COMMON_TASK_PROFILE_MAPPING",
+    "merge_profile_task_options",
+]

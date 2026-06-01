@@ -1,10 +1,10 @@
 import fcntl
+import difflib
 import json
 import logging
 import os
 import tempfile
 import time
-from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -12,6 +12,7 @@ import typer
 
 from ofx.commands.ui_helpers import inputs_table
 from ofx.models.config import DurableRunConfig
+from ofx.utils.file_cleanup import remove_file
 from ofx.runner import run_workflow
 from ofx.settings import (
     TEMP_DIR,
@@ -22,23 +23,7 @@ from ofx.settings import (
 
 logger = logging.getLogger(f"{settings.app_branding}.console")
 
-
-def _levenshtein_distance(s1: str, s2: str) -> int:
-    """Compute the Levenshtein edit distance between two strings."""
-    if len(s1) < len(s2):
-        return _levenshtein_distance(s2, s1)
-    if len(s2) == 0:
-        return len(s1)
-    prev_row = list(range(len(s2) + 1))
-    for i, c1 in enumerate(s1):
-        curr_row = [i + 1]
-        for j, c2 in enumerate(s2):
-            insertions = prev_row[j + 1] + 1
-            deletions = curr_row[j] + 1
-            substitutions = prev_row[j] + (c1 != c2)
-            curr_row.append(min(insertions, deletions, substitutions))
-        prev_row = curr_row
-    return prev_row[-1]
+list_available_workflows = None
 
 
 class JsonFormatter(logging.Formatter):
@@ -435,23 +420,31 @@ class FlowRunHandler:
 
     def _suggest_similar_workflows(self) -> None:
         """Log suggestions for similarly-named workflows when resolution fails."""
-        from ofx.utils.workflow_utils import list_available_workflows
+        workflow_lister = list_available_workflows
+        if workflow_lister is None:
+            from ofx.utils.workflow_utils import (
+                list_available_workflows as workflow_lister,
+            )
 
         try:
-            available = list_available_workflows(tuple(get_workflow_search_dirs()))
+            available = workflow_lister(tuple(get_workflow_search_dirs()))
         except Exception:
             return
         if not available:
             return
 
         name = self.workflow_name.lower()
-        # Simple substring + edit distance matching
-        matches = []
-        for wf_name in available:
-            wf_lower = wf_name.lower()
+        matches: list[str] = []
+        lowered: dict[str, str] = {wf_name.lower(): wf_name for wf_name in available}
+
+        for wf_lower, wf_name in lowered.items():
             if name in wf_lower or wf_lower in name:
                 matches.append(wf_name)
-            elif _levenshtein_distance(name, wf_lower) <= 3:
+
+        close = difflib.get_close_matches(name, list(lowered.keys()), n=5, cutoff=0.7)
+        for wf_lower in close:
+            wf_name = lowered[wf_lower]
+            if wf_name not in matches:
                 matches.append(wf_name)
 
         if matches:
@@ -558,5 +551,4 @@ class FlowRunHandler:
             os.close(fd)
         finally:
             if self.lock_path:
-                with suppress(OSError):
-                    self.lock_path.unlink(missing_ok=True)
+                remove_file(self.lock_path)

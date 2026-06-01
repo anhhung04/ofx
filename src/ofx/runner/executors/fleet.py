@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import sys
 from typing import Any
 
-from ofx.runner.context import RunnerContextBuilder, RunnerStatus, RunResult
+from ofx.runner.context import RunnerStatus, RunResult
 from ofx.runner.executors import Executor
-from ofx.runner.executors.parallel import run_limited_fail_fast
+from ofx.utils.file_cleanup import remove_files_and_parent_dir
+from ofx.runner.executors.parallel import (
+    parallel_run_settings,
+    run_parallel_runner_items,
+)
 
 
 class FleetExecutor(Executor):
@@ -27,39 +33,32 @@ class FleetExecutor(Executor):
                 "Check the fleet input configuration."
             )
 
-        strategy = runner.model.strategy
-        max_parallel = strategy.max_parallel if strategy else len(runner._fleet_combos)
-        fail_fast = strategy.fail_fast if strategy else True
-        results = await run_limited_fail_fast(
+        max_parallel, fail_fast = parallel_run_settings(
+            runner.model.strategy,
+            item_count=len(runner._fleet_combos),
+        )
+        errors = await run_parallel_runner_items(
             runner._fleet_combos,
             max_parallel=max_parallel,
             fail_fast=fail_fast,
             run_item=lambda idx, combo: self.run_single_fleet_job(runner, idx, combo),
-            is_failure=lambda result: isinstance(result, RunResult)
-            and result.status != RunnerStatus.COMPLETED,
+            describe_item=lambda idx, _combo: f"Fleet {idx}",
         )
-
-        errors = []
-        for i, result in enumerate(results):
-            if result is None:
-                continue
-            if isinstance(result, Exception):
-                errors.append(f"Fleet {i}: {result}")
-            elif (
-                isinstance(result, RunResult)
-                and result.status != RunnerStatus.COMPLETED
-            ):
-                errors.append(f"Fleet {i}: {result.error or 'Failed'}")
 
         if errors:
             await self.report_surviving_instances(runner)
             raise RuntimeError("; ".join(errors))
 
     async def post_run(self, runner) -> None:
-        self.cleanup_chunk_files(runner)
+        remove_files_and_parent_dir(
+            runner._chunk_files,
+            on_error=lambda message: runner._logger.debug(message),
+            file_label="chunk file",
+            dir_label="chunk dir",
+            clear=runner._chunk_files,
+        )
 
-    async def on_failure(self, runner) -> None:
-        self.cleanup_chunk_files(runner)
+    on_failure = post_run
 
     def expand_fleet(self, runner) -> list[dict[str, Any]]:
         """Expand fleet strategy into per-instance combinations with chunk files."""
@@ -89,66 +88,49 @@ class FleetExecutor(Executor):
         idx: int,
         combo: dict[str, Any],
     ) -> RunResult:
-        job_ctx = runner._child_context()
-        vars_update: dict[str, Any] = {}
-
-        if runner.model.strategy:
-            vars_update["strategy"] = runner.model.strategy.model_dump()
-
         fleet_vars = {k: v for k, v in combo.items() if k.startswith("fleet_")}
-        if fleet_vars:
-            vars_update["fleet"] = fleet_vars
 
-        if vars_update:
-            job_ctx = RunnerContextBuilder(job_ctx).with_vars(vars_update)
+        from ofx.runner.job import attach_indexed_job_runner, build_indexed_job_context
 
-        from ofx.runner.job import clone_indexed_job
-
-        job_copy = clone_indexed_job(
-            runner.model,
-            idx,
-            combo,
+        job_ctx = build_indexed_job_context(
+            runner,
+            vars_update={"fleet": fleet_vars} if fleet_vars else None,
         )
 
-        has_matrix = runner.model.strategy and runner.model.strategy.matrix
-        if has_matrix:
+        if runner.model.strategy and runner.model.strategy.matrix:
             from ofx.runner.cloud_matrix import CloudMatrixJobRunner
 
-            child_runner = CloudMatrixJobRunner(
-                job_copy,
-                job_ctx,
-                parent=runner.parent,  # type: ignore[arg-type]
-            )
+            runner_cls = CloudMatrixJobRunner
         else:
             from ofx.runner.cloud_job import CloudJobRunner
 
-            child_runner = CloudJobRunner(
-                job_copy,
-                job_ctx,
-                parent=runner.parent,  # type: ignore[arg-type]
-            )
+            runner_cls = CloudJobRunner
 
-        child_runner._is_fleet_child = True
-        runner._runners[job_copy.jid] = child_runner
+        _job_copy, child_runner = attach_indexed_job_runner(
+            runner,
+            ctx=job_ctx,
+            index=idx,
+            values=combo,
+            runner_cls=runner_cls,
+        )
         return await child_runner.run()
 
     async def report_surviving_instances(self, runner) -> None:
-        from ofx.runner.cloud_job import CloudJobRunner, _prompt_destroy_instance
+        from ofx.runner.cloud_job import CloudJobRunner
+        from ofx.runner.executors.cloud import CloudExecutor
 
         surviving_runners: list[CloudJobRunner] = []
         surviving_lines: list[str] = []
         for jid, child_runner in runner._runners.items():
             if not isinstance(child_runner, CloudJobRunner):
                 continue
-            inst = child_runner._instance
-            if not inst or not inst.ip:
-                continue
-            provider = inst.provider or "unknown"
-            if provider == "static":
+            state = CloudExecutor._cloud_instance_state(child_runner)
+            if not state.has_reportable_instance:
                 continue
             surviving_runners.append(child_runner)
             surviving_lines.append(
-                f"  {jid}: {inst.name} [{inst.instance_id}] @ {inst.ip} (provider={provider})"
+                f"  {jid}: {state.instance_name} [{state.instance_id}] "
+                f"@ {state.instance_ip} (provider={state.provider_name})"
             )
 
         if not surviving_runners:
@@ -159,42 +141,27 @@ class FleetExecutor(Executor):
             f"Cloud instances from failed fleet may still be running:\n{instance_list}"
         )
 
-        should_destroy = await _prompt_destroy_instance(
-            f"{len(surviving_runners)} fleet instance(s):\n{instance_list}"
-        )
+        should_destroy = False
+        if sys.stdin.isatty():
+            try:
+                answer = await asyncio.to_thread(
+                    input,
+                    "\n⚠  Cloud instance still running: "
+                    f"{len(surviving_runners)} fleet instance(s):\n{instance_list}\n"
+                    "   Destroy this instance? [y/N]: ",
+                )
+                should_destroy = answer.strip().lower() in ("y", "yes")
+            except (EOFError, KeyboardInterrupt):
+                should_destroy = False
 
         if should_destroy:
             for child_runner in surviving_runners:
                 inst_name = child_runner._instance.name if child_runner._instance else "unknown"
                 try:
-                    await child_runner.destroy_instance()
+                    await child_runner._cloud_executor.destroy_instance(child_runner)
                 except Exception as exc:
                     runner._log_warning(f"Failed to destroy {inst_name}: {exc}")
         else:
             runner._log_warning(
                 "Fleet instances left running - destroy manually when done."
             )
-
-    def cleanup_chunk_files(self, runner) -> None:
-        """Remove temporary fleet chunk files and their parent directory."""
-        if not runner._chunk_files:
-            return
-        parent_dir = None
-        for chunk_file in runner._chunk_files:
-            try:
-                if chunk_file.exists():
-                    if parent_dir is None:
-                        parent_dir = chunk_file.parent
-                    chunk_file.unlink()
-            except OSError as exc:
-                runner._logger.debug(
-                    "Failed to remove chunk file %s: %s", chunk_file, exc
-                )
-        if parent_dir:
-            try:
-                parent_dir.rmdir()
-            except OSError as exc:
-                runner._logger.debug(
-                    "Failed to remove chunk dir %s: %s", parent_dir, exc
-                )
-        runner._chunk_files.clear()

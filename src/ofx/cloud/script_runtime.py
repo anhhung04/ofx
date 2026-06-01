@@ -41,31 +41,17 @@ def resolve_python_step_source(step: Step, *, workflow_dir: Path | None = None) 
 
 
 @lru_cache(maxsize=128)
-def _build_python_payload_cached(
-    source: str,
-    *,
-    opsec_mode: bool,
-    obfuscate_sources: bool,
-) -> str:
-    """Return bundled payload (optionally obfuscated) for remote execution."""
-    result = build_bundle(source, obfuscate_sources=obfuscate_sources)
-    if opsec_mode:
-        return obfuscate_bootstrap(result.bootstrap)
-    return result.bootstrap
-
-
 def build_python_payload(
     source: str,
     *,
     opsec_mode: bool = False,
     obfuscate_sources: bool = False,
 ) -> str:
-    """Build and cache python payload for cloud/session execution."""
-    return _build_python_payload_cached(
-        source,
-        opsec_mode=opsec_mode,
-        obfuscate_sources=obfuscate_sources,
-    )
+    """Return bundled payload (optionally obfuscated) for remote execution."""
+    result = build_bundle(source, obfuscate_sources=obfuscate_sources)
+    if opsec_mode:
+        return obfuscate_bootstrap(result.bootstrap)
+    return result.bootstrap
 
 
 def build_python_step_payload(

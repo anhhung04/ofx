@@ -1,129 +1,60 @@
-"""Tests for RunnerContextBuilder context merging behavior."""
-
-import pytest
+"""Tests for public run-context helper functions."""
 
 from ofx.runner import RunContext
-from ofx.runner.context import RunnerContextBuilder, build_env_context
+from ofx.runner.context import (
+    context_copy,
+    context_with_env,
+    context_with_secrets,
+    context_with_update,
+    context_with_vars,
+)
 
 
-def test_with_env_merges_and_copies():
+def test_context_with_env_merges_and_copies():
     base = RunContext(envs={"A": "1"})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_env({"B": "2", "A": "override"})
 
-    assert ctx.envs["A"] == "override"
-    assert ctx.envs["B"] == "2"
-    assert base.envs["A"] == "1"
+    ctx = context_with_env(base, {"B": "2", "A": "override"})
+
+    assert ctx.envs == {"A": "override", "B": "2"}
+    assert base.envs == {"A": "1"}
 
 
-def test_with_inputs_merges_and_copies():
-    base = RunContext(inputs={"x": 1})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_inputs({"y": 2, "x": 3})
+def test_context_with_secrets_merge_without_mutating_base():
+    base = RunContext(inputs={"x": 1}, secrets={"token": "a"})
 
-    assert ctx.inputs == {"x": 3, "y": 2}
+    secrets_ctx = context_with_secrets(base, {"token": "b", "extra": "c"})
+
+    assert secrets_ctx.secrets == {"token": "b", "extra": "c"}
     assert base.inputs == {"x": 1}
-
-
-def test_with_secrets_merges_and_copies():
-    base = RunContext(secrets={"token": "a"})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_secrets({"token": "b", "extra": "c"})
-
-    assert ctx.secrets == {"token": "b", "extra": "c"}
     assert base.secrets == {"token": "a"}
 
 
-def test_with_vars_merges_and_copies():
-    base = RunContext(vars={"nested": {"k": "v"}})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_vars({"nested": {"k": "v2"}, "m": 1})
-
-    assert ctx.vars["nested"]["k"] == "v2"
-    assert ctx.vars["m"] == 1
-    assert base.vars["nested"]["k"] == "v"
-
-
-def test_with_env_and_vars_merges_both_maps():
-    base = RunContext(envs={"A": "1"}, vars={"role": "base"})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_env_and_vars({"B": "2"}, {"role": "scan"})
-
-    assert ctx.envs["A"] == "1"
-    assert ctx.envs["B"] == "2"
-    assert ctx.vars["role"] == "scan"
-    assert base.envs == {"A": "1"}
-    assert base.vars == {"role": "base"}
-
-
-def test_with_update_replaces_fields():
-    base = RunContext(inputs={"x": 1}, envs={"A": "1"})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_update({"inputs": {"z": 9}})
-
-    assert ctx.inputs == {"z": 9}
-    assert ctx.envs["A"] == "1"
-
-
-# ── Edge cases ───────────────────────────────────────────────────────────
-
-
-def test_with_env_empty_dict():
-    """Empty update should return a copy without changes."""
-    base = RunContext(envs={"A": "1"})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_env({})
-    assert ctx.envs["A"] == "1"
-    assert ctx is not base
-
-
-def test_with_vars_empty_dict():
-    base = RunContext(vars={"k": "v"})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_vars({})
-    assert ctx.vars["k"] == "v"
-
-
-def test_chained_builders():
-    """Multiple builder calls can be chained on successive contexts."""
-    base = RunContext()
-    b = RunnerContextBuilder(base)
-    ctx1 = b.with_env({"A": "1"})
-    ctx2 = RunnerContextBuilder(ctx1).with_inputs({"x": 42})
-    ctx3 = RunnerContextBuilder(ctx2).with_vars({"role": "scan"})
-
-    assert ctx3.envs["A"] == "1"
-    assert ctx3.inputs["x"] == 42
-    assert ctx3.vars["role"] == "scan"
-    # Original untouched
-    assert "A" not in base.envs or base.envs.get("A") != "1"
-
-
-def test_deep_copy_isolation():
-    """Modifying a nested dict in the derived context shouldn't affect the base."""
+def test_context_with_vars_deep_copies_existing_nested_values():
     base = RunContext(vars={"nested": {"list": [1, 2, 3]}})
-    builder = RunnerContextBuilder(base)
-    ctx = builder.with_vars({"extra": "val"})
+
+    ctx = context_with_vars(base, {"extra": "val"})
     ctx.vars["nested"]["list"].append(99)
 
+    assert ctx.vars["extra"] == "val"
     assert 99 not in base.vars["nested"]["list"]
 
+def test_context_with_update_replaces_fields():
+    base = RunContext(inputs={"x": 1}, envs={"A": "1"})
 
-def test_frozen_builder():
-    """RunnerContextBuilder is frozen — attributes can't be reassigned."""
-    from dataclasses import FrozenInstanceError
+    ctx = context_with_update(base, {"inputs": {"z": 9}})
 
-    base = RunContext()
-    builder = RunnerContextBuilder(base)
-    with pytest.raises(FrozenInstanceError):
-        builder.base = RunContext()  # type: ignore[misc]
+    assert ctx.inputs == {"z": 9}
+    assert ctx.envs == {"A": "1"}
 
+def test_context_copy_returns_independent_deep_copy_with_updates():
+    base = RunContext(
+        inputs={"region": "us-east-1"},
+        vars={"nested": {"attempt": 1}},
+    )
 
-def test_build_env_context_copies_env():
-    env = {"A": "1"}
+    copied = context_copy(base, {"inputs": {"tool": "nmap"}}, deep=True)
+    copied.vars["nested"]["attempt"] = 2
 
-    ctx = build_env_context(env)
-    ctx.envs["B"] = "2"
-
-    assert ctx.envs["A"] == "1"
-    assert env == {"A": "1"}
+    assert copied.inputs == {"tool": "nmap"}
+    assert base.inputs == {"region": "us-east-1"}
+    assert base.vars["nested"]["attempt"] == 1

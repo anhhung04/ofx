@@ -6,80 +6,116 @@ from typing import Any
 
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.context import RunContext
+from ofx.runner.context import (
+    RunContext,
+    context_copy,
+    context_with_update,
+    context_with_vars,
+)
 from ofx.runner.executors.job import JobExecutor
 from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.logging import bubble_context_log
-from ofx.runner.runner import BaseRunner
+from ofx.runner.runner import Runner
 
 
-def format_job_log(parent: BaseRunner[Workflow], job: Job, message: Any) -> str:
-    """Format and bubble a local job runner log message."""
-    return bubble_context_log(parent, message, model_jid=job.jid)
+
+def build_indexed_job_context(
+    runner,
+    *,
+    vars_update: dict[str, Any] | None = None,
+    input_updates: dict[str, Any] | None = None,
+) -> RunContext:
+    """Build a child job context with shared strategy/input propagation."""
+    child_context_factory = getattr(runner, "_child_context", None)
+    job_ctx = (
+        child_context_factory()
+        if callable(child_context_factory)
+        else context_copy(runner.ctx)
+    )
+    merged_vars: dict[str, Any] = {}
+    if runner.model.strategy:
+        merged_vars["strategy"] = runner.model.strategy.model_dump()
+    if vars_update:
+        merged_vars.update(vars_update)
+    if merged_vars:
+        job_ctx = context_with_vars(job_ctx, merged_vars)
+    if input_updates:
+        job_ctx = context_with_update(
+            job_ctx,
+            {"inputs": {**job_ctx.inputs, **input_updates}},
+        )
+
+    return job_ctx
 
 
-def clone_indexed_job(
-    job: Job,
+def attach_indexed_job_runner(
+    runner,
+    *,
+    ctx: RunContext,
     index: int,
     values: dict[str, Any],
-    *,
+    runner_cls,
     display_name: str | None = None,
-) -> Job:
-    """Clone a job for a matrix or fleet child execution."""
-    new_jid = f"{job.jid}_{index}"
-    child_name = display_name or f"[{job.name or job.jid}]{{{index}}}"
-    return job.model_copy(
+    parent=None,
+    **runner_kwargs,
+):
+    """Create, register, and return an indexed child job runner."""
+    job_copy = runner.model.model_copy(
         deep=True,
         update={
-            "name": child_name,
-            "jid": new_jid,
+            "name": display_name or f"[{runner.model.name or runner.model.jid}]{{{index}}}",
+            "jid": f"{runner.model.jid}_{index}",
             "matrix_values": values,
             "matrix_index": index,
         },
     )
+    child_runner = runner_cls(
+        job_copy,
+        ctx,
+        parent=parent or runner.parent,
+        **runner_kwargs,
+    )
+    runner._runners[job_copy.jid] = child_runner
+    return job_copy, child_runner
 
 
-class JobRunner(BaseRunner[Job]):
+class JobRunner(Runner[Job]):
     def __init__(
         self,
         job: Job,
         ctx: RunContext,
-        parent: BaseRunner[Workflow],
+        parent: Runner[Workflow],
         executor: JobExecutor | None = None,
     ):
-        job_executor = executor or JobExecutor()
         super().__init__(
             job,
             ctx,
             parent,
             parent.registry,
-            executor=job_executor,
+            executor=executor or JobExecutor(),
         )
 
-    @property
-    def total_steps(self) -> int:
-        return len(self.model.steps)
-
     def _produce_log(self, message: Any) -> str:
-        return format_job_log(self.parent, self.model, message)
+        return bubble_context_log(self.parent, message, model_jid=self.model.jid)
 
 
-class MatrixJobRunner(BaseRunner[Job]):
+class MatrixJobRunner(JobRunner):
     """Runner for jobs with matrix strategy, handling multiple combinations."""
 
     def __init__(
         self,
         job: Job,
         ctx: RunContext,
-        parent: BaseRunner[Workflow],
+        parent: Runner[Workflow],
         executor: MatrixExecutor | None = None,
     ):
-        matrix_executor = executor or MatrixExecutor()
-        super().__init__(job, ctx, parent, executor=matrix_executor)
+        super().__init__(job, ctx, parent, executor=executor or MatrixExecutor())
         self.name = f"Matrix{self.name}"
 
-    def _produce_log(self, message: Any) -> str:
-        return format_job_log(self.parent, self.model, message)
 
-
-__all__ = ["JobRunner", "MatrixJobRunner", "clone_indexed_job", "format_job_log"]
+__all__ = [
+    "JobRunner",
+    "MatrixJobRunner",
+    "build_indexed_job_context",
+    "attach_indexed_job_runner",
+]

@@ -13,6 +13,7 @@ from pydantic_settings import BaseSettings, SecretsSettingsSource, SettingsConfi
 from rich.console import Console
 from rich.theme import Theme
 
+from ofx.utils.file_cleanup import remove_file
 from ofx.utils.log import reload_logging_config
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -401,8 +402,7 @@ def update_config_field(key: str, value: object) -> None:
                 fh.write(content)
             os.replace(tmp_path, CONFIG_YAML)
         except Exception:
-            with suppress(OSError):
-                os.unlink(tmp_path)
+            remove_file(tmp_path)
             raise
 
     if IS_WINDOWS:
@@ -421,8 +421,7 @@ def update_config_field(key: str, value: object) -> None:
         try:
             _do_update()
         finally:
-            with suppress(OSError):
-                os.unlink(lock_path)
+            remove_file(lock_path)
     else:
         import fcntl
 

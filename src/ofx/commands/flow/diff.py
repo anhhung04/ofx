@@ -5,30 +5,9 @@ from __future__ import annotations
 from rich.table import Table
 from rich.tree import Tree
 
-from ofx.commands.flow.info import _find_workflow_fuzzy, _step_type_label
+from ofx.commands.flow.info import _find_workflow_fuzzy
+from ofx.runner.step_descriptors import step_type_label
 from ofx.settings import get_console
-
-
-def _diff_dicts(a: dict, b: dict, label: str) -> list[tuple[str, str, str]]:
-    """Compare two dicts, return list of (key, status, detail) tuples."""
-    rows: list[tuple[str, str, str]] = []
-    all_keys = sorted(set(a) | set(b))
-    for k in all_keys:
-        if k not in a:
-            rows.append((k, "[green]+ added[/]", str(b[k])[:60]))
-        elif k not in b:
-            rows.append((k, "[red]- removed[/]", str(a[k])[:60]))
-        elif str(a[k]) != str(b[k]):
-            rows.append(
-                (k, "[yellow]~ changed[/]", f"{str(a[k])[:30]} → {str(b[k])[:30]}")
-            )
-    return rows
-
-
-def _diff_lists(a: list, b: list) -> tuple[list, list, list]:
-    """Return (added, removed, common) items."""
-    sa, sb = set(a), set(b)
-    return sorted(sb - sa), sorted(sa - sb), sorted(sa & sb)
 
 
 def show_diff(name_a: str, name_b: str) -> None:
@@ -91,9 +70,10 @@ def show_diff(name_a: str, name_b: str) -> None:
     console.print()
 
     # ── Tags diff ──
-    added_tags, removed_tags, _ = _diff_lists(
-        [t.lower() for t in wf_a.tags], [t.lower() for t in wf_b.tags]
-    )
+    tags_a = {tag.lower() for tag in wf_a.tags}
+    tags_b = {tag.lower() for tag in wf_b.tags}
+    added_tags = sorted(tags_b - tags_a)
+    removed_tags = sorted(tags_a - tags_b)
     if added_tags or removed_tags:
         has_diff = True
         tag_parts: list[str] = []
@@ -105,9 +85,11 @@ def show_diff(name_a: str, name_b: str) -> None:
         console.print()
 
     # ── Jobs diff ──
-    added_jobs, removed_jobs, common_jobs = _diff_lists(
-        list(wf_a.jobs.keys()), list(wf_b.jobs.keys())
-    )
+    jobs_a = set(wf_a.jobs.keys())
+    jobs_b = set(wf_b.jobs.keys())
+    added_jobs = sorted(jobs_b - jobs_a)
+    removed_jobs = sorted(jobs_a - jobs_b)
+    common_jobs = sorted(jobs_a & jobs_b)
 
     tree = Tree("[bold]Jobs[/bold]")
 
@@ -157,16 +139,18 @@ def show_diff(name_a: str, name_b: str) -> None:
             # Step-level diff
             steps_a = {s.name: s for s in job_a.steps}
             steps_b = {s.name: s for s in job_b.steps}
-            added_s, removed_s, common_s = _diff_lists(
-                list(steps_a.keys()), list(steps_b.keys())
-            )
+            step_names_a = set(steps_a.keys())
+            step_names_b = set(steps_b.keys())
+            added_s = sorted(step_names_b - step_names_a)
+            removed_s = sorted(step_names_a - step_names_b)
+            common_s = sorted(step_names_a & step_names_b)
             for sn in added_s:
                 job_branch.add(
-                    f"  [green]+ step: {sn}[/] ({_step_type_label(steps_b[sn])})"
+                    f"  [green]+ step: {sn}[/] ({step_type_label(steps_b[sn])})"
                 )
             for sn in removed_s:
                 job_branch.add(
-                    f"  [red]- step: {sn}[/] ({_step_type_label(steps_a[sn])})"
+                    f"  [red]- step: {sn}[/] ({step_type_label(steps_a[sn])})"
                 )
             for sn in common_s:
                 sa, sb = steps_a[sn], steps_b[sn]
@@ -194,7 +178,20 @@ def show_diff(name_a: str, name_b: str) -> None:
     console.print()
 
     # ── Env diff ──
-    env_rows = _diff_dicts(wf_a.env, wf_b.env, "env")
+    env_rows: list[tuple[str, str, str]] = []
+    for key in sorted(set(wf_a.env) | set(wf_b.env)):
+        if key not in wf_a.env:
+            env_rows.append((key, "[green]+ added[/]", str(wf_b.env[key])[:60]))
+        elif key not in wf_b.env:
+            env_rows.append((key, "[red]- removed[/]", str(wf_a.env[key])[:60]))
+        elif str(wf_a.env[key]) != str(wf_b.env[key]):
+            env_rows.append(
+                (
+                    key,
+                    "[yellow]~ changed[/]",
+                    f"{str(wf_a.env[key])[:30]} → {str(wf_b.env[key])[:30]}",
+                )
+            )
     if env_rows:
         has_diff = True
         env_table = Table(title="Environment Variables", padding=(0, 1))
@@ -209,7 +206,20 @@ def show_diff(name_a: str, name_b: str) -> None:
     # ── Tools diff ──
     tools_a = {k: str(v) for k, v in wf_a.tools.items()}
     tools_b = {k: str(v) for k, v in wf_b.tools.items()}
-    tool_rows = _diff_dicts(tools_a, tools_b, "tools")
+    tool_rows: list[tuple[str, str, str]] = []
+    for key in sorted(set(tools_a) | set(tools_b)):
+        if key not in tools_a:
+            tool_rows.append((key, "[green]+ added[/]", str(tools_b[key])[:60]))
+        elif key not in tools_b:
+            tool_rows.append((key, "[red]- removed[/]", str(tools_a[key])[:60]))
+        elif str(tools_a[key]) != str(tools_b[key]):
+            tool_rows.append(
+                (
+                    key,
+                    "[yellow]~ changed[/]",
+                    f"{str(tools_a[key])[:30]} → {str(tools_b[key])[:30]}",
+                )
+            )
     if tool_rows:
         has_diff = True
         tool_table = Table(title="Tools", padding=(0, 1))

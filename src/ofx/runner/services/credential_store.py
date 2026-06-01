@@ -21,10 +21,9 @@ def should_store_creds(
     if step_store_creds is not None:
         return step_store_creds
 
-    if parent_model is not None:
-        defaults = getattr(parent_model, "defaults", None)
-        if defaults and getattr(defaults, "store_creds", False):
-            return True
+    defaults = getattr(parent_model, "defaults", None) if parent_model is not None else None
+    if defaults and getattr(defaults, "store_creds", False):
+        return True
 
     if global_default is not None:
         return global_default
@@ -41,7 +40,11 @@ def store_from_typed_outputs(
     from ofx.tasks.output_types import UserAccount
 
     debug = log_fn or logger.debug
-    accounts = [item for item in typed_outputs if isinstance(item, UserAccount) and item.username]
+    accounts = [
+        item
+        for item in typed_outputs
+        if isinstance(item, UserAccount) and item.username
+    ]
     if not accounts:
         return 0
 
@@ -58,7 +61,7 @@ def store_from_typed_outputs(
         try:
             cred = account.to_credential()
             existing = db.get_credential(cred.username)
-            if (
+            if bool(
                 existing
                 and existing.password == cred.password
                 and existing.hash == cred.hash
@@ -76,8 +79,25 @@ def store_from_typed_outputs(
             stored += 1
         except Exception as exc:
             debug(f"Failed to store credential for {account.username}: {exc}")
-
     return stored
 
 
-__all__ = ["should_store_creds", "store_from_typed_outputs"]
+def store_and_log_typed_outputs(
+    typed_outputs: list[Any] | Sequence[Any],
+    *,
+    debug_fn: Any | None = None,
+    info_fn: Any | None = None,
+) -> int:
+    """Store credential outputs and emit the standard success log once."""
+
+    stored = store_from_typed_outputs(typed_outputs, log_fn=debug_fn)
+    if stored and info_fn is not None:
+        info_fn(f"Stored {stored} credential(s) in credential store")
+    return stored
+
+
+__all__ = [
+    "should_store_creds",
+    "store_and_log_typed_outputs",
+    "store_from_typed_outputs",
+]

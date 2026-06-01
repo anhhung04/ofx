@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from rich.console import Console
@@ -115,10 +116,11 @@ class SecretRedactFilter(logging.Filter):
         return args
 
 
-def register_secrets(secrets: dict[str, Any]) -> None:
-    """Convenience: register all secret values for redaction."""
+def register_secrets(secrets: Mapping[str, Any] | Iterable[Any]) -> None:
+    """Register secret values for redaction from a mapping or iterable."""
+    values = secrets.values() if isinstance(secrets, Mapping) else secrets
     SecretRedactFilter.get_instance().register_values(
-        {str(v) for v in secrets.values() if v}
+        {str(value) for value in values if value}
     )
 
 

@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ...core.base import BaseRunner
+from ...core.base import PostRunnerProtocol
 from ..base import ConnectionError, PostRunnerError
 from ..registry import RunnerRegistry
 
@@ -36,7 +36,7 @@ class WinRMCommandError(PostRunnerError):
 
 @RunnerRegistry.register("winrm")  # type: ignore[arg-type]
 @dataclass
-class PostWinRM(BaseRunner):
+class PostWinRM(PostRunnerProtocol):
     """Post-exploitation runner over WinRM with stability and opsec features.
 
     Requires the optional ``pywinrm`` package.
@@ -149,6 +149,17 @@ class PostWinRM(BaseRunner):
         if self.amsi_bypass:
             return f"{self._AMSI_BYPASS}\n{script}"
         return script
+
+    def _remove_remote_temp_file(self, remote_tmp: str) -> None:
+        """Best-effort removal of a tracked remote temp file."""
+        try:
+            self.run_ps(f'Remove-Item -Force "{remote_tmp}" -ErrorAction SilentlyContinue')
+        except Exception as e:
+            logger.debug("Failed to remove remote temp file %s: %s", remote_tmp, e)
+
+    def _forget_remote_temp_file(self, remote_tmp: str) -> None:
+        if remote_tmp in self._remote_temp_files:
+            self._remote_temp_files.remove(remote_tmp)
 
     # -------------------------------------------------------------------------
     # Command Execution
@@ -285,15 +296,8 @@ class PostWinRM(BaseRunner):
         try:
             output = self._run_cmd_with_retry(remote_tmp)
         finally:
-            # Clean up
-            try:
-                self.run_ps(
-                    f'Remove-Item -Force "{remote_tmp}" -ErrorAction SilentlyContinue'
-                )
-            except Exception as e:
-                logger.debug("Failed to remove remote temp file %s: %s", remote_tmp, e)
-            if remote_tmp in self._remote_temp_files:
-                self._remote_temp_files.remove(remote_tmp)
+            self._remove_remote_temp_file(remote_tmp)
+            self._forget_remote_temp_file(remote_tmp)
 
         return output
 
@@ -409,8 +413,5 @@ class PostWinRM(BaseRunner):
     def cleanup(self) -> None:
         """Clean up remote temp files."""
         for f in self._remote_temp_files:
-            try:
-                self.run_ps(f'Remove-Item -Force "{f}" -ErrorAction SilentlyContinue')
-            except Exception as e:
-                logger.debug("Failed to remove remote temp file %s: %s", f, e)
+            self._remove_remote_temp_file(f)
         self._remote_temp_files.clear()

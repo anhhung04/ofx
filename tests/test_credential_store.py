@@ -215,3 +215,92 @@ class TestStoreFromTypedOutputs:
         monkeypatch.setattr(builtins, "__import__", mock_import)
         store_from_typed_outputs([account], log_fn=messages.append)
         assert any("unavailable" in m or "Credential store" in m for m in messages)
+
+
+class TestStoreAndLogTypedOutputs:
+    def test_logs_standard_success_message_once(self):
+        from ofx.runner.services.credential_store import store_and_log_typed_outputs
+        from ofx.tasks.output_types import UserAccount
+
+        info_messages: list[str] = []
+
+        result = store_and_log_typed_outputs(
+            [UserAccount(username="admin", password="pw")],
+            debug_fn=lambda _message: None,
+            info_fn=info_messages.append,
+        )
+
+        assert result == 0
+        assert info_messages == []
+
+    def test_delegates_storage_and_logs_success(self, monkeypatch):
+        import ofx.runner.services.credential_store as mod
+
+        info_messages: list[str] = []
+
+        monkeypatch.setattr(mod, "store_from_typed_outputs", lambda *_args, **_kwargs: 2)
+
+        result = mod.store_and_log_typed_outputs(
+            [object()],
+            debug_fn=lambda _message: None,
+            info_fn=info_messages.append,
+        )
+
+        assert result == 2
+        assert info_messages == ["Stored 2 credential(s) in credential store"]
+
+
+class TestCredentialStoreHelpers:
+    def test_should_store_creds_and_duplicate_matching_behavior(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        from ofx.runner.services.credential_store import (
+            should_store_creds,
+            store_from_typed_outputs,
+        )
+        from ofx.tasks.output_types import UserAccount
+
+        account = UserAccount(username="user1", password="secret")
+
+        cred = account.to_credential()
+        existing = SimpleNamespace(password=cred.password, hash=cred.hash, domain=cred.domain)
+        duplicate_db = SimpleNamespace(
+            get_credential=lambda _username: existing,
+            add_credential=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not add")),
+        )
+        with patch(
+            "ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=duplicate_db
+        ):
+            assert store_from_typed_outputs([account], log_fn=lambda _msg: None) == 0
+        assert should_store_creds(None, SimpleNamespace(defaults=SimpleNamespace(store_creds=True)), False) is True
+        assert should_store_creds(None, SimpleNamespace(defaults=SimpleNamespace(store_creds=False)), False) is False
+
+    def test_store_from_typed_outputs_returns_zero_for_duplicate_or_error(self):
+        from types import SimpleNamespace
+
+        from ofx.runner.services.credential_store import (
+            store_from_typed_outputs,
+        )
+        from ofx.tasks.output_types import UserAccount
+        from unittest.mock import patch
+
+        account = UserAccount(username="user1", password="secret")
+        cred = account.to_credential()
+        duplicate_db = SimpleNamespace(
+            get_credential=lambda _username: SimpleNamespace(password=cred.password, hash=cred.hash, domain=cred.domain),
+            add_credential=lambda **_kwargs: (_ for _ in ()).throw(AssertionError("should not add")),
+        )
+        with patch(
+            "ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=duplicate_db
+        ):
+            assert store_from_typed_outputs([account], log_fn=lambda _msg: None) == 0
+
+        error_db = SimpleNamespace(
+            get_credential=lambda _username: None,
+            add_credential=lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        with patch(
+            "ofx.api.creds.exegol_history.ExegolHistoryDB", return_value=error_db
+        ):
+            assert store_from_typed_outputs([account], log_fn=lambda _msg: None) == 0

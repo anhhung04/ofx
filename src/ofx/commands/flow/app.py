@@ -15,6 +15,10 @@ from ofx.commands.project.project_manager import ProjectManager
 
 logger = logging.getLogger("ofx")
 
+ALLOWED_WORKFLOW_FILE_EXTENSIONS = None
+get_workflow_search_dirs = None
+yaml_safe_load = None
+
 
 class VisualizeFormat(str, enum.Enum):
     terminal = "terminal"
@@ -51,7 +55,13 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
     segment at a time (like file-path completion), which avoids shell
     issues with ``/`` inside completion values.
     """
-    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, get_workflow_search_dirs
+    workflow_file_extensions = ALLOWED_WORKFLOW_FILE_EXTENSIONS
+    if workflow_file_extensions is None:
+        from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS as workflow_file_extensions
+
+    workflow_search_dirs_getter = get_workflow_search_dirs
+    if workflow_search_dirs_getter is None:
+        from ofx.settings import get_workflow_search_dirs as workflow_search_dirs_getter
 
     # Normalise backslash to forward-slash so Windows paths work too
     incomplete = incomplete.replace("\\", "/")
@@ -64,7 +74,7 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
 
     names: set[str] = set()
 
-    for d in get_workflow_search_dirs():
+    for d in workflow_search_dirs_getter():
         if not d.is_dir():
             continue
         search_root = d / prefix if prefix else d
@@ -81,7 +91,7 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
             if child.is_dir():
                 # Only suggest directories that contain workflow files
                 has_workflows = any(
-                    f.suffix in ALLOWED_WORKFLOW_FILE_EXTENSIONS
+                    f.suffix in workflow_file_extensions
                     for f in child.rglob("*")
                     if f.is_file()
                 )
@@ -90,7 +100,7 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
                 dirname = f"{rel_prefix}{child.name}/"
                 if dirname.startswith(incomplete):
                     names.add(dirname)
-            elif child.is_file() and child.suffix in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            elif child.is_file() and child.suffix in workflow_file_extensions:
                 wf_name = f"{rel_prefix}{child.stem}"
                 if wf_name.startswith(incomplete):
                     names.add(wf_name)
@@ -100,18 +110,28 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
 
 def _complete_tag_names(incomplete: str) -> list[str]:
     """Shell completion for workflow tags."""
-    import yaml
+    workflow_file_extensions = ALLOWED_WORKFLOW_FILE_EXTENSIONS
+    if workflow_file_extensions is None:
+        from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS as workflow_file_extensions
 
-    from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS, get_workflow_search_dirs
+    workflow_search_dirs_getter = get_workflow_search_dirs
+    if workflow_search_dirs_getter is None:
+        from ofx.settings import get_workflow_search_dirs as workflow_search_dirs_getter
+
+    safe_load = yaml_safe_load
+    if safe_load is None:
+        import yaml
+
+        safe_load = yaml.safe_load
 
     tags: set[str] = set()
-    for d in get_workflow_search_dirs():
+    for d in workflow_search_dirs_getter():
         if not d.is_dir():
             continue
-        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+        for ext in workflow_file_extensions:
             for path in d.rglob(f"*{ext}"):
                 with suppress(Exception):
-                    data = yaml.safe_load(path.read_text())
+                    data = safe_load(path.read_text())
                     if isinstance(data, dict):
                         for t in data.get("tags") or []:
                             t_lower = str(t).lower()

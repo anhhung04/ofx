@@ -7,32 +7,26 @@ from typing import Any
 
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.cloud_job import cloud_job_log_prefix
 from ofx.runner.context import RunContext
 from ofx.runner.executors.fleet import FleetExecutor
-from ofx.runner.logging import bubble_tagged_log
-from ofx.runner.runner import BaseRunner
+from ofx.runner.runner import Runner
 
 
-class CloudFleetRunner(BaseRunner[Job]):
+class CloudFleetRunner(Runner[Job]):
     def __init__(
         self,
         job: Job,
         ctx: RunContext,
-        parent: BaseRunner[Workflow],
+        parent: Runner[Workflow],
         executor: FleetExecutor | None = None,
     ):
-        fleet_executor = executor or FleetExecutor()
-        self._fleet_executor: FleetExecutor = fleet_executor
-        super().__init__(job, ctx, parent, executor=fleet_executor)
+        super().__init__(job, ctx, parent, executor=executor or FleetExecutor())
         self.name = f"CloudFleet{self.name}"
         self._fleet_combos: list[dict[str, Any]] = []
         self._chunk_files: list[Path] = []
 
     def _produce_log(self, message: Any) -> str:
-        return bubble_tagged_log(
-            self.parent,
-            message,
-            prefix=cloud_job_log_prefix(self.model.jid, quote_job_id=True),
-            tags=("cloud-fleet",),
-        )
+        formatted = f"'{self.model.jid}' [cloud-fleet] › {message}"
+        if self.parent is not None:
+            return self.parent._produce_log(formatted)
+        return formatted

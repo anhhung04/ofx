@@ -1,15 +1,15 @@
-"""Tests for runner services: CloudProvisioner, SecretRedactor."""
+"""Tests for runner services: CloudProvisioner."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from ofx.models.cloud import CloudConfig
 from ofx.runner.services.cloud_provisioner import CloudProvisioner
-from ofx.runner.services.secret_redactor import SecretRedactor
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,7 +62,13 @@ class FakeRegistry:
 
 
 class TestCloudProvisionerBuildKwargs:
-    """Tests for _build_provider_kwargs static method."""
+    """Tests for shared provider kwargs builder."""
+
+    @staticmethod
+    def _build_provider_kwargs(cfg):
+        from ofx.cloud.runtime import build_provider_kwargs
+
+        return build_provider_kwargs(cfg)
 
     def test_static_provider(self):
         cfg = CloudConfig(
@@ -73,7 +79,7 @@ class TestCloudProvisionerBuildKwargs:
             ssh_key="/tmp/id_rsa",
             ssh_password="pass",
         )
-        kw = CloudProvisioner._build_provider_kwargs(cfg)
+        kw = self._build_provider_kwargs(cfg)
         assert kw["host"] == "10.0.0.1"
         assert kw["user"] == "admin"
         assert kw["port"] == 2222
@@ -82,18 +88,18 @@ class TestCloudProvisionerBuildKwargs:
 
     def test_static_no_key(self):
         cfg = CloudConfig(provider="static", host="10.0.0.1")
-        kw = CloudProvisioner._build_provider_kwargs(cfg)
+        kw = self._build_provider_kwargs(cfg)
         assert "identity_file" not in kw
         assert "password" not in kw
 
     def test_digitalocean_provider(self):
         cfg = CloudConfig(provider="digitalocean", extra={"token": "dop_v1_xyz"})
-        kw = CloudProvisioner._build_provider_kwargs(cfg)
+        kw = self._build_provider_kwargs(cfg)
         assert kw["token"] == "dop_v1_xyz"
 
     def test_digitalocean_no_token(self):
         cfg = CloudConfig(provider="digitalocean")
-        kw = CloudProvisioner._build_provider_kwargs(cfg)
+        kw = self._build_provider_kwargs(cfg)
         assert "token" not in kw
 
     def test_aws_provider(self):
@@ -106,21 +112,63 @@ class TestCloudProvisionerBuildKwargs:
                 "region_name": "eu-west-1",
             },
         )
-        kw = CloudProvisioner._build_provider_kwargs(cfg)
+        kw = self._build_provider_kwargs(cfg)
         assert kw["aws_access_key_id"] == "AKIA"
         assert kw["aws_secret_access_key"] == "secret"
         assert kw["region"] == "eu-west-1"
 
     def test_aws_default_region(self):
         cfg = CloudConfig(provider="aws")
-        kw = CloudProvisioner._build_provider_kwargs(cfg)
+        kw = self._build_provider_kwargs(cfg)
         assert kw["region"] == "us-east-1"
 
     def test_unknown_provider_returns_empty(self):
         cfg = CloudConfig(provider="gcp")
-        kw = CloudProvisioner._build_provider_kwargs(cfg)
+        kw = self._build_provider_kwargs(cfg)
         assert kw == {}
 
+
+class TestCloudProvisionerHelpers:
+    def test_runtime_windows_config_matches_provisioner(self):
+        from ofx.cloud.runtime import is_windows_config
+
+        windows_cfg = CloudConfig(connection_type="winrm")
+        linux_cfg = CloudConfig()
+
+        assert is_windows_config(windows_cfg) is True
+        assert is_windows_config(linux_cfg) is False
+
+    def test_runtime_build_provider_kwargs_supports_pydantic_extra(self):
+        from ofx.cloud.runtime import build_provider_kwargs
+
+        cfg = SimpleNamespace(
+            provider="digitalocean",
+            region="",
+            __pydantic_extra__={"token": "dop_v1_xyz"},
+        )
+
+        assert build_provider_kwargs(cfg) == {"token": "dop_v1_xyz"}
+
+    def test_remote_join_normalizes_linux_path_parts(self):
+        from ofx.cloud.runtime import remote_join
+
+        assert (
+            remote_join("/tmp/ofx-run/", "/output/", "child.txt", is_windows=False)
+            == "/tmp/ofx-run/output/child.txt"
+        )
+
+    def test_remote_join_normalizes_windows_path_parts(self):
+        from ofx.cloud.runtime import remote_join
+
+        assert (
+            remote_join(
+                r"C:\Windows\Temp\.ses-123/",
+                r"\output\\",
+                "child.txt",
+                is_windows=True,
+            )
+            == r"C:\Windows\Temp\.ses-123\output\child.txt"
+        )
 
 class TestCloudProvisionerProvision:
     """Tests for the async provision path."""
@@ -134,9 +182,7 @@ class TestCloudProvisionerProvision:
         with (
             patch("ofx.cloud.ssh.wait_for_connectivity", new_callable=AsyncMock),
             patch("ofx.cloud.ssh.wait_for_login", new_callable=AsyncMock),
-            patch.object(
-                CloudProvisioner, "_create_remote_runner", return_value=MagicMock()
-            ),
+            patch("ofx.runner.services.cloud_provisioner.create_remote_runner", return_value=MagicMock()),
         ):
             provider, instance, runner, work_dir = await provisioner.provision(cfg)
         assert instance.ip == "1.2.3.4"
@@ -147,12 +193,12 @@ class TestCloudProvisionerProvision:
         with (
             patch("ofx.cloud.ssh.wait_for_connectivity", new_callable=AsyncMock),
             patch("ofx.cloud.ssh.wait_for_login", new_callable=AsyncMock),
-            patch.object(
-                CloudProvisioner, "_create_remote_runner", return_value=MagicMock()
-            ),
+            patch("ofx.runner.services.cloud_provisioner.create_remote_runner", return_value=MagicMock()),
+            patch("ofx.runner.logging.get_logger") as get_logger,
         ):
             _, instance, _, _ = await provisioner.provision(cfg)
         assert instance.ip == "1.2.3.4"
+        get_logger.return_value.info.assert_called_once()
 
     async def test_provision_no_ip_raises(self):
         no_ip = FakeInstance(ip="")
@@ -167,9 +213,7 @@ class TestCloudProvisionerProvision:
         with (
             patch("ofx.cloud.ssh.wait_for_connectivity", new_callable=AsyncMock),
             patch("ofx.cloud.ssh.wait_for_login", new_callable=AsyncMock),
-            patch.object(
-                CloudProvisioner, "_create_remote_runner", return_value=MagicMock()
-            ),
+            patch("ofx.runner.services.cloud_provisioner.create_remote_runner", return_value=MagicMock()),
         ):
             _, _, _, work_dir = await prov.provision(cfg)
         assert "C:\\Windows\\Temp" in work_dir
@@ -202,9 +246,13 @@ class TestCloudProvisionerDestroy:
         prov = CloudProvisioner(FakeRegistry())
         await prov.destroy(FakeProvider(), None)  # should not raise
 
+    async def test_destroy_skips_missing_provider(self):
+        prov = CloudProvisioner(FakeRegistry())
+        await prov.destroy(None, FakeInstance())  # should not raise
+
 
 class TestCloudProvisionerCreateRunner:
-    """Tests for _create_remote_runner."""
+    """Tests for shared remote runner creation helper."""
 
     def test_creates_ssh_runner(self):
         cfg = CloudConfig(
@@ -214,9 +262,11 @@ class TestCloudProvisionerCreateRunner:
             ssh_port=2222,
             ssh_key="/tmp/key",
         )
+        from ofx.cloud.runtime import create_remote_runner
+
         with patch("ofx.api.post.RunnerRegistry") as mock_reg:
             mock_reg.create.return_value = MagicMock()
-            CloudProvisioner._create_remote_runner(cfg, "10.0.0.1")
+            create_remote_runner(cfg, "10.0.0.1")
             mock_reg.create.assert_called_once()
             call_kwargs = mock_reg.create.call_args
             assert call_kwargs[0][0] == "ssh"
@@ -231,50 +281,11 @@ class TestCloudProvisionerCreateRunner:
             winrm_user="Admin",
             winrm_password="P@ss",
         )
+        from ofx.cloud.runtime import create_remote_runner
+
         with patch("ofx.api.post.RunnerRegistry") as mock_reg:
             mock_reg.create.return_value = MagicMock()
-            CloudProvisioner._create_remote_runner(cfg, "10.0.0.1")
+            create_remote_runner(cfg, "10.0.0.1")
             call_kwargs = mock_reg.create.call_args
             assert call_kwargs[0][0] == "winrm"
             assert call_kwargs[1]["username"] == "Admin"
-
-
-# =========================================================================
-# SecretRedactor
-# =========================================================================
-
-
-class TestSecretRedactor:
-    """Tests for SecretRedactor."""
-
-    def test_register_calls_filter(self):
-        with patch("ofx.utils.log.SecretRedactFilter") as mock_filter:
-            instance = MagicMock()
-            mock_filter.get_instance.return_value = instance
-            SecretRedactor.register(["s3cret", "p@ssword"])
-            instance.register_values.assert_called_once()
-            registered = instance.register_values.call_args[0][0]
-            assert "s3cret" in registered
-            assert "p@ssword" in registered
-
-    def test_register_filters_empty_and_none(self):
-        with patch("ofx.utils.log.SecretRedactFilter") as mock_filter:
-            instance = MagicMock()
-            mock_filter.get_instance.return_value = instance
-            SecretRedactor.register(["secret", "", None])
-            registered = instance.register_values.call_args[0][0]
-            assert registered == {"secret"}
-
-    def test_register_empty_iterable_noop(self):
-        with patch("ofx.utils.log.SecretRedactFilter") as mock_filter:
-            instance = MagicMock()
-            mock_filter.get_instance.return_value = instance
-            SecretRedactor.register([])
-            instance.register_values.assert_not_called()
-
-    def test_register_all_none_noop(self):
-        with patch("ofx.utils.log.SecretRedactFilter") as mock_filter:
-            instance = MagicMock()
-            mock_filter.get_instance.return_value = instance
-            SecretRedactor.register([None, None, ""])
-            instance.register_values.assert_not_called()

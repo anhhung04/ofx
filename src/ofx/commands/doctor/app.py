@@ -24,17 +24,15 @@ class CheckResult:
     detail: str
 
 
-def _status_style(status: str) -> str:
-    return {"pass": "green", "warn": "yellow", "fail": "red"}.get(status, "white")
+def _check_status_style(status: str) -> str:
+    return {"pass": "green", "warn": "yellow", "fail": "red"}.get(
+        status, "white"
+    )
 
 
-def _cfg_extra(cfg: Any) -> dict[str, Any]:
-    extra = getattr(cfg, "extra", None) or {}
-    if extra:
-        return dict(extra)
-    pydantic_extra = getattr(cfg, "__pydantic_extra__", None) or {}
-    return dict(pydantic_extra)
-
+def _doctor_error(console, message: str, code: int = 1, exc: Exception | None = None) -> None:
+    console.print(f"[red]{message}[/red]")
+    raise typer.Exit(code=code) from exc
 
 def _score_fleet_config(cfg: Any, provider_registered: bool) -> list[CheckResult]:
     checks: list[CheckResult] = []
@@ -50,7 +48,11 @@ def _score_fleet_config(cfg: Any, provider_registered: bool) -> list[CheckResult
         )
     )
 
-    extras = _cfg_extra(cfg)
+    extras = getattr(cfg, "extra", None) or {}
+    if extras:
+        extras = dict(extras)
+    else:
+        extras = dict(getattr(cfg, "__pydantic_extra__", None) or {})
     if provider == "digitalocean":
         token = extras.get("token")
         checks.append(
@@ -182,16 +184,12 @@ def doctor_fleet(
 
     profile_name = profile or mgr.default_profile_name
     if not profile_name:
-        console.print(
-            "[red]No profile specified and no default cloud profile set.[/red]"
-        )
-        raise typer.Exit(code=1)
+        _doctor_error(console, "No profile specified and no default cloud profile set.")
 
     try:
         resolved = mgr.resolve(CloudConfig(profile=profile_name))
     except Exception as exc:
-        console.print(f"[red]Failed to resolve profile '{profile_name}': {exc}[/red]")
-        raise typer.Exit(code=1) from exc
+        _doctor_error(console, f"Failed to resolve profile '{profile_name}': {exc}", exc=exc)
 
     provider = resolved.provider or "static"
     provider_registered = CloudProviderRegistry.get(provider) is not None
@@ -230,7 +228,7 @@ def doctor_fleet(
             fails += 1
         elif c.status == "warn":
             warns += 1
-        style = _status_style(c.status)
+        style = _check_status_style(c.status)
         table.add_row(c.name, f"[{style}]{c.status.upper()}[/{style}]", c.detail)
 
     console.print(table)

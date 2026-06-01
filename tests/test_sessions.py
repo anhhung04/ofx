@@ -10,6 +10,7 @@ import tarfile
 import textwrap
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -179,6 +180,17 @@ class TestSessionStore:
         assert len(cloud) == 1
         assert cloud[0].id == "ccc"
 
+    def test_list_sessions_skips_corrupt_metadata(self, tmp_path):
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        store.save(Session(id="good", workflow_file="w.yml"))
+        bad_dir = tmp_path / "sessions" / "bad"
+        bad_dir.mkdir(parents=True)
+        (bad_dir / "session.json").write_text("{not-json")
+
+        sessions = store.list_sessions()
+
+        assert [session.id for session in sessions] == ["good"]
+
     def test_results_dir(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
         store.save(Session(id="abc12345", workflow_file="w.yml"))
@@ -272,6 +284,27 @@ class TestScriptBuilder:
         )
         assert "export TARGET=" in script
         assert "export PORT=" in script
+
+    def test_bash_env_vars_skip_reserved_keys(self):
+        steps = [self._make_step(run="env")]
+        script = build_session_script(
+            steps,
+            session_id="aabb",
+            work_dir="/tmp/test",
+            env={"PATH": "/tmp/custom", "TARGET": "10.0.0.1"},
+        )
+        assert "export TARGET=" in script
+        assert 'export PATH="/tmp/custom"' not in script
+
+    def test_invalid_env_var_name_raises(self):
+        steps = [self._make_step(run="env")]
+        with pytest.raises(ValueError, match="Invalid environment variable name"):
+            build_session_script(
+                steps,
+                session_id="aabb",
+                work_dir="/tmp/test",
+                env={"BAD-NAME": "oops"},
+            )
 
     def test_bash_continue_on_error(self):
         steps = [self._make_step(run="might-fail", continue_on_error=True)]
@@ -675,6 +708,49 @@ class TestSessionManagerLocal:
         logs = asyncio.run(mgr.logs(session.id))
         assert "Session" in logs or "started" in logs
 
+    def test_check_local_status_alive_without_marker_stays_running(self, tmp_path):
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+        session = Session(
+            id="localrun1",
+            workflow_file="wf.yml",
+            target=SessionTarget.LOCAL,
+            status=SessionStatus.RUNNING,
+            remote_pid=1234,
+            remote_log_file=str(tmp_path / "output.log"),
+        )
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("os.kill", lambda pid, sig: None)
+            mp.setattr("builtins.open", lambda *args, **kwargs: (_ for _ in ()).throw(FileNotFoundError()))
+            mp.setattr("pathlib.Path.exists", lambda self: False)
+            result = mgr._check_local_status(session)
+
+        assert result.status == SessionStatus.RUNNING
+
+    def test_check_local_status_exited_without_marker_fails(self, tmp_path):
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+        session = Session(
+            id="localrun2",
+            workflow_file="wf.yml",
+            target=SessionTarget.LOCAL,
+            status=SessionStatus.RUNNING,
+            remote_pid=1234,
+            remote_log_file=str(tmp_path / "output.log"),
+        )
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "os.kill",
+                lambda pid, sig: (_ for _ in ()).throw(ProcessLookupError()),
+            )
+            mp.setattr("pathlib.Path.exists", lambda self: False)
+            result = mgr._check_local_status(session)
+
+        assert result.status == SessionStatus.FAILED
+        assert result.error == "Process exited without success marker"
+
     def test_fetch_results(self, tmp_path):
         """Fetch transparently decrypts at-rest encrypted output."""
         wf_path = self._create_test_workflow(tmp_path)
@@ -763,6 +839,30 @@ class TestSessionManagerLocal:
         except ProcessLookupError:
             pass  # Expected
 
+    def test_destroy_local_cleans_workspace(self, tmp_path):
+        wf_path = self._create_test_workflow(tmp_path)
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+
+        session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
+        work_dir = Path(session.remote_work_dir)
+
+        import time
+
+        for _ in range(50):
+            time.sleep(0.1)
+            session = asyncio.run(mgr.status(session.id))
+            if session.is_done():
+                break
+
+        assert work_dir.exists()
+
+        session = asyncio.run(mgr.destroy(session.id))
+
+        assert session.status == SessionStatus.DESTROYED
+        assert not work_dir.exists()
+        assert store.load(session.id).status == SessionStatus.DESTROYED
+
     def test_bundle_artifacts_creates_tar(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -832,6 +932,64 @@ class TestSessionManagerLocal:
         assert manifest["job_id"] == "second-job"
         assert manifest["execution_scope"] == "second-job"
 
+    def test_bundle_artifacts_includes_project_logs(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+
+        project_path = tmp_path / "project"
+        logs_dir = project_path / "logs"
+        logs_dir.mkdir(parents=True)
+        (logs_dir / "scan.log").write_text("project log")
+
+        results_dir = store.results_dir("projbundle")
+        (results_dir / "result.txt").write_text("result")
+
+        session = Session(
+            id="projbundle",
+            workflow_file="wf.yml",
+            status=SessionStatus.FETCHED,
+            project="demo-project",
+            results_path=str(results_dir),
+        )
+        store.save(session)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "ofx.commands.project.project_manager.ProjectManager.resolve_path",
+                lambda name: str(project_path),
+            )
+            bundle = asyncio.run(mgr.bundle_artifacts(session.id))
+
+        with tarfile.open(bundle, "r:gz") as tf:
+            names = tf.getnames()
+
+        assert "project_logs/scan.log" in names
+
+    def test_resolve_results_dir_uses_project_evidence_path(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        project_path = tmp_path / "project"
+        project_path.mkdir()
+        session = Session(
+            id="projresults",
+            workflow_file="wf.yml",
+            project="demo-project",
+        )
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "ofx.commands.project.project_manager.ProjectManager.resolve_path",
+                lambda name: str(project_path),
+            )
+            results_dir = mgr._resolve_results_dir(session)
+
+        assert results_dir == project_path / "evidence" / "sessions" / "projresults"
+        assert results_dir.exists()
+
     def test_fetch_while_running_raises(self, tmp_path):
         wf = tmp_path / "long_running.yml"
         wf.write_text(
@@ -892,20 +1050,6 @@ class TestSessionManagerDecrypt:
 
 class TestSessionInputInjection:
     """Tests for session input → env var injection and local file staging."""
-
-    def test_inputs_to_env_scalar(self):
-        from ofx.cloud.sessions.manager import _inputs_to_env
-
-        env = _inputs_to_env({"targets_file": "/tmp/hosts.txt", "count": 5})
-        assert env["targets_file"] == "/tmp/hosts.txt"
-        assert env["INPUT_TARGETS_FILE"] == "/tmp/hosts.txt"
-        assert env["count"] == "5"
-        assert env["INPUT_COUNT"] == "5"
-
-    def test_inputs_to_env_empty(self):
-        from ofx.cloud.sessions.manager import _inputs_to_env
-
-        assert _inputs_to_env({}) == {}
 
     def test_local_submit_injects_env(self, tmp_path):
         """Local session script contains INPUT_ env vars for workflow inputs."""
@@ -1016,25 +1160,484 @@ class TestSessionInputInjection:
         finally:
             settings_mod.DEFAULT_WORKFLOWS_DIRS = original_dirs
 
-    def test_upload_local_file_inputs_failure_raises(self, tmp_path):
-        """Cloud file upload helper must fail fast on upload errors."""
-        from ofx.cloud.sessions.manager import _upload_local_file_inputs
+    def test_start_cloud_remote_submit_raises_on_input_upload_failure(self, tmp_path):
+        """Cloud submit startup must fail fast on upload errors."""
+        from ofx.cloud.sessions import SessionManager
+        from types import SimpleNamespace
 
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
         src = tmp_path / "hosts.txt"
         src.write_text("10.0.0.1\n")
+        session = Session(
+            id="cloudscriptfail",
+            workflow_file="wf.yml",
+            inputs={"targets_file": str(src)},
+        )
+        target = SimpleNamespace(
+            resolved="resolved-config",
+            instance=SimpleNamespace(ip="10.0.0.8"),
+            os_type="linux",
+            is_windows=False,
+        )
+        runtime = SimpleNamespace(
+            session=session,
+            remote_work_dir="/tmp/.ses-1",
+            at_rest_key="key123",
+            remote_log="/tmp/.ses-1/output.log",
+            sep="/",
+            merged_env={},
+        )
 
-        class _FailingRemote:
-            def upload(self, local_path, remote_path):
-                raise RuntimeError("upload broke")
+        remote = SimpleNamespace(
+            upload=lambda local_path, remote_path: (_ for _ in ()).throw(
+                RuntimeError("upload broke")
+            ),
+            run=lambda *args, **kwargs: "",
+            cleanup=lambda: None,
+        )
 
-        with pytest.raises(RuntimeError, match="Failed to upload session input file"):
-            _upload_local_file_inputs(
-                {"targets_file": str(src)},
-                _FailingRemote(),
-                "/tmp/.ses-1",
-                "/",
-                is_windows=False,
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("ofx.cloud.runtime.create_remote_runner", lambda *_args, **_kwargs: remote)
+            with pytest.raises(RuntimeError, match="Failed to upload session input file"):
+                mgr._start_cloud_remote_submit(
+                    [Step(run="echo ok")],
+                    target=target,
+                    runtime=runtime,
+                    workflow_dir=None,
+                    workflow_name="wf-name",
+                )
+
+
+class TestSessionSubmitHelpers:
+    def test_resolved_cloud_submit_state_normalizes_connection_defaults(self):
+        from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
+
+        resolved = SimpleNamespace(os="windows")
+        state = SessionManager._resolved_cloud_submit_state(resolved)
+
+        assert state.os_type == "windows"
+        assert state.is_windows is True
+        assert state.session_update["ssh_user"] == "root"
+        assert state.session_update["winrm_user"] == "Administrator"
+        assert state.session_update["winrm_port"] == 5985
+
+    def test_reconnect_uses_normalized_connection_defaults(self):
+        from ofx.cloud.sessions import SessionManager
+
+        session = Session(
+            id="cfg12345",
+            workflow_file="wf.yml",
+            instance_ip="10.0.0.9",
+            os_type="windows",
+            ssh_user="svc-user",
+            ssh_password="secret",
+            winrm_user="",
+            winrm_ssl=True,
+            winrm_port=5986,
+        )
+        manager = SessionManager()
+        seen: list[tuple[object, str, int]] = []
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "ofx.cloud.runtime.create_remote_runner",
+                lambda cfg, host, max_retries=0: seen.append((cfg, host, max_retries)) or "remote",
             )
+            remote = manager._reconnect(session)
+
+        cfg, host, max_retries = seen[0]
+        assert remote == "remote"
+        assert cfg.connection_type == "winrm"
+        assert cfg.ssh_user == "svc-user"
+        assert cfg.winrm_user == "svc-user"
+        assert cfg.winrm_password == "secret"
+        assert cfg.winrm_port == 5986
+        assert host == "10.0.0.9"
+        assert max_retries == 2
+
+    def test_resolved_cloud_submit_state_reuses_normalized_connection_values(self):
+        from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
+
+        resolved = SimpleNamespace(provider="static", os="windows", winrm_ssl=True)
+
+        state = SessionManager._resolved_cloud_submit_state(resolved)
+
+        assert state.os_type == "windows"
+        assert state.is_windows is True
+        assert state.session_update["cloud_provider"] == "static"
+        assert state.session_update["os_type"] == "windows"
+        assert state.session_update["ssh_user"] == "root"
+        assert state.session_update["winrm_user"] == "Administrator"
+        assert state.session_update["winrm_port"] == 5986
+
+    def test_local_submit_passes_session_id_into_process_env(self, tmp_path):
+        import asyncio
+        from types import SimpleNamespace
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+        wf_file = tmp_path / "scan.yml"
+        wf_file.write_text(
+            "name: scan\njobs:\n  scan:\n    steps:\n      - run: echo ok\n"
+        )
+        captured_env: dict[str, str] = {}
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "subprocess.Popen",
+                lambda *args, **kwargs: captured_env.update(kwargs["env"]) or SimpleNamespace(pid=4321),
+            )
+            session = asyncio.run(
+                mgr.submit(
+                    str(wf_file),
+                    target=SessionTarget.LOCAL,
+                    env={"MODE": "fast"},
+                )
+            )
+
+        assert session.remote_pid == 4321
+        assert captured_env["SESSION_ID"] == session.id
+        assert captured_env["MODE"] == "fast"
+
+    @pytest.mark.asyncio
+    async def test_prepare_cloud_submit_target_sequences_setup(self, tmp_path):
+        from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(id="cloudprep", workflow_file="wf.yml")
+        resolved = SimpleNamespace(os="windows", provider="static")
+        instance = SimpleNamespace(ip="10.0.0.5")
+        calls: list[tuple] = []
+
+        with pytest.MonkeyPatch.context() as mp:
+            class _Manager:
+                def resolve(self, cfg):
+                    assert cfg.profile == "demo-profile"
+                    return resolved
+
+            mp.setattr(
+                "ofx.cloud.config.get_cloud_profile_manager",
+                lambda: _Manager(),
+            )
+
+            def _save_session(current, update):
+                calls.append(("save", update))
+                return current.model_copy(update=update)
+
+            async def _provision(current, resolved_cfg):
+                calls.append(("provision", resolved_cfg))
+                return current, instance
+
+            async def _await_login(ip, resolved_cfg, *, is_windows):
+                calls.append(("login", ip, resolved_cfg, is_windows))
+
+            mp.setattr(mgr, "_save_session", _save_session)
+            mp.setattr(mgr, "_provision_submit_cloud_instance", _provision)
+            mp.setattr(mgr, "_await_submit_cloud_login", _await_login)
+
+            prepared = await mgr._prepare_cloud_submit_target(session, "demo-profile")
+
+        assert prepared.session.id == "cloudprep"
+        assert prepared.resolved is resolved
+        assert prepared.instance is instance
+        assert prepared.os_type == "windows"
+        assert prepared.is_windows is True
+        assert calls[0][0] == "save"
+        assert calls[1] == ("provision", resolved)
+        assert calls[2] == ("login", "10.0.0.5", resolved, True)
+
+    def test_prepare_cloud_submit_runtime_sets_at_rest_state(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="cloudrun",
+            workflow_file="wf.yml",
+            job_id="job-1",
+            inputs={"targets_file": "/tmp/hosts.txt", "count": 5},
+        )
+        steps = [Step(run="echo ok")]
+
+        prepared = mgr._prepare_cloud_submit_runtime(
+            steps,
+            session=session,
+            env={"MODE": "fast"},
+            workflow_name="wf-name",
+            os_type="linux",
+            is_windows=False,
+        )
+
+        assert prepared.session.at_rest_encrypted is True
+        assert prepared.session.at_rest_key == prepared.at_rest_key
+        assert prepared.remote_work_dir == "/tmp/.ses-cloudrun"
+        assert prepared.remote_log == "/tmp/.ses-cloudrun/output.log"
+        assert prepared.sep == "/"
+        assert prepared.merged_env["targets_file"] == "/tmp/hosts.txt"
+        assert prepared.merged_env["INPUT_TARGETS_FILE"] == "/tmp/hosts.txt"
+        assert prepared.merged_env["count"] == "5"
+        assert prepared.merged_env["INPUT_COUNT"] == "5"
+        assert prepared.merged_env["MODE"] == "fast"
+        assert "wf-name" in prepared.script_content
+
+    def test_start_cloud_remote_submit_merges_uploaded_input_overrides_once(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from types import SimpleNamespace
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="cloudscript",
+            workflow_file="wf.yml",
+            inputs={"targets_file": str(tmp_path / "local-targets.txt")},
+        )
+        Path(session.inputs["targets_file"]).write_text("10.0.0.1\n")
+        steps = [Step(run="echo ok")]
+        uploads: list[tuple[str, str]] = []
+        temp_uploads: list[tuple[str, str]] = []
+        target = SimpleNamespace(
+            resolved="resolved-config",
+            instance=SimpleNamespace(ip="10.0.0.8"),
+            os_type="linux",
+            is_windows=False,
+        )
+        runtime = SimpleNamespace(
+            session=session,
+            remote_work_dir="/remote",
+            at_rest_key="key123",
+            remote_log="/remote/output.log",
+            sep="/",
+            merged_env={"MODE": "fast"},
+        )
+        remote = SimpleNamespace(
+            upload=lambda local_path, remote_path: uploads.append((local_path, remote_path)),
+            run=MagicMock(side_effect=["", "", "", "no\n", "42\n"]),
+            cleanup=lambda: None,
+        )
+
+        with (
+            patch.object(
+                mgr,
+                "_build_session_script_content",
+                return_value="echo ok",
+            ) as mock_build,
+            patch.object(mgr, "_upload_script_files"),
+            patch("ofx.cloud.runtime.create_remote_runner", return_value=remote),
+            patch(
+                "ofx.cloud.sessions.manager.upload_temp_content",
+                side_effect=lambda _remote, content, remote_path, suffix="": temp_uploads.append((content, remote_path)),
+            ),
+        ):
+            result = mgr._start_cloud_remote_submit(
+                steps,
+                target=target,
+                runtime=runtime,
+                workflow_dir=None,
+                workflow_name="wf-name",
+            )
+
+        assert result.remote_pid == 42
+        assert uploads == [(str(tmp_path / "local-targets.txt"), "/remote/local-targets.txt")]
+        assert temp_uploads == [
+            ("key123", "/remote/.skey"),
+            ("echo ok", "/remote/run.sh"),
+        ]
+        assert remote.run.mock_calls == [
+            (("mkdir -p /remote && chmod 700 /remote",), {}),
+            (("chmod 600 /remote/.skey",), {}),
+            (("chmod 700 /remote/run.sh",), {}),
+            (("command -v tmux >/dev/null 2>&1 && echo yes || echo no",), {}),
+            (("nohup bash /remote/run.sh > /remote/output.log 2>&1 & echo $!",), {}),
+        ]
+        mock_build.assert_called_once()
+        _, kwargs = mock_build.call_args
+        assert kwargs["session"].status == SessionStatus.UPLOADING
+        assert kwargs["work_dir"] == "/remote"
+        assert kwargs["workflow_name"] == "wf-name"
+        assert kwargs["env"] == {
+            "MODE": "fast",
+            "targets_file": "/remote/local-targets.txt",
+            "INPUT_TARGETS_FILE": "/remote/local-targets.txt",
+        }
+        assert kwargs["os_type"] == "linux"
+        assert result.remote_launcher == "nohup"
+        assert result.remote_tmux_session == ""
+
+    def test_start_cloud_remote_submit_tmux_launcher_quotes_remote_paths(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from types import SimpleNamespace
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(id="cloudtmux", workflow_file="wf.yml")
+        steps = [Step(run="echo ok")]
+        target = SimpleNamespace(
+            resolved="resolved-config",
+            instance=SimpleNamespace(ip="10.0.0.8"),
+            os_type="linux",
+            is_windows=False,
+        )
+        runtime = SimpleNamespace(
+            session=session,
+            remote_work_dir="/remote dir",
+            at_rest_key="key123",
+            remote_log="/remote dir/output.log",
+            sep="/",
+            merged_env={"MODE": "fast"},
+        )
+        remote = SimpleNamespace(
+            upload=lambda local_path, remote_path: None,
+            run=MagicMock(side_effect=["", "", "", "yes\n", "", "9876\n"]),
+            cleanup=lambda: None,
+        )
+        temp_uploads: list[tuple[str, str]] = []
+
+        with (
+            patch.object(mgr, "_build_session_script_content", return_value="echo ok"),
+            patch.object(mgr, "_upload_script_files"),
+            patch("ofx.cloud.runtime.create_remote_runner", return_value=remote),
+            patch(
+                "ofx.cloud.sessions.manager.upload_temp_content",
+                side_effect=lambda _remote, content, remote_path, suffix="": temp_uploads.append((content, remote_path)),
+            ),
+        ):
+            result = mgr._start_cloud_remote_submit(
+                steps,
+                target=target,
+                runtime=runtime,
+                workflow_dir=None,
+                workflow_name="wf-name",
+            )
+
+        assert result.remote_pid == 9876
+        assert result.remote_launcher == "tmux"
+        assert result.remote_tmux_session == "ofx-ses-cloudtmux"
+        tmux_start_cmd = remote.run.mock_calls[4].args[0]
+        assert "tmux new-session -d -s ofx-ses-cloudtmux" in tmux_start_cmd
+        assert "'/remote dir/run.sh'" in tmux_start_cmd
+        assert "'/remote dir/output.log'" in tmux_start_cmd
+        assert remote.run.mock_calls[5] == (("tmux list-panes -t ofx-ses-cloudtmux -F '#{pane_pid}' 2>/dev/null | head -n1",), {})
+
+    def test_start_cloud_remote_submit_windows_uses_start_process_launcher(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from types import SimpleNamespace
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(id="cloudwin", workflow_file="wf.yml")
+        steps = [Step(run="echo ok")]
+        target = SimpleNamespace(
+            resolved="resolved-config",
+            instance=SimpleNamespace(ip="10.0.0.8"),
+            os_type="windows",
+            is_windows=True,
+        )
+        runtime = SimpleNamespace(
+            session=session,
+            remote_work_dir=r"C:\Windows\Temp\.ses-cloudwin",
+            at_rest_key="key123",
+            remote_log=r"C:\Windows\Temp\.ses-cloudwin\output.log",
+            sep="\\",
+            merged_env={"MODE": "fast"},
+        )
+        remote = SimpleNamespace(
+            upload=lambda local_path, remote_path: None,
+            run=MagicMock(side_effect=["", "", "4321\n"]),
+            cleanup=lambda: None,
+        )
+        temp_uploads: list[tuple[str, str]] = []
+
+        with (
+            patch.object(mgr, "_build_session_script_content", return_value="echo ok"),
+            patch.object(mgr, "_upload_script_files"),
+            patch("ofx.cloud.runtime.create_remote_runner", return_value=remote),
+            patch(
+                "ofx.cloud.sessions.manager.upload_temp_content",
+                side_effect=lambda _remote, content, remote_path, suffix="": temp_uploads.append((content, remote_path)),
+            ),
+        ):
+            result = mgr._start_cloud_remote_submit(
+                steps,
+                target=target,
+                runtime=runtime,
+                workflow_dir=None,
+                workflow_name="wf-name",
+            )
+
+        assert result.remote_pid == 4321
+        assert result.remote_launcher == "start-process"
+        assert result.remote_tmux_session == ""
+
+    @pytest.mark.asyncio
+    async def test_submit_cloud_uses_prepared_target_and_runtime_objects(self, tmp_path):
+        from types import SimpleNamespace
+
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(id="cloudsubmit", workflow_file="wf.yml")
+        steps = [Step(run="echo ok")]
+        target = SimpleNamespace(
+            session=session,
+            resolved="resolved-config",
+            instance=SimpleNamespace(ip="10.0.0.8"),
+            os_type="linux",
+            is_windows=False,
+        )
+        runtime = SimpleNamespace(
+            session=session.model_copy(update={"at_rest_encrypted": True}),
+            remote_work_dir="/tmp/.ses-cloudsubmit",
+            at_rest_key="key123",
+            remote_log="/tmp/.ses-cloudsubmit/output.log",
+            sep="/",
+            merged_env={"MODE": "fast"},
+            script_content="echo ok",
+        )
+        calls: list[tuple[str, object]] = []
+
+        with pytest.MonkeyPatch.context() as mp:
+            async def _prepare_target(current, profile):
+                calls.append(("target", profile))
+                return target
+
+            def _prepare_runtime(steps_arg, **kwargs):
+                calls.append(("runtime", kwargs))
+                return runtime
+
+            def _start_remote(steps_arg, **kwargs):
+                calls.append(("start", kwargs))
+                return runtime.session.model_copy(update={"remote_pid": 42})
+
+            mp.setattr(mgr, "_prepare_cloud_submit_target", _prepare_target)
+            mp.setattr(mgr, "_prepare_cloud_submit_runtime", _prepare_runtime)
+            mp.setattr(mgr, "_start_cloud_remote_submit", _start_remote)
+
+            result = await mgr._submit_cloud(
+                session,
+                steps,
+                {"MODE": "fast"},
+                "demo-profile",
+                workflow_dir=None,
+                workflow_name="wf-name",
+            )
+
+        assert result.remote_pid == 42
+        assert calls[0] == ("target", "demo-profile")
+        assert calls[1][0] == "runtime"
+        assert calls[1][1]["session"] == target.session
+        assert calls[1][1]["os_type"] == "linux"
+        assert calls[2][0] == "start"
+        assert calls[2][1]["target"] is target
+        assert calls[2][1]["runtime"] is runtime
 
 
 class TestCloudCancelTmux:
@@ -1074,7 +1677,6 @@ class TestCloudCancelTmux:
 
         assert out.status == SessionStatus.CANCELED
         assert any("tmux kill-session -t ofx-ses-tmuxkill" in c for c in seen)
-
 
 class TestCloudAutoDestroyAfterFetch:
     @pytest.mark.asyncio
@@ -1167,6 +1769,250 @@ class TestCloudAutoDestroyAfterFetch:
         out = await mgr._auto_destroy_after_fetch(session)
         assert out.instance_id == "i-keep"
         assert out.instance_ip == "10.0.0.7"
+
+
+class TestCloudDestroy:
+    @pytest.mark.asyncio
+    async def test_destroy_cloud_non_static_marks_destroyed(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+        from ofx.models.cloud import CloudConfig
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="destroy1",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.COMPLETED,
+            cloud_provider="digitalocean",
+            instance_id="i-123",
+            instance_ip="10.0.0.5",
+        )
+        store.save(session)
+
+        destroyed: list[str] = []
+
+        class _FakeProvider:
+            async def destroy_instance(self, instance_id):
+                destroyed.append(instance_id)
+
+        class _FakeProfileMgr:
+            def resolve(self, cfg):
+                return CloudConfig(provider="digitalocean")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                "ofx.cloud.config.get_cloud_profile_manager",
+                lambda: _FakeProfileMgr(),
+            )
+            mp.setattr(
+                "ofx.cloud.CloudProviderRegistry.create",
+                lambda provider, **kwargs: _FakeProvider(),
+            )
+            out = await mgr.destroy("destroy1")
+
+        assert destroyed == ["i-123"]
+        assert out.status == SessionStatus.DESTROYED
+        assert out.instance_id == "i-123"
+        assert out.instance_ip == "10.0.0.5"
+
+
+class TestCloudFetchMaterialization:
+    @pytest.mark.asyncio
+    async def test_fetch_cloud_uses_encrypted_archive_when_available(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="fetchenc",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.COMPLETED,
+            instance_ip="10.0.0.8",
+            remote_work_dir="/tmp/.ses-fetchenc",
+            remote_log_file="/tmp/.ses-fetchenc/output.log",
+            os_type="linux",
+            at_rest_encrypted=True,
+            at_rest_key="secret-key",
+        )
+        results = tmp_path / "results"
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                raise AssertionError(
+                    "remote.run should not be used when archive download succeeds"
+                )
+
+            def download(self, remote_path, local_path):
+                path = Path(local_path)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if remote_path.endswith("output.enc"):
+                    path.write_text("encrypted-bytes")
+                    return
+                if remote_path.endswith("output.log"):
+                    path.write_text("log output")
+                    return
+                raise AssertionError(f"unexpected download path: {remote_path}")
+
+            def cleanup(self):
+                return None
+
+        decrypted: list[tuple[Path, str, Path]] = []
+
+        def _fake_decrypt(enc_file: Path, at_rest_key: str, output_dir: Path) -> None:
+            decrypted.append((enc_file, at_rest_key, output_dir))
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "result.txt").write_text("ok")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            mp.setattr(
+                "ofx.cloud.sessions.manager._decrypt_at_rest_openssl",
+                _fake_decrypt,
+            )
+            await mgr._fetch_cloud_results(session, results)
+
+        assert decrypted == [
+            (results.parent / "output_fetchenc.enc", "secret-key", results)
+        ]
+        assert (results / "result.txt").read_text() == "ok"
+        assert (results / "output.log").read_text() == "log output"
+        assert not (results.parent / "output_fetchenc.enc").exists()
+
+    @pytest.mark.asyncio
+    async def test_fetch_cloud_falls_back_to_individual_outputs(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = SessionManager(store=store)
+        session = Session(
+            id="fetchplain",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.COMPLETED,
+            instance_ip="10.0.0.9",
+            remote_work_dir="/tmp/work dir",
+            remote_log_file="/tmp/work dir/output.log",
+            os_type="linux",
+            at_rest_encrypted=True,
+            at_rest_key="secret-key",
+        )
+        results = tmp_path / "results"
+        seen_commands: list[str] = []
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                seen_commands.append(cmd)
+                return "one.txt\ntwo.txt\n"
+
+            def download(self, remote_path, local_path):
+                if remote_path.endswith("output.enc"):
+                    raise FileNotFoundError("missing archive")
+                Path(local_path).write_text(Path(remote_path).name)
+
+            def cleanup(self):
+                return None
+
+        def _unexpected_decrypt(*args, **kwargs):
+            raise AssertionError("decrypt should not run when archive download fails")
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            mp.setattr(
+                "ofx.cloud.sessions.manager._decrypt_at_rest_openssl",
+                _unexpected_decrypt,
+            )
+            await mgr._fetch_cloud_results(session, results)
+
+        assert seen_commands == ["ls -1 '/tmp/work dir/output' 2>/dev/null"]
+        assert (results / "one.txt").read_text() == "one.txt"
+        assert (results / "two.txt").read_text() == "two.txt"
+        assert (results / "output.log").read_text() == "output.log"
+
+
+class TestCloudLogs:
+    @pytest.mark.asyncio
+    async def test_logs_cloud_returns_remote_tail_output(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        session = Session(
+            id="cloudlogs1",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.RUNNING,
+            instance_ip="10.0.0.7",
+            remote_log_file="/tmp/.ses-cloudlogs1/output.log",
+            os_type="linux",
+        )
+        store.save(session)
+        mgr = SessionManager(store=store)
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                return "log line\n"
+
+            def cleanup(self):
+                return None
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            output = await mgr.logs(session.id, tail=10)
+
+        assert output == "log line\n"
+
+    @pytest.mark.asyncio
+    async def test_logs_cloud_returns_error_text_on_reconnect_failure(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        session = Session(
+            id="cloudlogs2",
+            workflow_file="wf.yml",
+            target=SessionTarget.CLOUD,
+            status=SessionStatus.RUNNING,
+            instance_ip="10.0.0.8",
+            remote_log_file="/tmp/.ses-cloudlogs2/output.log",
+            os_type="linux",
+        )
+        store.save(session)
+        mgr = SessionManager(store=store)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                mgr,
+                "_reconnect",
+                lambda s: (_ for _ in ()).throw(ConnectionRefusedError("refused")),
+            )
+            output = await mgr.logs(session.id, tail=10)
+
+        assert "cannot retrieve logs" in output
+        assert "refused" in output
+
+    @pytest.mark.asyncio
+    async def test_logs_local_returns_fallback_when_file_cannot_be_read(self, tmp_path):
+        from ofx.cloud.sessions import SessionManager
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        log_path = tmp_path / "output.log"
+        log_path.write_text("line1\nline2\n")
+        session = Session(
+            id="locallogs1",
+            workflow_file="wf.yml",
+            target=SessionTarget.LOCAL,
+            status=SessionStatus.RUNNING,
+            remote_log_file=str(log_path),
+            os_type="linux",
+        )
+        store.save(session)
+        mgr = SessionManager(store=store)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(Path, "read_text", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("boom")))
+            output = await mgr.logs(session.id, tail=10)
+
+        assert output == "(cannot read log)"
 
 
 # ======================================================================
@@ -1360,6 +2206,32 @@ class TestCheckCloudStatusNoPid:
 
         assert result.status == SessionStatus.RUNNING
 
+    @pytest.mark.asyncio
+    async def test_no_pid_status_quotes_remote_log_path_with_spaces(self, tmp_path):
+        """No-PID status probes shell-quote remote log paths."""
+        from ofx.cloud.sessions.models import SessionStatus
+
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session(pid=None).model_copy(
+            update={"remote_log_file": "/tmp/work dir/output.log"}
+        )
+        seen: list[str] = []
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                seen.append(cmd)
+                return "__TASK_OK__"
+
+            def cleanup(self):
+                pass
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            result = await mgr._check_cloud_status(session)
+
+        assert result.status == SessionStatus.COMPLETED
+        assert seen == ["tail -5 '/tmp/work dir/output.log' 2>/dev/null"]
+
 
 class TestCloudStatusBackoff:
     """Tests for exponential backoff and circuit breaker in _check_cloud_status."""
@@ -1406,6 +2278,33 @@ class TestCloudStatusBackoff:
             await mgr._check_cloud_status(session)
 
         assert mgr._poll_failures["back0ff1"] == 2
+
+    @pytest.mark.asyncio
+    async def test_tmux_pid_status_quotes_tmux_session_name(self, tmp_path):
+        mgr = self._make_mgr(tmp_path)
+        session = self._make_running_session().model_copy(
+            update={
+                "remote_launcher": "tmux",
+                "remote_tmux_session": "tmux name",
+            }
+        )
+        seen: list[str] = []
+
+        class _FakeRemote:
+            def run(self, cmd, timeout=None):
+                seen.append(cmd)
+                if "tmux has-session" in cmd:
+                    return "alive"
+                return ""
+
+            def cleanup(self):
+                pass
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(mgr, "_reconnect", lambda s: _FakeRemote())
+            await mgr._check_cloud_status(session)
+
+        assert seen[0] == "tmux has-session -t 'tmux name' 2>/dev/null && echo alive || echo dead"
 
     @pytest.mark.asyncio
     async def test_success_resets_failure_counter(self, tmp_path):

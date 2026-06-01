@@ -19,11 +19,12 @@ import logging
 import os
 import time
 from collections.abc import Callable, Generator
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Any
 
 from ofx.settings import settings
+from ofx.utils.file_cleanup import remove_empty_dirs, remove_file
 
 logger = logging.getLogger(settings.app_branding)
 
@@ -43,9 +44,9 @@ class ChannelStore:
       ``dict``.
     * **Mtime-based read cache** — avoids re-reading a file whose content
       hasn't changed since the last read.
-    * **Async API** — non-blocking ``async_publish/async_get/async_subscribe``
-      methods for use from ``asyncio`` runners.  In-process events provide
-      instant notification without file polling.
+    * **Async API** — awaitable variants for ``asyncio`` runners. In-process
+      events provide instant notification without file polling, while local
+      channel file I/O remains small and synchronous.
     """
 
     def __init__(self, channels_dir: str | Path | None = None) -> None:
@@ -54,22 +55,12 @@ class ChannelStore:
         self._dir = Path(channels_dir)
         self._dir.mkdir(parents=True, exist_ok=True)
         # Per-channel mtime cache: channel → (mtime, parsed_value)
-        self._cache: dict[str, tuple[float, Any]] = {}
+        self._cache: dict[str, tuple[int, Any]] = {}
         # Per-channel asyncio.Event for in-process notification
-        self._events: dict[str, asyncio.Event] = {}
+        self._events: dict[
+            str, tuple[asyncio.AbstractEventLoop | None, asyncio.Event]
+        ] = {}
         logger.debug("ChannelStore initialized at %s", self._dir)
-
-    # ------------------------------------------------------------------
-    # Path helpers
-    # ------------------------------------------------------------------
-
-    def _channel_path(self, channel: str) -> Path:
-        """Return the data file for *channel*."""
-        return self._dir / channel
-
-    def _lock_path(self, channel: str) -> Path:
-        """Return the lock file for *channel* (same dir, ``.lock`` suffix)."""
-        return self._dir / f"{channel}.lock"
 
     # ------------------------------------------------------------------
     # In-process event helpers
@@ -77,17 +68,51 @@ class ChannelStore:
 
     def _get_event(self, channel: str) -> asyncio.Event:
         """Return (or create) an asyncio.Event for *channel*."""
-        event = self._events.get(channel)
-        if event is None:
+        binding = self._events.get(channel)
+        if binding is None:
+            loop: asyncio.AbstractEventLoop | None
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
             event = asyncio.Event()
-            self._events[channel] = event
-        return event
+            self._events[channel] = (loop, event)
+            return event
+        return binding[1]
 
     def _notify(self, channel: str) -> None:
         """Signal in-process subscribers that *channel* was updated."""
-        event = self._events.get(channel)
-        if event is not None:
+        binding = self._events.get(channel)
+        if binding is None:
+            return
+
+        loop, event = binding
+        if loop is None:
             event.set()
+            return
+
+        loop.call_soon_threadsafe(event.set)
+
+    @staticmethod
+    @contextmanager
+    def _locked_fd(lock_path: Path, lock_mode: int) -> Generator[int]:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
+        try:
+            fcntl.flock(fd, lock_mode)
+            yield fd
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
+    @staticmethod
+    def _read_json_value(data_path: Path) -> Any | None:
+        content = data_path.read_text()
+        if not content.strip():
+            return None
+        return json.loads(content)
+
+    def _channel_paths(self, channel: str) -> tuple[Path, Path]:
+        return self._dir / channel, self._dir / f"{channel}.lock"
 
     # ------------------------------------------------------------------
     # Low-level I/O with flock
@@ -95,12 +120,9 @@ class ChannelStore:
 
     def _write(self, channel: str, value: Any) -> None:
         """Write *value* as JSON under an exclusive flock."""
-        data_path = self._channel_path(channel)
-        lock_path = self._lock_path(channel)
+        data_path, lock_path = self._channel_paths(channel)
 
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+        with self._locked_fd(lock_path, fcntl.LOCK_EX):
             try:
                 json_text = json.dumps(value, default=str)
             except (TypeError, ValueError) as exc:
@@ -109,46 +131,46 @@ class ChannelStore:
                 ) from exc
             data_path.write_text(json_text)
             # Update cache immediately
-            mtime = data_path.stat().st_mtime
-            self._cache[channel] = (mtime, value)
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
+            try:
+                mtime = data_path.stat().st_mtime_ns
+            except OSError:
+                mtime = None
+            if mtime is not None:
+                self._cache[channel] = (mtime, value)
 
         # Wake in-process subscribers
         self._notify(channel)
 
     def _read(self, channel: str) -> Any | None:
         """Read the channel value under a shared flock, using mtime cache."""
-        data_path = self._channel_path(channel)
+        data_path, lock_path = self._channel_paths(channel)
         if not data_path.exists():
             return None
 
         # Fast-path: mtime unchanged → return cached value
         try:
-            current_mtime = data_path.stat().st_mtime
+            current_mtime = data_path.stat().st_mtime_ns
         except OSError:
             return None
 
         cached = self._cache.get(channel)
-        if cached is not None and cached[0] == current_mtime:
-            return cached[1]
+        cached_value = cached[1] if cached is not None and cached[0] == current_mtime else None
+        if cached_value is not None:
+            return cached_value
 
-        lock_path = self._lock_path(channel)
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR)
         try:
-            fcntl.flock(fd, fcntl.LOCK_SH)
-            content = data_path.read_text()
-            if not content.strip():
-                return None
-            value = json.loads(content)
-            self._cache[channel] = (data_path.stat().st_mtime, value)
-            return value
+            with self._locked_fd(lock_path, fcntl.LOCK_SH):
+                value = self._read_json_value(data_path)
+                try:
+                    mtime = data_path.stat().st_mtime_ns
+                except OSError:
+                    mtime = None
+                if mtime is None or value is None:
+                    return value
+                self._cache[channel] = (mtime, value)
+                return value
         except (json.JSONDecodeError, OSError):
             return None
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
 
     # ------------------------------------------------------------------
     # Public API (sync — used from script processes & subscribe loops)
@@ -193,8 +215,9 @@ class ChannelStore:
         start = time.monotonic()
         while time.monotonic() - start < timeout:
             data = self._read(channel)
-            if data is not None and condition(data):
-                return data
+            if data is not None:
+                if condition(data):
+                    return data
             time.sleep(poll_interval)
         raise TimeoutError(f"Timeout waiting for channel '{channel}'")
 
@@ -205,17 +228,15 @@ class ChannelStore:
     async def async_publish(self, channel: str, data: ChannelValue) -> None:
         """Async publish *data* to *channel*.
 
-        Offloads the blocking flock I/O to a thread so the event loop
-        stays responsive.
+        The file I/O is local and small, so it is performed inline while the
+        waiting portions of the async API stay non-blocking.
         """
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._write, channel, data)
+        self._write(channel, data)
         logger.debug("Channel '%s' async published", channel)
 
     async def async_get(self, channel: str) -> Any | None:
         """Async read of the latest *channel* value."""
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._read, channel)
+        return self._read(channel)
 
     async def async_subscribe(self, channel: str, poll_interval: float = 0.1):
         """Async generator that yields new values from *channel*.
@@ -227,16 +248,16 @@ class ChannelStore:
         event = self._get_event(channel)
         last_value = object()  # sentinel
         while True:
+            value = self._read(channel)
+            if value is not None and value != last_value:
+                yield value
+                last_value = value
+                continue
+
             # Wait for notification or poll timeout
             event.clear()
             with suppress(TimeoutError):
                 await asyncio.wait_for(event.wait(), timeout=poll_interval)
-
-            loop = asyncio.get_running_loop()
-            value = await loop.run_in_executor(None, self._read, channel)
-            if value is not None and value != last_value:
-                yield value
-                last_value = value
 
     async def async_wait_for(
         self,
@@ -250,21 +271,20 @@ class ChannelStore:
         Uses in-process event notification for low-latency detection.
         """
         event = self._get_event(channel)
-        deadline = asyncio.get_event_loop().time() + timeout
         loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
 
         while True:
-            data = await loop.run_in_executor(None, self._read, channel)
-            if data is not None and condition(data):
-                return data
-            remaining = deadline - asyncio.get_event_loop().time()
+            data = self._read(channel)
+            if data is not None:
+                if condition(data):
+                    return data
+            remaining = deadline - loop.time()
             if remaining <= 0:
                 raise TimeoutError(f"Timeout waiting for channel '{channel}'")
             event.clear()
             with suppress(TimeoutError):
-                await asyncio.wait_for(
-                    event.wait(), timeout=min(poll_interval, remaining)
-                )
+                await asyncio.wait_for(event.wait(), timeout=min(poll_interval, remaining))
 
     # ------------------------------------------------------------------
     # Management
@@ -273,9 +293,9 @@ class ChannelStore:
     def delete(self, channel: str) -> bool:
         """Remove a channel file and its lock."""
         removed = False
-        for p in (self._channel_path(channel), self._lock_path(channel)):
-            with suppress(FileNotFoundError):
-                p.unlink()
+        for path in self._channel_paths(channel):
+            existed = path.exists()
+            if remove_file(path) is None and existed and not path.exists():
                 removed = True
         self._cache.pop(channel, None)
         self._events.pop(channel, None)
@@ -291,18 +311,18 @@ class ChannelStore:
 
     def clear(self) -> None:
         """Remove all channels."""
-        for p in self._dir.iterdir():
-            with suppress(FileNotFoundError):
-                p.unlink()
+        for path in self._dir.iterdir():
+            remove_file(path)
         self._cache.clear()
         self._events.clear()
 
     def close(self) -> None:
         """Clear all channels and remove the channels directory."""
         self.clear()
-        with suppress(OSError):
-            self._dir.rmdir()
-            logger.debug("Removed channels directory %s", self._dir)
+        if self._dir.exists():
+            remove_empty_dirs(self._dir)
+            if not self._dir.exists():
+                logger.debug("Removed channels directory %s", self._dir)
 
 
 # ------------------------------------------------------------------

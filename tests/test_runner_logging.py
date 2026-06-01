@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from ofx.models.step import Step
 from ofx.models.workflow import Workflow
-from ofx.runner.logging import bubble_context_log, bubble_tagged_log, prefix_log
+from ofx.runner.logging import (
+    LogContext,
+    StructuredLogger,
+    bubble_context_log,
+)
+from ofx.runner.runner import Runner
 from ofx.runner.step import StepRunner
 from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 from ofx.runner.tool_installer import ToolInstallation, ToolInstallerRunner
@@ -28,18 +36,91 @@ def test_bubble_context_log_formats_and_bubbles_message():
     assert parent.received == "name=wf | job=scan › hello"
     assert result == "parent::name=wf | job=scan › hello"
 
+def test_log_context_prefix_rendering_uses_all_present_fields():
+    context = LogContext(
+        run_id="run-1",
+        runner_type="WorkflowRunner",
+        model_name="wf",
+        model_jid="scan",
+        step_index=2,
+        status="completed",
+    )
 
-def test_bubble_tagged_log_formats_prefix_and_tags():
-    parent = ParentStub()
-
-    result = bubble_tagged_log(parent, "hello", prefix="job=scan", tags=("cloud",))
-
-    assert parent.received == "job=scan [cloud] › hello"
-    assert result == "parent::job=scan [cloud] › hello"
+    assert context.prefix == "[RUN-run-1] | WorkflowRunner | name=wf | job=scan | step=2 | status=completed"
 
 
-def test_prefix_log_formats_prefix_and_message():
-    assert prefix_log("hello", "[Task:scan]") == "[Task:scan] hello"
+def test_structured_logger_uses_shared_log_dispatch():
+    calls: list[tuple[str, str, dict]] = []
+
+    class _Logger:
+        def debug(self, message, *, extra):
+            calls.append(("debug", message, extra))
+
+    runner = SimpleNamespace(
+        run_id="run-1",
+        status=SimpleNamespace(value="completed"),
+        model=SimpleNamespace(name="wf", jid="scan", step_index=None),
+        parent=None,
+        name="runner-name",
+    )
+    logger = StructuredLogger(runner, logger=_Logger())
+
+    logger.debug("hello")
+
+    assert calls[0][0] == "debug"
+    assert calls[0][1].endswith("hello")
+    assert "log_context" in calls[0][2]
+
+
+def test_structured_logger_derives_context_once_per_log_call():
+    calls: list[tuple[str, dict]] = []
+
+    class _Logger:
+        def info(self, message, *, extra):
+            calls.append((message, extra))
+
+    runner = SimpleNamespace()
+    context = LogContext(run_id="run-1", runner_type="WorkflowRunner")
+
+    with patch(
+        "ofx.runner.logging.LogContext.from_runner",
+        return_value=context,
+    ) as mock_from_runner:
+        StructuredLogger(runner, logger=_Logger()).info("hello")
+
+    mock_from_runner.assert_called_once_with(runner)
+    assert calls == [
+        (
+            "[RUN-run-1] | WorkflowRunner | hello",
+            {"log_context": context.__dict__},
+        )
+    ]
+
+
+def test_structured_logger_format_message_reuses_optional_context():
+    runner = SimpleNamespace()
+    logger = StructuredLogger(runner, logger=SimpleNamespace())
+    context = LogContext(run_id="run-1", runner_type="WorkflowRunner")
+
+    with patch(
+        "ofx.runner.logging.LogContext.from_runner",
+        side_effect=AssertionError("should not derive context"),
+    ):
+        assert logger.format_message("hello", context) == "[RUN-run-1] | WorkflowRunner | hello"
+
+
+def test_base_runner_produce_log_uses_structured_logger_formatting():
+    runner = object.__new__(Runner)
+    runner._structured_logger = StructuredLogger(SimpleNamespace(), logger=SimpleNamespace())
+
+    with patch.object(
+        runner._structured_logger,
+        "format_message",
+        return_value="formatted::hello",
+    ) as mock_format:
+        assert runner._produce_log("hello") == "formatted::hello"
+
+    mock_format.assert_called_once_with("hello")
 
 
 def test_workflow_runner_uses_shared_context_log_formatting():

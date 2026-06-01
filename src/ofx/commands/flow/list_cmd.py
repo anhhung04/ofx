@@ -21,32 +21,6 @@ from ofx.settings import (
 logger = logging.getLogger("ofx")
 
 
-def _scan_yaml_files(root: Path) -> list[Path]:
-    files: list[Path] = []
-    for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-        files.extend(sorted(root.rglob(f"*{ext}")))
-    return sorted(set(files))
-
-
-def _read_metadata(path: Path) -> dict:
-    """Read name, description, and tags from a workflow YAML file."""
-    try:
-        with open(path) as f:
-            data = yaml.safe_load(f)
-        if isinstance(data, dict):
-            tags = data.get("tags", [])
-            return {
-                "name": str(data.get("name", path.stem)),
-                "description": str(data.get("description", "")),
-                "tags": [str(t).lower() for t in tags]
-                if isinstance(tags, list)
-                else [],
-            }
-    except Exception as e:
-        logger.debug("Failed to parse workflow metadata from %s: %s", path, e)
-    return {"name": path.stem, "description": "", "tags": []}
-
-
 def show_list(
     *,
     builtin: bool = False,
@@ -66,8 +40,28 @@ def show_list(
     all_files: list[tuple[Path, str, Path]] = []
     seen_paths: set[str] = set()
 
+    def _read_metadata(path: Path) -> dict[str, str | list[str]]:
+        try:
+            with open(path) as f:
+                data = yaml.safe_load(f)
+            if isinstance(data, dict):
+                tags = data.get("tags", [])
+                return {
+                    "name": str(data.get("name", path.stem)),
+                    "description": str(data.get("description", "")),
+                    "tags": [str(tag).lower() for tag in tags]
+                    if isinstance(tags, list)
+                    else [],
+                }
+        except Exception as e:
+            logger.debug("Failed to parse workflow metadata from %s: %s", path, e)
+        return {"name": path.stem, "description": "", "tags": []}
+
     def _collect(root: Path, source: str) -> None:
-        for file in _scan_yaml_files(root):
+        files: list[Path] = []
+        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+            files.extend(sorted(root.rglob(f"*{ext}")))
+        for file in sorted(set(files)):
             resolved = str(file.resolve())
             if resolved not in seen_paths:
                 seen_paths.add(resolved)

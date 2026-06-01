@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -24,6 +23,16 @@ class RunnerStatus(Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELED = "canceled"
+
+
+def normalize_runner_status(status: RunnerStatus) -> RunnerStatus:
+    """Map transient terminal runner states to their external representation."""
+    return RunnerStatus.COMPLETED if status == RunnerStatus.FINISHED else status
+
+
+def normalized_runner_status_value(status: RunnerStatus) -> str:
+    """Return the external string value for a runner status."""
+    return normalize_runner_status(status).value
 
 
 class RunContext(BaseModel):
@@ -91,56 +100,64 @@ class ConditionNotMetError(RuntimeError):
     """Raised when a job or step condition evaluates to false."""
 
 
-@dataclass(frozen=True)
-class RunnerContextBuilder:
-    """Immutable helper for all runner context mutations."""
-
-    base: RunContext
-
-    def _copy_with_dict_updates(self, **updates_by_field: dict[str, Any]) -> RunContext:
-        merged_updates: dict[str, Any] = {}
-        for field, updates in updates_by_field.items():
-            current = copy.deepcopy(getattr(self.base, field))
-            current.update(updates)
-            merged_updates[field] = current
-        return self.base.model_copy(update=merged_updates)
-
-    def with_env(self, env: dict[str, Any]) -> RunContext:
-        return self._copy_with_dict_updates(envs=env)
-
-    def with_inputs(self, inputs: dict[str, Any]) -> RunContext:
-        return self._copy_with_dict_updates(inputs=inputs)
-
-    def with_secrets(self, secrets: dict[str, Any]) -> RunContext:
-        return self._copy_with_dict_updates(secrets=secrets)
-
-    def with_vars(self, vars_update: dict[str, Any]) -> RunContext:
-        return self._copy_with_dict_updates(vars=vars_update)
-
-    def with_env_and_vars(
-        self,
-        env: dict[str, Any],
-        vars_update: dict[str, Any],
-    ) -> RunContext:
-        return self._copy_with_dict_updates(envs=env, vars=vars_update)
-
-    def with_update(self, update: dict[str, Any]) -> RunContext:
-        return self.base.model_copy(update=update)
+def context_with_env(ctx: RunContext, env: dict[str, Any]) -> RunContext:
+    """Return a context copy with merged environment updates."""
+    return _context_with_merged_field_update(ctx, "envs", env)
 
 
-ContextBuilder = RunnerContextBuilder
+def context_with_secrets(ctx: RunContext, secrets: dict[str, Any]) -> RunContext:
+    """Return a context copy with merged secret updates."""
+    return _context_with_merged_field_update(ctx, "secrets", secrets)
 
 
-def build_env_context(env: dict[str, Any]) -> RunContext:
-    """Create an isolated run context that carries only environment values."""
-    return RunnerContextBuilder(RunContext()).with_env(env)
+def context_with_vars(ctx: RunContext, vars_update: dict[str, Any]) -> RunContext:
+    """Return a context copy with merged variable updates."""
+    return _context_with_merged_field_update(ctx, "vars", vars_update)
+
+
+def context_with_update(ctx: RunContext, update: dict[str, Any]) -> RunContext:
+    """Return a context copy with arbitrary field updates."""
+    return context_copy(ctx, update)
+
+
+def context_copy(
+    ctx: RunContext,
+    update: dict[str, Any] | None = None,
+    *,
+    deep: bool = True,
+) -> RunContext:
+    """Return a copied context, optionally applying field replacements."""
+    return ctx.model_copy(update=update or {}, deep=deep)
+
+
+def _context_with_merged_dict_updates(
+    ctx: RunContext,
+    **updates_by_field: dict[str, Any],
+) -> RunContext:
+    merged_updates = {
+        field: copy.deepcopy(getattr(ctx, field)) | updates
+        for field, updates in updates_by_field.items()
+    }
+    return ctx.model_copy(update=merged_updates)
+
+
+def _context_with_merged_field_update(
+    ctx: RunContext,
+    field: str,
+    updates: dict[str, Any],
+) -> RunContext:
+    return _context_with_merged_dict_updates(ctx, **{field: updates})
 
 __all__ = [
-    "build_env_context",
     "ConditionNotMetError",
-    "ContextBuilder",
+    "context_copy",
+    "context_with_env",
+    "context_with_secrets",
+    "context_with_update",
+    "context_with_vars",
+    "normalized_runner_status_value",
+    "normalize_runner_status",
     "RunContext",
     "RunResult",
-    "RunnerContextBuilder",
     "RunnerStatus",
 ]

@@ -17,5 +17,5 @@ def test_register_supports_multiple_run_types() -> None:
 
     assert registry.get(RunType.SCRIPT) is handler
     assert registry.get(RunType.SCRIPT_FILE) is handler
-    assert registry.create_runner(RunType.SCRIPT_FILE, "step-runner") == "runner"
+    assert registry.get(RunType.SCRIPT_FILE)("step-runner") == "runner"
     assert calls == ["step-runner"]

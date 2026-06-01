@@ -1,6 +1,7 @@
 """Tests for runner edge cases and error handling"""
 
 import asyncio
+import contextlib
 from collections import OrderedDict
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,38 @@ from ofx.models.workflow import ToolConfig
 from ofx.runner import RunContext, RunnerStatus
 from ofx.runner.commands.command import CommandRunner, ScriptRunner
 from ofx.runner.tool_installer import ToolInstallation, ToolInstallerRunner
+from ofx.settings import settings
+
+
+async def _capture_script_exec_invocation(script: ScriptRunner):
+    submitted: list[tuple[object, tuple]] = []
+
+    class _Future:
+        def result(self):
+            return "future-result"
+
+    class _Executor:
+        def submit(self, fn, *args):
+            submitted.append((fn, args))
+            return _Future()
+
+    import ofx.runner.commands.command as command_module
+
+    original_shared_executor = command_module._shared_executor
+    command_module._shared_executor = _Executor()
+    loop = asyncio.get_running_loop()
+    original_run_in_executor = loop.run_in_executor
+
+    async def _fake_run_in_executor(_executor, fn, *args):
+        return fn(*args)
+
+    try:
+        loop.run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+        await script._exec_script()
+        return submitted[0][1][0]
+    finally:
+        loop.run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+        command_module._shared_executor = original_shared_executor
 
 
 class TestCommandRunnerEdgeCases:
@@ -378,13 +411,21 @@ print("Injected variables work!")
         assert "Context has inputs: True" in stdout
         assert "Injected variables work!" in stdout
 
-    def test_script_scope_models_returns_none_without_parent(self):
+    @pytest.mark.asyncio
+    async def test_exec_script_builds_empty_scope_without_parent(self):
         script = object.__new__(ScriptRunner)
+        script.model = SimpleNamespace(script="print('hi')", working_directory=Path("/tmp/work"))
+        script.ctx = RunContext(envs={})
         script.parent = None
 
-        assert script._script_scope_models() == (None, None, None)
+        invocation = await _capture_script_exec_invocation(script)
 
-    def test_script_scope_models_returns_step_job_and_workflow_models(self):
+        assert invocation.scope_models.job_model is None
+        assert invocation.scope_models.step_model is None
+        assert invocation.scope_models.workflow_model is None
+
+    @pytest.mark.asyncio
+    async def test_exec_script_collects_step_job_and_workflow_models(self):
         workflow_model = object()
         job_model = object()
         step_model = object()
@@ -393,13 +434,432 @@ print("Injected variables work!")
         job_runner = SimpleNamespace(model=job_model, parent=workflow_runner)
         step_runner = SimpleNamespace(model=step_model, parent=job_runner)
         script = object.__new__(ScriptRunner)
+        script.model = SimpleNamespace(script="print('hi')", working_directory=Path("/tmp/work"))
+        script.ctx = RunContext(envs={})
         script.parent = step_runner
 
-        assert script._script_scope_models() == (
-            job_model,
-            step_model,
-            workflow_model,
+        invocation = await _capture_script_exec_invocation(script)
+
+        assert invocation.scope_models.job_model is job_model
+        assert invocation.scope_models.step_model is step_model
+        assert invocation.scope_models.workflow_model is workflow_model
+
+    @pytest.mark.asyncio
+    async def test_do_run_merges_runner_outputs_file_values(self, tmp_path):
+        outputs_file = tmp_path / "outputs"
+        outputs_file.write_text("key=value\n")
+
+        script = object.__new__(ScriptRunner)
+        script.name = "script"
+        script.run_id = "run-1"
+        script.model = SimpleNamespace(timeout_minutes=3)
+        script.ctx = RunContext(envs={"RUNNER_OUTPUTS": str(outputs_file)})
+        script._log_debug = lambda _msg: None
+        recorded: list[tuple[str, dict[str, object]]] = []
+
+        async def _reg_set(key, value):
+            recorded.append((key, dict(value)))
+
+        script.reg_set = _reg_set
+        script._exec_script = lambda: asyncio.sleep(0, result=SimpleNamespace(exit_code=0, stdout="ok", stderr=""))
+
+        await script._do_run()
+
+        assert script._result.outputs == {
+            "exit_code": 0,
+            "stdout": "ok",
+            "stderr": "",
+            "key": "value",
+        }
+        assert recorded == [
+            (
+                "outputs",
+                {
+                    "exit_code": 0,
+                    "stdout": "ok",
+                    "stderr": "",
+                    "key": "value",
+                },
+            )
+        ]
+
+    @pytest.mark.asyncio
+    async def test_do_run_raises_with_stderr_or_default_message(self):
+        script = object.__new__(ScriptRunner)
+        script.name = "script"
+        script.run_id = "run-1"
+        script.model = SimpleNamespace(timeout_minutes=3)
+        script.ctx = RunContext(envs={})
+
+        async def _reg_set(_key, _value):
+            return None
+
+        script.reg_set = _reg_set
+
+        with pytest.raises(RuntimeError, match="boom"):
+            async def _exec_script_boom():
+                return SimpleNamespace(exit_code=1, stdout="", stderr="boom")
+
+            script._exec_script = _exec_script_boom
+            await script._do_run()
+
+        with pytest.raises(RuntimeError, match="Script execution failed"):
+            async def _exec_script_blank():
+                return SimpleNamespace(exit_code=1, stdout="", stderr="")
+
+            script._exec_script = _exec_script_blank
+            await script._do_run()
+
+    @pytest.mark.asyncio
+    async def test_do_run_populates_run_result_fields(self):
+        script = object.__new__(ScriptRunner)
+        script.name = "script"
+        script.run_id = "run-1"
+        script.model = SimpleNamespace(timeout_minutes=3)
+        script.ctx = RunContext(envs={})
+
+        async def _reg_set(_key, _value):
+            return None
+
+        script.reg_set = _reg_set
+
+        async def _exec_script():
+            return SimpleNamespace(exit_code=1, stdout="", stderr="boom")
+
+        script._exec_script = _exec_script
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await script._do_run()
+
+        assert script._result.status == RunnerStatus.FAILED
+        assert script._result.error == "boom"
+
+    @pytest.mark.asyncio
+    async def test_do_run_timeout_uses_model_timeout(self):
+        script = object.__new__(ScriptRunner)
+        script.model = SimpleNamespace(timeout_minutes=3)
+
+        async def _exec_script():
+            raise TimeoutError()
+
+        script._exec_script = _exec_script
+
+        with pytest.raises(RuntimeError, match="Script timed out after 3 minutes"):
+            await script._do_run()
+
+    @pytest.mark.asyncio
+    async def test_do_run_persists_script_outputs(self):
+        script = object.__new__(ScriptRunner)
+        script.name = "script"
+        script.run_id = "run-1"
+        script.model = SimpleNamespace(timeout_minutes=3)
+        script.ctx = RunContext(envs={})
+
+        recorded: list[tuple[str, dict[str, object]]] = []
+
+        async def _reg_set(key, value):
+            recorded.append((key, dict(value)))
+
+        script.reg_set = _reg_set
+        script._exec_script = lambda: asyncio.sleep(0, result=SimpleNamespace(exit_code=0, stdout="ok", stderr=""))
+
+        await script._do_run()
+
+        assert script._result.outputs == {"exit_code": 0, "stdout": "ok", "stderr": ""}
+        assert recorded == [
+            ("outputs", {"exit_code": 0, "stdout": "ok", "stderr": ""})
+        ]
+
+    @pytest.mark.asyncio
+    async def test_exec_script_bundles_scope_context_and_outputs_file(self):
+        workflow_runner = SimpleNamespace(model="workflow")
+        job_runner = SimpleNamespace(model="job", parent=workflow_runner)
+        step_runner = SimpleNamespace(model="step", parent=job_runner)
+        script = object.__new__(ScriptRunner)
+        script.model = SimpleNamespace(script="print('hi')", working_directory=Path("/tmp/work"))
+        script.ctx = RunContext(
+            inputs={"target": "example.com"},
+            secrets={"API_KEY": "secret"},
+            envs={"RUNNER_OUTPUTS": "/tmp/out.txt"},
         )
+        script.parent = step_runner
+
+        invocation = await _capture_script_exec_invocation(script)
+
+        assert invocation.script == "print('hi')"
+        assert invocation.working_directory == "/tmp/work"
+        assert invocation.scope_models.job_model == "job"
+        assert invocation.scope_models.step_model == "step"
+        assert invocation.scope_models.workflow_model == "workflow"
+        assert invocation.inputs == {"target": "example.com"}
+        assert invocation.secrets == {"API_KEY": "secret"}
+        assert invocation.channels_dir == settings.channels_dir
+        assert invocation.outputs_file == "/tmp/out.txt"
+
+    @pytest.mark.asyncio
+    async def test_exec_script_submits_process_invocation_to_shared_executor(self):
+        script = object.__new__(ScriptRunner)
+        script.model = SimpleNamespace(script="print('hi')", working_directory=Path("/tmp/work"))
+        script.ctx = RunContext(envs={})
+        script.parent = None
+
+        submitted: list[tuple[object, tuple]] = []
+
+        class _Future:
+            def result(self):
+                return "future-result"
+
+        class _Executor:
+            def submit(self, fn, *args):
+                submitted.append((fn, args))
+                return _Future()
+
+        import ofx.runner.commands.command as command_module
+
+        original_shared_executor = command_module._shared_executor
+        command_module._shared_executor = _Executor()
+        original_run_in_executor = asyncio.get_running_loop().run_in_executor
+
+        async def _fake_run_in_executor(_executor, fn, *args):
+            return fn(*args)
+
+        try:
+            asyncio.get_running_loop().run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+            result = await script._exec_script()
+            assert result == "future-result"
+            invocation = submitted[0][1][0]
+            assert invocation.script == "print('hi')"
+            assert invocation.working_directory == "/tmp/work"
+        finally:
+            asyncio.get_running_loop().run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+            command_module._shared_executor = original_shared_executor
+
+    @pytest.mark.asyncio
+    async def test_exec_script_waits_for_future_result_via_executor(self):
+        script = object.__new__(ScriptRunner)
+        script.model = SimpleNamespace(script="print('hi')", working_directory=Path("/tmp/work"))
+        script.ctx = RunContext(envs={})
+        script.parent = None
+
+        class _Future:
+            def result(self):
+                return SimpleNamespace(exit_code=0, stdout="ok", stderr="")
+
+        class _Executor:
+            def submit(self, fn, *args):
+                invocation = args[0]
+                assert invocation.script == "print('hi')"
+                assert invocation.working_directory == "/tmp/work"
+                return _Future()
+
+        import ofx.runner.commands.command as command_module
+
+        original_shared_executor = command_module._shared_executor
+        command_module._shared_executor = _Executor()
+        loop = asyncio.get_running_loop()
+        original_run_in_executor = loop.run_in_executor
+
+        async def _fake_run_in_executor(_executor, fn, *args):
+            return fn(*args)
+
+        try:
+            loop.run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+            result = await script._exec_script()
+        finally:
+            loop.run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+            command_module._shared_executor = original_shared_executor
+
+        assert result.exit_code == 0
+        assert result.stdout == "ok"
+        assert result.stderr == ""
+
+    def test_exec_script_in_process_builds_store_globals_and_streams(self, monkeypatch):
+        from ofx.runner.commands.command import exec_script_in_process
+
+        invocation = SimpleNamespace(
+            script="print('hi')",
+            working_directory="/tmp/work",
+            scope_models=SimpleNamespace(
+                job_model="job",
+                step_model="step",
+                workflow_model="workflow",
+            ),
+            ctx="ctx",
+            inputs={"target": "example.com"},
+            secrets={"API_KEY": "secret"},
+            channels_dir="/tmp/channels",
+            outputs_file="/tmp/out.txt",
+        )
+        calls: list[tuple[str, object]] = []
+        captured_globals: dict[str, object] = {}
+
+        class _Capture:
+            def __init__(self, value: str) -> None:
+                self._value = value
+
+            def getvalue(self) -> str:
+                return self._value
+
+            def write(self, text: str) -> None:
+                self._value += text
+
+        stdout_capture = _Capture("stdout")
+        stderr_capture = _Capture("stderr")
+
+        store_obj = SimpleNamespace(
+            publish=lambda channel, data: ("publish", channel, data),
+            subscribe=lambda channel: ("subscribe", channel),
+            wait_for=lambda channel, condition, timeout=60: (
+                "wait_for",
+                channel,
+                condition,
+                timeout,
+            ),
+        )
+        export_helper = object()
+
+        monkeypatch.setattr(
+            "ofx.runner.commands.command.ChannelStore",
+            lambda channels_dir: calls.append(("store", channels_dir)) or store_obj,
+        )
+        monkeypatch.setattr(
+            "ofx.runner.commands.command.os.environ.update",
+            lambda updates: calls.append(("env", updates)),
+        )
+        monkeypatch.setattr(
+            "ofx.runner.templates.helpers._asm_helpers",
+            lambda: {"asm_helper": "ok"},
+        )
+        monkeypatch.setattr(
+            "ofx.runner.findings_export.export_typed_outputs",
+            export_helper,
+        )
+        captures = iter((stdout_capture, stderr_capture))
+        monkeypatch.setattr(
+            "ofx.runner.commands.command.io.StringIO",
+            lambda: next(captures),
+        )
+        monkeypatch.setattr(
+            "ofx.runner.commands.command.contextlib.chdir",
+            lambda _path: contextlib.nullcontext(),
+        )
+        monkeypatch.setattr(
+            "builtins.exec",
+            lambda script, globals_dict: captured_globals.update(globals_dict) or calls.append(("exec", script)) or None,
+        )
+
+        result = exec_script_in_process(invocation)
+
+        assert result.exit_code == 0
+        assert result.stdout == "stdout"
+        assert result.stderr == "stderr"
+        assert calls == [
+            ("env", {"RUNNER_OUTPUTS": "/tmp/out.txt", "OFX_OUTPUTS": "/tmp/out.txt"}),
+            ("store", "/tmp/channels"),
+            ("exec", invocation.script),
+        ]
+        assert captured_globals["__job__"] == invocation.scope_models.job_model
+        assert captured_globals["__step__"] == invocation.scope_models.step_model
+        assert captured_globals["__workflow__"] == invocation.scope_models.workflow_model
+        assert captured_globals["__inputs__"] == invocation.inputs
+        assert captured_globals["__ctx__"] == invocation.ctx
+        assert captured_globals["__secrets__"] == invocation.secrets
+        assert captured_globals["export_typed_outputs"] is export_helper
+        assert captured_globals["asm_helper"] == "ok"
+        assert callable(captured_globals["add_outputs"])
+        assert callable(captured_globals["publish"])
+        assert callable(captured_globals["subscribe"])
+        assert callable(captured_globals["wait_for"])
+
+    def test_exec_script_in_process_restores_cwd_and_captures_error(self, tmp_path):
+        import os
+
+        from ofx.runner.commands.command import (
+            exec_script_in_process,
+        )
+
+        original_cwd = Path.cwd()
+        invocation = SimpleNamespace(
+            script="import os\nprint(os.getcwd())\nraise ValueError('boom')",
+            working_directory=str(tmp_path),
+            scope_models=SimpleNamespace(job_model=None, step_model=None, workflow_model=None),
+            ctx=SimpleNamespace(),
+            inputs={},
+            secrets={},
+            channels_dir=str(tmp_path / "channels"),
+            outputs_file=None,
+        )
+
+        result = exec_script_in_process(invocation)
+
+        assert result.exit_code == 1
+        assert result.stdout.strip() == str(tmp_path)
+        assert result.stderr == "boom"
+        assert Path.cwd() == original_cwd
+
+    def test_exec_script_in_process_exposes_os_to_runtime(self, tmp_path):
+        from ofx.runner.commands.command import exec_script_in_process
+
+        invocation = SimpleNamespace(
+            script="import os\nprint(bool(os.environ is not None))",
+            working_directory=str(tmp_path),
+            scope_models=SimpleNamespace(job_model=None, step_model=None, workflow_model=None),
+            ctx=SimpleNamespace(),
+            inputs={},
+            secrets={},
+            channels_dir=str(tmp_path / "channels"),
+            outputs_file=None,
+        )
+
+        result = exec_script_in_process(invocation)
+
+        assert result.exit_code == 0
+        assert result.stdout.strip() == "True"
+
+    @pytest.mark.asyncio
+    async def test_exec_script_registers_executor_shutdown_when_creating_shared_executor(self, monkeypatch):
+        script = object.__new__(ScriptRunner)
+        script.model = SimpleNamespace(script="print('hi')", working_directory=Path("/tmp/work"))
+        script.ctx = RunContext(envs={})
+        script.parent = None
+
+        registered: list[tuple[object, tuple, dict]] = []
+
+        class _Future:
+            def result(self):
+                return SimpleNamespace(exit_code=0, stdout="ok", stderr="")
+
+        class _Executor:
+            def submit(self, fn, *args):
+                return _Future()
+
+            def shutdown(self, **kwargs):
+                return None
+
+        import ofx.runner.commands.command as command_module
+
+        original_shared_executor = command_module._shared_executor
+        loop = asyncio.get_running_loop()
+        original_run_in_executor = loop.run_in_executor
+        monkeypatch.setattr(command_module, "_shared_executor", None)
+        monkeypatch.setattr(command_module, "ProcessPoolExecutor", lambda **kwargs: _Executor())
+        monkeypatch.setattr(command_module.atexit, "register", lambda fn, *args, **kwargs: registered.append((fn, args, kwargs)))
+
+        async def _fake_run_in_executor(_executor, fn, *args):
+            return fn(*args)
+
+        try:
+            loop.run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+            await script._exec_script()
+        finally:
+            loop.run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+            command_module._shared_executor = original_shared_executor
+
+        registered_fn, registered_args, registered_kwargs = registered[0]
+        assert registered_args == ()
+        assert registered_kwargs == {"wait": False}
+        assert getattr(registered_fn, "__self__", None) is not None
+        assert getattr(registered_fn, "__name__", "") == "shutdown"
 
 
 class TestToolInstallerEdgeCases:
@@ -560,7 +1020,6 @@ class TestToolInstallerEdgeCases:
         )
         assert len(config.tools) == 2
         assert config.show_console is False
-        assert "2 tools" in str(config)
 
 
 class TestRunContextEdgeCases:
@@ -719,7 +1178,15 @@ class TestMatrixValidation:
     def test_matrix_limit_rejects_huge_product(self):
         """Matrix with excessive combinations raises ValueError."""
         from ofx.models.strategy import MatrixStrategy
-        from ofx.utils.matrix import _generate_matrix_combinations
+        from ofx.runner.matrix_utils import generate_matrix_combinations
+
+        def _parse_matrix_value(value):
+            if not isinstance(value, str):
+                return value
+            try:
+                return __import__("json").loads(value)
+            except (__import__("json").JSONDecodeError, ValueError):
+                return value
 
         strategy = MatrixStrategy(
             matrix={
@@ -728,12 +1195,25 @@ class TestMatrixValidation:
             }
         )
         with pytest.raises(ValueError, match="combinations"):
-            _generate_matrix_combinations(strategy)
+            generate_matrix_combinations(
+                strategy.matrix,
+                include=strategy.include,
+                exclude=strategy.exclude,
+                value_processor=_parse_matrix_value,
+            )
 
     def test_matrix_limit_allows_small_product(self):
         """Matrix under limit works fine."""
         from ofx.models.strategy import MatrixStrategy
-        from ofx.utils.matrix import _generate_matrix_combinations
+        from ofx.runner.matrix_utils import generate_matrix_combinations
+
+        def _parse_matrix_value(value):
+            if not isinstance(value, str):
+                return value
+            try:
+                return __import__("json").loads(value)
+            except (__import__("json").JSONDecodeError, ValueError):
+                return value
 
         strategy = MatrixStrategy(
             matrix={
@@ -741,7 +1221,12 @@ class TestMatrixValidation:
                 "b": ["x", "y"],
             }
         )
-        combos = _generate_matrix_combinations(strategy)
+        combos = generate_matrix_combinations(
+            strategy.matrix,
+            include=strategy.include,
+            exclude=strategy.exclude,
+            value_processor=_parse_matrix_value,
+        )
         assert len(combos) == 6
 
 

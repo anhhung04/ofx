@@ -5,10 +5,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 
 from ofx.models.cloud import CloudConfig
 
 logger = logging.getLogger("ofx")
+
+_LOGIN_RETRY_INTERVAL = 5
 
 
 async def _wait_for_port(
@@ -109,10 +112,38 @@ async def wait_for_connectivity(
     Returns:
         True if became reachable.
     """
-    if os_type == "windows":
+    if str(os_type).lower() == "windows":
         return await wait_for_winrm(host, winrm_port, timeout)
-    else:
-        return await wait_for_ssh(host, ssh_port, timeout)
+    return await wait_for_ssh(host, ssh_port, timeout)
+
+
+def _probe_ssh_login(host: str, cfg: CloudConfig) -> None:
+    from ofx.api.post.runners.ssh import PostSSH
+
+    runner = PostSSH(
+        host=host,
+        port=cfg.ssh_port or 22,
+        user=cfg.ssh_user,
+        identity_file=cfg.ssh_key,
+        password=cfg.ssh_password,
+        connect_timeout=10,
+    )
+    runner.run("id")
+
+
+def _probe_winrm_login(host: str, cfg: CloudConfig) -> None:
+    from ofx.api.post.runners.winrm import PostWinRM
+
+    runner = PostWinRM(
+        host=host,
+        port=cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985),
+        username=cfg.winrm_user,
+        password=cfg.winrm_password,
+        ssl=cfg.winrm_ssl,
+        transport=cfg.winrm_transport,
+        command_timeout=10,
+    )
+    runner.run("whoami")
 
 
 async def wait_for_login(
@@ -125,41 +156,11 @@ async def wait_for_login(
     Raises:
         TimeoutError: If the host does not accept login within ``timeout`` seconds.
     """
-    from ofx.api.post.runners.ssh import PostSSH
-    from ofx.api.post.runners.winrm import PostWinRM
-
     start_time = time.time()
-    is_windows = (
-        cfg.connection_type == "winrm" or getattr(cfg, "os_type", "") == "windows"
-    )
-
-    ssh_port = cfg.ssh_port or 22
-    winrm_port = cfg.winrm_port or (5986 if cfg.winrm_ssl else 5985)
-
-    def _try_ssh():
-        r = PostSSH(
-            host=host,
-            port=ssh_port,
-            user=cfg.ssh_user,
-            identity_file=cfg.ssh_key,
-            password=cfg.ssh_password,
-            connect_timeout=10,
-        )
-        r.run("id")
-
-    def _try_winrm():
-        r = PostWinRM(
-            host=host,
-            port=winrm_port,
-            username=cfg.winrm_user,
-            password=cfg.winrm_password,
-            ssl=cfg.winrm_ssl,
-            transport=cfg.winrm_transport,
-            command_timeout=10,
-        )
-        r.run("whoami")
-
-    probe = _try_winrm if is_windows else _try_ssh
+    if cfg.connection_type == "winrm" or getattr(cfg, "os_type", "") == "windows":
+        probe: Callable[[], None] = lambda: _probe_winrm_login(host, cfg)
+    else:
+        probe = lambda: _probe_ssh_login(host, cfg)
     last_error: Exception | None = None
 
     while time.time() - start_time < timeout:
@@ -168,7 +169,7 @@ async def wait_for_login(
             return True
         except Exception as exc:
             last_error = exc
-            await asyncio.sleep(5)
+            await asyncio.sleep(_LOGIN_RETRY_INTERVAL)
 
     raise TimeoutError(
         f"Login to {host} not established after {timeout}s"

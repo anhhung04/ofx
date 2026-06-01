@@ -1,9 +1,12 @@
 """Tests for flow commands: info, visualize, validate, lint, diff, init, list, search."""
 
 from pathlib import Path
+import importlib
 
 import pytest
+import typer
 import yaml
+from rich.console import Console
 
 from ofx.models.workflow import Workflow
 
@@ -57,102 +60,103 @@ def workflow(workflow_file: Path) -> Workflow:
 
 
 class TestFlowInfo:
-    def test_build_overview_table(self, workflow: Workflow):
-        from ofx.commands.flow.info import _build_overview_table
+    def test_show_info_renders_overview_inputs_jobs_and_outputs(self, workflow_file: Path, monkeypatch):
+        import ofx.commands.flow.info as info
 
-        table = _build_overview_table(workflow)
-        assert table is not None
-        assert table.row_count >= 5  # name, desc, tags, jobs, steps
+        console = Console(record=True, width=120)
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_file.read_text()))
+        workflow.workflow_path = workflow_file
 
-    def test_build_inputs_table(self, workflow: Workflow):
-        from ofx.commands.flow.info import _build_inputs_table
+        monkeypatch.setattr(info, "find_workflow", lambda *_args, **_kwargs: workflow)
+        monkeypatch.setattr(info, "get_console", lambda: console)
 
-        table = _build_inputs_table(workflow)
-        assert table is not None
-        assert table.row_count == 1  # one input: target
+        info.show_info(str(workflow_file), detailed=True)
 
-    def test_build_inputs_table_none_when_no_dispatch(self):
-        from ofx.commands.flow.info import _build_inputs_table
+        output = console.export_text()
+        assert "test-workflow" in output
+        assert "A test workflow for validation" in output
+        assert "Inputs" in output
+        assert "target" in output
+        assert "Execution Plan" in output
+        assert "job1" in output
+        assert "step1" in output
+        assert "Job Outputs" in output
+        assert "result" in output
 
-        wf_data = {k: v for k, v in MINIMAL_WORKFLOW.items() if k != "dispatch"}
-        wf = Workflow.model_validate(wf_data)
-        assert _build_inputs_table(wf) is None
+    def test_show_info_omits_inputs_when_no_dispatch(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.info as info
 
-    def test_build_jobs_tree(self, workflow: Workflow):
-        from ofx.commands.flow.info import _build_jobs_tree
+        console = Console(record=True, width=120)
+        wf_data = {key: value for key, value in MINIMAL_WORKFLOW.items() if key != "dispatch"}
+        workflow_path = tmp_path / "no-dispatch.yml"
+        workflow_path.write_text(yaml.dump(wf_data))
+        workflow = Workflow.model_validate(wf_data)
+        workflow.workflow_path = workflow_path
 
-        tree = _build_jobs_tree(workflow, detailed=False)
-        assert tree is not None
+        monkeypatch.setattr(info, "find_workflow", lambda *_args, **_kwargs: workflow)
+        monkeypatch.setattr(info, "get_console", lambda: console)
 
-    def test_build_jobs_tree_detailed(self, workflow: Workflow):
-        from ofx.commands.flow.info import _build_jobs_tree
+        info.show_info(str(workflow_path))
 
-        tree = _build_jobs_tree(workflow, detailed=True)
-        assert tree is not None
+        output = console.export_text()
+        assert "Inputs" not in output
+        assert "Execution Plan" in output
 
-    def test_build_outputs_table(self, workflow: Workflow):
-        from ofx.commands.flow.info import _build_outputs_table
+    def test_show_info_falls_back_to_recursive_workflow_match(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow.info import show_info
 
-        table = _build_outputs_table(workflow)
-        assert table is not None
-        assert table.row_count == 1  # job1 has outputs
+        nested = tmp_path / "nested"
+        nested.mkdir()
+        flow = nested / "fallback.yml"
+        flow.write_text(yaml.dump(MINIMAL_WORKFLOW))
+
+        monkeypatch.setattr("ofx.commands.flow.info.DEFAULT_WORKFLOWS_DIRS", [tmp_path])
+        monkeypatch.setattr(
+            "ofx.commands.flow.info.find_workflow",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("missing")),
+        )
+
+        show_info("fallback")
 
     def test_step_type_label(self):
-        from ofx.commands.flow.info import _step_type_label
+        from ofx.runner.step_descriptors import step_type_label
         from ofx.models.step import Step
 
-        assert "task: nmap" in _step_type_label(Step(task="nmap", name="s"))
-        assert "run:" in _step_type_label(Step(run="echo hi", name="s"))
-        assert "script" == _step_type_label(Step(script="print(1)", name="s"))
-        assert "uses:" in _step_type_label(Step(uses="./other.yml", name="s"))
+        assert "task: nmap" in step_type_label(Step(task="nmap", name="s"))
+        assert "run:" in step_type_label(Step(run="echo hi", name="s"))
+        assert "script" == step_type_label(Step(script="print(1)", name="s"))
+        assert "uses:" in step_type_label(Step(uses="./other.yml", name="s"))
+
+
+class TestFlowCompletions:
+    def test_complete_workflow_names_uses_module_search_dirs(self, tmp_path: Path, monkeypatch):
+        flow_app = importlib.import_module("ofx.commands.flow.app")
+
+        nested = tmp_path / "recon"
+        nested.mkdir()
+        (nested / "scan.yml").write_text("name: scan")
+
+        monkeypatch.setattr(flow_app, "get_workflow_search_dirs", lambda: [tmp_path], raising=False)
+        monkeypatch.setattr(flow_app, "ALLOWED_WORKFLOW_FILE_EXTENSIONS", {".yml", ".yaml"}, raising=False)
+        monkeypatch.setattr("ofx.settings.get_workflow_search_dirs", lambda: [], raising=False)
+
+        assert flow_app._complete_workflow_names("re") == ["recon/"]
+
+    def test_complete_tag_names_uses_module_yaml_loader(self, tmp_path: Path, monkeypatch):
+        flow_app = importlib.import_module("ofx.commands.flow.app")
+
+        workflow_path = tmp_path / "scan.yml"
+        workflow_path.write_text("name: scan\ntags:\n  - ignored\n")
+
+        monkeypatch.setattr(flow_app, "get_workflow_search_dirs", lambda: [tmp_path], raising=False)
+        monkeypatch.setattr(flow_app, "ALLOWED_WORKFLOW_FILE_EXTENSIONS", {".yml", ".yaml"}, raising=False)
+        monkeypatch.setattr(flow_app, "yaml_safe_load", lambda _text: {"tags": ["recon"]}, raising=False)
+        monkeypatch.setattr("yaml.safe_load", lambda _text: {"tags": ["ignored"]})
+
+        assert flow_app._complete_tag_names("re") == ["recon"]
 
 
 class TestFlowDiff:
-    def test_diff_dicts_added(self):
-        from ofx.commands.flow.diff import _diff_dicts
-
-        rows = _diff_dicts({"a": 1}, {"a": 1, "b": 2}, "test")
-        assert len(rows) == 1
-        assert rows[0][0] == "b"
-        assert "added" in rows[0][1]
-
-    def test_diff_dicts_removed(self):
-        from ofx.commands.flow.diff import _diff_dicts
-
-        rows = _diff_dicts({"a": 1, "b": 2}, {"a": 1}, "test")
-        assert len(rows) == 1
-        assert rows[0][0] == "b"
-        assert "removed" in rows[0][1]
-
-    def test_diff_dicts_changed(self):
-        from ofx.commands.flow.diff import _diff_dicts
-
-        rows = _diff_dicts({"a": 1}, {"a": 2}, "test")
-        assert len(rows) == 1
-        assert "changed" in rows[0][1]
-
-    def test_diff_dicts_identical(self):
-        from ofx.commands.flow.diff import _diff_dicts
-
-        rows = _diff_dicts({"a": 1}, {"a": 1}, "test")
-        assert rows == []
-
-    def test_diff_lists(self):
-        from ofx.commands.flow.diff import _diff_lists
-
-        added, removed, common = _diff_lists(["a", "b"], ["b", "c"])
-        assert added == ["c"]
-        assert removed == ["a"]
-        assert common == ["b"]
-
-    def test_diff_lists_identical(self):
-        from ofx.commands.flow.diff import _diff_lists
-
-        added, removed, common = _diff_lists(["a", "b"], ["a", "b"])
-        assert added == []
-        assert removed == []
-        assert common == ["a", "b"]
-
     def test_show_diff_identical(self, workflow_file: Path, capsys):
         """show_diff completes without error for identical workflows."""
         from ofx.commands.flow.diff import show_diff
@@ -185,65 +189,188 @@ class TestFlowDiff:
 
         show_diff(str(path_a), str(path_b))
 
+    def test_show_diff_reports_added_removed_changed_sections(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.diff as diff
+
+        console = Console(record=True, width=120)
+        wf_a = {
+            "name": "workflow-a",
+            "description": "First workflow",
+            "tags": ["recon"],
+            "env": {"A": "1"},
+            "tools": {"httpx": "1.0"},
+            "jobs": {"scan": {"steps": [{"name": "s1", "run": "echo a"}]}},
+        }
+        wf_b = {
+            "name": "workflow-b",
+            "description": "Second workflow",
+            "tags": ["recon", "web"],
+            "env": {"A": "2", "B": "3"},
+            "tools": {},
+            "jobs": {
+                "scan": {"steps": [{"name": "s1", "run": "echo a"}]},
+                "report": {"steps": [{"name": "s2", "run": "echo report"}]},
+            },
+        }
+        path_a = tmp_path / "wf-a.yml"
+        path_b = tmp_path / "wf-b.yml"
+        path_a.write_text(yaml.dump(wf_a))
+        path_b.write_text(yaml.dump(wf_b))
+
+        monkeypatch.setattr(diff, "get_console", lambda: console)
+
+        diff.show_diff(str(path_a), str(path_b))
+
+        output = console.export_text()
+        assert "Tags:" in output
+        assert "+ web" in output
+        assert "Environment Variables" in output
+        assert "added" in output
+        assert "changed" in output
+        assert "Tools" in output
+        assert "removed" in output
+
 
 class TestFlowVisualize:
-    def test_build_dag_data(self, workflow: Workflow):
-        from ofx.commands.flow.visualize import _build_dag_data
-
-        data = _build_dag_data(workflow)
-        assert data["name"] == "test-workflow"
-        assert len(data["stages"]) == 2  # 2 stages
-        assert len(data["jobs"]) == 2
-        assert len(data["dependencies"]) == 1  # job2 depends on job1
-
-    def test_render_dot(self, workflow: Workflow):
-        from ofx.commands.flow.visualize import _render_dot
-
-        dot = _render_dot(workflow)
-        assert 'digraph "test-workflow"' in dot
-        assert '"job1"' in dot
-        assert '"job2"' in dot
-        assert '"job1" -> "job2"' in dot
-        assert "cluster_stage" in dot
-
-    def test_render_json(self, workflow: Workflow):
+    def test_visualize_json_prints_dag_structure(self, workflow_file: Path, monkeypatch):
         import json
+        import ofx.commands.flow.visualize as visualize_mod
 
-        from ofx.commands.flow.visualize import _render_json
+        console = Console(record=True, width=120)
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_file.read_text()))
+        workflow.workflow_path = workflow_file
 
-        result = _render_json(workflow)
-        data = json.loads(result)
+        monkeypatch.setattr(visualize_mod, "_find_workflow_fuzzy", lambda *_args, **_kwargs: workflow)
+        monkeypatch.setattr(visualize_mod, "get_console", lambda: console)
+
+        visualize_mod.visualize(str(workflow_file), format="json")
+
+        data = json.loads(console.export_text())
         assert data["name"] == "test-workflow"
-        assert "stages" in data
-        assert "jobs" in data
-        assert "dependencies" in data
+        assert len(data["stages"]) == 2
+        assert len(data["jobs"]) == 2
+        assert len(data["dependencies"]) == 1
+
+    def test_visualize_dot_prints_graphviz_output(self, workflow_file: Path, monkeypatch):
+        import ofx.commands.flow.visualize as visualize_mod
+
+        console = Console(record=True, width=120)
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_file.read_text()))
+        workflow.workflow_path = workflow_file
+
+        monkeypatch.setattr(visualize_mod, "_find_workflow_fuzzy", lambda *_args, **_kwargs: workflow)
+        monkeypatch.setattr(visualize_mod, "get_console", lambda: console)
+
+        visualize_mod.visualize(str(workflow_file), format="dot")
+
+        output = console.export_text()
+        assert 'digraph "test-workflow"' in output
+        assert '"job1" -> "job2"' in output
+        assert "cluster_stage" in output
+
+    def test_visualize_json_writes_output_file(self, workflow_file: Path, tmp_path: Path, monkeypatch):
+        import json
+        import ofx.commands.flow.visualize as visualize_mod
+
+        workflow = Workflow.model_validate(yaml.safe_load(workflow_file.read_text()))
+        workflow.workflow_path = workflow_file
+        output_path = tmp_path / "workflow.json"
+        saved: list[tuple[str, str]] = []
+
+        monkeypatch.setattr(visualize_mod, "_find_workflow_fuzzy", lambda *_args, **_kwargs: workflow)
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_success", lambda title, message, **_kwargs: saved.append((title, message)))
+
+        visualize_mod.visualize(str(workflow_file), format="json", output=str(output_path))
+
+        data = json.loads(output_path.read_text())
+        assert data["name"] == "test-workflow"
+        assert saved == [("Visualization Saved", f"Written to {output_path}")]
+
+    def test_visualize_falls_back_to_recursive_workflow_match(self, tmp_path: Path, monkeypatch):
+        from ofx.commands.flow.visualize import visualize
+
+        nested = tmp_path / "nested"
+        nested.mkdir()
+        flow = nested / "fallback.yml"
+        flow.write_text(yaml.dump(MINIMAL_WORKFLOW))
+
+        monkeypatch.setattr("ofx.commands.flow.info.DEFAULT_WORKFLOWS_DIRS", [tmp_path])
+        monkeypatch.setattr(
+            "ofx.commands.flow.info.find_workflow",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("missing")),
+        )
+
+        visualize("fallback", format="json")
 
 
 class TestFlowValidate:
-    def test_validate_one_valid(self, workflow_file: Path):
-        from ofx.commands.flow.validate import _validate_one
+    def test_validate_workflow_reports_success(self, workflow_file: Path, monkeypatch):
+        import ofx.commands.flow.validate as validate
 
-        result = _validate_one(workflow_file, check_tasks=False)
-        assert result.valid
-        assert result.name == "test-workflow"
-        assert result.jobs == 2
-        assert result.steps == 3
-        assert result.has_dispatch
-        assert "test" in result.tags
+        success_calls: list[tuple[str, str, dict[str, str]]] = []
 
-    def test_validate_one_invalid(self, tmp_path: Path):
-        from ofx.commands.flow.validate import _validate_one
+        monkeypatch.setattr(
+            validate,
+            "find_workflow",
+            lambda *_args, **_kwargs: type("Resolved", (), {"workflow_path": workflow_file})(),
+            raising=False,
+        )
+        monkeypatch.setattr(
+            "ofx.commands.ui_helpers.print_info",
+            lambda *args, **kwargs: None,
+        )
+        monkeypatch.setattr(
+            "ofx.commands.ui_helpers.print_success",
+            lambda title, message, details: success_calls.append((title, message, details)),
+        )
+        monkeypatch.setattr(validate, "get_console", lambda: Console(record=True, width=120))
 
+        validate.validate_workflows(str(workflow_file), check_tasks=False)
+
+        assert success_calls == [
+            (
+                "Validation Passed",
+                "[cyan]test-workflow[/] is valid",
+                {
+                    "Path": str(workflow_file),
+                    "Jobs": "2",
+                    "Steps": "3",
+                    "Tags": "test, ci",
+                    "Triggers": "dispatch",
+                },
+            )
+        ]
+
+    def test_validate_workflow_reports_invalid_file(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.validate as validate
+
+        errors: list[tuple[str, str, str | None]] = []
         bad_file = tmp_path / "bad.yml"
         bad_file.write_text("not: a: valid: workflow")
-        result = _validate_one(bad_file, check_tasks=False)
-        assert not result.valid
-        assert result.error
 
-    def test_validate_one_with_warnings(self, tmp_path: Path):
-        from ofx.commands.flow.validate import _validate_one
+        def fake_error_exit(title, message, details=None):
+            errors.append((title, message, details))
+            raise typer.Exit(code=1)
 
-        # Workflow without dispatch (triggers a warning)
+        monkeypatch.setattr(
+            validate,
+            "find_workflow",
+            lambda *_args, **_kwargs: type("Resolved", (), {"workflow_path": bad_file})(),
+            raising=False,
+        )
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_info", lambda *args, **kwargs: None)
+        monkeypatch.setattr("ofx.commands.ui_helpers.error_exit", fake_error_exit)
+        monkeypatch.setattr(validate, "get_console", lambda: Console(record=True, width=120))
+
+        with pytest.raises(typer.Exit):
+            validate.validate_workflows(str(bad_file), check_tasks=False)
+
+        assert errors
+        assert errors[0][0] == "Validation Failed"
+
+    def test_validate_workflow_reports_warnings(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.validate as validate
+
         wf_data = {
             "name": "warn-test",
             "jobs": {
@@ -254,25 +381,129 @@ class TestFlowValidate:
         }
         path = tmp_path / "warn.yml"
         path.write_text(yaml.dump(wf_data))
-        result = _validate_one(path, check_tasks=False)
-        assert result.valid
-        assert any(
-            "dispatch" in w.lower() or "call" in w.lower() for w in result.warnings
+        console = Console(record=True, width=120)
+
+        monkeypatch.setattr(
+            validate,
+            "find_workflow",
+            lambda *_args, **_kwargs: type("Resolved", (), {"workflow_path": path})(),
+            raising=False,
         )
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_info", lambda *args, **kwargs: None)
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_success", lambda *args, **kwargs: None)
+        monkeypatch.setattr(validate, "get_console", lambda: console)
+
+        validate.validate_workflows(str(path), check_tasks=False)
+
+        assert "No dispatch or call trigger defined" in console.export_text()
+
+    def test_validate_all_workflows_uses_module_collection_manager(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.validate as validate
+
+        collection_dir = tmp_path / "collection"
+        collection_dir.mkdir()
+        workflow_path = collection_dir / "bulk.yml"
+        workflow_path.write_text(yaml.dump(MINIMAL_WORKFLOW))
+
+        console = Console(record=True, width=120)
+
+        class FakeManager:
+            def list_installed(self):
+                return {
+                    "demo": type("Entry", (), {"path": str(collection_dir)})(),
+                }
+
+        class BrokenManager:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("should not use ofx.collections.CollectionManager")
+
+        empty_home = tmp_path / "home"
+        (empty_home / ".ofx").mkdir(parents=True)
+
+        monkeypatch.setattr(validate, "BUILTIN_WORKFLOWS_DIR", tmp_path / "builtin-missing")
+        monkeypatch.setattr(validate.Path, "home", lambda: empty_home)
+        monkeypatch.setattr(validate, "CollectionManager", FakeManager, raising=False)
+        monkeypatch.setattr("ofx.collections.CollectionManager", BrokenManager)
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_info", lambda *args, **kwargs: None)
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_warning", lambda *args, **kwargs: None)
+        monkeypatch.setattr(validate, "get_console", lambda: console)
+
+        validate.validate_workflows(all_workflows=True, check_tasks=False)
+
+        output = console.export_text()
+        assert "Workflow Validation" in output
+        assert "test-workflow" in output
+
+
+class TestFlowRunSuggestions:
+    def test_suggest_similar_workflows_uses_module_workflow_lister(self, monkeypatch):
+        import importlib
+
+        flow_run = importlib.import_module("ofx.commands.flow.run")
+        warnings: list[str] = []
+
+        monkeypatch.setattr(
+            "ofx.utils.workflow_utils.list_available_workflows",
+            lambda *_args, **_kwargs: [],
+        )
+        monkeypatch.setattr(
+            flow_run,
+            "list_available_workflows",
+            lambda *_args, **_kwargs: ["scan-target"],
+            raising=False,
+        )
+        monkeypatch.setattr(flow_run.logger, "warning", warnings.append)
+
+        flow_run.FlowRunHandler("scan-targt")._suggest_similar_workflows()
+
+        assert any("scan-target" in message for message in warnings)
+
+    def test_suggest_similar_workflows_keeps_substring_matching(self, monkeypatch):
+        import importlib
+
+        flow_run = importlib.import_module("ofx.commands.flow.run")
+        warnings: list[str] = []
+
+        monkeypatch.setattr(
+            "ofx.utils.workflow_utils.list_available_workflows",
+            lambda *_args, **_kwargs: [],
+        )
+        monkeypatch.setattr(
+            flow_run,
+            "list_available_workflows",
+            lambda *_args, **_kwargs: ["dns-scan"],
+            raising=False,
+        )
+        monkeypatch.setattr(flow_run.logger, "warning", warnings.append)
+
+        flow_run.FlowRunHandler("scan")._suggest_similar_workflows()
+
+        assert any("dns-scan" in message for message in warnings)
 
 
 class TestFlowLint:
-    def test_lint_clean_workflow(self, workflow_file: Path):
-        from ofx.commands.flow.lint import _lint_workflow
+    def test_lint_workflow_reports_single_output(self, workflow_file: Path, monkeypatch):
+        import ofx.commands.flow.lint as lint
 
-        result = _lint_workflow(workflow_file)
-        assert result.name == "test-workflow"
-        # Should have some info issues (job2 has no outputs) but no errors/warns
-        assert result.error_count == 0
-        assert result.warn_count == 0
+        console = Console(record=True, width=120)
 
-    def test_lint_missing_description(self, tmp_path: Path):
-        from ofx.commands.flow.lint import _lint_workflow
+        monkeypatch.setattr(
+            lint,
+            "find_workflow",
+            lambda *_args, **_kwargs: type("Resolved", (), {"workflow_path": workflow_file})(),
+            raising=False,
+        )
+        monkeypatch.setattr(lint, "get_console", lambda: console)
+
+        lint.lint_workflows(workflow_name=str(workflow_file))
+
+        output = console.export_text()
+        assert "test-workflow" in output
+        assert "Job has no outputs declared" in output
+        assert "0 errors, 0 warnings, 1 info" in output
+
+    def test_lint_workflow_reports_warnings(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.lint as lint
 
         wf_data = {
             "name": "no-desc",
@@ -280,29 +511,76 @@ class TestFlowLint:
         }
         path = tmp_path / "no-desc.yml"
         path.write_text(yaml.dump(wf_data))
-        result = _lint_workflow(path)
-        assert any("description" in i.message.lower() for i in result.issues)
+        console = Console(record=True, width=120)
 
-    def test_lint_missing_tags(self, tmp_path: Path):
-        from ofx.commands.flow.lint import _lint_workflow
+        monkeypatch.setattr(
+            lint,
+            "find_workflow",
+            lambda *_args, **_kwargs: type("Resolved", (), {"workflow_path": path})(),
+            raising=False,
+        )
+        monkeypatch.setattr(lint, "get_console", lambda: console)
 
-        wf_data = {
-            "name": "no-tags",
-            "description": "Has desc but no tags",
-            "jobs": {"j": {"steps": [{"name": "s", "run": "echo"}]}},
-        }
-        path = tmp_path / "no-tags.yml"
-        path.write_text(yaml.dump(wf_data))
-        result = _lint_workflow(path)
-        assert any("tags" in i.message.lower() for i in result.issues)
+        lint.lint_workflows(workflow_name=str(path))
 
-    def test_lint_invalid_yaml(self, tmp_path: Path):
-        from ofx.commands.flow.lint import _lint_workflow
+        output = console.export_text()
+        assert "Missing or default description" in output
+        assert "No tags defined" in output
+
+    def test_lint_workflow_reports_invalid_yaml(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.lint as lint
 
         path = tmp_path / "bad.yml"
         path.write_text("invalid: yaml: content")
-        result = _lint_workflow(path)
-        assert result.error_count > 0
+        console = Console(record=True, width=120)
+
+        monkeypatch.setattr(
+            lint,
+            "find_workflow",
+            lambda *_args, **_kwargs: type("Resolved", (), {"workflow_path": path})(),
+            raising=False,
+        )
+        monkeypatch.setattr(lint, "get_console", lambda: console)
+
+        lint.lint_workflows(workflow_name=str(path))
+
+        assert "Invalid YAML/schema" in console.export_text()
+
+    def test_lint_all_workflows_uses_module_collection_manager(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.lint as lint
+
+        collection_dir = tmp_path / "collection"
+        collection_dir.mkdir()
+        workflow_path = collection_dir / "bulk.yml"
+        workflow_path.write_text(yaml.dump(MINIMAL_WORKFLOW))
+        console = Console(record=True, width=120)
+
+        class FakeManager:
+            def list_installed(self):
+                return {
+                    "demo": type("Entry", (), {"path": str(collection_dir)})(),
+                }
+
+        class BrokenManager:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("should not use ofx.collections.CollectionManager")
+
+        empty_home = tmp_path / "home"
+        (empty_home / ".ofx").mkdir(parents=True)
+
+        monkeypatch.setattr(lint, "BUILTIN_WORKFLOWS_DIR", tmp_path / "builtin-missing")
+        monkeypatch.setattr(lint.Path, "home", lambda: empty_home)
+        monkeypatch.setattr(lint, "CollectionManager", FakeManager, raising=False)
+        monkeypatch.setattr("ofx.collections.CollectionManager", BrokenManager)
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_info", lambda *args, **kwargs: None)
+        monkeypatch.setattr("ofx.commands.ui_helpers.print_warning", lambda *args, **kwargs: None)
+        monkeypatch.setattr(lint, "get_console", lambda: console)
+
+        lint.lint_workflows(all_workflows=True)
+
+        output = console.export_text()
+        assert "Lint Issues" in output
+        assert "test-workflow" in output
 
 
 class TestFlowHistory:
@@ -392,16 +670,63 @@ class TestFlowHistory:
         records = history.load_history(limit=100)
         assert len(records) == 3
 
-    def test_relative_time(self):
+    def test_show_history_formats_relative_times(self, monkeypatch):
         from datetime import UTC, datetime, timedelta
 
-        from ofx.commands.flow.history import _relative_time
+        import ofx.commands.flow.history as history
 
-        now = datetime.now(UTC)
-        assert _relative_time(now.isoformat()) == "just now"
-        assert "m ago" in _relative_time((now - timedelta(minutes=5)).isoformat())
-        assert "h ago" in _relative_time((now - timedelta(hours=3)).isoformat())
-        assert "d ago" in _relative_time((now - timedelta(days=2)).isoformat())
+        now = datetime(2026, 1, 2, tzinfo=UTC)
+        console = Console(record=True, width=120)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        monkeypatch.setattr(history, "datetime", FixedDateTime)
+        monkeypatch.setattr(
+            history,
+            "load_history",
+            lambda limit, workflow, status: [
+                {
+                    "run_id": "run-just-now",
+                    "workflow": "flow-now",
+                    "status": "completed",
+                    "elapsed_seconds": 1.0,
+                    "timestamp": now.isoformat(),
+                },
+                {
+                    "run_id": "run-minutes",
+                    "workflow": "flow-min",
+                    "status": "failed",
+                    "elapsed_seconds": 75.0,
+                    "timestamp": (now - timedelta(minutes=5)).isoformat(),
+                },
+                {
+                    "run_id": "run-hours",
+                    "workflow": "flow-hour",
+                    "status": "canceled",
+                    "elapsed_seconds": 7200.0,
+                    "timestamp": (now - timedelta(hours=3)).isoformat(),
+                },
+                {
+                    "run_id": "run-days",
+                    "workflow": "flow-day",
+                    "status": "queued",
+                    "elapsed_seconds": 15.0,
+                    "timestamp": (now - timedelta(days=2)).isoformat(),
+                },
+            ],
+        )
+        monkeypatch.setattr("ofx.settings.get_console", lambda: console)
+
+        history.show_history()
+
+        output = console.export_text()
+        assert "just now" in output
+        assert "5m ago" in output
+        assert "3h ago" in output
+        assert "2d ago" in output
 
     def test_empty_history(self, tmp_path: Path, monkeypatch):
         from ofx.commands.flow import history
@@ -570,43 +895,139 @@ class TestFlowListHandler:
         monkeypatch.setattr(settings_mod, "BUILTIN_WORKFLOWS_DIR", tmp_path / "empty")
         show_list(builtin=True)
 
-    def test_read_metadata(self, tmp_path: Path):
-        from ofx.commands.flow.list_cmd import _read_metadata
+    def test_show_list_searches_declared_metadata_name(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.list_cmd as list_cmd
 
-        wf = tmp_path / "test.yml"
-        wf.write_text(
+        console = Console(record=True, width=120)
+        workflow = tmp_path / "searchable.yml"
+        workflow.write_text(
             yaml.dump(
-                {"name": "my-wf", "description": "A test", "tags": ["recon", "web"]}
+                {
+                    "name": "my-wf",
+                    "description": "A test workflow",
+                    "tags": ["recon", "web"],
+                }
             )
         )
 
-        meta = _read_metadata(wf)
-        assert meta["name"] == "my-wf"
-        assert meta["description"] == "A test"
-        assert "recon" in meta["tags"]
+        monkeypatch.setattr(list_cmd, "BUILTIN_WORKFLOWS_DIR", tmp_path)
+        monkeypatch.setattr(list_cmd, "get_console", lambda: console)
 
-    def test_read_metadata_invalid(self, tmp_path: Path):
-        from ofx.commands.flow.list_cmd import _read_metadata
+        list_cmd.show_list(
+            builtin=True,
+            search_term="my-wf",
+            show_tags=True,
+            show_descriptions=True,
+        )
 
+        output = console.export_text()
+        assert "searchable" in output
+        assert "#recon" in output
+        assert "A test workflow" in output
+
+    def test_show_list_falls_back_to_stem_for_invalid_yaml(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.list_cmd as list_cmd
+
+        console = Console(record=True, width=120)
         bad = tmp_path / "bad.yml"
         bad.write_text("not: valid: yaml: {{")
 
-        meta = _read_metadata(bad)
-        assert meta["name"] == "bad"
-        assert meta["tags"] == []
+        monkeypatch.setattr(list_cmd, "BUILTIN_WORKFLOWS_DIR", tmp_path)
+        monkeypatch.setattr(list_cmd, "get_console", lambda: console)
 
-    def test_scan_yaml_files(self, tmp_path: Path):
-        from ofx.commands.flow.list_cmd import _scan_yaml_files
+        list_cmd.show_list(builtin=True, search_term="bad")
 
+        assert "bad" in console.export_text()
+
+    def test_show_list_ignores_non_workflow_files(self, tmp_path: Path, monkeypatch):
+        import ofx.commands.flow.list_cmd as list_cmd
+
+        console = Console(record=True, width=120)
         (tmp_path / "a.yml").write_text("name: a")
         (tmp_path / "b.yaml").write_text("name: b")
         (tmp_path / "c.txt").write_text("not a workflow")
 
-        files = _scan_yaml_files(tmp_path)
-        names = {f.name for f in files}
-        assert "a.yml" in names
-        assert "b.yaml" in names
-        assert "c.txt" not in names
+        monkeypatch.setattr(list_cmd, "BUILTIN_WORKFLOWS_DIR", tmp_path)
+        monkeypatch.setattr(list_cmd, "get_console", lambda: console)
+
+        list_cmd.show_list(builtin=True)
+
+        output = console.export_text()
+        assert "a" in output
+        assert "b" in output
+        assert "c.txt" not in output
+
+
+class TestFlowCollectionCommands:
+    def test_collection_list_uses_module_manager(self, monkeypatch):
+        from typer.testing import CliRunner
+
+        from ofx.collections.manifest import InstalledCollection
+        from ofx.commands.flow.collection import app as collection_app
+
+        console = Console(record=True, width=120)
+
+        class FakeManager:
+            def list_installed(self):
+                return {
+                    "demo": InstalledCollection(
+                        name="demo",
+                        version="1.2.3",
+                        source="https://example.com/demo.git",
+                        tags=["recon"],
+                    )
+                }
+
+        monkeypatch.setattr(
+            "ofx.commands.flow.collection.CollectionManager",
+            FakeManager,
+            raising=False,
+        )
+        monkeypatch.setattr("ofx.commands.flow.collection.get_console", lambda: console)
+
+        result = CliRunner().invoke(collection_app, ["list"])
+
+        assert result.exit_code == 0
+        output = console.export_text()
+        assert "demo" in output
+        assert "1.2.3" in output
+
+    def test_collection_info_uses_module_manager(self, monkeypatch, tmp_path: Path):
+        from typer.testing import CliRunner
+
+        from ofx.collections.manifest import InstalledCollection
+        from ofx.commands.flow.collection import app as collection_app
+
+        console = Console(record=True, width=120)
+        coll_dir = tmp_path / "demo"
+        coll_dir.mkdir()
+        (coll_dir / "scan.yml").write_text("name: scan")
+
+        class FakeManager:
+            def get(self, name):
+                if name != "demo":
+                    return None
+                return InstalledCollection(
+                    name="demo",
+                    source="https://example.com/demo.git",
+                    path=str(coll_dir),
+                    pinned_ref="main",
+                    installed_at="2026-01-01T00:00:00+00:00",
+                )
+
+        monkeypatch.setattr(
+            "ofx.commands.flow.collection.CollectionManager",
+            FakeManager,
+            raising=False,
+        )
+        monkeypatch.setattr("ofx.commands.flow.collection.get_console", lambda: console)
+
+        result = CliRunner().invoke(collection_app, ["info", "demo"])
+
+        assert result.exit_code == 0
+        output = console.export_text()
+        assert "demo" in output
+        assert "scan.yml" in output
 
 
 class TestFlowSearchHandler:

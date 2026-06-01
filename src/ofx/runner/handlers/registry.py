@@ -16,12 +16,9 @@ class SupportsStepHandler(Protocol):
     parent: object
     _run_type: RunType
 
-    def _child_context(self, update: dict | None = None): ...
     def _log_warning(self, message: str) -> None: ...
     def _log_info(self, message: str) -> None: ...
     def _resolve_working_dir(self): ...
-    def _resolve_shell(self) -> str: ...
-    def _resolve_store_creds(self) -> bool: ...
 
 
 StepHandlerT = TypeVar("StepHandlerT", bound=Callable[[SupportsStepHandler], Any])
@@ -51,10 +48,6 @@ class HandlerRegistry:
         if handler is None:
             raise ValueError(f"Invalid run type '{run_type}'. No handler registered.")
         return handler
-
-    def create_runner(self, run_type: RunType, step_runner: SupportsStepHandler) -> Any:
-        """Instantiate the child runner for the provided run type."""
-        return self.get(run_type)(step_runner)
 
 
 registry = HandlerRegistry()

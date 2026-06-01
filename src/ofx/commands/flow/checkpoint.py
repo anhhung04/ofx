@@ -15,56 +15,6 @@ from ofx.settings import get_console
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
-
-def _parse_age(age: str) -> float | None:
-    """Parse a human-readable age string (e.g. '7d', '24h', '30m') to seconds."""
-    if not age:
-        return None
-    age = age.strip().lower()
-    multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
-    suffix = age[-1]
-    if suffix in multipliers:
-        try:
-            return float(age[:-1]) * multipliers[suffix]
-        except ValueError:
-            raise typer.BadParameter(f"Invalid age format: {age}") from None
-    try:
-        return float(age)
-    except ValueError:
-        raise typer.BadParameter(
-            f"Invalid age format: {age}. Use a number with optional suffix: s, m, h, d, w"
-        ) from None
-
-
-def _resolve_output_path(output: str) -> Path:
-    """Resolve the output directory for checkpoint operations.
-
-    Priority: explicit output arg > global -p flag > active project.
-    """
-    if output:
-        return Path(output).expanduser()
-
-    from ofx.commands import get_cli_project
-    from ofx.commands.project.project_manager import ProjectManager
-
-    resolved_project = get_cli_project()
-    if not resolved_project:
-        active_path = ProjectManager.get_active_path()
-        if active_path:
-            resolved_project = active_path.name
-
-    if resolved_project:
-        with suppress(Exception):
-            project_path = Path(ProjectManager.resolve_path(resolved_project))
-            if project_path.is_dir():
-                return project_path
-
-    raise typer.BadParameter(
-        "No output directory specified and no active project found. "
-        "Provide an output path or set an active project with 'ofx project active <name>'."
-    )
-
-
 @app.command("list")
 def checkpoint_list(
     output: Annotated[
@@ -83,10 +33,32 @@ def checkpoint_list(
     ] = "file",
 ):
     """List durable checkpoints in an output directory."""
-    from ofx.runner.durable import list_checkpoints
+    from ofx.runner.services.checkpoint import list_checkpoints
+    from ofx.commands import get_cli_project
+    from ofx.commands.project.project_manager import ProjectManager
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = _resolve_output_path(output)
+    if output:
+        path = Path(output).expanduser()
+    else:
+        resolved_project = get_cli_project()
+        if not resolved_project:
+            active_path = ProjectManager.get_active_path()
+            if active_path:
+                resolved_project = active_path.name
+
+        path = None
+        if resolved_project:
+            with suppress(Exception):
+                project_path = Path(ProjectManager.resolve_path(resolved_project))
+                if project_path.is_dir():
+                    path = project_path
+
+        if path is None:
+            raise typer.BadParameter(
+                "No output directory specified and no active project found. "
+                "Provide an output path or set an active project with 'ofx project active <name>'."
+            )
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
@@ -154,10 +126,32 @@ def checkpoint_show(
     """Show details of a specific checkpoint or all checkpoints as JSON."""
     import json
 
-    from ofx.runner.durable import get_checkpoint, list_checkpoints
+    from ofx.runner.services.checkpoint import get_checkpoint, list_checkpoints
+    from ofx.commands import get_cli_project
+    from ofx.commands.project.project_manager import ProjectManager
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = _resolve_output_path(output)
+    if output:
+        path = Path(output).expanduser()
+    else:
+        resolved_project = get_cli_project()
+        if not resolved_project:
+            active_path = ProjectManager.get_active_path()
+            if active_path:
+                resolved_project = active_path.name
+
+        path = None
+        if resolved_project:
+            with suppress(Exception):
+                project_path = Path(ProjectManager.resolve_path(resolved_project))
+                if project_path.is_dir():
+                    path = project_path
+
+        if path is None:
+            raise typer.BadParameter(
+                "No output directory specified and no active project found. "
+                "Provide an output path or set an active project with 'ofx project active <name>'."
+            )
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
@@ -222,15 +216,37 @@ def checkpoint_clean(
     ] = False,
 ):
     """Clean durable checkpoints from an output directory."""
-    from ofx.runner.durable import (
+    from ofx.runner.services.checkpoint import (
         clean_all_checkpoints,
         clean_checkpoints,
         clean_stale_checkpoints,
         list_checkpoints,
     )
+    from ofx.commands import get_cli_project
+    from ofx.commands.project.project_manager import ProjectManager
 
     config = DurableRunConfig(enabled=True, backend=backend)
-    path = _resolve_output_path(output)
+    if output:
+        path = Path(output).expanduser()
+    else:
+        resolved_project = get_cli_project()
+        if not resolved_project:
+            active_path = ProjectManager.get_active_path()
+            if active_path:
+                resolved_project = active_path.name
+
+        path = None
+        if resolved_project:
+            with suppress(Exception):
+                project_path = Path(ProjectManager.resolve_path(resolved_project))
+                if project_path.is_dir():
+                    path = project_path
+
+        if path is None:
+            raise typer.BadParameter(
+                "No output directory specified and no active project found. "
+                "Provide an output path or set an active project with 'ofx project active <name>'."
+            )
 
     if not path.is_dir():
         print_warning("Not Found", f"Directory not found: {path}")
@@ -253,7 +269,24 @@ def checkpoint_clean(
         print_success("Cleaned", f"Removed {count} stale checkpoint(s).")
         return
 
-    age_seconds = _parse_age(older_than)
+    if not older_than:
+        age_seconds = None
+    else:
+        age = older_than.strip().lower()
+        multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
+        suffix = age[-1]
+        if suffix in multipliers:
+            try:
+                age_seconds = float(age[:-1]) * multipliers[suffix]
+            except ValueError:
+                raise typer.BadParameter(f"Invalid age format: {age}") from None
+        else:
+            try:
+                age_seconds = float(age)
+            except ValueError:
+                raise typer.BadParameter(
+                    f"Invalid age format: {age}. Use a number with optional suffix: s, m, h, d, w"
+                ) from None
     statuses: list[str] | None = [
         s.strip() for s in status.split(",") if s.strip()
     ] or None

@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from ofx.utils.file_cleanup import remove_file
 from ofx.settings import BASE_DATA_DIR, ensure_dir, settings
 
 logger = logging.getLogger(f"{settings.app_branding}.history")
@@ -93,7 +94,7 @@ def clear_history() -> int:
         return 0
     try:
         count = sum(1 for line in HISTORY_FILE.read_text().splitlines() if line.strip())
-        HISTORY_FILE.unlink()
+        remove_file(HISTORY_FILE)
         return count
     except Exception as e:
         logger.debug("Failed to clear history: %s", e)
@@ -188,8 +189,25 @@ def show_history(
         else:
             dur = f"{elapsed:.1f}s"
 
-        # Time formatting (relative)
-        time_str = _relative_time(ts)
+        try:
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            now = datetime.now(UTC)
+            seconds = int((now - dt).total_seconds())
+
+            if seconds < 60:
+                time_str = "just now"
+            elif seconds < 3600:
+                time_str = f"{seconds // 60}m ago"
+            elif seconds < 86400:
+                time_str = f"{seconds // 3600}h ago"
+            elif seconds < 604800:
+                time_str = f"{seconds // 86400}d ago"
+            else:
+                time_str = dt.strftime("%Y-%m-%d")
+        except Exception:
+            time_str = ts[:16] if len(ts) > 16 else ts
 
         row = [run_id, wf_name, status_str, dur, time_str]
         if verbose:
@@ -209,27 +227,3 @@ def show_history(
         table.add_row(*row)
 
     console.print(table)
-
-
-def _relative_time(iso_ts: str) -> str:
-    """Convert ISO timestamp to relative time string."""
-    try:
-        dt = datetime.fromisoformat(iso_ts)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        now = datetime.now(UTC)
-        delta = now - dt
-        seconds = int(delta.total_seconds())
-
-        if seconds < 60:
-            return "just now"
-        elif seconds < 3600:
-            return f"{seconds // 60}m ago"
-        elif seconds < 86400:
-            return f"{seconds // 3600}h ago"
-        elif seconds < 604800:
-            return f"{seconds // 86400}d ago"
-        else:
-            return dt.strftime("%Y-%m-%d")
-    except Exception:
-        return iso_ts[:16] if len(iso_ts) > 16 else iso_ts

@@ -7,8 +7,6 @@ import io
 from rich.console import Console
 
 from ofx.runner.output_formatter import (
-    _cell_style,
-    _cell_value,
     format_typed_outputs,
 )
 
@@ -21,106 +19,6 @@ def _capture_console() -> tuple[Console, io.StringIO]:
     """Return a Console that writes to a StringIO buffer."""
     buf = io.StringIO()
     return Console(file=buf, force_terminal=True, width=200), buf
-
-
-# ---------------------------------------------------------------------------
-# TestCellValue
-# ---------------------------------------------------------------------------
-
-
-class TestCellValue:
-    """Tests for _cell_value."""
-
-    def test_none_field(self):
-        assert _cell_value({"x": None}, "x") == ""
-
-    def test_empty_string(self):
-        assert _cell_value({"x": ""}, "x") == ""
-
-    def test_zero_value(self):
-        assert _cell_value({"x": 0}, "x") == ""
-
-    def test_normal_string(self):
-        assert _cell_value({"x": "hello"}, "x") == "hello"
-
-    def test_normal_int(self):
-        assert _cell_value({"port": 443}, "port") == "443"
-
-    def test_list_leq_5(self):
-        assert _cell_value({"t": ["a", "b", "c"]}, "t") == "a, b, c"
-
-    def test_list_exactly_5(self):
-        items = ["a", "b", "c", "d", "e"]
-        assert _cell_value({"t": items}, "t") == "a, b, c, d, e"
-
-    def test_list_gt_5(self):
-        items = ["a", "b", "c", "d", "e", "f", "g"]
-        result = _cell_value({"t": items}, "t")
-        assert result == "a, b, c, d, e…"
-
-    def test_bool_true(self):
-        assert _cell_value({"x": True}, "x") == "✓"
-
-    def test_bool_false(self):
-        # False == 0 is True in Python, so it hits the val == 0 branch first
-        assert _cell_value({"x": False}, "x") == ""
-
-    def test_missing_key(self):
-        assert _cell_value({}, "missing") == ""
-
-
-# ---------------------------------------------------------------------------
-# TestCellStyle
-# ---------------------------------------------------------------------------
-
-
-class TestCellStyle:
-    """Tests for _cell_style."""
-
-    def test_severity_critical(self):
-        assert (
-            _cell_style({"severity": "critical"}, "severity", "base")
-            == "bold white on red"
-        )
-
-    def test_severity_high(self):
-        assert _cell_style({"severity": "high"}, "severity", "base") == "bold red"
-
-    def test_severity_medium(self):
-        assert _cell_style({"severity": "Medium"}, "severity", "base") == "yellow"
-
-    def test_severity_low(self):
-        assert _cell_style({"severity": "low"}, "severity", "base") == "blue"
-
-    def test_severity_info(self):
-        assert _cell_style({"severity": "info"}, "severity", "base") == "dim"
-
-    def test_severity_unknown(self):
-        assert _cell_style({"severity": "unknown"}, "severity", "base") == "dim"
-
-    def test_severity_unrecognized_falls_back(self):
-        assert _cell_style({"severity": "custom"}, "severity", "base") == "base"
-
-    def test_status_code_200(self):
-        assert _cell_style({"status_code": 200}, "status_code", "base") == "green"
-
-    def test_status_code_301(self):
-        assert _cell_style({"status_code": 301}, "status_code", "base") == "yellow"
-
-    def test_status_code_404(self):
-        assert _cell_style({"status_code": 404}, "status_code", "base") == "red"
-
-    def test_status_code_500(self):
-        assert _cell_style({"status_code": 500}, "status_code", "base") == "bold red"
-
-    def test_status_code_zero_returns_base(self):
-        assert _cell_style({"status_code": 0}, "status_code", "base") == "base"
-
-    def test_status_code_non_int_returns_base(self):
-        assert _cell_style({"status_code": "200"}, "status_code", "base") == "base"
-
-    def test_non_special_field(self):
-        assert _cell_style({"host": "example.com"}, "host", "cyan") == "cyan"
 
 
 # ---------------------------------------------------------------------------
@@ -283,3 +181,28 @@ class TestFormatTypedOutputs:
         format_typed_outputs(items, task_name="", console=console)
         output = buf.getvalue()
         assert "Task Results" in output
+
+    def test_formats_lists_bools_and_contextual_styles(self):
+        items = [
+            {
+                "_type": "vulnerability",
+                "severity": "critical",
+                "name": "XSS",
+                "matched_at": ["a", "b", "c", "d", "e", "f"],
+                "id": True,
+            },
+            {
+                "_type": "url",
+                "url": "https://example.com",
+                "status_code": 404,
+                "title": "Example",
+                "tech": "nginx",
+            },
+        ]
+        console, buf = _capture_console()
+        format_typed_outputs(items, task_name="styled", console=console)
+        output = buf.getvalue()
+        assert "a, b, c, d, e…" in output
+        assert "✓" in output
+        assert "critical" in output.lower()
+        assert "404" in output

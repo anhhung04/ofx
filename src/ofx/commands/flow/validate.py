@@ -16,6 +16,9 @@ from ofx.settings import (
 
 logger = logging.getLogger("ofx")
 
+CollectionManager = None
+find_workflow = None
+
 
 @dataclass
 class ValidationResult:
@@ -94,131 +97,6 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
                 result.warnings.append(f"Task '{task_name}' not found in registry")
 
     return result
-
-
-def _print_single_result(result: ValidationResult) -> None:
-    """Print detailed validation result for a single workflow."""
-    from ofx.commands.ui_helpers import error_exit, print_success
-
-    console = get_console()
-
-    if not result.valid:
-        error_exit("Validation Failed", f"[cyan]{result.path}[/]", result.error)
-
-    # Build details
-    details: dict[str, str] = {
-        "Path": str(result.path),
-        "Jobs": str(result.jobs),
-        "Steps": str(result.steps),
-    }
-    if result.tags:
-        details["Tags"] = ", ".join(result.tags)
-
-    triggers = []
-    if result.has_dispatch:
-        triggers.append("dispatch")
-    if result.has_call:
-        triggers.append("call")
-    details["Triggers"] = ", ".join(triggers) if triggers else "direct run"
-
-    if result.task_refs:
-        details["Task refs"] = f"{len(set(result.task_refs))} unique"
-
-    print_success(
-        "Validation Passed",
-        f"[cyan]{result.name}[/] is valid",
-        details,
-    )
-
-    if result.warnings:
-        for w in result.warnings:
-            console.print(f"  [yellow]⚠[/] {w}")
-        console.print()
-
-
-def _print_bulk_results(results: list[ValidationResult]) -> None:
-    """Print summary table for bulk validation."""
-    from rich.table import Table
-
-    console = get_console()
-
-    passed = sum(1 for r in results if r.valid)
-    failed = sum(1 for r in results if not r.valid)
-    warned = sum(1 for r in results if r.valid and r.warnings)
-
-    table = Table(
-        title=f"Workflow Validation: {passed} passed, {failed} failed, {warned} warnings"
-    )
-    table.add_column("Workflow", style="cyan")
-    table.add_column("Status", justify="center")
-    table.add_column("Jobs", justify="right")
-    table.add_column("Steps", justify="right")
-    table.add_column("Issues", style="dim")
-
-    for r in sorted(results, key=lambda x: (x.valid, x.path)):
-        if r.valid:
-            status = "[green]✓[/]"
-            issues = ""
-            if r.warnings:
-                status = "[yellow]⚠[/]"
-                issues = "; ".join(r.warnings[:2])
-                if len(r.warnings) > 2:
-                    issues += f" (+{len(r.warnings) - 2} more)"
-        else:
-            status = "[red]✗[/]"
-            issues = r.error[:80]
-
-        name = r.name or r.path.stem
-        table.add_row(name, status, str(r.jobs), str(r.steps), issues)
-
-    console.print(table)
-
-    # Print failed details
-    failed_results = [r for r in results if not r.valid]
-    if failed_results:
-        console.print()
-        console.print("[bold red]Failed workflows:[/]")
-        for r in failed_results:
-            console.print(f"  [red]✗[/] {r.path.stem}: {r.error[:120]}")
-
-
-def _discover_all_workflows() -> list[Path]:
-    """Find all workflow files in dedicated workflow directories (not CWD)."""
-    from ofx.collections import CollectionManager
-
-    seen: set[str] = set()
-    files: list[Path] = []
-
-    # Only scan dedicated workflow directories, not CWD
-    dirs: list[Path] = []
-    if BUILTIN_WORKFLOWS_DIR.is_dir():
-        dirs.append(BUILTIN_WORKFLOWS_DIR)
-
-    user_dir = Path.home() / ".ofx" / "workflows"
-    if user_dir.is_dir():
-        dirs.append(user_dir)
-
-    # Installed collections
-    try:
-        manager = CollectionManager()
-        for entry in manager.list_installed().values():
-            coll_path = Path(entry.path)
-            if coll_path.is_dir():
-                dirs.append(coll_path)
-    except Exception as e:
-        logger.debug("Failed to load installed collections for validation: %s", e)
-
-    for d in dirs:
-        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            for path in sorted(d.rglob(f"*{ext}")):
-                resolved = str(path.resolve())
-                if resolved not in seen:
-                    seen.add(resolved)
-                    files.append(path)
-
-    return files
-
-
 def validate_workflows(
     workflow_name: str = "",
     all_workflows: bool = False,
@@ -226,11 +104,43 @@ def validate_workflows(
 ) -> None:
     """Validate one or all workflows with detailed diagnostics."""
     from ofx.commands.ui_helpers import error_exit, print_info, print_warning
+    from rich.table import Table
 
     console = get_console()
 
     if all_workflows:
-        files = _discover_all_workflows()
+        seen: set[str] = set()
+        files: list[Path] = []
+        dirs: list[Path] = []
+
+        if BUILTIN_WORKFLOWS_DIR.is_dir():
+            dirs.append(BUILTIN_WORKFLOWS_DIR)
+
+        user_dir = Path.home() / ".ofx" / "workflows"
+        if user_dir.is_dir():
+            dirs.append(user_dir)
+
+        collection_manager_cls = CollectionManager
+        if collection_manager_cls is None:
+            from ofx.collections import CollectionManager as collection_manager_cls
+
+        try:
+            manager = collection_manager_cls()
+            for entry in manager.list_installed().values():
+                coll_path = Path(entry.path)
+                if coll_path.is_dir():
+                    dirs.append(coll_path)
+        except Exception as e:
+            logger.debug("Failed to load installed collections for validation: %s", e)
+
+        for directory in dirs:
+            for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+                for path in sorted(directory.rglob(f"*{ext}")):
+                    resolved = str(path.resolve())
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        files.append(path)
+
         if not files:
             print_warning(
                 "No Workflows", "No workflow files found in search directories."
@@ -241,18 +151,59 @@ def validate_workflows(
         console.print()
 
         results = [_validate_one(f, check_tasks=check_tasks) for f in files]
-        _print_bulk_results(results)
+        passed = sum(1 for result in results if result.valid)
+        failed = sum(1 for result in results if not result.valid)
+        warned = sum(1 for result in results if result.valid and result.warnings)
+
+        table = Table(
+            title=(
+                f"Workflow Validation: {passed} passed, {failed} failed, {warned} warnings"
+            )
+        )
+        table.add_column("Workflow", style="cyan")
+        table.add_column("Status", justify="center")
+        table.add_column("Jobs", justify="right")
+        table.add_column("Steps", justify="right")
+        table.add_column("Issues", style="dim")
+
+        for result in sorted(results, key=lambda item: (item.valid, item.path)):
+            if result.valid:
+                status = "[green]✓[/]"
+                issues = ""
+                if result.warnings:
+                    status = "[yellow]⚠[/]"
+                    issues = "; ".join(result.warnings[:2])
+                    if len(result.warnings) > 2:
+                        issues += f" (+{len(result.warnings) - 2} more)"
+            else:
+                status = "[red]✗[/]"
+                issues = result.error[:80]
+
+            name = result.name or result.path.stem
+            table.add_row(name, status, str(result.jobs), str(result.steps), issues)
+
+        console.print(table)
+
+        failed_results = [result for result in results if not result.valid]
+        if failed_results:
+            console.print()
+            console.print("[bold red]Failed workflows:[/]")
+            for result in failed_results:
+                console.print(
+                    f"  [red]✗[/] {result.path.stem}: {result.error[:120]}"
+                )
         return
 
     if not workflow_name:
         error_exit("Missing Argument", "Provide a workflow name or use --all")
 
-    # Single workflow: try find_workflow first, then recursive search
-    from ofx.utils.workflow_utils import find_workflow
-
     path: Path | None = None
+    workflow_finder = find_workflow
+    if workflow_finder is None:
+        from ofx.utils.workflow_utils import find_workflow as workflow_finder
+
     try:
-        wf = find_workflow(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+        wf = workflow_finder(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
         path = wf.workflow_path
     except RuntimeError:
         # Recursive fallback
@@ -272,4 +223,36 @@ def validate_workflows(
     print_info("Validating", f"[cyan]{workflow_name}[/]")
     console.print()
     result = _validate_one(path, check_tasks=check_tasks)
-    _print_single_result(result)
+    if not result.valid:
+        error_exit("Validation Failed", f"[cyan]{result.path}[/]", result.error)
+
+    details: dict[str, str] = {
+        "Path": str(result.path),
+        "Jobs": str(result.jobs),
+        "Steps": str(result.steps),
+    }
+    if result.tags:
+        details["Tags"] = ", ".join(result.tags)
+
+    triggers = []
+    if result.has_dispatch:
+        triggers.append("dispatch")
+    if result.has_call:
+        triggers.append("call")
+    details["Triggers"] = ", ".join(triggers) if triggers else "direct run"
+
+    if result.task_refs:
+        details["Task refs"] = f"{len(set(result.task_refs))} unique"
+
+    from ofx.commands.ui_helpers import print_success
+
+    print_success(
+        "Validation Passed",
+        f"[cyan]{result.name}[/] is valid",
+        details,
+    )
+
+    if result.warnings:
+        for warning in result.warnings:
+            console.print(f"  [yellow]⚠[/] {warning}")
+        console.print()

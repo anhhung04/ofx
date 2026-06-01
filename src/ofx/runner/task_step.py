@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from urllib.parse import urlparse
 
 
 def extract_task_target_and_opts(
-    run_with: Mapping[str, Any],
-) -> tuple[str, dict[str, Any]]:
+    run_with: Mapping[str, object],
+) -> tuple[str, dict[str, object]]:
     """Return normalized task target text plus remaining task options.
 
     Accepts either ``target`` or ``targets`` from workflow step ``with:``
@@ -25,4 +25,23 @@ def extract_task_target_and_opts(
     return target, task_opts
 
 
-__all__ = ["extract_task_target_and_opts"]
+def extract_output_item_target(item: Mapping[str, Any]) -> str:
+    """Return the best target label from a typed-output item."""
+    for key in ("domain", "host", "ip"):
+        value = item.get(key, "")
+        if value:
+            return str(value)
+
+    url = item.get("url", "")
+    if url:
+        try:
+            return urlparse(str(url)).hostname or ""
+        except Exception:
+            return ""
+    return ""
+
+
+__all__ = [
+    "extract_output_item_target",
+    "extract_task_target_and_opts",
+]

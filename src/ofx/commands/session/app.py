@@ -37,6 +37,15 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "session"
 HELP = "Manage detached workflow sessions (local & cloud)"
 
+SessionManager = None
+SessionStore = None
+SessionStatus = None
+SessionTarget = None
+get_cli_env_vars = None
+get_cli_project = None
+parse_key_value_pairs = None
+ProjectManager = None
+
 
 # ======================================================================
 # Helpers
@@ -53,9 +62,7 @@ def _run_session_op(
     extra_exc: tuple[type[Exception], ...] = (),
 ) -> Any:
     """Run an async SessionManager operation with standard error handling."""
-    from ofx.cloud.sessions import SessionManager
-
-    mgr = SessionManager()
+    mgr = _get_session_manager_cls()()
     try:
         return asyncio.run(coro(mgr))
     except FileNotFoundError:
@@ -109,21 +116,233 @@ def _session_detail_table(session) -> Table:
     return table
 
 
-def _parse_duration(s: str) -> int | None:
-    """Parse a human duration string like '7d', '24h', '30m', '3600s' into seconds."""
-    s = s.strip().lower()
-    if not s:
-        return None
+
+def _get_session_manager_cls():
+    session_manager_cls = SessionManager
+    if session_manager_cls is None:
+        from ofx.cloud.sessions import SessionManager as session_manager_cls
+
+    return session_manager_cls
+
+
+def _get_session_store_cls():
+    session_store_cls = SessionStore
+    if session_store_cls is None:
+        from ofx.cloud.sessions import SessionStore as session_store_cls
+
+    return session_store_cls
+
+
+def _get_session_status_cls():
+    session_status_cls = SessionStatus
+    if session_status_cls is None:
+        from ofx.cloud.sessions.models import SessionStatus as session_status_cls
+
+    return session_status_cls
+
+
+def _get_session_store_and_status_deps():
+    return _get_session_store_cls()(), _get_session_status_cls()
+
+
+def _parse_age_seconds(value: str) -> int | None:
+    raw = value.strip().lower()
     multipliers = {"s": 1, "m": 60, "h": 3600, "d": 86400}
-    if s[-1] in multipliers:
+    if not raw:
+        return None
+    if raw[-1] in multipliers:
         try:
-            return int(s[:-1]) * multipliers[s[-1]]
+            return int(raw[:-1]) * multipliers[raw[-1]]
         except ValueError:
             return None
     try:
-        return int(s)
+        return int(raw)
     except ValueError:
         return None
+
+
+def _parse_age_seconds_or_exit(value: str) -> int:
+    age_seconds = _parse_age_seconds(value)
+    if age_seconds is None:
+        error_exit(
+            "Invalid duration",
+            f"Invalid duration: {value}",
+            details="Examples: 7d, 24h, 30m, 3600s",
+        )
+    return age_seconds
+
+
+
+def _get_session_submit_deps():
+    key_value_parser = parse_key_value_pairs
+    if key_value_parser is None:
+        from ofx.utils.args import parse_key_value_pairs as key_value_parser
+
+    cli_env_getter = get_cli_env_vars
+    if cli_env_getter is None:
+        from ofx.commands import get_cli_env_vars as cli_env_getter
+
+    cli_project_getter = get_cli_project
+    if cli_project_getter is None:
+        from ofx.commands import get_cli_project as cli_project_getter
+
+    session_target_cls = SessionTarget
+    if session_target_cls is None:
+        from ofx.cloud.sessions import SessionTarget as session_target_cls
+
+    session_manager_cls = SessionManager
+    if session_manager_cls is None:
+        from ofx.cloud.sessions import SessionManager as session_manager_cls
+
+    return (
+        key_value_parser,
+        cli_env_getter,
+        cli_project_getter,
+        session_target_cls,
+        session_manager_cls,
+    )
+
+
+def _resolve_session_project(cli_project_getter) -> str:
+    session_project = cli_project_getter()
+    if session_project:
+        return session_project
+
+    project_manager_cls = ProjectManager
+    if project_manager_cls is None:
+        from ofx.commands.project.project_manager import ProjectManager as project_manager_cls
+
+    active_path = project_manager_cls.get_active_path()
+    return active_path.name if active_path else ""
+
+
+def _print_session_update(session_id: str, session) -> None:
+    print_info("Session updated", f"Session {session_id} → {session.status.value}")
+
+
+def _print_success_path(title: str, message: str, path: Path) -> None:
+    print_success(title, message, details={"Path": str(path)})
+
+def _print_result_path(message: str, result_path: Path) -> None:
+    _print_success_path("Results", message, result_path)
+
+
+def _print_cleanup_result(title: str, message: str, removed: int) -> None:
+    print_success(title, message, details={"Removed sessions": removed})
+
+
+def _print_info_message(title: str, message: str) -> None:
+    print_info(title, message)
+
+
+def _print_sessions_info(message: str) -> None:
+    _print_info_message("Sessions", message)
+
+
+def _print_clean_aborted() -> None:
+    _print_info_message("Clean", "Aborted.")
+
+
+def _fail_unknown_session_status(console, status: str, session_status_cls, exc: Exception) -> None:
+    console.print(f"[red]Unknown status: {status}[/red]")
+    _print_valid_session_statuses(console, session_status_cls)
+    raise typer.Exit(code=1) from exc
+
+
+def _print_valid_session_statuses(console, session_status_cls) -> None:
+    console.print(f"[dim]Valid: {', '.join(s.value for s in session_status_cls)}[/dim]")
+
+
+def _print_session_op_output(console, value) -> None:
+    console.print(value)
+
+
+def _optional_output_path(output: str) -> Path | None:
+    return Path(output) if output else None
+
+
+def _run_result_path_op(
+    session_id: str,
+    op_name: str,
+    op,
+    *,
+    success_message: str,
+    error_title: str,
+    error_msg: str,
+    extra_exc: tuple[type[Exception], ...] = (),
+) -> None:
+    result_path = _run_session_op(
+        session_id,
+        op_name,
+        op,
+        error_title=error_title,
+        error_msg=error_msg,
+        extra_exc=extra_exc,
+    )
+    _print_result_path(success_message, result_path)
+
+
+def _run_session_cleanup(
+    store,
+    *,
+    age_seconds: int | None,
+    statuses,
+    title: str,
+    message: str,
+) -> None:
+    removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
+    _print_cleanup_result(title, message.format(removed=removed), removed)
+
+
+def _run_session_update_op(
+    session_id: str,
+    op_name: str,
+    op,
+    *,
+    error_title: str = "Operation failed",
+    error_msg: str = "",
+    extra_exc: tuple[type[Exception], ...] = (),
+) -> None:
+    session = _run_session_op(
+        session_id,
+        op_name,
+        op,
+        error_title=error_title,
+        error_msg=error_msg,
+        extra_exc=extra_exc,
+    )
+    _print_session_update(session_id, session)
+
+
+def _session_submit_success_details(session) -> dict[str, str]:
+    details = {
+        "Session ID": session.id,
+        "Name": session.name,
+        "Target": session.target.value,
+        "Status": session.status.value,
+        "Workflow": session.workflow_file,
+        "Execution scope": session.job_id or "full-workflow",
+    }
+    if session.target.value == "cloud":
+        details["Auto destroy"] = (
+            "Yes" if getattr(session, "auto_destroy", True) else "No"
+        )
+    if session.project:
+        details["Project"] = session.project
+    return details
+
+
+def _parse_session_statuses(status_value: str, session_status_cls) -> list[object]:
+    statuses: list[object] = []
+    for raw in status_value.split(","):
+        current = raw.strip()
+        if not current:
+            continue
+        try:
+            statuses.append(session_status_cls(current))
+        except ValueError:
+            error_exit("Invalid status", f"Unknown status: {current}")
+    return statuses
 
 
 # ======================================================================
@@ -150,26 +369,25 @@ def session_submit(
 ):
     """Submit a workflow as a detached session."""
     console = get_console()
-    from ofx.cloud.sessions import SessionManager, SessionTarget
-    from ofx.commands import get_cli_env_vars, get_cli_project
-    from ofx.utils.args import parse_key_value_pairs
 
-    parsed_inputs: dict = parse_key_value_pairs(inputs or [])
-    parsed_env: dict = get_cli_env_vars()
+    (
+        key_value_parser,
+        cli_env_getter,
+        cli_project_getter,
+        session_target_cls,
+        session_manager_cls,
+    ) = _get_session_submit_deps()
 
-    session_project = get_cli_project()
-    if not session_project:
-        from ofx.commands.project.project_manager import ProjectManager
+    parsed_inputs: dict = key_value_parser(inputs or [])
+    parsed_env: dict = cli_env_getter()
 
-        active_path = ProjectManager.get_active_path()
-        if active_path:
-            session_project = active_path.name
+    session_project = _resolve_session_project(cli_project_getter)
 
     if cloud and local:
         error_exit("Invalid options", "Cannot use both --local and --cloud.")
 
-    target = SessionTarget.CLOUD if cloud else SessionTarget.LOCAL
-    mgr = SessionManager()
+    target = session_target_cls.CLOUD if cloud else session_target_cls.LOCAL
+    mgr = session_manager_cls()
 
     try:
         session = asyncio.run(
@@ -190,24 +408,7 @@ def session_submit(
     print_success(
         "Session submitted",
         "Session submitted successfully.",
-        details={
-            "Session ID": session.id,
-            "Name": session.name,
-            "Target": session.target.value,
-            "Status": session.status.value,
-            "Workflow": session.workflow_file,
-            "Execution scope": session.job_id or "full-workflow",
-            **(
-                {
-                    "Auto destroy": "Yes"
-                    if getattr(session, "auto_destroy", True)
-                    else "No"
-                }
-                if session.target.value == "cloud"
-                else {}
-            ),
-            **({"Project": session.project} if session.project else {}),
-        },
+        details=_session_submit_success_details(session),
     )
     console.print(_session_detail_table(session))
     print_info(
@@ -240,27 +441,20 @@ def session_list(
 ):
     """List all sessions."""
     console = get_console()
-    from ofx.cloud.sessions import SessionStore
-
-    store = SessionStore()
+    store = _get_session_store_cls()()
     _status = None
     if status:
-        from ofx.cloud.sessions.models import SessionStatus
-
+        session_status_cls = _get_session_status_cls()
         try:
-            _status = SessionStatus(status)
+            _status = session_status_cls(status)
         except ValueError as exc:
-            console.print(f"[red]Unknown status: {status}[/red]")
-            console.print(
-                f"[dim]Valid: {', '.join(s.value for s in SessionStatus)}[/dim]"
-            )
-            raise typer.Exit(code=1) from exc
+            _fail_unknown_session_status(console, status, session_status_cls, exc)
 
     sessions = store.list_sessions(
         status=_status, target=target or None, project=project or None
     )
     if not sessions:
-        print_info("Sessions", "No sessions found.")
+        _print_sessions_info("No sessions found.")
         return
 
     table = Table(title="Sessions")
@@ -303,7 +497,7 @@ def session_status(session_id: Annotated[str, typer.Argument(help="Session ID")]
     """Check the status of a session (probes PID if running)."""
     console = get_console()
     session = _run_session_op(session_id, "status", lambda mgr: mgr.status(session_id))
-    console.print(_session_detail_table(session))
+    _print_session_op_output(console, _session_detail_table(session))
 
 
 # ======================================================================
@@ -321,7 +515,7 @@ def session_logs(
     output = _run_session_op(
         session_id, "logs", lambda mgr: mgr.logs(session_id, tail=tail)
     )
-    console.print(output)
+    _print_session_op_output(console, output)
 
 
 # ======================================================================
@@ -341,17 +535,18 @@ def session_fetch(
     ] = "",
 ):
     """Fetch results from a completed session. Optionally encrypt with --passphrase."""
-    output_dir = Path(output) if output else None
-    result_path = _run_session_op(
+    output_dir = _optional_output_path(output)
+    _run_result_path_op(
         session_id,
         "fetch",
         lambda mgr: mgr.fetch(session_id, passphrase=passphrase, output_dir=output_dir),
+        success_message=(
+            "Results fetched and encrypted." if passphrase else "Results fetched."
+        ),
         error_title="Fetch failed",
         error_msg="Failed to fetch session results.",
         extra_exc=(RuntimeError,),
     )
-    msg = "Results fetched and encrypted." if passphrase else "Results fetched."
-    print_success("Results", msg, details={"Path": str(result_path)})
 
 
 # ======================================================================
@@ -377,18 +572,18 @@ def session_decrypt(
     ] = "",
 ):
     """Decrypt previously encrypted session results."""
-    output_dir = Path(output) if output else None
-    result_path = _run_session_op(
+    output_dir = _optional_output_path(output)
+    _run_result_path_op(
         session_id,
         "decrypt",
         lambda mgr: mgr.decrypt(
             session_id, passphrase=passphrase, output_dir=output_dir
         ),
+        success_message="Results decrypted.",
         error_title="Decrypt failed",
         error_msg="Failed to decrypt session results.",
         extra_exc=(RuntimeError, ValueError),
     )
-    print_success("Results", "Results decrypted.", details={"Path": str(result_path)})
 
 
 # ======================================================================
@@ -399,8 +594,11 @@ def session_decrypt(
 @app.command("cancel")
 def session_cancel(session_id: Annotated[str, typer.Argument(help="Session ID")]):
     """Cancel a running session (kills the process)."""
-    session = _run_session_op(session_id, "cancel", lambda mgr: mgr.cancel(session_id))
-    print_info("Session updated", f"Session {session_id} → {session.status.value}")
+    _run_session_update_op(
+        session_id,
+        "cancel",
+        lambda mgr: mgr.cancel(session_id),
+    )
 
 
 # ======================================================================
@@ -416,7 +614,7 @@ def session_destroy(
     ] = False,
 ):
     """Destroy a cloud session's VPS. For local, cleans up workspace."""
-    session = _run_session_op(
+    _run_session_update_op(
         session_id,
         "destroy",
         lambda mgr: mgr.destroy(session_id, force=force),
@@ -424,7 +622,6 @@ def session_destroy(
         error_msg="Failed to destroy session.",
         extra_exc=(RuntimeError,),
     )
-    print_info("Session updated", f"Session {session_id} → {session.status.value}")
 
 
 # ======================================================================
@@ -444,29 +641,13 @@ def session_clean(
 ):
     """Remove old session data from disk."""
     console = get_console()
-    from ofx.cloud.sessions import SessionStore
-    from ofx.cloud.sessions.models import SessionStatus
-
-    store = SessionStore()
+    store, session_status_cls = _get_session_store_and_status_deps()
 
     age_seconds = None
     if older_than:
-        age_seconds = _parse_duration(older_than)
-        if age_seconds is None:
-            error_exit(
-                "Invalid duration",
-                f"Invalid duration: {older_than}",
-                details="Examples: 7d, 24h, 30m, 3600s",
-            )
+        age_seconds = _parse_age_seconds_or_exit(older_than)
 
-    statuses = []
-    for s in status.split(","):
-        s = s.strip()
-        if s:
-            try:
-                statuses.append(SessionStatus(s))
-            except ValueError:
-                error_exit("Invalid status", f"Unknown status: {s}")
+    statuses = _parse_session_statuses(status, session_status_cls)
 
     all_sessions = store.list_sessions()
     matching = []
@@ -482,7 +663,7 @@ def session_clean(
         matching.append(sess)
 
     if not matching:
-        print_info("Sessions", "No sessions match the criteria.")
+        _print_sessions_info("No sessions match the criteria.")
         return
 
     console.print(f"[yellow]Will remove {len(matching)} session(s):[/yellow]")
@@ -493,11 +674,16 @@ def session_clean(
 
     if not yes:
         if not typer.confirm("Proceed?"):
-            print_info("Clean", "Aborted.")
+            _print_clean_aborted()
             return
 
-    removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
-    print_success("Clean", f"Removed {removed} session(s).")
+    _run_session_cleanup(
+        store,
+        age_seconds=age_seconds,
+        statuses=statuses,
+        title="Clean",
+        message="Removed {removed} session(s).",
+    )
 
 
 @app.command("guard")
@@ -510,33 +696,17 @@ def session_guard(
     ] = "completed,fetched,encrypted,destroyed,canceled,failed",
 ):
     """Auto-cleanup guard for unattended environments (non-interactive)."""
-    from ofx.cloud.sessions import SessionStore
-    from ofx.cloud.sessions.models import SessionStatus
+    store, session_status_cls = _get_session_store_and_status_deps()
+    age_seconds = _parse_age_seconds_or_exit(older_than)
 
-    store = SessionStore()
-    age_seconds = _parse_duration(older_than)
-    if age_seconds is None:
-        error_exit(
-            "Invalid duration",
-            f"Invalid duration: {older_than}",
-            details="Examples: 7d, 24h, 30m, 3600s",
-        )
+    statuses = _parse_session_statuses(status, session_status_cls)
 
-    statuses: list[SessionStatus] = []
-    for raw in status.split(","):
-        s = raw.strip()
-        if not s:
-            continue
-        try:
-            statuses.append(SessionStatus(s))
-        except ValueError:
-            error_exit("Invalid status", f"Unknown status: {s}")
-
-    removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
-    print_success(
-        "Guard cleanup",
-        "Auto-cleanup completed.",
-        details={"Removed sessions": removed},
+    _run_session_cleanup(
+        store,
+        age_seconds=age_seconds,
+        statuses=statuses,
+        title="Guard cleanup",
+        message="Auto-cleanup completed.",
     )
 
 
@@ -548,16 +718,12 @@ def session_bundle(
     ] = "",
 ):
     """Create a run artifacts bundle for a session (metadata + results)."""
-    from ofx.cloud.sessions import SessionManager
-
-    mgr = SessionManager()
-    out_file = Path(output) if output else None
+    mgr = _get_session_manager_cls()()
+    out_file = _optional_output_path(output)
     try:
         bundle = asyncio.run(mgr.bundle_artifacts(session_id, output_file=out_file))
     except Exception as exc:
         error_exit(
             "Bundle failed", "Could not create artifacts bundle.", details=str(exc)
         )
-    print_success(
-        "Bundle created", "Run artifacts bundle created.", details={"Path": str(bundle)}
-    )
+    _print_success_path("Bundle created", "Run artifacts bundle created.", bundle)

@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import os
+import signal
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,6 +18,9 @@ from ofx.models.command import Command
 from ofx.runner.commands.command_executor import (
     CommandExecutionResult,
     CommandExecutor,
+    _kill_process_tree,
+    _process_group_id,
+    parse_outputs_file,
     prepare_outputs_file_env,
 )
 
@@ -109,77 +115,34 @@ class TestDecodeOutput:
 
 
 class TestDecodeOutputHelpers:
-    def test_decode_utf8_output_marks_truncation(self):
-        outputs: dict[str, Any] = {}
+    def test_parse_outputs_file_filters_invalid_entries_and_logs(self, tmp_path):
+        path = tmp_path / "outputs.txt"
+        path.write_text("a=1\nnope\n b = 2 ")
+        messages: list[str] = []
 
-        text = CommandExecutor._decode_utf8_output(
-            b"A" * 10,
-            max_size=4,
-            truncated_suffix="...",
-            truncated_flag="flag",
-            outputs=outputs,
-        )
+        parsed = parse_outputs_file(path, messages.append)
 
-        assert text == "AAAA..."
-        assert outputs == {"flag": True}
+        assert parsed == {"a": "1", "b": "2"}
+        assert messages == ["Captured output: a=1", "Captured output: b=2"]
 
-    def test_encode_binary_output_marks_truncation(self):
-        outputs: dict[str, Any] = {}
+    def test_decode_output_handles_text_and_binary_streams(self):
+        executor = _make_executor()
 
-        text = CommandExecutor._encode_binary_output(
-            b"abcdef",
-            max_size=3,
-            truncated_suffix="...",
-            truncated_flag="flag",
-            outputs=outputs,
-        )
+        stdout, stderr, outputs = executor._decode_output(b"hello", b"warn")
 
-        assert text == base64.b64encode(b"abc").decode("utf-8") + "..."
-        assert outputs == {"flag": True}
+        assert stdout == "hello"
+        assert stderr == "warn"
+        assert outputs == {}
+
+        stdout, stderr, outputs = executor._decode_output(b"\xff\x00", b"\x80")
+
+        assert outputs["binary_output"] is True
+        assert isinstance(stdout, str)
+        assert isinstance(stderr, str)
 
 
 # ===================================================================
-# 2. TestRaiseForStatus
-# ===================================================================
-
-
-class TestRaiseForStatus:
-    """Test error handling via raise_for_status."""
-
-    def test_exit_zero_does_not_raise(self):
-        executor = _make_executor()
-        executor.raise_for_status(0, "")
-
-    def test_exit_nonzero_raises(self):
-        executor = _make_executor()
-        with pytest.raises(RuntimeError, match="Command failed"):
-            executor.raise_for_status(1, "something broke")
-
-    def test_exit_nonzero_uses_default_message(self):
-        executor = _make_executor()
-        with pytest.raises(RuntimeError, match="exit code 1"):
-            executor.raise_for_status(1, "")
-
-    def test_interactive_130_does_not_raise(self):
-        executor = _make_executor(interactive=True)
-        executor.raise_for_status(130, "")
-
-    def test_interactive_127_does_not_raise(self):
-        executor = _make_executor(interactive=True)
-        executor.raise_for_status(127, "")
-
-    def test_interactive_zero_does_not_raise(self):
-        executor = _make_executor(interactive=True)
-        executor.raise_for_status(0, "")
-
-    def test_interactive_other_code_raises(self):
-        executor = _make_executor(interactive=True)
-        with pytest.raises(RuntimeError, match="Command failed"):
-            executor.raise_for_status(2, "bad usage")
-
-
-# ===================================================================
-# 3. TestPrepareOutputsFile
+# 2. TestPrepareOutputsFile
 # ===================================================================
 
 
@@ -259,7 +222,6 @@ class TestPrepareOutputsFileEnv:
             assert envs["OFX_OUTPUTS"] == tmp_path
         finally:
             Path(tmp_path).unlink(missing_ok=True)
-
 
 # ===================================================================
 # 4. TestExecuteCommand (async integration)
@@ -359,17 +321,303 @@ class TestExecuteStreaming:
         assert "out" in result.stdout
         assert "err" in result.stderr
 
+    async def test_streaming_truncates_stdout_when_limit_exceeded(self, monkeypatch):
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.settings.max_output_size",
+            3,
+        )
+        executor = _make_executor(cmd='printf "abcde\\n"')
+
+        result = await executor.execute_streaming(on_line=lambda _: None)
+
+        assert result.stdout.endswith("[OUTPUT TRUNCATED]")
+        assert result.outputs == {"output_truncated": True}
+
 
 class TestCommandExecutionHelpers:
     """Small helper tests for command construction."""
 
-    def test_full_command_prepends_shell_helpers(self):
-        executor = _make_executor(cmd="echo marker")
+    @pytest.mark.asyncio
+    async def test_execute_streaming_builds_result_from_fake_process(self, monkeypatch):
+        executor = _make_executor()
 
-        full_command = executor._full_command()
+        class _Stdout:
+            def __init__(self, lines):
+                self._lines = iter(lines)
 
-        assert full_command.endswith("\necho marker")
-        assert len(full_command) > len("echo marker")
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self._lines)
+                except StopIteration as exc:
+                    raise StopAsyncIteration from exc
+
+        class _Stderr:
+            async def read(self):
+                return b"warn"
+
+        class _Proc:
+            returncode = 0
+            stdout = _Stdout([b"one\n", b"two\n"])
+            stderr = _Stderr()
+
+            async def wait(self):
+                return 0
+
+        async def _spawn_subprocess(**_kwargs):
+            return _Proc()
+
+        async def _await_with_timeout(_proc, awaitable):
+            return await awaitable
+
+        monkeypatch.setattr(executor, "_spawn_subprocess", _spawn_subprocess)
+        monkeypatch.setattr(executor, "_await_with_timeout", _await_with_timeout)
+
+        result = await executor.execute_streaming(on_line=None)
+
+        assert result == CommandExecutionResult(
+            exit_code=0,
+            stdout="one\ntwo",
+            stderr="warn",
+            outputs={},
+        )
+
+    @pytest.mark.asyncio
+    async def test_execute_streaming_base64_encodes_binary_stderr_with_fake_process(self, monkeypatch):
+        executor = _make_executor()
+
+        class _Stdout:
+            def __init__(self, lines):
+                self._lines = iter(lines)
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self._lines)
+                except StopIteration as exc:
+                    raise StopAsyncIteration from exc
+
+        class _Stderr:
+            async def read(self):
+                return b"\x80\x81"
+
+        class _Proc:
+            returncode = 0
+            stdout = _Stdout([b"one\n"])
+            stderr = _Stderr()
+
+            async def wait(self):
+                return 0
+
+        async def _spawn_subprocess(**_kwargs):
+            return _Proc()
+
+        async def _await_with_timeout(_proc, awaitable):
+            return await awaitable
+
+        monkeypatch.setattr(executor, "_spawn_subprocess", _spawn_subprocess)
+        monkeypatch.setattr(executor, "_await_with_timeout", _await_with_timeout)
+
+        result = await executor.execute_streaming(on_line=None)
+
+        assert result.stderr == base64.b64encode(b"\x80\x81").decode("utf-8")
+
+    @pytest.mark.asyncio
+    async def test_execute_streaming_marks_truncated_output_with_fake_process(self, monkeypatch):
+        executor = _make_executor()
+
+        class _Stdout:
+            def __init__(self, lines):
+                self._lines = iter(lines)
+
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                try:
+                    return next(self._lines)
+                except StopIteration as exc:
+                    raise StopAsyncIteration from exc
+
+        class _Stderr:
+            async def read(self):
+                return b""
+
+        class _Proc:
+            returncode = 0
+            stdout = _Stdout([b"abcde\n"])
+            stderr = _Stderr()
+
+            async def wait(self):
+                return 0
+
+        async def _spawn_subprocess(**_kwargs):
+            return _Proc()
+
+        async def _await_with_timeout(_proc, awaitable):
+            return await awaitable
+
+        monkeypatch.setattr(executor, "_spawn_subprocess", _spawn_subprocess)
+        monkeypatch.setattr(executor, "_await_with_timeout", _await_with_timeout)
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.settings.max_output_size",
+            3,
+        )
+
+        result = await executor.execute_streaming(on_line=None)
+
+        assert result.stdout.endswith("[OUTPUT TRUNCATED]")
+        assert result.outputs == {"output_truncated": True}
+
+    @pytest.mark.asyncio
+    async def test_spawn_subprocess_uses_command_config(self, monkeypatch):
+        executor = _make_executor(timeout_minutes=2, working_directory=Path("/tmp"))
+        captured = {}
+
+        async def _create_subprocess_shell(command, **kwargs):
+            captured["command"] = command
+            captured["kwargs"] = kwargs
+            return object()
+
+        monkeypatch.setattr(
+            "asyncio.create_subprocess_shell",
+            _create_subprocess_shell,
+        )
+
+        await executor._spawn_subprocess(stdout="pipe")
+
+        assert captured["command"].endswith("\necho hello")
+        assert len(captured["command"]) > len("echo hello")
+        kwargs = captured["kwargs"]
+        assert kwargs["executable"] == "/bin/bash"
+        assert kwargs["cwd"] == Path("/tmp")
+        assert kwargs["env"] == executor._envs
+        assert kwargs["start_new_session"] is True
+        assert kwargs["stdout"] == "pipe"
+
+    @pytest.mark.asyncio
+    async def test_run_non_interactive_builds_result_from_process_outputs(self, monkeypatch):
+        executor = _make_executor()
+
+        class _Proc:
+            returncode = 0
+
+            async def communicate(self):
+                return b"ok", b"warn"
+
+        async def _spawn_subprocess(**_kwargs):
+            return _Proc()
+
+        async def _await_with_timeout(_proc, awaitable):
+            return await awaitable
+
+        monkeypatch.setattr(executor, "_spawn_subprocess", _spawn_subprocess)
+        monkeypatch.setattr(executor, "_await_with_timeout", _await_with_timeout)
+
+        result = await executor._run_non_interactive()
+
+        assert result == CommandExecutionResult(
+            exit_code=0,
+            stdout="ok",
+            stderr="warn",
+            outputs={},
+        )
+
+    @pytest.mark.asyncio
+    async def test_run_interactive_builds_placeholder_result(self, monkeypatch):
+        executor = _make_executor(interactive=True)
+
+        class _Proc:
+            async def wait(self):
+                return 130
+
+        async def _spawn_subprocess(**_kwargs):
+            return _Proc()
+
+        async def _await_with_timeout(_proc, awaitable):
+            return await awaitable
+
+        monkeypatch.setattr(executor, "_spawn_subprocess", _spawn_subprocess)
+        monkeypatch.setattr(executor, "_await_with_timeout", _await_with_timeout)
+
+        result = await executor._run_interactive()
+
+        assert result == CommandExecutionResult(
+            exit_code=130,
+            stdout="[Interactive mode - output shown in real-time]",
+            stderr="",
+            outputs={},
+        )
+
+    def test_kill_process_tree_waits_then_stops_when_group_exits(self, monkeypatch):
+        proc = SimpleNamespace(pid=123)
+        signals: list[tuple[int, object]] = []
+        polls = iter([None, ProcessLookupError()])
+
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.os.getpgid",
+            lambda pid: pid + 1,
+        )
+
+        def _killpg(pgid, sig):
+            if sig != 0:
+                signals.append((pgid, sig))
+                return
+            result = next(polls)
+            if isinstance(result, BaseException):
+                raise result
+
+        monotonic_values = iter([0.0, 0.1, 0.2])
+        monkeypatch.setattr("ofx.runner.commands.command_executor.os.killpg", _killpg)
+        monkeypatch.setattr("time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("time.monotonic", lambda: next(monotonic_values))
+
+        _kill_process_tree(proc)
+
+        assert signals == [(124, signal.SIGTERM)]
+
+    def test_process_group_id_returns_none_for_missing_or_unresolvable_process(self, monkeypatch):
+        assert _process_group_id(SimpleNamespace(pid=None)) is None
+
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.os.getpgid",
+            lambda _pid: (_ for _ in ()).throw(ProcessLookupError()),
+        )
+
+        assert _process_group_id(SimpleNamespace(pid=123)) is None
+
+    @pytest.mark.asyncio
+    async def test_await_with_timeout_signals_group_and_closes_transport(self, monkeypatch):
+        calls: list[tuple[str, object]] = []
+
+        class _Transport:
+            def close(self):
+                calls.append(("close", None))
+
+        proc = SimpleNamespace(pid=123, _transport=_Transport())
+
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.os.getpgid",
+            lambda pid: pid + 1,
+        )
+        monkeypatch.setattr(
+            "ofx.runner.commands.command_executor.os.killpg",
+            lambda pgid, sig: calls.append(("kill", (pgid, sig))),
+        )
+
+        executor = _make_executor(timeout_minutes=1)
+
+        result = await executor._await_with_timeout(proc, asyncio.sleep(0, result="ok"))
+
+        assert result == "ok"
+        assert calls == [
+            ("kill", (124, signal.SIGTERM)),
+            ("close", None),
+        ]
 
 
 # ===================================================================
@@ -478,6 +726,24 @@ class TestCaptureOutputsFile:
         await executor.capture_outputs_file(runner, "key", lambda m: None)
         assert captured["url"] == "https://example.com?foo=bar"
 
+    async def test_capture_outputs_file_updates_registry_once(self):
+        fd, tmp_path = tempfile.mkstemp(prefix=".test_cap_", suffix=".txt")
+        os.close(fd)
+        Path(tmp_path).write_text("a=1\nb=2\n")
+
+        calls: list[tuple[str, dict[str, str]]] = []
+        runner = MagicMock()
+        executor = _make_executor()
+        executor._outputs_file = Path(tmp_path)
+
+        async def _reg_update(key, data):
+            calls.append((key, dict(data)))
+
+        runner.reg_update = _reg_update
+
+        await executor.capture_outputs_file(runner, "outputs", lambda _message: None)
+
+        assert calls == [("outputs", {"a": "1", "b": "2"})]
 
 # ===================================================================
 # 7. TestTimeout (async)
@@ -500,3 +766,16 @@ class TestTimeout:
         object.__setattr__(executor._command, "timeout_minutes", 0.01)
         with pytest.raises(RuntimeError, match="timed out"):
             await executor.execute_streaming(on_line=lambda _: None)
+
+    async def test_await_with_timeout_kills_and_waits_on_timeout(self):
+        executor = _make_executor(timeout_minutes=1)
+        object.__setattr__(executor._command, "timeout_minutes", 0)
+        proc = MagicMock()
+        proc.wait = AsyncMock()
+
+        with patch("ofx.runner.commands.command_executor._kill_process_tree") as mock_kill:
+            with pytest.raises(RuntimeError, match="timed out"):
+                await executor._await_with_timeout(proc, asyncio.sleep(0.01))
+
+        mock_kill.assert_called_once_with(proc)
+        proc.wait.assert_awaited_once()

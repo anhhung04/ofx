@@ -24,41 +24,36 @@ Directory layout::
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.runner.runner_refs import runner_leaf_descendants
+from ofx.runner.target_paths import sanitize_target_slug
 from ofx.settings import settings
 from ofx.tasks.output_types import OUTPUT_TYPE_DIR_MAP, OUTPUT_TYPE_FILE_MAP
 
 if TYPE_CHECKING:
-    from ofx.runner.runner import BaseRunner
+    from ofx.runner.runner import Runner
 
 logger = logging.getLogger(settings.app_branding)
 
-
-def type_display_key(type_name: str, item: dict) -> str:
-    """Extract the primary display value for a typed output item."""
-    key_map: dict[str, Any] = {
-        "ip": "ip",
-        "port": lambda i: f"{i.get('ip', i.get('host', ''))}:{i.get('port', '')}",
-        "subdomain": "host",
-        "url": "url",
-        "tag": "name",
-        "record": lambda i: (
-            f"{i.get('name', '')} {i.get('type', '')} {i.get('host', '')}"
-        ),
-        "domain": "domain",
-    }
-    extractor = key_map.get(type_name, "")
-    if callable(extractor):
-        return extractor(item).strip()
-    if extractor:
-        return str(item.get(extractor, "")).strip()
-    return ""
+_TEXT_EXPORT_KEY_EXTRACTORS: dict[str, Any] = {
+    "ip": "ip",
+    "port": lambda item: (
+        f"{item.get('ip', item.get('host', ''))}:{item.get('port', '')}"
+    ),
+    "subdomain": "host",
+    "url": "url",
+    "tag": "name",
+    "record": lambda item: (
+        f"{item.get('name', '')} {item.get('type', '')} {item.get('host', '')}"
+    ),
+    "domain": "domain",
+}
 
 
 def export_typed_outputs(
@@ -83,237 +78,121 @@ def export_typed_outputs(
     if not project_path or not all_typed_outputs:
         return []
 
-    p = Path(project_path)
-
-    # Bucket by (type, target) — target="" means "master only"
-    buckets: dict[str, list[dict]] = {}
-    target_buckets: dict[tuple[str, str], list[dict]] = {}
+    project_root = Path(project_path)
+    items_by_export_path: dict[tuple[str, str], list[dict]] = {}
 
     for item in all_typed_outputs:
         if not isinstance(item, dict):
             continue
-        t = item.get("_type", "")
-        if not t:
+
+        type_name = item.get("_type", "")
+        if not type_name:
             continue
-        buckets.setdefault(t, []).append(item)
-        target = item.get("_target", "")
-        if target:
-            target_buckets.setdefault((t, target), []).append(item)
+
+        items_by_export_path.setdefault((type_name, ""), []).append(item)
+
+        target_slug = sanitize_target_slug(item.get("_target", ""))
+        if target_slug:
+            items_by_export_path.setdefault((type_name, target_slug), []).append(item)
 
     summaries: list[str] = []
+    for (type_name, target_slug), items in sorted(items_by_export_path.items()):
+        subdir = OUTPUT_TYPE_DIR_MAP.get(type_name, "scans")
+        filename = OUTPUT_TYPE_FILE_MAP.get(type_name, f"{type_name}.txt")
+        if prefix:
+            filename_path = Path(filename)
+            filename = f"{prefix}-{filename_path.stem}{filename_path.suffix}"
 
-    # Write master files (all targets merged) — same as before
-    for type_name, items in sorted(buckets.items()):
-        summaries.append(
-            _write_export_target(
-                project_root=p,
-                type_name=type_name,
-                items=items,
-                prefix=prefix,
-            )
-        )
+        relative_dir = Path(subdir)
+        if target_slug:
+            relative_dir /= target_slug
+        summary_path = (relative_dir / filename).as_posix()
 
-    # Write per-target files
-    for (type_name, target), items in sorted(target_buckets.items()):
-        target_slug = _sanitize_target(target)
-        if not target_slug:
-            continue
+        dest = project_root / relative_dir
+        dest.mkdir(parents=True, exist_ok=True)
+        fpath = dest / filename
+        is_jsonl = fpath.suffix == ".jsonl"
+        existing_lines = set(fpath.read_text().splitlines()) if fpath.exists() else set()
 
-        summaries.append(
-            _write_export_target(
-                project_root=p,
-                type_name=type_name,
-                items=items,
-                prefix=prefix,
-                target_slug=target_slug,
-            )
-        )
+        if is_jsonl:
+            candidate_lines: list[str] = []
+            for item in items:
+                try:
+                    candidate_lines.append(json.dumps(item, default=str))
+                except (TypeError, ValueError):
+                    continue
+        else:
+            existing_lines = {line for line in existing_lines if line}
+            extractor = _TEXT_EXPORT_KEY_EXTRACTORS.get(type_name)
+            candidate_keys: set[str] = set()
+            for item in items:
+                if callable(extractor):
+                    extracted_key = extractor(item)
+                elif extractor:
+                    extracted_key = str(item.get(extractor, ""))
+                else:
+                    extracted_key = ""
+
+                stripped_key = extracted_key.strip()
+                if stripped_key:
+                    candidate_keys.add(stripped_key)
+            candidate_lines = sorted(candidate_keys)
+
+        new_lines = [line for line in candidate_lines if line not in existing_lines]
+        if new_lines:
+            if is_jsonl:
+                with open(fpath, "a") as file_obj:
+                    file_obj.write("\n".join(new_lines) + "\n")
+            else:
+                merged = set(existing_lines) | set(new_lines)
+                fpath.write_text("\n".join(sorted(merged)) + "\n")
+        elif not is_jsonl and existing_lines:
+            fpath.write_text("\n".join(sorted(existing_lines)) + "\n")
+
+        new_count = len(new_lines)
+        label = f"{len(items)} items"
+        if new_count < len(items):
+            label += f", {new_count} new"
+        summaries.append(f"  [+] {summary_path} ({label})")
 
     return summaries
 
 
-def _write_findings_file(fpath: Path, type_name: str, items: list[dict]) -> int:
-    """Write findings to a file, returning the count of new items."""
-    new_count = 0
-
-    if str(fpath).endswith(".jsonl"):
-        safe_lines = _jsonl_lines(items)
-        existing = _existing_lines(fpath)
-        new_lines = [ln for ln in safe_lines if ln not in existing]
-        new_count = len(new_lines)
-        if new_lines:
-            with open(fpath, "a") as f:
-                f.write("\n".join(new_lines) + "\n")
-    else:
-        values = _display_lines(type_name, items)
-        existing_lines = _existing_lines(fpath)
-        new_values = values - existing_lines
-        new_count = len(new_values)
-        merged = values | existing_lines
-        if merged:
-            fpath.write_text("\n".join(sorted(merged)) + "\n")
-
-    return new_count
-
-
-def _write_export_target(
-    *,
-    project_root: Path,
-    type_name: str,
-    items: list[dict],
-    prefix: str,
-    target_slug: str = "",
-) -> str:
-    """Write one findings export target and return its summary line."""
-    subdir = OUTPUT_TYPE_DIR_MAP.get(type_name, "scans")
-    filename = _prefixed_filename(type_name, prefix)
-
-    dest = project_root / subdir
-    summary_path = f"{subdir}/{filename}"
-    if target_slug:
-        dest = dest / target_slug
-        summary_path = f"{subdir}/{target_slug}/{filename}"
-
-    dest.mkdir(parents=True, exist_ok=True)
-    new_count = _write_findings_file(dest / filename, type_name, items)
-    return f"  [+] {summary_path} ({_summary_label(len(items), new_count)})"
-
-
-def _jsonl_lines(items: list[dict]) -> list[str]:
-    """Serialize findings as JSONL-safe strings."""
-    lines: list[str] = []
-    for item in items:
-        try:
-            lines.append(json.dumps(item, default=str))
-        except (TypeError, ValueError):
-            continue
-    return lines
-
-
-def _prefixed_filename(type_name: str, prefix: str) -> str:
-    """Return the export filename with an optional run prefix."""
-    filename = OUTPUT_TYPE_FILE_MAP.get(type_name, f"{type_name}.txt")
-    if not prefix:
-        return filename
-    stem, ext = (filename.rsplit(".", 1) + [""])[:2]
-    return f"{prefix}-{stem}.{ext}" if ext else f"{prefix}-{stem}"
-
-
-def _summary_label(total_count: int, new_count: int) -> str:
-    """Build a compact export summary label."""
-    label = f"{total_count} items"
-    if new_count < total_count:
-        label += f", {new_count} new"
-    return label
-
-
-def _display_lines(type_name: str, items: list[dict]) -> set[str]:
-    """Extract display keys for text-based findings files."""
-    values: set[str] = set()
-    for item in items:
-        key = type_display_key(type_name, item)
-        if key:
-            values.add(key)
-    return values
-
-
-def _existing_lines(fpath: Path) -> set[str]:
-    """Load non-empty existing lines from a findings file."""
-    if not fpath.exists():
-        return set()
-    return {line for line in fpath.read_text().splitlines() if line}
-
-
-def _sanitize_target(target: str) -> str:
-    """Sanitize a target string for safe use as a directory name."""
-    if not target:
-        return ""
-    slug = target
-    if re.match(r"^https?://", slug):
-        slug = re.sub(r"^https?://", "", slug)
-        slug = slug.split("/")[0]
-    slug = re.sub(r"[^A-Za-z0-9._-]", "_", slug)
-    slug = re.sub(r"_+", "_", slug).strip("_")
-    return slug[:120]
-
-
-async def collect_typed_outputs(runners: dict[str, BaseRunner]) -> list[dict]:
+async def collect_typed_outputs(runners: dict[str, Runner]) -> list[dict]:
     """Collect typed outputs from all job runners (including matrix children).
 
-    Traverses the runner tree: WorkflowRunner → JobRunner/MatrixJobRunner →
-    StepRunner, collecting typed_outputs from each step's registry outputs.
+    Traverses the runner tree down to leaf runners and collects each leaf
+    runner's ``typed_outputs`` payload when present.
     """
-    from ofx.runner.job import JobRunner, MatrixJobRunner
+    leaf_runners = [
+        typed_runner
+        for runner in runners.values()
+        for typed_runner in runner_leaf_descendants(runner)
+    ]
+    if not leaf_runners:
+        return []
+
+    results = await asyncio.gather(
+        *(typed_runner.reg_get(RunnerRegistryKeys.OUTPUTS) for typed_runner in leaf_runners),
+        return_exceptions=True,
+    )
 
     all_typed: list[dict] = []
-
-    for _job_id, runner in runners.items():
-        if isinstance(runner, MatrixJobRunner):
-            # Matrix runner wraps multiple JobRunners
-            for _child_id, child in runner._runners.items():
-                if isinstance(child, JobRunner):
-                    all_typed.extend(await _collect_from_job(child))
-        elif isinstance(runner, JobRunner):
-            all_typed.extend(await _collect_from_job(runner))
-        else:
-            # CloudJobRunner or other — try to get outputs directly
-            try:
-                all_typed.extend(await _collect_typed_outputs_from_runner(runner))
-            except Exception as e:
-                logger.debug("Failed to collect typed outputs from %s: %s", _job_id, e)
-
-    return all_typed
-
-
-async def _collect_from_job(job_runner: Any) -> list[dict]:
-    """Collect typed outputs from all step runners within a job."""
-    typed: list[dict] = []
-    for _step_id, step_runner in job_runner._runners.items():
-        try:
-            typed.extend(await _collect_typed_outputs_from_runner(step_runner))
-        except Exception as e:
+    for typed_runner, outputs in zip(leaf_runners, results, strict=True):
+        if isinstance(outputs, Exception):
+            model = getattr(typed_runner, "model", None)
+            runner_label = (
+                getattr(model, "jid", None)
+                or getattr(model, "name", None)
+                or "<unknown>"
+            )
             logger.debug(
-                "Failed to collect typed outputs from step %s: %s", _step_id, e
+                "Failed to collect typed outputs from %s: %s",
+                runner_label,
+                outputs,
             )
             continue
-    return typed
-
-
-async def _collect_typed_outputs_from_runner(runner: Any) -> list[dict]:
-    """Read typed outputs from a runner registry payload."""
-    outputs = await runner.reg_get(RunnerRegistryKeys.OUTPUTS)
-    if not outputs:
-        return []
-    typed = outputs.get("typed_outputs", [])
-    return typed if isinstance(typed, list) else []
-
-
-async def auto_export_findings(
-    runners: dict[str, Any],
-    project_path: str | None,
-    log_fn: Any = None,
-) -> list[str]:
-    """Collect and export all typed findings to the project directory.
-
-    Called automatically after workflow completion when --project is set.
-    Merges findings into master files and writes per-run timestamped
-    snapshots so every run's new discoveries are preserved.
-
-    Returns:
-        List of summary lines describing exported files.
-    """
-    if not project_path:
-        return []
-
-    all_typed = await collect_typed_outputs(runners)
-    if not all_typed:
-        return []
-
-    summaries = export_typed_outputs(project_path, all_typed)
-
-    if summaries and log_fn:
-        log_fn("Findings exported to project:")
-        for s in summaries:
-            log_fn(s)
-
-    return summaries
+        typed_outputs = outputs.get("typed_outputs") if isinstance(outputs, dict) else None
+        if isinstance(typed_outputs, list):
+            all_typed.extend(typed_outputs)
+    return all_typed

@@ -1,12 +1,15 @@
 """Tests for add_outputs() helper and stdout truncation."""
 
+import io
 import json
 
 import pytest
 
 from ofx.models.command import Script
 from ofx.runner import RunContext, RunnerStatus, ScriptRunner
-from ofx.runner.commands.command import write_outputs_file
+from ofx.runner.commands.command import (
+    write_outputs_file,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests for _add_outputs logic (inline, no subprocess)
@@ -20,7 +23,7 @@ class TestAddOutputsUnit:
         """add_outputs writes simple key=value pairs."""
         out = tmp_path / "outputs"
         out.touch()
-        _write_outputs(out, name="Alice", age=30)
+        write_outputs_file(out, name="Alice", age=30)
         lines = out.read_text().strip().splitlines()
         assert lines == ["name=Alice", "age=30"]
 
@@ -29,7 +32,7 @@ class TestAddOutputsUnit:
         out = tmp_path / "outputs"
         out.touch()
         data = {"host": "10.0.0.1", "open": True}
-        _write_outputs(out, metadata=data)
+        write_outputs_file(out, metadata=data)
         line = out.read_text().strip()
         assert line.startswith("metadata=")
         parsed = json.loads(line.split("=", 1)[1])
@@ -40,7 +43,7 @@ class TestAddOutputsUnit:
         out = tmp_path / "outputs"
         out.touch()
         items = ["a", "b", "c"]
-        _write_outputs(out, hosts=items)
+        write_outputs_file(out, hosts=items)
         line = out.read_text().strip()
         assert json.loads(line.split("=", 1)[1]) == items
 
@@ -48,7 +51,7 @@ class TestAddOutputsUnit:
         """Booleans are written as their string representation."""
         out = tmp_path / "outputs"
         out.touch()
-        _write_outputs(out, success=True, failed=False)
+        write_outputs_file(out, success=True, failed=False)
         lines = out.read_text().strip().splitlines()
         assert "success=True" in lines
         assert "failed=False" in lines
@@ -57,50 +60,60 @@ class TestAddOutputsUnit:
         """None is written as 'None'."""
         out = tmp_path / "outputs"
         out.touch()
-        _write_outputs(out, result=None)
+        write_outputs_file(out, result=None)
         assert out.read_text().strip() == "result=None"
 
     def test_integer_value(self, tmp_path):
         """Integers are written as their string."""
         out = tmp_path / "outputs"
         out.touch()
-        _write_outputs(out, count=42)
+        write_outputs_file(out, count=42)
         assert out.read_text().strip() == "count=42"
 
     def test_empty_string(self, tmp_path):
         """Empty string values are preserved."""
         out = tmp_path / "outputs"
         out.touch()
-        _write_outputs(out, result="")
+        write_outputs_file(out, result="")
         assert out.read_text().strip() == "result="
 
     def test_multiple_calls_append(self, tmp_path):
         """Multiple add_outputs calls append, not overwrite."""
         out = tmp_path / "outputs"
         out.touch()
-        _write_outputs(out, a="1")
-        _write_outputs(out, b="2")
+        write_outputs_file(out, a="1")
+        write_outputs_file(out, b="2")
         lines = out.read_text().strip().splitlines()
         assert lines == ["a=1", "b=2"]
 
     def test_no_outputs_file_is_noop(self):
         """No error when outputs_file is None."""
-        _write_outputs(None, key="val")  # should not raise
+        write_outputs_file(None, key="val")  # should not raise
 
     def test_kwargs_expansion(self, tmp_path):
         """**kwargs expansion works for dicts."""
         out = tmp_path / "outputs"
         out.touch()
         results = {"host": "10.0.0.1", "port": "22"}
-        _write_outputs(out, **results)
+        write_outputs_file(out, **results)
         lines = out.read_text().strip().splitlines()
         assert "host=10.0.0.1" in lines
         assert "port=22" in lines
 
 
-def _write_outputs(outputs_file, **kwargs):
-    """Delegate to the runtime add_outputs file writer."""
-    write_outputs_file(outputs_file, **kwargs)
+def test_script_output_helper_writes_and_capture_strings(tmp_path):
+    out = tmp_path / "outputs"
+    out.touch()
+
+    write_outputs_file(str(out), result="ok")
+    assert "result=ok" in out.read_text()
+
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
+    stdout_capture.write("hello")
+    stderr_capture.write("warn")
+    assert stdout_capture.getvalue() == "hello"
+    assert stderr_capture.getvalue() == "warn"
 
 
 # ---------------------------------------------------------------------------
@@ -111,20 +124,15 @@ def _write_outputs(outputs_file, **kwargs):
 class TestAddOutputsIntegration:
     """Test add_outputs() inside ScriptRunner execution."""
 
-    def _ctx_with_outputs(self, tmp_path):
-        """Create a RunContext with RUNNER_OUTPUTS configured."""
+    @pytest.mark.asyncio
+    async def test_script_add_outputs_basic(self, tmp_path):
+        """Script using add_outputs captures key-value outputs."""
+        script = 'add_outputs(target="10.0.0.1", port=8080)'
         outputs_file = tmp_path / "outputs"
         outputs_file.touch()
         ctx = RunContext()
         ctx.envs["RUNNER_OUTPUTS"] = str(outputs_file)
         ctx.envs["OFX_OUTPUTS"] = str(outputs_file)
-        return ctx
-
-    @pytest.mark.asyncio
-    async def test_script_add_outputs_basic(self, tmp_path):
-        """Script using add_outputs captures key-value outputs."""
-        script = 'add_outputs(target="10.0.0.1", port=8080)'
-        ctx = self._ctx_with_outputs(tmp_path)
         runner = ScriptRunner(Script(script=script), ctx)
         result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
@@ -135,7 +143,11 @@ class TestAddOutputsIntegration:
     async def test_script_add_outputs_dict_json(self, tmp_path):
         """Script using add_outputs serializes dicts as JSON."""
         script = 'add_outputs(data={"key": "value", "n": 1})'
-        ctx = self._ctx_with_outputs(tmp_path)
+        outputs_file = tmp_path / "outputs"
+        outputs_file.touch()
+        ctx = RunContext()
+        ctx.envs["RUNNER_OUTPUTS"] = str(outputs_file)
+        ctx.envs["OFX_OUTPUTS"] = str(outputs_file)
         runner = ScriptRunner(Script(script=script), ctx)
         result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
@@ -146,7 +158,11 @@ class TestAddOutputsIntegration:
     async def test_script_add_outputs_list_json(self, tmp_path):
         """Script using add_outputs serializes lists as JSON."""
         script = 'add_outputs(items=["a", "b", "c"])'
-        ctx = self._ctx_with_outputs(tmp_path)
+        outputs_file = tmp_path / "outputs"
+        outputs_file.touch()
+        ctx = RunContext()
+        ctx.envs["RUNNER_OUTPUTS"] = str(outputs_file)
+        ctx.envs["OFX_OUTPUTS"] = str(outputs_file)
         runner = ScriptRunner(Script(script=script), ctx)
         result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
@@ -160,7 +176,11 @@ class TestAddOutputsIntegration:
 add_outputs(step="recon")
 add_outputs(count=5, status="done")
 """
-        ctx = self._ctx_with_outputs(tmp_path)
+        outputs_file = tmp_path / "outputs"
+        outputs_file.touch()
+        ctx = RunContext()
+        ctx.envs["RUNNER_OUTPUTS"] = str(outputs_file)
+        ctx.envs["OFX_OUTPUTS"] = str(outputs_file)
         runner = ScriptRunner(Script(script=script), ctx)
         result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
@@ -175,7 +195,11 @@ add_outputs(count=5, status="done")
 results = {"host": "10.0.0.1", "open_ports": "22,80,443"}
 add_outputs(**results)
 """
-        ctx = self._ctx_with_outputs(tmp_path)
+        outputs_file = tmp_path / "outputs"
+        outputs_file.touch()
+        ctx = RunContext()
+        ctx.envs["RUNNER_OUTPUTS"] = str(outputs_file)
+        ctx.envs["OFX_OUTPUTS"] = str(outputs_file)
         runner = ScriptRunner(Script(script=script), ctx)
         result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED
@@ -190,7 +214,11 @@ print("Starting scan")
 add_outputs(result="success")
 print("Done")
 """
-        ctx = self._ctx_with_outputs(tmp_path)
+        outputs_file = tmp_path / "outputs"
+        outputs_file.touch()
+        ctx = RunContext()
+        ctx.envs["RUNNER_OUTPUTS"] = str(outputs_file)
+        ctx.envs["OFX_OUTPUTS"] = str(outputs_file)
         runner = ScriptRunner(Script(script=script), ctx)
         result = await runner.run()
         assert result.status == RunnerStatus.COMPLETED

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 
 from ofx.models.job import Job
@@ -33,15 +32,3 @@ class WorkflowScheduler:
         ]
         schedule = find_parallel_schedule(list(self._jobs.keys()), dependencies)
         return WorkflowSchedule(staged_jobs=self._jobs, schedule=schedule)
-
-    @staticmethod
-    def dependencies(jobs: dict[str, Job]) -> list[tuple[str, str]]:
-        """Return ``(dependency, job_id)`` pairs for topological sorting."""
-        return [
-            (dep, job_id) for job_id, job in jobs.items() for dep in job.needs if dep
-        ]
-
-    @staticmethod
-    def job_ids(jobs: dict[str, Job]) -> Iterable[str]:
-        """Return all job identifiers from the workflow."""
-        return jobs.keys()

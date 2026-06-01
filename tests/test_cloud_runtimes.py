@@ -13,6 +13,7 @@ from ofx.cloud.script_runtime import (
 )
 from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.models.step import RunType, Step
+from ofx.runner.task_step import extract_output_item_target, extract_task_target_and_opts
 
 # =========================================================================
 # resolve_python_step_source
@@ -194,3 +195,48 @@ class TestBuildTaskCommandFromStep:
         assert "target" not in call_args[1]
         assert "targets" not in call_args[1]
         assert call_args[1]["verbose"] is True
+
+    def test_profile_options_are_merged_before_build(self):
+        mock_task_cls = MagicMock()
+        mock_task = MagicMock()
+        mock_task.output_flag = None
+        mock_task.opts = {"threads": None, "proxy": None}
+        mock_task.build_command.return_value = ("tool target", [])
+        mock_task_cls.return_value = mock_task
+        profile = object()
+        step = Step(task="tool", run_with={"target": "target", "threads": 5})
+
+        with (
+            patch("ofx.tasks.registry.TaskRegistry") as mock_reg,
+            patch("ofx.cloud.task_runtime.merge_profile_task_options") as mock_merge,
+        ):
+            mock_reg.get.return_value = mock_task_cls
+            mock_merge.return_value = ({"threads": 5, "proxy": "socks5://127.0.0.1:9050"}, [], ["proxy"])
+
+            build_task_command_from_step(step, profile=profile)
+
+        mock_merge.assert_called_once_with(
+            task_name="tool",
+            user_opts={"threads": 5},
+            task_declared_opts=mock_task.opts,
+            profile=profile,
+        )
+        mock_task.build_command.assert_called_once_with(
+            "target",
+            threads=5,
+            proxy="socks5://127.0.0.1:9050",
+        )
+
+
+class TestTaskStepHelpers:
+    def test_extract_task_target_and_opts_normalizes_lists_and_scalars(self):
+        assert extract_task_target_and_opts({"targets": ["a", "b"]}) == ("a,b", {})
+        assert extract_task_target_and_opts({"target": "example.com"}) == ("example.com", {})
+        assert extract_task_target_and_opts({"target": 10, "verbose": True}) == ("10", {"verbose": True})
+
+    def test_extract_output_item_target_prefers_domain_host_ip_then_url(self):
+        assert extract_output_item_target({"domain": "example.com", "host": "api.example.com"}) == "example.com"
+        assert extract_output_item_target({"host": "api.example.com"}) == "api.example.com"
+        assert extract_output_item_target({"ip": "10.0.0.1"}) == "10.0.0.1"
+        assert extract_output_item_target({"url": "https://example.com:8443/path"}) == "example.com"
+        assert extract_output_item_target({}) == ""

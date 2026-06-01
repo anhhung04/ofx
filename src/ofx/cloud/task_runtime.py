@@ -20,23 +20,21 @@ def build_task_command_from_step(
     user_agent, jitter) and per-task ``task_options`` overrides are merged
     into the command — with step-level ``with:`` values always winning.
     """
-    from ofx.tasks.registry import TaskRegistry
-
-    if not step.task:
+    task_name = step.task
+    if not task_name:
         raise RuntimeError("Task step is missing task name")
 
-    task_cls = TaskRegistry.get(step.task)
-    if task_cls is None:
-        raise RuntimeError(f"Task '{step.task}' is not registered")
+    from ofx.tasks.registry import TaskRegistry
 
+    task_cls = TaskRegistry.get(task_name)
+    if task_cls is None:
+        raise RuntimeError(f"Task '{task_name}' is not registered")
     task = task_cls()
 
     target, task_opts = extract_task_target_and_opts(step.run_with)
-
-    # Apply profile settings (profile values yield to explicit step opts)
     if profile is not None:
         task_opts, _injected, _override_keys = merge_profile_task_options(
-            task_name=step.task,
+            task_name=task_name,
             user_opts=task_opts,
             task_declared_opts=task.opts,
             profile=profile,
@@ -48,5 +46,4 @@ def build_task_command_from_step(
         cmd_str, _ = task.build_command(target, **task_opts)
     finally:
         task.output_flag = saved_output_flag
-
     return cmd_str

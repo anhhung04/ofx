@@ -12,8 +12,6 @@ from ofx.models.pipe import PipeConfig
 from ofx.models.step import RunType, Step
 from ofx.runner.pipe import (
     _coerce_to_list,
-    _dump_json_lines,
-    _dump_json_pretty,
     _execute_pipeline,
     _format_items,
     _safe_eval,
@@ -292,13 +290,6 @@ class TestExecutePipeline:
 
 
 class TestFormatItems:
-    def test_dump_json_pretty(self):
-        assert json.loads(_dump_json_pretty([{"a": 1}])) == [{"a": 1}]
-
-    def test_dump_json_lines(self):
-        result = _dump_json_lines([{"a": 1}, {"a": 2}])
-        assert result.splitlines() == ['{"a": 1}', '{"a": 2}']
-
     def test_json(self):
         cfg = PipeConfig(input="{{ x }}", format="json")
         result = _format_items([{"a": 1}], cfg)

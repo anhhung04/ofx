@@ -103,6 +103,72 @@ class TestCloudProviderRegistry:
     def test_unregister_nonexistent_is_noop(self):
         CloudProviderRegistry.unregister("never_existed_xyz")
 
+    def test_available_provider_names_helper(self):
+        names = CloudProviderRegistry._available_provider_names()
+        assert "static" in names
+
+    def test_unsupported_snapshot_operation_message(self):
+        @CloudProviderRegistry.register("unsupported_test")
+        class _Unsupported(CloudProvider):
+            async def create_instance(self, config):
+                pass
+
+            async def wait_until_ready(self, instance_id, timeout=300):
+                pass
+
+            async def destroy_instance(self, instance_id):
+                pass
+
+            async def get_instance(self, instance_id):
+                pass
+
+            async def close(self):
+                pass
+
+        provider = CloudProviderRegistry.create("unsupported_test")
+        with pytest.raises(NotImplementedError, match="snapshot creation"):
+            import asyncio
+
+            asyncio.run(provider.create_snapshot("i-1", "snap"))
+
+    def test_poll_until_returns_ready_result(self):
+        @CloudProviderRegistry.register("poll_test")
+        class _PollProvider(CloudProvider):
+            async def create_instance(self, config):
+                pass
+
+            async def wait_until_ready(self, instance_id, timeout=300):
+                pass
+
+            async def destroy_instance(self, instance_id):
+                pass
+
+            async def get_instance(self, instance_id):
+                pass
+
+            async def close(self):
+                pass
+
+        provider = CloudProviderRegistry.create("poll_test")
+        attempts = {"count": 0}
+
+        async def _probe():
+            attempts["count"] += 1
+            return attempts["count"]
+
+        import asyncio
+
+        result = asyncio.run(
+            provider._poll_until(
+                _probe,
+                timeout=1,
+                interval=0,
+                is_ready=lambda value: value >= 3,
+            )
+        )
+
+        assert result == 3
+
 
 # ── CloudProfileManager ─────────────────────────────────────────────────
 class TestCloudProfileManager:
@@ -221,3 +287,15 @@ class TestCloudProfileManager:
         config = CloudConfig()
         resolved = populated_manager.resolve(config)
         assert resolved.host == "10.0.0.2"
+
+    def test_resolve_profile_name_prefers_explicit_profile(self, populated_manager):
+        config = CloudConfig(profile="do-small")
+        assert populated_manager._resolve_profile_name(config) == "do-small"
+
+    def test_config_overrides_ignore_profile_field(self, populated_manager):
+        config = CloudConfig(profile="do-small", ssh_user="admin")
+        overrides = populated_manager._config_overrides(
+            config,
+            profile_name="do-small",
+        )
+        assert overrides == {"ssh_user": "admin"}

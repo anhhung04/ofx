@@ -221,7 +221,239 @@ class TestProtocolConformance:
         assert stored["nested"]["status"] == "complete"
 
 
+class TestRegistryAdapterWrapperHelpers:
+    class _Adapter(RegistryAdapter):
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, object]] = []
+
+        async def _set(self, key: str, value):
+            self.calls.append(("set", (key, value)))
+
+        async def _get(self, key: str):
+            self.calls.append(("get", key))
+            return {"key": key}
+
+        async def _update(self, key: str, updates):
+            self.calls.append(("update", (key, updates)))
+
+        async def _delete(self, key: str):
+            self.calls.append(("delete", key))
+            return True
+
+        async def _exists(self, key: str):
+            self.calls.append(("exists", key))
+            return True
+
+        async def _get_all(self):
+            return {}
+
+        async def _clear(self):
+            return None
+
+        async def _close(self):
+            return None
+
+    @pytest.mark.asyncio
+    async def test_key_wrappers_validate_then_delegate(self):
+        adapter = self._Adapter()
+
+        assert await adapter.get("job") == {"key": "job"}
+        await adapter.set("job", {"a": 1})
+        assert await adapter.delete("job") is True
+        assert await adapter.exists("job") is True
+
+        assert adapter.calls == [
+            ("get", "job"),
+            ("set", ("job", {"a": 1})),
+            ("delete", "job"),
+            ("exists", "job"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_update_wrapper_validates_key_and_updates(self):
+        adapter = self._Adapter()
+
+        await adapter.update("job", {"status": "done"})
+
+        assert adapter.calls == [("update", ("job", {"status": "done"}))]
+
+
 class TestRegistrySerializationHelpers:
+    @pytest.mark.asyncio
+    async def test_serialized_prefixed_registry_adapter_shares_crud_flow(self):
+        from ofx.runner.registry_adapter import SerializedPrefixedRegistryAdapter
+
+        class _Adapter(SerializedPrefixedRegistryAdapter):
+            prefix = "ofx:job:"
+
+            def __init__(self):
+                self.storage: dict[str, str] = {}
+
+            async def _read_storage_value(self, storage_key: str):
+                return self.storage.get(storage_key)
+
+            async def _write_storage_value(self, storage_key: str, json_value: str) -> None:
+                self.storage[storage_key] = json_value
+
+            async def _storage_key_exists(self, storage_key: str) -> bool:
+                return storage_key in self.storage
+
+            async def _delete_storage_key(self, storage_key: str) -> None:
+                self.storage.pop(storage_key, None)
+
+            async def _storage_entries(self):
+                return [
+                    (self._logical_key(key), value)
+                    for key, value in self.storage.items()
+                ]
+
+            async def _clear_storage(self) -> None:
+                self.storage.clear()
+
+            async def _close(self) -> None:
+                return None
+
+        adapter = _Adapter()
+
+        await adapter.set("job", {"status": "running"})
+        assert await adapter.get("job") == {"status": "running"}
+
+        await adapter.update("job", {"status": "done"})
+        assert await adapter.get("job") == {"status": "done"}
+        assert await adapter.exists("job") is True
+        assert await adapter.get_all() == {"job": {"status": "done"}}
+
+        assert await adapter.delete("job") is True
+        assert await adapter.exists("job") is False
+
+    @pytest.mark.asyncio
+    async def test_serialized_prefixed_registry_adapter_runs_write_delete_hooks(self):
+        from ofx.runner.registry_adapter import SerializedPrefixedRegistryAdapter
+
+        class _Adapter(SerializedPrefixedRegistryAdapter):
+            prefix = "ofx:job:"
+
+            def __init__(self):
+                self.storage: dict[str, str] = {}
+                self.events: list[tuple[str, str]] = []
+
+            async def _read_storage_value(self, storage_key: str):
+                return self.storage.get(storage_key)
+
+            async def _write_storage_value(self, storage_key: str, json_value: str) -> None:
+                self.storage[storage_key] = json_value
+
+            async def _storage_key_exists(self, storage_key: str) -> bool:
+                return storage_key in self.storage
+
+            async def _delete_storage_key(self, storage_key: str) -> None:
+                self.storage.pop(storage_key, None)
+
+            async def _storage_entries(self):
+                return []
+
+            async def _clear_storage(self) -> None:
+                self.storage.clear()
+
+            async def _after_storage_write(self, key: str) -> None:
+                self.events.append(("write", key))
+
+            async def _after_storage_delete(self, key: str) -> None:
+                self.events.append(("delete", key))
+
+            async def _close(self) -> None:
+                return None
+
+        adapter = _Adapter()
+
+        await adapter.set("job", {"status": "running"})
+        await adapter.update("job", {"status": "done"})
+        await adapter.delete("job")
+
+        assert adapter.events == [("write", "job"), ("write", "job"), ("delete", "job")]
+
+    def test_backend_logging_helpers_use_display_name_and_actions(self, monkeypatch):
+        from ofx.runner.registry_adapter import RegistryAdapter
+
+        class _Adapter(RegistryAdapter):
+            _backend_display_name = "CustomRegistry"
+
+            async def _set(self, key: str, value): ...
+            async def _get(self, key: str): ...
+            async def _update(self, key: str, updates): ...
+            async def _delete(self, key: str): ...
+            async def _exists(self, key: str): ...
+            async def _get_all(self): ...
+            async def _clear(self): ...
+            async def _close(self): ...
+
+        messages: list[str] = []
+        adapter = _Adapter()
+        monkeypatch.setattr(adapter, "_log_debug", messages.append)
+
+        adapter._log_backend_initialized("at somewhere")
+        adapter._log_backend_key_action("Set", "job-a")
+        adapter._log_backend_action("Closed")
+
+        assert messages == [
+            "Initialized CustomRegistry at somewhere",
+            "Set key 'job-a' in CustomRegistry",
+            "Closed CustomRegistry",
+        ]
+
+    def test_prefix_helpers_normalize_and_strip_keys(self):
+        assert MemoryJobRegistry._normalized_prefix("/ofx/job", "/") == "/ofx/job/"
+        assert MemoryJobRegistry._prefixed_key("ofx:job:", "abc") == "ofx:job:abc"
+        assert MemoryJobRegistry._unprefixed_key("/ofx/job/abc", "/ofx/job", "/") == "abc"
+
+    def test_decoded_mapping_skips_empty_and_invalid_entries(self):
+        entries = [
+            ("a", '{"v": 1}'),
+            ("b", None),
+            ("c", '{"bad"'),
+        ]
+
+        decoded = MemoryJobRegistry._decoded_mapping(entries)
+
+        assert decoded == {"a": {"v": 1}}
+
+    def test_prefixed_registry_helpers_build_and_strip_storage_keys(self):
+        from ofx.runner.registry_adapter import PrefixedRegistryAdapter
+
+        class _Adapter(PrefixedRegistryAdapter):
+            prefix = "/ofx/job"
+            _prefix_separator = "/"
+
+            async def _set(self, key: str, value): ...
+            async def _get(self, key: str): ...
+            async def _update(self, key: str, updates): ...
+            async def _delete(self, key: str): ...
+            async def _exists(self, key: str): ...
+            async def _get_all(self): ...
+            async def _clear(self): ...
+            async def _close(self): ...
+
+        adapter = _Adapter()
+
+        assert adapter._storage_prefix() == "/ofx/job/"
+        assert adapter._storage_key("abc") == "/ofx/job/abc"
+        assert adapter._logical_key("/ofx/job/abc") == "abc"
+
+    def test_merged_updated_value_merges_dicts_with_copies(self):
+        existing = {"a": 1, "nested": {"x": 1}}
+        updates = {"b": 2, "nested": {"x": 9}}
+
+        merged = MemoryJobRegistry._merged_updated_value(existing, updates)
+
+        assert merged == {"a": 1, "b": 2, "nested": {"x": 9}}
+        updates["nested"]["x"] = 0
+        assert merged["nested"]["x"] == 9
+
+    def test_merged_updated_value_replaces_non_dict_existing(self):
+        merged = MemoryJobRegistry._merged_updated_value([1, 2], {"a": 1})
+
+        assert merged == {"a": 1}
+
     def test_serialize_value_keeps_default_string_fallback(self):
         class NotJsonSerializable:
             def __str__(self):
@@ -262,6 +494,12 @@ class FakeMemcachedRegistry(MemcachedJobRegistry):
 
 
 class TestMemcachedRegistryIndexHelpers:
+    async def test_key_byte_helpers_use_prefixed_keys(self):
+        registry = FakeMemcachedRegistry(FakeMemcachedClient())
+
+        assert registry._cache_key_bytes("a") == b"ofx:job:a"
+        assert registry._index_key_bytes() == b"ofx:job:_index"
+
     async def test_index_helpers_track_set_delete_and_clear(self):
         registry = FakeMemcachedRegistry(FakeMemcachedClient())
 

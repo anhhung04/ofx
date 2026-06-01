@@ -85,35 +85,35 @@ _SEVERITY_STYLES = {
     "unknown": "dim",
 }
 
-_STATUS_CODE_STYLES = {
-    2: "green",
-    3: "yellow",
-    4: "red",
-    5: "bold red",
-}
+_STATUS_CODE_STYLES = {2: "green", 3: "yellow", 4: "red", 5: "bold red"}
 
 
-def _cell_value(item: dict[str, Any], field: str) -> str:
-    """Extract a display-friendly string from a typed output field."""
-    val = item.get(field)
-    if val is None or val == "" or val == 0:
+def _summary_label(key: str, value: int) -> str:
+    if value == 1:
+        return key
+    if key.endswith("s"):
+        return key + "es"
+    return key + "s"
+
+
+def _display_output_value(value: Any) -> str:
+    if value is None or value == "" or value == 0:
         return ""
-    if isinstance(val, list):
-        return ", ".join(str(v) for v in val[:5]) + ("…" if len(val) > 5 else "")
-    if isinstance(val, bool):
-        return "✓" if val else ""
-    return str(val)
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value[:5]) + (
+            "…" if len(value) > 5 else ""
+        )
+    if isinstance(value, bool):
+        return "✓" if value else ""
+    return str(value)
 
 
-def _cell_style(item: dict[str, Any], field: str, base_style: str) -> str:
-    """Return a contextual style for specific field values."""
+def _contextual_cell_style(field: str, value: Any, default_style: str) -> str:
     if field == "severity":
-        return _SEVERITY_STYLES.get(str(item.get(field, "")).lower(), base_style)
-    if field == "status_code":
-        code = item.get(field, 0)
-        if isinstance(code, int) and code > 0:
-            return _STATUS_CODE_STYLES.get(code // 100, base_style)
-    return base_style
+        return _SEVERITY_STYLES.get(str(value or "").lower(), default_style)
+    if field == "status_code" and isinstance(value, int) and value > 0:
+        return _STATUS_CODE_STYLES.get(value // 100, default_style)
+    return default_style
 
 
 def format_typed_outputs(
@@ -154,26 +154,39 @@ def format_typed_outputs(
                 no_wrap=max_width is not None,
             )
 
-        data_fields = [field for field, _, _, _ in columns]
-        non_empty_items = [
-            item for item in items if any(_cell_value(item, field) for field in data_fields)
-        ]
-        if not non_empty_items:
+        prepared_rows: list[list[str | Text]] = []
+        for item in items:
+            row: list[str | Text] = []
+            has_value = False
+            for field, _, style, _ in columns:
+                value = item.get(field)
+                display_value = _display_output_value(value)
+
+                if display_value:
+                    has_value = True
+
+                cell_style = _contextual_cell_style(field, value, style)
+
+                row.append(
+                    Text(display_value, style=cell_style)
+                    if cell_style != style
+                    else display_value
+                )
+
+            if has_value:
+                prepared_rows.append(row)
+
+        if not prepared_rows:
             continue
 
         max_rows = 50
-        for item in non_empty_items[:max_rows]:
-            cells = []
-            for field, _, style, _ in columns:
-                value = _cell_value(item, field)
-                cell_style = _cell_style(item, field, style)
-                cells.append(Text(value, style=cell_style) if cell_style != style else value)
-            table.add_row(*cells)
+        for row in prepared_rows[:max_rows]:
+            table.add_row(*row)
 
-        if len(non_empty_items) > max_rows:
+        if len(prepared_rows) > max_rows:
             table.add_row(
                 *[
-                    f"… +{len(non_empty_items) - max_rows} more" if index == 0 else ""
+                    f"… +{len(prepared_rows) - max_rows} more" if index == 0 else ""
                     for index in range(len(columns))
                 ]
             )
@@ -186,7 +199,7 @@ def format_typed_outputs(
     counts = Counter(item.get("_type", "?") for item in typed_outputs)
     summary_parts = []
     for key, value in sorted(counts.items()):
-        label = key if value == 1 else (key + "es" if key.endswith("s") else key + "s")
+        label = _summary_label(key, value)
         summary_parts.append(f"[bold]{value}[/bold] {label}")
     summary_text = " · ".join(summary_parts)
 

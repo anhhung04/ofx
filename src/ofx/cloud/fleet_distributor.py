@@ -9,13 +9,45 @@ from __future__ import annotations
 import ipaddress
 import logging
 import tempfile
-from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 from ofx.cloud.fleet_input import FleetInputParser
+from ofx.utils.file_cleanup import remove_files_and_parent_dir
 
 logger = logging.getLogger("ofx")
+
+def _effective_count(targets: list[str], count: int) -> int:
+    if not targets or count <= 0:
+        return 0
+
+    effective_count = min(count, len(targets))
+    if effective_count < count:
+        logger.info(
+            "Fleet: reducing instance count from %s to %s (only %s targets)",
+            count,
+            effective_count,
+            len(targets),
+        )
+    return effective_count
+
+def _write_chunk_files(chunks: list[list[str]]) -> tuple[Path, list[Path]]:
+    output_dir = Path(tempfile.mkdtemp(prefix="ofx_fleet_"))
+    chunk_files: list[Path] = []
+    try:
+        for chunk_index, chunk in enumerate(chunks):
+            chunk_file = output_dir / f"fleet_chunk_{chunk_index}.txt"
+            chunk_file.write_text("\n".join(chunk) + "\n" if chunk else "")
+            chunk_files.append(chunk_file)
+    except Exception:
+        remove_files_and_parent_dir(
+            chunk_files,
+            on_error=lambda _message: None,
+            file_label="chunk file",
+            dir_label="chunk dir",
+        )
+        raise
+    return output_dir, chunk_files
 
 
 class FleetDistributor:
@@ -53,35 +85,35 @@ class FleetDistributor:
             never returned — if there are no targets the result is ``[]``
             (no instances at all).
         """
-        if not targets:
+        effective_count = _effective_count(targets, count)
+        if effective_count == 0:
             return []
 
-        if count <= 0:
-            return []
+        return [
+            chunk
+            for chunk in self._distribute_mode(targets, effective_count, mode, min_prefix)
+            if chunk
+        ]
 
-        # Reduce count if we have fewer targets than instances
-        effective_count = min(count, len(targets))
-        if effective_count < count:
-            logger.info(
-                f"Fleet: reducing instance count from {count} to {effective_count} "
-                f"(only {len(targets)} targets)"
-            )
-
+    def _distribute_mode(
+        self,
+        targets: list[str],
+        effective_count: int,
+        mode: str,
+        min_prefix: int,
+    ) -> list[list[str]]:
         match mode:
             case "chunk":
-                chunks = self._chunk(targets, effective_count)
+                return self._chunk(targets, effective_count)
             case "round-robin":
-                chunks = self._round_robin(targets, effective_count)
+                return self._round_robin(targets, effective_count)
             case "subnet":
-                chunks = self._subnet_aware(targets, effective_count, min_prefix)
+                return self._subnet_aware(targets, effective_count, min_prefix)
             case "line":
-                chunks = [[t] for t in targets]
+                return [[target] for target in targets]
             case _:
-                logger.warning(f"Unknown distribution mode '{mode}', using chunk")
-                chunks = self._chunk(targets, effective_count)
-
-        # Never return empty chunks — they would provision VPSes with zero targets
-        return [c for c in chunks if c]
+                logger.warning("Unknown distribution mode '%s', using chunk", mode)
+                return self._chunk(targets, effective_count)
 
     def _chunk(self, targets: list[str], count: int) -> list[list[str]]:
         """Split into N contiguous chunks."""
@@ -116,35 +148,29 @@ class FleetDistributor:
             count: Number of instances to distribute across.
             min_prefix: Prefix length for subnet grouping (default /24).
         """
-        # Group by subnet at min_prefix
         subnet_groups: dict[str, list[str]] = {}
         ungrouped: list[str] = []
 
         for target in targets:
             try:
                 addr = ipaddress.ip_address(target)
-                net = ipaddress.ip_network(f"{addr}/{min_prefix}", strict=False)
-                key = str(net)
-                if key not in subnet_groups:
-                    subnet_groups[key] = []
-                subnet_groups[key].append(target)
             except ValueError:
-                # Hostname or invalid IP — can't group by subnet
                 ungrouped.append(target)
+                continue
+            group_key = str(ipaddress.ip_network(f"{addr}/{min_prefix}", strict=False))
+            subnet_groups.setdefault(group_key, []).append(target)
 
-        # Sort groups by size (largest first) for better distribution
         sorted_groups = sorted(subnet_groups.values(), key=len, reverse=True)
         if ungrouped:
             sorted_groups.append(ungrouped)
 
-        # Distribute groups to buckets (greedy: assign to least-full bucket)
         buckets: list[list[str]] = [[] for _ in range(count)]
         bucket_sizes = [0] * count
 
         for group in sorted_groups:
-            min_idx = bucket_sizes.index(min(bucket_sizes))
-            buckets[min_idx].extend(group)
-            bucket_sizes[min_idx] += len(group)
+            bucket_index = bucket_sizes.index(min(bucket_sizes))
+            buckets[bucket_index].extend(group)
+            bucket_sizes[bucket_index] += len(group)
 
         return buckets
 
@@ -204,38 +230,22 @@ def expand_fleet_to_matrix(
             f"Ensure 'count' is at least 1."
         )
 
-    output_dir = Path(tempfile.mkdtemp(prefix="ofx_fleet_"))
-    chunk_files: list[Path] = []
-    try:
-        for i, chunk in enumerate(chunks):
-            chunk_file = output_dir / f"fleet_chunk_{i}.txt"
-            chunk_file.write_text("\n".join(chunk) + "\n" if chunk else "")
-            chunk_files.append(chunk_file)
-    except Exception:
-        # Clean up any written files before propagating
-        for f in chunk_files:
-            with suppress(OSError):
-                f.unlink(missing_ok=True)
-        with suppress(OSError):
-            output_dir.rmdir()
-        raise
+    output_dir, chunk_files = _write_chunk_files(chunks)
 
     logger.debug(
         f"Fleet: distributed {len(targets)} targets across {len(chunk_files)} "
         f"chunk files in {output_dir}"
     )
 
-    # Build matrix combinations
-    combinations = []
-    for i, chunk in enumerate(chunks):
-        combo = {
-            "fleet_index": i,
-            "fleet_total": len(chunks),
-            "fleet_input_file": str(chunk_files[i]),
+    fleet_total = len(chunks)
+    return [
+        {
+            "fleet_index": chunk_index,
+            "fleet_total": fleet_total,
+            "fleet_input_file": str(chunk_files[chunk_index]),
             "fleet_target_count": len(chunk),
             "fleet_input": chunk,
-            "fleet_name": f"[{fleet_config.get('name', 'fleet')}]{{{i}}}",
+            "fleet_name": f"[{fleet_config.get('name', 'fleet')}]{{{chunk_index}}}",
         }
-        combinations.append(combo)
-
-    return combinations, chunk_files
+        for chunk_index, chunk in enumerate(chunks)
+    ], chunk_files

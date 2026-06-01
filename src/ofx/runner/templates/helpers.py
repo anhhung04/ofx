@@ -9,6 +9,7 @@ in *resolver.py* short.
 from __future__ import annotations
 
 import base64
+from functools import partial
 import hashlib
 import json
 import logging
@@ -26,37 +27,68 @@ from urllib.parse import quote, unquote
 _logger = logging.getLogger("ofx.templates")
 
 
+def _field_value(item: Any, field: str, default: Any = None) -> Any:
+    if isinstance(item, dict):
+        return item.get(field, default)
+    return getattr(item, field, default)
+
+
+def _as_list(items: Any) -> list | None:
+    return items if isinstance(items, list) else None
+
+
+def _slice_list(items: Any, n: int = 1, *, from_end: bool = False) -> list | Any:
+    items_list = _as_list(items)
+    if items_list is None:
+        return [] if n > 1 else None
+    if n == 1:
+        if not items_list:
+            return None
+        return items_list[-1] if from_end else items_list[0]
+    return items_list[-n:] if from_end else items_list[:n]
+
+
+def _group_list(items: Any, field: str) -> dict[str, list]:
+    items_list = _as_list(items)
+    if items_list is None:
+        return {}
+    groups: dict[str, list] = {}
+    for item in items_list:
+        key = str(_field_value(item, field, ""))
+        groups.setdefault(key, []).append(item)
+    return groups
+
 # ── File I/O ─────────────────────────────────────────────────────────────
 def _file_helpers() -> dict[str, Any]:
     def _read_file(path: str) -> str:
-        p = Path(path)
-        if not p.exists() or not p.is_file():
+        file_path = path if isinstance(path, Path) else Path(path)
+        if not file_path.exists() or not file_path.is_file():
             return ""
         try:
-            return p.read_text(encoding="utf-8", errors="replace")
-        except Exception as e:
-            _logger.debug("file_read(%s) failed: %s", path, e)
+            return file_path.read_text(encoding="utf-8", errors="replace")
+        except Exception as exc:
+            _logger.debug("file_read(%s) failed: %s", path, exc)
             return ""
 
     def _write_file(path: str, content: str) -> None:
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding="utf-8")
+        file_path = path if isinstance(path, Path) else Path(path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
 
     def _append_file(path: str, content: str) -> None:
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("a", encoding="utf-8") as f:
+        file_path = path if isinstance(path, Path) else Path(path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with file_path.open("a", encoding="utf-8") as f:
             f.write(content)
 
     def _file_lines(path: str) -> list[str]:
-        p = Path(path)
-        if not p.exists() or not p.is_file():
+        file_path = path if isinstance(path, Path) else Path(path)
+        if not file_path.exists() or not file_path.is_file():
             return []
         try:
-            return p.read_text(encoding="utf-8", errors="replace").splitlines()
-        except Exception as e:
-            _logger.debug("file_lines(%s) failed: %s", path, e)
+            return file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except Exception as exc:
+            _logger.debug("file_lines(%s) failed: %s", path, exc)
             return []
 
     return {
@@ -64,9 +96,9 @@ def _file_helpers() -> dict[str, Any]:
         "file_write": _write_file,
         "file_append": _append_file,
         "file_lines": _file_lines,
-        "file_exists": lambda path: Path(path).exists(),
-        "is_file": lambda path: Path(path).is_file(),
-        "is_dir": lambda path: Path(path).is_dir(),
+        "file_exists": lambda path: (path if isinstance(path, Path) else Path(path)).exists(),
+        "is_file": lambda path: (path if isinstance(path, Path) else Path(path)).is_file(),
+        "is_dir": lambda path: (path if isinstance(path, Path) else Path(path)).is_dir(),
     }
 
 
@@ -74,10 +106,10 @@ def _file_helpers() -> dict[str, Any]:
 def _path_helpers() -> dict[str, Any]:
     return {
         "join_path": lambda *parts: str(Path(*parts)),
-        "basename": lambda path: Path(path).name,
-        "dirname": lambda path: str(Path(path).parent),
+        "basename": lambda path: (path if isinstance(path, Path) else Path(path)).name,
+        "dirname": lambda path: str((path if isinstance(path, Path) else Path(path)).parent),
         "glob": lambda pattern, directory=".": [
-            str(p) for p in Path(directory).glob(pattern)
+            str(p) for p in (directory if isinstance(directory, Path) else Path(directory)).glob(pattern)
         ],
         "cwd": lambda: str(Path.cwd()),
         "home": lambda: str(Path.home()),
@@ -98,16 +130,10 @@ def _encoding_helpers() -> dict[str, Any]:
 
 # ── Hashing ──────────────────────────────────────────────────────────────
 def _hash_helpers() -> dict[str, Any]:
-    def _make_hasher(algo: str):
-        def _hash(s: str) -> str:
-            return hashlib.new(algo, s.encode()).hexdigest()
-
-        return _hash
-
     return {
-        "md5": _make_hasher("md5"),
-        "sha1": _make_hasher("sha1"),
-        "sha256": _make_hasher("sha256"),
+        "md5": lambda s: hashlib.new("md5", s.encode()).hexdigest(),
+        "sha1": lambda s: hashlib.new("sha1", s.encode()).hexdigest(),
+        "sha256": lambda s: hashlib.new("sha256", s.encode()).hexdigest(),
     }
 
 
@@ -232,21 +258,141 @@ _TYPE_FILTER_MAP: dict[str, str] = {
 }
 
 
+def _pluck_field(items: list, field: str) -> list:
+    items_list = _as_list(items)
+    if items_list is None:
+        return []
+    return [_field_value(item, field) for item in items_list]
+
+
+def _join_lines(items: list, field: str | None = None, sep: str = "\n") -> str:
+    items_list = _as_list(items)
+    if items_list is None:
+        return ""
+
+    parts: list[str] = []
+    for item in items_list:
+        if field and isinstance(item, dict):
+            parts.append(str(item.get(field, "")))
+        else:
+            parts.append(str(item))
+    return sep.join(parts)
+
+
+def _to_csv_string(items: list, headers: bool = True) -> str:
+    import csv as _csv
+    import io as _io
+
+    if not items or not isinstance(items, list):
+        return ""
+
+    buf = _io.StringIO()
+    if isinstance(items[0], dict):
+        fieldnames = list(items[0].keys())
+        writer = _csv.DictWriter(buf, fieldnames=fieldnames)
+        if headers:
+            writer.writeheader()
+        for item in items:
+            writer.writerow({key: str(value) for key, value in item.items()})
+    return buf.getvalue().rstrip("\r\n")
+
+
+def _to_jsonl_string(items: list) -> str:
+    items_list = _as_list(items)
+    if items_list is None:
+        return ""
+    return "\n".join(json.dumps(item, default=str) for item in items_list)
+
+def _sort_items(items: list, field: str, reverse: bool = False) -> list:
+    items_list = _as_list(items)
+    if items_list is None:
+        return []
+
+    def _key(item: Any) -> tuple[int, int | float, str]:
+        value = _field_value(item, field)
+        if value is None:
+            return (0, 0, "")
+        if isinstance(value, (int, float)):
+            return (0, value, "")
+        try:
+            return (0, float(value), "")
+        except (ValueError, TypeError):
+            return (1, 0, str(value))
+
+    try:
+        return sorted(items_list, key=_key, reverse=reverse)
+    except TypeError:
+        return items_list
+
+
+def _unique_items(items: list, field: str) -> list:
+    items_list = _as_list(items)
+    if items_list is None:
+        return []
+
+    seen: set[Any] = set()
+    result: list = []
+    for item in items_list:
+        key = _field_value(item, field)
+        if key not in seen:
+            seen.add(key)
+            result.append(item)
+    return result
+
+
+def _filter_where(items: list, field: str, value: Any, *, negate: bool = False) -> list:
+    items_list = _as_list(items)
+    if items_list is None:
+        return []
+    result: list = []
+    for item in items_list:
+        matches = _field_value(item, field) == value
+        if (not matches) if negate else matches:
+            result.append(item)
+    return result
+
+
+def _flatten_items(items: list, field: str | None = None) -> list:
+    items_list = _as_list(items)
+    if items_list is None:
+        return []
+    if field:
+        result: list = []
+        for item in items_list:
+            nested = _field_value(item, field)
+            if isinstance(nested, list):
+                result.extend(nested)
+            else:
+                result.append(item)
+        return result
+
+    result: list = []
+    for item in items_list:
+        if isinstance(item, list):
+            result.extend(item)
+        else:
+            result.append(item)
+    return result
+
+
+def _of_type(items: list, type_name: str) -> list:
+    items_list = _as_list(items)
+    if items_list is None:
+        return []
+    return [
+        item
+        for item in items_list
+        if isinstance(item, dict) and item.get("_type") == type_name
+    ]
+
+
 def _type_filter_helpers() -> dict[str, Any]:
-    def _of_type(items: list, type_name: str) -> list:
-        if not isinstance(items, list):
-            return []
-        return [i for i in items if isinstance(i, dict) and i.get("_type") == type_name]
-
-    def _make_type_filter(type_name: str):
-        def _filter(items: list) -> list:
-            return _of_type(items, type_name)
-
-        return _filter
-
     return {
         "of_type": _of_type,
-        **{name: _make_type_filter(tname) for name, tname in _TYPE_FILTER_MAP.items()},
+        **{
+            name: partial(_of_type, type_name=type_name)
+            for name, type_name in _TYPE_FILTER_MAP.items()
+        },
     }
 
 
@@ -258,305 +404,150 @@ def _etl_helpers() -> dict[str, Any]:
     transformations via Jinja2 filters and functions.
     """
 
-    def _pluck(items: list, field: str) -> list:
-        """Extract a single field from each dict in a list."""
-        if not isinstance(items, list):
-            return []
-        return [
-            (i.get(field) if isinstance(i, dict) else getattr(i, field, None))
-            for i in items
-        ]
-
-    def _to_lines(items: list, field: str | None = None, sep: str = "\n") -> str:
-        """Join list items into a newline-separated string."""
-        if not isinstance(items, list):
-            return ""
-        parts: list[str] = []
-        for item in items:
-            if field and isinstance(item, dict):
-                parts.append(str(item.get(field, "")))
-            else:
-                parts.append(str(item))
-        return sep.join(parts)
-
-    def _to_csv(items: list, headers: bool = True) -> str:
-        """Convert a list of dicts to CSV."""
-        import csv as _csv
-        import io as _io
-
-        if not items or not isinstance(items, list):
-            return ""
-        buf = _io.StringIO()
-        if isinstance(items[0], dict):
-            fieldnames = list(items[0].keys())
-            writer = _csv.DictWriter(buf, fieldnames=fieldnames)
-            if headers:
-                writer.writeheader()
-            for item in items:
-                writer.writerow({k: str(v) for k, v in item.items()})
-        return buf.getvalue().rstrip("\r\n")
-
-    def _to_jsonl(items: list) -> str:
-        """Convert a list to JSONL (one JSON object per line)."""
-        if not isinstance(items, list):
-            return ""
-        return "\n".join(json.dumps(item, default=str) for item in items)
-
-    def _sort_by(items: list, field: str, reverse: bool = False) -> list:
-        """Sort a list of dicts by a field."""
-        if not isinstance(items, list):
-            return []
-
-        def _key(x):
-            v = x.get(field) if isinstance(x, dict) else getattr(x, field, None)
-            if v is None:
-                return (0, 0, "")
-            if isinstance(v, (int, float)):
-                return (0, v, "")
-            try:
-                return (0, float(v), "")
-            except (ValueError, TypeError):
-                return (1, 0, str(v))
-
-        try:
-            return sorted(items, key=_key, reverse=reverse)
-        except TypeError:
-            return items
-
-    def _unique_by(items: list, field: str) -> list:
-        """Deduplicate a list of dicts by a field (first occurrence wins)."""
-        if not isinstance(items, list):
-            return []
-        seen: set = set()
-        result: list = []
-        for item in items:
-            key = item.get(field) if isinstance(item, dict) else getattr(item, field, None)
-            if key not in seen:
-                seen.add(key)
-                result.append(item)
-        return result
-
-    def _where(items: list, field: str, value: Any) -> list:
-        """Filter a list of dicts where field equals value."""
-        if not isinstance(items, list):
-            return []
-        return [
-            i
-            for i in items
-            if (i.get(field) if isinstance(i, dict) else getattr(i, field, None))
-            == value
-        ]
-
-    def _where_not(items: list, field: str, value: Any) -> list:
-        """Filter a list of dicts where field does NOT equal value."""
-        if not isinstance(items, list):
-            return []
-        return [
-            i
-            for i in items
-            if (i.get(field) if isinstance(i, dict) else getattr(i, field, None))
-            != value
-        ]
-
-    def _first(items: list, n: int = 1) -> list | Any:
-        """Return the first N items. If n=1, returns a single item."""
-        if not isinstance(items, list):
-            return [] if n > 1 else None
-        if n == 1:
-            return items[0] if items else None
-        return items[:n]
-
-    def _last(items: list, n: int = 1) -> list | Any:
-        """Return the last N items. If n=1, returns a single item."""
-        if not isinstance(items, list):
-            return [] if n > 1 else None
-        if n == 1:
-            return items[-1] if items else None
-        return items[-n:]
-
-    def _group_by(items: list, field: str) -> dict[str, list]:
-        """Group a list of dicts by a field value."""
-        if not isinstance(items, list):
-            return {}
-        groups: dict[str, list] = {}
-        for item in items:
-            key = str(
-                item.get(field) if isinstance(item, dict) else getattr(item, field, "")
-            )
-            groups.setdefault(key, []).append(item)
-        return groups
-
-    def _flatten(items: list, field: str | None = None) -> list:
-        """Flatten nested lists. If field given, flatten that field."""
-        if not isinstance(items, list):
-            return []
-        if field:
-            result: list = []
-            for item in items:
-                nested = (
-                    item.get(field)
-                    if isinstance(item, dict)
-                    else getattr(item, field, None)
-                )
-                if isinstance(nested, list):
-                    result.extend(nested)
-                else:
-                    result.append(item)
-            return result
-        # Flatten one level of nesting
-        result = []
-        for item in items:
-            if isinstance(item, list):
-                result.extend(item)
-            else:
-                result.append(item)
-        return result
-
-    def _count_by(items: list, field: str) -> dict[str, int]:
-        """Count occurrences of each unique value in a field."""
-        if not isinstance(items, list):
-            return {}
-        counts: dict[str, int] = {}
-        for item in items:
-            key = str(
-                item.get(field) if isinstance(item, dict) else getattr(item, field, "")
-            )
-            counts[key] = counts.get(key, 0) + 1
-        return counts
-
     return {
-        "pluck": _pluck,
-        "to_lines": _to_lines,
-        "to_csv": _to_csv,
-        "to_jsonl": _to_jsonl,
-        "sort_by": _sort_by,
-        "unique_by": _unique_by,
-        "where": _where,
-        "where_not": _where_not,
-        "first": _first,
-        "last": _last,
-        "group_by": _group_by,
-        "flatten": _flatten,
-        "count_by": _count_by,
+        "pluck": _pluck_field,
+        "to_lines": _join_lines,
+        "to_csv": _to_csv_string,
+        "to_jsonl": _to_jsonl_string,
+        "sort_by": _sort_items,
+        "unique_by": _unique_items,
+        "where": _filter_where,
+        "where_not": partial(_filter_where, negate=True),
+        "first": _slice_list,
+        "last": partial(_slice_list, from_end=True),
+        "group_by": _group_list,
+        "flatten": _flatten_items,
+        "count_by": lambda items, field: {
+            key: len(group) for key, group in _group_list(items, field).items()
+        },
     }
 
 
 # ── ASM integration ─────────────────────────────────────────────────────
+def _get_asm_client(helper_name: str) -> Any | None:
+    try:
+        from ofx.asm.config import get_asm_client
+
+        return get_asm_client()
+    except Exception:
+        _logger.debug("ASM client unavailable for %s()", helper_name, exc_info=True)
+        return None
+
+
+def _asm_resolve_scope(client: Any, scope_ref: str) -> str:
+    if not scope_ref:
+        from ofx.asm.config import get_asm_config
+
+        scope_ref = get_asm_config().default_scope
+    if not scope_ref:
+        raise ValueError("No ASM scope specified")
+    if len(scope_ref) >= 32 and "-" in scope_ref:
+        return scope_ref
+    found = client.find_scope(scope_ref)
+    if found:
+        return found.id
+    raise ValueError(f"ASM scope '{scope_ref}' not found")
+
+
+def _asm_targets(
+    scope: str = "", effective: bool = True, target_type: str = ""
+) -> list[str]:
+    client = _get_asm_client("asm_targets")
+    if client is None:
+        return []
+
+    try:
+        scope_id = _asm_resolve_scope(client, scope)
+        targets = (
+            client.effective_targets(scope_id)
+            if effective
+            else client.list_targets(scope_id)
+        )
+        values: list[str] = []
+        for target in targets:
+            if effective and target.excluded:
+                continue
+            if not effective and not target.enabled:
+                continue
+            if target_type and target.target_type != target_type:
+                continue
+            values.append(target.value)
+        return values
+    except Exception:
+        _logger.debug("asm_targets() failed", exc_info=True)
+        return []
+
+
+def _asm_push(items: list, scope: str = "", source: str = "ofx") -> int:
+    try:
+        from ofx.asm.export import batch_convert
+    except Exception:
+        _logger.debug("ASM export unavailable for asm_push()", exc_info=True)
+        return 0
+
+    client = _get_asm_client("asm_push")
+    if client is None:
+        return 0
+
+    try:
+        scope_id = _asm_resolve_scope(client, scope)
+        assets, _ = batch_convert(items, source=source)
+        if not assets:
+            return 0
+        result = client.import_generic(scope_id, assets)
+        return result.get("imported", 0)
+    except Exception:
+        _logger.debug("asm_push() failed", exc_info=True)
+        return 0
+
+
+def _asm_scopes() -> list[dict]:
+    client = _get_asm_client("asm_scopes")
+    if client is None:
+        return []
+
+    try:
+        return [item.model_dump() for item in client.list_scopes()]
+    except Exception:
+        _logger.debug("asm_scopes() failed", exc_info=True)
+        return []
+
+
+def _asm_scope_assets(
+    scope: str = "", asset_type: str = "", limit: int = 1000
+) -> list[dict]:
+    """List assets from an ASM scope."""
+
+    client = _get_asm_client("asm_scope_assets")
+    if client is None:
+        return []
+
+    try:
+        scope_id = _asm_resolve_scope(client, scope)
+        assets, _ = client.list_assets(scope_id, limit=limit, asset_type=asset_type)
+        return [item.model_dump() for item in assets]
+    except Exception:
+        _logger.debug("asm_scope_assets() failed", exc_info=True)
+        return []
+
+
+def _asm_add_targets(targets: list[str], scope: str = "") -> int:
+    """Add targets to an ASM scope (auto-detect types)."""
+
+    client = _get_asm_client("asm_add_targets")
+    if client is None:
+        return 0
+
+    try:
+        scope_id = _asm_resolve_scope(client, scope)
+        result = client.bulk_import_targets(scope_id, targets, auto_detect=True)
+        return result.imported
+    except Exception:
+        _logger.debug("asm_add_targets() failed", exc_info=True)
+        return 0
+
+
 def _asm_helpers() -> dict[str, Any]:
-    def _get_asm_client(helper_name: str) -> Any | None:
-        try:
-            from ofx.asm.config import get_asm_client
-
-            return get_asm_client()
-        except Exception:
-            _logger.debug("ASM client unavailable for %s()", helper_name, exc_info=True)
-            return None
-
-    def _asm_resolve_scope(client: Any, scope_ref: str) -> str:
-        if not scope_ref:
-            from ofx.asm.config import get_asm_config
-
-            scope_ref = get_asm_config().default_scope
-        if not scope_ref:
-            raise ValueError("No ASM scope specified")
-        if len(scope_ref) >= 32 and "-" in scope_ref:
-            return scope_ref
-        found = client.find_scope(scope_ref)
-        if found:
-            return found.id
-        raise ValueError(f"ASM scope '{scope_ref}' not found")
-
-    def _asm_targets(
-        scope: str = "", effective: bool = True, target_type: str = ""
-    ) -> list[str]:
-        client = _get_asm_client("asm_targets")
-        if client is None:
-            return []
-
-        try:
-            scope_id = _asm_resolve_scope(client, scope)
-            if effective:
-                raw = client.effective_targets(scope_id)
-                return [
-                    t.value
-                    for t in raw
-                    if not t.excluded
-                    and (not target_type or t.target_type == target_type)
-                ]
-            else:
-                raw_t = client.list_targets(scope_id)
-                return [
-                    t.value
-                    for t in raw_t
-                    if t.enabled and (not target_type or t.target_type == target_type)
-                ]
-        except Exception:
-            _logger.debug("asm_targets() query failed", exc_info=True)
-            return []
-
-    def _asm_push(items: list, scope: str = "", source: str = "ofx") -> int:
-        client = _get_asm_client("asm_push")
-        if client is None:
-            return 0
-
-        try:
-            from ofx.asm.export import batch_convert
-        except Exception:
-            _logger.debug("ASM export unavailable for asm_push()", exc_info=True)
-            return 0
-
-        try:
-            scope_id = _asm_resolve_scope(client, scope)
-            assets, _ = batch_convert(items, source=source)
-            if not assets:
-                return 0
-            result = client.import_generic(scope_id, assets)
-            return result.get("imported", 0)
-        except Exception:
-            _logger.debug("asm_push() failed", exc_info=True)
-            return 0
-
-    def _asm_scopes() -> list[dict]:
-        client = _get_asm_client("asm_scopes")
-        if client is None:
-            return []
-
-        try:
-            return [s.model_dump() for s in client.list_scopes()]
-        except Exception:
-            _logger.debug("asm_scopes() failed", exc_info=True)
-            return []
-
-    def _asm_scope_assets(
-        scope: str = "", asset_type: str = "", limit: int = 1000
-    ) -> list[dict]:
-        """List assets from an ASM scope."""
-        client = _get_asm_client("asm_scope_assets")
-        if client is None:
-            return []
-
-        try:
-            scope_id = _asm_resolve_scope(client, scope)
-            assets, _ = client.list_assets(scope_id, limit=limit, asset_type=asset_type)
-            return [a.model_dump() for a in assets]
-        except Exception:
-            _logger.debug("asm_scope_assets() failed", exc_info=True)
-            return []
-
-    def _asm_add_targets(targets: list[str], scope: str = "") -> int:
-        """Add targets to an ASM scope (auto-detect types)."""
-        client = _get_asm_client("asm_add_targets")
-        if client is None:
-            return 0
-
-        try:
-            scope_id = _asm_resolve_scope(client, scope)
-            result = client.bulk_import_targets(scope_id, targets, auto_detect=True)
-            return result.imported
-        except Exception:
-            _logger.debug("asm_add_targets() failed", exc_info=True)
-            return 0
-
     return {
         "asm_targets": _asm_targets,
         "asm_push": _asm_push,
@@ -567,6 +558,22 @@ def _asm_helpers() -> dict[str, Any]:
 
 
 # ── Public aggregator ───────────────────────────────────────────────────
+_HELPER_GROUP_FACTORIES = (
+    _file_helpers,
+    _path_helpers,
+    _encoding_helpers,
+    _hash_helpers,
+    _random_helpers,
+    _network_helpers,
+    _datetime_helpers,
+    _json_helpers,
+    _regex_helpers,
+    _type_filter_helpers,
+    _etl_helpers,
+    _asm_helpers,
+)
+
+
 def build_all_helpers() -> dict[str, Any]:
     """Aggregate every helper group into a single dict.
 
@@ -577,20 +584,9 @@ def build_all_helpers() -> dict[str, Any]:
     from ofx.runner.findings_export import export_typed_outputs
     from ofx.settings import IS_WINDOWS
 
-    helpers: dict[str, Any] = {}
-    helpers.update(get_shell_exports())
-    helpers.update(_file_helpers())
-    helpers.update(_path_helpers())
-    helpers.update(_encoding_helpers())
-    helpers.update(_hash_helpers())
-    helpers.update(_random_helpers())
-    helpers.update(_network_helpers())
-    helpers.update(_datetime_helpers())
-    helpers.update(_json_helpers())
-    helpers.update(_regex_helpers())
-    helpers.update(_type_filter_helpers())
-    helpers.update(_etl_helpers())
-    helpers.update(_asm_helpers())
+    helpers: dict[str, Any] = dict(get_shell_exports())
+    for factory in _HELPER_GROUP_FACTORIES:
+        helpers.update(factory())
     helpers["is_windows"] = IS_WINDOWS
     helpers["platform"] = "windows" if IS_WINDOWS else "unix"
     helpers["export_typed_outputs"] = export_typed_outputs

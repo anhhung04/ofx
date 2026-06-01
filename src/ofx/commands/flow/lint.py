@@ -16,6 +16,9 @@ from ofx.settings import (
 
 logger = logging.getLogger("ofx")
 
+CollectionManager = None
+find_workflow = None
+
 
 @dataclass
 class LintIssue:
@@ -119,14 +122,6 @@ def _lint_workflow(path: Path) -> LintResult:
                 )
 
     return result
-
-
-def _severity_icon(severity: str) -> str:
-    return {"error": "[red]✗[/]", "warn": "[yellow]⚠[/]", "info": "[dim]ℹ[/]"}.get(
-        severity, "?"
-    )
-
-
 def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None:
     """Run best-practice lint checks on workflows."""
     from rich.table import Table
@@ -136,9 +131,59 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
     console = get_console()
 
     if all_workflows:
-        files = _discover_workflow_files()
+        seen: set[str] = set()
+        files: list[Path] = []
+
+        dirs: list[Path] = []
+        if BUILTIN_WORKFLOWS_DIR.is_dir():
+            dirs.append(BUILTIN_WORKFLOWS_DIR)
+        user_dir = Path.home() / ".ofx" / "workflows"
+        if user_dir.is_dir():
+            dirs.append(user_dir)
+
+        collection_manager_cls = CollectionManager
+        if collection_manager_cls is None:
+            from ofx.collections import CollectionManager as collection_manager_cls
+
+        try:
+            manager = collection_manager_cls()
+            for entry in manager.list_installed().values():
+                coll_path = Path(entry.path)
+                if coll_path.is_dir():
+                    dirs.append(coll_path)
+        except Exception as e:
+            logger.debug("Failed to load installed collections for linting: %s", e)
+
+        for directory in dirs:
+            for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+                for path in sorted(directory.rglob(f"*{ext}")):
+                    resolved = str(path.resolve())
+                    if resolved not in seen:
+                        seen.add(resolved)
+                        files.append(path)
     elif workflow_name:
-        files = _find_workflow_file(workflow_name)
+        files: list[Path] = []
+        workflow_finder = find_workflow
+        if workflow_finder is None:
+            from ofx.utils.workflow_utils import find_workflow as workflow_finder
+
+        with suppress(RuntimeError):
+            wf = workflow_finder(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
+            if wf.workflow_path:
+                files = [wf.workflow_path]
+
+        if not files:
+            for directory in DEFAULT_WORKFLOWS_DIRS:
+                if not directory.is_dir():
+                    continue
+                for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
+                    for match in directory.rglob(f"{workflow_name}{ext}"):
+                        files = [match]
+                        break
+                    if files:
+                        break
+                if files:
+                    break
     else:
         error_exit("Missing Argument", "Provide a workflow name or use --all")
 
@@ -179,7 +224,7 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
             for issue in r.issues:
                 table.add_row(
                     r.name if first else "",
-                    _severity_icon(issue.severity),
+                    {"error": "[red]✗[/]", "warn": "[yellow]⚠[/]", "info": "[dim]ℹ[/]"}.get(issue.severity, "?"),
                     issue.message,
                     issue.location,
                 )
@@ -201,59 +246,9 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
         console.print()
         for issue in r.issues:
             loc = f" [dim]({issue.location})[/]" if issue.location else ""
-            console.print(f"  {_severity_icon(issue.severity)} {issue.message}{loc}")
+            severity_icon = {"error": "[red]✗[/]", "warn": "[yellow]⚠[/]", "info": "[dim]ℹ[/]"}.get(issue.severity, "?")
+            console.print(f"  {severity_icon} {issue.message}{loc}")
         console.print()
         console.print(
             f"  {r.error_count} errors, {r.warn_count} warnings, {sum(1 for i in r.issues if i.severity == 'info')} info"
         )
-
-
-def _discover_workflow_files() -> list[Path]:
-    """Find all workflow files in dedicated directories."""
-    from ofx.collections import CollectionManager
-
-    seen: set[str] = set()
-    files: list[Path] = []
-
-    dirs: list[Path] = []
-    if BUILTIN_WORKFLOWS_DIR.is_dir():
-        dirs.append(BUILTIN_WORKFLOWS_DIR)
-    user_dir = Path.home() / ".ofx" / "workflows"
-    if user_dir.is_dir():
-        dirs.append(user_dir)
-    try:
-        manager = CollectionManager()
-        for entry in manager.list_installed().values():
-            coll_path = Path(entry.path)
-            if coll_path.is_dir():
-                dirs.append(coll_path)
-    except Exception as e:
-        logger.debug("Failed to load installed collections for linting: %s", e)
-
-    for d in dirs:
-        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            for path in sorted(d.rglob(f"*{ext}")):
-                resolved = str(path.resolve())
-                if resolved not in seen:
-                    seen.add(resolved)
-                    files.append(path)
-    return files
-
-
-def _find_workflow_file(name: str) -> list[Path]:
-    """Find a single workflow file by name."""
-    from ofx.utils.workflow_utils import find_workflow
-
-    with suppress(RuntimeError):
-        wf = find_workflow(name, tuple(DEFAULT_WORKFLOWS_DIRS))
-        if wf.workflow_path:
-            return [wf.workflow_path]
-
-    # Recursive fallback
-    for d in DEFAULT_WORKFLOWS_DIRS:
-        if not d.is_dir():
-            continue
-        for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
-            for match in d.rglob(f"{name}{ext}"):
-                return [match]
-    return []

@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from ofx.runner.context import RunnerContextBuilder, RunnerStatus, RunResult
+from ofx.runner.context import RunResult
 from ofx.runner.executors.base import Executor
-from ofx.runner.executors.parallel import run_limited_fail_fast
+from ofx.runner.executors.parallel import (
+    parallel_run_settings,
+    run_parallel_runner_items,
+)
 
 
 class MatrixExecutor(Executor):
@@ -15,49 +18,40 @@ class MatrixExecutor(Executor):
         await runner._resolve_template_fields(["strategy"])
         if runner.model.strategy and runner.model.strategy.matrix:
             for key, val in runner.model.strategy.matrix.items():
-                if isinstance(val, str):
-                    try:
-                        parsed = json.loads(val)
-                        if isinstance(parsed, list):
-                            runner.model.strategy.matrix[key] = parsed
-                            runner._log_debug(
-                                f"Matrix key '{key}' resolved to {len(parsed)} item(s)"
-                            )
-                        else:
-                            runner.model.strategy.matrix[key] = [parsed]
-                    except (json.JSONDecodeError, ValueError):
-                        runner.model.strategy.matrix[key] = [val]
+                if not isinstance(val, str):
+                    continue
+
+                try:
+                    normalized = json.loads(val)
+                except (json.JSONDecodeError, ValueError):
+                    normalized = val
+                if isinstance(normalized, list):
+                    runner.model.strategy.matrix[key] = normalized
+                    runner._log_debug(
+                        f"Matrix key '{key}' resolved to {len(normalized)} item(s)"
+                    )
+                else:
+                    runner.model.strategy.matrix[key] = [normalized]
         runner._matrix_combinations = self.generate_matrix_combinations(runner)
 
     async def do_run(self, runner) -> None:
         if not runner._matrix_combinations:
             return
 
-        strategy = runner.model.strategy
-        max_parallel = (
-            strategy.max_parallel if strategy else len(runner._matrix_combinations)
+        max_parallel, fail_fast = parallel_run_settings(
+            runner.model.strategy,
+            item_count=len(runner._matrix_combinations),
         )
-        fail_fast = strategy.fail_fast if strategy else True
 
-        results = await run_limited_fail_fast(
+        errors = await run_parallel_runner_items(
             runner._matrix_combinations,
             max_parallel=max_parallel,
             fail_fast=fail_fast,
             run_item=lambda idx, combo: self.run_single_job(runner, idx, combo),
-            is_failure=lambda result: isinstance(result, RunResult)
-            and result.status != RunnerStatus.COMPLETED,
+            describe_item=lambda idx, combo: (
+                f"Combination {idx} ({', '.join(f'{key}={value}' for key, value in combo.items())})"
+            ),
         )
-
-        errors = []
-        for idx, result in enumerate(results):
-            combo = runner._matrix_combinations[idx]
-            combo_label = ", ".join(f"{k}={v}" for k, v in combo.items())
-            if isinstance(result, Exception):
-                errors.append(f"Combination {idx} ({combo_label}): {result}")
-            elif isinstance(result, RunResult) and result.status != RunnerStatus.COMPLETED:
-                errors.append(
-                    f"Combination {idx} ({combo_label}): {result.error or 'Failed'}"
-                )
 
         if errors:
             detail = "\n  ".join(errors[:10])
@@ -74,33 +68,27 @@ class MatrixExecutor(Executor):
         matrix_idx: int,
         matrix_values: dict[str, Any],
     ):
-        job_ctx = runner._child_context()
-        vars_update: dict[str, Any] = {"matrix": matrix_values}
-        if runner.model.strategy:
-            vars_update["strategy"] = runner.model.strategy.model_dump()
-        job_ctx = RunnerContextBuilder(job_ctx).with_vars(vars_update)
-
         matrix_input_updates = {
             key: matrix_values[key]
-            for key in job_ctx.vars.get("_matrix_input_keys", [])
+            for key in runner.ctx.vars.get("_matrix_input_keys", [])
             if key in matrix_values
         }
-        if matrix_input_updates:
-            job_ctx = RunnerContextBuilder(job_ctx).with_inputs(matrix_input_updates)
 
-        from ofx.runner.job import JobRunner, clone_indexed_job
+        from ofx.runner.job import JobRunner, attach_indexed_job_runner, build_indexed_job_context
 
-        job_copy = clone_indexed_job(
-            runner.model,
-            matrix_idx,
-            matrix_values,
+        job_ctx = build_indexed_job_context(
+            runner,
+            vars_update={"matrix": matrix_values},
+            input_updates=matrix_input_updates,
         )
-        child_runner = JobRunner(
-            job_copy,
-            job_ctx,
-            parent=runner.parent,  # type: ignore[arg-type]
+
+        _job_copy, child_runner = attach_indexed_job_runner(
+            runner,
+            ctx=job_ctx,
+            index=matrix_idx,
+            values=matrix_values,
+            runner_cls=JobRunner,
         )
-        runner._runners[job_copy.jid] = child_runner
         return await child_runner.run()
 
     def generate_matrix_combinations(self, runner) -> list[dict[str, Any]]:

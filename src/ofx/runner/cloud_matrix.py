@@ -7,28 +7,12 @@ from typing import Any
 from ofx.models.cloud import CloudConfig
 from ofx.models.job import Job
 from ofx.models.workflow import Workflow
-from ofx.runner.cloud_job import CloudJobRunner, cloud_job_log_prefix
-from ofx.runner.context import RunContext, RunnerStatus, RunResult
+from ofx.runner.cloud_job import CloudJobRunner
+from ofx.runner.context import RunContext
+from ofx.runner.executors.cloud_matrix import CloudMatrixExecutor as _CloudMatrixExecutor
 from ofx.runner.executors.matrix import MatrixExecutor
-from ofx.runner.logging import bubble_tagged_log
-from ofx.runner.runner import BaseRunner
-
-
-class CloudMatrixExecutor(MatrixExecutor):
-    """Run each matrix combination as remote steps on one cloud instance."""
-
-    async def run_single_job(
-        self,
-        runner,
-        matrix_idx: int,
-        matrix_values: dict[str, Any],
-    ) -> RunResult:
-        await runner.dispatch_remote_steps(matrix_values, suffix=f"_{matrix_idx}")
-        return RunResult(
-            name=runner.name,
-            run_id=runner.run_id,
-            status=RunnerStatus.COMPLETED,
-        )
+from ofx.runner.metadata import ModelContext
+from ofx.runner.runner import Runner
 
 
 class CloudMatrixJobRunner(CloudJobRunner):
@@ -36,12 +20,11 @@ class CloudMatrixJobRunner(CloudJobRunner):
         self,
         job: Job,
         ctx: RunContext,
-        parent: BaseRunner[Workflow],
+        parent: Runner[Workflow],
         cloud_config: CloudConfig | None = None,
         executor: MatrixExecutor | None = None,
     ):
-        matrix_executor = executor or CloudMatrixExecutor()
-        self._matrix_executor: MatrixExecutor = matrix_executor
+        self._matrix_executor: MatrixExecutor = executor or _CloudMatrixExecutor()
         super().__init__(
             job,
             ctx,
@@ -51,17 +34,17 @@ class CloudMatrixJobRunner(CloudJobRunner):
         self._matrix_combinations: list[dict[str, Any]] = []
 
     def _produce_log(self, message: Any) -> str:
-        fleet_vars = self.ctx.vars.get("fleet", {}) if hasattr(self, "ctx") else {}
-        return bubble_tagged_log(
-            self.parent,
-            message,
-            prefix=cloud_job_log_prefix(
-                self.model.jid,
-                fleet_name=fleet_vars.get("fleet_name", "cloud-fleet") if fleet_vars else "",
-                quote_job_id=True,
-            ),
-            tags=("cloud-matrix",),
-        )
+        fleet_name = self.ctx.vars.get("fleet", {}).get("fleet_name", "")
+        workflow_name = ModelContext.from_model(getattr(self.parent, "model", None)).name or ""
+        prefix = f"'{self.model.jid}'"
+        if workflow_name:
+            prefix = f"name={workflow_name} | {prefix}"
+        if fleet_name:
+            prefix = f"{prefix} [{fleet_name}]"
+        formatted = f"{prefix} [cloud-matrix] › {message}"
+        if self.parent is not None:
+            return self.parent._produce_log(formatted)
+        return formatted
 
     async def _do_run(self) -> None:
         self._log_info(
@@ -70,14 +53,16 @@ class CloudMatrixJobRunner(CloudJobRunner):
         )
 
         await self._upload_fleet_input()
-
         self._matrix_combinations = self._matrix_executor.generate_matrix_combinations(self)
         self._log_debug(
             f"Expanded {len(self._matrix_combinations)} matrix combination(s)"
         )
 
         if not self._matrix_combinations:
-            await self.dispatch_remote_steps(None)
+            await self._cloud_executor.dispatch_remote_steps(self, None)
             return
 
         await self._matrix_executor.do_run(self)
+
+
+__all__ = ["CloudMatrixJobRunner"]

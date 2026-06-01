@@ -44,6 +44,17 @@ def _iter_session_env_assignments(
     return lines
 
 
+def _append_step_blocks(
+    lines: list[str],
+    steps: list[Step],
+    *,
+    build_step_block: Callable[[Step, int], list[str]],
+) -> None:
+    for step_index, step in enumerate(steps):
+        lines.extend(build_step_block(step, step_index))
+        lines.append("")
+
+
 def build_session_script(
     steps: list[Step],
     *,
@@ -132,30 +143,7 @@ def _build_bash(
         ]
     )
 
-    # Each step wrapped with error handling
-    for idx, step in enumerate(steps):
-        step_desc = bash_dquote_escape(_step_log_descriptor(step, idx))
-        lines.append(f'_log ">>> Step {idx}: {step_desc}"')
-
-        cmd = _step_command_bash(step, idx)
-        if step.continue_on_error:
-            lines.append(
-                f'({cmd}) >> "$LOG_FILE" 2>&1 || _log "Step {idx} ({step_desc}) failed (continue_on_error)"'
-            )
-        else:
-            lines.extend(
-                [
-                    f'({cmd}) >> "$LOG_FILE" 2>&1',
-                    "STEP_RC=$?",
-                    "if [ $STEP_RC -ne 0 ]; then",
-                    f'  _log "Step {idx} ({step_desc}) FAILED (exit $STEP_RC)"',
-                    '  _log "__TASK_ERR__"',
-                    "  exit $STEP_RC",
-                    "fi",
-                ]
-            )
-        lines.append(f'_log "<<< Step {idx} ({step_desc}) done"')
-        lines.append("")
+    _append_step_blocks(lines, steps, build_step_block=_build_bash_step_block)
 
     if encrypt_at_rest:
         lines.extend(_bash_encrypt_epilogue())
@@ -182,30 +170,41 @@ def _build_bash(
     return "\n".join(lines) + "\n"
 
 
-def _step_command_bash(step: Step, step_index: int) -> str:
-    """Extract the shell command(s) from a step for bash.
-
-    Uses ``$WORK_DIR`` rather than hard-coding the working directory so that paths with
-    spaces continue to work (the outer script always sets WORK_DIR as a
-    quoted double-quoted assignment).
-    """
-    return _step_command_for_session_script(
+def _build_bash_step_block(step: Step, step_index: int) -> list[str]:
+    step_desc = bash_dquote_escape(_step_log_descriptor(step, step_index))
+    command = _step_command_for_session_script(
         step,
         prefix='cd "$WORK_DIR" 2>/dev/null; ',
         python_command=_python_step_command_bash(step_index),
         pipe_command='echo "Pipe steps run locally and cannot be executed in cloud sessions" >&2; exit 1',
         unsupported_command=lambda run_type: f'echo "Unsupported run type: {run_type}"',
     )
+    lines = [f'_log ">>> Step {step_index}: {step_desc}"']
 
+    if step.continue_on_error:
+        lines.append(
+            f'({command}) >> "$LOG_FILE" 2>&1 || _log "Step {step_index} ({step_desc}) failed (continue_on_error)"'
+        )
+    else:
+        lines.extend(
+            [
+                f'({command}) >> "$LOG_FILE" 2>&1',
+                "STEP_RC=$?",
+                "if [ $STEP_RC -ne 0 ]; then",
+                f'  _log "Step {step_index} ({step_desc}) FAILED (exit $STEP_RC)"',
+                '  _log "__TASK_ERR__"',
+                "  exit $STEP_RC",
+                "fi",
+            ]
+        )
 
-def _python_step_filename(step_index: int) -> str:
-    """Return deterministic filename for staged inline step scripts."""
-    return step_bundle_filename(step_index)
+    lines.append(f'_log "<<< Step {step_index} ({step_desc}) done"')
+    return lines
 
 
 def _python_step_command_bash(step_index: int) -> str:
     """Return the bash command used for staged Python step files."""
-    escaped_name = bash_dquote_escape(_python_step_filename(step_index))
+    escaped_name = bash_dquote_escape(step_bundle_filename(step_index))
     return (
         'cd "$WORK_DIR" 2>/dev/null; '
         "__OFX_PY_BIN=$(command -v python3 || command -v python); "
@@ -335,39 +334,20 @@ def _build_powershell(
         ]
     )
 
-    for idx, step in enumerate(steps):
-        step_desc = _ps_escape(_step_log_descriptor(step, idx))
-        lines.append(f'Write-Log ">>> Step {idx}: {step_desc}"')
-        lines.append("try {")
-
-        cmd = _step_command_ps(step, idx, work_dir)
-        lines.append(f"  {cmd} *>> $LOG_FILE")
-
-        if step.continue_on_error:
-            lines.append("} catch {")
-            lines.append(
-                f'  Write-Log "Step {idx} ({step_desc}) failed (continue_on_error): $_"'
-            )
-            lines.append("}")
-        else:
-            lines.append("} catch {")
-            lines.append(f'  Write-Log "Step {idx} ({step_desc}) FAILED: $_"')
-            lines.append('  Write-Log "__TASK_ERR__"')
-            lines.append("  exit 1")
-            lines.append("}")
-
-        lines.append(f'Write-Log "<<< Step {idx} ({step_desc}) done"')
-        lines.append("")
+    _append_step_blocks(
+        lines,
+        steps,
+        build_step_block=lambda step, step_index: _build_powershell_step_block(
+            step,
+            step_index,
+            work_dir,
+        ),
+    )
 
     if encrypt_at_rest:
         lines.extend(_ps_encrypt_epilogue())
 
-    lines.extend(
-        [
-            'Write-Log "All steps completed successfully"',
-            'Write-Log "__TASK_OK__"',
-        ]
-    )
+    lines.extend(['Write-Log "All steps completed successfully"', 'Write-Log "__TASK_OK__"'])
 
     # Self-destruct AFTER markers are written
     if encrypt_at_rest:
@@ -380,6 +360,49 @@ def _build_powershell(
         )
 
     return "\n".join(lines) + "\n"
+
+
+def _build_powershell_step_block(
+    step: Step,
+    step_index: int,
+    work_dir: str,
+) -> list[str]:
+    step_desc = _ps_escape(_step_log_descriptor(step, step_index))
+    escaped_cwd = _ps_escape(work_dir)
+    command = _step_command_for_session_script(
+        step,
+        prefix=f'Set-Location "{escaped_cwd}"; ',
+        python_command=_python_step_command_ps(step_index),
+        pipe_command='Write-Error "Pipe steps run locally and cannot be executed in cloud sessions"; exit 1',
+        unsupported_command=lambda run_type: f'Write-Output "Unsupported run type: {run_type}"',
+    )
+    lines = [
+        f'Write-Log ">>> Step {step_index}: {step_desc}"',
+        "try {",
+        f"  {command} *>> $LOG_FILE",
+    ]
+
+    if step.continue_on_error:
+        lines.extend(
+            [
+                "} catch {",
+                f'  Write-Log "Step {step_index} ({step_desc}) failed (continue_on_error): $_"',
+                "}",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                "} catch {",
+                f'  Write-Log "Step {step_index} ({step_desc}) FAILED: $_"',
+                '  Write-Log "__TASK_ERR__"',
+                "  exit 1",
+                "}",
+            ]
+        )
+
+    lines.append(f'Write-Log "<<< Step {step_index} ({step_desc}) done"')
+    return lines
 
 
 def _ps_encrypt_epilogue() -> list[str]:
@@ -438,7 +461,7 @@ def _ps_escape(s: str) -> str:
 
 def _python_step_command_ps(step_index: int) -> str:
     """Return the PowerShell command used for staged Python step files."""
-    script_name = _python_step_filename(step_index)
+    script_name = step_bundle_filename(step_index)
     return (
         f'$__ofx_py = Join-Path $WORK_DIR "{_ps_escape(script_name)}"; '
         "if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 $__ofx_py } "
@@ -446,21 +469,4 @@ def _python_step_command_ps(step_index: int) -> str:
         "elseif (Get-Command python3 -ErrorAction SilentlyContinue) { & python3 $__ofx_py } "
         'else { throw "Python interpreter not found" }; '
         "$__ofx_rc = $LASTEXITCODE; if ($__ofx_rc -ne 0) { exit $__ofx_rc }"
-    )
-
-
-def _step_command_ps(step: Step, step_index: int, work_dir: str) -> str:
-    """Extract PowerShell command from a step.
-
-    For inline scripts the content is written to a here-string variable
-    and piped to a temp script file, avoiding double-quote and backtick
-    escaping issues inside ``Invoke-Expression``.
-    """
-    escaped_cwd = _ps_escape(work_dir)
-    return _step_command_for_session_script(
-        step,
-        prefix=f'Set-Location "{escaped_cwd}"; ',
-        python_command=_python_step_command_ps(step_index),
-        pipe_command='Write-Error "Pipe steps run locally and cannot be executed in cloud sessions"; exit 1',
-        unsupported_command=lambda run_type: f'Write-Output "Unsupported run type: {run_type}"',
     )

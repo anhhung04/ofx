@@ -2,37 +2,38 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from ofx.models.step import RunType
+from ofx.runner.context import context_copy
 from ofx.runner.handlers.registry import registry
-from ofx.runner.handlers.shared import build_child_runner
-
-if TYPE_CHECKING:
-    from ofx.runner.runner import BaseRunner
 
 
 @registry.register(RunType.WORKFLOW)
-def _create_workflow_runner(step_runner) -> BaseRunner:
+def create_runner(step_runner):
     from ofx.runner.workflow import WorkflowRunner
     from ofx.utils.workflow_utils import find_workflow, workflow_dirs_with_path
 
-    workflow_dirs = workflow_dirs_with_path(
+    parent_workflow_dir = (
+        step_runner.ctx.workflow_dir
+        or step_runner.parent.model.workflow_path.parent
+    )
+    search_dirs = workflow_dirs_with_path(
         step_runner.ctx.workflow_dirs,
-        step_runner.ctx.workflow_dir or step_runner.parent.model.workflow_path.parent,
+        parent_workflow_dir,
     )
     workflow = find_workflow(
         step_runner.model.uses or "",
-        tuple(workflow_dirs),
+        tuple(search_dirs),
         step_runner.parent.model.defaults.flow_registry_url,
     )
-    return build_child_runner(
+    return WorkflowRunner(
         workflow,
-        WorkflowRunner,
-        step_runner,
-        context_update={
-            "workflow_dirs": workflow_dirs_with_path(
-                workflow_dirs, workflow.workflow_path.parent
-            ),
-        },
+        context_copy(
+            step_runner.ctx,
+            update={
+                "workflow_dirs": workflow_dirs_with_path(
+                    search_dirs, workflow.workflow_path.parent
+                ),
+            },
+        ),
+        parent=step_runner,
     )

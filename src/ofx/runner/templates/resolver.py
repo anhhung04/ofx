@@ -10,6 +10,7 @@ from typing import Any, Self
 from jinja2 import Environment
 from pydantic import BaseModel
 
+from ofx.runner.metadata import ModelContext
 from ofx.runner.registry_keys import RunnerRegistryKeys
 
 _logger = logging.getLogger("ofx.templates")
@@ -231,20 +232,18 @@ class TemplateResolver:
     ) -> Any:
         """Inner resolve implementation (separated for depth tracking)."""
         if isinstance(value, dict):
-            return {
-                k: await self.resolve(v, context_vars, memo) for k, v in value.items()
-            }
-        elif isinstance(value, list):
-            return [await self.resolve(v, context_vars, memo) for v in value]
-        elif issubclass(type(value), BaseModel):
+            return await self._resolved_mapping_values(value, context_vars, memo)
+        if isinstance(value, list):
+            return await self._resolved_sequence_items(value, context_vars, memo)
+        if issubclass(type(value), BaseModel):
             return value.model_copy(
-                update={k: await self.resolve(v, context_vars, memo) for k, v in value}
+                update=await self._resolved_model_values(value, context_vars, memo)
             )
-        elif not isinstance(value, (str, int, float, bool, dict, list)):
+        if not isinstance(value, (str, int, float, bool, dict, list)):
             return value
 
         value_str = str(value)
-        if "{{" not in value_str and "{%" not in value_str:
+        if not self._contains_template_syntax(value_str):
             return value
 
         # Circular reference detection
@@ -255,72 +254,165 @@ class TemplateResolver:
         resolve_stack.append(value_str)
 
         support_funcs = await self._build_support_functions(context_vars, memo)
+        template = self._cached_template(value_str)
+        template_vars = self._template_vars(context_vars, support_funcs)
 
+        try:
+            result = await self._render_template(
+                template,
+                template_vars,
+                value_str=value_str,
+                context_vars=context_vars,
+            )
+        except Exception as e:
+            raise e
+
+        resolve_stack.pop()
+        return self._coerce_scalar_result(value, result, value_str)
+
+    async def _resolved_sequence_items(
+        self,
+        items: list[Any],
+        context_vars: dict[str, Any],
+        memo: dict[str, Any],
+    ) -> list[Any]:
+        return [await self.resolve(item, context_vars, memo) for item in items]
+
+    async def _resolved_mapping_values(
+        self,
+        mapping: dict[Any, Any],
+        context_vars: dict[str, Any],
+        memo: dict[str, Any],
+    ) -> dict[Any, Any]:
+        return {
+            key: await self.resolve(item, context_vars, memo)
+            for key, item in mapping.items()
+        }
+
+    async def _resolved_model_values(
+        self,
+        model: BaseModel,
+        context_vars: dict[str, Any],
+        memo: dict[str, Any],
+    ) -> dict[str, Any]:
+        return await self._resolved_mapping_values(dict(model), context_vars, memo)
+
+    @staticmethod
+    def _contains_template_syntax(value_str: str) -> bool:
+        return "{{" in value_str or "{%" in value_str
+
+    def _cached_template(self, value_str: str):
         _ensure_filters_registered(_jinja_env)
 
         if value_str in self._template_cache:
             self._template_cache.move_to_end(value_str)
             self._cache_hits += 1
-        else:
-            self._cache_misses += 1
-            if len(self._template_cache) >= self._template_cache_max_size:
-                self._template_cache.popitem(last=False)
-            self._template_cache[value_str] = _jinja_env.from_string(value_str)
+            return self._template_cache[value_str]
 
-        template = self._template_cache[value_str]
+        self._cache_misses += 1
+        if len(self._template_cache) >= self._template_cache_max_size:
+            self._template_cache.popitem(last=False)
+        template = _jinja_env.from_string(value_str)
+        self._template_cache[value_str] = template
+        return template
 
+    @staticmethod
+    def _template_vars(
+        context_vars: dict[str, Any],
+        support_funcs: dict[str, Any],
+    ) -> dict[str, Any]:
         template_vars = context_vars.copy()
         template_vars.update(support_funcs)
+        return template_vars
 
+    async def _render_template(
+        self,
+        template: Any,
+        template_vars: dict[str, Any],
+        *,
+        value_str: str,
+        context_vars: dict[str, Any],
+    ) -> str:
         try:
-            result = await template.render_async(template_vars)
-        except Exception as e:
-            # Redact secret values from the error preview to avoid leaking
-            preview = value_str[:120] + ("…" if len(value_str) > 120 else "")
-            secrets_dict = context_vars.get("secrets")
-            if isinstance(secrets_dict, dict):
-                for secret_val in secrets_dict.values():
-                    sv = str(secret_val)
-                    if len(sv) >= 4:
-                        preview = preview.replace(sv, "***")
-            # List available top-level variables for debugging
-            available = sorted(
-                k for k in template_vars if not k.startswith("_") and k != "secrets"
-            )
-            raise type(e)(
-                f"Template rendering failed: {e}\n"
-                f"  Template: {preview}\n"
-                f"  Available variables: {', '.join(available[:20])}"
-            ) from e
+            return await template.render_async(template_vars)
+        except Exception as exc:
+            raise self._template_render_error(
+                exc,
+                value_str=value_str,
+                template_vars=template_vars,
+                context_vars=context_vars,
+            ) from exc
 
-        resolve_stack.pop()
+    @staticmethod
+    def _template_preview(value_str: str, context_vars: dict[str, Any]) -> str:
+        preview = value_str[:120] + ("…" if len(value_str) > 120 else "")
+        secrets_dict = context_vars.get("secrets")
+        if isinstance(secrets_dict, dict):
+            for secret_val in secrets_dict.values():
+                secret = str(secret_val)
+                if len(secret) >= 4:
+                    preview = preview.replace(secret, "***")
+        return preview
 
-        if isinstance(value, bool):
+    @staticmethod
+    def _available_template_variables(template_vars: dict[str, Any]) -> list[str]:
+        return sorted(
+            key for key in template_vars if not key.startswith("_") and key != "secrets"
+        )
+
+    def _template_render_error(
+        self,
+        exc: Exception,
+        *,
+        value_str: str,
+        template_vars: dict[str, Any],
+        context_vars: dict[str, Any],
+    ) -> Exception:
+        preview = self._template_preview(value_str, context_vars)
+        available = self._available_template_variables(template_vars)
+        return type(exc)(
+            f"Template rendering failed: {exc}\n"
+            f"  Template: {preview}\n"
+            f"  Available variables: {', '.join(available[:20])}"
+        )
+
+    def _coerce_scalar_result(self, original: Any, result: str, value_str: str) -> Any:
+        if isinstance(original, bool):
             return result.lower() in ("true", "yes", "1", "t", "y")
-        elif isinstance(value, int):
-            try:
-                return int(result)
-            except ValueError:
-                _logger.debug(
-                    "Template returned non-integer '%s' for int field, "
-                    "keeping as string (template: %s)",
-                    result[:50],
-                    value_str[:80],
-                )
-                return result
-        elif isinstance(value, float):
-            try:
-                return float(result)
-            except ValueError:
-                _logger.debug(
-                    "Template returned non-float '%s' for float field, "
-                    "keeping as string (template: %s)",
-                    result[:50],
-                    value_str[:80],
-                )
-                return result
-
+        if isinstance(original, int):
+            return self._coerce_numeric_result(
+                result,
+                value_str,
+                cast=int,
+                label="integer",
+            )
+        if isinstance(original, float):
+            return self._coerce_numeric_result(
+                result,
+                value_str,
+                cast=float,
+                label="float",
+            )
         return result
+
+    @staticmethod
+    def _coerce_numeric_result(
+        result: str,
+        value_str: str,
+        *,
+        cast,
+        label: str,
+    ) -> Any:
+        try:
+            return cast(result)
+        except ValueError:
+            _logger.debug(
+                "Template returned non-%s '%s', keeping as string (template: %s)",
+                label,
+                result[:50],
+                value_str[:80],
+            )
+            return result
 
     def get_support_functions(self) -> dict[str, Any]:
         """Get template support functions with caching"""
@@ -340,123 +432,109 @@ class TemplateResolver:
             return memo["support_funcs"]
 
         support_funcs = self.get_support_functions()
-
         runner = context_vars.get("runner")
         if runner is not None:
-            jobs_data: dict[str, Any] = memo.get("jobs_data", {})
-            steps_data: dict[str, Any] = memo.get("steps_data", {})
-            if not jobs_data and not steps_data:
-                jobs_data, steps_data = await asyncio.gather(
-                    self._jobs_from_runner(runner),
-                    self._steps_from_runner(runner),
-                )
-                memo["jobs_data"] = jobs_data
-                memo["steps_data"] = steps_data
-            support_funcs["jobs"] = jobs_data
-            support_funcs["steps"] = steps_data
+            jobs_data, steps_data = await self._runner_support_values(runner, memo)
+            support_funcs.update({"jobs": jobs_data, "steps": steps_data})
 
         memo["support_funcs"] = support_funcs
         return support_funcs
 
-    async def _jobs_from_runner(self, runner: Any) -> dict[str, Any]:
-        container = self._find_container_with_child_attr(runner, "jid")
-        if not container:
-            return {}
+    async def _runner_support_values(
+        self,
+        runner: Any,
+        memo: dict[str, Any],
+    ) -> tuple[dict[str, Any], _StepAccessor]:
+        if "jobs_data" not in memo or "steps_data" not in memo:
+            jobs_data: dict[str, Any] = {}
+            steps_data = _StepAccessor()
+            job_container = None
+            step_container = None
+            current = runner
 
-        jobs: dict[str, Any] = {}
-        # Parallelize registry lookups across all child runners
-        tasks = [
-            self._collect_job_output(child, jobs)
-            for child in getattr(container, "_runners", {}).values()
-        ]
-        await asyncio.gather(*tasks)
-        return jobs
+            while current is not None and (job_container is None or step_container is None):
+                children = list(getattr(current, "_runners", {}).values())
+                if job_container is None and any(
+                    getattr(getattr(child, "model", None), "jid", None) is not None
+                    for child in children
+                ):
+                    job_container = current
+                if step_container is None and any(
+                    getattr(getattr(child, "model", None), "step_index", None)
+                    is not None
+                    for child in children
+                ):
+                    step_container = current
+                current = getattr(current, "parent", None)
 
-    async def _collect_job_output(self, runner: Any, jobs: dict[str, Any]) -> None:
-        model = getattr(runner, "model", None)
-        children = list(getattr(runner, "_runners", {}).values())
+            if job_container is not None:
+                job_targets: list[tuple[str, Any]] = []
+                for job_runner in getattr(job_container, "_runners", {}).values():
+                    for candidate in (
+                        job_runner,
+                        *getattr(job_runner, "_runners", {}).values(),
+                    ):
+                        model = getattr(candidate, "model", None)
+                        if model is None:
+                            continue
+                        model_context = ModelContext.from_model(model)
+                        job_id = model_context.jid or getattr(
+                            model,
+                            "original_job_id",
+                            "",
+                        )
+                        if job_id:
+                            job_targets.append((job_id, candidate))
 
-        # Collect all (job_id, runner) pairs that need registry lookups
-        targets: list[tuple[str, Any]] = []
-        if model is not None and hasattr(model, "jid"):
-            job_id = getattr(model, "jid", None) or getattr(
-                model, "original_job_id", ""
-            )
-            if job_id:
-                targets.append((job_id, runner))
+                if job_targets:
+                    job_results = await self._registry_outputs(job_targets)
+                    jobs_data = {
+                        job_id: {"outputs": outputs or {}}
+                        for (job_id, _), outputs in zip(
+                            job_targets,
+                            job_results,
+                            strict=True,
+                        )
+                    }
 
-        for child in children:
-            child_model = getattr(child, "model", None)
-            if child_model is None or not hasattr(child_model, "jid"):
-                continue
-            job_id = getattr(child_model, "jid", None) or getattr(
-                child_model, "original_job_id", ""
-            )
-            if not job_id:
-                continue
-            targets.append((job_id, child))
-
-        if not targets:
-            return
-
-        # Batch all reg_get calls in parallel instead of sequential N+1
-        results = await asyncio.gather(
-            *(r.reg_get(RunnerRegistryKeys.OUTPUTS) for _, r in targets)
-        )
-        # Dict updates between awaits are safe in asyncio's single-threaded model
-        for (job_id, _), outputs in zip(targets, results, strict=True):
-            jobs[job_id] = {"outputs": outputs or {}}
-
-    async def _steps_from_runner(self, runner: Any) -> _StepAccessor:
-        container = self._find_container_with_child_attr(runner, "step_index")
-        if not container:
-            return _StepAccessor()
-
-        # Collect targets needing registry lookups
-        targets: list[tuple[Any, Any]] = []
-        for child in getattr(container, "_runners", {}).values():
-            model = getattr(child, "model", None)
-            if model is None or not hasattr(model, "step_index"):
-                continue
-            targets.append((model, child))
-
-        if not targets:
-            return _StepAccessor()
-
-        # Batch all reg_get calls in parallel instead of sequential N+1
-        results = await asyncio.gather(
-            *(child.reg_get(RunnerRegistryKeys.OUTPUTS) for _, child in targets)
-        )
-
-        steps = _StepAccessor()
-        for (model, _), raw in zip(targets, results, strict=True):
-            outputs = {"typed_outputs": [], **(raw or {})}
-            entry = {
-                "index": getattr(model, "step_index", None),
-                "name": getattr(model, "name", None),
-                "outputs": outputs,
-            }
-            name = getattr(model, "name", None)
-            if name:
-                steps[name] = entry
-            # Also allow numeric index access
-            idx = getattr(model, "step_index", None)
-            if idx is not None:
-                steps[str(idx)] = entry
-
-        return steps
-
-    def _find_container_with_child_attr(self, runner: Any, attr: str) -> Any | None:
-        current = runner
-        while current is not None:
-            children = getattr(current, "_runners", None)
-            if children:
-                for child in children.values():
+            if step_container is not None:
+                step_targets: list[tuple[Any, Any]] = []
+                for child in getattr(step_container, "_runners", {}).values():
                     model = getattr(child, "model", None)
-                    if model is not None and hasattr(model, attr):
-                        return current
-            current = getattr(current, "parent", None)
-        return None
+                    model_context = ModelContext.from_model(model)
+                    if model is None or model_context.step_index is None:
+                        continue
+                    step_targets.append((model, child))
+
+                if step_targets:
+                    step_results = await self._registry_outputs(step_targets)
+                    for (model, _), raw in zip(
+                        step_targets,
+                        step_results,
+                        strict=True,
+                    ):
+                        outputs = {"typed_outputs": [], **(raw or {})}
+                        model_context = ModelContext.from_model(model)
+                        entry = {
+                            "index": model_context.step_index,
+                            "name": model_context.name,
+                            "outputs": outputs,
+                        }
+                        if entry["name"]:
+                            steps_data[entry["name"]] = entry
+                        if entry["index"] is not None:
+                            steps_data[str(entry["index"])] = entry
+
+            memo["jobs_data"] = jobs_data
+            memo["steps_data"] = steps_data
+        jobs_data = memo["jobs_data"]
+        steps_data = memo["steps_data"]
+        return jobs_data, steps_data
+
+    async def _registry_outputs(self, targets: list[tuple[Any, Any]]) -> list[Any]:
+        return await asyncio.gather(
+            *(runner.reg_get(RunnerRegistryKeys.OUTPUTS) for _, runner in targets)
+        )
 
     def clear_cache(self) -> None:
         """Clear the template cache and reset counters."""

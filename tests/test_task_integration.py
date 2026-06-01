@@ -530,45 +530,6 @@ class TestProfileTaskOptions:
         assert runner.model.opts == {}
 
 
-# ── Profile Env Var Injection ──────────────────────────────────────────
-
-
-class TestProfileEnvInjection:
-    def test_profile_env_vars_set(self):
-        """Verify profile fields generate OFX_* env vars in context."""
-        from ofx.profiles.models import OFXProfile
-        from ofx.runner.executors.workflow import build_profile_envs
-
-        profile = OFXProfile(
-            rate_limit=30,
-            threads=5,
-            timeout_minutes=90,
-            delay=2.0,
-            jitter=0.5,
-            proxy="socks5://127.0.0.1:9050",
-            user_agent="CustomAgent/1.0",
-        )
-
-        profile_envs = build_profile_envs(profile)
-
-        assert profile_envs["OFX_RATE_LIMIT"] == "30"
-        assert profile_envs["OFX_THREADS"] == "5"
-        assert profile_envs["OFX_TIMEOUT"] == "90"
-        assert profile_envs["OFX_DELAY"] == "2.0"
-        assert profile_envs["OFX_JITTER"] == "0.5"
-        assert profile_envs["OFX_PROXY"] == "socks5://127.0.0.1:9050"
-        assert profile_envs["OFX_USER_AGENT"] == "CustomAgent/1.0"
-
-    def test_default_profile_no_extra_envs(self):
-        """Default profile values should not generate env vars."""
-        from ofx.profiles.models import OFXProfile
-        from ofx.runner.executors.workflow import build_profile_envs
-
-        profile = OFXProfile()
-
-        assert build_profile_envs(profile) == {}
-
-
 # ── Cloud Task Profile Integration ─────────────────────────────────────
 
 

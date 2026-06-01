@@ -16,6 +16,7 @@ from typing import Any
 
 from ofx.models.command import Command
 from ofx.runner.commands.shell_functions import get_shell_functions
+from ofx.utils.file_cleanup import remove_file
 from ofx.settings import settings
 
 logger = logging.getLogger("ofx")
@@ -41,24 +42,23 @@ def parse_outputs_file(
     if not outputs_file.exists():
         return parsed
     try:
-        outputs_content = outputs_file.read_text().strip()
-        if outputs_content:
-            for line in outputs_content.splitlines():
-                line = line.strip()
-                if line and "=" in line:
-                    key_name, value = line.split("=", 1)
-                    key_name = key_name.strip()
-                    value = value.strip()
-                    if key_name:
-                        parsed[key_name] = value
-                        log_fn(f"Captured output: {key_name}={value}")
+        for line in outputs_file.read_text().splitlines():
+            line = line.strip()
+            if not line or "=" not in line:
+                continue
+            key_name, value = line.split("=", 1)
+            key_name = key_name.strip()
+            value = value.strip()
+            if not key_name:
+                continue
+            parsed[key_name] = value
+            log_fn(f"Captured output: {key_name}={value}")
     except Exception as e:
         log_fn(f"Failed to parse RUNNER_OUTPUTS: {e}")
     finally:
-        try:
-            outputs_file.unlink(missing_ok=True)
-        except Exception as e:
-            log_fn(f"Failed to remove outputs file: {e}")
+        exc = remove_file(outputs_file)
+        if exc is not None:
+            log_fn(f"Failed to remove outputs file: {exc}")
     return parsed
 
 
@@ -79,7 +79,7 @@ def prepare_outputs_file_env(
         from ofx.utils.tempfiles import make_temp_file
 
         outputs_file = make_temp_file(prefix=".tmp_out_")
-        envs[RUNNER_OUTPUTS_ENV] = str(outputs_file)
+    envs[RUNNER_OUTPUTS_ENV] = str(outputs_file)
 
     if include_ofx_alias:
         envs[OFX_OUTPUTS_ENV] = str(outputs_file)
@@ -95,15 +95,10 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     PID targets the entire process group so that grandchildren (e.g.
     nmap spawned by bash) are also cleaned up.
     """
-    pid = proc.pid
-    if pid is None:
-        return
-    try:
-        pgid = os.getpgid(pid)
-    except (OSError, ProcessLookupError):
+    pgid = _process_group_id(proc)
+    if pgid is None:
         return
 
-    # SIGTERM the group first for graceful shutdown
     with suppress(OSError, ProcessLookupError):
         os.killpg(pgid, signal.SIGTERM)
 
@@ -113,14 +108,28 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     deadline = time.monotonic() + 2.0
     while time.monotonic() < deadline:
         try:
-            os.killpg(pgid, 0)  # probe
+            os.killpg(pgid, 0)
         except (OSError, ProcessLookupError):
-            return  # all dead
+            return
         time.sleep(0.1)
+    try:
+        os.killpg(pgid, 0)
+    except (OSError, ProcessLookupError):
+        return
 
     with suppress(OSError, ProcessLookupError):
         os.killpg(pgid, signal.SIGKILL)
 
+
+def _process_group_id(proc: asyncio.subprocess.Process) -> int | None:
+    pid = proc.pid
+    if pid is None:
+        return None
+
+    try:
+        return os.getpgid(pid)
+    except (OSError, ProcessLookupError):
+        return None
 
 class CommandExecutor:
     """Handles subprocess execution for CommandRunner."""
@@ -144,6 +153,41 @@ class CommandExecutor:
         if self._command.interactive:
             return await self._run_interactive()
         return await self._run_non_interactive()
+
+    async def _spawn_subprocess(self, **overrides: Any) -> asyncio.subprocess.Process:
+        kwargs: dict[str, Any] = {
+            "executable": self._command.shell,
+            "cwd": self._command.working_directory,
+            "env": self._envs,
+            "start_new_session": True,
+        }
+        kwargs.update(overrides)
+        return await asyncio.create_subprocess_shell(
+            f"{get_shell_functions(self._command.shell)}\n{self._command.cmd}",
+            **kwargs,
+        )
+
+    async def _await_with_timeout(self, proc, awaitable) -> Any:
+        try:
+            return await asyncio.wait_for(awaitable, self._command.timeout_minutes * 60)
+        except TimeoutError as te:
+            _kill_process_tree(proc)
+            await proc.wait()
+            raise RuntimeError(
+                f"Command timed out after {self._command.timeout_minutes} minutes"
+            ) from te
+        finally:
+            pgid = _process_group_id(proc)
+            if pgid is not None:
+                with suppress(OSError, ProcessLookupError):
+                    os.killpg(pgid, signal.SIGTERM)
+
+            transport = getattr(proc, "_transport", None)
+            if transport is not None:
+                try:
+                    transport.close()
+                except Exception as e:
+                    logger.debug("Failed to close process transport: %s", e)
 
     def prepare_outputs_file(self) -> None:
         """Create (or reuse) a temporary file for step output capture.
@@ -171,14 +215,9 @@ class CommandExecutor:
         # the limit" errors when tools like katana emit long JSONL lines.
         _STREAM_LIMIT = 10 * 1024 * 1024  # 10 MB
 
-        proc = await asyncio.create_subprocess_shell(
-            self._full_command(),
-            executable=self._command.shell,
-            cwd=self._command.working_directory,
-            env=self._envs,
+        proc = await self._spawn_subprocess(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,
             limit=_STREAM_LIMIT,
         )
 
@@ -200,7 +239,7 @@ class CommandExecutor:
                     stdout_bytes_total += len(raw_line)
                     if stdout_bytes_total <= max_size:
                         stdout_lines.append(line)
-                    if on_line:
+                    if on_line is not None:
                         try:
                             on_line(line)
                         except Exception as e:
@@ -217,64 +256,35 @@ class CommandExecutor:
             assert proc.stderr is not None
             stderr_bytes = await proc.stderr.read()
 
+        await self._await_with_timeout(
+            proc,
+            asyncio.gather(_read_stdout(), _read_stderr(), proc.wait()),
+        )
         try:
-            await asyncio.wait_for(
-                asyncio.gather(_read_stdout(), _read_stderr(), proc.wait()),
-                self._command.timeout_minutes * 60,
-            )
-        except TimeoutError as te:
-            _kill_process_tree(proc)
-            await proc.wait()
-            raise RuntimeError(
-                f"Command timed out after {self._command.timeout_minutes} minutes"
-            ) from te
-        finally:
-            self._close_process(proc)
-
-        stdout_str = "\n".join(stdout_lines)
-        max_size = settings.max_output_size
-        outputs: dict[str, Any] = {}
-
-        if stdout_bytes_total > max_size:
-            stdout_str += "\n... [OUTPUT TRUNCATED]"
-            outputs["output_truncated"] = True
-
-        try:
-            stderr_str = stderr_bytes.decode("utf-8").strip()
+            stderr = stderr_bytes.decode("utf-8").strip()
         except UnicodeDecodeError:
-            stderr_str = base64.b64encode(stderr_bytes).decode("utf-8")
+            stderr = base64.b64encode(stderr_bytes).decode("utf-8")
+
+        outputs: dict[str, Any] = {}
+        stdout = "\n".join(stdout_lines)
+        if stdout_bytes_total > settings.max_output_size:
+            stdout += "\n... [OUTPUT TRUNCATED]"
+            outputs["output_truncated"] = True
 
         return CommandExecutionResult(
             exit_code=proc.returncode,
-            stdout=stdout_str,
-            stderr=stderr_str,
-            outputs=outputs,
+            stdout=stdout,
+            stderr=stderr,
+            outputs=outputs or {},
         )
 
     async def _run_interactive(self) -> CommandExecutionResult:
-        proc = await asyncio.create_subprocess_shell(
-            self._full_command(),
-            executable=self._command.shell,
-            cwd=self._command.working_directory,
-            env=self._envs,
+        proc = await self._spawn_subprocess(
             stdin=sys.stdin,
             stdout=sys.stdout,
             stderr=sys.stderr,
-            start_new_session=True,
         )
-        try:
-            exit_code = await asyncio.wait_for(
-                proc.wait(), self._command.timeout_minutes * 60
-            )
-        except TimeoutError as te:
-            _kill_process_tree(proc)
-            await proc.wait()
-            raise RuntimeError(
-                f"Command timed out after {self._command.timeout_minutes} minutes"
-            ) from te
-        finally:
-            self._close_process(proc)
-
+        exit_code = await self._await_with_timeout(proc, proc.wait())
         return CommandExecutionResult(
             exit_code=exit_code,
             stdout="[Interactive mode - output shown in real-time]",
@@ -283,141 +293,68 @@ class CommandExecutor:
         )
 
     async def _run_non_interactive(self) -> CommandExecutionResult:
-        proc = await asyncio.create_subprocess_shell(
-            self._full_command(),
-            executable=self._command.shell,
-            cwd=self._command.working_directory,
-            env=self._envs,
+        proc = await self._spawn_subprocess(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,
         )
-        try:
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                proc.communicate(), self._command.timeout_minutes * 60
-            )
-            exit_code = proc.returncode
-        except TimeoutError as te:
-            _kill_process_tree(proc)
-            await proc.wait()
-            raise RuntimeError(
-                f"Command timed out after {self._command.timeout_minutes} minutes"
-            ) from te
-        finally:
-            self._close_process(proc)
-
+        stdout_bytes, stderr_bytes = await self._await_with_timeout(proc, proc.communicate())
         stdout, stderr, outputs = self._decode_output(stdout_bytes, stderr_bytes)
         return CommandExecutionResult(
-            exit_code=exit_code, stdout=stdout, stderr=stderr, outputs=outputs
+            exit_code=proc.returncode,
+            stdout=stdout,
+            stderr=stderr,
+            outputs=outputs or {},
         )
-
-    def _full_command(self) -> str:
-        """Return the command with shell helper functions prepended."""
-        return f"{get_shell_functions(self._command.shell)}\n{self._command.cmd}"
 
     def _decode_output(
         self, stdout_bytes: bytes, stderr_bytes: bytes
     ) -> tuple[str, str, dict[str, Any]]:
         max_size = settings.max_output_size
         outputs: dict[str, Any] = {}
-        try:
-            stdout = self._decode_utf8_output(
-                stdout_bytes,
-                max_size=max_size,
-                truncated_suffix="\n... [OUTPUT TRUNCATED]",
-                truncated_flag="output_truncated",
-                outputs=outputs,
-            )
-            stderr = self._decode_utf8_output(
-                stderr_bytes,
-                max_size=max_size,
-                truncated_suffix="\n... [STDERR TRUNCATED]",
-                truncated_flag="stderr_truncated",
-                outputs=outputs,
-            )
 
+        try:
+            stdout = stdout_bytes.decode("utf-8").strip()
+            if len(stdout_bytes) > max_size:
+                outputs["output_truncated"] = True
+                stdout = (
+                    stdout_bytes[:max_size].decode("utf-8", errors="ignore")
+                    + "\n... [OUTPUT TRUNCATED]"
+                )
+
+            stderr = stderr_bytes.decode("utf-8").strip()
+            if len(stderr_bytes) > max_size:
+                outputs["stderr_truncated"] = True
+                stderr = (
+                    stderr_bytes[:max_size].decode("utf-8", errors="ignore")
+                    + "\n... [STDERR TRUNCATED]"
+                )
         except UnicodeDecodeError:
             outputs["binary_output"] = True
-            stdout = self._encode_binary_output(
-                stdout_bytes,
-                max_size=max_size,
-                truncated_suffix="... [BINARY OUTPUT TRUNCATED]",
-                truncated_flag="output_truncated",
-                outputs=outputs,
-            )
-            stderr = self._encode_binary_output(
-                stderr_bytes,
-                max_size=max_size,
-                truncated_suffix="... [BINARY STDERR TRUNCATED]",
-                truncated_flag="stderr_truncated",
-                outputs=outputs,
-            )
+            stdout = base64.b64encode(stdout_bytes).decode("utf-8")
+            if len(stdout_bytes) > max_size:
+                outputs["output_truncated"] = True
+                stdout = (
+                    base64.b64encode(stdout_bytes[:max_size]).decode("utf-8")
+                    + "... [BINARY OUTPUT TRUNCATED]"
+                )
+
+            stderr = base64.b64encode(stderr_bytes).decode("utf-8")
+            if len(stderr_bytes) > max_size:
+                outputs["stderr_truncated"] = True
+                stderr = (
+                    base64.b64encode(stderr_bytes[:max_size]).decode("utf-8")
+                    + "... [BINARY STDERR TRUNCATED]"
+                )
 
         return stdout, stderr, outputs
-
-    @staticmethod
-    def _decode_utf8_output(
-        output_bytes: bytes,
-        *,
-        max_size: int,
-        truncated_suffix: str,
-        truncated_flag: str,
-        outputs: dict[str, Any],
-    ) -> str:
-        text = output_bytes.decode("utf-8").strip()
-        if len(output_bytes) > max_size:
-            text = output_bytes[:max_size].decode("utf-8", errors="ignore") + truncated_suffix
-            outputs[truncated_flag] = True
-        return text
-
-    @staticmethod
-    def _encode_binary_output(
-        output_bytes: bytes,
-        *,
-        max_size: int,
-        truncated_suffix: str,
-        truncated_flag: str,
-        outputs: dict[str, Any],
-    ) -> str:
-        if len(output_bytes) > max_size:
-            outputs[truncated_flag] = True
-            return base64.b64encode(output_bytes[:max_size]).decode("utf-8") + truncated_suffix
-        return base64.b64encode(output_bytes).decode("utf-8")
-
-    def raise_for_status(self, exit_code: int | None, stderr: str) -> None:
-        """Raise :class:`RuntimeError` if the exit code indicates failure."""
-        if self._command.interactive:
-            if exit_code not in (0, 130, 127):
-                stderr = stderr or f"Command failed with exit code {exit_code}"
-                raise RuntimeError(f"Command failed: {stderr}")
-            return
-        if exit_code != 0:
-            stderr = stderr or f"Command failed with exit code {exit_code}"
-            raise RuntimeError(f"Command failed: {stderr}")
-
-    @staticmethod
-    def _close_process(proc: asyncio.subprocess.Process) -> None:
-        """Close process transport and streams; ensure the process tree is reaped."""
-        pid = proc.pid
-        if pid is not None:
-            with suppress(OSError, ProcessLookupError):
-                pgid = os.getpgid(pid)
-                os.killpg(pgid, signal.SIGTERM)
-
-        # Close the subprocess transport (owns the underlying pipe fds)
-        transport = getattr(proc, "_transport", None)
-        if transport is not None:
-            try:
-                transport.close()
-            except Exception as e:
-                logger.debug("Failed to close process transport: %s", e)
 
     async def capture_outputs_file(self, runner, key: str, log_fn) -> None:
         """Parse ``key=value`` lines from the outputs file into the registry.
 
         The file is deleted after parsing regardless of success or failure.
         """
-        if not self._outputs_file:
+        if self._outputs_file is None:
             return
-        for key_name, value in parse_outputs_file(self._outputs_file, log_fn).items():
-            await runner.reg_update(key, {key_name: value})
+        outputs = parse_outputs_file(self._outputs_file, log_fn)
+        if outputs:
+            await runner.reg_update(key, outputs)

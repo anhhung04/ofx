@@ -22,6 +22,8 @@ class FileRegistry(RegistryAdapter):
     to reduce disk I/O for repeated reads.
     """
 
+    _backend_display_name = "FileJobRegistry"
+
     def __init__(self, filepath: str | Path | None = None):
         """Initialize the file-based registry
 
@@ -47,7 +49,7 @@ class FileRegistry(RegistryAdapter):
         if not self.filepath.exists():
             self.filepath.write_text("{}")
 
-        self._log_debug(f"Initialized FileJobRegistry at {self.filepath}")
+        self._log_backend_initialized(f"at {self.filepath}")
 
     def _read_cache_valid(self) -> bool:
         """Check if the in-memory cache is still valid (file not modified externally)."""
@@ -101,7 +103,7 @@ class FileRegistry(RegistryAdapter):
         registry = await self._read_registry()
         registry[key] = self._clone_value(value)
         await self._write_registry(registry)
-        self._log_debug(f"Set key '{key}' in FileJobRegistry")
+        self._log_backend_key_action("Set", key)
 
     async def _get(self, key: str) -> Any | None:
         """Retrieve data from file (returns a copy to prevent shared mutation)"""
@@ -112,15 +114,9 @@ class FileRegistry(RegistryAdapter):
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data"""
         registry = await self._read_registry()
-        existing = registry.get(key)
-        if isinstance(existing, dict):
-            merged = self._clone_value(existing)
-            merged.update(self._clone_value(updates))
-            registry[key] = merged
-        else:
-            registry[key] = self._clone_value(updates)
+        registry[key] = self._merged_updated_value(registry.get(key), updates)
         await self._write_registry(registry)
-        self._log_debug(f"Updated key '{key}' in FileJobRegistry")
+        self._log_backend_key_action("Updated", key)
 
     async def _delete(self, key: str) -> bool:
         """Remove data from file"""
@@ -128,7 +124,7 @@ class FileRegistry(RegistryAdapter):
         if key in registry:
             del registry[key]
             await self._write_registry(registry)
-            self._log_debug(f"Deleted key '{key}' from FileJobRegistry")
+            self._log_backend_key_action("Deleted", key)
             return True
         return False
 
@@ -145,10 +141,10 @@ class FileRegistry(RegistryAdapter):
     async def _clear(self) -> None:
         """Clear all entries from file"""
         await self._write_registry({})
-        self._log_debug("Cleared FileJobRegistry")
+        self._log_backend_action("Cleared")
 
     async def _close(self) -> None:
         """Close the registry and clean up resources"""
         self._cache = None
         self._cache_mtime = 0.0
-        self._log_debug("Closed FileJobRegistry")
+        self._log_backend_action("Closed")

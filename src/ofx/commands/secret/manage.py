@@ -10,7 +10,6 @@ from ofx.commands.secret.helpers import (
     _format_secret_value,
     _get_secret_type,
     _maybe_backup_store,
-    _resolve_secret_input,
 )
 from ofx.commands.ui_helpers import (
     error_exit,
@@ -25,21 +24,13 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 logger = logging.getLogger(settings.app_branding)
 
 
-def _print_values_warning() -> None:
-    typer.secho(
-        "\n⚠️ WARNING: Secret values are displayed above!",
-        fg=typer.colors.YELLOW,
-        bold=True,
-    )
-
-
-def _build_secrets_table(
+def _render_secrets_table(
+    console,
+    title: str,
     secrets: dict[str, Any],
     *,
-    title: str,
-    show_values: bool,
-):
-    """Build a consistent secrets listing table."""
+    show_values: bool = False,
+) -> None:
     from rich.table import Table
 
     table = Table(
@@ -59,7 +50,44 @@ def _build_secrets_table(
             table.add_row(name, value_type, _format_secret_value(value))
         else:
             table.add_row(name, value_type)
-    return table
+
+    console.print(table)
+
+
+def _print_values_warning() -> None:
+    typer.secho(
+        "\n⚠️ WARNING: Secret values are displayed above!",
+        fg=typer.colors.YELLOW,
+        bold=True,
+    )
+
+
+def _render_secret_results(
+    console,
+    title: str,
+    secrets: dict[str, Any],
+    *,
+    show_values: bool = False,
+) -> None:
+    _render_secrets_table(
+        console,
+        title,
+        secrets,
+        show_values=show_values,
+    )
+    if show_values:
+        _print_values_warning()
+
+
+def _collect_matching_secrets(
+    secrets: dict[str, Any],
+    predicate,
+) -> dict[str, Any]:
+    return {
+        name: value
+        for name, value in secrets.items()
+        if predicate(name, value)
+    }
 
 
 @app.command("set")
@@ -96,7 +124,20 @@ def set_secret(
     automatically detected and stored as structured data.
     """
     file_path = Path(file) if file else None
-    secret_value = _resolve_secret_input(name, value, file_path)
+    if value is not None and file_path is not None:
+        typer.secho("❌ Use either --value or --file, not both", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
+
+    if file_path is not None:
+        if not file_path.exists():
+            typer.secho(f"❌ File not found: {file_path}", fg=typer.colors.RED)
+            raise typer.Exit(code=1)
+        secret_value = file_path.read_text().strip()
+    elif value is not None:
+        secret_value = value
+    else:
+        secret_value = typer.prompt(f"Enter value for secret '{name}'", hide_input=True)
+
     if secrets_store.secret_exists(name) and not force:
         if not typer.confirm(f"Secret '{name}' exists. Overwrite?"):
             typer.secho("Cancelled", fg=typer.colors.YELLOW)
@@ -194,17 +235,16 @@ def list_secrets(
         typer.secho("No secrets found", fg=typer.colors.YELLOW)
         return
 
-    filtered_secrets: dict[str, Any] = {}
-    for name, value in secrets.items():
-        if search and search.lower() not in name.lower():
-            continue
-
-        if filter_type:
-            secret_type = _get_secret_type(value)
-            if secret_type != filter_type.lower():
-                continue
-
-        filtered_secrets[name] = value
+    filtered_secrets = _collect_matching_secrets(
+        secrets,
+        lambda name, value: (
+            (not search or search.lower() in name.lower())
+            and (
+                not filter_type
+                or _get_secret_type(value) == filter_type.lower()
+            )
+        ),
+    )
 
     if not filtered_secrets:
         print_warning(
@@ -214,16 +254,12 @@ def list_secrets(
         )
         return
 
-    console.print(
-        _build_secrets_table(
-            filtered_secrets,
-            title=f"[*] Stored Secrets ({len(filtered_secrets)} found)",
-            show_values=show_values,
-        )
+    _render_secret_results(
+        console,
+        f"[*] Stored Secrets ({len(filtered_secrets)} found)",
+        filtered_secrets,
+        show_values=show_values,
     )
-
-    if show_values:
-        _print_values_warning()
 
 
 @app.command("search")
@@ -258,11 +294,11 @@ def search_secrets(
         )
         return
 
-    matches: dict[str, Any] = {}
-
-    for name, value in secrets.items():
-        if fnmatch.fnmatch(name.lower(), pattern.lower()):
-            matches[name] = value
+    pattern_lower = pattern.lower()
+    matches = _collect_matching_secrets(
+        secrets,
+        lambda name, _value: fnmatch.fnmatch(name.lower(), pattern_lower),
+    )
 
     if not matches:
         print_warning(
@@ -272,16 +308,12 @@ def search_secrets(
         )
         return
 
-    console.print(
-        _build_secrets_table(
-            matches,
-            title=f"🔍 Search Results for '{pattern}' ({len(matches)} found)",
-            show_values=show_values,
-        )
+    _render_secret_results(
+        console,
+        f"🔍 Search Results for '{pattern}' ({len(matches)} found)",
+        matches,
+        show_values=show_values,
     )
-
-    if show_values:
-        _print_values_warning()
 
 
 @app.command("delete")

@@ -78,6 +78,22 @@ class TestTaskBase:
         assert len(results) == 2
         assert all(isinstance(r, Url) for r in results)
 
+    def test_parse_output_prefers_output_file_when_present(self, tmp_path):
+        class StreamingTask(Task):
+            name = "streaming"
+            cmd = "echo"
+
+            def parse_line(self, line: str):
+                return [Url(url=line.strip())] if line.strip() else []
+
+        t = StreamingTask()
+        output_file = tmp_path / "out.txt"
+        output_file.write_text("http://file-only.com\n")
+
+        results = t.parse_output("http://stdout-only.com\n", "", output_file)
+
+        assert [result.url for result in results] == ["http://file-only.com"]
+
     def test_check_installed(self):
         t = DummyTask()
         assert t.check_installed()  # echo should exist

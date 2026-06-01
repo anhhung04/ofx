@@ -6,6 +6,8 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from ofx.runner.context import normalized_runner_status_value
+from ofx.runner.metadata import ModelContext
 from ofx.settings import settings
 from ofx.utils.log import reload_logging_config
 
@@ -18,7 +20,6 @@ class LogContext:
 
     run_id: str | None = None
     runner_type: str | None = None
-    runner_name: str | None = None
     model_name: str | None = None
     model_jid: str | None = None
     step_index: int | str | None = None
@@ -44,16 +45,20 @@ class LogContext:
 
     @classmethod
     def from_runner(cls, runner: Any) -> LogContext:
-        model = getattr(runner, "model", None)
-        status = getattr(getattr(runner, "status", None), "value", None)
+        model_context = ModelContext.from_model(getattr(runner, "model", None))
+        status_obj = getattr(runner, "status", None)
+        status = (
+            normalized_runner_status_value(status_obj)
+            if status_obj is not None
+            else None
+        )
         parent = getattr(runner, "parent", None)
         return cls(
             run_id=getattr(runner, "run_id", None),
             runner_type=type(runner).__name__,
-            runner_name=getattr(runner, "name", None),
-            model_name=getattr(model, "name", None),
-            model_jid=getattr(model, "jid", None),
-            step_index=getattr(model, "step_index", None),
+            model_name=model_context.name,
+            model_jid=model_context.jid,
+            step_index=model_context.step_index,
             status=status,
             parent_run_id=getattr(parent, "run_id", None),
         )
@@ -66,64 +71,43 @@ class StructuredLogger:
         self._runner = runner
         self._logger = logger or get_logger()
 
-    def context(self) -> LogContext:
-        return LogContext.from_runner(self._runner)
-
-    def _extra(self) -> dict[str, Any]:
-        return {"log_context": asdict(self.context())}
-
-    def _message(self, message: Any) -> str:
-        context = self.context()
-        prefix = context.prefix
+    def format_message(
+        self,
+        message: Any,
+        context: LogContext | None = None,
+    ) -> str:
+        context = context or LogContext.from_runner(self._runner)
         text = str(message)
-        return f"{prefix} | {text}" if prefix else text
+        return f"{context.prefix} | {text}" if context.prefix else text
+
+    def _log(self, level_name: str, message: Any) -> None:
+        context = LogContext.from_runner(self._runner)
+        getattr(self._logger, level_name)(
+            self.format_message(message, context),
+            extra={"log_context": asdict(context)},
+        )
 
     def debug(self, message: Any) -> None:
-        self._logger.debug(self._message(message), extra=self._extra())
+        self._log("debug", message)
 
     def info(self, message: Any) -> None:
-        self._logger.info(self._message(message), extra=self._extra())
+        self._log("info", message)
 
     def warning(self, message: Any) -> None:
-        self._logger.warning(self._message(message), extra=self._extra())
+        self._log("warning", message)
 
     def error(self, message: Any) -> None:
-        self._logger.error(self._message(message), extra=self._extra())
-
-
-def bubble_log(parent: Any, message: str) -> str:
-    """Delegate a child runner log message to its parent when present."""
-    if parent is not None:
-        return parent._produce_log(message)
-    return message
+        self._log("error", message)
 
 
 def bubble_context_log(parent: Any, message: Any, **context_fields: Any) -> str:
     """Format a message from log context fields and bubble it to the parent."""
-    prefix = LogContext(**context_fields).prefix
+    head = LogContext(**context_fields).prefix
     text = str(message)
-    formatted = f"{prefix} › {text}" if prefix else text
-    return bubble_log(parent, formatted)
-
-
-def bubble_tagged_log(
-    parent: Any,
-    message: Any,
-    *,
-    prefix: str = "",
-    tags: tuple[str, ...] = (),
-) -> str:
-    """Format a message with bracketed tags and bubble it to the parent."""
-    text = str(message)
-    tag_text = " ".join(f"[{tag}]" for tag in tags if tag)
-    head = " ".join(part for part in (prefix, tag_text) if part)
     formatted = f"{head} › {text}" if head else text
-    return bubble_log(parent, formatted)
-
-
-def prefix_log(message: Any, prefix: str) -> str:
-    """Format a message with a simple text prefix."""
-    return f"{prefix} {message}"
+    if parent is not None:
+        return parent._produce_log(formatted)
+    return formatted
 
 
 def get_logger() -> logging.Logger:
@@ -138,10 +122,8 @@ def get_logger() -> logging.Logger:
 
 __all__ = [
     "LogContext",
+    "ModelContext",
     "StructuredLogger",
     "bubble_context_log",
-    "bubble_log",
-    "bubble_tagged_log",
     "get_logger",
-    "prefix_log",
 ]

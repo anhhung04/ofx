@@ -3,7 +3,7 @@
 import warnings
 from typing import Any
 
-from ofx.runner.registry_adapter import RegistryAdapter
+from ofx.runner.registry_adapter import SerializedPrefixedRegistryAdapter
 
 try:
     import etcd3
@@ -13,7 +13,7 @@ except Exception:
     ETCD_AVAILABLE = False
     etcd3 = None  # type: ignore
 
-class EtcdJobRegistry(RegistryAdapter):
+class EtcdJobRegistry(SerializedPrefixedRegistryAdapter):
     """etcd-based implementation of registry
 
     Stores data in etcd for distributed coordination and strong consistency.
@@ -62,104 +62,49 @@ class EtcdJobRegistry(RegistryAdapter):
             timeout=timeout,
             **kwargs,
         )
-        self._log_debug(f"Initialized EtcdJobRegistry at {host}:{port}")
+        self._log_backend_initialized(f"at {host}:{port}")
 
-    def _make_key(self, key: str) -> str:
-        """Create an etcd key for a data identifier
-
-        Args:
-            key: Data identifier
-
-        Returns:
-            etcd key with prefix
-        """
-        # Ensure prefix ends with / for proper path-like structure
-        prefix = self.prefix if self.prefix.endswith("/") else f"{self.prefix}/"
-        return f"{prefix}{key}"
-
-    async def _set(self, key: str, value: Any) -> None:
-        """Store data in etcd"""
-        etcd_key = self._make_key(key)
-        json_value = self._serialize_value(key, value)
-        if json_value is None:
-            return
+    async def _read_storage_value(self, storage_key: str) -> str | bytes | None:
         client = self._client
         assert client is not None
-        client.put(etcd_key, json_value)
-        self._log_debug(f"Set key '{key}' in EtcdJobRegistry")
+        value, _ = client.get(storage_key)
+        return value
 
-    async def _get(self, key: str) -> Any | None:
-        """Retrieve data from etcd"""
-        etcd_key = self._make_key(key)
+    async def _write_storage_value(self, storage_key: str, json_value: str) -> None:
         client = self._client
         assert client is not None
-        value, _ = client.get(etcd_key)
-        if value:
-            return self._deserialize_value(key, value)
-        return None
+        client.put(storage_key, json_value)
 
-    async def _update(self, key: str, updates: dict[str, Any]) -> None:
-        """Update specific fields in data"""
-        existing = await self._get(key)
-        if isinstance(existing, dict):
-            existing.update(updates)
-            await self._set(key, existing)
-        else:
-            await self._set(key, updates)
-        self._log_debug(f"Updated key '{key}' in EtcdJobRegistry")
-
-    async def _delete(self, key: str) -> bool:
-        """Remove data from etcd"""
-        etcd_key = self._make_key(key)
+    async def _storage_key_exists(self, storage_key: str) -> bool:
         client = self._client
         assert client is not None
-
-        # Check if key exists first
-        value, _ = client.get(etcd_key)
-        if value:
-            client.delete(etcd_key)
-            self._log_debug(f"Deleted key '{key}' from EtcdJobRegistry")
-            return True
-        return False
-
-    async def _exists(self, key: str) -> bool:
-        """Check if data exists in etcd"""
-        etcd_key = self._make_key(key)
-        client = self._client
-        assert client is not None
-        value, _ = client.get(etcd_key)
+        value, _ = client.get(storage_key)
         return value is not None
 
-    async def _get_all(self) -> dict[str, Any]:
-        """Get all entries from etcd"""
-        # Get all keys with the prefix
-        result = {}
-        prefix = self.prefix if self.prefix.endswith("/") else f"{self.prefix}/"
+    async def _delete_storage_key(self, storage_key: str) -> None:
         client = self._client
         assert client is not None
+        client.delete(storage_key)
 
-        for value, metadata in client.get_prefix(prefix):
-            if value:
-                # Extract the key from the full etcd key
-                etcd_key = metadata.key.decode()
-                key = etcd_key[len(prefix) :]
-                decoded = self._deserialize_value(key, value)
-                if decoded is not None:
-                    result[key] = decoded
+    async def _storage_entries(self) -> list[tuple[str, str | bytes | None]]:
+        prefix = self._storage_prefix()
+        client = self._client
+        assert client is not None
+        return [
+            (self._logical_key(metadata.key.decode()), value)
+            for value, metadata in client.get_prefix(prefix)
+        ]
 
-        return result
-
-    async def _clear(self) -> None:
-        """Clear all entries from etcd"""
-        prefix = self.prefix if self.prefix.endswith("/") else f"{self.prefix}/"
+    async def _clear_storage(self) -> None:
+        prefix = self._storage_prefix()
         client = self._client
         assert client is not None
         client.delete_prefix(prefix)
-        self._log_debug("Cleared EtcdJobRegistry")
 
     async def _close(self) -> None:
         """Close the etcd connection"""
         if self._client:
             self._client.close()
             self._client = None
-        self._log_debug("Closed EtcdJobRegistry")
+        self._log_backend_action("Closed")
+    _prefix_separator = "/"

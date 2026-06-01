@@ -184,6 +184,3 @@ class Step(OFXBaseModel):
             f"Step '{self.name}' must have one of 'run', 'script', 'script_file', "
             f"'uses', 'task', or 'pipe' defined."
         )
-
-    def __str__(self):
-        return f"Step(name='{self.name}',type='{self.get_run_type()}')"

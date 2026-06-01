@@ -10,9 +10,10 @@ import logging
 from contextlib import suppress
 from typing import Any
 
+from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.models.pipe import PipeConfig
 from ofx.runner.executors.base import Executor
-from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger("ofx.pipe")
 
@@ -116,56 +117,15 @@ def _item_namespace(item: Any) -> dict[str, Any]:
     return ns
 
 
-def _fields(value: str | list[str]) -> list[str]:
-    """Normalize a single field or list of fields."""
-    return [value] if isinstance(value, str) else list(value)
-
-
-def _item_field_value(item: Any, field: str) -> Any:
-    """Return *field* from a dict or object item."""
-    if isinstance(item, dict):
-        return item.get(field)
-    return getattr(item, field, None)
-
-
-def _sort_value(value: Any) -> tuple[int, Any, str]:
-    """Normalize a field value for mixed numeric/string sorting."""
-    if value is None:
-        return (0, "", "")
-    if isinstance(value, (int, float)):
-        return (0, value, "")
-    try:
-        return (0, float(value), "")
-    except (ValueError, TypeError):
-        return (1, 0, str(value))
-
-
-def _unique_key(item: Any, fields: list[str]) -> tuple[Any, ...]:
-    """Build a stable uniqueness key for dict, object, or scalar items."""
-    if isinstance(item, dict) or any(hasattr(item, field) for field in fields):
-        return tuple(_item_field_value(item, field) for field in fields)
-    return (item,)
-
-
-def _dump_json_pretty(items: list[Any]) -> str:
-    """Serialize pipeline items as pretty JSON."""
-    return json.dumps(items, indent=2, default=str)
-
-
-def _dump_json_lines(items: list[Any]) -> str:
-    """Serialize pipeline items as newline-delimited JSON."""
-    return "\n".join(json.dumps(item, default=str) for item in items)
-
-
 def _format_items(items: list[Any], config: PipeConfig) -> str:
     """Serialize *items* according to [`PipeConfig.format`](src/ofx/models/pipe.py)."""
     fmt = config.format
 
     if fmt == "json":
-        return _dump_json_pretty(items)
+        return json.dumps(items, indent=2, default=str)
 
     if fmt == "jsonl":
-        return _dump_json_lines(items)
+        return "\n".join(json.dumps(item, default=str) for item in items)
 
     if fmt == "lines":
         parts: list[str] = []
@@ -201,13 +161,18 @@ def _format_items(items: list[Any], config: PipeConfig) -> str:
 
             return yaml.dump(items, default_flow_style=False)
         except ImportError:
-            return _dump_json_pretty(items)
+            return json.dumps(items, indent=2, default=str)
 
-    return _dump_json_pretty(items)
+    return json.dumps(items, indent=2, default=str)
 
 
 def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
     """Run the ETL operations on *items* and return the processed result."""
+    def item_field_value(item: Any, field: str) -> Any:
+        if isinstance(item, dict):
+            return item.get(field)
+        return getattr(item, field, None)
+
     if config.filter:
         expr = config.filter
         filtered: list[Any] = []
@@ -253,22 +218,42 @@ def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
         items = flat
 
     if config.sort:
-        sort_fields = _fields(config.sort)
+        sort_fields = (
+            [config.sort] if isinstance(config.sort, str) else list(config.sort)
+        )
 
         def _sort_key(item: Any) -> tuple:
-            return tuple(
-                _sort_value(_item_field_value(item, field)) for field in sort_fields
-            )
+            normalized_values: list[tuple[int, Any, str]] = []
+            for field in sort_fields:
+                value = item_field_value(item, field)
+                if value is None:
+                    normalized_values.append((0, "", ""))
+                    continue
+                if isinstance(value, (int, float)):
+                    normalized_values.append((0, value, ""))
+                    continue
+                try:
+                    normalized_values.append((0, float(value), ""))
+                except (ValueError, TypeError):
+                    normalized_values.append((1, 0, str(value)))
+            return tuple(normalized_values)
 
         with suppress(TypeError):
             items = sorted(items, key=_sort_key, reverse=config.reverse)
 
     if config.unique:
-        unique_fields = _fields(config.unique)
+        unique_fields = (
+            [config.unique] if isinstance(config.unique, str) else list(config.unique)
+        )
         seen: set[tuple] = set()
         unique_items: list[Any] = []
         for item in items:
-            key = _unique_key(item, unique_fields)
+            key = (
+                tuple(item_field_value(item, field) for field in unique_fields)
+                if isinstance(item, dict)
+                or any(hasattr(item, field) for field in unique_fields)
+                else (item,)
+            )
             if key not in seen:
                 seen.add(key)
                 unique_items.append(item)
@@ -278,7 +263,7 @@ def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
         field = config.group_by
         groups: dict[str, list] = {}
         for item in items:
-            raw = _item_field_value(item, field)
+            raw = item_field_value(item, field)
             key_val = str(raw) if raw is not None else "__none__"
             groups.setdefault(key_val, []).append(item)
         return groups
@@ -303,17 +288,13 @@ class PipeExecutor(Executor):
         config = runner.model.pipe
         result = _execute_pipeline(items, config)
 
-        is_grouped = isinstance(result, dict)
-        if is_grouped:
-            flat_items: list[Any] = []
-            for group in result.values():
-                flat_items.extend(group)
-            formatted = _format_items(flat_items, config)
-            output_items = result
-        else:
-            flat_items = result
-            formatted = _format_items(flat_items, config)
-            output_items = flat_items
+        flat_items = (
+            [item for group in result.values() for item in group]
+            if isinstance(result, dict)
+            else result
+        )
+        formatted = _format_items(flat_items, config)
+        output_items = result
 
         from ofx.utils.tempfiles import make_temp_file
 
@@ -330,15 +311,12 @@ class PipeExecutor(Executor):
         await runner.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
 
     async def on_failure(self, runner) -> None:
-        if runner._temp_file and runner._temp_file.exists():
-            runner._temp_file.unlink(missing_ok=True)
+        remove_file(runner._temp_file)
 
 
 __all__ = [
     "PipeExecutor",
     "_coerce_to_list",
-    "_dump_json_lines",
-    "_dump_json_pretty",
     "_execute_pipeline",
     "_format_items",
     "_item_namespace",

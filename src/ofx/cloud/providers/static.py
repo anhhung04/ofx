@@ -29,25 +29,61 @@ class StaticProvider(CloudProvider):
         """Static provider needs no credentials."""
         ...
 
-    async def create_instance(self, config: CloudConfig) -> CloudInstanceInfo:
-        """Return instance info for the static host. No actual provisioning."""
+    @staticmethod
+    def _instance_id(host: str) -> str:
+        return f"static-{host}"
+
+    @classmethod
+    def _instance_info(
+        cls,
+        host: str,
+        *,
+        name: str,
+        metadata: dict | None = None,
+    ) -> CloudInstanceInfo:
+        return CloudInstanceInfo(
+            instance_id=cls._instance_id(host),
+            ip=host,
+            status="active",
+            provider="static",
+            name=name,
+            metadata=metadata or {},
+        )
+
+    @staticmethod
+    def _resolved_static_host(config: CloudConfig) -> str:
         host = config.host
         if not host and config.hosts:
-            # For fleet, caller should use create_fleet_instances() instead
-            host = config.hosts[0].host
+            return config.hosts[0].host
+        return host
+
+    @staticmethod
+    def _fleet_host_metadata(host_entry: Any) -> dict[str, str]:
+        return {
+            "ssh_user": host_entry.ssh_user,
+            "ssh_port": host_entry.ssh_port,
+            "ssh_key": host_entry.ssh_key,
+            "ssh_password": host_entry.ssh_password,
+        }
+
+    @classmethod
+    def _fleet_instance_info(cls, host_entry: Any, index: int) -> CloudInstanceInfo:
+        return cls._instance_info(
+            host_entry.host,
+            name=f"static-fleet-{index}-{host_entry.host}",
+            metadata=cls._fleet_host_metadata(host_entry),
+        )
+
+    async def create_instance(self, config: CloudConfig) -> CloudInstanceInfo:
+        """Return instance info for the static host. No actual provisioning."""
+        host = self._resolved_static_host(config)
 
         if not host:
             raise ValueError(
                 "Static provider requires 'host' or 'hosts' in cloud config"
             )
 
-        return CloudInstanceInfo(
-            instance_id=f"static-{host}",
-            ip=host,
-            status="active",
-            provider="static",
-            name=f"static-{host}",
-        )
+        return self._instance_info(host, name=f"static-{host}")
 
     async def create_fleet_instances(
         self, config: CloudConfig
@@ -60,24 +96,10 @@ class StaticProvider(CloudProvider):
         Returns:
             List of CloudInstanceInfo for each host.
         """
-        instances = []
-        for i, host_entry in enumerate(config.hosts):
-            instances.append(
-                CloudInstanceInfo(
-                    instance_id=f"static-{host_entry.host}",
-                    ip=host_entry.host,
-                    status="active",
-                    provider="static",
-                    name=f"static-fleet-{i}-{host_entry.host}",
-                    metadata={
-                        "ssh_user": host_entry.ssh_user,
-                        "ssh_port": host_entry.ssh_port,
-                        "ssh_key": host_entry.ssh_key,
-                        "ssh_password": host_entry.ssh_password,
-                    },
-                )
-            )
-        return instances
+        return [
+            self._fleet_instance_info(host_entry, index)
+            for index, host_entry in enumerate(config.hosts)
+        ]
 
     async def wait_until_ready(
         self, instance_id: str, timeout: int = 300
@@ -87,23 +109,24 @@ class StaticProvider(CloudProvider):
         Polls with a simple connectivity check until timeout.
         """
         host = instance_id.removeprefix("static-")
-        deadline = asyncio.get_running_loop().time() + timeout
         last_error = None
 
-        while asyncio.get_running_loop().time() < deadline:
+        async def _probe() -> bool:
+            nonlocal last_error
             try:
-                reachable = await self._check_ssh_reachable(host)
-                if reachable:
-                    return CloudInstanceInfo(
-                        instance_id=instance_id,
-                        ip=host,
-                        status="active",
-                        provider="static",
-                    )
-            except Exception as e:
-                last_error = e
+                return await self._check_ssh_reachable(host)
+            except Exception as exc:
+                last_error = exc
+                return False
 
-            await asyncio.sleep(5)
+        reachable = await self._poll_until(
+            _probe,
+            timeout=timeout,
+            interval=5,
+            is_ready=bool,
+        )
+        if reachable:
+            return self._instance_info(host, name=instance_id)
 
         raise TimeoutError(
             f"Static host {host} not reachable after {timeout}s"
@@ -121,12 +144,7 @@ class StaticProvider(CloudProvider):
     async def get_instance(self, instance_id: str) -> CloudInstanceInfo:
         """Return info for the static host."""
         host = instance_id.removeprefix("static-")
-        return CloudInstanceInfo(
-            instance_id=instance_id,
-            ip=host,
-            status="active",
-            provider="static",
-        )
+        return self._instance_info(host, name=instance_id)
 
     async def list_instances(
         self, tags: list[str] | None = None

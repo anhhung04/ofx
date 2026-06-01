@@ -10,20 +10,87 @@ from rich.table import Table
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
+get_profile_manager = None
+get_console = None
+
+
+def _get_profile_deps():
+    profile_manager_getter = get_profile_manager
+    if profile_manager_getter is None:
+        from ofx.profiles.manager import get_profile_manager as profile_manager_getter
+
+    console_getter = get_console
+    if console_getter is None:
+        from ofx.settings import get_console as console_getter
+
+    return console_getter(), profile_manager_getter()
+
+
+def _run_profile_mutation(action, success_message: str) -> None:
+    console, mgr = _get_profile_deps()
+    try:
+        action(mgr)
+        console.print(success_message)
+    except KeyError as e:
+        _profile_error(console, e)
+
+
+def _fail_invalid_set_syntax(console, item: str) -> None:
+    console.print(f"[error]Invalid format '{item}', use key=value[/error]")
+    raise typer.Exit(1)
+
+
+def _print_no_profiles_hint(console) -> None:
+    console.print("[dim]No profiles configured. Add one with:[/dim]")
+    console.print("  ofx flow profile add <name> --set rate_limit=30")
+
+
+def _profile_error(console, error: Exception) -> None:
+    console.print(f"[error]{error}[/error]")
+    raise typer.Exit(1) from None
+
+
+def _parse_profile_set_value(value: str) -> object:
+    value = value.strip()
+    if value.lower() in ("true", "yes"):
+        return True
+    if value.lower() in ("false", "no"):
+        return False
+
+    try:
+        return int(value)
+    except ValueError:
+        try:
+            return float(value)
+        except ValueError:
+            if value.startswith("[") and value.endswith("]"):
+                inner = value[1:-1]
+                return [v.strip() for v in inner.split(",") if v.strip()]
+            return value
+
+
+def _apply_profile_set_value(console, data: dict, item: str) -> None:
+    if "=" not in item:
+        _fail_invalid_set_syntax(console, item)
+
+    key, raw_value = item.split("=", 1)
+    parsed_value = _parse_profile_set_value(raw_value)
+
+    keys = key.strip().split(".")
+    current = data
+    for part in keys[:-1]:
+        current = current.setdefault(part, {})
+    current[keys[-1]] = parsed_value
+
 
 @app.command("list")
 def list_profiles():
     """List all configured profiles."""
-    from ofx.profiles.manager import get_profile_manager
-    from ofx.settings import get_console
-
-    console = get_console()
-    mgr = get_profile_manager()
+    console, mgr = _get_profile_deps()
     names = mgr.list_profiles()
 
     if not names:
-        console.print("[dim]No profiles configured. Add one with:[/dim]")
-        console.print("  ofx flow profile add <name> --set rate_limit=30")
+        _print_no_profiles_hint(console)
         return
 
     default = mgr.default_profile_name
@@ -62,17 +129,12 @@ def show_profile(
     from rich.panel import Panel
     from rich.syntax import Syntax
 
-    from ofx.profiles.manager import get_profile_manager
-    from ofx.settings import get_console
-
-    console = get_console()
-    mgr = get_profile_manager()
+    console, mgr = _get_profile_deps()
 
     try:
         data = mgr.get_profile_data(name)
     except KeyError as e:
-        console.print(f"[error]{e}[/error]")
-        raise typer.Exit(1) from None
+        _profile_error(console, e)
 
     yaml_str = yaml.dump({name: data}, default_flow_style=False, sort_keys=False)
     console.print(
@@ -105,29 +167,24 @@ def add_profile(
     ] = False,
 ):
     """Add or update a profile."""
-    from ofx.profiles.manager import get_profile_manager
-    from ofx.settings import get_console
-
-    console = get_console()
-    mgr = get_profile_manager()
+    console, mgr = _get_profile_deps()
 
     data: dict = {}
     if description:
         data["description"] = description
 
     for item in set_values or []:
-        if "=" not in item:
-            console.print(f"[error]Invalid format '{item}', use key=value[/error]")
-            raise typer.Exit(1)
-        key, value = item.split("=", 1)
-        _set_nested(data, key.strip(), _parse_value(value.strip()))
+        _apply_profile_set_value(console, data, item)
 
-    mgr.add(name, data)
+    def _save_profile(manager):
+        manager.add(name, data)
+        if default:
+            manager.set_default(name)
 
-    if default:
-        mgr.set_default(name)
-
-    console.print(f"[success]Profile '{name}' saved[/success]")
+    _run_profile_mutation(
+        _save_profile,
+        f"[success]Profile '{name}' saved[/success]",
+    )
 
 
 @app.command("remove")
@@ -135,18 +192,10 @@ def remove_profile(
     name: Annotated[str, typer.Argument(help="Profile name to remove")],
 ):
     """Remove a profile."""
-    from ofx.profiles.manager import get_profile_manager
-    from ofx.settings import get_console
-
-    console = get_console()
-    mgr = get_profile_manager()
-
-    try:
-        mgr.remove(name)
-        console.print(f"[success]Profile '{name}' removed[/success]")
-    except KeyError as e:
-        console.print(f"[error]{e}[/error]")
-        raise typer.Exit(1) from None
+    _run_profile_mutation(
+        lambda mgr: mgr.remove(name),
+        f"[success]Profile '{name}' removed[/success]",
+    )
 
 
 @app.command("default")
@@ -154,44 +203,7 @@ def set_default(
     name: Annotated[str, typer.Argument(help="Profile name to set as default")],
 ):
     """Set the default profile."""
-    from ofx.profiles.manager import get_profile_manager
-    from ofx.settings import get_console
-
-    console = get_console()
-    mgr = get_profile_manager()
-
-    try:
-        mgr.set_default(name)
-        console.print(f"[success]Default profile set to '{name}'[/success]")
-    except KeyError as e:
-        console.print(f"[error]{e}[/error]")
-        raise typer.Exit(1) from None
-
-
-# ── Helpers ────────────────────────────────────────────────────────
-
-
-def _set_nested(data: dict, dotted_key: str, value) -> None:
-    """Set a value in a nested dict using dot notation."""
-    keys = dotted_key.split(".")
-    current = data
-    for key in keys[:-1]:
-        current = current.setdefault(key, {})
-    current[keys[-1]] = value
-
-
-def _parse_value(value: str):
-    """Parse a string value into its appropriate Python type."""
-    if value.lower() in ("true", "yes"):
-        return True
-    if value.lower() in ("false", "no"):
-        return False
-    with suppress(ValueError):
-        return int(value)
-    with suppress(ValueError):
-        return float(value)
-    # Handle lists: "[a,b,c]"
-    if value.startswith("[") and value.endswith("]"):
-        inner = value[1:-1]
-        return [v.strip() for v in inner.split(",") if v.strip()]
-    return value
+    _run_profile_mutation(
+        lambda mgr: mgr.set_default(name),
+        f"[success]Default profile set to '{name}'[/success]",
+    )

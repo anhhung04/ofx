@@ -23,37 +23,41 @@ def generate_matrix_combinations(
         return []
 
     matrix_keys = list(matrix.keys())
-    matrix_values = [_matrix_values(matrix[key]) for key in matrix_keys]
+    matrix_values = [
+        value if isinstance(value, list) else [value]
+        for value in matrix.values()
+    ]
 
     if enforce_limit:
-        estimated = 1
-        for vals in matrix_values:
-            estimated *= len(vals) if isinstance(vals, list) else 1
-            if estimated > MAX_MATRIX_COMBINATIONS:
-                raise ValueError(
-                    f"Matrix would produce ~{estimated} combinations "
-                    f"(limit: {MAX_MATRIX_COMBINATIONS}). "
-                    f"Reduce matrix values or add exclude rules."
-                )
+        _enforce_matrix_limit(matrix_values)
 
     base_combinations = [
         _process_values(
-            dict(zip(matrix_keys, combination, strict=True)), value_processor
+            dict(zip(matrix_keys, combination, strict=True)),
+            value_processor,
         )
         for combination in itertools.product(*matrix_values)
     ]
 
     if exclude:
-        exclude = [_process_values(item, value_processor) for item in exclude]
+        processed_excludes = [
+            _process_values(filter_dict, value_processor)
+            for filter_dict in exclude
+        ]
         base_combinations = [
             combo
             for combo in base_combinations
-            if not _matches_any_filter(combo, exclude)
+            if not any(
+                all(combo.get(key) == value for key, value in filter_dict.items())
+                for filter_dict in processed_excludes
+            )
         ]
 
     if include:
-        for include_combo in include:
-            include_combo = _process_values(include_combo, value_processor)
+        for include_combo in (
+            _process_values(filter_dict, value_processor)
+            for filter_dict in include
+        ):
             if include_combo not in base_combinations:
                 base_combinations.append(include_combo)
 
@@ -73,10 +77,26 @@ def estimate_matrix_count(
     return max(len(combos), 1)
 
 
-def _matrix_values(value: Any) -> list[Any]:
-    """Return a list of values for one matrix dimension."""
-    return value if isinstance(value, list) else [value]
+def _enforce_matrix_limit(matrix_values: list[list[Any]]) -> None:
+    """Raise when a matrix would exceed the supported combination limit."""
+    estimated = _estimate_combinations(matrix_values)
+    if estimated <= MAX_MATRIX_COMBINATIONS:
+        return
+    raise ValueError(
+        f"Matrix would produce ~{estimated} combinations "
+        f"(limit: {MAX_MATRIX_COMBINATIONS}). "
+        f"Reduce matrix values or add exclude rules."
+    )
 
+
+def _estimate_combinations(matrix_values: list[list[Any]]) -> int:
+    """Return the cartesian-product size for normalized matrix values."""
+    estimated = 1
+    for values in matrix_values:
+        estimated *= len(values)
+        if estimated > MAX_MATRIX_COMBINATIONS:
+            return estimated
+    return estimated
 
 def _process_values(
     values: dict[str, Any], value_processor: ValueProcessor | None
@@ -85,14 +105,6 @@ def _process_values(
     if value_processor is None:
         return dict(values)
     return {key: value_processor(value) for key, value in values.items()}
-
-
-def _matches_any_filter(combo: dict[str, Any], filters: list[dict[str, Any]]) -> bool:
-    """Check if *combo* matches any filter dict."""
-    for filter_dict in filters:
-        if all(combo.get(key) == value for key, value in filter_dict.items()):
-            return True
-    return False
 
 
 __all__ = [

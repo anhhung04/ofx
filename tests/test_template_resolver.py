@@ -1,11 +1,13 @@
 """Comprehensive tests for TemplateResolver: support functions, resolve logic, and caching."""
 
+import asyncio
 import json
 import re
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from pydantic import BaseModel
 
 from ofx.runner.templates.resolver import (
     TemplateResolver,
@@ -576,6 +578,36 @@ class TestTemplateCache:
         assert len(resolver._template_cache) == 0
 
 
+@pytest.mark.asyncio
+class TestResolverCollectionHelpers:
+    async def test_resolved_sequence_mapping_and_model_values_reuse_core_resolution(self, resolver):
+        class _Model(BaseModel):
+            name: str
+            count: int
+
+        context = {"value": "hello", "count": "3"}
+        memo: dict[str, Any] = {}
+
+        sequence = await resolver._resolved_sequence_items([
+            "{{ value }}",
+            "{{ count }}",
+        ], context, memo)
+        mapping = await resolver._resolved_mapping_values(
+            {"name": "{{ value }}", "count": "{{ count }}"},
+            context,
+            memo,
+        )
+        model_values = await resolver._resolved_model_values(
+            _Model(name="{{ value }}", count=1),
+            context,
+            memo,
+        )
+
+        assert sequence == ["hello", "3"]
+        assert mapping == {"name": "hello", "count": "3"}
+        assert model_values == {"name": "hello", "count": 1}
+
+
 # ── Template error handling ──────────────────────────────────────────────
 class TestTemplateErrors:
     async def test_invalid_syntax_error_includes_context(self, resolver):
@@ -610,6 +642,101 @@ class TestSupportFuncCache:
         assert f1 is not f2  # Should be a copy
         f1["extra"] = True
         assert "extra" not in resolver.get_support_functions()
+
+    @pytest.mark.asyncio
+    async def test_runner_support_functions_cache_jobs_and_steps(self, resolver, monkeypatch):
+        memo: dict[str, Any] = {}
+        step = type(
+            "StepRunner",
+            (),
+            {
+                "model": type("StepModel", (), {"step_index": 0, "name": "step-0"})(),
+                "reg_get": lambda self, _key: asyncio.sleep(0, result={"stdout": "ok"}),
+            },
+        )()
+        job = type(
+            "JobRunner",
+            (),
+            {
+                "model": type("JobModel", (), {"jid": "job-a", "original_job_id": ""})(),
+                "_runners": {"0": step},
+                "reg_get": lambda self, _key: asyncio.sleep(0, result={"job": True}),
+            },
+        )()
+        runner = job
+        runner.parent = type(
+            "WorkflowRunner",
+            (),
+            {"_runners": {"job-a": job}, "parent": None},
+        )()
+
+        support_funcs = await resolver._build_support_functions({"runner": runner}, memo)
+        cached_jobs, cached_steps = await resolver._runner_support_values(runner, memo)
+
+        assert support_funcs["jobs"] == {"job-a": {"outputs": {"job": True}}}
+        assert support_funcs["steps"]["0"]["index"] == 0
+        assert cached_jobs == {"job-a": {"outputs": {"job": True}}}
+        assert cached_steps["0"]["index"] == 0
+
+    @pytest.mark.asyncio
+    async def test_runner_support_functions_cache_empty_jobs_and_steps(
+        self,
+        resolver,
+    ):
+        memo: dict[str, Any] = {}
+        calls = {"parent": 0}
+
+        class _Runner:
+            _runners = {}
+
+            @property
+            def parent(self):
+                calls["parent"] += 1
+                return None
+
+        runner = _Runner()
+
+        await resolver._runner_support_values(runner, memo)
+        await resolver._runner_support_values(runner, memo)
+
+        assert calls == {"parent": 1}
+        assert memo["jobs_data"] == {}
+        assert memo["steps_data"] == _StepAccessor()
+
+
+@pytest.mark.asyncio
+class TestRunnerDataExtraction:
+    async def test_runner_support_values_collects_job_outputs(self, resolver):
+        class _Child:
+            def __init__(self, jid: str, outputs: dict[str, str]):
+                self.model = type("M", (), {"jid": jid, "original_job_id": "", "step_index": None})()
+                self._runners = {}
+                self.reg_get = lambda _key: asyncio.sleep(0, result=outputs)
+
+        container = type("R", (), {"_runners": {"a": _Child("job-a", {"x": 1}), "b": _Child("job-b", {"y": 2})}, "parent": None})()
+
+        jobs, steps = await resolver._runner_support_values(container, {})
+
+        assert jobs == {
+            "job-a": {"outputs": {"x": 1}},
+            "job-b": {"outputs": {"y": 2}},
+        }
+        assert steps == _StepAccessor()
+
+    async def test_runner_support_values_indexes_steps_by_name_and_position(self, resolver):
+        class _Child:
+            def __init__(self, step_index: int, name: str, outputs: dict[str, str]):
+                self.model = type("M", (), {"step_index": step_index, "name": name})()
+                self.reg_get = lambda _key: asyncio.sleep(0, result=outputs)
+
+        container = type("R", (), {"_runners": {"0": _Child(0, "first", {"stdout": "ok"})}, "parent": None})()
+
+        jobs, steps = await resolver._runner_support_values(container, {})
+
+        assert jobs == {}
+        assert steps["first"]["index"] == 0
+        assert steps["0"]["outputs"]["stdout"] == "ok"
+        assert steps["0"]["outputs"]["typed_outputs"] == []
 
 
 # ── Recursion depth limit ────────────────────────────────────────────────

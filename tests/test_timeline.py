@@ -179,7 +179,6 @@ def test_log_step_appends_csv(tmp_path, monkeypatch):
 
     log_step(
         ctx_vars={"project_name": "demo"},
-        output_path=None,
         step_name="scan",
         command="nmap 10.0.0.1",
         tool="nmap",
@@ -211,7 +210,6 @@ def test_log_step_with_exit_code(tmp_path, monkeypatch):
 
     log_step(
         ctx_vars={},
-        output_path=None,
         step_name="fail-step",
         command="false",
         tool="",

@@ -2,41 +2,58 @@
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
+
+
+def is_windows_config(cfg: Any) -> bool:
+    return (
+        getattr(cfg, "connection_type", "") == "winrm"
+        or (getattr(cfg, "os", "linux") or "linux") == "windows"
+    )
+
+def remote_join(base: str, *parts: str, is_windows: bool) -> str:
+    path_cls = PureWindowsPath if is_windows else PurePosixPath
+    path = path_cls(str(base).rstrip("\\/"))
+    for part in parts:
+        path /= str(part).strip("\\/")
+    return str(path)
 
 
 def build_provider_kwargs(cfg: Any) -> dict[str, Any]:
     """Build kwargs for ``CloudProviderRegistry.create()`` from cloud config."""
-    kwargs: dict[str, Any] = {}
-    provider = cfg.provider or "static"
+    provider_name = cfg.provider or "static"
+    extras = (
+        getattr(cfg, "extra", None)
+        or getattr(cfg, "__pydantic_extra__", None)
+        or {}
+    )
 
-    if provider == "static":
-        kwargs["host"] = getattr(cfg, "host", "") or ""
-        kwargs["user"] = cfg.ssh_user or "root"
-        kwargs["port"] = cfg.ssh_port or 22
-        if cfg.ssh_key:
-            kwargs["identity_file"] = cfg.ssh_key
-        if cfg.ssh_password:
-            kwargs["password"] = cfg.ssh_password
-    elif provider == "digitalocean":
-        token = (cfg.extra or {}).get("token") if hasattr(cfg, "extra") else None
-        if not token and hasattr(cfg, "__pydantic_extra__"):
-            token = (cfg.__pydantic_extra__ or {}).get("token")
-        if token:
-            kwargs["token"] = token
-    elif provider == "aws":
-        extras: dict[str, Any] = {}
-        if hasattr(cfg, "extra"):
-            extras = cfg.extra or {}
-        elif hasattr(cfg, "__pydantic_extra__"):
-            extras = cfg.__pydantic_extra__ or {}
-        for key in ("aws_access_key_id", "aws_secret_access_key", "region_name"):
-            val = extras.get(key)
-            if val:
-                kwargs[key] = val
-        kwargs["region"] = cfg.region or "us-east-1"
-
-    return kwargs
+    match provider_name:
+        case "static":
+            kwargs = {
+                "host": getattr(cfg, "host", "") or "",
+                "user": cfg.ssh_user or "root",
+                "port": cfg.ssh_port or 22,
+            }
+            if cfg.ssh_key:
+                kwargs["identity_file"] = cfg.ssh_key
+            if cfg.ssh_password:
+                kwargs["password"] = cfg.ssh_password
+            return kwargs
+        case "digitalocean":
+            token = extras.get("token")
+            return {"token": token} if token else {}
+        case "aws":
+            kwargs = {
+                key: value
+                for key in ("aws_access_key_id", "aws_secret_access_key", "region_name")
+                if (value := extras.get(key))
+            }
+            kwargs["region"] = cfg.region or "us-east-1"
+            return kwargs
+        case _:
+            return {}
 
 
 def create_remote_runner(
@@ -49,12 +66,7 @@ def create_remote_runner(
     """Create PostSSH/PostWinRM runner using shared cloud config conventions."""
     from ofx.api.post import RunnerRegistry
 
-    is_windows = (
-        getattr(cfg, "connection_type", "") == "winrm"
-        or (getattr(cfg, "os", "linux") or "linux") == "windows"
-    )
-
-    if is_windows:
+    if is_windows_config(cfg):
         return RunnerRegistry.create(
             "winrm",
             host=ip,

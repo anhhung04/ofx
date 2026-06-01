@@ -4,6 +4,7 @@ import pytest
 
 from ofx.models.command import Command
 from ofx.runner import CommandRunner, RunContext, RunnerStatus
+from ofx.runner.commands.command_executor import CommandExecutionResult
 
 
 class TestCommandOutputs:
@@ -221,3 +222,64 @@ echo "has_value=something" >> $RUNNER_OUTPUTS
             assert result.outputs.get("output_truncated") is True
         finally:
             settings.max_output_size = original_max
+
+
+class TestCommandRunnerHelpers:
+    @pytest.mark.asyncio
+    async def test_do_run_sets_outputs_file_and_merges_executor_results(self, monkeypatch, tmp_path):
+        runner = CommandRunner(Command(cmd="echo hi"), RunContext())
+        runner.model.shell = "/bin/bash"
+        recorded_sets: list[tuple[str, dict]] = []
+        recorded_updates: list[tuple[str, dict]] = []
+
+        async def _reg_set(key, value):
+            recorded_sets.append((key, dict(value)))
+
+        async def _reg_update(key, value):
+            recorded_updates.append((key, dict(value)))
+
+        runner.reg_set = _reg_set
+        runner.reg_update = _reg_update
+        runner._log_debug = lambda _msg: None
+
+        outputs_file = tmp_path / "outputs"
+
+        class _Exec:
+            def __init__(self, _model, _envs):
+                self.outputs_file = outputs_file
+
+            def prepare_outputs_file(self):
+                outputs_file.write_text("")
+
+            async def execute(self):
+                return CommandExecutionResult(
+                    exit_code=0,
+                    stdout="ok",
+                    stderr="",
+                    outputs={"extra": 1},
+                )
+
+            async def capture_outputs_file(self, runner, key, log_fn):
+                await runner.reg_update(key, {"captured": True})
+
+        monkeypatch.setattr("ofx.runner.commands.command.CommandExecutor", _Exec)
+
+        await runner._do_run()
+
+        assert recorded_sets == [("outputs", {})]
+        assert runner._outputs_file is not None
+        assert runner._outputs_file.exists()
+        assert runner._outputs_file == outputs_file
+        assert recorded_updates[0] == (
+            "outputs",
+            {"exit_code": 0, "stdout": "ok", "stderr": "", "extra": 1},
+        )
+        assert recorded_updates[1] == ("outputs", {"captured": True})
+
+    @pytest.mark.asyncio
+    async def test_do_run_rejects_missing_shell(self):
+        runner = CommandRunner(Command(cmd="echo hi"), RunContext())
+        runner.model.shell = "/no/such/shell"
+
+        with pytest.raises(RuntimeError, match="Shell not found"):
+            await runner._do_run()

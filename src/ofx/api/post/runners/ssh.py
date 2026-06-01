@@ -14,6 +14,7 @@ from pathlib import Path
 from random import uniform
 
 import paramiko  # type: ignore[import-untyped]
+from ofx.utils.file_cleanup import remove_file
 
 from ..base import AuthenticationError, ConnectionError, PostRunnerBase, PostRunnerError
 from ..registry import RunnerRegistry
@@ -425,9 +426,25 @@ class PostSSH(PostRunnerBase):
         try:
             return self._run_direct(wrapper, timeout)
         finally:
-            # Remove from tracking since wrapper already deletes it
-            if remote_tmp in self._remote_temp_files:
-                self._remote_temp_files.remove(remote_tmp)
+            self._forget_remote_temp_file(remote_tmp)
+
+    def _forget_remote_temp_file(self, remote_tmp: str) -> None:
+        if remote_tmp in self._remote_temp_files:
+            self._remote_temp_files.remove(remote_tmp)
+
+    def _cleanup_remote_temp_files(self) -> None:
+        if not self._remote_temp_files:
+            return
+
+        try:
+            import shlex
+
+            files = " ".join(shlex.quote(path) for path in self._remote_temp_files)
+            self._run_direct(f"rm -f {files}", timeout=10)
+        except (OSError, paramiko.SSHException, EOFError) as e:
+            logger.warning("Failed to clean remote temp files: %s", e)
+        finally:
+            self._remote_temp_files.clear()
 
     def run_with_output_file(self, command: str, timeout: int | None = None) -> str:
         """Execute command and capture output via file (opsec).
@@ -459,7 +476,7 @@ class PostSSH(PostRunnerBase):
             if len(output) > self.max_output_size:
                 output = output[: self.max_output_size] + "\n[OUTPUT TRUNCATED]"
         finally:
-            Path(local_tmp).unlink(missing_ok=True)
+            remove_file(local_tmp)
             try:
                 self._run_direct(f"rm -f {remote_out}", timeout=10)
             except (OSError, paramiko.SSHException, EOFError) as e:
@@ -543,10 +560,7 @@ class PostSSH(PostRunnerBase):
             self._sftp_with_retry("DOWNLOAD", "get", remote_path, local_path)
         except Exception:
             # Remove partial file left by a failed transfer
-            local = Path(local_path)
-            if local.exists():
-                with suppress(OSError):
-                    local.unlink()
+            remove_file(local_path)
             raise
 
     # -------------------------------------------------------------------------
@@ -630,15 +644,7 @@ class PostSSH(PostRunnerBase):
 
     def cleanup(self) -> None:
         """Clean up remote temp files and close connection."""
-        if self._remote_temp_files:
-            try:
-                import shlex
-
-                files = " ".join(shlex.quote(f) for f in self._remote_temp_files)
-                self._run_direct(f"rm -f {files}", timeout=10)
-            except (OSError, paramiko.SSHException, EOFError) as e:
-                logger.warning("Failed to clean remote temp files: %s", e)
-            self._remote_temp_files.clear()
+        self._cleanup_remote_temp_files()
 
         self._close_client()
         logger.debug("SSH cleanup completed for %s", self.host)

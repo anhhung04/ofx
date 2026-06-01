@@ -11,14 +11,12 @@ from ofx.runner.context import RunContext
 from ofx.runner.executors.pipe import (
     PipeExecutor,
     _coerce_to_list,
-    _dump_json_lines,
-    _dump_json_pretty,
     _execute_pipeline,
     _format_items,
     _item_namespace,
     _safe_eval,
 )
-from ofx.runner.runner import BaseRunner
+from ofx.runner.runner import Runner
 
 
 class PipeExecution(BaseModel):
@@ -28,14 +26,14 @@ class PipeExecution(BaseModel):
     resolved_input: list = Field(default_factory=list)
 
 
-class PipeRunner(BaseRunner[PipeExecution]):
+class PipeRunner(Runner[PipeExecution]):
     """Execute a declarative ETL pipeline and store results as step outputs."""
 
     def __init__(
         self,
         model: PipeExecution,
         ctx: RunContext,
-        parent: BaseRunner | None = None,
+        parent: Runner | None = None,
         executor: PipeExecutor | None = None,
     ):
         super().__init__(model, ctx, parent, None, executor=executor or PipeExecutor())
@@ -46,8 +44,6 @@ __all__ = [
     "PipeExecution",
     "PipeRunner",
     "_coerce_to_list",
-    "_dump_json_lines",
-    "_dump_json_pretty",
     "_execute_pipeline",
     "_format_items",
     "_item_namespace",

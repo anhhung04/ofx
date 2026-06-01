@@ -30,6 +30,8 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from ofx.utils.file_cleanup import remove_file
+
 from .analyzer import BundleError
 
 __all__ = [
@@ -140,7 +142,7 @@ class UploadAdapter:
                     self.runner.run(f"rm -f {self.remote_tmp}")
             return output
         finally:
-            Path(local_path).unlink(missing_ok=True)
+            remove_file(local_path)
 
 
 class HttpAdapter:

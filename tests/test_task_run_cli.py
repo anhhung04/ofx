@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+from types import SimpleNamespace
+
+from rich.console import Console
+from typer.testing import CliRunner
 
 # ── parse_opt_args ────────────────────────────────────────────────────────
 
@@ -71,59 +76,44 @@ class TestParseOptArgs:
         assert result == {"key": "value"}
 
 
-# ── _pick_columns ─────────────────────────────────────────────────────────
-
-
-class TestPickColumns:
-    """Verify column selection for output type display."""
-
-    def test_port_type_columns(self):
-        from ofx.commands.flow.run_task import _pick_columns
-
-        items = [{"ip": "10.0.0.1", "port": 80, "protocol": "tcp"}]
-        cols = _pick_columns("port", items)
-        assert "ip" in cols
-        assert "port" in cols
-
-    def test_url_type_columns(self):
-        from ofx.commands.flow.run_task import _pick_columns
-
-        items = [{"url": "https://example.com", "status_code": 200, "title": "Example"}]
-        cols = _pick_columns("url", items)
-        assert "url" in cols
-        assert "status_code" in cols
-
-    def test_unknown_type_uses_item_keys(self):
-        from ofx.commands.flow.run_task import _pick_columns
-
-        items = [{"foo": "bar", "baz": 42, "_internal": "skip"}]
-        cols = _pick_columns("custom", items)
-        assert "foo" in cols
-        assert "baz" in cols
-        assert "_internal" not in cols
-
-    def test_empty_items(self):
-        from ofx.commands.flow.run_task import _pick_columns
-
-        cols = _pick_columns("port", [])
-        assert cols == []
-
-    def test_skips_columns_without_data(self):
-        from ofx.commands.flow.run_task import _pick_columns
-
-        items = [{"ip": "10.0.0.1", "port": 80}]  # no protocol, service_name, host
-        cols = _pick_columns("port", items)
-        assert "ip" in cols
-        assert "port" in cols
-        # Columns with no data should be excluded
-        assert "service_name" not in cols
-
-
 # ── TaskRunHandler ────────────────────────────────────────────────────────
 
 
 class TestTaskRunHandler:
     """Test the task run handler logic."""
+
+    def _patch_success_run(self, monkeypatch, *, typed_outputs=None, stdout=""):
+        import ofx.commands.flow.run_task as run_task
+
+        console = Console(record=True, width=120)
+        typed_outputs = typed_outputs or []
+
+        class FakeTask:
+            pass
+
+        class FakeRunner:
+            def __init__(self, model, ctx):
+                self.model = model
+                self.ctx = ctx
+
+            async def run(self):
+                return SimpleNamespace(status=SimpleNamespace(value="completed"), error="")
+
+            async def reg_get(self, _key):
+                return {
+                    "typed_outputs": typed_outputs,
+                    "stdout": stdout,
+                    "exit_code": 0,
+                }
+
+        monkeypatch.setattr(run_task, "TaskRunner", FakeRunner)
+        monkeypatch.setattr("ofx.tasks.TaskRegistry.get", lambda _name: FakeTask)
+        monkeypatch.setattr("ofx.settings.get_console", lambda: console)
+        monkeypatch.setattr(
+            "ofx.profiles.manager.get_profile_manager",
+            lambda: SimpleNamespace(resolve_or_default=lambda _name: None),
+        )
+        return console
 
     def test_unknown_task_returns_error(self):
         from ofx.commands.flow.run_task import TaskRunHandler
@@ -135,6 +125,43 @@ class TestTaskRunHandler:
         )
         result = asyncio.run(handler.run())
         assert result == 1
+
+    def test_run_displays_useful_columns_for_typed_outputs(self, monkeypatch):
+        from ofx.commands.flow.run_task import TaskRunHandler
+
+        console = self._patch_success_run(
+            monkeypatch,
+            typed_outputs=[
+                {"_type": "port", "ip": "10.0.0.1", "port": 80, "protocol": "tcp"}
+            ],
+        )
+
+        result = asyncio.run(TaskRunHandler("nmap", "10.0.0.1", {}).run())
+
+        assert result == 0
+        output = console.export_text()
+        assert "port (1)" in output
+        assert "ip" in output
+        assert "port" in output
+        assert "protocol" in output
+        assert "10.0.0.1" in output
+
+    def test_run_falls_back_to_item_keys_for_unknown_output_type(self, monkeypatch):
+        from ofx.commands.flow.run_task import TaskRunHandler
+
+        console = self._patch_success_run(
+            monkeypatch,
+            typed_outputs=[{"_type": "custom", "foo": "bar", "baz": 42, "_internal": "skip"}],
+        )
+
+        result = asyncio.run(TaskRunHandler("nmap", "10.0.0.1", {}).run())
+
+        assert result == 0
+        output = console.export_text()
+        assert "custom (1)" in output
+        assert "foo" in output
+        assert "baz" in output
+        assert "_internal" not in output
 
     def test_handler_creates_with_defaults(self):
         from ofx.commands.flow.run_task import TaskRunHandler
@@ -169,6 +196,150 @@ class TestTaskRunHandler:
         assert handler.output == "/tmp/results"
         assert handler.store_creds is True
         assert handler.json_output is True
+
+
+class TestTaskRunCommand:
+    def test_run_command_uses_module_parse_and_handler(self, monkeypatch):
+        task_commands = importlib.import_module("ofx.commands.flow.task_commands")
+        calls: list[tuple[list[str], dict]] = []
+
+        class FakeHandler:
+            def __init__(self, **kwargs):
+                calls.append(([], kwargs))
+
+            async def run(self):
+                return 0
+
+        def broken_parse(_opts):
+            raise RuntimeError("should not use ofx.commands.flow.run_task.parse_opt_args")
+
+        def broken_handler(**_kwargs):
+            raise RuntimeError("should not use ofx.commands.flow.run_task.TaskRunHandler")
+
+        monkeypatch.setattr(task_commands, "parse_opt_args", lambda opts: {"mode": "patched"}, raising=False)
+        monkeypatch.setattr(task_commands, "TaskRunHandler", FakeHandler, raising=False)
+        monkeypatch.setattr("ofx.commands.flow.run_task.parse_opt_args", broken_parse)
+        monkeypatch.setattr("ofx.commands.flow.run_task.TaskRunHandler", broken_handler)
+
+        result = CliRunner().invoke(
+            task_commands.app,
+            ["run", "httpx", "example.com", "--opt", "mode=cli"],
+        )
+
+        assert result.exit_code == 0
+        assert calls == [
+            (
+                [],
+                {
+                    "task_name": "httpx",
+                    "target": "example.com",
+                    "opts": {"mode": "patched"},
+                    "profile": "",
+                    "timeout": 60,
+                    "output": "",
+                    "store_creds": False,
+                    "json_output": False,
+                },
+            )
+        ]
+
+    def test_run_command_exits_with_handler_code(self, monkeypatch):
+        task_commands = importlib.import_module("ofx.commands.flow.task_commands")
+
+        class FakeHandler:
+            def __init__(self, **kwargs):
+                pass
+
+            async def run(self):
+                return 3
+
+        def broken_parse(_opts):
+            raise RuntimeError("should not use ofx.commands.flow.run_task.parse_opt_args")
+
+        def broken_handler(**_kwargs):
+            raise RuntimeError("should not use ofx.commands.flow.run_task.TaskRunHandler")
+
+        monkeypatch.setattr(task_commands, "parse_opt_args", lambda opts: {}, raising=False)
+        monkeypatch.setattr(task_commands, "TaskRunHandler", FakeHandler, raising=False)
+        monkeypatch.setattr("ofx.commands.flow.run_task.parse_opt_args", broken_parse)
+        monkeypatch.setattr("ofx.commands.flow.run_task.TaskRunHandler", broken_handler)
+
+        result = CliRunner().invoke(task_commands.app, ["run", "httpx", "example.com"])
+
+        assert result.exit_code == 3
+
+    def test_list_command_uses_module_registry_and_console(self, monkeypatch):
+        task_commands = importlib.import_module("ofx.commands.flow.task_commands")
+        console = Console(record=True, width=120)
+
+        class FakeTask:
+            def __init__(self):
+                self.category = "web/"
+                self.description = "Fake task"
+
+            def check_installed(self):
+                return True
+
+        fake_registry = SimpleNamespace(
+            list_tasks=lambda: ["fake"],
+            get=lambda name: FakeTask if name == "fake" else None,
+            get_by_category=lambda category: [("fake", FakeTask)] if category == "web/" else [],
+        )
+
+        monkeypatch.setattr(task_commands, "get_console", lambda: console, raising=False)
+        monkeypatch.setattr(task_commands, "TaskRegistry", fake_registry, raising=False)
+        monkeypatch.setattr("ofx.settings.get_console", lambda: None)
+        monkeypatch.setattr("ofx.tasks.TaskRegistry", SimpleNamespace(list_tasks=lambda: (_ for _ in ()).throw(RuntimeError("wrong registry"))), raising=False)
+
+        result = CliRunner().invoke(task_commands.app, ["list", "--category", "web/"])
+
+        assert result.exit_code == 0
+        output = console.export_text()
+        assert "Registered Tasks" in output
+        assert "fake" in output
+        assert "Fake task" in output
+
+    def test_info_command_uses_module_registry_and_console(self, monkeypatch):
+        task_commands = importlib.import_module("ofx.commands.flow.task_commands")
+        console = Console(record=True, width=120)
+
+        fake_opt = SimpleNamespace(flag="--threads", is_flag=False, type=int, help="Thread count")
+
+        class FakeTask:
+            def __init__(self):
+                self.name = "fake"
+                self.description = "Fake task"
+                self.category = "web/"
+                self.cmd = "fakebin"
+                self.output_types = []
+                self.opts = {"threads": fake_opt}
+                self.install_cmd = "brew install fake"
+                self.supports_streaming = False
+                self.export_output = False
+                self.extra_flags = []
+                self.success_codes = [0]
+
+            def check_installed(self):
+                return True
+
+        fake_registry = SimpleNamespace(
+            get=lambda name: FakeTask if name == "fake" else None,
+            list_tasks=lambda: ["fake"],
+        )
+
+        monkeypatch.setattr(task_commands, "get_console", lambda: console, raising=False)
+        monkeypatch.setattr(task_commands, "TaskRegistry", fake_registry, raising=False)
+        monkeypatch.setattr("ofx.settings.get_console", lambda: None)
+        monkeypatch.setattr("ofx.tasks.TaskRegistry", SimpleNamespace(get=lambda _name: (_ for _ in ()).throw(RuntimeError("wrong registry"))), raising=False)
+
+        result = CliRunner().invoke(task_commands.app, ["info", "fake"])
+
+        assert result.exit_code == 0
+        output = console.export_text()
+        assert "Task: fake" in output
+        assert "Fake task" in output
+        assert "fakebin" in output
+        assert "threads" in output
 
 
 # ── Profile Common Opt Injection ──────────────────────────────────────────

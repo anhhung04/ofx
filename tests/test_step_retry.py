@@ -187,3 +187,188 @@ class TestRetryProfileDefaults:
         runner._apply_retry_profile_defaults()
         # Policy retry=5 should apply since max_retries==3 is the default
         assert runner.model.retry == 5
+
+    def test_invalid_policy_shape_is_ignored(self):
+        class Profile:
+            max_retries = None
+            retry_policy = "standard"
+            retry_profiles = {"standard": "invalid"}
+            timeout_minutes = None
+
+        runner = self._make_mock_runner(retry=4, retry_delay=7, timeout=30, profile=Profile())
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 4
+        assert runner.model.retry_delay == 7
+        assert runner.model.timeout == 30
+
+
+class TestRetryProfileHelpers:
+    def test_apply_retry_profile_defaults_ignores_non_mapping_retry_profile(self):
+        class Profile:
+            max_retries = None
+            retry_policy = "x"
+            retry_profiles = {"x": "bad"}
+            timeout_minutes = None
+
+        runner = TestRetryProfileDefaults()._make_mock_runner(retry=1, retry_delay=5, timeout=30, profile=Profile())
+
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 1
+        assert runner.model.retry_delay == 5
+        assert runner.model.timeout == 30
+
+    def test_apply_retry_profile_defaults_uses_selected_retry_profile_mapping(self):
+        class Profile:
+            max_retries = None
+            retry_policy = "x"
+            retry_profiles = {"x": {"retry": "2", "retry_delay": "9", "timeout": "15"}}
+            timeout_minutes = None
+
+        runner = TestRetryProfileDefaults()._make_mock_runner(retry=1, retry_delay=5, timeout=30, profile=Profile())
+
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 2
+        assert runner.model.retry_delay == 9
+        assert runner.model.timeout == 15
+
+    def test_apply_retry_profile_defaults_treats_default_and_none_profile_values_as_unset(self):
+        class DefaultProfile:
+            max_retries = 3
+            retry_policy = "standard"
+            retry_profiles = {"standard": {"retry": 5}}
+            timeout_minutes = None
+
+        default_runner = TestRetryProfileDefaults()._make_mock_runner(retry=0, profile=DefaultProfile())
+        default_runner._apply_retry_profile_defaults()
+
+        assert default_runner.model.retry == 5
+
+        class NoneProfile:
+            max_retries = None
+            retry_policy = "standard"
+            retry_profiles = {"standard": {"retry": 6}}
+            timeout_minutes = None
+
+        none_runner = TestRetryProfileDefaults()._make_mock_runner(retry=0, profile=NoneProfile())
+        none_runner._apply_retry_profile_defaults()
+
+        assert none_runner.model.retry == 6
+
+    def test_apply_retry_profile_defaults_uses_non_default_explicit_profile_value(self):
+        class Profile:
+            max_retries = 8
+            retry_policy = "standard"
+            retry_profiles = {"standard": {"retry": 5}}
+            timeout_minutes = None
+
+        runner = TestRetryProfileDefaults()._make_mock_runner(retry=0, profile=Profile())
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 8
+
+    def test_apply_retry_profile_defaults_prefers_explicit_profile_over_policy(self):
+        class Profile:
+            max_retries = 8
+            retry_policy = "standard"
+            retry_profiles = {"standard": {"retry": 2}}
+            timeout_minutes = 15
+
+        runner = TestRetryProfileDefaults()._make_mock_runner(retry=0, timeout=60, profile=Profile())
+
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 8
+        assert runner.model.timeout == 15
+
+    def test_apply_retry_profile_defaults_ignores_zero_retry_policy_value(self):
+        class Profile:
+            max_retries = 3
+            retry_policy = "standard"
+            retry_profiles = {"standard": {"retry": 0}}
+            timeout_minutes = None
+
+        runner = TestRetryProfileDefaults()._make_mock_runner(retry=1, profile=Profile())
+
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 1
+
+
+class TestProfileOverrideBehavior:
+    def test_policy_retry_zero_is_ignored(self):
+        class Profile:
+            max_retries = None
+            retry_policy = "standard"
+            retry_profiles = {"standard": {"retry": 0}}
+            timeout_minutes = None
+
+        runner = TestRetryProfileDefaults()._make_mock_runner(retry=1, profile=Profile())
+
+        runner._apply_retry_profile_defaults()
+
+        assert runner.model.retry == 1
+
+
+class TestTimeoutResolutionHelpers:
+    @pytest.mark.asyncio
+    async def test_non_string_timeout_is_left_unchanged(self):
+        class MockModel:
+            timeout = 15
+
+        class MockRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = MockModel()
+
+            async def _resolve_template(self, _value):
+                raise AssertionError("should not resolve")
+
+        runner = MockRunner()
+
+        await runner._resolve_timeout_field()
+
+        assert runner.model.timeout == 15
+
+    @pytest.mark.asyncio
+    async def test_numeric_timeout_resolution_sets_integer_minutes(self):
+        class MockModel:
+            timeout = "{{ timeout }}"
+
+        class MockRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = MockModel()
+
+            async def _resolve_template(self, _value):
+                return "12.5"
+
+        runner = MockRunner()
+
+        await runner._resolve_timeout_field()
+
+        assert runner.model.timeout == 12
+
+    @pytest.mark.asyncio
+    async def test_invalid_timeout_resolution_falls_back_and_warns(self):
+        warnings: list[str] = []
+
+        class MockModel:
+            timeout = "{{ broken }}"
+
+        class MockRunner(StepRunnerMixin):
+            def __init__(self):
+                self.model = MockModel()
+
+            async def _resolve_template(self, _value):
+                return "not-a-number"
+
+            def _log_warning(self, message: str) -> None:
+                warnings.append(message)
+
+        runner = MockRunner()
+
+        await runner._resolve_timeout_field()
+
+        assert runner.model.timeout == 60
+        assert warnings == ["Invalid timeout expression result: 'not-a-number', using 60 min"]

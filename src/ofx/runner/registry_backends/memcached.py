@@ -4,7 +4,7 @@ import logging
 import warnings
 from typing import Any
 
-from ofx.runner.registry_adapter import RegistryAdapter
+from ofx.runner.registry_adapter import SerializedPrefixedRegistryAdapter
 
 try:
     import aiomcache
@@ -19,7 +19,7 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 
 
-class MemcachedJobRegistry(RegistryAdapter):
+class MemcachedJobRegistry(SerializedPrefixedRegistryAdapter):
     """Memcached-based implementation of registry
 
     Stores data in Memcached for distributed caching and high-performance access.
@@ -65,7 +65,7 @@ class MemcachedJobRegistry(RegistryAdapter):
         self._client = None
         self._pool_size = pool_size
         self._pool_minsize = pool_minsize
-        self._log_debug(f"Initialized MemcachedJobRegistry at {host}:{port}")
+        self._log_backend_initialized(f"at {host}:{port}")
 
     async def _get_client(self):
         """Get or create the Memcached client"""
@@ -74,26 +74,30 @@ class MemcachedJobRegistry(RegistryAdapter):
             self._client = client_cls(self.host, self.port)
         return self._client
 
-    def _make_key(self, key: str) -> str:
-        """Create a Memcached key for a data identifier
-
-        Args:
-            key: Data identifier
-
-        Returns:
-            Memcached key with prefix
-        """
-        return f"{self.prefix}{key}"
-
     def _make_index_key(self) -> str:
         """Create the index key that stores all registry keys"""
         return f"{self.prefix}_index"
+
+    def _cache_key_bytes(self, key: str) -> bytes:
+        return self._storage_key(key).encode()
+
+    def _index_key_bytes(self) -> bytes:
+        return self._make_index_key().encode()
+
+    async def _get_cached_bytes(self, client, key: str) -> bytes | None:
+        return await client.get(self._cache_key_bytes(key))
+
+    async def _set_cached_json(self, client, key: str, json_value: str) -> None:
+        await client.set(self._cache_key_bytes(key), json_value.encode())
+
+    async def _delete_cached_key(self, client, key: str) -> None:
+        await client.delete(self._cache_key_bytes(key))
 
     async def _get_index(self) -> list[str]:
         """Load the index of registry keys from Memcached."""
         client = await self._get_client()
         index_key = self._make_index_key()
-        index_data = await client.get(index_key.encode())
+        index_data = await client.get(self._index_key_bytes())
         if not index_data:
             return []
 
@@ -108,7 +112,7 @@ class MemcachedJobRegistry(RegistryAdapter):
         index_key = self._make_index_key()
         json_value = self._serialize_value(index_key, keys)
         if json_value is not None:
-            await client.set(index_key.encode(), json_value.encode())
+            await client.set(self._index_key_bytes(), json_value.encode())
 
     async def _add_to_index(self, key: str) -> None:
         """Add a key to the index of all keys"""
@@ -132,95 +136,52 @@ class MemcachedJobRegistry(RegistryAdapter):
         except Exception as e:
             logger.warning("Memcached delete failed for key removal: %s", e)
 
-    async def _set(self, key: str, value: Any) -> None:
-        """Store data in Memcached"""
+    async def _read_storage_value(self, storage_key: str) -> str | bytes | None:
         client = await self._get_client()
-        cache_key = self._make_key(key)
-        json_value = self._serialize_value(key, value)
-        if json_value is None:
-            return
-        await client.set(cache_key.encode(), json_value.encode())
+        return await client.get(storage_key.encode())
+
+    async def _write_storage_value(self, storage_key: str, json_value: str) -> None:
+        client = await self._get_client()
+        await client.set(storage_key.encode(), json_value.encode())
+
+    async def _storage_key_exists(self, storage_key: str) -> bool:
+        return await self._read_storage_value(storage_key) is not None
+
+    async def _delete_storage_key(self, storage_key: str) -> None:
+        client = await self._get_client()
+        await client.delete(storage_key.encode())
+
+    async def _after_storage_write(self, key: str) -> None:
         await self._add_to_index(key)
-        self._log_debug(f"Set key '{key}' in MemcachedJobRegistry")
 
-    async def _get(self, key: str) -> Any | None:
-        """Retrieve data from Memcached"""
+    async def _after_storage_delete(self, key: str) -> None:
+        await self._remove_from_index(key)
+
+    async def _storage_entries(self) -> list[tuple[str, str | bytes | None]]:
         client = await self._get_client()
-        cache_key = self._make_key(key)
-        value = await client.get(cache_key.encode())
-        if value:
-            return self._deserialize_value(key, value)
-        return None
-
-    async def _update(self, key: str, updates: dict[str, Any]) -> None:
-        """Update specific fields in data"""
-        existing = await self._get(key)
-        if isinstance(existing, dict):
-            existing.update(updates)
-            await self._set(key, existing)
-        else:
-            await self._set(key, updates)
-        self._log_debug(f"Updated key '{key}' in MemcachedJobRegistry")
-
-    async def _delete(self, key: str) -> bool:
-        """Remove data from Memcached"""
-        client = await self._get_client()
-        cache_key = self._make_key(key)
-
-        # Check if key exists first
-        exists = await client.get(cache_key.encode())
-        if exists:
-            await client.delete(cache_key.encode())
-            await self._remove_from_index(key)
-            self._log_debug(f"Deleted key '{key}' from MemcachedJobRegistry")
-            return True
-        return False
-
-    async def _exists(self, key: str) -> bool:
-        """Check if data exists in Memcached"""
-        client = await self._get_client()
-        cache_key = self._make_key(key)
-        value = await client.get(cache_key.encode())
-        return value is not None
-
-    async def _get_all(self) -> dict[str, Any]:
-        """Get all entries from Memcached"""
-        client = await self._get_client()
-
         try:
-            result = {}
-            for key in await self._get_index():
-                cache_key = self._make_key(key)
-                value = await client.get(cache_key.encode())
-                if value:
-                    decoded = self._deserialize_value(key, value)
-                    if decoded is not None:
-                        result[key] = decoded
-
-            return result
+            return [
+                (key, await self._get_cached_bytes(client, key))
+                for key in await self._get_index()
+            ]
         except Exception as e:
             logger.warning("Memcached get_all failed: %s", e)
-            return {}
+            return []
 
-    async def _clear(self) -> None:
-        """Clear all entries from Memcached"""
+    async def _clear_storage(self) -> None:
         client = await self._get_client()
-        index_key = self._make_index_key()
 
         try:
             for key in await self._get_index():
-                cache_key = self._make_key(key)
-                await client.delete(cache_key.encode())
+                await self._delete_cached_key(client, key)
 
-            await client.delete(index_key.encode())
+            await client.delete(self._index_key_bytes())
         except Exception as e:
             logger.warning("Memcached clear failed: %s", e)
-
-        self._log_debug("Cleared MemcachedJobRegistry")
 
     async def _close(self) -> None:
         """Close the Memcached connection"""
         if self._client:
             await self._client.close()
             self._client = None
-        self._log_debug("Closed MemcachedJobRegistry")
+        self._log_backend_action("Closed")

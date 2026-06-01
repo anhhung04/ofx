@@ -99,6 +99,3 @@ class Job(OFXBaseModel):
             if self.strategy.fail_fast is not None:
                 object.__setattr__(self, "fail_fast", self.strategy.fail_fast)
         return self
-
-    def __str__(self):
-        return f"Job(name='{self.name}',id={self.jid})"

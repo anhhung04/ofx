@@ -453,6 +453,25 @@ class TestUploadAdapter:
         with pytest.raises(RuntimeError, match="conn fail"):
             adapter.deliver("x = 1")
 
+    def test_upload_adapter_removes_local_temp_file_on_upload_failure(self):
+        from ofx.api.bundle.deliverer import UploadAdapter
+
+        captured: dict[str, str] = {}
+
+        def _upload(local_path, _remote_path):
+            captured["local_path"] = local_path
+            raise RuntimeError("conn fail")
+
+        runner = MagicMock()
+        runner.upload.side_effect = _upload
+        adapter = UploadAdapter(runner, remote_tmp="/tmp/t.py")
+
+        with pytest.raises(RuntimeError, match="conn fail"):
+            adapter.deliver("x = 1")
+
+        assert captured["local_path"]
+        assert not Path(captured["local_path"]).exists()
+
 
 class TestInlineAdapter:
     def test_deliver_runs_base64_python_command(self):

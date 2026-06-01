@@ -6,11 +6,15 @@ import fcntl
 import json
 import logging
 import os
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from collections.abc import Iterator
+from collections.abc import Generator
 from typing import Any
 
 from ofx.cloud.sessions.models import Session, SessionStatus
+from ofx.utils.file_cleanup import remove_tree
 
 logger = logging.getLogger("ofx")
 
@@ -44,31 +48,27 @@ class SessionStore:
 
     def save(self, session: Session) -> Path:
         """Persist a session to disk (create or overwrite)."""
-        session_dir = self._session_dir(session.id)
-        session_dir.mkdir(parents=True, exist_ok=True)
-        path = session_dir / "session.json"
-        data = session.model_dump(mode="json")
-        self._write_json(path, data)
+        path = self._session_file(session.id, ensure_dir=True)
+        self._write_json(path, session.model_dump(mode="json"))
         return path
 
     def load(self, session_id: str) -> Session:
         """Load a session by ID. Raises FileNotFoundError if missing."""
-        path = self._session_dir(session_id) / "session.json"
+        path = self._session_file(session_id)
         if not path.exists():
             raise FileNotFoundError(f"Session '{session_id}' not found")
-        data = self._read_json(path)
-        return Session(**data)
+        return Session(**self._read_json(path))
 
     def exists(self, session_id: str) -> bool:
-        return (self._session_dir(session_id) / "session.json").exists()
+        return self._session_file(session_id).exists()
 
     def delete(self, session_id: str) -> None:
         """Remove all data for a session."""
-        import shutil
-
-        session_dir = self._session_dir(session_id)
-        if session_dir.exists():
-            shutil.rmtree(session_dir)
+        remove_tree(
+            self.session_dir(session_id),
+            on_error=logger.warning,
+            label="session directory",
+        )
 
     def update_status(
         self,
@@ -81,34 +81,19 @@ class SessionStore:
         Uses an exclusive file lock for the entire read-modify-write cycle
         to prevent concurrent callers from losing each other's updates.
         """
-        path = self._session_dir(session_id) / "session.json"
+        path = self._session_file(session_id)
         if not path.exists():
             raise FileNotFoundError(f"Session '{session_id}' not found")
 
-        fd = os.open(str(path), os.O_RDWR, 0o600)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
-
-            # Read current state under lock
-            os.lseek(fd, 0, os.SEEK_SET)
-            raw = os.read(fd, 10_000_000)  # 10 MB cap
-            data = json.loads(raw)
+        with self._locked_fd(path, os.O_RDWR) as fd:
+            data = self._read_locked_json_fd(fd)
 
             # Apply updates
             data["status"] = status.value if hasattr(status, "value") else status
             data.update(extra_fields)
 
-            # Write back atomically
-            content = json.dumps(data, indent=2, default=str).encode()
-            os.ftruncate(fd, 0)
-            os.lseek(fd, 0, os.SEEK_SET)
-            os.write(fd, content)
-            os.fsync(fd)
-
+            self._write_locked_json_fd(fd, data)
             return Session(**data)
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-            os.close(fd)
 
     def list_sessions(
         self,
@@ -117,25 +102,16 @@ class SessionStore:
         project: str | None = None,
     ) -> list[Session]:
         """List all sessions, optionally filtered by status, target, or project."""
-        sessions: list[Session] = []
-        if not self._base_dir.exists():
-            return sessions
-
-        for child in sorted(self._base_dir.iterdir()):
-            meta_file = child / "session.json"
-            if child.is_dir() and meta_file.exists():
-                try:
-                    s = Session(**self._read_json(meta_file))
-                    if status and s.status != status:
-                        continue
-                    if target and s.target.value != target:
-                        continue
-                    if project and s.project != project:
-                        continue
-                    sessions.append(s)
-                except Exception as exc:
-                    logger.debug("Skipping corrupt session %s: %s", child.name, exc)
-        return sessions
+        return [
+            session
+            for session in self._iter_sessions()
+            if self._session_matches_filters(
+                session,
+                status=status,
+                target=target,
+                project=project,
+            )
+        ]
 
     def list_by_fleet_group(self, fleet_group_id: str) -> list[Session]:
         """Return all sessions belonging to a fleet group, sorted by fleet_index."""
@@ -147,10 +123,10 @@ class SessionStore:
 
     def session_dir(self, session_id: str) -> Path:
         """Public accessor for a session's directory."""
-        return self._session_dir(session_id)
+        return self._base_dir / session_id
 
     def results_dir(self, session_id: str) -> Path:
-        d = self._session_dir(session_id) / "results"
+        d = self.session_dir(session_id) / "results"
         d.mkdir(parents=True, exist_ok=True)
         return d
 
@@ -166,13 +142,14 @@ class SessionStore:
         """Remove sessions matching criteria. Returns count deleted."""
         now = datetime.now(UTC)
         removed = 0
-        for session in self.list_sessions():
-            if statuses and session.status not in statuses:
+        for session in self._iter_sessions():
+            if not self._should_remove_session(
+                session,
+                now=now,
+                older_than_seconds=older_than_seconds,
+                statuses=statuses,
+            ):
                 continue
-            if older_than_seconds:
-                age = (now - session.started_at).total_seconds()
-                if age < older_than_seconds:
-                    continue
             self.delete(session.id)
             removed += 1
         return removed
@@ -181,19 +158,89 @@ class SessionStore:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _session_dir(self, session_id: str) -> Path:
-        return self._base_dir / session_id
+    def _session_file(self, session_id: str, *, ensure_dir: bool = False) -> Path:
+        session_dir = self.session_dir(session_id)
+        if ensure_dir:
+            session_dir.mkdir(parents=True, exist_ok=True)
+        return session_dir / "session.json"
+
+    def _iter_session_files(self):
+        for child in sorted(self._base_dir.iterdir()):
+            meta_file = child / "session.json"
+            if child.is_dir() and meta_file.exists():
+                yield meta_file
+
+    def _iter_sessions(self) -> Iterator[Session]:
+        if not self._base_dir.exists():
+            return
+
+        for meta_file in self._iter_session_files():
+            try:
+                yield Session(**self._read_json(meta_file))
+            except Exception as exc:
+                logger.debug(
+                    "Skipping corrupt session %s: %s",
+                    meta_file.parent.name,
+                    exc,
+                )
+
+    @staticmethod
+    def _session_matches_filters(
+        session: Session,
+        *,
+        status: SessionStatus | None,
+        target: str | None,
+        project: str | None,
+    ) -> bool:
+        if status and session.status != status:
+            return False
+        if target and session.target.value != target:
+            return False
+        if project and session.project != project:
+            return False
+        return True
+
+    @staticmethod
+    def _should_remove_session(
+        session: Session,
+        *,
+        now: datetime,
+        older_than_seconds: int | None,
+        statuses: list[SessionStatus] | None,
+    ) -> bool:
+        if statuses and session.status not in statuses:
+            return False
+        if older_than_seconds is None:
+            return True
+        age = (now - session.started_at).total_seconds()
+        return age >= older_than_seconds
+
+    @staticmethod
+    def _read_locked_json_fd(fd: int) -> dict[str, Any]:
+        os.lseek(fd, 0, os.SEEK_SET)
+        raw = os.read(fd, 10_000_000)
+        return json.loads(raw)
+
+    @staticmethod
+    def _write_locked_json_fd(fd: int, data: dict[str, Any]) -> None:
+        content = json.dumps(data, indent=2, default=str).encode()
+        os.ftruncate(fd, 0)
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.write(fd, content)
+        os.fsync(fd)
 
     def _write_json(self, path: Path, data: dict) -> None:
         """Write JSON atomically: lock before truncate to prevent races."""
-        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT, 0o600)
+        with self._locked_fd(path, os.O_WRONLY | os.O_CREAT) as fd:
+            self._write_locked_json_fd(fd, data)
+
+    @staticmethod
+    @contextmanager
+    def _locked_fd(path: Path, flags: int) -> Generator[int]:
+        fd = os.open(str(path), flags, 0o600)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX)
-            os.ftruncate(fd, 0)
-            os.lseek(fd, 0, os.SEEK_SET)
-            content = json.dumps(data, indent=2, default=str).encode()
-            os.write(fd, content)
-            os.fsync(fd)
+            yield fd
         finally:
             fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)

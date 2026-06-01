@@ -123,20 +123,3 @@ class TestWorkflowScheduler:
         assert result.schedule[0] == ["build"]
         assert result.schedule[1] == ["test"]
         assert result.schedule[2] == ["deploy"]
-
-    def test_dependencies_static_method(self):
-        from ofx.runner.workflow_scheduler import WorkflowScheduler
-
-        jobs = {
-            "a": self._make_job(),
-            "b": self._make_job(needs=["a"]),
-        }
-        deps = WorkflowScheduler.dependencies(jobs)
-        assert ("a", "b") in deps
-
-    def test_job_ids_static_method(self):
-        from ofx.runner.workflow_scheduler import WorkflowScheduler
-
-        jobs = {"x": self._make_job(), "y": self._make_job()}
-        ids = list(WorkflowScheduler.job_ids(jobs))
-        assert set(ids) == {"x", "y"}

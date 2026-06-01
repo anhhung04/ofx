@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from ofx.models.step import RunType
+from ofx.runner.context import context_copy
 from ofx.runner.handlers.registry import registry
-from ofx.runner.handlers.shared import build_child_runner
 
 
 @registry.register(RunType.PIPE)
-def _create_pipe_runner(step_runner):
+def create_runner(step_runner):
     """Build a PipeRunner from the step's pipe configuration."""
     from ofx.runner.pipe import PipeExecution, PipeRunner
 
@@ -17,8 +17,8 @@ def _create_pipe_runner(step_runner):
     )
 
     model = PipeExecution(pipe=step_runner.model.pipe)
-    return build_child_runner(
+    return PipeRunner(
         model,
-        PipeRunner,
-        step_runner,
+        context_copy(step_runner.ctx),
+        parent=step_runner,
     )

@@ -1,5 +1,6 @@
 """Tests for ChannelStore and inter-job channel communication."""
 
+import asyncio
 import os
 import subprocess
 import threading
@@ -122,6 +123,16 @@ class TestChannelStoreManagement:
     def test_delete_nonexistent(self, store):
         assert store.delete("nope") is False
 
+    def test_delete_clears_cached_state_and_event(self, store):
+        store.publish("ch1", "data")
+        store.get("ch1")
+        store._get_event("ch1")
+
+        store.delete("ch1")
+
+        assert "ch1" not in store._cache
+        assert "ch1" not in store._events
+
     def test_list_channels(self, store):
         store.publish("alpha", 1)
         store.publish("beta", 2)
@@ -133,6 +144,14 @@ class TestChannelStoreManagement:
         store.publish("b", 2)
         store.clear()
         assert store.list_channels() == []
+
+    def test_close_removes_channels_dir(self, channels_dir):
+        store = ChannelStore(channels_dir)
+        store.publish("a", 1)
+
+        store.close()
+
+        assert not channels_dir.exists()
 
 
 class TestChannelStoreMtimeCache:
@@ -154,6 +173,104 @@ class TestChannelStoreMtimeCache:
         (channels_dir / "ch1").write_text('"modified"')
 
         assert store.get("ch1") == "modified"
+
+    def test_cached_value_returns_hit_only_for_matching_mtime(self, store):
+        store._cache["ch1"] = (1.23, "cached")
+
+        cached = store._cache.get("ch1")
+        assert cached is not None and cached[0] == 1.23 and cached[1] == "cached"
+        assert not (cached is not None and cached[0] == 2.34)
+
+
+class TestChannelStoreHelpers:
+    def test_subscribe_skips_duplicate_values(self, store):
+        store.publish("ch1", "initial")
+        gen = store.subscribe("ch1", poll_interval=0.01)
+        assert next(gen) == "initial"
+
+        def update():
+            time.sleep(0.05)
+            store.publish("ch1", "initial")
+            time.sleep(0.05)
+            store.publish("ch1", "updated")
+
+        t = threading.Thread(target=update)
+        t.start()
+
+        assert next(gen) == "updated"
+        t.join()
+
+    def test_delete_removes_data_and_lock_paths(self, store, channels_dir):
+        store.publish("jobs", {"ok": 1})
+
+        assert (channels_dir / "jobs").exists()
+        assert (channels_dir / "jobs.lock").exists()
+
+        assert store.delete("jobs") is True
+        assert not (channels_dir / "jobs").exists()
+        assert not (channels_dir / "jobs.lock").exists()
+
+
+class TestChannelStoreAsync:
+    @pytest.mark.asyncio
+    async def test_async_subscribe_yields_existing_and_updated_values(self, store):
+        store.publish("ch1", "initial")
+        gen = store.async_subscribe("ch1", poll_interval=0.01)
+
+        assert await asyncio.wait_for(anext(gen), timeout=0.2) == "initial"
+
+        await store.async_publish("ch1", "updated")
+
+        assert await asyncio.wait_for(anext(gen), timeout=0.2) == "updated"
+        await gen.aclose()
+
+    @pytest.mark.asyncio
+    async def test_async_wait_for_returns_matching_value(self, store):
+        async def publish_later():
+            await asyncio.sleep(0.05)
+            await store.async_publish("ch1", "ready")
+
+        publish_task = asyncio.create_task(publish_later())
+
+        result = await store.async_wait_for(
+            "ch1",
+            lambda value: value == "ready",
+            timeout=1,
+            poll_interval=0.01,
+        )
+
+        assert result == "ready"
+        await publish_task
+
+    @pytest.mark.asyncio
+    async def test_async_wait_for_timeout_includes_channel_name(self, store):
+        with pytest.raises(TimeoutError, match="Timeout waiting for channel 'ch1'"):
+            await store.async_wait_for(
+                "ch1",
+                lambda value: value == "ready",
+                timeout=0.05,
+                poll_interval=0.01,
+            )
+
+    @pytest.mark.asyncio
+    async def test_async_wait_for_detects_external_write_via_polling(
+        self, store, channels_dir
+    ):
+        async def publish_later():
+            await asyncio.sleep(0.05)
+            (channels_dir / "ch1").write_text('"ready"')
+
+        publish_task = asyncio.create_task(publish_later())
+
+        result = await store.async_wait_for(
+            "ch1",
+            lambda value: value == "ready",
+            timeout=1,
+            poll_interval=0.01,
+        )
+
+        assert result == "ready"
+        await publish_task
 
 
 class TestChannelStoreCrossProcess:

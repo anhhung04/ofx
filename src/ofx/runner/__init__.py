@@ -20,7 +20,7 @@ from ofx.runner.pipe import PipeRunner
 from ofx.runner.registry import RegistryFactory, cleanup_registry
 from ofx.runner.registry_adapter import RegistryAdapter
 from ofx.runner.registry_keys import RunnerRegistryKeys
-from ofx.runner.runner import BaseRunner, Runner
+from ofx.runner.runner import Runner
 from ofx.runner.services.event_emitter import EventEmitter
 from ofx.runner.step import StepRunner
 from ofx.runner.tool_installer import ToolInstallerRunner
@@ -36,7 +36,6 @@ def create_registry(*, backend: str = "memory", **config):
 __all__ = [
     "CloudExecutor",
     "CommandRunner",
-    "BaseRunner",
     "create_registry",
     "cleanup_registry",
     "EventEmitter",

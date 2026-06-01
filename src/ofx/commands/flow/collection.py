@@ -8,16 +8,11 @@ import typer
 from rich.table import Table
 from rich.tree import Tree
 
+from ofx.collections.manager import CollectionManager
 from ofx.commands.ui_helpers import print_success, print_warning
 from ofx.settings import get_console
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
-
-
-def _mgr():
-    from ofx.collections.manager import CollectionManager
-
-    return CollectionManager()
 
 
 # ------------------------------------------------------------------
@@ -41,7 +36,7 @@ def add(
     ] = "",
 ):
     """Install a workflow collection."""
-    mgr = _mgr()
+    mgr = CollectionManager()
     console = get_console()
     try:
         entry = mgr.add(name_or_url, alias=name, ref=ref)
@@ -74,7 +69,7 @@ def remove(
         console.print("[yellow]Cancelled.[/yellow]")
         return
 
-    mgr = _mgr()
+    mgr = CollectionManager()
     if mgr.remove(name):
         print_success("Removed", f"Collection '{name}' removed.")
     else:
@@ -94,7 +89,7 @@ def update(
     ] = "",
 ):
     """Pull latest changes for installed collections."""
-    mgr = _mgr()
+    mgr = CollectionManager()
     console = get_console()
     updated = mgr.update(name)
     if updated:
@@ -110,7 +105,7 @@ def update(
 @app.command("list")
 def list_collections():
     """List installed collections."""
-    mgr = _mgr()
+    mgr = CollectionManager()
     console = get_console()
     installed = mgr.list_installed()
 
@@ -157,7 +152,7 @@ def info(
 
     from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
-    mgr = _mgr()
+    mgr = CollectionManager()
     console = get_console()
     entry = mgr.get(name)
 

@@ -98,6 +98,55 @@ class CloudProfileManager:
             raise KeyError(f"Cloud profile '{name}' not found. Available: {available}")
         return dict(profiles[name])
 
+    def _resolve_profile_name(self, cloud_config: CloudConfig) -> str:
+        profile_name = cloud_config.profile
+        if profile_name:
+            return profile_name
+        if cloud_config.provider:
+            return ""
+        return self.default_profile_name
+
+    @staticmethod
+    def _default_profile_config(profile_name: str) -> CloudConfig:
+        return CloudConfig.model_validate({"profile": profile_name}, strict=False)
+
+    @classmethod
+    def _config_overrides(
+        cls,
+        cloud_config: CloudConfig,
+        *,
+        profile_name: str,
+    ) -> dict[str, Any]:
+        overrides: dict[str, Any] = {}
+        default_config = cls._default_profile_config(profile_name)
+        for field_name in CloudConfig.model_fields:
+            if field_name == "profile":
+                continue
+            current_value = getattr(cloud_config, field_name)
+            default_value = getattr(default_config, field_name)
+            if current_value != default_value:
+                overrides[field_name] = current_value
+        return overrides
+
+    def _resolve_profile_base_data(self, profile_name: str) -> dict[str, Any] | None:
+        try:
+            return self.get_profile_data(profile_name)
+        except KeyError:
+            logger.warning(
+                f"Cloud profile '{profile_name}' not found, using config as-is"
+            )
+            return None
+
+    @classmethod
+    def _merged_profile_config(
+        cls,
+        base_data: dict[str, Any],
+        overrides: dict[str, Any],
+    ) -> CloudConfig:
+        merged = {**base_data, **overrides}
+        merged.pop("profile", None)
+        return CloudConfig(**merged)
+
     def resolve(self, cloud_config: CloudConfig) -> CloudConfig:
         """Resolve a CloudConfig by merging profile defaults with overrides.
 
@@ -110,47 +159,16 @@ class CloudProfileManager:
         Returns:
             Fully resolved CloudConfig with profile + overrides merged.
         """
-        profile_name = cloud_config.profile
-
-        if not profile_name:
-            # No profile reference — check if we should use the default
-            if not cloud_config.provider:
-                default = self.default_profile_name
-                if default:
-                    profile_name = default
-                else:
-                    return cloud_config
-
+        profile_name = self._resolve_profile_name(cloud_config)
         if not profile_name:
             return cloud_config
 
-        # Load base profile
-        try:
-            base_data = self.get_profile_data(profile_name)
-        except KeyError:
-            logger.warning(
-                f"Cloud profile '{profile_name}' not found, using config as-is"
-            )
+        base_data = self._resolve_profile_base_data(profile_name)
+        if base_data is None:
             return cloud_config
 
-        # Get overrides from the inline config (non-default values)
-        overrides = {}
-        default_config = CloudConfig.model_validate(
-            {"profile": profile_name}, strict=False
-        )
-        for field_name, _field_info in CloudConfig.model_fields.items():
-            if field_name == "profile":
-                continue
-            current_value = getattr(cloud_config, field_name)
-            default_value = getattr(default_config, field_name)
-            if current_value != default_value:
-                overrides[field_name] = current_value
-
-        # Merge: profile base + inline overrides
-        merged = {**base_data, **overrides}
-        merged.pop("profile", None)  # Don't re-set profile
-
-        return CloudConfig(**merged)
+        overrides = self._config_overrides(cloud_config, profile_name=profile_name)
+        return self._merged_profile_config(base_data, overrides)
 
     def add(self, name: str, profile_data: dict[str, Any]) -> None:
         """Add or update a cloud profile.

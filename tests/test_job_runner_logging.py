@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from ofx.models.job import Job
-from ofx.runner.job import JobRunner, MatrixJobRunner, format_job_log
+from ofx.runner.job import JobRunner, MatrixJobRunner
+from ofx.runner.logging import bubble_context_log
 
 
 class ParentStub:
@@ -14,15 +15,14 @@ class ParentStub:
         self.received = message
         return f"parent::{message}"
 
-
-def _job(jid: str = "job-1") -> Job:
-    return Job(jid=jid, steps=[{"run": "echo hi"}])
-
-
-def test_format_job_log_bubbles_prefixed_message_to_parent():
+def test_job_log_bubbles_prefixed_message_to_parent():
     parent = ParentStub()
 
-    result = format_job_log(parent, _job(), "hello")
+    result = bubble_context_log(
+        parent,
+        "hello",
+        model_jid=Job(jid="job-1", steps=[{"run": "echo hi"}]).jid,
+    )
 
     assert parent.received == "job=job-1 › hello"
     assert result == "parent::job=job-1 › hello"
@@ -30,7 +30,7 @@ def test_format_job_log_bubbles_prefixed_message_to_parent():
 
 def test_job_and_matrix_runners_share_job_log_formatting():
     parent = ParentStub()
-    job = _job("build")
+    job = Job(jid="build", steps=[{"run": "echo hi"}])
 
     job_runner = object.__new__(JobRunner)
     job_runner.model = job

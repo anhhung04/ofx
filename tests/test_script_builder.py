@@ -220,11 +220,14 @@ class TestTaskStepCommands:
 
 
 class TestScriptOpsecPayload:
-    def test_inline_bundle_payload_is_obfuscated(self):
-        from ofx.cloud.sessions.manager import _build_step_bundle_source
+    def test_inline_python_step_bundle_is_obfuscated(self):
+        from ofx.cloud.sessions.python_steps import iter_python_step_bundles
 
         step = _make_step(script='print("SECRET_TOKEN_123")')
-        payload = _build_step_bundle_source(step)
+        idx, filename, payload = next(iter_python_step_bundles([step]))
+
+        assert idx == 0
+        assert filename == ".ofx_step_0.py"
         assert "SECRET_TOKEN_123" not in payload
         assert "marshal.loads" in payload or "exec(" in payload
 

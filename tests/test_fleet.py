@@ -243,6 +243,19 @@ class TestFleetDistributorChunk:
         assert len(chunks) == 2
         assert all(len(c) == 1 for c in chunks)
 
+    def test_more_instances_than_targets_logs_reduction(self, monkeypatch):
+        messages: list[tuple[int, int, int]] = []
+        monkeypatch.setattr(
+            "ofx.cloud.fleet_distributor.logger.info",
+            lambda _message, count, effective_count, target_count: messages.append(
+                (count, effective_count, target_count)
+            ),
+        )
+
+        FleetDistributor().distribute(["10.0.0.1", "10.0.0.2"], count=5, mode="chunk")
+
+        assert messages == [(5, 2, 2)]
+
     def test_single_instance(self):
         targets = [f"10.0.0.{i}" for i in range(1, 6)]
         chunks = FleetDistributor().distribute(targets, count=1, mode="chunk")
@@ -302,6 +315,21 @@ class TestFleetDistributorSubnet:
         all_targets = [t for c in chunks for t in c]
         assert sorted(all_targets) == sorted(targets)
 
+    def test_subnet_mode_assigns_ungrouped_targets_to_smallest_bucket(self):
+        targets = [
+            "10.0.0.1",
+            "10.0.0.2",
+            "10.0.0.3",
+            "10.0.1.1",
+            "10.0.1.2",
+            "host.example.com",
+        ]
+
+        chunks = FleetDistributor().distribute(targets, count=2, mode="subnet")
+
+        assert sorted(len(chunk) for chunk in chunks) == [3, 3]
+        assert any("host.example.com" in chunk for chunk in chunks)
+
 
 class TestFleetDistributorLine:
     """Line distribution mode (one target per instance)."""
@@ -334,6 +362,20 @@ class TestFleetDistributorEdgeCases:
         targets = ["10.0.0.1", "10.0.0.2"]
         chunks = FleetDistributor().distribute(targets, count=2, mode="bad_mode")
         assert len(chunks) == 2
+
+    def test_unknown_mode_logs_warning(self, monkeypatch):
+        warnings: list[tuple[str, str]] = []
+        monkeypatch.setattr(
+            "ofx.cloud.fleet_distributor.logger.warning",
+            lambda message, mode: warnings.append((message, mode)),
+        )
+
+        FleetDistributor().distribute(["10.0.0.1", "10.0.0.2"], count=2, mode="bad_mode")
+
+        assert warnings == [(
+            "Unknown distribution mode '%s', using chunk",
+            "bad_mode",
+        )]
 
 
 # ── split_subnet ─────────────────────────────────────────────────────────
@@ -445,6 +487,22 @@ class TestExpandFleetToMatrix:
         combos, chunk_files = expand_fleet_to_matrix(config)
         try:
             assert "fleet" in combos[0]["fleet_name"]
+        finally:
+            for f in chunk_files:
+                f.unlink(missing_ok=True)
+            if chunk_files:
+                chunk_files[0].parent.rmdir()
+
+    def test_fleet_name_uses_config_name(self):
+        config = {
+            "name": "scan",
+            "count": 1,
+            "input": "10.0.0.1",
+            "distribution": "chunk",
+        }
+        combos, chunk_files = expand_fleet_to_matrix(config)
+        try:
+            assert combos[0]["fleet_name"] == "[scan]{0}"
         finally:
             for f in chunk_files:
                 f.unlink(missing_ok=True)

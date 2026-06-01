@@ -13,20 +13,6 @@ def model_field_is_explicitly_set(model: Any, field: str) -> bool:
     return field in getattr(model, "model_fields_set", set())
 
 
-def resolve_parent_run_default(runner: Any, field: str) -> Any | None:
-    """Return the nearest inherited ``defaults.run.<field>`` value."""
-    parent = getattr(runner, "parent", None)
-    while parent is not None:
-        model = getattr(parent, "model", None)
-        defaults = getattr(model, "defaults", None)
-        run_defaults = getattr(defaults, "run", None)
-        value = getattr(run_defaults, field, None)
-        if value is not None:
-            return value
-        parent = getattr(parent, "parent", None)
-    return None
-
-
 def resolve_model_run_default(
     runner: Any,
     model: Any,
@@ -37,7 +23,18 @@ def resolve_model_run_default(
     """Resolve a model field from explicit state, inherited defaults, or fallback."""
     if model_field_is_explicitly_set(model, field):
         return getattr(model, field)
-    return resolve_parent_run_default(runner, field) or fallback
+
+    parent = getattr(runner, "parent", None)
+    while parent is not None:
+        parent_model = getattr(parent, "model", None)
+        defaults = getattr(parent_model, "defaults", None)
+        run_defaults = getattr(defaults, "run", None)
+        inherited = getattr(run_defaults, field, None)
+        if inherited is not None:
+            return inherited
+        parent = getattr(parent, "parent", None)
+
+    return fallback
 
 
 def resolve_model_shell(runner: Any, model: Any) -> str:
@@ -50,20 +47,8 @@ def resolve_model_shell(runner: Any, model: Any) -> str:
     )
 
 
-def resolve_model_working_directory(runner: Any, model: Any) -> Path:
-    """Resolve working directory from explicit model state or inherited defaults."""
-    return resolve_model_run_default(
-        runner,
-        model,
-        "working_directory",
-        fallback=Path.cwd(),
-    )
-
-
 __all__ = [
     "model_field_is_explicitly_set",
     "resolve_model_run_default",
     "resolve_model_shell",
-    "resolve_model_working_directory",
-    "resolve_parent_run_default",
 ]

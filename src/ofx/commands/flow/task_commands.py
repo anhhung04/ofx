@@ -10,6 +10,35 @@ import typer
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
+TaskRunHandler = None
+parse_opt_args = None
+TaskRegistry = None
+get_console = None
+
+
+def _get_run_deps():
+    task_run_handler_cls = TaskRunHandler
+    if task_run_handler_cls is None:
+        from ofx.commands.flow.run_task import TaskRunHandler as task_run_handler_cls
+
+    parse_opt_args_fn = parse_opt_args
+    if parse_opt_args_fn is None:
+        from ofx.commands.flow.run_task import parse_opt_args as parse_opt_args_fn
+
+    return task_run_handler_cls, parse_opt_args_fn
+
+
+def _get_task_deps():
+    console_getter = get_console
+    if console_getter is None:
+        from ofx.settings import get_console as console_getter
+
+    task_registry = TaskRegistry
+    if task_registry is None:
+        from ofx.tasks import TaskRegistry as task_registry
+
+    return console_getter(), task_registry
+
 
 @app.command("run")
 def run_task(
@@ -75,11 +104,11 @@ def run_task(
       ofx flow tasks run nuclei https://example.com --profile stealth
       ofx flow tasks run subfinder example.com --json
     """
-    from ofx.commands.flow.run_task import TaskRunHandler, parse_opt_args
+    task_run_handler_cls, parse_opt_args_fn = _get_run_deps()
 
-    opts = parse_opt_args(opt or [])
+    opts = parse_opt_args_fn(opt or [])
     exit_code = asyncio.run(
-        TaskRunHandler(
+        task_run_handler_cls(
             task_name=task_name,
             target=target,
             opts=opts,
@@ -108,18 +137,15 @@ def list_tasks(
     """List all registered tasks."""
     from rich.table import Table
 
-    from ofx.settings import get_console
-    from ofx.tasks import TaskRegistry
-
-    console = get_console()
+    console, task_registry = _get_task_deps()
 
     if category:
-        entries = TaskRegistry.get_by_category(category)
+        entries = task_registry.get_by_category(category)
     else:
         entries = [
             (n, t)
-            for n in TaskRegistry.list_tasks()
-            if (t := TaskRegistry.get(n)) is not None
+            for n in task_registry.list_tasks()
+            if (t := task_registry.get(n)) is not None
         ]
 
     if not entries:
@@ -151,22 +177,18 @@ def task_info(
     from rich.panel import Panel
     from rich.table import Table
 
-    from ofx.settings import get_console
-    from ofx.tasks import TaskRegistry
+    console, task_registry = _get_task_deps()
 
-    console = get_console()
-
-    task_cls = TaskRegistry.get(task_name)
+    task_cls = task_registry.get(task_name)
     if task_cls is None:
         console.print(f"[red]Task '{task_name}' is not registered.[/red]")
-        available = TaskRegistry.list_tasks()
+        available = task_registry.list_tasks()
         if available:
             console.print(f"[dim]Available: {', '.join(available)}[/dim]")
         raise typer.Exit(1)
 
     task = task_cls()
 
-    # Header
     installed = task.check_installed()
     status = "[green]✓ installed[/green]" if installed else "[red]✗ not installed[/red]"
     console.print(
@@ -178,12 +200,10 @@ def task_info(
         )
     )
 
-    # Output types
     if task.output_types:
         type_names = ", ".join(t.__name__ for t in task.output_types)
         console.print(f"\n[bold]Output Types:[/bold] {type_names}")
 
-    # Options table
     if task.opts:
         opts_table = Table(title="Options", show_header=True, header_style="bold cyan")
         opts_table.add_column("Name", style="green")
@@ -197,11 +217,9 @@ def task_info(
 
         console.print(opts_table)
 
-    # Install command
     if task.install_cmd:
         console.print(f"\n[bold]Install:[/bold] [dim]{task.install_cmd}[/dim]")
 
-    # Capabilities
     caps: list[str] = []
     if task.supports_streaming:
         caps.append("[green]streaming[/green]")
@@ -214,7 +232,6 @@ def task_info(
     if caps:
         console.print(f"\n[bold]Capabilities:[/bold] {', '.join(caps)}")
 
-    # Example YAML
     example_opts = []
     for opt_name, opt_def in list(task.opts.items())[:3]:
         if opt_def.is_flag:

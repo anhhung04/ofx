@@ -17,6 +17,8 @@ from ofx.tasks.base import Task
 
 logger = logging.getLogger(__name__)
 
+TASK_TOOLS_PACKAGE = "ofx.tasks.tools"
+
 
 class TaskRegistry:
     """Central registry of available task wrappers."""
@@ -58,11 +60,7 @@ class TaskRegistry:
     @classmethod
     def create(cls, name: str, **kwargs: Any) -> Task:
         """Instantiate a registered task by name."""
-        task_cls = cls.get(name)
-        if task_cls is None:
-            available = ", ".join(sorted(cls._tasks)) or "(none)"
-            raise KeyError(f"Task '{name}' is not registered. Available: {available}")
-        return task_cls(**kwargs)
+        return cls._task_class_or_error(name)(**kwargs)
 
     @classmethod
     def list_tasks(cls) -> list[str]:
@@ -74,11 +72,7 @@ class TaskRegistry:
     def get_by_category(cls, category: str) -> list[tuple[str, type[Task]]]:
         """Return tasks whose category starts with *category*."""
         cls._ensure_loaded()
-        return [
-            (name, t)
-            for name, t in sorted(cls._tasks.items())
-            if t.category.startswith(category)
-        ]
+        return cls._category_tasks(category)
 
     # ── Internals ──────────────────────────────────────────────────
 
@@ -96,19 +90,56 @@ class TaskRegistry:
         with cls._lock:
             if cls._loaded:
                 return
-            try:
-                _pkg = importlib.import_module("ofx.tasks.tools")
-            except ImportError as exc:
-                logger.debug("Failed to import task tools package: %s", exc)
+            package = cls._task_tools_package()
+            if package is None:
                 return
 
-            for info in pkgutil.iter_modules(_pkg.__path__):
-                try:
-                    importlib.import_module(f"ofx.tasks.tools.{info.name}")
-                except ImportError as exc:
-                    logger.debug("Skipping task module %s: %s", info.name, exc)
-
+            cls._import_task_modules(package.__path__)
             cls._loaded = True
+
+    @classmethod
+    def _task_class_or_error(cls, name: str) -> type[Task]:
+        task_cls = cls.get(name)
+        if task_cls is not None:
+            return task_cls
+
+        available = ", ".join(sorted(cls._tasks)) or "(none)"
+        raise KeyError(f"Task '{name}' is not registered. Available: {available}")
+
+    @classmethod
+    def _category_tasks(cls, category: str) -> list[tuple[str, type[Task]]]:
+        return [
+            (name, task_cls)
+            for name, task_cls in sorted(cls._tasks.items())
+            if task_cls.category.startswith(category)
+        ]
+
+    @classmethod
+    def _task_tools_package(cls) -> Any | None:
+        try:
+            return importlib.import_module(TASK_TOOLS_PACKAGE)
+        except ImportError as exc:
+            logger.debug("Failed to import task tools package: %s", exc)
+            return None
+
+    @classmethod
+    def _import_task_modules(cls, package_paths: Any) -> None:
+        for module_name in cls._task_module_names(package_paths):
+            try:
+                importlib.import_module(module_name)
+            except ImportError as exc:
+                logger.debug(
+                    "Skipping task module %s: %s",
+                    module_name.removeprefix(f"{TASK_TOOLS_PACKAGE}."),
+                    exc,
+                )
+
+    @classmethod
+    def _task_module_names(cls, package_paths: Any) -> list[str]:
+        return [
+            f"{TASK_TOOLS_PACKAGE}.{info.name}"
+            for info in pkgutil.iter_modules(package_paths)
+        ]
 
     @classmethod
     def unregister(cls, name: str) -> None:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import shutil
 from collections.abc import Sequence
 from pathlib import Path
@@ -14,8 +13,8 @@ from pydantic import BaseModel, Field
 from ofx.runner.commands.command_executor import CommandExecutionResult
 from ofx.runner.context import RunContext
 from ofx.runner.executors.task import TaskExecutor
-from ofx.runner.logging import prefix_log
-from ofx.runner.runner import BaseRunner
+from ofx.runner.runner import Runner
+from ofx.runner.target_paths import sanitize_target_slug
 from ofx.settings import DEFAULT_SHELL
 from ofx.tasks.base import Task
 from ofx.tasks.output_types import OutputType
@@ -41,11 +40,8 @@ class TaskExecution(BaseModel):
         description="Store discovered UserAccount credentials into the credential store",
     )
 
-    def __str__(self) -> str:
-        return f"TaskExecution(task='{self.task_name}', target='{self.target}')"
 
-
-class TaskRunner(BaseRunner[TaskExecution]):
+class TaskRunner(Runner[TaskExecution]):
     """Runner that wraps a :class:`Task` tool definition.
 
     The execution lifecycle is delegated to :class:`TaskExecutor`; this class
@@ -62,7 +58,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         self,
         model: TaskExecution,
         ctx: RunContext,
-        parent: BaseRunner | None = None,
+        parent: Runner | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         super().__init__(
@@ -78,7 +74,7 @@ class TaskRunner(BaseRunner[TaskExecution]):
         self._streamed_items: list[OutputType] = []
 
     def _produce_log(self, message: str) -> str:
-        return prefix_log(message, f"[Task:{self.model.task_name}]")
+        return f"[Task:{self.model.task_name}] {message}"
 
     # ── Profile integration ────────────────────────────────────────
 
@@ -99,14 +95,12 @@ class TaskRunner(BaseRunner[TaskExecution]):
 
         from ofx.runner.task_profile_options import merge_profile_task_options
 
-        task_declared_opts = self._task.opts if self._task is not None else {}
         merged_opts, injected, override_keys = merge_profile_task_options(
             task_name=self.model.task_name,
             user_opts=self.model.opts,
-            task_declared_opts=task_declared_opts,
+            task_declared_opts=self._task.opts if self._task is not None else {},
             profile=profile,
         )
-
         self.model.opts = merged_opts
         if injected:
             self._log_debug(f"Injected profile common opts: {', '.join(injected)}")
@@ -124,37 +118,35 @@ class TaskRunner(BaseRunner[TaskExecution]):
         Attempts to parse the line into typed output items and publishes
         them to the channel store for real-time consumption.
         """
-        assert self._task is not None
         try:
+            assert self._task is not None
             items = self._task.parse_line(line)
-            if items:
-                new_items = self._deduplicate_incremental(items)
-                self._streamed_items.extend(new_items)
-                if new_items:
-                    self._publish_items(new_items)
         except Exception as e:
             logger.debug("Non-parseable line (task=%s): %s", self.model.task_name, e)
+            return
 
-    def _publish_items(self, items: list[OutputType]) -> None:
-        """Publish newly discovered items to the task channel."""
+        if not items:
+            return
+
+        new_items = self._deduplicate_with_seen(
+            items,
+            {item._uuid for item in self._streamed_items},
+        )
+        self._streamed_items.extend(new_items)
+        if not new_items:
+            return
+
         try:
             from ofx.runner.channels import get_channel_store
 
             store = get_channel_store()
             channel = f"task:{self.model.task_name}:items"
-            for item in items:
+            for item in new_items:
                 store.publish(channel, item.to_dict())
         except Exception as e:
             logger.debug(
                 "Channel publish failed (task=%s): %s", self.model.task_name, e
             )
-
-    def _deduplicate_incremental(self, items: Sequence[OutputType]) -> list[OutputType]:
-        """Deduplicate against already-streamed items."""
-        return self._deduplicate_with_seen(
-            items,
-            {item._uuid for item in self._streamed_items},
-        )
 
     # ── Helpers ────────────────────────────────────────────────────
 
@@ -164,23 +156,20 @@ class TaskRunner(BaseRunner[TaskExecution]):
         If streaming was active, merges streamed items with any additional
         items discovered from the output file.
         """
-        assert self._task is not None
         try:
-            raw = self._task.parse_output(
+            assert self._task is not None
+            parsed_output_items = self._task.parse_output(
                 stdout=result.stdout,
                 stderr=result.stderr,
                 output_file=self._output_file,
             )
-            all_items = list(self._streamed_items) + list(raw)
-            return self._deduplicate(all_items)
+            return self._deduplicate_with_seen(
+                self._streamed_items + list(parsed_output_items),
+                set(),
+            )
         except Exception as e:
             self._log_warning(f"Output parsing failed: {e}")
-            return list(self._streamed_items) if self._streamed_items else []
-
-    @staticmethod
-    def _deduplicate(items: list[OutputType]) -> list[OutputType]:
-        """Remove duplicates using each item's ``_uuid`` hash."""
-        return TaskRunner._deduplicate_with_seen(items, set())
+            return list(self._streamed_items)
 
     @staticmethod
     def _deduplicate_with_seen(
@@ -196,15 +185,6 @@ class TaskRunner(BaseRunner[TaskExecution]):
                 unique.append(item)
         return unique
 
-    def _cleanup_output_file(self) -> None:
-        if self._output_file and self._output_file.exists():
-            try:
-                self._output_file.unlink()
-            except OSError as e:
-                logger.debug(
-                    "Failed to remove task output file %s: %s", self._output_file, e
-                )
-
     def _export_output_file(self) -> Path | None:
         """Copy task output file to output_path with target in the filename.
 
@@ -216,7 +196,6 @@ class TaskRunner(BaseRunner[TaskExecution]):
             return None
         if not self.ctx.output_path:
             return None
-        # Skip empty output files
         try:
             if self._output_file.stat().st_size == 0:
                 return None
@@ -224,17 +203,13 @@ class TaskRunner(BaseRunner[TaskExecution]):
             return None
 
         task_name = self.model.task_name
-        target_slug = self._sanitize_target(self.model.target)
+        target_slug = sanitize_target_slug(self.model.target)
         suffix = self._output_file.suffix or ".txt"
-
-        if target_slug:
-            filename = f"{task_name}_{target_slug}{suffix}"
-        else:
-            filename = f"{task_name}{suffix}"
-
-        scans_dir = self.ctx.output_path / "scans"
-        scans_dir.mkdir(parents=True, exist_ok=True)
-        dest = scans_dir / filename
+        filename = (
+            f"{task_name}_{target_slug}{suffix}" if target_slug else f"{task_name}{suffix}"
+        )
+        dest = self.ctx.output_path / "scans" / filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
 
         try:
             shutil.copy2(str(self._output_file), str(dest))
@@ -243,33 +218,3 @@ class TaskRunner(BaseRunner[TaskExecution]):
         except OSError as e:
             self._log_debug(f"Failed to export output file: {e}")
             return None
-
-    @staticmethod
-    def _sanitize_target(target: str) -> str:
-        """Sanitize a target string for safe use in filenames.
-
-        ``https://example.com:8443/path`` → ``example.com_8443``
-        ``192.168.1.0/24``                → ``192.168.1.0_24``
-        """
-        if not target:
-            return ""
-        slug = target
-        # Strip protocol and path for URLs
-        if re.match(r"^https?://", slug):
-            slug = re.sub(r"^https?://", "", slug)
-            slug = slug.split("/")[0]  # keep host:port only
-        # Replace unsafe chars (/ becomes _ to preserve CIDR notation)
-        slug = re.sub(r"[^A-Za-z0-9._-]", "_", slug)
-        # Collapse multiple underscores
-        slug = re.sub(r"_+", "_", slug).strip("_")
-        return slug[:120]  # cap length
-
-    def _store_credentials(self, typed_outputs: list[OutputType]) -> int:
-        """Store UserAccount typed outputs in the credential store.
-
-        Returns the number of credentials successfully stored.
-        Gracefully handles missing pykeepass or DB file.
-        """
-        from ofx.runner.services.credential_store import store_from_typed_outputs
-
-        return store_from_typed_outputs(typed_outputs, log_fn=self._log_debug)

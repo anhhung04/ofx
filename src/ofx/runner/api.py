@@ -15,10 +15,10 @@ from typing import Any, Literal
 
 from ofx.models.config import DurableRunConfig
 from ofx.models.workflow import Workflow
-from ofx.runner.context import RunContext, RunnerContextBuilder, RunResult
-from ofx.runner.durable import find_running_checkpoints
+from ofx.runner.context import RunContext, RunResult, context_with_env
 from ofx.runner.executors.workflow import WorkflowExecutor
 from ofx.runner.registry import RegistryFactory
+from ofx.runner.services.checkpoint import list_checkpoints
 from ofx.runner.workflow import WorkflowRunner
 from ofx.settings import (
     SECRETS_DIR,
@@ -27,6 +27,7 @@ from ofx.settings import (
     get_workflow_search_dirs,
     settings,
 )
+from ofx.utils.file_cleanup import remove_empty_dirs
 from ofx.utils.log import register_secrets, register_sensitive_env
 from ofx.utils.secrets import load_secrets_by_keys
 from ofx.utils.workflow_utils import find_workflow, workflow_dirs_with_path
@@ -39,120 +40,119 @@ _SECRETS_DOT_RE = re.compile(r"\bsecrets\.([a-zA-Z_][a-zA-Z0-9_]*)")
 _SECRETS_BRACKET_RE = re.compile(r"""secrets\[['"]([a-zA-Z_][a-zA-Z0-9_]*)["']\]""")
 
 
-def _extract_secret_refs(workflow: Workflow) -> set[str]:
-    """Scan a workflow model for secret name references in template strings.
-
-    Walks all string values in the workflow dump looking for patterns like
-    ``secrets.MY_KEY`` or ``secrets["MY_KEY"]``.  Also includes keys
-    declared in ``call.secrets`` for reusable workflows.
-    """
-    refs: set[str] = set()
-
-    # Declared secrets in call config (reusable workflows)
-    if workflow.call and workflow.call.secrets:
-        refs.update(workflow.call.secrets.keys())
-
-    # Walk the model dump looking for template references
-    def _walk(obj: Any) -> None:
-        if isinstance(obj, str):
-            refs.update(_SECRETS_DOT_RE.findall(obj))
-            refs.update(_SECRETS_BRACKET_RE.findall(obj))
-        elif isinstance(obj, dict):
-            for v in obj.values():
-                _walk(v)
-        elif isinstance(obj, (list, tuple)):
-            for v in obj:
-                _walk(v)
-
-    # Dump jobs (where templates live) — exclude heavy non-template fields
-    for job in workflow.jobs.values():
-        _walk(job.model_dump(mode="python"))
-
-    # Also scan workflow-level env (may reference secrets)
-    _walk(workflow.env)
-
-    return refs
-
-
-def _cleanup_run(output_dir: Path) -> None:
-    """Clean up temp artifacts after a workflow run."""
-    # 1. Close channel store (removes channel files + dir)
-    try:
-        from ofx.runner.channels import close_channel_store
-
-        close_channel_store()
-    except Exception as e:
-        logger.debug("Failed to close channel store: %s", e)
-
-    # 2. Remove empty output subdirectories (bottom-up)
-    if output_dir and output_dir.exists():
-        _remove_empty_dirs(output_dir)
-
-    # 3. Clean up TEMP_DIR if empty
-    try:
-        if TEMP_DIR.exists():
-            _remove_empty_dirs(TEMP_DIR)
-    except Exception as e:
-        logger.debug("Failed to clean temp dir: %s", e)
-
-
-def _remove_empty_dirs(root: Path) -> None:
-    """Remove empty directories bottom-up under *root*, including *root* itself."""
-    if not root.is_dir():
-        return
-    for child in sorted(root.rglob("*"), reverse=True):
-        if child.is_dir():
-            with suppress(OSError):
-                child.rmdir()  # only succeeds if empty
-    with suppress(OSError):
-        root.rmdir()
-
-
-def _get_tmp_dir(output: str | Path | None = None) -> Path:
-    """Get the temporary directory for workflow runs"""
-    if output and Path(output).is_dir():
-        return Path(output)
-    if output:
-        # If output path is provided but doesn't exist, create it
-        p = Path(output)
-        p.mkdir(parents=True, exist_ok=True)
-        return p
-
-    return Path(
-        tempfile.mkdtemp(
-            prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_",
-            dir=ensure_dir(TEMP_DIR),
-        )
-    )
-
-
-def _build_run_context(
+async def _build_run_runner(
+    workflow: str | Path,
     *,
     inputs: dict[str, Any] | None,
-    output_dir: Path,
-    runner_secrets: dict[str, str],
-    search_paths: list[Path],
-    resolved_workflow: Workflow,
-    durable_config: DurableRunConfig | None,
+    secrets: dict[str, str] | None,
+    env: dict[str, str] | None,
+    output_path: str | Path | None,
+    workflow_search_paths: list[str | Path] | None,
+    durable_overrides: DurableRunConfig | None,
     vars: dict[str, Any] | None,
     event_sink_path: Path | None,
-    env: dict[str, str] | None,
-) -> RunContext:
-    """Build the workflow run context with merged workflow search paths and env."""
+    registry_backend: Literal["memory", "file", "redis", "memcached", "etcd"],
+    registry_config: dict[str, Any] | None,
+) -> tuple[WorkflowRunner, Path]:
+    search_paths = [Path(path) for path in workflow_search_paths or get_workflow_search_dirs()]
+    try:
+        resolved_workflow = find_workflow(str(workflow), tuple(search_paths))
+    except RuntimeError as exc:
+        raise FileNotFoundError(f"Workflow {workflow!r} not found in search paths") from exc
+
+    if output_path:
+        output_dir = Path(output_path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        output_dir = Path(
+            tempfile.mkdtemp(
+                prefix=f"run_{datetime.now().strftime('%d-%m-%Y_%H%M%S')}_",
+                dir=ensure_dir(TEMP_DIR),
+            )
+        )
+    if durable_overrides is not None:
+        resolved_workflow.defaults.durable = durable_overrides
+    durable_config = resolved_workflow.defaults.durable
+    if durable_config and durable_config.enabled and not durable_config.resume:
+        running_checkpoints = [
+            checkpoint
+            for checkpoint in await list_checkpoints(output_dir, durable_config)
+            if checkpoint.get("status") == "running"
+        ]
+        if running_checkpoints:
+            raise RuntimeError(
+                "Durable checkpoints indicate in-progress execution in the output directory. "
+                "Abort to avoid inconsistent state. In-progress: "
+                + ", ".join(
+                    checkpoint.get("name") or checkpoint.get("checkpoint_id") or "unknown"
+                    for checkpoint in running_checkpoints
+                )
+            )
+    if secrets is not None:
+        runner_secrets = secrets
+    else:
+        try:
+            needed: set[str] = set()
+            if resolved_workflow.call and resolved_workflow.call.secrets:
+                needed.update(resolved_workflow.call.secrets.keys())
+
+            pending: list[Any] = [
+                *(job.model_dump(mode="python") for job in resolved_workflow.jobs.values()),
+                resolved_workflow.env,
+            ]
+            while pending:
+                current = pending.pop()
+                if isinstance(current, str):
+                    needed.update(_SECRETS_DOT_RE.findall(current))
+                    needed.update(_SECRETS_BRACKET_RE.findall(current))
+                    continue
+                if isinstance(current, dict):
+                    pending.extend(current.values())
+                    continue
+                if isinstance(current, (list, tuple)):
+                    pending.extend(current)
+
+            runner_secrets = (
+                load_secrets_by_keys(needed, secrets_dir=ensure_dir(SECRETS_DIR))
+                if needed
+                else {}
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to load secrets: %s (continuing without secrets)", exc
+            )
+            runner_secrets = {}
+
+    if runner_secrets:
+        register_secrets(runner_secrets)
+    if resolved_workflow.env:
+        register_sensitive_env(resolved_workflow.env)
     ctx = RunContext(
         inputs=inputs or {},
         output_path=output_dir,
         secrets=runner_secrets,
         workflow_dirs=workflow_dirs_with_path(
-            search_paths, resolved_workflow.workflow_path.parent
+            search_paths,
+            resolved_workflow.workflow_path.parent,
         ),
         durable=durable_config,
         vars=vars or {},
         event_sink_path=event_sink_path,
     )
     if env:
-        ctx = RunnerContextBuilder(ctx).with_env(env)
-    return ctx
+        ctx = context_with_env(ctx, env)
+    return (
+        WorkflowRunner(
+            resolved_workflow,
+            ctx=ctx,
+            registry=RegistryFactory.create(
+                registry_backend,
+                **(registry_config or {}),
+            ),
+            executor=WorkflowExecutor(),
+        ),
+        output_dir,
+    )
 
 
 async def run_workflow(
@@ -198,118 +198,62 @@ async def run_workflow(
         FileNotFoundError: If the workflow file cannot be found.
         ValueError: If inputs break validation.
     """
-    search_paths = workflow_search_paths or get_workflow_search_dirs()
-    search_paths = [Path(p) for p in search_paths]
-
-    try:
-        resolved_workflow: Workflow = find_workflow(str(workflow), tuple(search_paths))
-    except RuntimeError as exc:
-        raise FileNotFoundError(
-            f"Workflow {workflow!r} not found in search paths"
-        ) from exc
-
-    output_dir = _get_tmp_dir(output_path)
-    if durable_overrides is not None:
-        resolved_workflow.defaults.durable = durable_overrides
-    durable_config = resolved_workflow.defaults.durable
-    if durable_config and durable_config.enabled:
-        running_checkpoints = await find_running_checkpoints(output_dir, durable_config)
-        if running_checkpoints and not durable_config.resume:
-            names = [
-                (checkpoint.get("name") or checkpoint.get("checkpoint_id") or "unknown")
-                for checkpoint in running_checkpoints
-            ]
-            raise RuntimeError(
-                "Durable checkpoints indicate in-progress execution in the output directory. "
-                f"Abort to avoid inconsistent state. In-progress: {', '.join(names)}"
-            )
-
-    runner_secrets = secrets
-    if runner_secrets is None:
-        try:
-            needed = _extract_secret_refs(resolved_workflow)
-            if needed:
-                runner_secrets = load_secrets_by_keys(
-                    needed, secrets_dir=ensure_dir(SECRETS_DIR)
-                )
-            else:
-                runner_secrets = {}
-        except Exception as exc:
-            logger.warning(
-                "Failed to load secrets: %s (continuing without secrets)", exc
-            )
-            runner_secrets = {}
-
-    # Register secret values for log redaction *before* any runner logs.
-    if runner_secrets:
-        register_secrets(runner_secrets)
-    # Redact sensitive-looking env vars (passwords, tokens, keys) from logs.
-    if resolved_workflow.env:
-        register_sensitive_env(resolved_workflow.env)
-
-    ctx = _build_run_context(
+    runner, output_dir = await _build_run_runner(
+        workflow,
         inputs=inputs,
-        output_dir=output_dir,
-        runner_secrets=runner_secrets,
-        search_paths=search_paths,
-        resolved_workflow=resolved_workflow,
-        durable_config=durable_config,
+        secrets=secrets,
+        env=env,
+        output_path=output_path,
+        workflow_search_paths=workflow_search_paths,
+        durable_overrides=durable_overrides,
         vars=vars,
         event_sink_path=event_sink_path,
-        env=env,
+        registry_backend=registry_backend,
+        registry_config=registry_config,
     )
-
-    registry = RegistryFactory.create(
-        registry_backend,
-        **(registry_config or {}),
-    )
-
-    runner = WorkflowRunner(
-        resolved_workflow,
-        ctx=ctx,
-        registry=registry,
-        executor=WorkflowExecutor(),
-    )
-
     if quiet:
         runner.log_level = logging.ERROR
 
-    # --- Graceful shutdown signal handling ---
-    _shutting_down = False
-    _runner_task = asyncio.current_task()
-    _registered_signals: list[int] = []
-
-    def _handle_shutdown(sig_num: int) -> None:
-        nonlocal _shutting_down
-        sig_name = signal.Signals(sig_num).name
-        if _shutting_down:
-            logger.warning("Received %s again — forcing exit", sig_name)
-            raise SystemExit(128 + sig_num)
-        _shutting_down = True
-        logger.warning(
-            "Received %s — initiating graceful shutdown...", sig_name
-        )
-        if _runner_task and not _runner_task.done():
-            _runner_task.cancel()
-
+    loop = None
+    registered_signals: list[int] = []
     if threading.current_thread() is threading.main_thread():
         loop = asyncio.get_running_loop()
+        runner_task = asyncio.current_task()
+        shutting_down = False
+
+        def handle_shutdown(sig_num: int) -> None:
+            nonlocal shutting_down
+            sig_name = signal.Signals(sig_num).name
+            if shutting_down:
+                logger.warning("Received %s again — forcing exit", sig_name)
+                raise SystemExit(128 + sig_num)
+            shutting_down = True
+            logger.warning(
+                "Received %s — initiating graceful shutdown...", sig_name
+            )
+            if runner_task and not runner_task.done():
+                runner_task.cancel()
+
         for sig in (signal.SIGINT, signal.SIGTERM):
             with suppress(NotImplementedError, OSError):
-                loop.add_signal_handler(sig, _handle_shutdown, sig)
-                _registered_signals.append(sig)
-
+                loop.add_signal_handler(sig, handle_shutdown, sig)
+                registered_signals.append(sig)
     try:
-        result = await runner.run()
-        return result
+        return await runner.run()
     except asyncio.CancelledError:
         logger.warning("Workflow execution cancelled — collecting partial results")
         return await runner.get_result()
     finally:
-        # Restore default signal handlers
-        if _registered_signals and threading.current_thread() is threading.main_thread():
-            loop = asyncio.get_running_loop()
-            for sig in _registered_signals:
+        if loop is not None:
+            for sig in registered_signals:
                 with suppress(NotImplementedError, OSError):
                     loop.remove_signal_handler(sig)
-        _cleanup_run(output_dir)
+        try:
+            from ofx.runner.channels import close_channel_store
+
+            close_channel_store()
+        except Exception as e:
+            logger.debug("Failed to close channel store: %s", e)
+
+        for path in (output_dir, TEMP_DIR):
+            remove_empty_dirs(path)

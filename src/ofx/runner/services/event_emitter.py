@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ofx.runner.logging import LogContext
+
 if TYPE_CHECKING:
     from ofx.runner.runner import Runner
 
@@ -29,48 +31,32 @@ class EventEmitter:
 
     def emit(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
         """Emit a structured runner lifecycle event as NDJSON and callbacks."""
-        entry = self._build_entry(event_type, payload)
-        self._emit_to_sink(entry)
-        self._emit_to_listeners(event_type, entry)
-
-    def _build_entry(
-        self, event_type: str, payload: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+        context = LogContext.from_runner(self._runner)
         entry = {
             "ts": datetime.now(UTC).isoformat(),
             "event_type": event_type,
-            "runner_type": self._runner.__class__.__name__,
-            "run_id": self._runner.run_id,
-            "status": self._runner.status.value,
-            "name": getattr(self._runner.model, "name", ""),
-            "job_id": getattr(self._runner.model, "jid", None),
-            "step_index": getattr(self._runner.model, "step_index", None),
-            "parent_run_id": self._runner.parent.run_id if self._runner.parent else None,
+            "runner_type": context.runner_type,
+            "run_id": context.run_id,
+            "status": context.status,
+            "name": context.model_name or "",
+            "job_id": context.model_jid,
+            "step_index": context.step_index,
+            "parent_run_id": context.parent_run_id,
         }
         if payload:
             entry.update(payload)
-        return entry
 
-    def _emit_to_sink(self, entry: dict[str, Any]) -> None:
-        sink = self._event_sink_path()
-        if sink is None:
-            return
-        try:
-            sink.parent.mkdir(parents=True, exist_ok=True)
-            with open(sink, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry, default=str) + "\n")
-        except Exception as exc:
-            self._runner._log_warning(f"event emit failed: {exc}")
+        sink = self._runner.ctx.event_sink_path or None
+        if sink is not None:
+            try:
+                sink.parent.mkdir(parents=True, exist_ok=True)
+                with open(sink, "a", encoding="utf-8") as file_obj:
+                    file_obj.write(json.dumps(entry, default=str) + "\n")
+            except Exception as exc:
+                self._runner._log_warning(f"event emit failed: {exc}")
 
-    def _emit_to_listeners(self, event_type: str, entry: dict[str, Any]) -> None:
-        for callback in self._listeners.get(event_type, []):
+        for callback in tuple(self._listeners.get(event_type, ())):
             try:
                 callback(entry)
             except Exception as exc:
                 self._runner._log_warning(f"event listener failed: {exc}")
-
-    def _event_sink_path(self) -> Path | None:
-        path = getattr(self._runner.ctx, "event_sink_path", None)
-        if path:
-            return path
-        return None

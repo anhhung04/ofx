@@ -2,43 +2,30 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from ofx.cloud.script_runtime import resolve_python_step_source
 from ofx.models.step import RunType
+from ofx.runner.context import context_copy
 from ofx.runner.handlers.registry import registry
-from ofx.runner.handlers.shared import (
-    build_child_runner,
-    resolved_execution_model_kwargs,
-)
-
-if TYPE_CHECKING:
-    from ofx.runner.runner import BaseRunner
+from ofx.runner.run_defaults import resolve_model_shell
 
 
-def _build_script_runner(step_runner) -> BaseRunner:
+@registry.register(RunType.SCRIPT, RunType.SCRIPT_FILE)
+def create_runner(step_runner):
     """Create a ScriptRunner for inline and file-backed Python steps."""
     from ofx.runner.commands.command import Script, ScriptRunner
 
-    script_model = Script(
+    model = Script(
+        shell=resolve_model_shell(step_runner, step_runner.model),
+        working_directory=step_runner._resolve_working_dir(),
         script=resolve_python_step_source(
             step_runner.model,
             workflow_dir=step_runner.ctx.workflow_dir,
         ),
-        **resolved_execution_model_kwargs(step_runner),
         timeout_minutes=step_runner.model.timeout,
         interactive=step_runner.model.interactive,
     )
-    return build_child_runner(
-        script_model,
-        ScriptRunner,
-        step_runner,
+    return ScriptRunner(
+        model,
+        context_copy(step_runner.ctx),
+        parent=step_runner,
     )
-
-
-@registry.register(RunType.SCRIPT, RunType.SCRIPT_FILE)
-def _create_script_runner(step_runner) -> BaseRunner:
-    return _build_script_runner(step_runner)
-
-
-_create_script_file_runner = _create_script_runner

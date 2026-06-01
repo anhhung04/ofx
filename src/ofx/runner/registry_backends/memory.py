@@ -34,7 +34,7 @@ class MemoryJobRegistry(RegistryAdapter):
         self._registry: dict[str, Any] = {}
         self._maxsize = maxsize
         self._lock = asyncio.Lock()
-        self._log_debug("Initialized MemoryJobRegistry")
+        self._log_backend_initialized()
 
     def _check_capacity(self) -> None:
         if len(self._registry) >= self._maxsize:
@@ -49,7 +49,7 @@ class MemoryJobRegistry(RegistryAdapter):
             if key not in self._registry:
                 self._check_capacity()
             self._registry[key] = self._clone_value(value)
-        self._log_debug(f"Set key '{key}' in MemoryJobRegistry")
+        self._log_backend_key_action("Set", key)
 
     async def _get(self, key: str) -> Any | None:
         """Retrieve data from memory (returns a deep copy to prevent shared mutation)."""
@@ -62,21 +62,18 @@ class MemoryJobRegistry(RegistryAdapter):
     async def _update(self, key: str, updates: dict[str, Any]) -> None:
         """Update specific fields in data (atomic read-modify-write)."""
         async with self._lock:
-            existing = self._registry.get(key)
-            if isinstance(existing, dict):
-                merged = dict(existing)
-                merged.update(self._clone_value(updates))
-                self._registry[key] = merged
-            else:
-                self._registry[key] = self._clone_value(updates)
-        self._log_debug(f"Updated key '{key}' in MemoryJobRegistry")
+            self._registry[key] = self._merged_updated_value(
+                self._registry.get(key),
+                updates,
+            )
+        self._log_backend_key_action("Updated", key)
 
     async def _delete(self, key: str) -> bool:
         """Remove data from memory."""
         async with self._lock:
             if key in self._registry:
                 del self._registry[key]
-                self._log_debug(f"Deleted key '{key}' from MemoryJobRegistry")
+                self._log_backend_key_action("Deleted", key)
                 return True
         return False
 
@@ -94,8 +91,8 @@ class MemoryJobRegistry(RegistryAdapter):
         """Clear all entries from memory."""
         async with self._lock:
             self._registry.clear()
-        self._log_debug("Cleared MemoryJobRegistry")
+        self._log_backend_action("Cleared")
 
     async def _close(self) -> None:
         """Close the registry (no-op for memory adapter)."""
-        self._log_debug("Closed MemoryJobRegistry")
+        self._log_backend_action("Closed")

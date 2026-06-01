@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import uuid
@@ -9,7 +10,16 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ofx.runner.context import RunContext, RunnerContextBuilder, RunnerStatus, RunResult
+from ofx.runner.context import (
+    RunContext,
+    RunnerStatus,
+    RunResult,
+    context_with_env,
+    context_with_secrets,
+    context_with_update,
+    context_with_vars,
+    normalize_runner_status,
+)
 from ofx.runner.executors.base import Executor
 from ofx.runner.lifecycle import LifecycleManager, RunnerStateMachine
 from ofx.runner.logging import StructuredLogger, get_logger
@@ -36,7 +46,6 @@ class Runner[TModel: BaseModel]:
         "_started_at_utc",
         "_finished_at_utc",
         "_log_level",
-        "_durable_outputs",
         "_cached_key_prefix",
         "_cached_durable_config",
         "_template_resolver_instance",
@@ -79,73 +88,61 @@ class Runner[TModel: BaseModel]:
         self._started_at_utc: str | None = None
         self._finished_at_utc: str | None = None
         self._log_level = (logger or get_logger()).getEffectiveLevel()
-        self._durable_outputs: dict[str, Any] | None = None
         self._cached_key_prefix: str | None = None
         self._cached_durable_config: Any = None
         self._template_resolver_instance: TemplateResolver | None = None
         self._executor = executor
         self._event_emitter = event_emitter or EventEmitter(self)
         self._structured_logger = StructuredLogger(self, logger=logger)
-        self._lifecycle = lifecycle or LifecycleManager(self)
+        self._lifecycle = lifecycle or LifecycleManager(
+            self,
+            event_emitter=self._event_emitter,
+        )
 
     async def run(self) -> RunResult:
         return await self._lifecycle.execute()
 
-    def update_context(self, **update: Any) -> RunContext:
-        self.ctx = RunnerContextBuilder(self.ctx).with_update(update)
+    def _mutate_context(self, mutator, *args, **kwargs) -> RunContext:
+        self.ctx = mutator(self.ctx, *args, **kwargs)
         return self.ctx
+
+    def update_context(self, **update: Any) -> RunContext:
+        return self._mutate_context(context_with_update, update)
 
     def update_env(self, env: dict[str, Any]) -> RunContext:
-        self.ctx = RunnerContextBuilder(self.ctx).with_env(env)
-        return self.ctx
+        return self._mutate_context(context_with_env, env)
 
     def update_inputs(self, inputs: dict[str, Any]) -> RunContext:
-        self.ctx = RunnerContextBuilder(self.ctx).with_inputs(inputs)
-        return self.ctx
+        return self._mutate_context(
+            context_with_update,
+            {"inputs": {**self.ctx.inputs, **inputs}},
+        )
 
     def update_secrets(self, secrets: dict[str, Any]) -> RunContext:
-        self.ctx = RunnerContextBuilder(self.ctx).with_secrets(secrets)
-        return self.ctx
+        return self._mutate_context(context_with_secrets, secrets)
 
     def update_vars(self, vars_update: dict[str, Any]) -> RunContext:
-        self.ctx = RunnerContextBuilder(self.ctx).with_vars(vars_update)
-        return self.ctx
+        return self._mutate_context(context_with_vars, vars_update)
 
     def update_env_and_vars(
         self,
         env: dict[str, Any],
         vars_update: dict[str, Any],
     ) -> RunContext:
-        self.ctx = RunnerContextBuilder(self.ctx).with_env_and_vars(env, vars_update)
-        return self.ctx
+        return self._mutate_context(
+            context_with_update,
+            {
+                "envs": {**self.ctx.envs, **env},
+                "vars": {**self.ctx.vars, **vars_update},
+            },
+        )
 
     async def _on_failure_cleanup(self) -> None:
         if self._executor is not None:
             await self._executor.on_failure(self)
 
     def add_event_listener(self, event_type: str, callback: Any) -> None:
-        self._lifecycle.add_event_listener(event_type, callback)
-
-    def _emit_event(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
-        self._lifecycle.emit_event(event_type, payload)
-
-    async def _write_checkpoint(self, status: str) -> None:
-        await self._lifecycle.write_checkpoint(status)
-
-    async def _restore_from_checkpoint(self) -> bool:
-        return await self._lifecycle.restore_from_checkpoint()
-
-    def _durable_config(self):
-        return self._lifecycle.durable_config()
-
-    def _checkpoint_id(self) -> str:
-        return self._lifecycle.checkpoint_id()
-
-    def _checkpoint_status(self) -> str:
-        return self._lifecycle.checkpoint_status()
-
-    async def _auto_commit_push(self) -> None:
-        await self._lifecycle.auto_commit_push()
+        self._event_emitter.add_event_listener(event_type, callback)
 
     async def _do_run(self) -> None:
         if self._executor is None:
@@ -167,22 +164,21 @@ class Runner[TModel: BaseModel]:
         return self._template_resolver_instance
 
     def _build_template_context(self) -> dict[str, Any]:
-        context_vars = self.ctx.vars.copy()
-        context_vars.update(self.ctx.model_dump(exclude={"vars"}))
-        envs = context_vars.get("envs", {})
-        context_vars.update(
-            {
-                "self": self.model,
-                "registry": self._registry,
-                "runner": self,
-                "ctx": self.ctx,
-                "env": lambda key, default="": envs.get(
-                    key, os.environ.get(key, default)
-                ),
-                "vars": self.ctx.vars,
-            }
-        )
-        return context_vars
+        envs = self.ctx.envs
+
+        def env_lookup(key: str, default: str = "") -> Any:
+            return envs.get(key, os.environ.get(key, default))
+
+        return {
+            **self.ctx.vars,
+            **self.ctx.model_dump(exclude={"vars"}),
+            "self": self.model,
+            "registry": self._registry,
+            "runner": self,
+            "ctx": self.ctx,
+            "env": env_lookup,
+            "vars": self.ctx.vars,
+        }
 
     async def _resolve_template(
         self,
@@ -210,41 +206,35 @@ class Runner[TModel: BaseModel]:
 
     async def _resolve_job_outputs(self) -> dict[str, Any]:
         outputs = getattr(self.model, "outputs", None)
-        if not outputs:
+        if not isinstance(outputs, dict) or not outputs:
             return {}
-        resolved: dict[str, Any] = {}
-        for key, value in outputs.items():
-            try:
-                resolved[key] = await self._resolve_template(value)
-            except Exception as exc:
-                self._log_warning(f"Failed to resolve output '{key}': {exc}")
-                resolved[key] = ""
-        return resolved
+        keys = list(outputs)
+        results = await asyncio.gather(
+            *(self._resolve_template(outputs[key]) for key in keys),
+            return_exceptions=True,
+        )
+        resolved_outputs: dict[str, Any] = {}
+        for key, result in zip(keys, results, strict=True):
+            if isinstance(result, Exception):
+                self._log_warning(f"Failed to resolve output '{key}': {result}")
+                resolved_outputs[key] = ""
+            else:
+                resolved_outputs[key] = result
+        return resolved_outputs
 
     async def _resolve_template_fields(self, fields: list[str]) -> bool:
-        if not fields:
+        target_fields = [field for field in fields if hasattr(self.model, field)]
+        if not target_fields:
             return False
-        import asyncio
-
-        tasks = []
-        target_fields = []
-        for field in fields:
-            if hasattr(self.model, field):
-                tasks.append(asyncio.create_task(self._resolve_template(getattr(self.model, field))))
-                target_fields.append(field)
-        if not tasks:
-            return False
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(
+            *(self._resolve_template(getattr(self.model, field)) for field in target_fields)
+        )
         for field, resolved_value in zip(target_fields, results, strict=True):
             setattr(self.model, field, resolved_value)
         return True
 
-    def _child_context(self, update: dict[str, Any] | None = None, *, deep: bool = True) -> RunContext:
-        update = update or {}
-        return self.ctx.model_copy(update=update, deep=deep)
-
     def _produce_log(self, message: Any) -> str:
-        return self._structured_logger._message(message)
+        return self._structured_logger.format_message(message)
 
     def _log_debug(self, message: Any) -> None:
         self._structured_logger.debug(message)
@@ -297,54 +287,54 @@ class Runner[TModel: BaseModel]:
         return self._runners
 
     async def get_result(self) -> RunResult:
-        status = RunnerStatus.COMPLETED if self.status == RunnerStatus.FINISHED else self.status
         outputs = await self.reg_get("outputs") or {}
-        if self._durable_outputs is not None and not outputs:
-            outputs = self._durable_outputs
         return RunResult(
             name=self.name,
             run_id=self.run_id,
-            status=status,
+            status=normalize_runner_status(self.status),
             error=self._error,
             outputs=outputs,
         )
 
     async def reg_set(self, key: str, value: dict[str, Any]) -> None:
-        await self._require_registry().set(self.get_key(key), value)
+        await self._registry_call("set", key, value)
 
     async def reg_get(self, key: str) -> dict[str, Any] | None:
-        return await self._require_registry().get(self.get_key(key))
+        return await self._registry_call("get", key)
 
     async def reg_update(self, key: str, updates: dict[str, Any]) -> None:
-        await self._require_registry().update(self.get_key(key), updates)
+        await self._registry_call("update", key, updates)
 
     async def reg_set_many(self, items: dict[str, dict[str, Any]]) -> None:
         for key, value in items.items():
             await self.reg_set(key, value)
 
-    def _require_registry(self) -> RegistryAdapter:
-        if self._registry is None:
+    async def _registry_call(self, method_name: str, key: str, *args):
+        registry = self._registry
+        if registry is None:
             raise RuntimeError("Runner registry is not configured")
-        return self._registry
+        method = getattr(registry, method_name)
+        return await method(self.get_key(key), *args)
 
     def _namespace(self) -> str:
         return f"{self.__class__.__name__}:{self.name}"
 
     def get_key(self, key: str) -> str:
-        prefix = self._cached_key_prefix
-        if prefix is None:
-            prefix = self._build_key_prefix()
-            self._cached_key_prefix = prefix
+        prefix = self._key_prefix()
         return f"{prefix}{key}" if prefix else key
 
-    def _build_key_prefix(self) -> str:
-        parts: list[str] = []
-        runner: Runner[Any] | None = self
-        while runner is not None:
-            parts.append(runner._namespace())
-            runner = runner.parent
-        parts.reverse()
-        return ":".join(parts) + ":"
+    def _key_prefix(self) -> str:
+        prefix = self._cached_key_prefix
+        if prefix is None:
+            parts: list[str] = []
+            runner: Runner[Any] | None = self
+            while runner is not None:
+                parts.append(runner._namespace())
+                runner = runner.parent
+            parts.reverse()
+            prefix = ":".join(parts) + ":"
+            self._cached_key_prefix = prefix
+        return prefix
 
     @property
     def log_level(self) -> int:
@@ -355,6 +345,4 @@ class Runner[TModel: BaseModel]:
         self._log_level = level
 
 
-BaseRunner = Runner
-
-__all__ = ["BaseRunner", "Runner"]
+__all__ = ["Runner"]

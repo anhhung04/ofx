@@ -16,72 +16,330 @@ from ofx.runner.cloud_step import CloudStepRunner
 async def test_execute_remote_run_type_dispatches_supported_modes():
     runner = object.__new__(CloudStepRunner)
     runner.model = Step(task="httpx", run_with={"target": "example.com"})
+    runner.ctx = RunContext(vars={})
+    runner.parent = SimpleNamespace(_cloud_config=SimpleNamespace(opsec_mode=False))
+    runner._build_remote_exec_command = lambda command: f"wrapped:{command}"
 
     calls: list[tuple[str, object, int]] = []
 
-    async def _run_remote_command(command, timeout=None):
-        calls.append(("command", command, timeout))
-        return "command-output"
+    runner._remote = SimpleNamespace(
+        run=lambda command, timeout=None: calls.append(("command", command, timeout)) or "command-output"
+    )
 
-    async def _run_remote_python_step(timeout=None):
-        calls.append(("python_step", None, timeout))
+    async def _run_remote_python_payload(payload, *, timeout=None):
+        calls.append(("python_payload", payload, timeout))
         return "python-step-output"
 
-    async def _run_remote_task(timeout=None):
-        calls.append(("task", None, timeout))
-        return "task-output"
+    runner._run_remote_python_payload = _run_remote_python_payload
 
-    runner._run_remote_command = _run_remote_command
-    runner._run_remote_python_step = _run_remote_python_step
-    runner._run_remote_task = _run_remote_task
+    async def _fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
 
-    runner.model = Step(run="echo hi")
-    assert await runner._execute_remote_run_type(RunType.COMMAND, timeout_seconds=10) == "command-output"
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr("asyncio.to_thread", _fake_to_thread)
 
-    runner.model = Step(script="print('hi')")
-    assert await runner._execute_remote_run_type(RunType.SCRIPT, timeout_seconds=11) == "python-step-output"
+        runner.model = Step(run="echo hi")
+        assert await runner._execute_remote_run_type(RunType.COMMAND, timeout_seconds=10) == "command-output"
 
-    runner.model = Step(script_file="worker.py")
-    assert await runner._execute_remote_run_type(RunType.SCRIPT_FILE, timeout_seconds=12) == "python-step-output"
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                "ofx.runner.cloud_step.build_python_step_payload",
+                lambda model, **_kwargs: f"payload:{model.get_run_type().value}",
+            )
 
-    runner.model = Step(task="httpx", run_with={"target": "example.com"})
-    assert await runner._execute_remote_run_type(RunType.TASK, timeout_seconds=13) == "task-output"
+            runner.model = Step(script="print('hi')")
+            assert await runner._execute_remote_run_type(RunType.SCRIPT, timeout_seconds=11) == "python-step-output"
+
+            runner.model = Step(script_file="worker.py")
+            assert await runner._execute_remote_run_type(RunType.SCRIPT_FILE, timeout_seconds=12) == "python-step-output"
+
+        runner.model = Step(task="httpx", run_with={"target": "example.com"})
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(
+                "ofx.runner.cloud_step.build_task_command_from_step",
+                lambda model, profile=None: "task-command",
+            )
+            assert await runner._execute_remote_run_type(RunType.TASK, timeout_seconds=13) == "command-output"
 
     assert calls == [
-        ("command", "echo hi", 10),
-        ("python_step", None, 11),
-        ("python_step", None, 12),
-        ("task", None, 13),
+        ("command", "wrapped:echo hi", 10),
+        ("python_payload", "payload:script", 11),
+        ("python_payload", "payload:script_file", 12),
+        ("command", "wrapped:task-command", 13),
     ]
 
 
-def test_unsupported_remote_run_type_error_messages():
+@pytest.mark.asyncio
+async def test_remote_handler_runner_delegates_run_type_timeout_and_output_storage():
+    from ofx.runner.cloud_step import _RemoteHandlerRunner
+
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(run="echo hi", timeout=2)
+    runner._run_type = None
+
+    stored: list[tuple[object, object]] = []
+
+    async def _execute_remote_run_type(run_type, *, timeout_seconds):
+        assert run_type == RunType.COMMAND
+        assert timeout_seconds == 120
+        return "command-output"
+
+    async def _reg_set(key, value):
+        stored.append((key, value))
+
+    async def _get_result():
+        return "result"
+
+    runner._execute_remote_run_type = _execute_remote_run_type
+    runner.reg_set = _reg_set
+    runner.get_result = _get_result
+
+    handler = _RemoteHandlerRunner(runner)
+
+    assert await handler.run() == "result"
+    assert stored == [(
+        "outputs",
+        {"stdout": "command-output"},
+    )]
+
+
+@pytest.mark.asyncio
+async def test_execute_remote_run_type_rejects_workflow_and_pipe_steps():
     runner = object.__new__(CloudStepRunner)
     runner.model = Step(uses="./child.yml")
 
-    workflow_error = runner._unsupported_remote_run_type_error(RunType.WORKFLOW)
-    assert "Reusable workflows" in str(workflow_error)
+    with pytest.raises(RuntimeError, match="Reusable workflows"):
+        await runner._execute_remote_run_type(RunType.WORKFLOW, timeout_seconds=10)
 
     pipe_runner = object.__new__(CloudStepRunner)
     pipe_runner.model = Step(pipe={"input": "x"})
-    pipe_error = pipe_runner._unsupported_remote_run_type_error(RunType.PIPE)
-    assert "Pipe steps run locally" in str(pipe_error)
+    with pytest.raises(RuntimeError, match="Pipe steps run locally"):
+        await pipe_runner._execute_remote_run_type(RunType.PIPE, timeout_seconds=10)
 
 
-def test_remote_outputs_include_typed_outputs_only_for_task_steps():
+@pytest.mark.asyncio
+async def test_execute_remote_run_type_rejects_unknown_run_type_value():
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(name="scan-step", run="echo hi")
+
+    with pytest.raises(RuntimeError, match="Unsupported run type 'unknown' for cloud step 'scan-step'"):
+        await runner._execute_remote_run_type("unknown", timeout_seconds=10)
+
+
+@pytest.mark.asyncio
+async def test_remote_handler_runner_adds_typed_outputs_only_for_task_steps():
+    from ofx.runner.cloud_step import _RemoteHandlerRunner
+
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(task="httpx", run_with={"target": "example.com"}, timeout=1)
+    runner._parse_task_output = lambda stdout: [{"parsed": stdout}]
+    runner._run_type = RunType.TASK
+    stored: list[tuple[object, object]] = []
+
+    async def _execute_remote_run_type(run_type, *, timeout_seconds):
+        assert run_type == RunType.TASK
+        assert timeout_seconds == 60
+        return "task-stdout"
+
+    async def _reg_set(key, value):
+        stored.append((key, value))
+
+    runner._execute_remote_run_type = _execute_remote_run_type
+    runner.reg_set = _reg_set
+    runner.get_result = AsyncMock(return_value="result")
+
+    assert await _RemoteHandlerRunner(runner).run() == "result"
+    assert stored == [(
+        "outputs",
+        {"stdout": "task-stdout", "typed_outputs": [{"parsed": "task-stdout"}]},
+    )]
+
+
+@pytest.mark.asyncio
+async def test_remote_handler_runner_skips_typed_outputs_for_non_task_steps():
+    from ofx.runner.cloud_step import _RemoteHandlerRunner
+
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(run="echo hi", timeout=1)
+    runner._run_type = RunType.COMMAND
+    stored: list[tuple[object, object]] = []
+
+    async def _execute_remote_run_type(run_type, *, timeout_seconds):
+        assert run_type == RunType.COMMAND
+        assert timeout_seconds == 60
+        return "cmd-stdout"
+
+    async def _reg_set(key, value):
+        stored.append((key, value))
+
+    runner._execute_remote_run_type = _execute_remote_run_type
+    runner.reg_set = _reg_set
+    runner.get_result = AsyncMock(return_value="result")
+
+    assert await _RemoteHandlerRunner(runner).run() == "result"
+    assert stored == [(
+        "outputs",
+        {"stdout": "cmd-stdout"},
+    )]
+
+
+def test_task_parser_returns_none_when_task_missing(monkeypatch):
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(task="missing-task", run_with={"target": "example.com"})
+
+    class _Registry:
+        @staticmethod
+        def get(_name):
+            return None
+
+    monkeypatch.setattr("ofx.tasks.registry.TaskRegistry", _Registry)
+    runner._log_debug = lambda _message: None
+    assert runner._parse_task_output("stdout") == []
+
+
+def test_parse_task_output_instantiates_registered_parser(monkeypatch):
     runner = object.__new__(CloudStepRunner)
     runner.model = Step(task="httpx", run_with={"target": "example.com"})
-    runner._parse_task_output = lambda stdout: [{"parsed": stdout}]
 
-    task_outputs = runner._remote_outputs(RunType.TASK, "task-stdout")
-    assert task_outputs == {
-        "stdout": "task-stdout",
-        "typed_outputs": [{"parsed": "task-stdout"}],
-    }
+    class _Task:
+        def parse_output(self, *, stdout, stderr):
+            return [_TypedResult(stdout), _TypedResult(stderr)]
 
-    runner.model = Step(run="echo hi")
-    command_outputs = runner._remote_outputs(RunType.COMMAND, "cmd-stdout")
-    assert command_outputs == {"stdout": "cmd-stdout"}
+    class _TypedResult:
+        def __init__(self, value):
+            self.value = value
+
+        def to_dict(self):
+            return {"value": self.value}
+
+    class _Registry:
+        @staticmethod
+        def get(_name):
+            return _Task
+
+    monkeypatch.setattr("ofx.tasks.registry.TaskRegistry", _Registry)
+    monkeypatch.setattr(
+        "ofx.runner.services.credential_store.should_store_creds",
+        lambda *_args, **_kwargs: False,
+    )
+    runner._log_debug = lambda _message: None
+    runner._log_info = lambda _message: None
+    runner.parent = None
+
+    assert runner._parse_task_output("stdout") == [
+        {"value": "stdout"},
+        {"value": ""},
+    ]
+
+
+def test_parse_task_output_stores_credentials_and_serializes(monkeypatch):
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(task="httpx", run_with={"target": "example.com"})
+    stored = {}
+
+    class _Result:
+        def __init__(self, value):
+            self.value = value
+
+        def to_dict(self):
+            return {"value": self.value}
+
+    class _Task:
+        def parse_output(self, *, stdout, stderr):
+            return [_Result(stdout)]
+
+    class _Registry:
+        @staticmethod
+        def get(_name):
+            return _Task
+
+    monkeypatch.setattr("ofx.tasks.registry.TaskRegistry", _Registry)
+    monkeypatch.setattr(
+        "ofx.runner.services.credential_store.should_store_creds",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "ofx.runner.services.credential_store.store_and_log_typed_outputs",
+        lambda results, **_kwargs: stored.setdefault("results", list(results)),
+    )
+    runner._log_debug = lambda _message: None
+    runner._log_info = lambda _message: None
+    runner.parent = None
+
+    output = runner._parse_task_output("parsed-stdout")
+
+    assert output == [{"value": "parsed-stdout"}]
+    assert len(stored["results"]) == 1
+
+
+def test_parse_task_output_applies_side_effects_before_serializing(monkeypatch):
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(task="httpx", run_with={"target": "example.com"})
+
+    calls: list[tuple[str, object]] = []
+
+    class _TypedResult:
+        def __init__(self, count: int) -> None:
+            self._count = count
+
+        def to_dict(self) -> dict[str, int]:
+            calls.append(("typed", self._count))
+            return {"count": self._count}
+
+    parsed_results = [_TypedResult(1)]
+    class _Task:
+        def parse_output(self, *, stdout, stderr):
+            calls.append(("parsed", stdout))
+            return parsed_results
+
+    class _Registry:
+        @staticmethod
+        def get(_name):
+            return _Task
+
+    monkeypatch.setattr("ofx.tasks.registry.TaskRegistry", _Registry)
+    monkeypatch.setattr(
+        "ofx.runner.services.credential_store.should_store_creds",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        "ofx.runner.services.credential_store.store_and_log_typed_outputs",
+        lambda results, **_kwargs: calls.append(("creds", results)),
+    )
+    runner._log_debug = lambda _message: None
+    runner._log_info = lambda _message: None
+    runner.parent = None
+
+    assert runner._parse_task_output("stdout") == [{"count": 1}]
+    assert calls == [
+        ("parsed", "stdout"),
+        ("creds", parsed_results),
+        ("typed", 1),
+    ]
+
+
+def test_parse_task_output_returns_empty_and_logs_on_error():
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(task="httpx", run_with={"target": "example.com"})
+    messages: list[str] = []
+    runner._log_debug = messages.append
+    runner._log_info = lambda _message: None
+
+    class _Task:
+        def parse_output(self, *, stdout, stderr):
+            raise RuntimeError("boom")
+
+    class _Registry:
+        @staticmethod
+        def get(_name):
+            return _Task
+
+    with monkeypatch.context() as m:
+        m.setattr("ofx.tasks.registry.TaskRegistry", _Registry)
+        runner.parent = None
+
+        assert runner._parse_task_output("stdout") == []
+    assert messages == ["Failed to parse task output for 'httpx': boom"]
 
 
 @pytest.mark.asyncio
@@ -89,7 +347,10 @@ async def test_pre_run_sets_remote_work_dir_and_resolves_non_workflow_fields():
     runner = object.__new__(CloudStepRunner)
     runner.model = Step(run="echo hi")
     runner.ctx = RunContext()
-    runner.parent = SimpleNamespace(_cloud_config=SimpleNamespace(connection_type="ssh"))
+    runner.parent = SimpleNamespace(
+        _cloud_config=SimpleNamespace(connection_type="ssh"),
+        _produce_log=lambda message: message,
+    )
     runner._state_machine = SimpleNamespace(transition=lambda _status: None)
     runner._apply_retry_profile_defaults = lambda: None
     runner._resolve_remote_work_dir = lambda: "/tmp/ofx-run"
@@ -142,8 +403,66 @@ def test_build_remote_exec_command_uses_windows_shell_conventions():
     assert command == 'SET FOO=bar && cd /d "C:\\ofx" && echo hi'
 
 
+def test_remote_exec_command_helpers_cover_platform_joining():
+    posix_runner = object.__new__(CloudStepRunner)
+    posix_runner.parent = SimpleNamespace(_cloud_config=SimpleNamespace(connection_type="ssh"))
+    posix_runner._build_env_prefix = lambda: "export FOO=bar &&"
+    posix_runner._resolve_remote_work_dir = lambda: "/tmp/ofx"
+
+    windows_runner = object.__new__(CloudStepRunner)
+    windows_runner.parent = SimpleNamespace(_cloud_config=SimpleNamespace(connection_type="winrm"))
+    windows_runner._build_env_prefix = lambda: "SET FOO=bar"
+    windows_runner._resolve_remote_work_dir = lambda: "C:\\ofx"
+
+    assert windows_runner._build_remote_exec_command("echo hi") == (
+        'SET FOO=bar && cd /d "C:\\ofx" && echo hi'
+    )
+    assert posix_runner._build_remote_exec_command("echo hi") == (
+        "export FOO=bar && cd /tmp/ofx && echo hi"
+    )
+
+
+def test_remote_env_var_helpers_merge_runner_parent_and_step_env():
+    runner = object.__new__(CloudStepRunner)
+    runner.ctx = RunContext(envs={
+        "REMOTE_FLEET_INPUT_FILE": "/tmp/targets.txt",
+        "LOCAL_ONLY": "skip",
+    })
+    runner.model = Step(run="echo hi", env={"STEP_ONLY": "1"})
+    runner.parent = SimpleNamespace(model=SimpleNamespace(env={"JOB_ONLY": "2"}))
+
+    env_prefix = runner._build_env_prefix()
+    assert 'REMOTE_FLEET_INPUT_FILE="/tmp/targets.txt"' in env_prefix
+    assert 'JOB_ONLY="2"' in env_prefix
+    assert 'STEP_ONLY="1"' in env_prefix
+
+
+def test_step_log_helpers_build_name_run_type_and_message():
+    runner = object.__new__(CloudStepRunner)
+    runner.model = Step(run="echo hi", step_index=2, name="recon-step")
+    workflow_runner = SimpleNamespace(model=SimpleNamespace(name="wf-a"), parent=None)
+    runner.parent = SimpleNamespace(
+        model=SimpleNamespace(jid="job-a"),
+        parent=workflow_runner,
+        _cloud_config=SimpleNamespace(connection_type="ssh", host="10.0.0.1"),
+        _produce_log=lambda message: message,
+    )
+    runner._run_type = None
+
+    timeline_params = runner._build_timeline_params(SimpleNamespace(outputs={}))
+    assert timeline_params["source_host"] == "10.0.0.1"
+    assert timeline_params["tags"] == "cloud"
+    assert runner._produce_log("hello") == (
+        "workflow[wf-a]job[job-a]step[2][recon-step][command] › hello"
+    )
+    runner._run_type = RunType.TASK
+    assert runner._produce_log("hello") == (
+        "workflow[wf-a]job[job-a]step[2][recon-step][task] › hello"
+    )
+
+
 @pytest.mark.asyncio
-async def test_run_remote_python_step_uses_cloud_opsec_mode(monkeypatch, tmp_path):
+async def test_execute_remote_run_type_uses_cloud_opsec_mode_for_python_steps(monkeypatch, tmp_path):
     captured = {}
 
     def _fake_build_python_step_payload(step, *, workflow_dir=None, opsec_mode=False, obfuscate_sources=False):
@@ -162,7 +481,6 @@ async def test_run_remote_python_step_uses_cloud_opsec_mode(monkeypatch, tmp_pat
     runner.model = Step(script="print('hi')")
     runner.ctx = SimpleNamespace(workflow_dir=tmp_path)
     runner.parent = SimpleNamespace(_cloud_config=SimpleNamespace(opsec_mode=True))
-    runner._run_remote_python_payload = lambda payload, timeout=None: pytest.fail("payload execution should be awaited")
 
     async def _run_remote_python_payload(payload, timeout=None):
         captured["payload"] = payload
@@ -171,7 +489,7 @@ async def test_run_remote_python_step_uses_cloud_opsec_mode(monkeypatch, tmp_pat
 
     runner._run_remote_python_payload = _run_remote_python_payload
 
-    result = await runner._run_remote_python_step(timeout=21)
+    result = await runner._execute_remote_run_type(RunType.SCRIPT, timeout_seconds=21)
 
     assert result == "ok"
     assert captured == {
@@ -185,7 +503,7 @@ async def test_run_remote_python_step_uses_cloud_opsec_mode(monkeypatch, tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_run_remote_python_step_resolves_source_before_upload(monkeypatch, tmp_path):
+async def test_execute_remote_run_type_resolves_source_before_upload(monkeypatch, tmp_path):
     captured = {}
 
     def _fake_build_python_step_payload(step, *, workflow_dir=None, opsec_mode=False, obfuscate_sources=False):
@@ -212,7 +530,7 @@ async def test_run_remote_python_step_resolves_source_before_upload(monkeypatch,
 
     runner._run_remote_python_payload = _run_remote_python_payload
 
-    result = await runner._run_remote_python_step(timeout=21)
+    result = await runner._execute_remote_run_type(RunType.SCRIPT_FILE, timeout_seconds=21)
 
     assert result == "ok"
     assert captured == {
@@ -270,6 +588,37 @@ async def test_run_remote_python_payload_uploads_executes_and_cleans_up(monkeypa
     assert "python3" in commands[0][0]
     assert remote_path in commands[0][0]
     assert commands[1] == (f"rm -f {remote_path}", 10)
+
+
+@pytest.mark.asyncio
+async def test_discover_python_logs_and_caches_selected_candidate() -> None:
+    from ofx.runner.cloud_job import CloudJobRunner
+
+    runner = object.__new__(CloudStepRunner)
+    runner._remote = SimpleNamespace(
+        run=lambda command, _timeout=None: "Python 3.11.0"
+        if command.startswith("command -v python3")
+        else (_ for _ in ()).throw(RuntimeError("unexpected"))
+    )
+    runner.parent = object.__new__(CloudJobRunner)
+    runner.parent._cached_python = None
+    info_messages: list[str] = []
+    debug_messages: list[str] = []
+    runner._log_info = info_messages.append
+    runner._log_debug = debug_messages.append
+
+    async def _fake_to_thread(func, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr("asyncio.to_thread", _fake_to_thread)
+
+        result = await runner._discover_python()
+
+    assert result == "python3"
+    assert info_messages == ["Discovered Python: python3"]
+    assert debug_messages == []
+    assert runner.parent._cached_python == "python3"
 
 
 @pytest.mark.asyncio

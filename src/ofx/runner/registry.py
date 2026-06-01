@@ -26,6 +26,23 @@ DEFAULT_BACKEND_MAP: dict[str, type[RegistryAdapter]] = {
 }
 
 
+def _registry_type_name(registry: RegistryAdapter) -> str:
+    return type(registry).__name__
+
+
+def _normalize_registry_password(config: dict[str, Any]) -> None:
+    if "password" not in config:
+        return
+
+    password = config["password"]
+    if hasattr(password, "get_secret_value"):
+        password = password.get_secret_value() or None
+    if password is None:
+        config.pop("password")
+    else:
+        config["password"] = password
+
+
 class RegistryFactory:
     """Declarative factory for creating registry adapters."""
 
@@ -52,14 +69,8 @@ class RegistryFactory:
                 f"Unsupported registry backend: {backend}. Supported: {supported}"
             ) from exc
 
-        if "password" in config:
-            password = config["password"]
-            if password is None:
-                config.pop("password")
-            elif hasattr(password, "get_secret_value"):
-                config["password"] = password.get_secret_value() or None
-                if config["password"] is None:
-                    config.pop("password")
+        config = dict(config)
+        _normalize_registry_password(config)
 
         logger.debug("Creating %s with config: %s", backend_cls.__name__, config)
         return backend_cls(**config)
@@ -69,9 +80,9 @@ async def cleanup_registry(registry: RegistryAdapter) -> None:
     """Clean up registry resources."""
     try:
         await registry.close()
-        logger.debug("Cleaned up %s", type(registry).__name__)
+        logger.debug("Cleaned up %s", _registry_type_name(registry))
     except Exception as exc:
-        logger.error("Error cleaning up registry: %s", exc)
+        logger.error("Error cleaning up %s: %s", _registry_type_name(registry), exc)
 
 
 __all__ = [

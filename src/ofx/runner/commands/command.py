@@ -7,8 +7,10 @@ import contextlib
 import io
 import json
 import logging
+import multiprocessing as mp
 import os
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -22,17 +24,43 @@ from ofx.runner.commands.command_executor import (
     parse_outputs_file,
 )
 from ofx.runner.context import RunContext, RunnerStatus, RunResult
-from ofx.runner.logging import bubble_log
+from ofx.runner.logging import bubble_context_log
 from ofx.runner.registry_keys import RunnerRegistryKeys
 from ofx.runner.run_defaults import (
     resolve_model_shell,
-    resolve_model_working_directory,
+    resolve_model_run_default,
 )
-from ofx.runner.runner import BaseRunner
+from ofx.runner.runner import Runner
 from ofx.settings import settings
 
 # Shared ProcessPoolExecutor — avoids creating a new executor per script call.
 _shared_executor: ProcessPoolExecutor | None = None
+
+
+@dataclass(frozen=True)
+class _ScriptScopeModels:
+    job_model: Any | None
+    step_model: Any | None
+    workflow_model: Any | None
+
+
+@dataclass(frozen=True)
+class _ScriptProcessInvocation:
+    script: str
+    working_directory: str
+    scope_models: _ScriptScopeModels
+    ctx: RunContext
+    inputs: dict[str, Any]
+    secrets: dict[str, Any]
+    channels_dir: str
+    outputs_file: str | None
+
+
+@dataclass(frozen=True)
+class _ScriptExecutionResult:
+    exit_code: int
+    stdout: str
+    stderr: str
 
 
 def write_outputs_file(outputs_file: str | os.PathLike[str] | None, **kwargs: Any) -> None:
@@ -42,109 +70,60 @@ def write_outputs_file(outputs_file: str | os.PathLike[str] | None, **kwargs: An
 
     with open(outputs_file, "a") as handle:
         for key, value in kwargs.items():
-            if isinstance(value, (dict, list)):
-                handle.write(f"{key}={json.dumps(value)}\n")
-            else:
-                handle.write(f"{key}={value}\n")
+            serialized = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
+            handle.write(f"{key}={serialized}\n")
 
 
-def _get_shared_executor() -> ProcessPoolExecutor:
-    """Return or create the shared ProcessPoolExecutor."""
-    global _shared_executor
-    if _shared_executor is None:
-        _shared_executor = ProcessPoolExecutor(max_workers=4)
-        atexit.register(_shutdown_shared_executor)
-    return _shared_executor
-
-
-def _shutdown_shared_executor() -> None:
-    """Shutdown the shared executor at process exit."""
-    global _shared_executor
-    if _shared_executor is not None:
-        _shared_executor.shutdown(wait=False)
-        _shared_executor = None
-
-
-def exec_script_in_process(
-    script,
-    working_directory,
-    job_model,
-    step_model,
-    workflow_model,
-    ctx_model,
-    inputs,
-    secrets,
-    channels_dir,
-    outputs_file=None,
-):
+def exec_script_in_process(invocation: _ScriptProcessInvocation) -> _ScriptExecutionResult:
     """Execute script in a separate process with channel communication"""
-    store = ChannelStore(channels_dir)
-
-    # Make RUNNER_OUTPUTS / OFX_OUTPUTS available inside scripts
-    if outputs_file:
-        os.environ[RUNNER_OUTPUTS_ENV] = outputs_file
-        os.environ[OFX_OUTPUTS_ENV] = outputs_file
-
-    def _add_outputs(**kwargs):
-        """Write key=value pairs to the OFX_OUTPUTS file.
-
-        Lists and dicts are serialized as JSON. All other values
-        are converted to strings.
-        """
-        write_outputs_file(outputs_file, **kwargs)
-
+    if invocation.outputs_file:
+        path_str = str(invocation.outputs_file)
+        os.environ.update({
+            RUNNER_OUTPUTS_ENV: path_str,
+            OFX_OUTPUTS_ENV: path_str,
+        })
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
     from ofx.runner.findings_export import export_typed_outputs
     from ofx.runner.templates.helpers import _asm_helpers
 
-    asm_funcs = _asm_helpers()
-
+    store = ChannelStore(invocation.channels_dir)
     globals_dict = {
         "__builtins__": builtins.__dict__,
         "__name__": "__main__",
         "os": os,
-        "__job__": job_model,
-        "__step__": step_model,
-        "__workflow__": workflow_model,
-        "__inputs__": inputs,
-        "__ctx__": ctx_model,
-        "__secrets__": secrets,
-        "add_outputs": _add_outputs,
+        "__job__": invocation.scope_models.job_model,
+        "__step__": invocation.scope_models.step_model,
+        "__workflow__": invocation.scope_models.workflow_model,
+        "__inputs__": invocation.inputs,
+        "__ctx__": invocation.ctx,
+        "__secrets__": invocation.secrets,
+        "add_outputs": lambda **kwargs: write_outputs_file(invocation.outputs_file, **kwargs),
         "publish": lambda channel, data: store.publish(channel, data),
         "subscribe": lambda channel: store.subscribe(channel),
         "wait_for": lambda channel, condition, timeout=60: store.wait_for(
             channel, condition, timeout=timeout
         ),
         "export_typed_outputs": export_typed_outputs,
-        # ASM integration (shared with template helpers)
-        **asm_funcs,
+        **_asm_helpers(),
     }
-
-    stdout_capture = io.StringIO()
-    stderr_capture = io.StringIO()
-    exit_code = 0
-    original_cwd = os.getcwd()
-
     try:
-        os.chdir(working_directory)
         with (
+            contextlib.chdir(invocation.working_directory),
             contextlib.redirect_stdout(stdout_capture),
             contextlib.redirect_stderr(stderr_capture),
         ):
-            exec(script, globals_dict)
-    except Exception as e:
+            exec(invocation.script, globals_dict)
+            exit_code = 0
+    except Exception as exc:
+        stderr_capture.write(str(exc))
         exit_code = 1
-        stderr_capture.write(str(e))
-    finally:
-        os.chdir(original_cwd)
 
-    stdout = stdout_capture.getvalue()
-    stderr = stderr_capture.getvalue()
-
-    return {
-        "exit_code": exit_code,
-        "stdout": stdout,
-        "stderr": stderr,
-    }
+    return _ScriptExecutionResult(
+        exit_code=exit_code,
+        stdout=stdout_capture.getvalue(),
+        stderr=stderr_capture.getvalue(),
+    )
 
 
 class _ExecutionDefaultsMixin:
@@ -152,19 +131,14 @@ class _ExecutionDefaultsMixin:
 
     model: Command | Script
 
-    def _resolve_shell(self) -> str:
-        """Resolve shell path from explicit model state or parent defaults."""
-        return resolve_model_shell(self, self.model)
-
-    def _resolve_working_directory(self) -> Path:
-        return resolve_model_working_directory(self, self.model)
-
-    def _apply_execution_defaults(self) -> None:
-        self.model.shell = self._resolve_shell()
-        self.model.working_directory = self._resolve_working_directory()
-
     async def _pre_run(self) -> None:
-        self._apply_execution_defaults()
+        self.model.shell = resolve_model_shell(self, self.model)
+        self.model.working_directory = resolve_model_run_default(
+            self,
+            self.model,
+            "working_directory",
+            fallback=Path.cwd(),
+        )
 
     async def _post_run_execution_log(
         self,
@@ -179,12 +153,12 @@ class _ExecutionDefaultsMixin:
         )
 
 
-class CommandRunner(_ExecutionDefaultsMixin, BaseRunner[Command]):
+class CommandRunner(_ExecutionDefaultsMixin, Runner[Command]):
     def __init__(
         self,
         command_model: Command,
         ctx: RunContext,
-        parent: BaseRunner | None = None,
+        parent: Runner | None = None,
         logger: logging.Logger | None = None,
     ):
         """Run shell commands with inherited execution defaults."""
@@ -195,7 +169,6 @@ class CommandRunner(_ExecutionDefaultsMixin, BaseRunner[Command]):
         """Execute a shell command and capture output"""
         outputs: dict[str, Any] = {}
         await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
-
         if not self.model.shell or not Path(self.model.shell).exists():
             raise RuntimeError(f"Shell not found: {self.model.shell}") from None
 
@@ -206,28 +179,30 @@ class CommandRunner(_ExecutionDefaultsMixin, BaseRunner[Command]):
 
         try:
             result = await executor.execute()
-            executor.raise_for_status(result.exit_code, result.stderr)
-        except TimeoutError:
-            raise RuntimeError(
-                f"Command timed out after {self.model.timeout_minutes} minutes"
-            ) from None
+            if result.exit_code not in (0, None):
+                error_message = f"Command failed with exit code {result.exit_code}"
+                if result.stderr:
+                    error_message = f"{error_message}: {result.stderr}"
+                raise RuntimeError(error_message)
         except RuntimeError:
             raise
         except Exception as e:
             raise RuntimeError(f"Command error: {str(e)}") from e
         finally:
-            if result is None:
-                result = CommandExecutionResult(
-                    exit_code=None, stdout="", stderr="", outputs={}
-                )
+            final_result = result or CommandExecutionResult(
+                exit_code=None,
+                stdout="",
+                stderr="",
+                outputs={},
+            )
             outputs.update(
                 {
-                    "exit_code": result.exit_code,
-                    "stdout": result.stdout,
-                    "stderr": result.stderr,
+                    "exit_code": final_result.exit_code,
+                    "stdout": final_result.stdout,
+                    "stderr": final_result.stderr,
                 }
             )
-            outputs.update(result.outputs)
+            outputs.update(final_result.outputs)
             await self.reg_update(RunnerRegistryKeys.OUTPUTS, outputs)
             await executor.capture_outputs_file(
                 self,
@@ -242,46 +217,30 @@ class CommandRunner(_ExecutionDefaultsMixin, BaseRunner[Command]):
         )
 
     def _produce_log(self, message: Any) -> str:
-        return bubble_log(self.parent, str(message))
+        return bubble_context_log(self.parent, message)
 
 
-class ScriptRunner(_ExecutionDefaultsMixin, BaseRunner[Script]):
-    def _script_scope_models(self) -> tuple[Any | None, Any | None, Any | None]:
-        """Return workflow step scope models exposed inside executed scripts."""
-        step_runner = self.parent
-        job_runner = step_runner.parent if step_runner else None
-        workflow_runner = job_runner.parent if job_runner else None
-        return (
-            getattr(job_runner, "model", None),
-            getattr(step_runner, "model", None),
-            getattr(workflow_runner, "model", None),
-        )
-
+class ScriptRunner(_ExecutionDefaultsMixin, Runner[Script]):
     async def _do_run(self) -> None:
         """Execute a Python script using exec"""
         try:
             result = await asyncio.wait_for(
-                self._exec_script(), timeout=self.model.timeout_minutes * 60
+                self._exec_script(),
+                timeout=self.model.timeout_minutes * 60,
             )
             outputs = {
-                "exit_code": result["exit_code"],
-                "stdout": result["stdout"],
-                "stderr": result["stderr"],
+                "exit_code": result.exit_code,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
             }
-
             outputs_file_path = self.ctx.envs.get("RUNNER_OUTPUTS")
             if outputs_file_path:
                 outputs.update(
                     parse_outputs_file(Path(outputs_file_path), self._log_debug)
                 )
-
             await self.reg_set(RunnerRegistryKeys.OUTPUTS, outputs)
-            status = (
-                RunnerStatus.COMPLETED
-                if result["exit_code"] == 0
-                else RunnerStatus.FAILED
-            )
-            error = result["stderr"] if status == RunnerStatus.FAILED else None
+            status = RunnerStatus.COMPLETED if result.exit_code == 0 else RunnerStatus.FAILED
+            error = result.stderr if status == RunnerStatus.FAILED else None
             self._result = RunResult(
                 name=self.name,
                 run_id=self.run_id,
@@ -290,35 +249,49 @@ class ScriptRunner(_ExecutionDefaultsMixin, BaseRunner[Script]):
                 outputs=outputs,
             )
             if status != RunnerStatus.COMPLETED:
-                raise RuntimeError(error or "Script execution failed")
+                raise RuntimeError(result.stderr or "Script execution failed")
         except TimeoutError as timeout_exc:
             raise RuntimeError(
                 f"Script timed out after {self.model.timeout_minutes} minutes"
             ) from timeout_exc
 
-    async def _exec_script(self):
+    async def _exec_script(self) -> _ScriptExecutionResult:
         """Run the script execution in a separate process"""
-        # Use shared channels directory for inter-job communication
-        channels_dir = settings.channels_dir
-        outputs_file = self.ctx.envs.get(RUNNER_OUTPUTS_ENV)
-        job_model, step_model, workflow_model = self._script_scope_models()
+        step_runner = self.parent
+        job_runner = getattr(step_runner, "parent", None)
+        global _shared_executor
+        if _shared_executor is None:
+            if os.name == "nt":
+                executor_kwargs: dict[str, Any] = {}
+            else:
+                try:
+                    executor_kwargs = {"mp_context": mp.get_context("fork")}
+                except ValueError:
+                    executor_kwargs = {}
+            _shared_executor = ProcessPoolExecutor(
+                max_workers=4,
+                **executor_kwargs,
+            )
+            atexit.register(_shared_executor.shutdown, wait=False)
 
-        executor = _get_shared_executor()
-        future = executor.submit(
+        future = _shared_executor.submit(
             exec_script_in_process,
-            self.model.script,
-            str(self.model.working_directory),
-            job_model,
-            step_model,
-            workflow_model,
-            self.ctx,
-            self.ctx.inputs,
-            self.ctx.secrets,
-            channels_dir,
-            outputs_file,
+            _ScriptProcessInvocation(
+                script=self.model.script,
+                working_directory=str(self.model.working_directory),
+                scope_models=_ScriptScopeModels(
+                    job_model=getattr(job_runner, "model", None),
+                    step_model=getattr(step_runner, "model", None),
+                    workflow_model=getattr(getattr(job_runner, "parent", None), "model", None),
+                ),
+                ctx=self.ctx,
+                inputs=self.ctx.inputs,
+                secrets=self.ctx.secrets,
+                channels_dir=settings.channels_dir,
+                outputs_file=self.ctx.envs.get(RUNNER_OUTPUTS_ENV),
+            ),
         )
-        result = await asyncio.get_running_loop().run_in_executor(None, future.result)
-        return result
+        return await asyncio.get_running_loop().run_in_executor(None, future.result)
 
     async def _post_run(self) -> None:
         await self._post_run_execution_log(

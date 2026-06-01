@@ -18,64 +18,20 @@ _MAX_BACKOFF_SECONDS = 300  # 5 minutes
 _JITTER_MIN = 0.5
 _JITTER_MAX = 1.0
 _DEFAULT_TIMEOUT_MINUTES = 60
-_COMMON_TEMPLATE_FIELDS = (
-    "name",
-    "shell",
-    "working_directory",
-    "log_stdout",
-    "log_command",
-    "env",
-    "run_if",
-)
-_RUN_TYPE_TEMPLATE_FIELDS = {
-    RunType.WORKFLOW: ("uses",),
-    RunType.SCRIPT: ("script",),
-    RunType.COMMAND: ("run",),
-    RunType.SCRIPT_FILE: ("script_file",),
-    RunType.TASK: ("task", "run_with"),
-    RunType.PIPE: (),
-}
 
 
 class StepRunnerMixin:
     """Mixin providing methods shared by StepRunner and CloudStepRunner."""
 
-    def _prepare_step_run_type(self):
-        """Apply retry defaults and cache the current step run type."""
-        self._apply_retry_profile_defaults()  # type: ignore[attr-defined]
-        self._run_type = self.model.get_run_type()  # type: ignore[attr-defined]
-        return self._run_type
-
-    async def _resolve_step_pre_run_fields(
-        self,
-        *,
-        resolve_workflow: bool = True,
-    ) -> None:
-        """Resolve template-backed fields and timeout for the current step."""
-        await self._resolve_template_fields(  # type: ignore[attr-defined]
-            self._template_fields_for_run_type(  # type: ignore[attr-defined]
-                self._run_type,  # type: ignore[attr-defined]
-                resolve_workflow=resolve_workflow,
-            )
-        )
-        await self._resolve_timeout_field()  # type: ignore[attr-defined]
-
-    def _cancel_step_for_unmet_condition(self, message: str) -> None:
-        """Cancel the current step when its run_if condition evaluates false."""
+    def _ensure_run_if_condition(self, message: str) -> None:
+        """Validate ``run_if`` for the current step or cancel it."""
+        if self._evaluate_run_if(  # type: ignore[attr-defined]
+            self.model.run_if,  # type: ignore[attr-defined]
+            self._run_if_context(),
+        ):
+            return
         self._state_machine.transition(RunnerStatus.CANCELED)  # type: ignore[attr-defined]
         raise ConditionNotMetError(message)
-
-    @staticmethod
-    def _template_fields_for_run_type(
-        run_type: RunType,
-        *,
-        resolve_workflow: bool = True,
-    ) -> list[str]:
-        fields = list(_COMMON_TEMPLATE_FIELDS)
-        if run_type is RunType.WORKFLOW and not resolve_workflow:
-            return fields
-        fields.extend(_RUN_TYPE_TEMPLATE_FIELDS[run_type])
-        return fields
 
     # ------------------------------------------------------------------
     # Retry / profile helpers
@@ -101,31 +57,47 @@ class StepRunnerMixin:
         if not isinstance(policy, dict):
             policy = {}
 
-        # ── retry ──────────────────────────────────────────────────
-        # Top-level max_retries wins; fall back to policy; then step.
         from ofx.profiles.models import OFXProfile
 
-        max_retries = getattr(profile, "max_retries", None)
-        default_max_retries = OFXProfile.model_fields["max_retries"].default
-        if max_retries is not None and max_retries != default_max_retries:
-            self.model.retry = int(max_retries)  # type: ignore[attr-defined]
-        elif "retry" in policy:
-            policy_retry = int(policy["retry"])
-            if policy_retry != 0:
-                self.model.retry = policy_retry  # type: ignore[attr-defined]
+        def _resolve_profile_or_policy_int(
+            profile_field: str,
+            policy_field: str,
+            *,
+            ignore_zero_policy: bool = False,
+        ) -> int | None:
+            default_value = OFXProfile.model_fields[profile_field].default
+            profile_value = getattr(profile, profile_field, None)
+            if profile_value is not None and profile_value != default_value:
+                return int(profile_value)
 
-        # ── retry_delay ────────────────────────────────────────────
-        if "retry_delay" in policy:
-            self.model.retry_delay = int(policy["retry_delay"])  # type: ignore[attr-defined]
+            if policy_field not in policy:
+                return None
 
-        # ── timeout ────────────────────────────────────────────────
-        # Top-level timeout_minutes wins; fall back to policy; then step.
-        timeout_minutes = getattr(profile, "timeout_minutes", None)
-        default_timeout = OFXProfile.model_fields["timeout_minutes"].default
-        if timeout_minutes is not None and timeout_minutes != default_timeout:
-            self.model.timeout = int(timeout_minutes)  # type: ignore[attr-defined]
-        elif "timeout" in policy:
-            self.model.timeout = int(policy["timeout"])  # type: ignore[attr-defined]
+            policy_value = int(policy[policy_field])
+            if ignore_zero_policy and policy_value == 0:
+                return None
+            return policy_value
+
+        retry_override = _resolve_profile_or_policy_int(
+            "max_retries",
+            "retry",
+            ignore_zero_policy=True,
+        )
+        if retry_override is not None:
+            self.model.retry = retry_override  # type: ignore[attr-defined]
+
+        retry_delay_policy_value = (
+            int(policy["retry_delay"]) if "retry_delay" in policy else None
+        )
+        if retry_delay_policy_value is not None:
+            self.model.retry_delay = retry_delay_policy_value  # type: ignore[attr-defined]
+
+        timeout_override = _resolve_profile_or_policy_int(
+            "timeout_minutes",
+            "timeout",
+        )
+        if timeout_override is not None:
+            self.model.timeout = timeout_override  # type: ignore[attr-defined]
 
     @staticmethod
     def _retry_delay_seconds(attempt: int, base_delay: int) -> float:
@@ -140,25 +112,22 @@ class StepRunnerMixin:
 
     async def _resolve_timeout_field(self) -> None:
         """Resolve a Jinja2 expression in ``self.model.timeout``."""
-        if isinstance(self.model.timeout, str):  # type: ignore[attr-defined]
-            resolved = await self._resolve_template(self.model.timeout)  # type: ignore[attr-defined]
-            try:
-                self.model.timeout = int(float(resolved))  # type: ignore[attr-defined]
-            except (ValueError, TypeError):
-                self._log_warning(  # type: ignore[attr-defined]
-                    f"Invalid timeout expression result: {resolved!r}, using 60 min"
-                )
-                self.model.timeout = _DEFAULT_TIMEOUT_MINUTES  # type: ignore[attr-defined]
+        timeout = self.model.timeout  # type: ignore[attr-defined]
+        if not isinstance(timeout, str):
+            return
+
+        resolved = await self._resolve_template(timeout)  # type: ignore[attr-defined]
+        try:
+            self.model.timeout = int(float(resolved))  # type: ignore[attr-defined]
+        except (ValueError, TypeError):
+            self._log_warning(  # type: ignore[attr-defined]
+                f"Invalid timeout expression result: {resolved!r}, using 60 min"
+            )
+            self.model.timeout = _DEFAULT_TIMEOUT_MINUTES  # type: ignore[attr-defined]
 
     # ------------------------------------------------------------------
     # Output helpers
     # ------------------------------------------------------------------
-
-    def _log_output(self, stream: str, content: str) -> None:
-        """Log a stdout/stderr stream to the console, truncating long output."""
-        from ofx.runner.step_output import log_output
-
-        log_output(self._log_info, stream, content)  # type: ignore[attr-defined]
 
     def _save_runner_output(
         self,
@@ -169,17 +138,25 @@ class StepRunnerMixin:
         warn_on_missing_output_path: bool = False,
     ) -> None:
         """Persist runner output using the shared step-output helper."""
-        from ofx.runner.step_output import save_runner_output_file
+        output_path = self.ctx.output_path  # type: ignore[attr-defined]
+        if not output_path:
+            if missing_output_path_message and warn_on_missing_output_path:
+                self._log_warning(missing_output_path_message)  # type: ignore[attr-defined]
+            return
 
-        save_runner_output_file(
-            self.ctx.output_path,  # type: ignore[attr-defined]
-            self.parent.model.jid if self.parent else None,  # type: ignore[attr-defined]
+        job_id = self.parent.model.jid if self.parent else None  # type: ignore[attr-defined]
+        if not job_id:
+            return
+
+        from ofx.runner.step_output import save_output_file
+
+        save_output_file(
+            output_path,
+            job_id,
             self.model,  # type: ignore[attr-defined]
             stdout,
             outputs,
             log_fn=self._log_info,  # type: ignore[attr-defined]
-            missing_output_path_message=missing_output_path_message,
-            warn_fn=self._log_warning if warn_on_missing_output_path else None,  # type: ignore[attr-defined]
         )
 
     def _format_typed_outputs(self, result) -> bool:
@@ -188,18 +165,41 @@ class StepRunnerMixin:
         Returns ``True`` if typed outputs were displayed, ``False`` otherwise
         (caller should fall back to plain stdout logging).
         """
-        typed_outputs = result.outputs.get("typed_outputs")
-        if typed_outputs and isinstance(typed_outputs, list) and len(typed_outputs) > 0:
-            from ofx.runner.output_formatter import format_typed_outputs
-            from ofx.settings import get_console
+        outputs = getattr(result, "outputs", None)
+        typed_outputs = outputs.get("typed_outputs") if isinstance(outputs, dict) else None
+        typed_outputs = typed_outputs if isinstance(typed_outputs, list) else []
+        if not typed_outputs:
+            return False
 
-            format_typed_outputs(
-                typed_outputs,
-                task_name=self.model.name or self.model.task or "",  # type: ignore[attr-defined]
-                console=get_console(),
+        from ofx.runner.output_formatter import format_typed_outputs
+        from ofx.settings import get_console
+
+        format_typed_outputs(
+            typed_outputs,
+            task_name=self.model.name or self.model.task or "",  # type: ignore[attr-defined]
+            console=get_console(),
+        )
+        return True
+
+    def _emit_result_outputs(self, result) -> None:
+        """Display stdout/stderr streams and optionally persist stdout."""
+        from ofx.runner.step_output import log_output
+
+        stdout = result.outputs.get("stdout", "")
+        stderr = result.outputs.get("stderr", "")
+
+        if not self._format_typed_outputs(result):
+            log_output(self._log_info, "stdout", stdout)  # type: ignore[attr-defined]
+
+        log_output(self._log_info, "stderr", stderr)  # type: ignore[attr-defined]
+
+        if self.model.log_stdout and stdout and self.ctx.output_path:  # type: ignore[attr-defined]
+            self._save_runner_output(
+                stdout,
+                result.outputs,
+                missing_output_path_message="No output_path configured, skipping log file save.",
+                warn_on_missing_output_path=True,
             )
-            return True
-        return False
 
     # ------------------------------------------------------------------
     # Conditional execution
@@ -211,25 +211,19 @@ class StepRunnerMixin:
         Provides ``success()``, ``failure()``, ``canceled()``, and ``always()``
         helpers that inspect the previous step's status.
         """
-        prev_runner = None
-        if self.parent and self.model.step_index > 0:  # type: ignore[attr-defined]
-            prev_key = str(self.model.step_index - 1)  # type: ignore[attr-defined]
-            prev_runner = getattr(self.parent, "_runners", {}).get(prev_key)  # type: ignore[attr-defined]
+        from ofx.runner.execution_results import build_run_if_context
 
-        if prev_runner is None:
-            return {
-                "success": lambda: True,
-                "failure": lambda: False,
-                "canceled": lambda: False,
-                "always": lambda: True,
-            }
+        if not self.parent:  # type: ignore[attr-defined]
+            return build_run_if_context([])
 
-        return {
-            "success": lambda: prev_runner.is_success,
-            "failure": lambda: prev_runner.is_failed,
-            "canceled": lambda: prev_runner.status == RunnerStatus.CANCELED,
-            "always": lambda: True,
-        }
+        step_index = self.model.step_index  # type: ignore[attr-defined]
+        if step_index <= 0:
+            return build_run_if_context([])
+
+        previous_runner = getattr(self.parent, "_runners", {}).get(  # type: ignore[attr-defined]
+            str(step_index - 1)
+        )
+        return build_run_if_context([previous_runner] if previous_runner is not None else [])
 
     # ------------------------------------------------------------------
     # Timeline helpers
@@ -243,12 +237,3 @@ class StepRunnerMixin:
         from ofx.runner.step_descriptors import step_timeline_params
 
         return step_timeline_params(self.model, outputs=result.outputs)  # type: ignore[attr-defined]
-
-    def _save_output_file(self, stdout: str, outputs: dict[str, Any] | None = None) -> None:
-        """Persist step stdout to the configured output path."""
-        self._save_runner_output(
-            stdout,
-            outputs,
-            missing_output_path_message="No output_path configured, skipping log file save.",
-            warn_on_missing_output_path=True,
-        )

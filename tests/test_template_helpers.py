@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from ofx.runner.templates.helpers import (
@@ -75,6 +76,15 @@ class TestFileHelpers:
         path = str(tmp_path / "deep" / "nested" / "file.txt")
         h["file_write"](path, "content")
         assert Path(path).read_text() == "content"
+
+    def test_read_returns_empty_on_read_error(self, tmp_path):
+        h = _file_helpers()
+        path = tmp_path / "error.txt"
+        path.write_text("content")
+
+        with patch.object(Path, "read_text", side_effect=OSError("boom")):
+            assert h["file_read"](str(path)) == ""
+            assert h["file_lines"](str(path)) == []
 
 
 # ── Path helpers ─────────────────────────────────────────────────────────
@@ -382,6 +392,42 @@ class TestASMHelpers:
         result = h["asm_add_targets"](["example.com"])
         assert result == 0
 
+    def test_asm_targets_uses_default_scope_and_filters_effective(self):
+        h = _asm_helpers()
+        client = SimpleNamespace(
+            find_scope=lambda name: SimpleNamespace(id="scope-id") if name == "demo" else None,
+            effective_targets=lambda scope_id: [
+                SimpleNamespace(value="a.example", excluded=False, target_type="domain"),
+                SimpleNamespace(value="b.example", excluded=True, target_type="domain"),
+                SimpleNamespace(value="1.1.1.1", excluded=False, target_type="ip"),
+            ],
+        )
+        with patch("ofx.asm.config.get_asm_client", return_value=client), patch(
+            "ofx.asm.config.get_asm_config",
+            return_value=SimpleNamespace(default_scope="demo"),
+        ):
+            result = h["asm_targets"](target_type="domain")
+        assert result == ["a.example"]
+
+    def test_asm_scope_assets_returns_dumped_models(self):
+        h = _asm_helpers()
+        client = SimpleNamespace(
+            list_assets=lambda scope_id, limit, asset_type: (
+                [
+                    SimpleNamespace(model_dump=lambda: {"name": "asset-1"}),
+                    SimpleNamespace(model_dump=lambda: {"name": "asset-2"}),
+                ],
+                None,
+            )
+        )
+        with patch("ofx.asm.config.get_asm_client", return_value=client):
+            result = h["asm_scope_assets"](
+                scope="12345678-1234-1234-1234-123456789012",
+                asset_type="domain",
+                limit=2,
+            )
+        assert result == [{"name": "asset-1"}, {"name": "asset-2"}]
+
 
 # ── build_all_helpers integration ────────────────────────────────────────
 
@@ -496,6 +542,18 @@ class TestETLHelpers:
         result = h["sort_by"](_ETL_ITEMS, "port", reverse=True)
         ports = [r["port"] for r in result]
         assert ports == sorted(ports, reverse=True)
+
+    def test_sort_by_orders_numbers_before_strings(self):
+        h = _etl_helpers()
+        items = [
+            {"port": "abc"},
+            {"port": 80},
+            {"port": "22"},
+        ]
+
+        result = h["sort_by"](items, "port")
+
+        assert [item["port"] for item in result] == ["22", 80, "abc"]
 
     def test_unique_by(self):
         h = _etl_helpers()

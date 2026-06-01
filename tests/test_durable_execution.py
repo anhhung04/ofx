@@ -5,7 +5,7 @@ import pytest
 from ofx.models.config import DurableRunConfig
 from ofx.runner import RunnerStatus
 from ofx.runner.api import run_workflow
-from ofx.runner.durable import (
+from ofx.runner.services.checkpoint import (
     get_checkpoint,
     list_checkpoints,
     write_checkpoint,
@@ -54,6 +54,22 @@ async def test_durable_abort_on_running_checkpoint(tmp_path: Path) -> None:
     )
 
     with pytest.raises(RuntimeError, match="in-progress execution"):
+        await run_workflow(
+            workflow=workflow_path,
+            output_path=tmp_path,
+            workflow_search_paths=workflow_dirs,
+            durable_overrides=durable_config,
+        )
+
+@pytest.mark.asyncio
+async def test_build_run_runner_raises_with_human_checkpoint_names(tmp_path: Path) -> None:
+    workflow_path = Path(__file__).parent / "flows" / "durable.yml"
+    workflow_dirs = [workflow_path.parent, Path.cwd().absolute()]
+    durable_config = DurableRunConfig(enabled=True, resume=False, backend="file")
+    await write_checkpoint(tmp_path, durable_config, "cp-a", {"status": "running", "name": "job-a"})
+    await write_checkpoint(tmp_path, durable_config, "cp-b", {"status": "running", "checkpoint_id": "job-b"})
+
+    with pytest.raises(RuntimeError, match="job-a, job-b"):
         await run_workflow(
             workflow=workflow_path,
             output_path=tmp_path,

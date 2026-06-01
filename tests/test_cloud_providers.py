@@ -43,6 +43,44 @@ def _make_cloud_config(**overrides) -> CloudConfig:
 
 
 class TestAWSCreateInstance:
+    def test_run_instances_kwargs_builds_optional_fields(self):
+        provider, _ec2 = _make_aws_provider()
+        config = _make_cloud_config(
+            key_pair_name="my-key",
+            security_group="sg-12345",
+            subnet_id="subnet-abc",
+            iam_instance_profile="my-profile",
+            tags=["scan", "recon"],
+        )
+
+        kwargs = provider._run_instances_kwargs(config, "ofx-us-east-1-123")
+
+        assert kwargs["KeyName"] == "my-key"
+        assert kwargs["SecurityGroupIds"] == ["sg-12345"]
+        assert kwargs["SubnetId"] == "subnet-abc"
+        assert kwargs["IamInstanceProfile"] == {"Name": "my-profile"}
+        tags = kwargs["TagSpecifications"][0]["Tags"]
+        tag_keys = [tag["Key"] for tag in tags]
+        assert "Name" in tag_keys
+        assert "ofx" in tag_keys
+        assert "scan" in tag_keys
+        assert "recon" in tag_keys
+
+    def test_instance_user_data_windows_and_linux(self):
+        provider, _ec2 = _make_aws_provider()
+
+        windows_data = provider._instance_user_data(
+            _make_cloud_config(os="windows", winrm_password="P@ssw0rd")
+        )
+        linux_data = provider._instance_user_data(
+            _make_cloud_config(os="linux", ssh_password="rootpass")
+        )
+
+        assert "winrm quickconfig" in windows_data
+        assert "P@ssw0rd" in windows_data
+        assert "chpasswd" in linux_data
+        assert "rootpass" in linux_data
+
     def test_basic_launch(self):
         provider, ec2 = _make_aws_provider()
         ec2.run_instances.return_value = {
@@ -142,6 +180,57 @@ class TestAWSCreateInstance:
 
 
 class TestAWSGetInstance:
+    def test_instance_info_helper_extracts_fields(self):
+        provider, _ec2 = _make_aws_provider()
+        instance = {
+            "InstanceId": "i-abc123",
+            "PublicIpAddress": "1.2.3.4",
+            "State": {"Name": "running"},
+            "Placement": {"AvailabilityZone": "us-east-1a"},
+            "InstanceType": "t3.micro",
+            "ImageId": "ami-12345678",
+            "Tags": [{"Key": "Name", "Value": "ofx-test"}],
+        }
+
+        info = provider._instance_info(instance)
+
+        assert info.instance_id == "i-abc123"
+        assert info.ip == "1.2.3.4"
+        assert info.name == "ofx-test"
+
+    def test_waiter_config_and_deadline_helpers(self):
+        provider, _ec2 = _make_aws_provider()
+        assert provider._waiter_config(300) == {"Delay": 10, "MaxAttempts": 30}
+
+    def test_snapshot_helpers(self):
+        provider, _ec2 = _make_aws_provider()
+        image = {
+            "ImageId": "ami-001",
+            "Name": "snap-a",
+            "State": "available",
+            "CreationDate": "2024-01-01T00:00:00Z",
+        }
+
+        snapshot = provider._snapshot_info(image)
+
+        assert snapshot.snapshot_id == "ami-001"
+        assert snapshot.name == "snap-a"
+        assert provider._snapshot_waiter_config() == {"Delay": 30, "MaxAttempts": 20}
+
+    def test_require_instance_ip_raises_without_ip(self):
+        provider, _ec2 = _make_aws_provider()
+        with pytest.raises(RuntimeError, match="no public IP assigned"):
+            provider._require_instance_ip(
+                provider._instance_info(
+                    {
+                        "InstanceId": "i-noip",
+                        "State": {"Name": "running"},
+                        "Tags": [],
+                    }
+                ),
+                "i-noip",
+            )
+
     def test_get_instance_with_ip(self):
         provider, ec2 = _make_aws_provider()
         ec2.describe_instances.return_value = {
@@ -307,6 +396,43 @@ def _make_do_provider():
 
 
 class TestDOCreateInstance:
+    def test_droplet_create_body_builds_optional_fields(self):
+        provider, client = _make_do_provider()
+        client.ssh_keys.list.return_value = {
+            "ssh_keys": [{"id": 111, "name": "my-key", "fingerprint": "aa:bb:cc"}]
+        }
+        config = _make_cloud_config(
+            provider="digitalocean",
+            image="ubuntu-22-04-x64",
+            ssh_key="my-key",
+            vpc_uuid="vpc-abc123",
+            project_id="proj-xyz",
+            tags=["scan"],
+        )
+
+        body = provider._droplet_create_body(config)
+
+        assert body["ssh_keys"] == [111]
+        assert body["vpc_uuid"] == "vpc-abc123"
+        assert body["project_ids"] == ["proj-xyz"]
+        assert "ofx" in body["tags"]
+        assert "scan" in body["tags"]
+
+    def test_droplet_create_body_password_auth_sets_user_data(self):
+        provider, client = _make_do_provider()
+        client.ssh_keys.list.return_value = {"ssh_keys": []}
+        config = _make_cloud_config(
+            provider="digitalocean",
+            image="ubuntu-22-04-x64",
+            ssh_password="secret123",
+        )
+
+        body = provider._droplet_create_body(config)
+
+        assert "user_data" in body
+        assert "secret123" in body["user_data"]
+        assert "chpasswd" in body["user_data"]
+
     def test_basic_create(self):
         provider, client = _make_do_provider()
         client.droplets.create.return_value = {
@@ -395,6 +521,30 @@ class TestDOCreateInstance:
 
 
 class TestDOGetInstance:
+    def test_droplet_info_helper_extracts_fields(self):
+        provider, _client = _make_do_provider()
+        droplet = {
+            "id": 12345,
+            "status": "active",
+            "name": "ofx-nyc3-1234",
+            "region": {"slug": "nyc3"},
+            "size_slug": "s-1vcpu-1gb",
+            "image": {"slug": "ubuntu-22-04-x64"},
+            "tags": ["ofx"],
+            "networks": {
+                "v4": [
+                    {"type": "private", "ip_address": "10.0.0.5"},
+                    {"type": "public", "ip_address": "64.23.1.100"},
+                ]
+            },
+        }
+
+        info = provider._droplet_info(droplet)
+
+        assert info.instance_id == "12345"
+        assert info.ip == "64.23.1.100"
+        assert info.name == "ofx-nyc3-1234"
+
     def test_get_with_public_ip(self):
         provider, client = _make_do_provider()
         client.droplets.get.return_value = {
@@ -513,6 +663,49 @@ class TestDOSnapshots:
         snap = asyncio.run(provider.create_snapshot("12345", "my-snap"))
         assert snap.name == "my-snap"
         assert snap.snapshot_id == "snap-001"
+
+    def test_action_status_helper(self):
+        provider, _client = _make_do_provider()
+        assert provider._action_status({"status": "completed"}) == "completed"
+
+    def test_snapshot_helpers(self):
+        provider, _client = _make_do_provider()
+        snapshot = {
+            "id": "snap-001",
+            "name": "my-snap",
+            "size_gigabytes": 25,
+            "created_at": "2024-01-01T00:00:00Z",
+            "regions": ["nyc3"],
+        }
+
+        info = provider._snapshot_info(snapshot)
+        pending = provider._pending_snapshot_info("pending-snap")
+
+        assert info.snapshot_id == "snap-001"
+        assert info.region == "nyc3"
+        assert pending.status == "in-progress"
+        assert provider._snapshot_named([info], "my-snap") is info
+
+    def test_droplet_timeout_error_uses_last_ip(self):
+        provider, _client = _make_do_provider()
+        error = provider._droplet_timeout_error(
+            "12345",
+            300,
+            provider._droplet_info(
+                {
+                    "id": 12345,
+                    "status": "active",
+                    "name": "ofx-nyc3-1234",
+                    "region": {"slug": "nyc3"},
+                    "size_slug": "s-1vcpu-1gb",
+                    "image": {"slug": "ubuntu-22-04-x64"},
+                    "tags": ["ofx"],
+                    "networks": {"v4": [{"type": "public", "ip_address": "64.23.1.100"}]},
+                }
+            ),
+        )
+
+        assert "64.23.1.100" in str(error)
 
     def test_list_snapshots(self):
         provider, client = _make_do_provider()

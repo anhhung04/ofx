@@ -4,27 +4,52 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import subprocess
 from pathlib import Path
 
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
+_GIT_TIMEOUT_SECONDS = 10
+
 
 async def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
-    proc = await asyncio.create_subprocess_exec(
-        "git",
-        *args,
-        cwd=str(cwd),
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    stdout, stderr = await proc.communicate()
-    return (
-        proc.returncode or 0,
-        stdout.decode(errors="replace").strip(),
-        stderr.decode(errors="replace").strip(),
-    )
+    def _run_sync() -> tuple[int, str, str]:
+        try:
+            completed = subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "-c",
+                    "tag.gpgsign=false",
+                    *args,
+                ],
+                cwd=str(cwd),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "HUSKY": "0"},
+                text=True,
+                timeout=_GIT_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            stdout = (exc.stdout or "").strip() if isinstance(exc.stdout, str) else ""
+            stderr = (exc.stderr or "").strip() if isinstance(exc.stderr, str) else ""
+            suffix = f"git command timed out after {_GIT_TIMEOUT_SECONDS}s"
+            stderr = f"{stderr}\n{suffix}" if stderr else suffix
+            return (124, stdout, stderr)
+
+        return (
+            completed.returncode or 0,
+            completed.stdout.strip(),
+            completed.stderr.strip(),
+        )
+
+    return await asyncio.to_thread(_run_sync)
 
 
 async def is_git_repo(path: Path) -> bool:

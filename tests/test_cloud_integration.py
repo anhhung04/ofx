@@ -340,6 +340,25 @@ class TestStaticProvider:
         assert instance.ip == "10.0.0.1"
         assert instance.provider == "static"
 
+    def test_fleet_instance_info_helper(self):
+        from types import SimpleNamespace
+
+        from ofx.cloud.providers.static import StaticProvider
+
+        host_entry = SimpleNamespace(
+            host="10.0.0.2",
+            ssh_user="root",
+            ssh_port=2222,
+            ssh_key="/tmp/key",
+            ssh_password="secret",
+        )
+
+        instance = StaticProvider._fleet_instance_info(host_entry, 1)
+
+        assert instance.instance_id == "static-10.0.0.2"
+        assert instance.name == "static-fleet-1-10.0.0.2"
+        assert instance.metadata["ssh_port"] == 2222
+
     @pytest.mark.asyncio
     async def test_destroy_is_noop(self):
         from ofx.cloud.providers.static import StaticProvider
@@ -599,6 +618,50 @@ class TestWaitForLogin:
     """Tests for wait_for_login timeout behaviour."""
 
     @pytest.mark.asyncio
+    async def test_wait_for_connectivity_dispatches_to_winrm(self):
+        from ofx.cloud.ssh import wait_for_connectivity
+
+        seen: list[tuple[str, int, int]] = []
+
+        async def _fake_winrm(host, port, timeout, interval=10):
+            seen.append((host, port, timeout))
+            return True
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("ofx.cloud.ssh.wait_for_winrm", _fake_winrm)
+            result = await wait_for_connectivity(
+                "10.0.0.9",
+                os_type="windows",
+                winrm_port=5986,
+                timeout=45,
+            )
+
+        assert result is True
+        assert seen == [("10.0.0.9", 5986, 45)]
+
+    @pytest.mark.asyncio
+    async def test_wait_for_connectivity_dispatches_to_ssh(self):
+        from ofx.cloud.ssh import wait_for_connectivity
+
+        seen: list[tuple[str, int, int]] = []
+
+        async def _fake_ssh(host, port, timeout, interval=5):
+            seen.append((host, port, timeout))
+            return True
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("ofx.cloud.ssh.wait_for_ssh", _fake_ssh)
+            result = await wait_for_connectivity(
+                "10.0.0.8",
+                os_type="linux",
+                ssh_port=2222,
+                timeout=30,
+            )
+
+        assert result is True
+        assert seen == [("10.0.0.8", 2222, 30)]
+
+    @pytest.mark.asyncio
     async def test_raises_timeout_error_when_login_never_succeeds(self):
         """wait_for_login should raise TimeoutError after timeout, not return False."""
         from ofx.cloud.ssh import wait_for_login
@@ -644,6 +707,43 @@ class TestWaitForLogin:
             result = await wait_for_login("10.0.0.1", cfg, timeout=30)
 
         assert result is True
+
+    @pytest.mark.asyncio
+    async def test_wait_for_login_uses_winrm_probe_for_windows(self):
+        from ofx.cloud.ssh import wait_for_login
+        from ofx.models.cloud import CloudConfig
+
+        cfg = CloudConfig(
+            provider="static",
+            host="10.0.0.2",
+            os="windows",
+            connection_type="winrm",
+            winrm_user="Administrator",
+            winrm_password="secret",
+        )
+
+        captured: list[str] = []
+
+        async def mock_to_thread(fn, *_args, **_kwargs):
+            captured.append(fn.__name__)
+            fn()
+            return None
+
+        class _FakeWinRM:
+            def __init__(self, **kwargs):
+                captured.append(kwargs["username"])
+
+            def run(self, command):
+                captured.append(command)
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr("asyncio.to_thread", mock_to_thread)
+            mp.setattr("ofx.api.post.runners.winrm.PostWinRM", _FakeWinRM)
+            result = await wait_for_login("10.0.0.2", cfg, timeout=30)
+
+        assert result is True
+        assert "Administrator" in captured
+        assert "whoami" in captured
 
 
 class TestFleetDistributorEdgeCases:

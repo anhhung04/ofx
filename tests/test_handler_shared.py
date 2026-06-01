@@ -4,58 +4,51 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
-from ofx.runner.handlers.shared import (
-    build_child_runner,
-    resolved_execution_model_kwargs,
-)
-
-
-def test_resolved_execution_model_kwargs_uses_step_runner_defaults(tmp_path) -> None:
-    work_dir = (tmp_path / "workspace").resolve()
-    step_runner = SimpleNamespace(
-        _resolve_shell=lambda: "/bin/sh",
-        _resolve_working_dir=lambda: work_dir,
-    )
-
-    assert resolved_execution_model_kwargs(step_runner) == {
-        "shell": "/bin/sh",
-        "working_directory": work_dir,
-    }
+from ofx.runner import RunContext
+from ofx.runner.handlers.registry import registry
+from ofx.models.step import RunType
 
 
-def test_resolved_execution_model_kwargs_preserves_absolute_paths() -> None:
-    step_runner = SimpleNamespace(
-        _resolve_shell=lambda: "/bin/zsh",
-        _resolve_working_dir=lambda: Path("/opt/ofx"),
-    )
-
-    assert resolved_execution_model_kwargs(step_runner)["working_directory"] == Path(
-        "/opt/ofx"
-    )
-
-
-def test_build_child_runner_uses_child_context_and_parent() -> None:
-    captured: dict[str, object] = {}
-
-    class _Runner:
-        def __init__(self, model, ctx, *, parent) -> None:
-            captured.update({"model": model, "ctx": ctx, "parent": parent})
+def test_create_workflow_runner_uses_parent_dirs_for_search_and_child_context() -> None:
+    calls: dict[str, object] = {}
+    found_workflow = SimpleNamespace(workflow_path=Path("/tmp/child/workflow.yml"))
 
     step_runner = SimpleNamespace(
-        _child_context=lambda update=None: {"update": update},
+        ctx=RunContext(workflow_dirs=[Path("/tmp/base")]),
+        model=SimpleNamespace(uses="child"),
+        parent=SimpleNamespace(
+            model=SimpleNamespace(
+                workflow_path=Path("/tmp/parent/main.yml"),
+                defaults=SimpleNamespace(flow_registry_url="https://registry.example"),
+            )
+        ),
     )
-    model = object()
 
-    build_child_runner(
-        model,
-        _Runner,
+    def _find_workflow(name, search_dirs, registry_url):
+        calls["find_workflow"] = (name, search_dirs, registry_url)
+        return found_workflow
+
+    class _WorkflowRunner:
+        def __init__(self, model, ctx, *, parent):
+            calls["workflow_runner"] = (model, ctx, parent)
+
+    with patch("ofx.utils.workflow_utils.find_workflow", _find_workflow), patch(
+        "ofx.runner.workflow.WorkflowRunner", _WorkflowRunner
+    ):
+        result = registry.get(RunType.WORKFLOW)(step_runner)
+
+    assert isinstance(result, _WorkflowRunner)
+    assert calls["find_workflow"] == (
+        "child",
+        (Path("/tmp/base"), Path("/tmp/parent")),
+        "https://registry.example",
+    )
+    assert calls["workflow_runner"] == (
+        found_workflow,
+        RunContext(
+            workflow_dirs=[Path("/tmp/base"), Path("/tmp/parent"), Path("/tmp/child")]
+        ),
         step_runner,
-        context_update={"workflow_dirs": ["/tmp/wf"]},
     )
-
-    assert captured == {
-        "model": model,
-        "ctx": {"update": {"workflow_dirs": ["/tmp/wf"]}},
-        "parent": step_runner,
-    }

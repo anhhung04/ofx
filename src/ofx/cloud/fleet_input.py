@@ -53,14 +53,19 @@ class FleetInputParser:
 
         if exclude:
             for item in exclude:
-                try:
-                    net = ipaddress.ip_network(item, strict=False)
-                    if net.prefixlen == net.max_prefixlen:
-                        self._exclude_ips.add(str(net.network_address))
-                    else:
-                        self._exclude_nets.append(net)
-                except ValueError:
-                    self._exclude_ips.add(item)
+                self._register_exclusion(item)
+
+    def _register_exclusion(self, item: str) -> None:
+        try:
+            net = ipaddress.ip_network(item, strict=False)
+        except ValueError:
+            self._exclude_ips.add(item)
+            return
+
+        if net.prefixlen == net.max_prefixlen:
+            self._exclude_ips.add(str(net.network_address))
+            return
+        self._exclude_nets.append(net)
 
     def parse(self, input_data: str | list[str]) -> list[str]:
         """Parse input and return a flat list of targets.
@@ -119,52 +124,53 @@ class FleetInputParser:
         if _seen_files is None:
             _seen_files = set()
 
-        lines = []
         if isinstance(input_data, list):
+            lines: list[str] = []
             for item in input_data:
                 lines.extend(self._read_input(str(item), _seen_files))
             return lines
 
         input_str = input_data.strip()
-
         path = Path(input_str)
-        file_to_read = None
-        if not path.is_absolute():
-            cwd_path = Path.cwd() / input_str
-            if cwd_path.is_file():
-                file_to_read = cwd_path
-        if file_to_read is None and path.is_file():
+        cwd_path = Path.cwd() / input_str
+        file_to_read: Path | None = None
+        if path.is_absolute() and path.is_file():
+            file_to_read = path
+        elif cwd_path.is_file():
+            file_to_read = cwd_path
+        elif path.is_file():
             file_to_read = path
 
-        if file_to_read is not None:
-            abs_path = str(file_to_read.resolve())
-            if abs_path in _seen_files:
-                logger.warning(
-                    f"Recursive fleet input: already read file {abs_path}, skipping to avoid loop."
-                )
-                return []
-            _seen_files.add(abs_path)
-            logger.debug(f"Reading fleet input from file: {file_to_read}")
-            file_lines = file_to_read.read_text().splitlines()
-            expanded_lines = []
-            for line in file_lines:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                possible_path = Path(line)
-                abs_possible = (
-                    possible_path if possible_path.is_absolute() else Path.cwd() / line
-                )
-                if abs_possible.is_file():
-                    expanded_lines.extend(self._read_input(line, _seen_files))
-                else:
-                    expanded_lines.append(line)
-            return expanded_lines
+        if file_to_read is None:
+            if "," in input_str and "/" not in input_str.split(",")[0]:
+                return [item.strip() for item in input_str.split(",")]
+            return input_str.splitlines()
 
-        if "," in input_str and "/" not in input_str.split(",")[0]:
-            return [item.strip() for item in input_str.split(",")]
+        abs_path = str(file_to_read.resolve())
+        if abs_path in _seen_files:
+            logger.warning(
+                f"Recursive fleet input: already read file {abs_path}, skipping to avoid loop."
+            )
+            return []
 
-        return input_str.splitlines()
+        _seen_files.add(abs_path)
+        logger.debug(f"Reading fleet input from file: {file_to_read}")
+
+        expanded_lines: list[str] = []
+        for line in file_to_read.read_text().splitlines():
+            normalized = line.strip()
+            if not normalized or normalized.startswith("#"):
+                continue
+
+            possible_path = Path(normalized)
+            nested_path = (
+                possible_path if possible_path.is_absolute() else Path.cwd() / normalized
+            )
+            if nested_path.is_file():
+                expanded_lines.extend(self._read_input(normalized, _seen_files))
+            else:
+                expanded_lines.append(normalized)
+        return expanded_lines
 
     def _expand_line(self, line: str) -> Iterator[str]:
         """Expand a single line into individual targets."""

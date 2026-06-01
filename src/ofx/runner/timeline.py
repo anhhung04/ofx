@@ -118,7 +118,7 @@ def _csv_row(values: list[str]) -> str:
     return buf.getvalue()
 
 
-def _resolve_oops_csv(project_name: str) -> Path | None:
+def _resolve_oops_csv(project_name: str) -> Path:
     """Resolve the oops-logger CSV file path for the current engagement."""
     log_file = os.environ.get("OOPS_LOG_FILE")
     if log_file:
@@ -150,7 +150,6 @@ def _format_duration(ms: int | None) -> str:
 def log_step(
     *,
     ctx_vars: dict[str, Any],
-    output_path: Path | None,
     step_name: str,
     command: str,
     tool: str,
@@ -164,8 +163,6 @@ def log_step(
     """Append a step execution record to the oops-logger engagement CSV."""
     project_name = ctx_vars.get("project_name", "")
     csv_path = _resolve_oops_csv(project_name)
-    if csv_path is None:
-        return
 
     resolved_target = target or detect_target(command)
     tool_name = tool or ""

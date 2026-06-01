@@ -170,10 +170,10 @@ class TestStoreFromTypedOutputs:
 # StepOutputHandler
 # ---------------------------------------------------------------------------
 from ofx.runner.step_descriptors import (  # noqa: E402
-    step_output_header_line,
     step_timeline_params,
     step_type_label,
 )
+from ofx.runner.step_output import save_output_file  # noqa: E402
 from ofx.runner.step_output import log_output, save_output_file  # noqa: E402
 
 
@@ -258,30 +258,26 @@ class TestSaveOutputFile:
         assert "[OUTPUT TRUNCATED]" in content
         assert "[STDERR TRUNCATED]" in content
 
+    def test_output_log_helpers_build_path_and_flags(self, tmp_path):
+        step = SimpleNamespace(name="scan step", step_index=2)
+
+        result = save_output_file(tmp_path, "job-1", step, "data")
+
+        assert result == tmp_path / "logs" / "stdout_job-1_scan-step.log"
+        flagged = save_output_file(
+            tmp_path,
+            "job-2",
+            step,
+            "data",
+            {"binary_output": True, "stderr_truncated": True},
+        )
+        assert flagged is not None
+        content = flagged.read_text()
+        assert "[BINARY OUTPUT]" in content
+        assert "[STDERR TRUNCATED]" in content
+
     def test_save_none_output_path(self):
         result = save_output_file(None, "j", SimpleNamespace(), "data")
-        assert result is None
-
-    def test_save_runner_output_file_warns_when_output_path_missing(self):
-        from ofx.runner.step_output import save_runner_output_file
-
-        warnings: list[str] = []
-        result = save_runner_output_file(
-            None,
-            "job",
-            SimpleNamespace(),
-            "data",
-            missing_output_path_message="missing output path",
-            warn_fn=warnings.append,
-        )
-
-        assert result is None
-        assert warnings == ["missing output path"]
-
-    def test_save_runner_output_file_skips_missing_job_id(self, tmp_path):
-        from ofx.runner.step_output import save_runner_output_file
-
-        result = save_runner_output_file(tmp_path, None, SimpleNamespace(), "data")
         assert result is None
 
     def test_save_with_script_base64(self, tmp_path):
@@ -300,15 +296,62 @@ class TestSaveOutputFile:
 
 
 class TestStepDescriptors:
+    def test_public_descriptor_helpers_cover_non_command_cases(self):
+        task_step = SimpleNamespace(
+            task="nmap",
+            pipe=None,
+            uses=None,
+            script=None,
+            script_file=None,
+            run=None,
+        )
+        pipe_step = SimpleNamespace(
+            pipe=SimpleNamespace(format="yaml"),
+            task=None,
+            uses=None,
+            script=None,
+            script_file=None,
+            run=None,
+        )
+        command_step = SimpleNamespace(
+            run="echo hi",
+            uses=None,
+            script_file=None,
+            script=None,
+            task=None,
+            pipe=None,
+        )
+        script_file_step = SimpleNamespace(
+            run=None,
+            uses=None,
+            script_file="worker.py",
+            script=None,
+            task=None,
+            pipe=None,
+        )
+
+        assert step_type_label(task_step) == "task: nmap"
+        assert step_type_label(pipe_step) == "pipe: → yaml"
+        command_log = save_output_file(tmp_path, "job", command_step, "ok")
+        script_file_log = save_output_file(tmp_path, "job", script_file_step, "ok")
+
+        assert command_log is not None
+        assert script_file_log is not None
+        assert command_log.read_text().startswith(">> command: echo hi\n>>===<<\nok")
+        assert script_file_log.read_text().startswith(">> script_file: worker.py\n>>===<<\nok")
+
     def test_step_type_label_for_pipe(self):
         step = SimpleNamespace(pipe=SimpleNamespace(format="yaml"), task=None, uses=None, script=None, script_file=None, run=None)
 
         assert step_type_label(step) == "pipe: → yaml"
 
-    def test_step_output_header_line_for_workflow(self):
+    def test_save_output_file_uses_workflow_header(self, tmp_path):
         step = SimpleNamespace(run=None, uses="./child.yml", script_file=None, script=None, task=None, pipe=None)
 
-        assert step_output_header_line(step) == ">> workflow: ./child.yml"
+        result = save_output_file(tmp_path, "job", step, "ok")
+
+        assert result is not None
+        assert result.read_text().startswith(">> workflow: ./child.yml\n>>===<<\nok")
 
     def test_step_timeline_params_for_task(self):
         step = SimpleNamespace(
@@ -341,6 +384,40 @@ class TestStepDescriptors:
 
         assert step_timeline_params(step, outputs={}) == {
             "command": "pipe:transform",
+            "tool": "",
+            "target": "",
+        }
+
+    def test_step_timeline_params_for_workflow_uses_workflow_source_not_step_name(self):
+        step = SimpleNamespace(
+            run=None,
+            uses="./child.yml",
+            script_file=None,
+            script=None,
+            task=None,
+            pipe=None,
+            name="child-runner",
+        )
+
+        assert step_timeline_params(step, outputs={}) == {
+            "command": "uses:./child.yml",
+            "tool": "",
+            "target": "",
+        }
+
+    def test_step_timeline_params_for_script_file_uses_script_path_not_step_name(self):
+        step = SimpleNamespace(
+            run=None,
+            uses=None,
+            script_file="worker.py",
+            script=None,
+            task=None,
+            pipe=None,
+            name="script-step",
+        )
+
+        assert step_timeline_params(step, outputs={}) == {
+            "command": "script_file:worker.py",
             "tool": "",
             "target": "",
         }
