@@ -197,6 +197,35 @@ class TestTaskRunHandler:
         assert handler.store_creds is True
         assert handler.json_output is True
 
+    def test_profile_time_window_blocks_task_run(self, monkeypatch):
+        from ofx.commands.flow.run_task import TaskRunHandler
+
+        console = Console(record=True, width=120)
+        profile = SimpleNamespace(
+            time_window=SimpleNamespace(enabled=True),
+            model_dump=lambda: {"name": "stealth"},
+        )
+
+        monkeypatch.setattr("ofx.tasks.TaskRegistry.get", lambda _name: object)
+        monkeypatch.setattr("ofx.settings.get_console", lambda: console)
+        monkeypatch.setattr(
+            "ofx.profiles.manager.get_profile_manager",
+            lambda: SimpleNamespace(resolve_or_default=lambda _name: profile),
+        )
+        monkeypatch.setattr(
+            "ofx.profiles.time_window.check_time_window",
+            lambda _window: {
+                "allowed": False,
+                "remaining_minutes": 0,
+                "message": "Current time is outside the allowed window",
+            },
+        )
+
+        result = asyncio.run(TaskRunHandler("nmap", "10.0.0.1", {}, profile="stealth").run())
+
+        assert result == 1
+        assert "outside the allowed window" in console.export_text()
+
 
 class TestTaskRunCommand:
     def test_run_command_uses_module_parse_and_handler(self, monkeypatch):

@@ -60,7 +60,8 @@ class FlowRunHandler:
         input: list[str] | None = None,
         env: dict[str, str] | None = None,
         output: str = "",
-        profile: bool = False,
+        profile_name: str = "",
+        perf_profile: bool = False,
         durable: bool | None = None,
         resume: bool | None = None,
         durable_backend: str | None = None,
@@ -79,7 +80,8 @@ class FlowRunHandler:
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
         self.env = env or {}
-        self.profile = profile
+        self.profile_name = profile_name
+        self.perf_profile = perf_profile
         self.durable = durable
         self.resume = resume
         self.durable_backend = durable_backend
@@ -141,7 +143,7 @@ class FlowRunHandler:
         lock_fd: int | None = None
         profiler: cProfile.Profile | None = None
 
-        if self.profile:
+        if self.perf_profile:
             logger.info("Profiling enabled (detailed timing data will be collected).")
             profiler = cProfile.Profile()
             profiler.enable()
@@ -166,6 +168,9 @@ class FlowRunHandler:
 
             # Inject CLI time window into vars for WorkflowRunner
             run_vars = dict(self.project_vars) if self.project_vars else {}
+            if self.profile_name:
+                run_vars["_cli_profile_name"] = self.profile_name
+                logger.info("Execution profile: %s", self.profile_name)
             if self.time_window:
                 run_vars["_cli_time_window"] = self.time_window
                 logger.info("Time window: %s", self.time_window)
@@ -200,7 +205,7 @@ class FlowRunHandler:
         finally:
             if lock_fd is not None:
                 self._release_lock(lock_fd)
-            if self.profile and profiler is not None:
+            if self.perf_profile and profiler is not None:
                 profiler.disable()
                 end_time = time.time()
 

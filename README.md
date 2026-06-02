@@ -690,7 +690,8 @@ ofx flow run workflow.yml \
   -i wordlist=/usr/share/wordlists/common.txt \
   -o ./output \
   -p my-project \
-  --profile \
+  --profile stealth \
+  --perf-profile \
   --durable \
   --resume \
   --log-format json \
@@ -704,7 +705,8 @@ ofx flow run workflow.yml \
 | `-i, --input` | Input parameters (KEY=VAL, repeatable) |
 | `-o, --output` | Output directory |
 | `-p, --project` | Run scoped to a project |
-| `--profile` | Enable performance profiling |
+| `--profile <name>` | Apply an execution profile |
+| `--perf-profile` | Enable performance profiling |
 | `--durable / --no-durable` | Enable checkpoint-based durable execution |
 | `--resume / --no-resume` | Resume from last checkpoint |
 | `--durable-backend` | Checkpoint backend: `file` or `redis` |

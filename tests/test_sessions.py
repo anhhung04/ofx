@@ -8,8 +8,10 @@ import os
 import shutil
 import tarfile
 import textwrap
+import yaml
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -672,6 +674,39 @@ class TestSessionManagerLocal:
         bundled_text = bundled.read_text()
         assert "INLINE_SCRIPT_OK" not in bundled_text
         assert "_m.loads" in bundled_text or "base64.b64decode" in bundled_text
+
+    def test_submit_local_rejects_profile_time_window_outside_allowed_range(self, tmp_path, monkeypatch):
+        from ofx.profiles.models import OFXProfile, TimeWindow
+
+        wf_path = self._create_test_workflow(tmp_path)
+        wf_data = yaml.safe_load(wf_path.read_text())
+        wf_data["defaults"] = {"profile": "stealth"}
+        wf_path.write_text(yaml.safe_dump(wf_data))
+
+        store = SessionStore(base_dir=tmp_path / "sessions")
+        mgr = _make_manager(store, tmp_path)
+        profile = OFXProfile(
+            name="stealth",
+            time_window=TimeWindow(enabled=True, start="09:00", end="17:00"),
+        )
+
+        monkeypatch.setattr(
+            "ofx.profiles.manager.get_profile_manager",
+            lambda: SimpleNamespace(resolve_or_default=lambda _name: profile),
+        )
+        monkeypatch.setattr(
+            "ofx.profiles.time_window.check_time_window",
+            lambda _window: {
+                "allowed": False,
+                "remaining_minutes": 0,
+                "message": "Current time 22:00 UTC is outside the allowed window",
+            },
+        )
+
+        with pytest.raises(RuntimeError, match="outside the allowed window"):
+            asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
+
+        assert store.list_sessions() == []
 
     def test_status_completed(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)

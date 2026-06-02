@@ -11,7 +11,6 @@ app = typer.Typer(
 from ofx.commands import (  # noqa: E402
     ai,
     api,
-    asm,
     cloud,
     doctor,
     flow,
@@ -135,7 +134,6 @@ def _register_commands():
     add_app(api)
     add_app(secret)
     add_app(ai)
-    add_app(asm)
     add_aliases()
 
 

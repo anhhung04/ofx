@@ -205,9 +205,6 @@ Beyond standard Jinja2, OFX provides built-in functions accessible in any templa
 | `random_string(16)` | Generate random string |
 | `local_ip()` | Get local IP address |
 | `export_typed_outputs(path, items)` | Export typed outputs to project directories |
-| `asm_targets(scope, target_type)` | Retrieve targets from an ASM scope |
-| `asm_push(items, scope)` | Push typed outputs to an ASM scope |
-| `asm_scopes()` | List available ASM scopes |
 
 ---
 

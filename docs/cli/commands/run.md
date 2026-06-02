@@ -22,6 +22,7 @@ ofx task run <workflow_name> [OPTIONS]   # Another alias
 | `-o, --output <dir>` | Output directory for artifacts (default: temp dir under `~/.ofx/tmp`) |
 | `-p, --project <name>` | Run for a specific project. Sets output to `<project>/logs` and exposes project vars. |
 | `--profile <name>` | Apply an execution profile (rate limits, stealth, time windows). See [Profiles](../../guide/profiles.md). |
+| `--perf-profile` | Enable cProfile performance profiling and write `profile.prof` into the output directory. |
 | `--dry-run` | Show execution plan without running (jobs, stages, inputs, dependencies) |
 | `-T, --load-targets` | Load targets from project `targets/` folder and expand as matrix input |
 | `--time-window HH:MM-HH:MM` | Restrict execution to a time window (e.g. `09:00-17:00`) |

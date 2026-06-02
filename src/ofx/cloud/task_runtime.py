@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from ofx.models.step import Step
-from ofx.runner.task_profile_options import merge_profile_task_options
+from ofx.runner.task_profile_options import (
+    adapt_task_command_for_profile,
+    merge_profile_task_options,
+)
 from ofx.runner.task_step import extract_task_target_and_opts
 
 
@@ -46,4 +49,9 @@ def build_task_command_from_step(
         cmd_str, _ = task.build_command(target, **task_opts)
     finally:
         task.output_flag = saved_output_flag
-    return cmd_str
+    return adapt_task_command_for_profile(
+        cmd_str,
+        task_declared_opts=task.opts,
+        resolved_opts=task_opts,
+        profile=profile,
+    )

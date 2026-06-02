@@ -30,6 +30,7 @@ from ofx.runner.run_defaults import model_field_is_explicitly_set
 from ofx.runner.runner import Runner
 from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
 from ofx.runner.step_mixin import StepRunnerMixin
+from ofx.runner.task_profile_options import build_profile_env_overrides
 from ofx.utils.shell import bash_dquote_escape
 
 if TYPE_CHECKING:
@@ -357,20 +358,24 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         """Build environment variable export prefix for remote command.
 
         Exports env vars from:
-        1. Runner-injected context envs (fleet/remote vars set by CloudJobRunner)
-        2. Workflow/job-level ``env:`` fields (propagated through parent model)
-        3. Step-level ``env:`` field
+        1. Active execution profile envs (all exported profile fields + custom env)
+        2. Runner-injected context envs (fleet/remote vars set by CloudJobRunner)
+        3. Workflow/job-level ``env:`` fields
+        4. Step-level ``env:`` field
 
         Later sources override earlier ones. Local OS environment is never leaked.
         Values are shell-escaped to prevent command injection via embedded
         ``$(...)`` or backtick sequences.
         """
         parent_model = getattr(self.parent, "model", None)
-        env_vars = {
+        workflow_model = getattr(getattr(self.parent, "parent", None), "model", None)
+        env_vars = build_profile_env_overrides(self.ctx.vars.get("profile_model"))
+        env_vars.update({
             key: str(value)
             for key, value in self.ctx.envs.items()
             if any(key.startswith(prefix) for prefix in _RUNNER_ENV_PREFIXES)
-        }
+        })
+        env_vars.update(getattr(workflow_model, "env", None) or {})
         env_vars.update(getattr(parent_model, "env", None) or {})
         env_vars.update(self.model.env or {})
         if not env_vars:

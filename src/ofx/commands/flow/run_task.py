@@ -13,6 +13,10 @@ from typing import Any
 
 import ofx.profiles.manager as profile_manager_module
 from ofx.runner import RunContext, RunnerRegistryKeys
+from ofx.runner.task_profile_options import (
+    build_profile_env_overrides,
+    build_profile_var_overrides,
+)
 from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 import ofx.settings as settings_module
 from ofx.settings import settings
@@ -68,17 +72,29 @@ class TaskRunHandler:
         profile = profile_manager_module.get_profile_manager().resolve_or_default(
             self.profile_name or None
         )
+        if profile and getattr(getattr(profile, "time_window", None), "enabled", False):
+            from ofx.profiles.time_window import check_time_window
+
+            result = check_time_window(profile.time_window)
+            if not result["allowed"]:
+                message = f"Task aborted: {result['message']}"
+                if self.json_output:
+                    print(json.dumps({"status": "failed", "error": message, "exit_code": None}))
+                else:
+                    console.print(f"[red]✗ Task failed:[/red] {message}")
+                return 1
+            if result["message"] and not self.json_output:
+                console.print(f"[yellow]{result['message']}[/yellow]")
 
         output_path: Path | None = None
         if self.output:
             output_path = Path(self.output)
             output_path.mkdir(parents=True, exist_ok=True)
 
-        ctx_vars: dict[str, Any] = {}
+        ctx = RunContext(output_path=output_path)
         if profile:
-            ctx_vars["profile_model"] = profile
-            ctx_vars["profile"] = profile.model_dump()
-        ctx = RunContext(output_path=output_path, vars=ctx_vars)
+            ctx.vars.update(build_profile_var_overrides(profile))
+            ctx.envs.update(build_profile_env_overrides(profile))
 
         model = TaskExecution(
             task_name=self.task_name,

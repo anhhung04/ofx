@@ -30,6 +30,7 @@ from ofx.cloud.runtime import remote_join
 from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.sessions.store import SessionStore
 from ofx.cloud.temp_upload import upload_temp_content
+from ofx.runner.task_profile_options import build_profile_env_overrides
 from ofx.utils.file_cleanup import remove_files, remove_tree
 
 logger = logging.getLogger("ofx")
@@ -156,6 +157,26 @@ class SessionManager:
         workflow = find_workflow(workflow_file, tuple(DEFAULT_WORKFLOWS_DIRS))
         session_steps, resolved_job_id = self._resolve_session_steps(workflow, job_id)
         workflow_name = workflow.name or Path(workflow_file).stem
+        profile_name = workflow.defaults.profile or ""
+        workflow_profile = None
+        if profile_name:
+            from ofx.profiles.manager import get_profile_manager
+
+            workflow_profile = get_profile_manager().resolve_or_default(profile_name)
+        if workflow_profile is not None and getattr(workflow_profile.time_window, "enabled", False):
+            from ofx.profiles.time_window import check_time_window
+
+            time_window_result = check_time_window(workflow_profile.time_window)
+            if not time_window_result["allowed"]:
+                raise RuntimeError(
+                    f"Session submit aborted: {time_window_result['message']}"
+                )
+            if time_window_result["message"]:
+                logger.warning(time_window_result["message"])
+
+        merged_env = dict(env or {})
+        if workflow_profile is not None:
+            merged_env = build_profile_env_overrides(workflow_profile) | merged_env
 
         session = Session(
             id=session_id,
@@ -177,7 +198,8 @@ class SessionManager:
             session = await self._submit_local(
                 session,
                 session_steps,
-                env or {},
+                merged_env,
+                workflow_profile,
                 workflow_dir=workflow.workflow_path.parent if workflow.workflow_path else None,
                 workflow_name=workflow_name,
             )
@@ -185,8 +207,9 @@ class SessionManager:
             session = await self._submit_cloud(
                 session,
                 session_steps,
-                env or {},
+                merged_env,
                 cloud_profile,
+                workflow_profile,
                 workflow_dir=workflow.workflow_path.parent if workflow.workflow_path else None,
                 workflow_name=workflow_name,
             )
@@ -242,6 +265,7 @@ class SessionManager:
         work_dir: str,
         workflow_name: str,
         env: dict[str, str],
+        profile: Any | None = None,
         os_type: str,
     ) -> str:
         return build_session_script(
@@ -251,6 +275,7 @@ class SessionManager:
             workflow_name=workflow_name,
             job_name=session.job_id,
             env=env,
+            profile=profile,
             os_type=os_type,
             encrypt_at_rest=True,
         )
@@ -404,6 +429,7 @@ class SessionManager:
         *,
         session: Session,
         env: dict[str, str],
+        profile: Any | None = None,
         workflow_name: str,
         os_type: str,
         is_windows: bool,
@@ -432,6 +458,7 @@ class SessionManager:
             work_dir=remote_work_dir,
             workflow_name=workflow_name,
             env=merged_env,
+            profile=profile,
             os_type=os_type,
         )
         return _PreparedCloudSubmitRuntime(
@@ -450,6 +477,7 @@ class SessionManager:
         *,
         target: _PreparedCloudSubmitTarget,
         runtime: _PreparedCloudSubmitRuntime,
+        profile: Any | None = None,
         workflow_dir: Path | None,
         workflow_name: str,
     ) -> Session:
@@ -510,6 +538,7 @@ class SessionManager:
                 work_dir=runtime.remote_work_dir,
                 workflow_name=workflow_name,
                 env=merged_env,
+                profile=profile,
                 os_type=target.os_type,
             )
             upload_temp_content(
@@ -1148,6 +1177,7 @@ class SessionManager:
         session: Session,
         steps: list[Any],
         env: dict[str, str],
+        profile: Any | None = None,
         *,
         workflow_dir: Path | None,
         workflow_name: str,
@@ -1196,6 +1226,7 @@ class SessionManager:
             work_dir=str(work_dir),
             workflow_name=workflow_name,
             env=merged_env,
+            profile=profile,
             os_type="linux",
         )
 
@@ -1240,6 +1271,7 @@ class SessionManager:
         steps: list[Any],
         env: dict[str, str],
         cloud_profile: str,
+        profile: Any | None = None,
         *,
         workflow_dir: Path | None,
         workflow_name: str,
@@ -1250,6 +1282,7 @@ class SessionManager:
             steps,
             session=target.session,
             env=env,
+            profile=profile,
             workflow_name=workflow_name,
             os_type=target.os_type,
             is_windows=target.is_windows,
@@ -1258,6 +1291,7 @@ class SessionManager:
             steps,
             target=target,
             runtime=runtime,
+            profile=profile,
             workflow_dir=workflow_dir,
             workflow_name=workflow_name,
         )

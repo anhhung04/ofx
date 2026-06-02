@@ -1,4 +1,4 @@
-"""Tests for template helper functions: network, ASM, type filters, ETL, encoding, and more."""
+"""Tests for template helper functions: network, type filters, ETL, encoding, and more."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from ofx.runner.templates.helpers import (
-    _asm_helpers,
     _datetime_helpers,
     _encoding_helpers,
     _etl_helpers,
@@ -359,76 +358,6 @@ class TestTypeFilterHelpers:
         assert h["ports"](items) == []
 
 
-# ── ASM helpers (graceful degradation) ───────────────────────────────────
-
-
-class TestASMHelpers:
-    def test_asm_targets_no_module(self):
-        """ASM helpers return empty when ofx.asm is not available."""
-        h = _asm_helpers()
-        with patch.dict("sys.modules", {"ofx.asm.config": None}):
-            result = h["asm_targets"]()
-            assert result == []
-
-    def test_asm_push_no_module(self):
-        h = _asm_helpers()
-        with patch.dict("sys.modules", {"ofx.asm.config": None}):
-            result = h["asm_push"]([])
-            assert result == 0
-
-    def test_asm_scopes_no_module(self):
-        h = _asm_helpers()
-        with patch.dict("sys.modules", {"ofx.asm.config": None}):
-            result = h["asm_scopes"]()
-            assert result == []
-
-    def test_asm_scope_assets_no_module(self):
-        h = _asm_helpers()
-        result = h["asm_scope_assets"]()
-        assert result == []
-
-    def test_asm_add_targets_no_module(self):
-        h = _asm_helpers()
-        result = h["asm_add_targets"](["example.com"])
-        assert result == 0
-
-    def test_asm_targets_uses_default_scope_and_filters_effective(self):
-        h = _asm_helpers()
-        client = SimpleNamespace(
-            find_scope=lambda name: SimpleNamespace(id="scope-id") if name == "demo" else None,
-            effective_targets=lambda scope_id: [
-                SimpleNamespace(value="a.example", excluded=False, target_type="domain"),
-                SimpleNamespace(value="b.example", excluded=True, target_type="domain"),
-                SimpleNamespace(value="1.1.1.1", excluded=False, target_type="ip"),
-            ],
-        )
-        with patch("ofx.asm.config.get_asm_client", return_value=client), patch(
-            "ofx.asm.config.get_asm_config",
-            return_value=SimpleNamespace(default_scope="demo"),
-        ):
-            result = h["asm_targets"](target_type="domain")
-        assert result == ["a.example"]
-
-    def test_asm_scope_assets_returns_dumped_models(self):
-        h = _asm_helpers()
-        client = SimpleNamespace(
-            list_assets=lambda scope_id, limit, asset_type: (
-                [
-                    SimpleNamespace(model_dump=lambda: {"name": "asset-1"}),
-                    SimpleNamespace(model_dump=lambda: {"name": "asset-2"}),
-                ],
-                None,
-            )
-        )
-        with patch("ofx.asm.config.get_asm_client", return_value=client):
-            result = h["asm_scope_assets"](
-                scope="12345678-1234-1234-1234-123456789012",
-                asset_type="domain",
-                limit=2,
-            )
-        assert result == [{"name": "asset-1"}, {"name": "asset-2"}]
-
-
 # ── build_all_helpers integration ────────────────────────────────────────
 
 
@@ -465,8 +394,6 @@ class TestBuildAllHelpers:
         assert "of_type" in h
         assert "ports" in h
         assert "users" in h
-        # ASM
-        assert "asm_targets" in h
         # Misc
         assert "is_windows" in h
         assert "platform" in h

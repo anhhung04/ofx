@@ -727,10 +727,6 @@ print("Injected variables work!")
             lambda updates: calls.append(("env", updates)),
         )
         monkeypatch.setattr(
-            "ofx.runner.templates.helpers._asm_helpers",
-            lambda: {"asm_helper": "ok"},
-        )
-        monkeypatch.setattr(
             "ofx.runner.findings_export.export_typed_outputs",
             export_helper,
         )
@@ -765,7 +761,6 @@ print("Injected variables work!")
         assert captured_globals["__ctx__"] == invocation.ctx
         assert captured_globals["__secrets__"] == invocation.secrets
         assert captured_globals["export_typed_outputs"] is export_helper
-        assert captured_globals["asm_helper"] == "ok"
         assert callable(captured_globals["add_outputs"])
         assert callable(captured_globals["publish"])
         assert callable(captured_globals["subscribe"])

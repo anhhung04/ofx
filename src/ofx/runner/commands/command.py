@@ -85,7 +85,6 @@ def exec_script_in_process(invocation: _ScriptProcessInvocation) -> _ScriptExecu
     stdout_capture = io.StringIO()
     stderr_capture = io.StringIO()
     from ofx.runner.findings_export import export_typed_outputs
-    from ofx.runner.templates.helpers import _asm_helpers
 
     store = ChannelStore(invocation.channels_dir)
     globals_dict = {
@@ -105,7 +104,6 @@ def exec_script_in_process(invocation: _ScriptProcessInvocation) -> _ScriptExecu
             channel, condition, timeout=timeout
         ),
         "export_typed_outputs": export_typed_outputs,
-        **_asm_helpers(),
     }
     try:
         with (

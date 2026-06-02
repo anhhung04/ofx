@@ -13,6 +13,7 @@ from ofx.runner.commands.command_executor import CommandExecutionResult, Command
 from ofx.runner.context import RunContext, context_with_env
 from ofx.runner.executors.base import Executor
 from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.runner.task_profile_options import adapt_task_command_for_profile
 from ofx.runner.task_step import extract_output_item_target
 from ofx.settings import TOOLS_BIN_DIR
 from ofx.tasks.registry import TaskRegistry
@@ -78,6 +79,12 @@ class TaskExecutor(Executor):
         command, runner._output_file = task.build_command(
             model.target,
             **model.opts,
+        )
+        command = adapt_task_command_for_profile(
+            command,
+            task_declared_opts=getattr(task, "opts", {}),
+            resolved_opts=model.opts,
+            profile=runner.ctx.vars.get("profile_model"),
         )
         runner._log_info(f"Command: {command}")
 

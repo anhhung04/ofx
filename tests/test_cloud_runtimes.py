@@ -227,6 +227,33 @@ class TestBuildTaskCommandFromStep:
             proxy="socks5://127.0.0.1:9050",
         )
 
+    def test_profile_command_adaptation_runs_after_build(self):
+        mock_task_cls = MagicMock()
+        mock_task = MagicMock()
+        mock_task.output_flag = None
+        mock_task.opts = {}
+        mock_task.build_command.return_value = ("whois example.com", [])
+        mock_task_cls.return_value = mock_task
+        profile = object()
+        step = Step(task="whois", run_with={"target": "example.com"})
+
+        with (
+            patch("ofx.tasks.registry.TaskRegistry") as mock_reg,
+            patch("ofx.cloud.task_runtime.adapt_task_command_for_profile") as mock_adapt,
+        ):
+            mock_reg.get.return_value = mock_task_cls
+            mock_adapt.return_value = "env HTTP_PROXY=socks5://127.0.0.1:9050 whois example.com"
+
+            result = build_task_command_from_step(step, profile=profile)
+
+        mock_adapt.assert_called_once_with(
+            "whois example.com",
+            task_declared_opts=mock_task.opts,
+            resolved_opts={},
+            profile=profile,
+        )
+        assert result == "env HTTP_PROXY=socks5://127.0.0.1:9050 whois example.com"
+
 
 class TestTaskStepHelpers:
     def test_extract_task_target_and_opts_normalizes_lists_and_scalars(self):

@@ -119,6 +119,33 @@ class TestSubfinderParser:
         assert results[0].domain == "example.com"
 
 
+class TestAsnmapParser:
+    def test_parse_line(self):
+        task = TaskRegistry.create("asnmap")
+
+        results = task.parse_line(
+            json.dumps(
+                {
+                    "input": "AS13335",
+                    "as_range": "104.16.0.0/13",
+                    "as_number": "13335",
+                    "as_name": "CLOUDFLARENET",
+                    "as_country": "US",
+                }
+            )
+        )
+
+        assert len(results) == 1
+        assert isinstance(results[0], Ip)
+        assert results[0].ip == "104.16.0.0/13"
+        assert results[0].host == "AS13335"
+        assert results[0].extra_data == {
+            "as_number": "13335",
+            "as_name": "CLOUDFLARENET",
+            "as_country": "US",
+        }
+
+
 # ── Ffuf Parser ────────────────────────────────────────────────────────────
 
 

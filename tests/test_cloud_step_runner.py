@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
 from ofx.models.step import RunType, Step
 from ofx.runner import RunContext
@@ -334,7 +335,7 @@ def test_parse_task_output_returns_empty_and_logs_on_error():
         def get(_name):
             return _Task
 
-    with monkeypatch.context() as m:
+    with MonkeyPatch.context() as m:
         m.setattr("ofx.tasks.registry.TaskRegistry", _Registry)
         runner.parent = None
 
@@ -437,6 +438,41 @@ def test_remote_env_var_helpers_merge_runner_parent_and_step_env():
     assert 'STEP_ONLY="1"' in env_prefix
 
 
+def test_remote_env_var_helpers_include_workflow_and_profile_env_without_leaking_local_env():
+    from ofx.profiles.models import OFXProfile
+
+    runner = object.__new__(CloudStepRunner)
+    runner.ctx = RunContext(
+        envs={
+            "REMOTE_FLEET_INPUT_FILE": "/tmp/targets.txt",
+            "PATH": "/usr/local/bin:/usr/bin",
+            "UNRELATED_LOCAL": "skip",
+        },
+        vars={
+            "profile_model": OFXProfile(
+                proxy="socks5://127.0.0.1:9050",
+                env={"PROFILE_ONLY": "1"},
+            )
+        },
+    )
+    runner.model = Step(run="echo hi", env={"STEP_ONLY": "3"})
+    runner.parent = SimpleNamespace(
+        model=SimpleNamespace(env={"JOB_ONLY": "2"}),
+        parent=SimpleNamespace(model=SimpleNamespace(env={"WORKFLOW_ONLY": "4"})),
+    )
+
+    env_prefix = runner._build_env_prefix()
+
+    assert 'REMOTE_FLEET_INPUT_FILE="/tmp/targets.txt"' in env_prefix
+    assert 'PROFILE_ONLY="1"' in env_prefix
+    assert 'OFX_PROXY="socks5://127.0.0.1:9050"' in env_prefix
+    assert 'HTTP_PROXY="socks5://127.0.0.1:9050"' in env_prefix
+    assert 'WORKFLOW_ONLY="4"' in env_prefix
+    assert 'JOB_ONLY="2"' in env_prefix
+    assert 'STEP_ONLY="3"' in env_prefix
+    assert "UNRELATED_LOCAL" not in env_prefix
+
+
 def test_step_log_helpers_build_name_run_type_and_message():
     runner = object.__new__(CloudStepRunner)
     runner.model = Step(run="echo hi", step_index=2, name="recon-step")
@@ -453,11 +489,11 @@ def test_step_log_helpers_build_name_run_type_and_message():
     assert timeline_params["source_host"] == "10.0.0.1"
     assert timeline_params["tags"] == "cloud"
     assert runner._produce_log("hello") == (
-        "workflow[wf-a]job[job-a]step[2][recon-step][command] › hello"
+        "name=wf-a | job=job-a | step=2 › [recon-step] [command] hello"
     )
     runner._run_type = RunType.TASK
     assert runner._produce_log("hello") == (
-        "workflow[wf-a]job[job-a]step[2][recon-step][task] › hello"
+        "name=wf-a | job=job-a | step=2 › [recon-step] [task] hello"
     )
 
 

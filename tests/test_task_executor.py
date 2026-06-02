@@ -452,6 +452,57 @@ async def test_do_run_uses_streaming_executor_and_stdout_callback(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_do_run_adapts_command_for_profile(monkeypatch):
+    captured_commands: list[str] = []
+    task_executor = TaskExecutor()
+    runner = SimpleNamespace(
+        _task=SimpleNamespace(
+            supports_streaming=False,
+            success_codes={0},
+            opts={},
+            build_command=lambda _target, **_opts: ("whois example.com", None),
+        ),
+        model=SimpleNamespace(
+            task_name="whois",
+            target="example.com",
+            opts={},
+            shell="/bin/sh",
+            working_directory=Path.cwd(),
+            timeout_minutes=5,
+            store_creds=False,
+        ),
+        reg_set=AsyncMock(),
+        ctx=RunContext(vars={"profile_model": object()}, envs={}),
+        _log_info=lambda _msg: None,
+        _on_stdout_line=lambda _line: None,
+    )
+
+    executor = SimpleNamespace(prepare_outputs_file=lambda: None)
+
+    async def _execute():
+        return SimpleNamespace(exit_code=0, stdout="ok", stderr="", outputs={})
+
+    async def _finalize(_runner, **_kwargs):
+        return None
+
+    def _command_executor(command_model, _envs):
+        captured_commands.append(command_model.cmd)
+        executor.execute = _execute
+        return executor
+
+    monkeypatch.setattr("ofx.runner.executors.task.CommandExecutor", _command_executor)
+    monkeypatch.setattr(
+        "ofx.runner.executors.task.adapt_task_command_for_profile",
+        lambda command, **_kwargs: f"env HTTP_PROXY=socks5://127.0.0.1:9050 {command}",
+    )
+    monkeypatch.setattr(task_executor, "_finalize_task_execution", _finalize)
+
+    await task_executor.do_run(runner)
+
+    assert captured_commands == ["env HTTP_PROXY=socks5://127.0.0.1:9050 whois example.com"]
+
+
+@pytest.mark.asyncio
 async def test_do_run_raises_for_failed_exit_code_and_still_finalizes(monkeypatch):
     calls: list[str] = []
     task_executor = TaskExecutor()

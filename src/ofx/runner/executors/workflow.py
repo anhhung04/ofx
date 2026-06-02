@@ -10,21 +10,15 @@ from typing import Any
 from ofx.runner.context import context_copy
 from ofx.runner.executors import Executor
 from ofx.runner.registry_keys import RunnerRegistryKeys
+from ofx.runner.task_profile_options import (
+    build_profile_env_overrides,
+    build_profile_var_overrides,
+)
 from ofx.settings import settings
 from ofx.utils.file_cleanup import remove_tree
 from ofx.utils.workflow_utils import workflow_dirs_with_path
 
 logger = logging.getLogger(settings.app_branding)
-
-_PROFILE_ENV_SPECS: tuple[tuple[str, str, object | None], ...] = (
-    ("OFX_RATE_LIMIT", "rate_limit", None),
-    ("OFX_THREADS", "threads", 10),
-    ("OFX_TIMEOUT", "timeout_minutes", 60),
-    ("OFX_DELAY", "delay", None),
-    ("OFX_JITTER", "jitter", None),
-    ("OFX_PROXY", "proxy", None),
-    ("OFX_USER_AGENT", "user_agent", None),
-)
 
 _INPUT_TYPE_MAP: dict[str, type[Any] | tuple[type[Any], ...]] = {
     "string": str,
@@ -327,7 +321,7 @@ class WorkflowExecutor(Executor):
         )
 
     async def apply_profile(self, runner) -> None:
-        profile_name = runner.model.defaults.profile or ""
+        profile_name = runner.ctx.vars.get("_cli_profile_name") or runner.model.defaults.profile or ""
         if not profile_name:
             return
 
@@ -338,17 +332,9 @@ class WorkflowExecutor(Executor):
             return
         runner._profile = profile
         runner._log_info(f"Applying profile: {profile_name}")
-        profile_envs: dict[str, str] = {}
-        for env_key, profile_attr, default_value in _PROFILE_ENV_SPECS:
-            value = getattr(profile, profile_attr)
-            if bool(value) if default_value is None else value != default_value:
-                profile_envs[env_key] = str(value)
         runner.update_env_and_vars(
-            (profile.env or {}) | profile_envs,
-            {
-                "profile": profile.model_dump(),
-                "profile_model": profile,
-            },
+            build_profile_env_overrides(profile),
+            build_profile_var_overrides(profile),
         )
 
         if not profile.time_window.enabled:

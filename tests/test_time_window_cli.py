@@ -393,3 +393,34 @@ class TestFlowRunHandlerTimeWindow:
             passed_vars = call_kwargs.kwargs.get("vars") or call_kwargs[1].get("vars")
             if passed_vars:
                 assert "_cli_time_window" not in passed_vars
+
+    def test_cli_profile_injected_into_run_vars(self):
+        with (
+            patch(
+                "ofx.commands.flow.run.run_workflow", new_callable=AsyncMock
+            ) as mock_run_workflow,
+            patch("ofx.commands.flow.run.get_workflow_search_dirs", return_value=[]),
+        ):
+            from ofx.commands.flow.run import FlowRunHandler as FRH
+
+            mock_run_workflow.return_value = MagicMock(
+                status=MagicMock(value="completed"),
+            )
+
+            handler = FRH(
+                workflow_name="test.yml",
+                profile_name="stealth",
+            )
+            handler._configure_logging = MagicMock()
+            handler._acquire_lock = MagicMock(return_value=None)
+            handler._process_inputs = MagicMock()
+            handler._print_summary = MagicMock()
+            handler._save_history = MagicMock()
+            handler.input = {}
+            handler.quiet = True
+
+            asyncio.run(handler.run())
+
+            call_kwargs = mock_run_workflow.call_args
+            passed_vars = call_kwargs.kwargs.get("vars") or call_kwargs[1].get("vars")
+            assert passed_vars["_cli_profile_name"] == "stealth"

@@ -330,6 +330,22 @@ class Task(ABC):
             return [item for item in parsed if isinstance(item, dict)]
         return []
 
+    @staticmethod
+    def _parse_json_line(line: str) -> dict[str, Any] | None:
+        """Parse a single JSONL line into a dict, ignoring non-JSON noise."""
+        import json
+
+        raw = line.strip()
+        if not raw or not raw.startswith("{"):
+            return None
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+
+        return parsed if isinstance(parsed, dict) else None
+
     def _read_json_output(
         self, stdout: str, output_file: Path | None = None
     ) -> Any | None:

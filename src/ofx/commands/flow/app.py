@@ -232,9 +232,16 @@ def run(
         ),
     ] = "",
     profile: Annotated[
-        bool,
+        str,
         typer.Option(
             "--profile",
+            help="Execution profile name from ~/.ofx/profiles.yml.",
+        ),
+    ] = "",
+    perf_profile: Annotated[
+        bool,
+        typer.Option(
+            "--perf-profile",
             help="Enable performance profiling and output timing information.",
         ),
     ] = False,
@@ -369,7 +376,8 @@ def run(
             input=input or [],
             env=get_cli_env_vars(),
             output=output,
-            profile=profile,
+            profile_name=profile,
+            perf_profile=perf_profile,
             durable=durable,
             resume=resume,
             durable_backend=durable_backend,

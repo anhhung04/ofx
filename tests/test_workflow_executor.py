@@ -82,6 +82,7 @@ class _RegistryRunner:
 class _ProfileRunner:
     def __init__(self, profile_name: str = "") -> None:
         self.model = SimpleNamespace(defaults=SimpleNamespace(profile=profile_name))
+        self.ctx = SimpleNamespace(vars={})
         self._profile = None
         self._logged_info: list[str] = []
         self.env_updates: list[dict] = []
@@ -886,6 +887,26 @@ async def test_apply_profile_skips_without_profile_name() -> None:
 
 
 @pytest.mark.asyncio
+async def test_apply_profile_prefers_cli_profile_override(monkeypatch) -> None:
+    from ofx.profiles.models import OFXProfile
+
+    runner = _ProfileRunner("")
+    runner.ctx.vars["_cli_profile_name"] = "stealth"
+    profile = OFXProfile(threads=4)
+
+    monkeypatch.setattr(
+        "ofx.profiles.manager.get_profile_manager",
+        lambda: SimpleNamespace(resolve_or_default=lambda name: profile if name == "stealth" else None),
+    )
+
+    await WorkflowExecutor().apply_profile(runner)
+
+    assert runner._profile is profile
+    assert runner._logged_info == ["Applying profile: stealth"]
+    assert runner.var_updates[0]["profile_model"] is profile
+
+
+@pytest.mark.asyncio
 async def test_apply_profile_skips_when_profile_resolution_returns_none(monkeypatch) -> None:
     runner = _ProfileRunner("stealth")
     monkeypatch.setattr(
@@ -933,7 +954,13 @@ async def test_apply_profile_updates_runtime_and_activates_time_window(monkeypat
 
     assert runner._profile is profile
     assert runner._logged_info == ["Applying profile: stealth"]
-    assert runner.env_updates == [{"FOO": "bar", "OFX_THREADS": "5"}]
+    env = runner.env_updates[0]
+    assert env["FOO"] == "bar"
+    assert env["OFX_THREADS"] == "5"
+    assert env["OFX_PROFILE_THREADS"] == "5"
+    assert env["OFX_PROFILE_ENV"] == '{"FOO": "bar"}'
+    assert env["OFX_PROFILE_TIME_WINDOW"] == '{"abort_on_expire": true, "days": ["mon", "tue"], "enabled": true, "end": "17:00", "start": "09:00", "timezone": "UTC", "warn_before_minutes": 10}'
+    assert env["OFX_PROFILE_JSON"]
     assert runner.var_updates[0]["profile_model"] is profile
     assert runner.var_updates[0]["profile"]["threads"] == 5
     assert len(activation) == 1
@@ -968,14 +995,25 @@ async def test_apply_profile_only_includes_non_default_profile_envs(monkeypatch)
 
     await WorkflowExecutor().apply_profile(runner)
 
-    assert runner.env_updates == [{
-        "OFX_RATE_LIMIT": "30",
-        "OFX_TIMEOUT": "90",
-        "OFX_DELAY": "2.0",
-        "OFX_JITTER": "0.5",
-        "OFX_PROXY": "socks5://127.0.0.1:9050",
-        "OFX_USER_AGENT": "CustomAgent/1.0",
-    }]
+    env = runner.env_updates[0]
+    assert env["OFX_RATE_LIMIT"] == "30"
+    assert env["OFX_TIMEOUT"] == "90"
+    assert env["OFX_DELAY"] == "2.0"
+    assert env["OFX_JITTER"] == "0.5"
+    assert env["OFX_PROXY"] == "socks5://127.0.0.1:9050"
+    assert env["OFX_USER_AGENT"] == "CustomAgent/1.0"
+    assert env["OFX_PROFILE_NAME"] == "stealth"
+    assert env["OFX_PROFILE_RATE_LIMIT"] == "30"
+    assert env["OFX_PROFILE_TIMEOUT_MINUTES"] == "90"
+    assert env["OFX_PROFILE_USER_AGENT"] == "CustomAgent/1.0"
+    assert '"name": "stealth"' in env["OFX_PROFILE_JSON"]
+    assert '"rate_limit": 30' in env["OFX_PROFILE_JSON"]
+    assert '"threads": 10' in env["OFX_PROFILE_JSON"]
+    assert env["http_proxy"] == "socks5://127.0.0.1:9050"
+    assert env["https_proxy"] == "socks5://127.0.0.1:9050"
+    assert env["HTTP_PROXY"] == "socks5://127.0.0.1:9050"
+    assert env["HTTPS_PROXY"] == "socks5://127.0.0.1:9050"
+    assert env["ALL_PROXY"] == "socks5://127.0.0.1:9050"
 
 
 @pytest.mark.asyncio
@@ -1001,7 +1039,12 @@ async def test_apply_profile_skips_default_profile_envs(monkeypatch) -> None:
 
     await WorkflowExecutor().apply_profile(runner)
 
-    assert runner.env_updates == [{}]
+    env = runner.env_updates[0]
+    assert env["OFX_PROFILE_NAME"] == "stealth"
+    assert env["OFX_PROFILE_THREADS"] == "10"
+    assert env["OFX_PROFILE_TIMEOUT_MINUTES"] == "60"
+    assert env["OFX_PROFILE_TIME_WINDOW"] == "namespace(enabled=False)"
+    assert '"name": "stealth"' in env["OFX_PROFILE_JSON"]
 
 
 def test_apply_cli_time_window_returns_without_runner_var() -> None:

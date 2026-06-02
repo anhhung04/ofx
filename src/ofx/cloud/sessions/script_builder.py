@@ -63,6 +63,7 @@ def build_session_script(
     workflow_name: str = "",
     job_name: str = "",
     env: dict[str, str] | None = None,
+    profile: object | None = None,
     os_type: str = "linux",
     encrypt_at_rest: bool = False,
 ) -> str:
@@ -91,10 +92,18 @@ def build_session_script(
             workflow_name,
             job_name,
             env or {},
+            profile,
             encrypt_at_rest,
         )
     return _build_bash(
-        steps, session_id, work_dir, workflow_name, job_name, env or {}, encrypt_at_rest
+        steps,
+        session_id,
+        work_dir,
+        workflow_name,
+        job_name,
+        env or {},
+        profile,
+        encrypt_at_rest,
     )
 
 
@@ -110,6 +119,7 @@ def _build_bash(
     workflow_name: str,
     job_name: str,
     env: dict[str, str],
+    profile: object | None,
     encrypt_at_rest: bool = False,
 ) -> str:
     scope = bash_dquote_escape(job_name or "full-workflow")
@@ -143,7 +153,15 @@ def _build_bash(
         ]
     )
 
-    _append_step_blocks(lines, steps, build_step_block=_build_bash_step_block)
+    _append_step_blocks(
+        lines,
+        steps,
+        build_step_block=lambda step, step_index: _build_bash_step_block(
+            step,
+            step_index,
+            profile=profile,
+        ),
+    )
 
     if encrypt_at_rest:
         lines.extend(_bash_encrypt_epilogue())
@@ -170,10 +188,16 @@ def _build_bash(
     return "\n".join(lines) + "\n"
 
 
-def _build_bash_step_block(step: Step, step_index: int) -> list[str]:
+def _build_bash_step_block(
+    step: Step,
+    step_index: int,
+    *,
+    profile: object | None,
+) -> list[str]:
     step_desc = bash_dquote_escape(_step_log_descriptor(step, step_index))
     command = _step_command_for_session_script(
         step,
+        profile=profile,
         prefix='cd "$WORK_DIR" 2>/dev/null; ',
         python_command=_python_step_command_bash(step_index),
         pipe_command='echo "Pipe steps run locally and cannot be executed in cloud sessions" >&2; exit 1',
@@ -223,6 +247,7 @@ def _step_log_descriptor(step: Step, step_index: int) -> str:
 def _step_command_for_session_script(
     step: Step,
     *,
+    profile: object | None,
     prefix: str,
     python_command: str,
     pipe_command: str,
@@ -236,7 +261,7 @@ def _step_command_for_session_script(
     elif is_python_step_run_type(run_type):
         suffix = python_command
     elif run_type == RunType.TASK:
-        suffix = build_task_command_from_step(step)
+        suffix = build_task_command_from_step(step, profile=profile)
     elif run_type == RunType.PIPE:
         return pipe_command
     else:
@@ -301,6 +326,7 @@ def _build_powershell(
     workflow_name: str,
     job_name: str,
     env: dict[str, str],
+    profile: object | None,
     encrypt_at_rest: bool = False,
 ) -> str:
     scope = _ps_escape(job_name or "full-workflow")
@@ -341,6 +367,7 @@ def _build_powershell(
             step,
             step_index,
             work_dir,
+            profile=profile,
         ),
     )
 
@@ -366,11 +393,14 @@ def _build_powershell_step_block(
     step: Step,
     step_index: int,
     work_dir: str,
+    *,
+    profile: object | None,
 ) -> list[str]:
     step_desc = _ps_escape(_step_log_descriptor(step, step_index))
     escaped_cwd = _ps_escape(work_dir)
     command = _step_command_for_session_script(
         step,
+        profile=profile,
         prefix=f'Set-Location "{escaped_cwd}"; ',
         python_command=_python_step_command_ps(step_index),
         pipe_command='Write-Error "Pipe steps run locally and cannot be executed in cloud sessions"; exit 1',

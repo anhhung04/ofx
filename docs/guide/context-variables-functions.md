@@ -158,16 +158,6 @@ run: |
 |---|---|
 | `export_typed_outputs(project_path, items, prefix)` | Export typed output dicts to organized project directories (master files + per-target subdirectories). |
 
-### ASM Integration
-
-These functions integrate with the OFX Attack Surface Management module. They degrade gracefully (returning empty results) when ASM is not configured:
-
-| Function | Description |
-|---|---|
-| `asm_targets(scope, effective, target_type)` | Retrieve target values from an ASM scope. Returns a list of strings (domains, IPs, etc.). |
-| `asm_push(items, scope, source)` | Push typed output dicts to an ASM scope. Returns the count of imported assets. |
-| `asm_scopes()` | List available ASM scopes as dicts with `id`, `name`, `scope_type`, and `group` fields. |
-
 ---
 
 ## Shell Helper Functions
