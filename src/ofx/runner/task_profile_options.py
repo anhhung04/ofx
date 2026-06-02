@@ -3,19 +3,71 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 import json
 import re
 import shlex
+from typing import Callable
 from typing import Any
 from urllib.parse import urlparse
 
+
+@dataclass(frozen=True)
+class ProfileTaskOptMapping:
+    profile_attr: str
+    candidate_names: tuple[str, ...]
+    resolver: Callable[[str, Any, Any], Any] | None = None
+
+
+def _identity_resolver(_opt_name: str, _opt_def: Any, value: Any) -> Any:
+    return value
+
+
+def _timeout_resolver(opt_name: str, opt_def: Any, value: Any) -> Any:
+    minutes = int(value)
+    help_text = str(getattr(opt_def, "help", "") or "").lower()
+    unit_hint = opt_name.lower()
+    if "millisecond" in help_text or re.search(r"\bms\b", help_text):
+        return minutes * 60_000
+    if "minute" in help_text or unit_hint == "lifetime":
+        return minutes
+    return minutes * 60
+
+
+def _delay_resolver(opt_name: str, opt_def: Any, value: Any) -> Any:
+    delay = float(value)
+    help_text = str(getattr(opt_def, "help", "") or "").lower()
+    if "millisecond" in help_text or re.search(r"\bms\b", help_text):
+        return int(round(delay * 1000))
+    if getattr(opt_def, "type", None) is str or opt_name == "delay" and isinstance(value, str):
+        return str(value)
+    return value
+
+
+def _user_agent_resolver(opt_name: str, _opt_def: Any, value: Any) -> Any:
+    if opt_name in {"header", "headers"}:
+        return f"User-Agent: {value}"
+    return value
+
+
+COMMON_TASK_PROFILE_MAPPINGS: tuple[ProfileTaskOptMapping, ...] = (
+    ProfileTaskOptMapping("proxy", ("proxy", "proxy_url", "http_proxy")),
+    ProfileTaskOptMapping("threads", ("threads", "concurrency", "workers", "max_concurrency")),
+    ProfileTaskOptMapping("rate_limit", ("rate_limit", "rate")),
+    ProfileTaskOptMapping("delay", ("delay",), resolver=_delay_resolver),
+    ProfileTaskOptMapping("user_agent", ("user_agent", "header", "headers"), resolver=_user_agent_resolver),
+    ProfileTaskOptMapping("jitter", ("jitter",)),
+    ProfileTaskOptMapping("max_retries", ("retry", "retries")),
+    ProfileTaskOptMapping(
+        "timeout_minutes",
+        ("timeout", "lifetime", "dns_timeout", "ssl_timeout"),
+        resolver=_timeout_resolver,
+    ),
+)
+
 COMMON_TASK_PROFILE_MAPPING: list[tuple[str, list[str]]] = [
-    ("proxy", ["proxy", "proxy_url", "http_proxy"]),
-    ("threads", ["threads", "concurrency", "workers"]),
-    ("rate_limit", ["rate_limit", "rate"]),
-    ("delay", ["delay"]),
-    ("user_agent", ["user_agent"]),
-    ("jitter", ["jitter"]),
+    (mapping.profile_attr, list(mapping.candidate_names))
+    for mapping in COMMON_TASK_PROFILE_MAPPINGS
 ]
 
 _PROFILE_ENV_SPECS: tuple[tuple[str, str, object | None], ...] = (
@@ -66,8 +118,8 @@ def merge_profile_task_options(
     merged = dict(user_opts)
     declared = task_declared_opts or {}
     injected: list[str] = []
-    for profile_attr, candidate_names in COMMON_TASK_PROFILE_MAPPING:
-        value = getattr(profile, profile_attr, None)
+    for mapping in COMMON_TASK_PROFILE_MAPPINGS:
+        value = getattr(profile, mapping.profile_attr, None)
         if value is None:
             continue
         if isinstance(value, (int, float)) and value == 0:
@@ -75,18 +127,28 @@ def merge_profile_task_options(
         if isinstance(value, str) and not value:
             continue
 
-        opt_name = next(
+        selected = next(
             (
-                candidate_name
-                for candidate_name in candidate_names
+                (candidate_name, declared[candidate_name])
+                for candidate_name in mapping.candidate_names
                 if candidate_name in declared and candidate_name not in merged
             ),
             None,
         )
-        if opt_name is None:
+        if selected is None:
             continue
-        merged[opt_name] = value
-        injected.append(f"{opt_name}={value}")
+
+        opt_name, opt_def = selected
+        resolved_value = (
+            mapping.resolver(opt_name, opt_def, value)
+            if mapping.resolver is not None
+            else _identity_resolver(opt_name, opt_def, value)
+        )
+        if resolved_value is None:
+            continue
+
+        merged[opt_name] = resolved_value
+        injected.append(f"{opt_name}={resolved_value}")
 
     task_options = getattr(profile, "task_options", None) or {}
     overrides = dict(task_options.get(task_name, {}) or {})

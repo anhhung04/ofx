@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from ofx.profiles.models import OFXProfile
+from ofx.tasks.base import OptDef
 from ofx.runner.task_profile_options import (
     adapt_task_command_for_profile,
     build_profile_env_overrides,
@@ -173,3 +174,81 @@ def test_build_profile_var_overrides_and_profile_to_dict_normalize_profile_data(
     assert vars_update["profile_model"] is profile
     assert vars_update["profile"] == profile_to_dict(profile)
     assert vars_update["profile"]["name"] == "stealth"
+
+
+def test_merge_profile_task_options_maps_threads_to_max_concurrency():
+    profile = OFXProfile(threads=7)
+
+    merged, injected, _override_keys = merge_profile_task_options(
+        task_name="promptfoo",
+        user_opts={},
+        task_declared_opts={
+            "max_concurrency": OptDef(flag="-j", type=int, help="Max concurrency")
+        },
+        profile=profile,
+    )
+
+    assert merged == {"max_concurrency": 7}
+    assert injected == ["max_concurrency=7"]
+
+
+def test_merge_profile_task_options_maps_timeout_minutes_to_seconds_and_milliseconds():
+    profile = OFXProfile(timeout_minutes=2)
+
+    seconds_merged, seconds_injected, _ = merge_profile_task_options(
+        task_name="httpx",
+        user_opts={},
+        task_declared_opts={
+            "timeout": OptDef(flag="-timeout", type=int, help="Timeout in seconds")
+        },
+        profile=profile,
+    )
+    ms_merged, ms_injected, _ = merge_profile_task_options(
+        task_name="naabu",
+        user_opts={},
+        task_declared_opts={
+            "timeout": OptDef(flag="-timeout", type=int, help="Timeout in milliseconds")
+        },
+        profile=profile,
+    )
+
+    assert seconds_merged == {"timeout": 120}
+    assert seconds_injected == ["timeout=120"]
+    assert ms_merged == {"timeout": 120000}
+    assert ms_injected == ["timeout=120000"]
+
+
+def test_merge_profile_task_options_maps_delay_and_retry_and_user_agent_header_fallback():
+    profile = OFXProfile(delay=1.5, max_retries=4, user_agent="agent/1.0")
+
+    delay_merged, delay_injected, _ = merge_profile_task_options(
+        task_name="cariddi",
+        user_opts={},
+        task_declared_opts={
+            "delay": OptDef(flag="-d", type=int, help="Delay between requests in ms")
+        },
+        profile=profile,
+    )
+    retry_merged, retry_injected, _ = merge_profile_task_options(
+        task_name="dnsx",
+        user_opts={},
+        task_declared_opts={
+            "retries": OptDef(flag="-retry", type=int, help="Number of retries")
+        },
+        profile=profile,
+    )
+    header_merged, header_injected, _ = merge_profile_task_options(
+        task_name="graphw00f",
+        user_opts={},
+        task_declared_opts={
+            "headers": OptDef(flag="-H", type=str, help="Custom headers")
+        },
+        profile=profile,
+    )
+
+    assert delay_merged == {"delay": 1500}
+    assert delay_injected == ["delay=1500"]
+    assert retry_merged == {"retries": 4}
+    assert retry_injected == ["retries=4"]
+    assert header_merged == {"headers": "User-Agent: agent/1.0"}
+    assert header_injected == ["headers=User-Agent: agent/1.0"]
