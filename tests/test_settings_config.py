@@ -166,3 +166,30 @@ class TestEnsureDefaultConfig:
         _ensure_default_config()
         data = yaml.safe_load(isolated_config.read_text()) or {}
         assert data.get("custom_key") == "custom_value"
+
+
+class TestEnsureDefaultLayout:
+    def test_creates_standard_ofx_directories(self, tmp_path, monkeypatch):
+        import ofx.settings as sm
+
+        monkeypatch.setattr(sm, "BASE_DATA_DIR", tmp_path / ".ofx")
+        monkeypatch.setattr(sm, "SECRETS_DIR", tmp_path / ".ofx" / "secrets")
+        monkeypatch.setattr(sm, "DEFAULT_WORKFLOWS_DIR", tmp_path / ".ofx" / "workflows")
+        monkeypatch.setattr(sm, "DEFAULT_PROJECTS_PATH", tmp_path / ".ofx" / "projects")
+        monkeypatch.setattr(sm, "USER_EXPLOITS_DIR", tmp_path / ".ofx" / "exploits")
+        monkeypatch.setattr(sm, "USER_SHELLCODE_CONNECTORS_DIR", tmp_path / ".ofx" / "shellcode" / "connectors")
+        monkeypatch.setattr(sm, "USER_WEBSHELL_CONNECTORS_DIR", tmp_path / ".ofx" / "webshell" / "connectors")
+        monkeypatch.setattr(sm, "SESSIONS_DIR", tmp_path / ".ofx" / "sessions")
+        monkeypatch.setattr(sm, "COLLECTIONS_DIR", tmp_path / ".ofx" / "collections")
+
+        sm._ensure_default_layout()
+
+        assert sm.BASE_DATA_DIR.is_dir()
+        assert sm.SECRETS_DIR.is_dir()
+        assert sm.DEFAULT_WORKFLOWS_DIR.is_dir()
+        assert sm.DEFAULT_PROJECTS_PATH.is_dir()
+        assert sm.USER_EXPLOITS_DIR.is_dir()
+        assert sm.USER_SHELLCODE_CONNECTORS_DIR.is_dir()
+        assert sm.USER_WEBSHELL_CONNECTORS_DIR.is_dir()
+        assert sm.SESSIONS_DIR.is_dir()
+        assert sm.COLLECTIONS_DIR.is_dir()

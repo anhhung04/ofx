@@ -204,6 +204,21 @@ class TestCloudProfileManager:
         assert manager.profiles == {}
         assert manager.default_profile_name == ""
 
+    def test_bootstraps_default_cloud_config_on_first_use(self, tmp_path, monkeypatch):
+        import ofx.cloud.config as cc
+
+        config_path = tmp_path / ".ofx" / "cloud.yml"
+        monkeypatch.setattr(cc, "CLOUD_CONFIG_FILE", config_path)
+
+        manager = cc.CloudProfileManager()
+
+        assert config_path.exists()
+        text = config_path.read_text()
+        assert "# OFX cloud profiles" in text
+        assert "# Example:" in text
+        assert manager.list_profiles() == []
+        assert manager.default_profile_name == ""
+
     def test_add_profile(self, manager):
         manager.add("test", {"provider": "static", "host": "1.2.3.4"})
         assert "test" in manager.list_profiles()

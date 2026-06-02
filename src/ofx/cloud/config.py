@@ -31,6 +31,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from ofx.models.cloud import CloudConfig
 from ofx.settings import BASE_DATA_DIR
 from ofx.utils.config_store import load_yaml_dict, save_yaml_dict
@@ -38,6 +40,61 @@ from ofx.utils.config_store import load_yaml_dict, save_yaml_dict
 logger = logging.getLogger("ofx")
 
 CLOUD_CONFIG_FILE = BASE_DATA_DIR / "cloud.yml"
+
+
+def _default_cloud_config_data() -> dict[str, Any]:
+    """Starter cloud config created on first user use."""
+    return {
+        "profiles": {},
+        "defaults": {"profile": ""},
+    }
+
+
+_CLOUD_CONFIG_FILE_HEADER = """# OFX cloud profiles
+#
+# File format:
+#   profiles:
+#     <name>:
+#       provider: static | digitalocean | aws
+#       host: <ip-or-hostname>        # static only
+#       region: <cloud-region>
+#       size: <instance-size>
+#       image: <image-or-ami>
+#       ssh_user: <user>
+#       ssh_key: <path>
+#       ssh_password: <password>
+#       auto_destroy: <bool>
+#   defaults:
+#     profile: <name or empty>
+#
+# Example:
+#   profiles:
+#     do-small:
+#       provider: digitalocean
+#       region: nyc3
+#       size: s-1vcpu-1gb
+#       image: ubuntu-24-04-x64
+#       ssh_user: root
+#       auto_destroy: true
+#
+#     lab-host:
+#       provider: static
+#       host: 10.10.10.5
+#       ssh_user: root
+#       ssh_key: ~/.ssh/id_ed25519
+#   defaults:
+#     profile: do-small
+
+"""
+
+
+def _dump_default_cloud_config_file() -> str:
+    return _CLOUD_CONFIG_FILE_HEADER + yaml.dump(
+        _default_cloud_config_data(),
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
 
 
 class CloudProfileManager:
@@ -57,6 +114,7 @@ class CloudProfileManager:
 
     def _load(self) -> None:
         """Load cloud config from YAML file."""
+        self._bootstrap_defaults()
         self._data = load_yaml_dict(
             self._path, warn_prefix="Failed to load cloud config"
         )
@@ -64,6 +122,13 @@ class CloudProfileManager:
     def _save(self) -> None:
         """Save cloud config to YAML file."""
         save_yaml_dict(self._path, self._data)
+
+    def _bootstrap_defaults(self) -> None:
+        """Create a starter cloud.yml on first use in the default OFX path."""
+        if self._path != CLOUD_CONFIG_FILE or self._path.exists():
+            return
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(_dump_default_cloud_config_file())
 
     @property
     def profiles(self) -> dict[str, dict[str, Any]]:

@@ -267,6 +267,22 @@ class TestProfiles:
         with pytest.raises(KeyError):
             mgr.resolve("nonexistent")
 
+    def test_profile_manager_bootstraps_default_profiles_on_first_use(self, tmp_path, monkeypatch):
+        import ofx.profiles.manager as pm
+
+        config_path = tmp_path / ".ofx" / "profiles.yml"
+        monkeypatch.setattr(pm, "PROFILES_FILE", config_path)
+
+        mgr = pm.ProfileManager()
+
+        assert config_path.exists()
+        text = config_path.read_text()
+        assert "# OFX execution profiles" in text
+        assert "# Example:" in text
+        assert "stealth" in mgr.list_profiles()
+        assert "aggressive" in mgr.list_profiles()
+        assert mgr.default_profile_name == ""
+
     def test_profile_task_options(self):
         from ofx.profiles.models import OFXProfile
 

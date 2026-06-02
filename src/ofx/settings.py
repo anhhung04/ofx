@@ -110,8 +110,23 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
-ensure_dir(BASE_DATA_DIR)
-ensure_dir(SECRETS_DIR)
+def _ensure_default_layout() -> None:
+    """Create the standard OFX filesystem layout on first user use."""
+    for path in (
+        BASE_DATA_DIR,
+        SECRETS_DIR,
+        DEFAULT_WORKFLOWS_DIR,
+        DEFAULT_PROJECTS_PATH,
+        USER_EXPLOITS_DIR,
+        USER_SHELLCODE_CONNECTORS_DIR,
+        USER_WEBSHELL_CONNECTORS_DIR,
+        SESSIONS_DIR,
+        COLLECTIONS_DIR,
+    ):
+        ensure_dir(path)
+
+
+_ensure_default_layout()
 
 
 # ------------------------------------------------------------------

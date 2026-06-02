@@ -9,6 +9,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from ofx.profiles.models import OFXProfile
 from ofx.settings import BASE_DATA_DIR
 from ofx.utils.config_store import load_yaml_dict, save_yaml_dict
@@ -16,6 +18,90 @@ from ofx.utils.config_store import load_yaml_dict, save_yaml_dict
 logger = logging.getLogger("ofx")
 
 PROFILES_FILE = BASE_DATA_DIR / "profiles.yml"
+
+
+def _default_profiles_data() -> dict[str, Any]:
+    """Starter execution profiles created on first user use."""
+    return {
+        "profiles": {
+            "stealth": {
+                "description": "Low-and-slow profile for cautious reconnaissance",
+                "rate_limit": 30,
+                "threads": 2,
+                "delay": 2.0,
+                "jitter": 1.0,
+                "retry_policy": "stealth",
+            },
+            "aggressive": {
+                "description": "Higher concurrency profile for fast scans",
+                "threads": 50,
+                "retry_policy": "aggressive",
+                "timeout_minutes": 30,
+            },
+        },
+        "defaults": {"profile": ""},
+    }
+
+
+_PROFILES_FILE_HEADER = """# OFX execution profiles
+#
+# File format:
+#   profiles:
+#     <name>:
+#       description: <text>
+#       rate_limit: <int>
+#       threads: <int>
+#       delay: <float seconds>
+#       jitter: <float seconds>
+#       proxy: <url>
+#       user_agent: <string>
+#       timeout_minutes: <int>
+#       max_retries: <int>
+#       time_window:
+#         enabled: <bool>
+#         start: \"HH:MM\"
+#         end: \"HH:MM\"
+#         days: [monday, tuesday, ...]
+#         timezone: <IANA tz>
+#       env:
+#         KEY: VALUE
+#       task_options:
+#         <task_name>:
+#           <opt>: <value>
+#   defaults:
+#     profile: <name or empty>
+#
+# Example:
+#   profiles:
+#     stealth:
+#       description: Low-and-slow recon
+#       rate_limit: 30
+#       threads: 2
+#       delay: 2.0
+#       jitter: 1.0
+#       timeout_minutes: 120
+#       time_window:
+#         enabled: true
+#         start: \"09:00\"
+#         end: \"17:00\"
+#         days: [monday, tuesday, wednesday, thursday, friday]
+#         timezone: UTC
+#       task_options:
+#         httpx:
+#           tech_detect: true
+#   defaults:
+#     profile: stealth
+
+"""
+
+
+def _dump_default_profiles_file() -> str:
+    return _PROFILES_FILE_HEADER + yaml.dump(
+        _default_profiles_data(),
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+    )
 
 
 class ProfileManager:
@@ -54,10 +140,18 @@ class ProfileManager:
     # ── I/O ────────────────────────────────────────────────────────
 
     def _load(self) -> None:
+        self._bootstrap_defaults()
         self._data = load_yaml_dict(self._path, warn_prefix="Failed to load profiles")
 
     def _save(self) -> None:
         save_yaml_dict(self._path, self._data)
+
+    def _bootstrap_defaults(self) -> None:
+        """Create a starter profiles.yml on first use in the default OFX path."""
+        if self._path != PROFILES_FILE or self._path.exists():
+            return
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(_dump_default_profiles_file())
 
     # ── Properties ─────────────────────────────────────────────────
 
