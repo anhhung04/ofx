@@ -9,6 +9,14 @@ tags:
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -23,7 +31,7 @@ jobs:
       live_count: '{{ steps["collect-cache-urls"].outputs.live_count | default("", true) }}'
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: probe-targets
         with:
           target: '{{ inputs.target }}'
@@ -59,7 +67,7 @@ jobs:
       total_count: '{{ steps["collect-results"].outputs.total_count | default("", true) }}'
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-cache-poison
         with:
           target: '{{ jobs.discover.outputs.live_file | default(inputs.target, true) }}'
@@ -67,7 +75,7 @@ jobs:
         continue-on-error: true
 
       - name: ffuf-unkeyed-headers
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           TARGETS="{{ jobs.discover.outputs.live_file | default(inputs.target, true) }}"
           HEADERS="X-Forwarded-Host X-Original-URL X-Rewrite-URL X-Forwarded-Scheme X-Forwarded-Proto X-Host X-Forwarded-Server X-HTTP-Method-Override X-Amz-Website-Redirect-Location"
@@ -142,7 +150,7 @@ jobs:
           echo "Total findings: {{ jobs['header-fuzz'].outputs.total_count }}"
           echo ""
           echo "Findings file: {{ jobs['header-fuzz'].outputs.findings_file }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

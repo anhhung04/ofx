@@ -6,6 +6,14 @@ description: |
 tags: [osint, email, recon, breach]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -31,15 +39,15 @@ jobs:
       name: account-discovery
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"
       continue-on-error: true
     - task: h8mail
       name: breach-search
       with:
         target: '{{ inputs.target }}'
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"
       continue-on-error: true
     - name: email-analysis
       script: |
@@ -119,5 +127,5 @@ jobs:
             print(f"  Google: {d}")
 
         add_outputs(**results)
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

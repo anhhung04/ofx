@@ -6,6 +6,14 @@ description: |
 tags: [scan, network, discovery, recon]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -24,7 +32,7 @@ jobs:
       hosts_file: '{{ steps["host-sweep"].outputs.hosts_file | default("", true) }}'
     steps:
     - name: host-sweep
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         echo "[+] Host discovery: {{ inputs.target }}"
 
@@ -50,7 +58,7 @@ jobs:
       ports_file: '{{ steps["fast-portscan"].outputs.ports_file | default("", true) }}'
     steps:
     - name: fast-portscan
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         echo "[+] Port scanning alive hosts..."
         HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
@@ -83,13 +91,13 @@ jobs:
       service_file: '{{ steps["nmap-svc"].outputs.service_file | default("", true) }}'
     steps:
     - task: nerva
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nerva-fingerprint
       with:
         target: "{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
       continue-on-error: true
     - name: nmap-svc
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         echo "[+] Service identification..."
 
@@ -118,7 +126,7 @@ jobs:
       cred_count: '{{ steps["brute-defaults"].outputs.cred_count }}'
     steps:
     - name: brute-defaults
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         HOSTS_FILE="{{ jobs['discovery'].outputs.hosts_file | default('/tmp/ofx_alive_hosts.txt', true) }}"
         if [ -f "$HOSTS_FILE" ]; then
@@ -144,4 +152,4 @@ jobs:
         echo ""
         echo "  Hosts file: ${OFX_RUN_DIR:-/tmp}/ofx_alive_hosts.txt"
         echo "  Service scan: ${OFX_RUN_DIR:-/tmp}/ofx_service_scan.txt"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -5,6 +5,14 @@ description: |
 tags: [recon, banner, portscan, fingerprint]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -24,7 +32,7 @@ jobs:
     steps:
     - name: scan-ports
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.recon import async_port_scan, TOP_100_PORTS
         import asyncio
@@ -56,7 +64,7 @@ jobs:
     steps:
     - name: grab-banners
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.service import scan_banner
         import json
@@ -125,4 +133,4 @@ jobs:
             print(f"  {svc['port']:<10} {svc['protocol']:<14} {tls:<6} {banner}")
 
         print(f"\n  Total: {{ jobs.portscan.outputs.port_count | default(0, true) }} open ports, {{ jobs.banners.outputs.service_count | default(0, true) }} services identified")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -8,6 +8,14 @@ tags:
 - code
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -21,13 +29,13 @@ jobs:
       critical_count: '{{ steps["export-vulns"].outputs.critical_count | default("", true) }}'
     steps:
     - task: grype
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: dependency-vulns
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trivy
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: code-vulns
       with:
         target: '{{ inputs.target }}'
@@ -56,13 +64,13 @@ jobs:
       secrets_count: '{{ steps["export-secrets"].outputs.secrets_count | default("", true) }}'
     steps:
     - task: gitleaks
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trufflehog
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'
@@ -92,7 +100,7 @@ jobs:
         echo "Vulnerabilities: {{ jobs['vuln-scan'].outputs.vuln_count }}"
         echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
         echo "Secrets/Leaks: {{ jobs['secrets-scan'].outputs.secrets_count }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

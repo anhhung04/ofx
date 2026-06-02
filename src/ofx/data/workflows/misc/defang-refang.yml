@@ -5,6 +5,14 @@ description: |
 tags: [utility, ioc, defang, dfir, cyberchef]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     data:
       required: true
       type: string
@@ -67,4 +75,4 @@ jobs:
         Path(out_file).write_text(result)
 
         add_outputs(result_file=out_file, operation=operation, line_count=len(result.splitlines()))
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

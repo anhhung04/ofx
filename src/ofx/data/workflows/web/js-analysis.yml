@@ -10,6 +10,14 @@ tags:
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -26,7 +34,7 @@ jobs:
       url_count: '{{ steps["extract-js-urls"].outputs.url_count | default("", true) }}'
     steps:
       - task: katana
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: katana-js-crawl
         with:
           target: '{{ inputs.target }}'
@@ -35,7 +43,7 @@ jobs:
         continue-on-error: true
 
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: httpx-probe
         with:
           target: '{{ inputs.target }}'
@@ -44,7 +52,7 @@ jobs:
         continue-on-error: true
 
       - task: gau
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: gau-archive
         with:
           target: '{{ inputs.target }}'
@@ -96,7 +104,7 @@ jobs:
       high_count: '{{ steps["js-summary"].outputs.high_count | default("", true) }}'
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-exposure
         with:
           target: "{{ jobs['discover-js'].outputs.js_file | default(inputs.target, true) }}"
@@ -125,7 +133,7 @@ jobs:
           print(f"Vulnerabilities: {total_vulns}")
           print(f"  Critical: {len(critical)}")
           print(f"  High: {len(high)}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

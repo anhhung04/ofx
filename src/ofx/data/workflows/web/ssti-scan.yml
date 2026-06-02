@@ -9,6 +9,14 @@ tags:
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -23,7 +31,7 @@ jobs:
       param_count: '{{ steps["merge-params"].outputs.param_count | default("", true) }}'
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: probe-targets
         with:
           target: '{{ inputs.target }}'
@@ -32,7 +40,7 @@ jobs:
         continue-on-error: true
 
       - task: arjun
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: arjun-params
         with:
           target: '{{ inputs.target }}'
@@ -41,7 +49,7 @@ jobs:
         continue-on-error: true
 
       - task: paramspider
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: paramspider-mine
         with:
           target: '{{ inputs.target }}'
@@ -97,14 +105,14 @@ jobs:
       nuclei_count: '{{ steps["collect-results"].outputs.nuclei_count | default("", true) }}'
     steps:
       - task: tinja
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: tinja-scan
         with:
           target: "{{ jobs['param-discovery'].outputs.param_file | default(inputs.target, true) }}"
         continue-on-error: true
 
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-ssti
         with:
           target: "{{ jobs['param-discovery'].outputs.param_file | default(inputs.target, true) }}"
@@ -154,7 +162,7 @@ jobs:
           echo "  Nuclei: {{ jobs['ssti-test'].outputs.nuclei_count }}"
           echo ""
           echo "Findings file: {{ jobs['ssti-test'].outputs.findings_file }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

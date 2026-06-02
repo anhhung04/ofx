@@ -6,6 +6,14 @@ description: |
 tags: [misc, packing, evasion, payload]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     input_file:
       required: true
       type: string
@@ -97,5 +105,5 @@ jobs:
         print(f"\n[+] {len(variants)} variant(s) written to {output_dir}")
 
         add_outputs(output_dir=output_dir, variants=json.dumps(variants), variant_count=len(variants))
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

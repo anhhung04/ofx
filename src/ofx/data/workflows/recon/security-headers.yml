@@ -5,6 +5,14 @@ description: |
 tags: [recon, web, headers, security-audit]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -20,7 +28,7 @@ jobs:
     steps:
     - name: fetch-headers
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.http import fetch, get_http_client
         from ofx.api.recon import security_headers_audit
@@ -118,4 +126,4 @@ jobs:
                 print(f"    - {recs[h]}")
 
         add_outputs(grade=grade, present_count=present, missing_count=missing)
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

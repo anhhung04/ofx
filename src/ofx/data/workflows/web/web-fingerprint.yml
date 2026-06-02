@@ -6,6 +6,14 @@ description: |
 tags: [web, recon, fingerprint, headers, security]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -22,7 +30,7 @@ jobs:
     steps:
     - name: fetch-and-fingerprint
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.recon.web import web_fingerprint
@@ -63,7 +71,7 @@ jobs:
     steps:
     - name: audit-headers
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.recon.web import security_headers_audit
@@ -97,7 +105,7 @@ jobs:
         add_outputs(security_audit=json.dumps(audit), missing_count=len(missing))
     - name: check-robots
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.recon.web import robots_txt_url
@@ -197,4 +205,4 @@ jobs:
                 print(f"  {line}")
 
         print("\n" + "=" * 60)
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

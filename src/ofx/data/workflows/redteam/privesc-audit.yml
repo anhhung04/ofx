@@ -6,6 +6,14 @@ description: |
 tags: [redteam, privesc, linpeas, winpeas, audit, task]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     os:
       type: string
       default: linux
@@ -29,8 +37,8 @@ jobs:
           target: "{{ inputs.target }}"
           thorough: true
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - task: winpeas
         name: winpeas-scan
         if: "{{ inputs.os == 'windows' }}"
@@ -39,8 +47,8 @@ jobs:
           quiet: true
           log: true
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: audit-summary
         script: |
           target_os = "{{ inputs.os }}"
@@ -77,4 +85,4 @@ jobs:
               print(f"\n  [*] Notable tags:")
               for t in tag_results[:10]:
                   print(f"    - {t.get('name', '')}: {t.get('value', '')}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

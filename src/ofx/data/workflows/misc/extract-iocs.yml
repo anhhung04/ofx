@@ -6,6 +6,14 @@ description: |
 tags: [utility, ioc, extract, dfir, cyberchef]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     data:
       required: true
       type: string
@@ -129,4 +137,4 @@ jobs:
         for ioc_type, items in all_iocs.items():
             add_outputs(**{f"{ioc_type}_count": len(items), f"{ioc_type}_file": ff"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_iocs_{ioc_type}.txt"})
         add_outputs(summary=json.dumps({k: len(v) for k, v in all_iocs.items()}))
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

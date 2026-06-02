@@ -10,6 +10,14 @@ tags:
 - token
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     token:
       required: true
       type: string
@@ -30,7 +38,7 @@ jobs:
       jwt_expiry: '{{ steps["collect-token-info"].outputs.jwt_expiry | default("", true) }}'
     steps:
     - task: jwt_tool
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: jwt-decode
       with:
         target: '{{ inputs.token }}'
@@ -78,7 +86,7 @@ jobs:
       jwt_vulns_file: '{{ steps["collect-vulns"].outputs.jwt_vulns_file | default("", true) }}'
     steps:
     - task: jwt_tool
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: jwt-all-tests
       with:
         target: '{{ inputs.token }}'
@@ -118,4 +126,4 @@ jobs:
         echo ""
         echo "--- Vulnerabilities ---"
         echo "Findings: {{ jobs['vuln-scan'].outputs.jwt_vuln_count }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -10,6 +10,14 @@ tags:
   - network
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -29,7 +37,7 @@ jobs:
       port_count: '{{ steps["merge-ports"].outputs.port_count | default("", true) }}'
     steps:
       - task: rustscan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: rustscan-sweep
         with:
           target: "{{ inputs.target }}"
@@ -70,13 +78,13 @@ jobs:
       exploit_count: '{{ steps["collect-services"].outputs.exploit_count | default("", true) }}'
     steps:
       - task: nerva
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nerva-fingerprint
         with:
           target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
         continue-on-error: true
       - task: nmap
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nmap-version
         with:
           target: "{{ inputs.target }}"
@@ -84,7 +92,7 @@ jobs:
           version_detection: true
         continue-on-error: true
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: http-probe
         with:
           target: "{{ jobs['fast-scan'].outputs.hosts_file | default(inputs.target, true) }}"
@@ -94,13 +102,13 @@ jobs:
           follow_redirects: true
         continue-on-error: true
       - task: ssh-audit
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: ssh-check
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: searchsploit
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: exploit-lookup
         with:
           target: "{{ inputs.target }}"
@@ -152,7 +160,7 @@ jobs:
           echo "HTTP services: {{ jobs['service-detect'].outputs.http_count }}"
           echo "Known vulnerabilities: {{ jobs['service-detect'].outputs.vuln_count }}"
           echo "Known exploits: {{ jobs['service-detect'].outputs.exploit_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
       - name: export-to-project
         script: |
           import shutil

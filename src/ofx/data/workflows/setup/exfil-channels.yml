@@ -7,6 +7,14 @@ tags: [setup, exfil, opsec, c2]
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     listen_ip:
       type: string
       default: "0.0.0.0"
@@ -40,7 +48,7 @@ jobs:
     needs: [prepare]
     steps:
       - name: Create HTTPS receiver
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         script: |
           import ssl
           import os
@@ -112,4 +120,4 @@ jobs:
           echo "  done"
           echo ""
           echo "Receive with: sudo tcpdump -i any -n 'port 53' -l | grep {{ inputs.dns_domain }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

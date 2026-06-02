@@ -13,6 +13,14 @@ tags:
   - http
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -38,7 +46,7 @@ jobs:
       verified_hosts_json: '{{ steps["export-verified"].outputs.verified_hosts_json | default("[]", true) }}'
     steps:
       - name: full-subdomain-scan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         uses: subdomain-scan
         with:
           target: "{{ inputs.target }}"
@@ -76,7 +84,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         uses: host-scan
         with:
           target: "{{ matrix.target }}"
@@ -93,7 +101,7 @@ jobs:
           echo "======================================================"
           echo "Verified hosts:   {{ jobs['subdomain-discovery'].outputs.verified_count }}"
           echo "Deep scans:       {{ inputs.skip_deep == 'true' and 'skipped' or jobs['subdomain-discovery'].outputs.verified_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
       - name: export-to-project
         script: |
           import shutil

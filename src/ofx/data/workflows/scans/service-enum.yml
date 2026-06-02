@@ -6,6 +6,14 @@ description: |
 tags: [scan, enumeration, services, network]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -21,7 +29,7 @@ jobs:
       open_ports: '{{ steps["identify-services"].outputs.open_ports | default("", true) }}'
     steps:
     - task: naabu
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: port-scan
       with:
         target: '{{ inputs.target }}'
@@ -29,7 +37,7 @@ jobs:
         rate: 1000
       continue-on-error: true
     - task: nerva
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: fingerprint
       with:
         target: '{{ inputs.target }}'
@@ -160,8 +168,8 @@ jobs:
 
         add_outputs(enum_file=out_file, service_count=len(services))
         print(f"\n[+] Full results: {out_file}")
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"
 
     - name: export-to-project
       script: |
@@ -190,7 +198,7 @@ jobs:
       cred_count: '{{ steps["parse-results"].outputs.cred_count | default("", true) }}'
     steps:
     - name: nerva-brutus
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         naabu -host {{ inputs.target }} -p {{ jobs['port-discovery'].outputs.open_ports | default('22,21,3306,5432,6379', true) }} -silent 2>/dev/null | \
           nerva --json 2>/dev/null | \
@@ -227,4 +235,4 @@ jobs:
                 print(f"  [+] {c['target']} ({c['service']}): {c['user']}:{c['pass']}")
         else:
             print("[*] No default credentials found")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

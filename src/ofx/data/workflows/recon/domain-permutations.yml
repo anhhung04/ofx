@@ -6,6 +6,14 @@ description: |
 tags: [recon, domain, typosquatting, phishing, dns]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -25,7 +33,7 @@ jobs:
     steps:
     - name: gen-perms
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.recon.osint import domain_permutations
 
@@ -49,7 +57,7 @@ jobs:
     steps:
     - name: dns-resolve
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.dns import resolve_host_sync
         from pathlib import Path
@@ -127,4 +135,4 @@ jobs:
 
         print(f"\n[*] Full permutations: {{ jobs.generate.outputs.perms_file }}")
         print(f"[*] Registered list:   {{ jobs.resolve.outputs.registered_file }}")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

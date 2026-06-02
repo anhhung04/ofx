@@ -116,5 +116,5 @@ jobs:
                       print(f"    Hex preview: {decoded_data[:64].hex()}")
 
                   add_outputs(output_file=out_file, decoded_size=len(decoded_data), is_text=is_text)
-              log-stdout: true
-              log-command: true
+              log-stdout: "{{ inputs.log_output | default(true) }}"
+              log-command: "{{ inputs.log_command | default(true) }}"

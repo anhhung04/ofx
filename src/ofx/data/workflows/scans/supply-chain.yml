@@ -6,6 +6,14 @@ description: |
 tags: [supply-chain, sbom, vulnerability, dependency, audit]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -20,7 +28,7 @@ jobs:
       pkg_managers: '{{ steps["generate-sbom"].outputs.pkg_managers | default("", true) }}'
     steps:
     - name: generate-sbom
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         echo "[+] Generating SBOM for {{ inputs.target }}..."
 
@@ -60,13 +68,13 @@ jobs:
     name: Dependency Vulnerability Scan
     steps:
     - task: grype
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: grype-scan
       with:
         target: 'dir:{{ inputs.target }}'
       continue-on-error: true
     - task: trivy
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: trivy-fs
       with:
         target: '{{ inputs.target }}'
@@ -76,13 +84,13 @@ jobs:
     name: Secret Detection in Dependencies
     steps:
     - task: gitleaks
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: gitleaks-scan
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: trufflehog
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: trufflehog-scan
       with:
         target: '{{ inputs.target }}'
@@ -102,7 +110,7 @@ jobs:
         echo "  Vulnerabilities: {{ vulns(jobs['vuln-scan'].outputs.typed_outputs) | list | length | default('?', true) }}"
         echo ""
         echo "  SBOM: {{ jobs['sbom'].outputs.sbom_file | default('not generated', true) }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

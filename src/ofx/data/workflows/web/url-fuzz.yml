@@ -9,6 +9,14 @@ tags:
   - secrets
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -26,7 +34,7 @@ jobs:
       fuzz_count: '{{ steps["collect-urls"].outputs.fuzz_count | default("", true) }}'
     steps:
       - task: feroxbuster
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: feroxbuster-fuzz
         with:
           target: "{{ inputs.target }}"
@@ -57,7 +65,7 @@ jobs:
       - fuzz
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: probe-fuzzed
         with:
           target: "{{ jobs.fuzz.outputs.fuzzed_file }}"
@@ -71,7 +79,7 @@ jobs:
       - probe
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: hunt-secrets
         with:
           target: "{{ inputs.target }}"
@@ -83,7 +91,7 @@ jobs:
           echo " URL Fuzz: {{ inputs.target }}"
           echo "================================="
           echo "Fuzzed URLs: {{ jobs.fuzz.outputs.fuzz_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

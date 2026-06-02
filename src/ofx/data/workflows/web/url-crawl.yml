@@ -9,6 +9,14 @@ tags:
   - secrets
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -22,7 +30,7 @@ jobs:
       url_count: '{{ steps["collect-urls"].outputs.url_count | default("", true) }}'
     steps:
       - task: katana
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: katana-crawl
         with:
           target: "{{ inputs.target }}"
@@ -31,7 +39,7 @@ jobs:
           known_files: all
         continue-on-error: true
       - task: gau
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: gau-passive
         with:
           target: "{{ inputs.target }}"
@@ -62,7 +70,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("", true) }}'
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: probe-urls
         with:
           target: "{{ jobs.crawl.outputs.crawled_file }}"
@@ -86,14 +94,14 @@ jobs:
       - probe
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: hunt-secrets
         with:
           target: "{{ inputs.target }}"
           tags: exposure,token,secret
         continue-on-error: true
       - task: cariddi
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: cariddi-crawl
         with:
           target: "{{ inputs.target }}"
@@ -109,7 +117,7 @@ jobs:
           echo "================================="
           echo "URLs crawled: {{ jobs.crawl.outputs.url_count }}"
           echo "Live URLs: {{ jobs.probe.outputs.live_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

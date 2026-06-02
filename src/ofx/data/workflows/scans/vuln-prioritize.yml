@@ -6,6 +6,14 @@ description: |
 tags: [vulnerability, prioritize, report, triage]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -25,14 +33,14 @@ jobs:
     name: Vulnerability Scanning
     steps:
     - task: nuclei
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nuclei-scan
       with:
         target: '{{ inputs.target }}'
         severity: '{{ inputs.severity_threshold }},high,critical'
       continue-on-error: true
     - task: nmap
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nmap-vuln
       with:
         target: '{{ inputs.target }}'
@@ -49,7 +57,7 @@ jobs:
       exploitable_data: '{{ steps["check-exploits"].outputs.exploitable_data | default("", true) }}'
     steps:
     - name: check-exploits
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         import json
         import subprocess
@@ -170,7 +178,7 @@ jobs:
                 f.write(f"[{v.get('severity', '?').upper()}] {v.get('name', '?')} — {v.get('host', '?')}\n")
 
         add_outputs(vuln_count=len(unique), critical_count=by_severity.get('CRITICAL', 0), high_count=by_severity.get('HIGH', 0), report_file=report_file)
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
     - name: export-to-project
       script: |
         import shutil

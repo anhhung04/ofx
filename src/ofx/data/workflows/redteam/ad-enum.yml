@@ -12,6 +12,14 @@ tags:
   - kerberos
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -40,7 +48,7 @@ jobs:
       smb_user_count: '{{ steps["collect-smb"].outputs.smb_user_count | default("", true) }}'
     steps:
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-smb-shares
         with:
           target: "{{ inputs.target }}"
@@ -50,7 +58,7 @@ jobs:
           shares: true
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-smb-users
         with:
           target: "{{ inputs.target }}"
@@ -60,7 +68,7 @@ jobs:
           users: true
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-smb-groups
         with:
           target: "{{ inputs.target }}"
@@ -70,7 +78,7 @@ jobs:
           groups: true
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-smb-sessions
         with:
           target: "{{ inputs.target }}"
@@ -80,7 +88,7 @@ jobs:
           sessions: true
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-smb-passpol
         with:
           target: "{{ inputs.target }}"
@@ -137,7 +145,7 @@ jobs:
       asrep_count: '{{ steps["collect-kerberos"].outputs.asrep_count | default("", true) }}'
     steps:
       - task: kerbrute
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: kerbrute-userenum
         with:
           target: "{{ inputs.target }}"
@@ -147,7 +155,7 @@ jobs:
           users: /usr/share/wordlists/seclists/Usernames/xato-net-10-million-usernames-dup.txt
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: asrep-roast
         with:
           target: "{{ inputs.target }}"
@@ -191,7 +199,7 @@ jobs:
       ldap_user_count: '{{ steps["collect-ldap"].outputs.ldap_user_count | default("", true) }}'
     steps:
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-ldap-users
         with:
           target: "{{ inputs.target }}"
@@ -202,7 +210,7 @@ jobs:
         if: "{{ inputs.username }}"
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-ldap-gmsa
         if: "{{ inputs.username }}"
         with:
@@ -248,7 +256,7 @@ jobs:
           echo ""
           echo "--- LDAP Enumeration ---"
           echo "LDAP users: {{ jobs['ldap-enum'].outputs.ldap_user_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
       - name: export-to-project
         script: |
           import shutil

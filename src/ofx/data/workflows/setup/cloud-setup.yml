@@ -6,6 +6,14 @@ tags: [setup, cloud, tools]
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     skip_apt:
       type: boolean
       default: false
@@ -16,14 +24,14 @@ jobs:
     name: "Install Go, Ruby, uv"
     steps:
       - name: System update
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get update -qq
           apt-get install -y -qq git curl wget unzip jq libpcap-dev build-essential
 
       - name: Install Go
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           if ! command -v go &>/dev/null; then
             GO_VERSION=$(curl -sL 'https://go.dev/VERSION?m=text' | head -1)
@@ -34,7 +42,7 @@ jobs:
           go version
 
       - name: Install Ruby
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           if ! command -v ruby &>/dev/null; then
             apt-get install -y -qq ruby ruby-dev
@@ -42,7 +50,7 @@ jobs:
           ruby --version
 
       - name: Install uv
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           if ! command -v uv &>/dev/null; then
             curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -65,13 +73,13 @@ jobs:
     if: "{{ not inputs.skip_apt }}"
     steps:
       - name: Install nmap, whois, exploitdb
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get install -y -qq nmap whois exploitdb
 
       - name: Install masscan, fping, nikto, whatweb, sslscan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get install -y -qq masscan fping nikto whatweb sslscan
@@ -81,7 +89,7 @@ jobs:
     needs: [setup-runtime]
     steps:
       - name: Install Go tools
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export PATH="$HOME/Tools/bin:/usr/local/go/bin:$PATH"
           export GOBIN="$HOME/Tools/bin"
@@ -162,7 +170,7 @@ jobs:
     needs: [setup-runtime]
     steps:
       - name: Install Python tools via uv
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export PATH="$HOME/.local/bin:$HOME/Tools/bin:$PATH"
           export UV_TOOL_BIN_DIR="$HOME/Tools/bin"
@@ -220,36 +228,36 @@ jobs:
     needs: [setup-runtime]
     steps:
       - name: Install feroxbuster
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           mkdir -p ~/Tools/bin && cd ~/Tools/bin
           curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash
 
       - name: Install grype
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b ~/Tools/bin
 
       - name: Install trivy
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b ~/Tools/bin
 
       - name: Install testssl
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           git clone --depth 1 https://github.com/drwetter/testssl.sh.git ~/Tools/testssl
           ln -sf ~/Tools/testssl/testssl.sh ~/Tools/bin/testssl.sh
 
       - name: Install wpscan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export GEM_HOME="$HOME/Tools"
           export PATH="$HOME/Tools/bin:$PATH"
           gem install wpscan
 
       - name: Install findomain
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           mkdir -p ~/Tools/bin
           curl -sL https://github.com/findomain/findomain/releases/latest/download/findomain-linux.zip -o /tmp/findomain.zip
@@ -258,7 +266,7 @@ jobs:
           rm /tmp/findomain.zip
 
       - name: Install x8
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           if ! command -v cargo &>/dev/null; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -269,7 +277,7 @@ jobs:
           cp ~/.cargo/bin/x8 ~/Tools/bin/
 
       - name: Install rustscan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           if ! command -v cargo &>/dev/null; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -291,7 +299,7 @@ jobs:
     if: "{{ not inputs.skip_apt }}"
     steps:
       - name: Install hydra
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export DEBIAN_FRONTEND=noninteractive
           apt-get install -y -qq hydra
@@ -301,7 +309,7 @@ jobs:
     needs: [install-apt-tools, install-apt-tools2, install-go-tools, install-python-tools, install-other-tools]
     steps:
       - name: Verify all tools
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           export PATH="$HOME/Tools/bin:$HOME/.local/bin:/usr/local/go/bin:$PATH"
           echo "=== Tool Verification ==="

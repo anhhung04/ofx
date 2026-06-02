@@ -5,6 +5,14 @@ description: |
 tags: [recon, fofa, search, assets, osint]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     dork:
       required: true
       type: string
@@ -30,7 +38,7 @@ jobs:
     steps:
     - name: fofa-query
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.search.fofa import Fofa
         import json
@@ -169,4 +177,4 @@ jobs:
 
         print(f"\n[*] Full results: {{ jobs.deduplicate.outputs.dedup_file }}")
         print(f"[*] Hosts list:   {{ jobs.deduplicate.outputs.hosts_file }}")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -5,6 +5,14 @@ description: |
 tags: [recon, shodan, osint, search]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -32,7 +40,7 @@ jobs:
     steps:
     - name: query-shodan
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.search import Shodan
         import json
@@ -125,4 +133,4 @@ jobs:
         echo "  Unique IPs:    {{ jobs.analyze.outputs.unique_ips }}"
         echo "  Unique ports:  {{ jobs.analyze.outputs.unique_ports }}"
         echo "  Services file: {{ jobs.analyze.outputs.services_file }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

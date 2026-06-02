@@ -10,6 +10,14 @@ outputs:
   sample_count: "{{ jobs.demonstrate.outputs.sample_count }}"
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       type: string
       default: https://www.example.com
@@ -105,5 +113,5 @@ jobs:
           print(f"\n[+] Sample headers saved to {out_file}")
 
           add_outputs(headers_file=out_file, agent_count=len(agents), sample_count=count)
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"

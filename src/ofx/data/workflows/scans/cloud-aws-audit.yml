@@ -6,6 +6,14 @@ description: |
 tags: [cloud, aws, security, audit]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     profile:
       type: string
       default: ''
@@ -24,7 +32,7 @@ jobs:
       no_mfa_count: '{{ steps["check-iam"].outputs.no_mfa_count | default("", true) }}'
     steps:
     - name: check-iam
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         import subprocess
         import json
@@ -82,7 +90,7 @@ jobs:
       public_bucket_count: '{{ steps["check-s3"].outputs.public_bucket_count | default("", true) }}'
     steps:
     - name: check-s3
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         import subprocess
         import json
@@ -128,7 +136,7 @@ jobs:
       risky_sg_count: '{{ steps["check-security-groups"].outputs.risky_sg_count | default("", true) }}'
     steps:
     - name: check-security-groups
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         import subprocess
         import json
@@ -186,4 +194,4 @@ jobs:
         echo "--- Security Groups ---"
         echo "  Total: {{ jobs['sg-audit'].outputs.sg_count | default('?', true) }}"
         echo "  Risky (0.0.0.0/0): {{ jobs['sg-audit'].outputs.risky_sg_count | default('?', true) }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

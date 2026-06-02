@@ -25,7 +25,7 @@ jobs:
         name: API Endpoint Discovery
         steps:
             - task: ffuf
-              log-command: true
+              log-command: "{{ inputs.log_command | default(true) }}"
               name: fuzz-endpoints
               with:
                   target: "{{ inputs.target }}/FUZZ"
@@ -86,8 +86,8 @@ jobs:
                   add_outputs(finding_count=len(findings))
                   for finding in findings:
                       print(f"\n  {finding}")
-              log-stdout: true
-              log-command: true
+              log-stdout: "{{ inputs.log_output | default(true) }}"
+              log-command: "{{ inputs.log_command | default(true) }}"
               continue-on-error: true
 
     security-headers:
@@ -152,8 +152,8 @@ jobs:
                   add_outputs(header_finding_count=len(findings))
                   for finding in findings:
                       print(f"  {finding}")
-              log-stdout: true
-              log-command: true
+              log-stdout: "{{ inputs.log_output | default(true) }}"
+              log-command: "{{ inputs.log_command | default(true) }}"
               continue-on-error: true
     summary:
         name: Summary

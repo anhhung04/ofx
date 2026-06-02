@@ -7,6 +7,14 @@ description: >
 tags: [recon, dns, network, http, crawl, ssl, vuln, secrets, params, brute]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -90,7 +98,7 @@ jobs:
       waf_detected: '{{ steps["export-data"].outputs.waf_detected | default("unknown", true) }}'
     steps:
       - task: rustscan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: rustscan-fast
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -100,7 +108,7 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: nmap
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: service-detect
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -109,7 +117,7 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: nerva
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nerva-fingerprint
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -117,7 +125,7 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: ssh-audit
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: ssh-audit
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -125,7 +133,7 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: http-probe
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -200,7 +208,7 @@ jobs:
       typed_outputs: '{{ steps["whatweb-fingerprint"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: whatweb
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: whatweb-fingerprint
         with:
           target: "{{ jobs['target-resolve'].outputs.hostname }}"
@@ -217,7 +225,7 @@ jobs:
       js_findings: '{{ steps["js-extract"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: katana
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: crawl
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -305,7 +313,7 @@ jobs:
            (steps["cmdi-scan"].outputs.typed_outputs | default([], true)) }}
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-scan
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -314,7 +322,7 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - task: dalfox
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: xss-scan
         with:
           target: "{{ jobs['host-recon'].outputs.live_urls | default(jobs['target-resolve'].outputs.hostname, true) }}"
@@ -349,7 +357,7 @@ jobs:
         retry-delay: 5
         continue-on-error: true
       - name: final-summary
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
         script: |
           hostname = '{{ jobs["target-resolve"].outputs.hostname }}'
           ip = '{{ jobs["target-resolve"].outputs.ip }}'

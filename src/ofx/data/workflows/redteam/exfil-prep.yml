@@ -5,6 +5,14 @@ description: |
 tags: [redteam, exfiltration, data, opsec]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     source_path:
       required: true
       type: string
@@ -76,7 +84,7 @@ jobs:
     steps:
     - name: encode-data
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.exfil import dns_encode_payload, chunk_b64
         from pathlib import Path
@@ -184,5 +192,5 @@ jobs:
                 print(f"  ... ({len(commands) - 3} more)")
 
         add_outputs(commands_file=out_file, command_count=len(commands))
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

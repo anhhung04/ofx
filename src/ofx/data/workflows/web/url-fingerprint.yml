@@ -9,6 +9,14 @@ tags:
 - waf
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -23,7 +31,7 @@ jobs:
       webserver: '{{ steps["export-probe"].outputs.webserver | default("", true) }}'
     steps:
     - task: httpx
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: http-probe
       with:
         target: '{{ inputs.target }}'
@@ -44,7 +52,7 @@ jobs:
       tech_count: '{{ steps["collect-tech"].outputs.tech_count | default("", true) }}'
     steps:
     - task: whatweb
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: whatweb-scan
       with:
         target: '{{ inputs.target }}'
@@ -72,7 +80,7 @@ jobs:
       waf_count: '{{ steps["export-waf"].outputs.waf_count | default("", true) }}'
     steps:
     - task: wafw00f
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: wafw00f-scan
       with:
         target: '{{ inputs.target }}'
@@ -109,7 +117,7 @@ jobs:
         echo "Web Server: {{ jobs.probe.outputs.webserver }}"
         echo "Technologies: {{ jobs.fingerprint.outputs.tech_count }}"
         echo "WAF: {{ jobs['waf-detect'].outputs.waf_detected_file }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

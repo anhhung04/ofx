@@ -5,6 +5,14 @@ description: |
 tags: [misc, dns, enumeration, recon]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -24,7 +32,7 @@ jobs:
     steps:
     - name: dns-brute
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.dns import bruteforce_subdomains_sync
         from pathlib import Path
@@ -81,7 +89,7 @@ jobs:
     steps:
     - name: resolve-ips
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.dns import resolve_host_sync
         import json
@@ -158,4 +166,4 @@ jobs:
                 print(f"    {ip} ({count} subdomains)")
 
         print(f"\n  Results: {resolved_file}")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

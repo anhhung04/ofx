@@ -5,6 +5,14 @@ description: |
 tags: [recon, subdomains, crtsh, osint]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -19,7 +27,7 @@ jobs:
       total_count: '{{ steps["merge-results"].outputs.total_count | default("", true) }}'
     steps:
     - name: subfinder-scan
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       task: subfinder
       continue-on-error: true
       with:
@@ -27,7 +35,7 @@ jobs:
 
     - name: crtsh-lookup
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.recon import crtsh_subdomains_sync
 
@@ -79,4 +87,4 @@ jobs:
             print(f"    ... and {len(filtered) - 30} more")
 
         add_outputs(subdomains_file=out_file, total_count=len(filtered))
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

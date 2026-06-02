@@ -11,6 +11,14 @@ tags:
   - vuln
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -21,7 +29,7 @@ jobs:
     name: Host Recon
     steps:
       - name: host-scan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         uses: host-scan
         with:
           target: "{{ inputs.target }}"

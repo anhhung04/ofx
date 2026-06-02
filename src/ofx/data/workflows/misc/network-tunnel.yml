@@ -6,6 +6,14 @@ description: |
 tags: [utility, pivoting, tunnel, network, redteam]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     lhost:
       required: true
       type: string
@@ -125,4 +133,4 @@ jobs:
                 f.write("\n")
 
         add_outputs(tunnels_file=out, tunnel_count=len(tunnels))
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

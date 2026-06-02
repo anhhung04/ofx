@@ -7,6 +7,14 @@ tags:
   - dns
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -20,20 +28,20 @@ jobs:
       sub_count: '{{ steps["merge-subs"].outputs.sub_count | default("", true) }}'
     steps:
       - task: subfinder
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
           all: true
         continue-on-error: true
       - task: amass
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gau
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: gau-subs
         with:
           target: "{{ inputs.target }}"
@@ -75,7 +83,7 @@ jobs:
       dangling_file: '{{ steps["analyze-cnames"].outputs.dangling_file | default("", true) }}'
     steps:
       - task: dnsx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: dns-resolve
         with:
           target: "{{ jobs.enum.outputs.subs_file | default('', true) }}"
@@ -147,14 +155,14 @@ jobs:
       takeover_details_file: '{{ steps["collect-takeovers"].outputs.takeover_details_file | default("", true) }}'
     steps:
       - task: subzy
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: subzy-check
         with:
           target: ${OFX_RUN_DIR:-/tmp}/ofx_alive_subs.txt
           concurrency: 20
         continue-on-error: true
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-takeover
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}"
@@ -185,14 +193,14 @@ jobs:
       - dns-verify
     steps:
       - task: gowitness
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: gowitness-capture
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}"
           threads: 10
         continue-on-error: true
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: http-fingerprint
         with:
           target: "{{ jobs['dns-verify'].outputs.alive_file | default('', true) }}"
@@ -233,8 +241,8 @@ jobs:
           echo "--- Dangling CNAMEs (investigate manually) ---"
           cat {{ jobs['dns-verify'].outputs.dangling_file | default("", true) }}
           {% endif %}
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: export-to-project
         script: |
           import shutil

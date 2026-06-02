@@ -13,6 +13,14 @@ tags:
   - comprehensive
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -23,7 +31,7 @@ jobs:
     name: Deep Recon
     steps:
       - name: full-recon
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         uses: full-recon
         with:
           target: "{{ inputs.target }}"

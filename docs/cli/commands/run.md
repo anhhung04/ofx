@@ -52,6 +52,16 @@ ofx flow run scan \
   --input timeout=300
 ```
 
+### Control Builtin Workflow Logging
+```bash
+ofx flow run full-recon \
+  --input target=example.com \
+  --input log_command=false \
+  --input log_output=true
+```
+
+Many builtin workflows accept `log_command` and `log_output` as regular workflow inputs. When present, they control builtin step `log-command` and `log-stdout` behavior for that run, including recursive builtin subworkflows reached through `uses:`.
+
 ### Run for a Project
 ```bash
 ofx flow run full-recon --project client-pentest --input target=10.0.0.0/24
@@ -117,6 +127,7 @@ Each line contains runner lifecycle metadata (`event_type`, `runner_type`, `run_
 
 - Use the `x` alias for faster typing: `ofx x run ...`
 - Input values are JSON-decoded when possible — `--input count=5` sets an integer, `--input tags='["a","b"]'` sets a list
+- Builtin workflows may expose runtime logging inputs such as `log_command` and `log_output`
 - `--project` resolves the project via `ProjectManager` and injects project vars into the workflow context
 - `--quiet` and `--log-format json` are ideal for CI/CD and cron jobs
 - Outputs and logs are saved in the specified output directory

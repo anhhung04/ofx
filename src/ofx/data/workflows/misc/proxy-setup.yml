@@ -9,6 +9,14 @@ outputs:
   proxy_count: "{{ jobs.generate.outputs.proxy_count }}"
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     proxies:
       required: true
       type: string
@@ -100,5 +108,5 @@ jobs:
           print(f"    source {env_file} && curl https://check.torproject.org")
 
           add_outputs(conf_file=conf_file, env_file=env_file, proxy_count=len(proxies))
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"

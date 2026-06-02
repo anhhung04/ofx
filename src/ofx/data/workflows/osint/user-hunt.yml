@@ -8,6 +8,14 @@ tags:
 - leak
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -24,7 +32,7 @@ jobs:
       profile_urls: '{{ steps["export-accounts"].outputs.profile_urls | default("", true) }}'
     steps:
     - task: maigret
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: maigret-search
       with:
         target: '{{ inputs.target }}'
@@ -44,7 +52,7 @@ jobs:
       breaches_found: '{{ steps["export-breaches"].outputs.breaches_found | default("", true) }}'
     steps:
     - task: h8mail
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: breach-search
       with:
         target: '{{ inputs.target }}'
@@ -71,7 +79,7 @@ jobs:
         echo "Accounts found: {{ jobs['username-hunt'].outputs.accounts_found }}"
         echo "Profile URLs: {{ jobs['username-hunt'].outputs.profile_urls }}"
         echo "Breach results: {{ jobs['email-breach'].outputs.breaches_found }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

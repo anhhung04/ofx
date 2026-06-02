@@ -6,6 +6,14 @@ description: |
 tags: [redteam, ad, recon, kerberos, ldap]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     dc_ip:
       required: true
       type: string
@@ -39,7 +47,7 @@ jobs:
     steps:
     - name: bloodhound-cmd
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.ad.enum import bloodhound_collection_command
 
@@ -55,7 +63,7 @@ jobs:
         add_outputs(bloodhound_cmd=cmd)
     - name: shares-cmd
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.ad.enum import enumerate_shares_command
 
@@ -71,7 +79,7 @@ jobs:
         add_outputs(shares_cmd=cmd)
     - name: ldap-cmd
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.ad.enum import ldap_query_command
 
@@ -87,7 +95,7 @@ jobs:
         add_outputs(ldap_cmd=cmd)
     - name: collect-enum
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.ad.enum import (
             bloodhound_collection_command,
@@ -141,7 +149,7 @@ jobs:
     steps:
     - name: kerberoast-cmd
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.ad.kerberos import kerberoast_command
 
@@ -157,7 +165,7 @@ jobs:
         add_outputs(kerberoast_cmd=cmd)
     - name: asreproast-cmd
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.ad.kerberos import asreproast_command
 
@@ -173,7 +181,7 @@ jobs:
         add_outputs(asreproast_cmd=cmd)
     - name: delegation-cmd
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.ad.kerberos import find_delegation_command
         import json
@@ -222,4 +230,4 @@ jobs:
 
         commands_file = "{{ jobs.enumerate.outputs.commands_file }}"
         print(f"\n[*] All enumeration commands saved to: {commands_file}")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

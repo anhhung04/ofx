@@ -5,6 +5,14 @@ description: |
 tags: [osint, phone, recon]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     phone:
       required: true
       type: string
@@ -88,4 +96,4 @@ jobs:
             print(f"  Google: {d}")
 
         add_outputs(**results)
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

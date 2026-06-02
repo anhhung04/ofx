@@ -6,6 +6,14 @@ description: |
 tags: [redteam, ad, coerce, ntlm, relay, petitpotam, task]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -45,8 +53,8 @@ jobs:
           domain: "{{ inputs.domain }}"
           always_continue: true
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: scan-summary
         script: |
           vulns = {{ vulns(steps["coercer-scan"].outputs.typed_outputs) | tojson }}
@@ -106,4 +114,4 @@ jobs:
           else:
               print("\n  [*] No coercion vectors found — target may be patched")
               print("      Try authenticated scan with domain credentials")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -5,6 +5,14 @@ description: |
 tags: [utility, hash, crack, password, cyberchef]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     hash:
       required: true
       type: string
@@ -28,7 +36,7 @@ jobs:
       results: '{{ steps["identify-hash"].outputs.results | default("", true) }}'
     steps:
     - name: identify-hash
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         import subprocess
         import json
@@ -117,8 +125,8 @@ jobs:
         else
           echo "[-] Wordlist not found: $WORDLIST"
         fi
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"
       continue-on-error: true
     - name: try-hashcat
       run: |
@@ -140,11 +148,11 @@ jobs:
         else
           echo "[-] hashcat not available or wordlist missing"
         fi
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"
       continue-on-error: true
     - name: collect-results
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         import subprocess
         from pathlib import Path

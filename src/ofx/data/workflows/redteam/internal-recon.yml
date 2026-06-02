@@ -10,6 +10,14 @@ tags:
 - ad
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -27,7 +35,7 @@ jobs:
       alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("", true) }}'
     steps:
     - task: fping
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: fping-sweep
       with:
         target: '{{ inputs.target }}'
@@ -56,7 +64,7 @@ jobs:
     - host-discovery
     steps:
     - task: rustscan
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: rustscan-fast
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
@@ -64,7 +72,7 @@ jobs:
         ulimit: 5000
       continue-on-error: true
     - task: gogo
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: gogo-scan
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
@@ -113,20 +121,20 @@ jobs:
     - port-scan
     steps:
     - task: nmap
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nmap-service
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
         version_detection: true
       continue-on-error: true
     - task: nerva
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nerva-fingerprint
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
       continue-on-error: true
     - task: httpx
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: http-probe
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
@@ -166,14 +174,14 @@ jobs:
     - service-detect
     steps:
     - name: whatweb-scan
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         cat {{ jobs['service-detect'].outputs.http_urls_file | default('', true) }} 2>/dev/null | head -50 | while read url; do
           whatweb -a 3 "$url" --color=never 2>/dev/null
         done | tee ${OFX_RUN_DIR:-/tmp}/ofx_whatweb_output.txt
       continue-on-error: true
     - task: gowitness
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: gowitness-screenshots
       with:
         target: "{{ jobs['service-detect'].outputs.http_urls_file | default('', true) }}"
@@ -207,7 +215,7 @@ jobs:
     - host-discovery
     steps:
     - task: netexec
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nxc-smb-scan
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file }}"
@@ -252,7 +260,7 @@ jobs:
     - port-scan
     steps:
     - task: zombie
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: zombie-brute
       with:
         gogo: '{{ jobs["port-scan"].outputs.gogo_file }}'
@@ -303,7 +311,7 @@ jobs:
         echo ""
         echo "--- Default Credentials ---"
         echo "Credentials found: {{ jobs['default-cred-check'].outputs.cred_count | default('0', true) }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
     - name: export-to-project
       script: |
         import shutil

@@ -9,6 +9,14 @@ tags:
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -77,14 +85,14 @@ jobs:
       nuclei_vuln_count: '{{ steps["collect-results"].outputs.nuclei_vuln_count | default("", true) }}'
     steps:
       - task: s3scanner
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: s3scanner-scan
         with:
           target: "{{ jobs['generate-names'].outputs.names_file }}"
         continue-on-error: true
 
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-cloud-scan
         with:
           target: '{{ inputs.target }}'
@@ -134,7 +142,7 @@ jobs:
           echo "Buckets identified: {{ jobs['scan-buckets'].outputs.bucket_count }}"
           echo ""
           echo "Results file: {{ jobs['scan-buckets'].outputs.results_file }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

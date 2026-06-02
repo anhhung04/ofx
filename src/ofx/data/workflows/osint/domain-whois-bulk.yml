@@ -5,6 +5,14 @@ description: |
 tags: [osint, whois, domain, bulk]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     targets:
       required: true
       type: string
@@ -69,5 +77,5 @@ jobs:
         Path(out_file).write_text(json.dumps(results, indent=2))
 
         add_outputs(results_file=out_file, domain_count=len(results))
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

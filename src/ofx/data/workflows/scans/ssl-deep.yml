@@ -6,6 +6,14 @@ description: |
 tags: [ssl, tls, certificate, security, scan]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -21,7 +29,7 @@ jobs:
     name: TestSSL Analysis
     steps:
     - task: testssl
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: testssl-scan
       with:
         target: '{{ inputs.target }}:{{ inputs.port }}'
@@ -31,7 +39,7 @@ jobs:
     name: SSH Audit
     steps:
     - task: ssh-audit
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: ssh-audit
       with:
         target: '{{ inputs.target }}'
@@ -127,8 +135,8 @@ jobs:
         print(f"\n--- Findings ({len(findings)}) ---")
         for finding in findings:
             print(f"  {finding}")
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"
       continue-on-error: true
   summary:
     name: Summary

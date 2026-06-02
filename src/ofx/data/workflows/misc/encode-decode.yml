@@ -5,6 +5,14 @@ description: |
 tags: [utility, encoding, decoding, cyberchef]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     data:
       required: true
       type: string
@@ -118,4 +126,4 @@ jobs:
         add_outputs(result=output, operation=operation)
         print(f"=== {operation.upper()} ===")
         print(output)
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

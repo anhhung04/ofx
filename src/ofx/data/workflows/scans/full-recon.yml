@@ -8,6 +8,14 @@ description: >
 tags: [scan, recon, comprehensive, full, recursive]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -24,14 +32,14 @@ jobs:
       sub_count: '{{ steps["merge-passive"].outputs.sub_count | default("0", true) }}'
     steps:
       - task: subfinder
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: subfinder-enum
         retry: 2
         retry-delay: 5
         with: {target: "{{ inputs.target }}", all: true}
         continue-on-error: true
       - task: amass
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: amass-passive
         retry: 2
         retry-delay: 5
@@ -90,7 +98,7 @@ jobs:
       cert_sub_count: '{{ steps["merge-cert"].outputs.cert_sub_count | default("0", true) }}'
     steps:
       - task: tlsx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: tls-san-enum
         retry: 2
         retry-delay: 5
@@ -119,14 +127,14 @@ jobs:
       perm_sub_count: '{{ steps["resolve-perms"].outputs.typed_outputs | default([], true) | length }}'
     steps:
       - task: gotator
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: generate-perms
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['passive-enum'].outputs.subs_file }}"}
         continue-on-error: true
       - task: puredns
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: resolve-perms
         retry: 2
         retry-delay: 5
@@ -164,7 +172,7 @@ jobs:
           add_outputs(merged_file=merged_path, total_count=len(all_subs))
           print(f"Merged: {len(all_subs)} unique subdomains across all sources")
       - task: dnsx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: dns-resolve
         retry: 2
         retry-delay: 5
@@ -260,7 +268,7 @@ jobs:
       waf_detected_count: '{{ steps["waf-report"].outputs.waf_detected_count | default("0", true) }}'
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: probe-hosts
         retry: 2
         retry-delay: 5
@@ -311,7 +319,7 @@ jobs:
               print("No WAF detected")
       # Screenshot all live services for visual recon
       - task: gowitness
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: screenshots
         retry: 2
         retry-delay: 5
@@ -353,14 +361,14 @@ jobs:
       takeover_count: '{{ steps["report-takeovers"].outputs.takeover_count | default("0", true) }}'
     steps:
       - task: subzy
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: subzy-check
         retry: 2
         retry-delay: 5
         with: {target: "{{ jobs['dns-verify'].outputs.verified_file }}"}
         continue-on-error: true
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-takeover
         retry: 2
         retry-delay: 5
@@ -393,7 +401,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         uses: host-scan
         with: {target: "{{ matrix.target }}"}
 
@@ -621,7 +629,7 @@ jobs:
           echo "--- Scanning ---"
           echo "Hosts deep-scanned:    {{ jobs['dns-verify'].outputs.verified_count }}"
           echo "(Each host: port scan, service detect, web fingerprint, crawl, vuln scan)"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
       - name: export-to-project
         script: |
           import shutil, json

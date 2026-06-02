@@ -6,6 +6,14 @@ description: |
 tags: [redteam, ad, adcs, certificate, privilege-escalation]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -36,7 +44,7 @@ jobs:
       vuln_file: '{{ steps["certipy-find"].outputs.vuln_file | default("", true) }}'
     steps:
     - name: certipy-find
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         AUTH_ARGS="{{ inputs.domain }}/{{ inputs.user }}"
         {% if inputs.password %}
@@ -118,4 +126,4 @@ jobs:
             print(f"  {esc}: {desc}")
 
         add_outputs(finding_count=len(findings), template_count=len(templates) if isinstance(templates, dict) else 0)
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

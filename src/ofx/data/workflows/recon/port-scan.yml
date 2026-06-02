@@ -5,6 +5,14 @@ description: |
 tags: [recon, portscan, network]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -68,5 +76,5 @@ jobs:
             json.dump(output_data, f, indent=2)
 
         add_outputs(open_ports=json.dumps(open_ports), port_count=len(open_ports), results_file=out_file)
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

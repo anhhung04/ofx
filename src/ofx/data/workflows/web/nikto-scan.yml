@@ -10,6 +10,14 @@ tags:
   - server
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -23,7 +31,7 @@ jobs:
       typed_outputs: '{{ steps["nikto-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: nikto
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nikto-scan
         with:
           target: "{{ inputs.target }}"
@@ -43,7 +51,7 @@ jobs:
       typed_outputs: '{{ steps["nuclei-web-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-web-scan
         with:
           target: "{{ inputs.target }}"
@@ -74,7 +82,7 @@ jobs:
           print(f"Nuclei findings: {{ jobs['nuclei-web'].outputs.nuclei_count }}")
           print(f"  Critical: {len(critical)}")
           print(f"  High: {len(high)}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

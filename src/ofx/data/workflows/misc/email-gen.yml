@@ -6,6 +6,14 @@ description: |
 tags: [misc, osint, email, phishing, recon]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     first_name:
       required: true
       type: string
@@ -28,7 +36,7 @@ jobs:
     steps:
     - name: gen-emails
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.recon.osint import email_patterns
 
@@ -56,7 +64,7 @@ jobs:
     steps:
     - name: gen-perms
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.recon.osint import domain_permutations
 
@@ -110,4 +118,4 @@ jobs:
 
         print("\n[*] Use email patterns for password spraying or account discovery")
         print("[*] Use domain permutations for phishing infrastructure detection")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

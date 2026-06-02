@@ -12,6 +12,14 @@ outputs:
   scan_typed_outputs: '{{ jobs["wordpress-scan"].outputs.typed_outputs }}'
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -28,7 +36,7 @@ jobs:
       typed_outputs: '{{ steps["http-probe"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: http-probe
         with:
           target: "{{ inputs.target }}"
@@ -44,7 +52,7 @@ jobs:
       typed_outputs: '{{ (steps["wpscan-full"].outputs.typed_outputs | default([], true)) + (steps["nuclei-wordpress"].outputs.typed_outputs | default([], true)) }}'
     steps:
       - task: wpscan
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: wpscan-full
         with:
           target: "{{ inputs.target }}"
@@ -52,7 +60,7 @@ jobs:
           api_token: "{{ inputs.api_token }}"
         continue-on-error: true
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-wordpress
         with:
           target: "{{ inputs.target }}"
@@ -77,7 +85,7 @@ jobs:
           print(f"  High: {len(high)}")
           for v in critical + high:
               print(f"  - [{v.get('severity', 'unknown').upper()}] {v.get('name', 'Unknown')}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

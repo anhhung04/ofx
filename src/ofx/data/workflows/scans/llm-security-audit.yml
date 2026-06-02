@@ -5,6 +5,14 @@ description: |
 tags: [llm, ai, security, audit]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     model_type:
       required: true
       type: string
@@ -26,7 +34,7 @@ jobs:
       typed_outputs: '{{ steps["garak-test"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: garak
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: garak-test
         with:
           target: "{{ inputs.model_name }}"
@@ -56,4 +64,4 @@ jobs:
           print()
           print("--- Garak Results ---")
           print(f"  Vulnerabilities found: {finding_count}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

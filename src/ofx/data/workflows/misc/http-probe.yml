@@ -5,6 +5,14 @@ description: |
 tags: [misc, http, probe, recon]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     targets_file:
       required: true
       type: string
@@ -24,7 +32,7 @@ jobs:
     steps:
     - name: probe-targets
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.http import get_http_client
         from ofx.api.evasion import sleep_with_jitter
@@ -155,4 +163,4 @@ jobs:
         print(f"\n  Alive hosts saved to: {alive_file}")
 
         add_outputs(alive_file=alive_file, alive_count=len(alive), redirect_count=len(redirects), auth_count=len(auth_required))
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

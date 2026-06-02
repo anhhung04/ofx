@@ -5,6 +5,14 @@ description: |
 tags: [misc, oob, interactsh, testing]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -24,7 +32,7 @@ jobs:
     steps:
     - name: start-listener
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.oob import Interactsh
 
@@ -47,7 +55,7 @@ jobs:
     steps:
     - name: send-probes
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.http import fetch, get_http_client
         import time
@@ -133,5 +141,5 @@ jobs:
         print(f"\n[*] Target: {{ inputs.target }}")
         print(f"[*] Method: {{ inputs.method }}")
         print(f"[*] Probes sent: {{ jobs.probe.outputs.probes_sent | default(0, true) }}")
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

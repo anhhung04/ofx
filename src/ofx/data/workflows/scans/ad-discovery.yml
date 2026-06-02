@@ -7,6 +7,14 @@ description: |
 tags: [scans, ad, ldap, bloodhound, kerberos, enumeration, task]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -43,10 +51,10 @@ jobs:
           password: "{{ inputs.password }}"
           output_dir: ${OFX_RUN_DIR:-/tmp}/ofx_ldapdump
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-users
         with:
           target: "{{ inputs.target }}"
@@ -94,8 +102,8 @@ jobs:
           output_dir: true
           dns_tcp: true
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: bh-status
         script: |
           bh_tags = {{ tags(steps["bh-collect"].outputs.typed_outputs) | tojson }}
@@ -115,7 +123,7 @@ jobs:
       admin_users: '{{ steps["enum-summary"].outputs.admin_users | default("", true) }}'
     steps:
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-groups
         with:
           target: "{{ inputs.target }}"
@@ -126,7 +134,7 @@ jobs:
           groups: true
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-sessions
         with:
           target: "{{ inputs.target }}"
@@ -137,7 +145,7 @@ jobs:
           sessions: true
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-loggedon
         with:
           target: "{{ inputs.target }}"
@@ -148,7 +156,7 @@ jobs:
           loggedon_users: true
         continue-on-error: true
       - task: netexec
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nxc-pass-pol
         with:
           target: "{{ inputs.target }}"
@@ -182,7 +190,7 @@ jobs:
               print("\n  Active sessions:")
               for u in sorted(active_users)[:20]:
                   print(f"    - {u}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
   kerberos-scan:
     name: Kerberos Attack Surface
@@ -201,8 +209,8 @@ jobs:
           domain: "{{ inputs.domain }}"
           users: "{{ jobs['ldap-enum'].outputs.user_file | default('/tmp/ofx_ad_users.txt', true) }}"
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - task: getuserspns
         name: spn-enum
         with:
@@ -211,8 +219,8 @@ jobs:
           password: "{{ inputs.password }}"
           dc_ip: "{{ inputs.target }}"
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - task: getnpusers
         name: asrep-enum
         with:
@@ -221,8 +229,8 @@ jobs:
           password: "{{ inputs.password }}"
           dc_ip: "{{ inputs.target }}"
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: kerb-summary
         script: |
           kerb_users = {{ users(steps["kerbrute-enum"].outputs.typed_outputs) | tojson }}
@@ -255,4 +263,4 @@ jobs:
 
           if not spn_accounts and not asrep_accounts:
               print("\n  [*] No Kerberos attack vectors found")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

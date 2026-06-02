@@ -9,6 +9,14 @@ tags:
 - secrets
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -26,7 +34,7 @@ jobs:
       live_url: '{{ steps["export-url"].outputs.live_url | default("", true) }}'
     steps:
     - task: httpx
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: probe-url
       with:
         target: '{{ inputs.target }}'
@@ -48,7 +56,7 @@ jobs:
       param_count: '{{ steps["export-params"].outputs.param_count | default("", true) }}'
     steps:
     - task: arjun
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: find-params
       with:
         target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}"
@@ -71,7 +79,7 @@ jobs:
     - param-discovery
     steps:
     - task: ffuf
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: fuzz-params
       with:
         target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}?FUZZ=test"
@@ -86,7 +94,7 @@ jobs:
         echo "======================================="
         echo "Parameters found: {{ jobs['param-discovery'].outputs.param_count }}"
         echo 'Fuzz results: {{ urls(steps["fuzz-params"].outputs.typed_outputs) | length }}'
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

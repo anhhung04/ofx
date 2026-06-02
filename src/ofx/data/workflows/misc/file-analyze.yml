@@ -6,6 +6,14 @@ description: |
 tags: [utility, file, forensics, dfir, analysis]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     file:
       required: true
       type: string
@@ -129,5 +137,5 @@ jobs:
             pass
 
         add_outputs(**{k: json.dumps(v) if isinstance(v, (dict, list)) else v for k, v in results.items()})
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

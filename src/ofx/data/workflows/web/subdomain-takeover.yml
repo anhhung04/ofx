@@ -6,6 +6,14 @@ description: |
 tags: [web, subdomain, takeover, dns, security]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -17,7 +25,7 @@ jobs:
     name: Subdomain Discovery
     steps:
     - task: subfinder
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: subdomain-find
       with:
         target: '{{ inputs.target }}'
@@ -135,8 +143,8 @@ jobs:
         print(f"\n=== RESULTS: {len(findings)} vulnerable subdomains ===")
         if not findings:
             print("  No takeover opportunities found")
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"
 
     - name: export-to-project
       script: |

@@ -5,6 +5,14 @@ description: |
 tags: [utility, reverse-shell, exploit, redteam]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     lhost:
       required: true
       type: string
@@ -91,5 +99,5 @@ jobs:
                 f.write(f"=== {name} ===\n{cmd}\n\n")
 
         add_outputs(shells_file=out, shell_count=len(shells))
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

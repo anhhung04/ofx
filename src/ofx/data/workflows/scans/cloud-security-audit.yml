@@ -6,6 +6,14 @@ description: |
 tags: [cloud, security, audit, aws, azure, gcp]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     provider:
       required: true
       type: string
@@ -32,7 +40,7 @@ jobs:
       typed_outputs: '{{ steps["prowler-audit"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: prowler
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: prowler-audit
         with:
           target: "{{ inputs.provider }}"
@@ -50,7 +58,7 @@ jobs:
       typed_outputs: '{{ steps["cloudfox-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: cloudfox
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: cloudfox-scan
         with:
           target: all-checks
@@ -85,4 +93,4 @@ jobs:
               print(f"  Findings: {cloudfox_count}")
           else:
               print("  Skipped (provider is not AWS)")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -15,6 +15,14 @@ tags:
   - vuln
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -32,21 +40,21 @@ jobs:
       live_hosts_json: '{{ steps["collect-hosts"].outputs.live_hosts_json | default("[]", true) }}'
     steps:
       - task: fping
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: fping-discovery
         with:
           target: "{{ inputs.target }}"
           generate: true
         continue-on-error: true
       - task: nmap
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: host-discovery
         with:
           target: "{{ inputs.target }}"
           timing: 4
         continue-on-error: true
       - task: naabu
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: port-sweep
         with:
           target: "{{ inputs.target }}"
@@ -92,7 +100,7 @@ jobs:
       cred_count: '{{ steps["parse-brutus"].outputs.cred_count | default("0", true) }}'
     steps:
       - name: run-pipeline
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           naabu -list {{ jobs['network-discovery'].outputs.hosts_file }} \
             -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
@@ -133,7 +141,7 @@ jobs:
                   print(f"  [+] {c['host']} ({c['service']}): {c['user']}:{c['pass']}")
           else:
               print("[*] No default credentials found")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
   # ── Phase 2b: Per-host Deep Scan via host-scan (parallel) ──────────
   per-host-scan:
@@ -146,7 +154,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         uses: host-scan
         with:
           target: "{{ matrix.target }}"
@@ -165,7 +173,7 @@ jobs:
           echo "Default creds:    {{ jobs['default-cred-check'].outputs.cred_count }}"
           echo "Hosts deep-scanned: {{ jobs['network-discovery'].outputs.host_count }}"
           echo "(Each host: port scan, service detect, web fingerprint, crawl, vuln scan)"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
       - name: export-to-project
         script: |
           import shutil

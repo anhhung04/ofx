@@ -6,6 +6,14 @@ description: |
 tags: [redteam, ad, kerberos, kerberoast, asrep, task]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -52,8 +60,8 @@ jobs:
           dc_ip: "{{ inputs.target }}"
           request: true
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: save-hashes
         script: |
           creds = {{ users(steps["get-spn-tickets"].outputs.typed_outputs) | tojson }}
@@ -90,8 +98,8 @@ jobs:
           request: true
           format: hashcat
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: save-asrep
         script: |
           creds = {{ users(steps["get-asrep-hashes"].outputs.typed_outputs) | tojson }}
@@ -141,8 +149,8 @@ jobs:
           wordlist: "{{ inputs.wordlist }}"
           format: krb5tgs
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - task: john
         name: john-show
         with:
@@ -150,8 +158,8 @@ jobs:
           format: krb5tgs
           show: true
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: crack-summary
         script: |
           cracked = {{ users(steps["john-show"].outputs.typed_outputs) | tojson }}
@@ -171,4 +179,4 @@ jobs:
           if not cracked:
               print("  [-] No hashes cracked with current wordlist")
               print(f"      Wordlist: {{ inputs.wordlist }}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -6,6 +6,14 @@ description: |
 tags: [redteam, ad, adcs, certificate, certipy, task]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -48,8 +56,8 @@ jobs:
           enabled: true
           json: true
         continue-on-error: true
-        log-stdout: true
-        log-command: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        log-command: "{{ inputs.log_command | default(true) }}"
       - name: analyze-certs
         script: |
           vulns = {{ vulns(steps["certipy-find"].outputs.typed_outputs) | tojson }}
@@ -116,4 +124,4 @@ jobs:
               print("      - certipy auth -pfx cert.pfx -dc-ip DC_IP")
           else:
               print("\n  [*] No vulnerable ADCS templates found")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

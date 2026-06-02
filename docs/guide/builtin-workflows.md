@@ -93,6 +93,33 @@ ofx flow run domain-scan --input target=example.com
 
 # Run with output directory
 ofx flow run host-scan --input target=10.10.10.10 -o ./results/
+
+# Disable command log entries but keep stdout artifact logs
+ofx flow run full-recon \
+  --input target=example.com \
+  --input log_command=false \
+  --input log_output=true
+```
+
+### Runtime Logging Inputs
+
+Built-in workflows now expose two common runtime inputs:
+
+| Input | Default | Effect |
+|-------|---------|--------|
+| `log_command` | `true` | Controls step `log-command` entries |
+| `log_output` | `true` | Controls step `log-stdout` output capture |
+
+These inputs are read by the builtin workflow YAML itself, so you can change logging behavior per run without editing the workflow file.
+
+For builtin workflows that call other builtin workflows with `uses:`, the same inputs continue to apply recursively because subworkflows inherit the parent run inputs.
+
+```bash
+# Quiet down recursive builtin workflows for one run
+ofx flow run recursive-domain-scan \
+  --input target=example.com \
+  --input log_command=false \
+  --input log_output=false
 ```
 
 ### Running Individual Tasks

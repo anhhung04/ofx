@@ -9,6 +9,14 @@ tags:
 - rce
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -26,7 +34,7 @@ jobs:
       commix_vuln_param: '{{ steps["collect-commix"].outputs.commix_vuln_param | default("", true) }}'
     steps:
     - task: commix
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: commix-scan
       with:
         target: '{{ inputs.target }}'
@@ -52,7 +60,7 @@ jobs:
       nuclei_vuln_count: '{{ steps["collect-nuclei"].outputs.nuclei_vuln_count | default("", true) }}'
     steps:
     - task: nuclei
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nuclei-cmdi
       with:
         target: '{{ inputs.target }}'
@@ -89,7 +97,7 @@ jobs:
         echo ""
         echo "--- Nuclei RCE Results ---"
         echo "Findings: {{ jobs['nuclei-rce'].outputs.nuclei_vuln_count }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

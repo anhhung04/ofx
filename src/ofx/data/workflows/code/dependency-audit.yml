@@ -7,6 +7,14 @@ tags: [code, vuln, supply-chain, audit]
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -30,14 +38,14 @@ jobs:
       high_count: "{{ steps.aggregate.outputs.high_count }}"
     steps:
       - task: grype
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: grype-scan
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
 
       - task: trivy
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: trivy-scan
         with:
           target: "{{ inputs.target }}"
@@ -74,10 +82,10 @@ jobs:
           echo "Vulnerabilities: {{ jobs['scan'].outputs.vuln_count }}"
           echo "  Critical: {{ jobs['scan'].outputs.critical_count }}"
           echo "  High: {{ jobs['scan'].outputs.high_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: Check threshold
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         run: |
           critical={{ jobs['scan'].outputs.critical_count | default('0', true) }}
           if [ "{{ inputs.fail_on_critical }}" = "true" ] && [ "$critical" -gt 0 ]; then

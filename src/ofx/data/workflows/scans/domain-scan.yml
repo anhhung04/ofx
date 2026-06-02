@@ -15,6 +15,14 @@ tags:
   - secrets
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -28,7 +36,7 @@ jobs:
     name: DNS Enumeration
     steps:
       - task: dnsx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: dns-records
         with:
           target: "{{ inputs.target }}"
@@ -42,7 +50,7 @@ jobs:
           resp: true
         continue-on-error: true
       - task: dnsrecon
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: dnsrecon-scan
         with:
           target: "{{ inputs.target }}"
@@ -68,21 +76,21 @@ jobs:
       sub_count: '{{ steps["merge-subs"].outputs.sub_count | default("0", true) }}'
     steps:
       - task: subfinder
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: subfinder-enum
         with:
           target: "{{ inputs.target }}"
           all: true
         continue-on-error: true
       - task: amass
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: amass-passive
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       # CT log enumeration
       - task: tlsx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: tls-san-enum
         with:
           target: "{{ inputs.target }}"
@@ -120,7 +128,7 @@ jobs:
       verified_count: '{{ steps["export-verified"].outputs.verified_count | default("", true) }}'
     steps:
       - task: dnsx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: verify-subs
         with:
           target: "{{ jobs['subdomain-discovery'].outputs.subs_file }}"
@@ -153,7 +161,7 @@ jobs:
       port_count: '{{ steps["collect-ports"].outputs.port_count | default("0", true) }}'
     steps:
       - task: nmap
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: service-detect
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -188,7 +196,7 @@ jobs:
       live_count: '{{ steps["export-live"].outputs.live_count | default("0", true) }}'
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: probe-hosts
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -199,19 +207,19 @@ jobs:
           ports: "80,443,8080,8443"
         continue-on-error: true
       - task: testssl
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: ssl-audit
         with:
           target: "{{ inputs.target }}:443"
         continue-on-error: true
       - task: wafw00f
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: waf-detect
         with:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: whatweb
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: tech-fingerprint
         with:
           target: "{{ inputs.target }}"
@@ -248,14 +256,14 @@ jobs:
     needs: [port-scan, http-probe]
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-scan
         with:
           target: "{{ jobs['http-probe'].outputs.live_urls_file }}"
           severity: critical,high,medium
         continue-on-error: true
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: takeover-check
         with:
           target: "{{ jobs['dns-verify'].outputs.verified_file }}"
@@ -278,7 +286,7 @@ jobs:
                   print(f"  {sev.upper()}: {cnt}")
                   for v in by_sev[sev][:5]:
                       print(f"    [{v.get('host','')}] {v.get('name','')}")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
   # ── Phase 5: Summary ─────────────────────────────────────────────
   summary:
@@ -296,7 +304,7 @@ jobs:
           echo "DNS-verified hosts:  {{ jobs['dns-verify'].outputs.verified_count }}"
           echo "Open ports:          {{ jobs['port-scan'].outputs.port_count | default(0) }}"
           echo "Live HTTP services:  {{ jobs['http-probe'].outputs.live_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
       - name: export-to-project
         script: |
           import shutil

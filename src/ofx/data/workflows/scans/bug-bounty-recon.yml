@@ -13,6 +13,14 @@ tags:
   - vuln
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -32,7 +40,7 @@ jobs:
       live_urls_json: '{{ steps["export-live-urls"].outputs.live_urls_json | default("[]", true) }}'
     steps:
       - task: subfinder
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: subfinder-scan
         retry: 2
         retry-delay: 5
@@ -41,7 +49,7 @@ jobs:
           all: true
         continue-on-error: true
       - task: amass
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: amass-passive
         retry: 2
         retry-delay: 5
@@ -49,7 +57,7 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: tlsx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: tls-san-enum
         retry: 2
         retry-delay: 5
@@ -185,7 +193,7 @@ jobs:
       takeover_count: '{{ steps["collect-takeovers"].outputs.takeover_count | default("0", true) }}'
     steps:
       - task: subzy
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: subzy-check
         retry: 2
         retry-delay: 5
@@ -193,7 +201,7 @@ jobs:
           target: "{{ jobs['subdomain-discovery'].outputs.verified_file }}"
         continue-on-error: true
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-takeover
         retry: 2
         retry-delay: 5
@@ -222,7 +230,7 @@ jobs:
       fail_fast: false
     steps:
       - name: scan-host
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         uses: host-scan
         with:
           target: "{{ matrix.target }}"
@@ -271,7 +279,7 @@ jobs:
       param_url_count: '{{ steps["collect-params"].outputs.param_url_count | default("0", true) }}'
     steps:
       - task: paramspider
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: paramspider-mine
         retry: 2
         retry-delay: 5
@@ -279,7 +287,7 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gau
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: gau-params
         retry: 2
         retry-delay: 5
@@ -288,7 +296,7 @@ jobs:
           subs: true
         continue-on-error: true
       - task: arjun
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: arjun-discover
         retry: 2
         retry-delay: 5
@@ -389,7 +397,7 @@ jobs:
       nuclei_count: '{{ steps["collect-results"].outputs.nuclei_count | default("0", true) }}'
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-scan
         retry: 2
         retry-delay: 5
@@ -398,7 +406,7 @@ jobs:
           severity: critical,high,medium
         continue-on-error: true
       - task: dalfox
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: dalfox-xss
         retry: 2
         retry-delay: 5
@@ -481,7 +489,7 @@ jobs:
       secrets_count: '{{ steps["collect-secrets"].outputs.secrets_count | default("0", true) }}'
     steps:
       - task: nuclei
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-secrets
         retry: 2
         retry-delay: 5
@@ -490,7 +498,7 @@ jobs:
           tags: exposure,token,secret,api-key
         continue-on-error: true
       - task: gitleaks
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: gitleaks-scan
         retry: 2
         retry-delay: 5
@@ -539,7 +547,7 @@ jobs:
           echo ""
           echo "--- Parameter Mining ---"
           echo "Parameterized URLs:  {{ jobs['param-mine'].outputs.param_url_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
       - name: export-to-project
         script: |
           import shutil

@@ -6,6 +6,14 @@ description: |
 tags: [osint, company, recon, email, social]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -24,20 +32,20 @@ jobs:
     name: Domain Intelligence
     steps:
     - task: whois
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: whois-lookup
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: subfinder
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: subdomain-enum
       with:
         target: '{{ inputs.domain or inputs.target }}'
         all: true
       continue-on-error: true
     - task: dnsx
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: dns-records
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -56,7 +64,7 @@ jobs:
       email_count: '{{ steps["collect-emails"].outputs.email_count | default("", true) }}'
     steps:
     - task: theharvester
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: theharvester-scan
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -64,7 +72,7 @@ jobs:
         limit: 500
       continue-on-error: true
     - task: holehe
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: email-existence
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -94,7 +102,7 @@ jobs:
     needs: [domain-intel]
     steps:
     - task: httpx
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: http-tech
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -104,7 +112,7 @@ jobs:
         follow_redirects: true
       continue-on-error: true
     - task: wafw00f
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: waf-detect
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -116,7 +124,7 @@ jobs:
       typed_outputs: '{{ steps["breach-lookup"].outputs.typed_outputs | default([], true) }}'
     steps:
     - task: h8mail
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: breach-lookup
       with:
         target: '{{ inputs.domain or inputs.target }}'
@@ -140,7 +148,7 @@ jobs:
         echo ""
         echo "--- Breach Data ---"
         echo "  Hits: {{ users(jobs['breach-search'].outputs.typed_outputs) | list | length | default('?', true) }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

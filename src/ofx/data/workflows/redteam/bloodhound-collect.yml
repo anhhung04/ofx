@@ -5,6 +5,14 @@ description: |
 tags: [redteam, ad, bloodhound, enumeration]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -39,7 +47,7 @@ jobs:
       output_dir: '{{ steps["bh-collect"].outputs.output_dir | default("", true) }}'
     steps:
     - name: bh-collect
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         echo "[+] BloodHound collection: {{ inputs.domain }}"
         echo "    DC: {{ inputs.target }}"
@@ -148,4 +156,4 @@ jobs:
             add_outputs(object_count=total)
             print(f"\n[+] Import into BloodHound CE:")
             print(f"    Upload ZIP from: {out_dir}")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

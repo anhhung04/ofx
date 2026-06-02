@@ -6,6 +6,14 @@ description: |
 tags: [utility, jwt, token, cyberchef, web]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     token:
       required: true
       type: string
@@ -123,7 +131,7 @@ jobs:
             print(f"  {issue}")
 
         add_outputs(algorithm=alg, header=json.dumps(header), payload=json.dumps(payload), issue_count=len(issues), verified=verified, expired='exp' in payload and payload['exp'] < now)
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: brute-secret
       if: "{{ inputs.wordlist }}"
@@ -170,5 +178,5 @@ jobs:
                 add_outputs(cracked_secret=found)
             else:
                 print(f"  [-] Secret not found in {count} attempts")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
       continue-on-error: true

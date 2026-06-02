@@ -9,6 +9,14 @@ tags:
 - ports
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -23,7 +31,7 @@ jobs:
       alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("", true) }}'
     steps:
     - task: fping
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: ping-sweep
       with:
         target: '{{ inputs.target }}'
@@ -51,7 +59,7 @@ jobs:
     - host-discovery
     steps:
     - task: naabu
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: naabu-scan
       with:
         target: "{{ jobs['host-discovery'].outputs.alive_file | default(inputs.target, true) }}"
@@ -88,14 +96,14 @@ jobs:
     - port-scan
     steps:
     - task: nmap
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: version-detect
       with:
         target: "{{ jobs['port-scan'].outputs.hosts_file | default(inputs.target, true) }}"
         version_detection: true
       continue-on-error: true
     - task: httpx
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: http-probe
       with:
         target: "{{ jobs['port-scan'].outputs.hosts_file | default(inputs.target, true) }}"
@@ -126,7 +134,7 @@ jobs:
         echo "Alive hosts: {{ jobs['host-discovery'].outputs.alive_count }}"
         echo "Open ports: {{ jobs['port-scan'].outputs.port_count }}"
         echo "HTTP services: {{ jobs['service-detection'].outputs.live_count }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

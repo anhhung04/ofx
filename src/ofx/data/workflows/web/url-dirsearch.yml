@@ -9,6 +9,14 @@ tags:
   - secrets
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -26,7 +34,7 @@ jobs:
       live_url: '{{ steps["export-url"].outputs.live_url | default("", true) }}'
     steps:
       - task: httpx
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: http-probe
         with:
           target: "{{ inputs.target }}"
@@ -49,7 +57,7 @@ jobs:
       url_count: '{{ steps["collect-dirs"].outputs.url_count | default("", true) }}'
     steps:
       - task: dirsearch
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: dirsearch-scan
         with:
           target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}"
@@ -77,7 +85,7 @@ jobs:
       - dir-search
     steps:
       - task: katana
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: crawl-content
         with:
           target: "{{ jobs['dir-search'].outputs.found_file | default(inputs.target, true) }}"
@@ -90,7 +98,7 @@ jobs:
           echo " Dir Search: {{ inputs.target }}"
           echo "=================================="
           echo "URLs found: {{ jobs['dir-search'].outputs.url_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
         script: |

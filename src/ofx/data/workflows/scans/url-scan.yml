@@ -10,6 +10,14 @@ tags:
 - secrets
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -27,7 +35,7 @@ jobs:
       url_count: '{{ steps["collect-urls"].outputs.url_count | default("", true) }}'
     steps:
     - task: katana
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: katana-crawl
       with:
         target: '{{ inputs.target }}'
@@ -36,13 +44,13 @@ jobs:
         known_files: all
       continue-on-error: true
     - task: gau
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: gau-passive
       with:
         target: '{{ inputs.target }}'
       continue-on-error: true
     - task: httpx
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: probe-crawled
       with:
         target: '{{ inputs.target }}'
@@ -70,7 +78,7 @@ jobs:
     - url-crawl
     steps:
     - task: feroxbuster
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: feroxbuster-fuzz
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
@@ -87,7 +95,7 @@ jobs:
     - url-crawl
     steps:
     - task: arjun
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: param-discovery
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
@@ -99,7 +107,7 @@ jobs:
     - param-fuzz
     steps:
     - task: nuclei
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nuclei-scan
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
@@ -107,20 +115,20 @@ jobs:
         exclude_tags: network,ssl,file,dns,osint,token-spray,headers
       continue-on-error: true
     - task: dalfox
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: xss-scan
       with:
         target: "{{ jobs['url-crawl'].outputs.urls_file | default(inputs.target, true) }}"
       continue-on-error: true
     - task: nuclei
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: secret-scan
       with:
         target: '{{ inputs.target }}'
         tags: exposure,token,secret
       continue-on-error: true
     - task: cariddi
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: cariddi-crawl
       with:
         target: '{{ inputs.target }}'
@@ -130,7 +138,7 @@ jobs:
         depth: 2
       continue-on-error: true
     - task: whatweb
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: whatweb-fingerprint
       with:
         target: '{{ inputs.target }}'
@@ -154,7 +162,7 @@ jobs:
         print(f"Total vulnerabilities: {len(all_vulns)}")
         print(f"  Critical: {len(critical)}")
         print(f"  High: {len(high)}")
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

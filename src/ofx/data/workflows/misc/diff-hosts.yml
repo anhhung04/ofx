@@ -5,6 +5,14 @@ description: |
 tags: [utility, diff, compare, monitoring]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     baseline:
       required: true
       type: string
@@ -72,4 +80,4 @@ jobs:
         Path(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_diff_removed.txt').write_text('\n'.join(removed_items) + '\n')
 
         add_outputs(new_count=len(new_items), removed_count=len(removed_items), unchanged_count=len(unchanged), new_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_diff_new.txt", removed_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_diff_removed.txt", baseline_count=len(baseline), current_count=len(current))
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

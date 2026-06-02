@@ -6,6 +6,14 @@ description: |
 tags: [redteam, ad, ntlm, relay, coercion]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -40,7 +48,7 @@ jobs:
       relay_targets_file: '{{ steps["check-smb-signing"].outputs.relay_targets_file | default("", true) }}'
     steps:
     - name: check-smb-signing
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       run: |
         echo "[+] Checking SMB signing on {{ inputs.target }}..."
 
@@ -69,7 +77,7 @@ jobs:
       coercion_count: '{{ steps["check-coercion"].outputs.coercion_count | default("", true) }}'
     steps:
     - name: check-coercion
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         import subprocess
 
@@ -142,4 +150,4 @@ jobs:
         echo "  Coercion vectors: {{ jobs['coercion-check'].outputs.coercion_count | default('?', true) }}"
         echo ""
         echo "  Full target list: ${OFX_RUN_DIR:-/tmp}/ofx_relay_targets.txt"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"

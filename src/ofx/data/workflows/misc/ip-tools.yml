@@ -5,6 +5,14 @@ description: |
 tags: [utility, network, ip, cidr, cyberchef]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -134,5 +142,5 @@ jobs:
             print(f"  {key}: {val}")
 
         add_outputs(**{k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in results.items()})
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

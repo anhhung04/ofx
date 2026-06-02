@@ -7,6 +7,14 @@ tags:
 - vuln
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -19,7 +27,7 @@ jobs:
       xss_count: '{{ steps["export-xss"].outputs.xss_count | default("", true) }}'
     steps:
     - task: dalfox
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: dalfox-xss
       with:
         target: '{{ inputs.target }}'
@@ -33,7 +41,7 @@ jobs:
       nuclei_count: '{{ steps["export-vulns"].outputs.nuclei_count | default("", true) }}'
     steps:
     - task: nuclei
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: nuclei-http
       with:
         target: '{{ inputs.target }}'
@@ -56,7 +64,7 @@ jobs:
         echo "================================="
         echo "XSS findings: {{ jobs['xss-scan'].outputs.xss_count }}"
         echo "Nuclei findings: {{ jobs['nuclei-scan'].outputs.nuclei_count }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

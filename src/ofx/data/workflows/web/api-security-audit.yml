@@ -6,6 +6,14 @@ description: |
 tags: [web, api, security, audit]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -28,7 +36,7 @@ jobs:
       typed_outputs: '{{ steps["graphql-detect"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: graphw00f
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: graphql-detect
         with:
           target: "{{ inputs.target }}"
@@ -42,7 +50,7 @@ jobs:
       typed_outputs: '{{ steps["brute-endpoints"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: kiterunner
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: brute-endpoints
         with:
           target: "{{ inputs.target }}"
@@ -58,7 +66,7 @@ jobs:
       typed_outputs: '{{ steps["schema-fuzz"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: schemathesis
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: schema-fuzz
         with:
           target: "{{ inputs.schema }}"
@@ -76,7 +84,7 @@ jobs:
       typed_outputs: '{{ steps["cherrybomb-scan"].outputs.typed_outputs | default([], true) }}'
     steps:
       - task: cherrybomb
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: cherrybomb-scan
         with:
           target: "{{ inputs.schema }}"
@@ -117,4 +125,4 @@ jobs:
               print(f"  Vulnerabilities: {api_count}")
           else:
               print("  Skipped (no schema provided)")
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"

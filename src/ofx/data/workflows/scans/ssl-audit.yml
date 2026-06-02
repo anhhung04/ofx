@@ -10,6 +10,14 @@ tags:
 - certificate
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target:
       required: true
       type: string
@@ -23,7 +31,7 @@ jobs:
       cert_issues: '{{ steps["export-testssl"].outputs.cert_issues | default("", true) }}'
     steps:
     - task: testssl
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       name: testssl-scan
       with:
         target: '{{ inputs.target }}'
@@ -56,7 +64,7 @@ jobs:
         echo "======================================="
         echo "TLS vulnerabilities: {{ jobs['testssl-check'].outputs.testssl_vulns }}"
         echo "Certificate issues: {{ jobs['testssl-check'].outputs.cert_issues }}"
-      log-stdout: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
 
     - name: export-to-project
       script: |

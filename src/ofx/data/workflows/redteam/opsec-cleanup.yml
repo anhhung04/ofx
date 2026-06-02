@@ -5,6 +5,14 @@ description: |
 tags: [redteam, opsec, cleanup, anti-forensics]
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     target_os:
       required: true
       type: string
@@ -27,7 +35,7 @@ jobs:
     steps:
     - name: build-cleanup
       continue-on-error: true
-      log-command: true
+      log-command: "{{ inputs.log_command | default(true) }}"
       script: |
         from ofx.api.opsec import (
             clean_history_commands,
@@ -130,5 +138,5 @@ jobs:
         print(f"[+] Generated {len([c for c in commands if not c.startswith('#')])} timestomp commands")
 
         add_outputs(timestomp_file=out_file, timestomp_count=len([c for c in commands if not c.startswith('#')]))
-      log-stdout: true
-      log-command: true
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+      log-command: "{{ inputs.log_command | default(true) }}"

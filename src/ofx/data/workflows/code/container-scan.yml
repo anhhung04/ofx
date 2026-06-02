@@ -7,6 +7,14 @@ tags: [code, container, docker, vuln, compliance]
 
 dispatch:
   inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
     image:
       required: true
       type: string
@@ -29,7 +37,7 @@ jobs:
       critical_count: "{{ steps.export.outputs.critical_count }}"
     steps:
       - task: trivy
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: trivy-image
         with:
           target: "{{ inputs.image }}"
@@ -37,7 +45,7 @@ jobs:
         continue-on-error: true
 
       - task: grype
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: grype-image
         with:
           target: "{{ inputs.image }}"
@@ -67,7 +75,7 @@ jobs:
       secrets_count: '{{ steps["export-secrets"].outputs.secrets_count | default("", true) }}'
     steps:
       - task: trufflehog
-        log-command: true
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: image-secrets
         with:
           target: "docker://{{ inputs.image }}"
@@ -91,7 +99,7 @@ jobs:
           echo "Vulnerabilities: {{ jobs['image-vulns'].outputs.vuln_count }}"
           echo "  Critical: {{ jobs['image-vulns'].outputs.critical_count }}"
           echo "Embedded Secrets: {{ jobs['secrets-scan'].outputs.secrets_count }}"
-        log-stdout: true
+        log-stdout: "{{ inputs.log_output | default(true) }}"
 
 outputs:
   vuln_count: "{{ jobs['image-vulns'].outputs.vuln_count }}"
