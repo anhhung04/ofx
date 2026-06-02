@@ -70,7 +70,7 @@ class Step(OFXBaseModel):
     )
     log_command: bool | str = Field(
         default=False,
-        description="Whether to log the executed command to the oops timeline CSV (~/.oops/logs/)",
+        description="Whether to log the executed command to the command log (defaults to <project_path>/logs/command_log.ndjson)",
         alias="log-command",
     )
     uses: str | None = Field(

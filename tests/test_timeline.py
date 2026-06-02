@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-import csv
-import io
+import json
 from pathlib import Path
 
 import ofx.runner.timeline as tmod
-from ofx.runner.timeline import (
-    _csv_row,
-    _format_duration,
-    _resolve_oops_csv,
-    detect_target,
-    log_step,
-)
-
-# ── detect_target ────────────────────────────────────────────────────────
+from ofx.runner.timeline import _format_duration, _resolve_command_log_path, detect_target, log_step
 
 
 def test_detect_target_flag_h():
@@ -74,9 +65,6 @@ def test_detect_target_no_target():
     assert detect_target("echo hello") == ""
 
 
-# ── _format_duration ─────────────────────────────────────────────────────
-
-
 def test_format_duration_none():
     assert _format_duration(None) == ""
 
@@ -86,22 +74,18 @@ def test_format_duration_seconds():
 
 
 def test_format_duration_minutes():
-    # 90000 ms = 90s = 1.5m
     assert _format_duration(90000) == "1.5m"
 
 
 def test_format_duration_hours():
-    # 7200000 ms = 7200s = 2.0h
     assert _format_duration(7200000) == "2.0h"
 
 
 def test_format_duration_boundary_60s():
-    # Exactly 60000 ms = 60s = 1.0m
     assert _format_duration(60000) == "1.0m"
 
 
 def test_format_duration_boundary_3600s():
-    # Exactly 3600000 ms = 3600s = 1.0h
     assert _format_duration(3600000) == "1.0h"
 
 
@@ -109,76 +93,50 @@ def test_format_duration_zero():
     assert _format_duration(0) == "0.0s"
 
 
-# ── _resolve_oops_csv ───────────────────────────────────────────────────
+def test_resolve_command_log_path_explicit_file(monkeypatch):
+    monkeypatch.setenv("OFX_COMMAND_LOG_FILE", "/tmp/custom.ndjson")
+    assert _resolve_command_log_path({"project_name": "proj"}) == Path("/tmp/custom.ndjson")
 
 
-def test_resolve_oops_csv_explicit_file(monkeypatch):
-    monkeypatch.setenv("OOPS_LOG_FILE", "/tmp/custom.csv")
-    assert _resolve_oops_csv("proj") == Path("/tmp/custom.csv")
+def test_resolve_command_log_path_project_logs_var(monkeypatch):
+    monkeypatch.delenv("OFX_COMMAND_LOG_FILE", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_DIR", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_NAME", raising=False)
+    assert _resolve_command_log_path(
+        {"project_logs": "/var/logs", "project_name": "pentest1"}
+    ) == Path("/var/logs/command_log.ndjson")
 
 
-def test_resolve_oops_csv_dir_and_engagement(monkeypatch):
-    monkeypatch.delenv("OOPS_LOG_FILE", raising=False)
-    monkeypatch.setenv("OOPS_LOG_DIR", "/var/logs")
-    monkeypatch.setenv("OOPS_ENGAGEMENT", "pentest1")
-    assert _resolve_oops_csv("") == Path("/var/logs/pentest1.csv")
+def test_resolve_command_log_path_project_path(monkeypatch, tmp_path):
+    monkeypatch.delenv("OFX_COMMAND_LOG_FILE", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_NAME", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_DIR", raising=False)
+    project_path = tmp_path / "myproject"
+    assert _resolve_command_log_path(
+        {"project_path": str(project_path), "project_name": "myproject"}
+    ) == project_path / "logs" / "command_log.ndjson"
 
 
-def test_resolve_oops_csv_project_name(monkeypatch):
-    monkeypatch.delenv("OOPS_LOG_FILE", raising=False)
-    monkeypatch.delenv("OOPS_ENGAGEMENT", raising=False)
-    monkeypatch.setenv("OOPS_LOG_DIR", "/var/logs")
-    assert _resolve_oops_csv("myproject") == Path("/var/logs/myproject.csv")
+def test_resolve_command_log_path_default(monkeypatch):
+    monkeypatch.delenv("OFX_COMMAND_LOG_FILE", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_DIR", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_NAME", raising=False)
+    result = _resolve_command_log_path({})
+    assert result == Path("~/.ofx/logs/command/default.ndjson").expanduser()
 
 
-def test_resolve_oops_csv_default(monkeypatch):
-    monkeypatch.delenv("OOPS_LOG_FILE", raising=False)
-    monkeypatch.delenv("OOPS_LOG_DIR", raising=False)
-    monkeypatch.delenv("OOPS_ENGAGEMENT", raising=False)
-    result = _resolve_oops_csv("")
-    assert result == Path("~/.oops/logs/default.csv").expanduser()
-
-
-# ── _csv_row ─────────────────────────────────────────────────────────────
-
-
-def test_csv_row_simple():
-    row = _csv_row(["a", "b", "c"])
-    assert row.strip() == "a,b,c"
-
-
-def test_csv_row_value_with_comma():
-    row = _csv_row(["hello, world", "b"])
-    reader = csv.reader(io.StringIO(row))
-    parsed = next(reader)
-    assert parsed == ["hello, world", "b"]
-
-
-def test_csv_row_value_with_quotes():
-    row = _csv_row(['say "hi"', "ok"])
-    reader = csv.reader(io.StringIO(row))
-    parsed = next(reader)
-    assert parsed == ['say "hi"', "ok"]
-
-
-def test_csv_row_ends_with_newline():
-    row = _csv_row(["x"])
-    assert row.endswith("\n")
-
-
-# ── log_step (integration) ──────────────────────────────────────────────
-
-
-def test_log_step_appends_csv(tmp_path, monkeypatch):
-    monkeypatch.delenv("OOPS_LOG_FILE", raising=False)
-    monkeypatch.setenv("OOPS_LOG_DIR", str(tmp_path))
-    monkeypatch.delenv("OOPS_ENGAGEMENT", raising=False)
+def test_log_step_appends_ndjson(tmp_path, monkeypatch):
+    monkeypatch.delenv("OFX_COMMAND_LOG_FILE", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_DIR", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_NAME", raising=False)
     tmod._source_host_cache = ""
-    monkeypatch.setenv("OOPS_SOURCE_HOST", "testbox")
-    monkeypatch.setenv("OOPS_SOURCE_IP", "1.2.3.4")
+    monkeypatch.setenv("OFX_COMMAND_LOG_SOURCE_HOST", "testbox")
+    monkeypatch.setenv("OFX_COMMAND_LOG_SOURCE_IP", "1.2.3.4")
+
+    project_path = tmp_path / "demo-project"
 
     log_step(
-        ctx_vars={"project_name": "demo"},
+        ctx_vars={"project_name": "demo", "project_path": str(project_path)},
         step_name="scan",
         command="nmap 10.0.0.1",
         tool="nmap",
@@ -187,26 +145,32 @@ def test_log_step_appends_csv(tmp_path, monkeypatch):
         duration_ms=5000,
     )
 
-    csv_file = tmp_path / "demo.csv"
-    assert csv_file.exists()
-    lines = csv_file.read_text().splitlines()
-    # First line is header, second is data
-    assert len(lines) == 2
-    reader = csv.reader(io.StringIO(lines[1]))
-    row = next(reader)
-    assert row[0] == "[nmap] nmap 10.0.0.1"  # title
-    assert row[1] == "nmap 10.0.0.1"  # command
-    assert row[2] == "nmap"  # tool
-    assert row[5] == "10.0.0.1"  # target
+    log_file = project_path / "logs" / "command_log.ndjson"
+    assert log_file.exists()
+    records = [json.loads(line) for line in log_file.read_text().splitlines()]
+    assert len(records) == 1
+    assert records[0]["step_name"] == "scan"
+    assert records[0]["command"] == "nmap 10.0.0.1"
+    assert records[0]["tool"] == "nmap"
+    assert records[0]["target"] == "10.0.0.1"
+    assert records[0]["source_host"] == "testbox (1.2.3.4)"
+    assert records[0]["project_name"] == "demo"
+    assert records[0]["status"] == "success"
+    assert records[0]["duration_ms"] == 5000
+    assert records[0]["duration"] == "5.0s"
+    assert records[0]["exit_code"] is None
+    assert records[0]["tags"] == ["ofx", "duration:5.0s", "status:success"]
+    assert records[0]["timestamp"].endswith("Z")
 
 
-def test_log_step_with_exit_code(tmp_path, monkeypatch):
-    monkeypatch.delenv("OOPS_LOG_FILE", raising=False)
-    monkeypatch.setenv("OOPS_LOG_DIR", str(tmp_path))
-    monkeypatch.delenv("OOPS_ENGAGEMENT", raising=False)
+def test_log_step_with_exit_code_and_extra_tags(tmp_path, monkeypatch):
+    fallback_file = tmp_path / "fallback.ndjson"
+    monkeypatch.setenv("OFX_COMMAND_LOG_FILE", str(fallback_file))
+    monkeypatch.delenv("OFX_COMMAND_LOG_DIR", raising=False)
+    monkeypatch.delenv("OFX_COMMAND_LOG_NAME", raising=False)
     tmod._source_host_cache = ""
-    monkeypatch.setenv("OOPS_SOURCE_HOST", "box")
-    monkeypatch.setenv("OOPS_SOURCE_IP", "5.5.5.5")
+    monkeypatch.setenv("OFX_COMMAND_LOG_SOURCE_HOST", "box")
+    monkeypatch.setenv("OFX_COMMAND_LOG_SOURCE_IP", "5.5.5.5")
 
     log_step(
         ctx_vars={},
@@ -217,9 +181,18 @@ def test_log_step_with_exit_code(tmp_path, monkeypatch):
         status="failed",
         duration_ms=100,
         exit_code=1,
+        tags="cloud;batch:nightly",
     )
 
-    csv_file = tmp_path / "default.csv"
-    assert csv_file.exists()
-    content = csv_file.read_text()
-    assert "exit:1" in content
+    log_file = fallback_file
+    assert log_file.exists()
+    records = [json.loads(line) for line in log_file.read_text().splitlines()]
+    assert records[0]["tags"] == [
+        "ofx",
+        "duration:0.1s",
+        "status:failed",
+        "exit:1",
+        "cloud",
+        "batch:nightly",
+    ]
+    assert records[0]["target"] == ""
