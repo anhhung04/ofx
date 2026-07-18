@@ -240,3 +240,48 @@ plans/recon
 # Cython build cache
 build/.cython_cache.json
 REFACTORING_PLAN.md
+
+# =============================================================================
+# Production / Security
+# =============================================================================
+# Environment files (may contain secrets)
+.env
+.env.*
+!.env.example
+
+# Secrets & credentials
+secrets.enc
+*.kdbx
+*.key
+*.pem
+*.crt
+!tests/**/*.key
+!tests/**/*.pem
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.swp
+*.swo
+*~
+\#*\#
+.#*
+
+# Editor / IDE (additional)
+.idea/
+*.sublime-*
+.cursor/
+
+
+# AI assistant markers
+CLAUDE.md
+.github/copilot-instructions.md
+.agents/
+.codex/
+.kilo/
+.deepseek/
+.cursor/
+REFACTORING_PLAN.md

@@ -1,9 +1,39 @@
 [project]
 name = "ofx"
 version = "0.9.9"
-description = "Offensive Flow Executor tool for handing over to the next generation of red teamers"
+description = "Offensive Flow Executor — red team automation toolkit for composing complex attack chains with YAML workflows"
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.12"
+authors = [
+    { name = "OFX Contributors" },
+]
+keywords = [
+    "red-team",
+    "offensive-security",
+    "penetration-testing",
+    "workflow-automation",
+    "post-exploitation",
+    "reconnaissance",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/anhhung04/ofx"
+Documentation = "https://anhhung04.github.io/ofx-docs/"
+Repository = "https://github.com/anhhung04/ofx"
+Issues = "https://github.com/anhhung04/ofx/issues"
 dependencies = [
   "aiofiles>=23.2.1,<25",
   "cryptography>=46.0.7,<48",

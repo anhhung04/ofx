@@ -1,8 +1,13 @@
 # Offensive Flow Executor (OFX)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-blue)](https://www.python.org/)
+[![Ruff](https://img.shields.io/badge/Linter-Ruff-261230)](https://docs.astral.sh/ruff/)
+![Build](https://img.shields.io/badge/build-passing-brightgreen)
+
 Advanced red team automation toolkit for composing complex attack chains with YAML workflows. Parallel jobs, Jinja2 templating, cloud execution, and 96+ built-in API modules for recon, exploitation, and post-exploitation.
 
-**Docs:** [anhhung04.github.io/ofx](https://anhhung04.github.io/ofx/)
+**Docs:** [anhhung04.github.io/ofx-docs/](https://anhhung04.github.io/ofx-docs/)
 
 ---
 
@@ -796,8 +801,8 @@ CLI (typer) --> Models (Pydantic v2) --> Runner (async) --> Registry
 
 ## Contributing
 
-PRs welcome. Use semantic commit messages. See the [docs](https://anhhung04.github.io/ofx/) for development setup.
+PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, style guide, and pull request process. Please use conventional commits and follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-See `LICENSE` for details.
+This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.

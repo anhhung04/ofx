@@ -36,8 +36,8 @@ on authorized red-team engagements.  Its threat model considers:
 
 | Version | Supported |
 |---------|-----------|
-| 0.7.x  | ✅ Current |
-| < 0.7  | ❌ EOL    |
+| 0.9.x  | ✅ Current |
+| < 0.9  | ❌ EOL    |
 
 ## Reporting a Vulnerability
 

@@ -1,1 +1,7 @@
 recursive-include src/ofx/data *
+include LICENSE
+include README.md
+include SECURITY.md
+include CONTRIBUTING.md
+include CODE_OF_CONDUCT.md
+include pyproject.toml
