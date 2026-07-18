@@ -13,9 +13,6 @@ from ofx.tasks.output_types import (
     UserAccount,
 )
 
-# ── Searchsploit Parser ───────────────────────────────────────────────
-
-
 class TestSearchsploitParser:
     def test_parse_output(self):
         data = {
@@ -57,13 +54,6 @@ class TestSearchsploitParser:
         task = TaskRegistry.create("searchsploit")
         assert task.name == "searchsploit"
 
-
-# ── Gitleaks Parser ────────────────────────────────────────────────────
-
-
-# ── Maigret Parser ─────────────────────────────────────────────────────
-
-
 class TestMaigretParser:
     def test_parse_output(self):
         lines = [
@@ -100,13 +90,6 @@ class TestMaigretParser:
         task = TaskRegistry.create("maigret")
         assert task.name == "maigret"
 
-
-# ── Searchsploit Parser ───────────────────────────────────────────────
-
-
-# ── H8mail Parser ─────────────────────────────────────────────────────
-
-
 class TestH8mailParser:
     def test_parse_output(self, tmp_path):
         data = {
@@ -140,7 +123,6 @@ class TestH8mailParser:
         assert "h8mail" in cmd
         assert "-t user@example.com" in cmd
         assert "--chase-limit 10" in cmd
-        # h8mail has output_flag=--json
         assert out_file is not None
         if out_file and out_file.exists():
             out_file.unlink()
@@ -148,13 +130,6 @@ class TestH8mailParser:
     def test_registration(self):
         task = TaskRegistry.create("h8mail")
         assert task.name == "h8mail"
-
-
-# ── Whois Parser ───────────────────────────────────────────────────────
-
-
-# ── Holehe Parser ─────────────────────────────────────────────────────
-
 
 class TestHoleheParser:
     def test_holehe_metadata(self):
@@ -194,15 +169,7 @@ class TestHoleheParser:
         assert "--only-used" in cmd
         assert "-t 30" in cmd
         assert "user@example.com" in cmd
-        # holehe has no output_flag, so out_file should be None
         assert out_file is None
-
-
-# ── Sslscan Parser ────────────────────────────────────────────────────
-
-
-# ── TheHarvester Parser ──────────────────────────────────────────────
-
 
 class TestTheHarvesterParser:
     def test_theharvester_metadata(self):
@@ -270,13 +237,6 @@ class TestTheHarvesterParser:
         if out_file and out_file.exists():
             out_file.unlink()
 
-
-# ── Holehe Parser ─────────────────────────────────────────────────────
-
-
-# ── Whois Parser ───────────────────────────────────────────────────────
-
-
 class TestWhoisParser:
     def test_parse_output(self):
         stdout = (
@@ -315,13 +275,6 @@ class TestWhoisParser:
     def test_registration(self):
         task = TaskRegistry.create("whois")
         assert task.name == "whois"
-
-
-# ── Gobuster Parser ───────────────────────────────────────────────────
-
-
-# ── Gitleaks Parser ────────────────────────────────────────────────────
-
 
 class TestGitleaksParser:
     def test_parse_output(self, tmp_path):
@@ -364,13 +317,6 @@ class TestGitleaksParser:
     def test_registration(self):
         task = TaskRegistry.create("gitleaks")
         assert task.name == "gitleaks"
-
-
-# ── Trufflehog Parser ─────────────────────────────────────────────────
-
-
-# ── Trufflehog Parser ─────────────────────────────────────────────────
-
 
 class TestTrufflehogParser:
     def test_parse_output(self):
@@ -436,16 +382,8 @@ class TestTrufflehogParser:
     def test_filesystem_mode_skips_normalization(self):
         task = TaskRegistry.create("trufflehog")
         cmd, _ = task.build_command("nhi.cocay.me", mode="filesystem")
-        # No https:// prefix in filesystem mode
         assert "https://" not in cmd
         assert "nhi.cocay.me" in cmd
-
-
-# ── Grype Parser ───────────────────────────────────────────────────────
-
-
-# ── Name-That-Hash Parser ────────────────────────────────────────────────
-
 
 class TestNameThatHashParser:
     def test_name_that_hash_metadata(self):
@@ -491,13 +429,6 @@ class TestNameThatHashParser:
         task = TaskRegistry.create("name-that-hash")
         assert task.parse_output("", "") == []
 
-
-# ── Hashid Parser ─────────────────────────────────────────────────────────
-
-
-# ── Hashid Parser ─────────────────────────────────────────────────────────
-
-
 class TestHashidParser:
     def test_hashid_metadata(self):
         task = TaskRegistry.create("hashid")
@@ -525,8 +456,7 @@ class TestHashidParser:
         assert tags[0].name == "hash_type"
         assert tags[0].match == "5d41402abc4b2a76b9719d911017c592"
         assert tags[0].category == "crypto"
-        # The lazy (.+?) in _TYPE_RE captures minimal chars due to optional groups
-        assert tags[0].value  # non-empty
+        assert tags[0].value
         assert tags[1].value
         assert tags[2].value
 
@@ -546,20 +476,13 @@ class TestHashidParser:
         tags = [r for r in results if isinstance(r, Tag)]
         assert len(tags) == 2
         assert tags[0].match == "abc123"
-        assert tags[0].value  # non-empty hash type
+        assert tags[0].value
         assert tags[1].match == "def456"
-        assert tags[1].value  # non-empty hash type
+        assert tags[1].value
 
     def test_hashid_parse_empty(self):
         task = TaskRegistry.create("hashid")
         assert task.parse_output("", "") == []
-
-
-# ── Nerva Parser ──────────────────────────────────────────────────────────
-
-
-# ── JWT Tool Parser ───────────────────────────────────────────────────────
-
 
 class TestJwtToolParser:
     def test_jwt_tool_metadata(self):
@@ -589,12 +512,10 @@ class TestJwtToolParser:
         assert len(vulns) == 2
         assert vulns[0].severity == Severity.HIGH
         assert "Algorithm confusion" in vulns[0].name
-        # Claims — both sub and iat match _CLAIM_RE (\w+ = value)
         claims = [t for t in tags if t.name == "jwt_claim"]
         assert len(claims) == 2
         assert claims[0].value == "sub=admin"
         assert claims[1].value == "iat=1700000000"
-        # Info line for "Decoded token info line"
         info_tags = [t for t in tags if t.name == "jwt_info"]
         assert len(info_tags) == 1
 
@@ -612,6 +533,3 @@ class TestJwtToolParser:
         assert token in cmd
         assert "-M at" in cmd
         assert "-t https://example.com/api" in cmd
-
-
-# ── Name-That-Hash Parser ────────────────────────────────────────────────

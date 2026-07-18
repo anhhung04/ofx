@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 class TestShouldStoreCreds:
     def test_step_true_overrides_all(self):
         from ofx.runner.services.credential_store import should_store_creds
@@ -34,7 +33,6 @@ class TestShouldStoreCreds:
 
         parent = MagicMock()
         parent.defaults.store_creds = False
-        # Falls through to global_default
         assert (
             should_store_creds(None, parent_model=parent, global_default=True) is True
         )
@@ -69,7 +67,6 @@ class TestShouldStoreCreds:
             is False
         )
 
-
 class TestStoreFromTypedOutputs:
     def test_returns_zero_for_empty_list(self):
         from ofx.runner.services.credential_store import store_from_typed_outputs
@@ -98,12 +95,10 @@ class TestStoreFromTypedOutputs:
 
         account = UserAccount(username="admin", password="secret")
 
-        # Simulate ImportError for ExegolHistoryDB
         _original_import = (
             __builtins__.__import__ if hasattr(__builtins__, "__import__") else None
         )
 
-        # Monkeypatch to raise ImportError for exegol_history
         def mock_import(name, *args, **kwargs):
             if "exegol_history" in name:
                 raise ImportError("pykeepass not available")
@@ -121,7 +116,6 @@ class TestStoreFromTypedOutputs:
         """Should accept any Sequence, not just list."""
         from ofx.runner.services.credential_store import store_from_typed_outputs
 
-        # Empty tuple — no UserAccount
         result = store_from_typed_outputs(())
         assert result == 0
 
@@ -204,7 +198,6 @@ class TestStoreFromTypedOutputs:
         account = UserAccount(username="bob", password="pw")
         messages: list[str] = []
 
-        # Make DB unavailable by patching import inside the function
         orig = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
@@ -215,7 +208,6 @@ class TestStoreFromTypedOutputs:
         monkeypatch.setattr(builtins, "__import__", mock_import)
         store_from_typed_outputs([account], log_fn=messages.append)
         assert any("unavailable" in m or "Credential store" in m for m in messages)
-
 
 class TestStoreAndLogTypedOutputs:
     def test_logs_standard_success_message_once(self):
@@ -248,7 +240,6 @@ class TestStoreAndLogTypedOutputs:
 
         assert result == 2
         assert info_messages == ["Stored 2 credential(s) in credential store"]
-
 
 class TestCredentialStoreHelpers:
     def test_should_store_creds_and_duplicate_matching_behavior(self):

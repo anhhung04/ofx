@@ -11,11 +11,6 @@ from ofx.runner.commands.command import (
     write_outputs_file,
 )
 
-# ---------------------------------------------------------------------------
-# Unit tests for _add_outputs logic (inline, no subprocess)
-# ---------------------------------------------------------------------------
-
-
 class TestAddOutputsUnit:
     """Test the add_outputs function logic directly."""
 
@@ -88,7 +83,7 @@ class TestAddOutputsUnit:
 
     def test_no_outputs_file_is_noop(self):
         """No error when outputs_file is None."""
-        write_outputs_file(None, key="val")  # should not raise
+        write_outputs_file(None, key="val")
 
     def test_kwargs_expansion(self, tmp_path):
         """**kwargs expansion works for dicts."""
@@ -99,7 +94,6 @@ class TestAddOutputsUnit:
         lines = out.read_text().strip().splitlines()
         assert "host=10.0.0.1" in lines
         assert "port=22" in lines
-
 
 def test_script_output_helper_writes_and_capture_strings(tmp_path):
     out = tmp_path / "outputs"
@@ -114,12 +108,6 @@ def test_script_output_helper_writes_and_capture_strings(tmp_path):
     stderr_capture.write("warn")
     assert stdout_capture.getvalue() == "hello"
     assert stderr_capture.getvalue() == "warn"
-
-
-# ---------------------------------------------------------------------------
-# Integration tests: ScriptRunner with add_outputs()
-# ---------------------------------------------------------------------------
-
 
 class TestAddOutputsIntegration:
     """Test add_outputs() inside ScriptRunner execution."""
@@ -225,12 +213,6 @@ print("Done")
         assert result.outputs["result"] == "success"
         assert "Starting scan" in result.outputs["stdout"]
 
-
-# ---------------------------------------------------------------------------
-# Stdout truncation tests
-# ---------------------------------------------------------------------------
-
-
 class TestStdoutTruncation:
     """Test _log_output truncation behavior."""
 
@@ -253,17 +235,15 @@ class TestStdoutTruncation:
         content = "\n".join(f"line {i}" for i in range(51))
         display = _truncate(content, max_lines=50)
         assert "... [1 more lines" in display
-        assert display.count("\n") == 50  # 50 content lines + truncation notice
+        assert display.count("\n") == 50
 
     def test_large_output_truncated(self):
         """Large output shows correct omitted count."""
         content = "\n".join(f"https://example.com/page/{i}" for i in range(1000))
         display = _truncate(content, max_lines=50)
         assert "... [950 more lines" in display
-        # First 50 lines should be present
         assert "https://example.com/page/0" in display
         assert "https://example.com/page/49" in display
-        # Line 50 should NOT be in the output
         assert "https://example.com/page/50" not in display
 
     def test_empty_output_passthrough(self):
@@ -290,7 +270,6 @@ class TestStdoutTruncation:
         content = "\n".join("x" for _ in range(100))
         display = _truncate(content, max_lines=30)
         assert "... [70 more lines — full output saved to logs]" in display
-
 
 def _truncate(content: str, max_lines: int = 50) -> str:
     """Mimic StepRunner._log_output truncation logic."""

@@ -12,12 +12,11 @@ try:
     MEMCACHED_AVAILABLE = True
 except ImportError:
     MEMCACHED_AVAILABLE = False
-    aiomcache = None  # type: ignore
+    aiomcache = None
 
 from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
-
 
 class MemcachedJobRegistry(SerializedPrefixedRegistryAdapter):
     """Memcached-based implementation of registry
@@ -70,7 +69,7 @@ class MemcachedJobRegistry(SerializedPrefixedRegistryAdapter):
     async def _get_client(self):
         """Get or create the Memcached client"""
         if self._client is None:
-            client_cls = aiomcache.Client  # type: ignore[union-attr]
+            client_cls = aiomcache.Client
             self._client = client_cls(self.host, self.port)
         return self._client
 

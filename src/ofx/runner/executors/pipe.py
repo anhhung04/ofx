@@ -44,7 +44,6 @@ _SAFE_BUILTINS: dict[str, Any] = {
     "None": None,
 }
 
-
 def _coerce_to_list(raw: Any) -> list[Any]:
     """Coerce a template-resolved value to a list of items."""
     if isinstance(raw, list):
@@ -71,7 +70,6 @@ def _coerce_to_list(raw: Any) -> list[Any]:
         return list(raw)
     except TypeError:
         return [raw] if raw is not None else []
-
 
 def _safe_eval(expr: str, namespace: dict[str, Any]) -> Any:
     """Evaluate *expr* with a restricted set of builtins."""
@@ -100,8 +98,7 @@ def _safe_eval(expr: str, namespace: dict[str, Any]) -> Any:
     safe_ns: dict[str, Any] = {"__builtins__": {}}
     safe_ns.update(_SAFE_BUILTINS)
     safe_ns.update(namespace)
-    return eval(code, safe_ns)  # noqa: S307
-
+    return eval(code, safe_ns)
 
 def _item_namespace(item: Any) -> dict[str, Any]:
     """Build the evaluation namespace from a single pipeline item."""
@@ -115,7 +112,6 @@ def _item_namespace(item: Any) -> dict[str, Any]:
             except Exception:
                 logger.debug("Failed to read attribute %s from item", attr)
     return ns
-
 
 def _format_items(items: list[Any], config: PipeConfig) -> str:
     """Serialize *items* according to [`PipeConfig.format`](src/ofx/models/pipe.py)."""
@@ -164,7 +160,6 @@ def _format_items(items: list[Any], config: PipeConfig) -> str:
             return json.dumps(items, indent=2, default=str)
 
     return json.dumps(items, indent=2, default=str)
-
 
 def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
     """Run the ETL operations on *items* and return the processed result."""
@@ -275,7 +270,6 @@ def _execute_pipeline(items: list[Any], config: PipeConfig) -> list[Any] | dict:
 
     return items
 
-
 class PipeExecutor(Executor):
     """Execution strategy for pipe runners."""
 
@@ -312,7 +306,6 @@ class PipeExecutor(Executor):
 
     async def on_failure(self, runner) -> None:
         remove_file(runner._temp_file)
-
 
 __all__ = [
     "PipeExecutor",

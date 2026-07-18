@@ -38,19 +38,17 @@ logger = logging.getLogger("ofx")
 _DONE_MARKER = "__TASK_OK__"
 _FAIL_MARKER = "__TASK_ERR__"
 
-_INITIAL_POLL_INTERVAL = 10.0    # seconds before first retry
-_MAX_POLL_INTERVAL = 120.0       # 2 minutes max between retries
-_POLL_BACKOFF_FACTOR = 1.5       # multiply interval on each failure
-_MAX_CONSECUTIVE_FAILURES = 10   # mark session as unreachable after N failures
-_SSH_COMMAND_TIMEOUT = 30        # seconds for individual SSH commands during polling
-
+_INITIAL_POLL_INTERVAL = 10.0
+_MAX_POLL_INTERVAL = 120.0
+_POLL_BACKOFF_FACTOR = 1.5
+_MAX_CONSECUTIVE_FAILURES = 10
+_SSH_COMMAND_TIMEOUT = 30
 
 @dataclass(frozen=True)
 class _ResolvedCloudSubmitState:
     os_type: str
     is_windows: bool
     session_update: dict[str, Any]
-
 
 @dataclass(frozen=True)
 class _PreparedCloudSubmitTarget:
@@ -59,7 +57,6 @@ class _PreparedCloudSubmitTarget:
     instance: Any
     os_type: str
     is_windows: bool
-
 
 @dataclass(frozen=True)
 class _PreparedCloudSubmitRuntime:
@@ -99,7 +96,6 @@ def _cloud_connection_settings(
         "winrm_transport": winrm_transport or "ntlm",
     }
 
-
 class SessionManager:
     """High-level API for detached session lifecycle.
 
@@ -114,10 +110,6 @@ class SessionManager:
     def __init__(self, store: SessionStore | None = None):
         self.store = store or SessionStore()
         self._poll_failures: dict[str, int] = {}
-
-    # ------------------------------------------------------------------
-    # Submit (fire-and-forget)
-    # ------------------------------------------------------------------
 
     async def submit(
         self,
@@ -148,9 +140,8 @@ class SessionManager:
         Returns:
             The created Session (status = RUNNING after this returns).
         """
-        session_id = _secrets.token_hex(4)  # 8-char hex
+        session_id = _secrets.token_hex(4)
 
-        # Load workflow to extract job steps
         from ofx.settings import DEFAULT_WORKFLOWS_DIRS
         from ofx.utils.workflow_utils import find_workflow
 
@@ -191,7 +182,6 @@ class SessionManager:
             project=project,
         )
 
-        # Save initial state
         self.store.save(session)
 
         if target == SessionTarget.LOCAL:
@@ -1168,10 +1158,6 @@ class SessionManager:
             probe=_probe,
         )
 
-    # ------------------------------------------------------------------
-    # Local submission
-    # ------------------------------------------------------------------
-
     async def _submit_local(
         self,
         session: Session,
@@ -1261,10 +1247,6 @@ class SessionManager:
         logger.info("Local session %s started (PID %d)", session.id, pid)
         return session
 
-    # ------------------------------------------------------------------
-    # Cloud submission
-    # ------------------------------------------------------------------
-
     async def _submit_cloud(
         self,
         session: Session,
@@ -1303,10 +1285,6 @@ class SessionManager:
         )
 
         return session
-
-    # ------------------------------------------------------------------
-    # Status
-    # ------------------------------------------------------------------
 
     async def status(self, session_id: str) -> Session:
         """Check the current status of a session.
@@ -1384,10 +1362,6 @@ class SessionManager:
             return self._check_cloud_status_without_pid(session)
         return self._check_cloud_status_with_pid(session)
 
-    # ------------------------------------------------------------------
-    # Logs
-    # ------------------------------------------------------------------
-
     async def logs(self, session_id: str, tail: int = 50, follow: bool = False) -> str:
         """Retrieve log output from a session.
 
@@ -1425,10 +1399,6 @@ class SessionManager:
         except Exception as exc:
             return f"(cannot retrieve logs: {exc})"
 
-    # ------------------------------------------------------------------
-    # Fetch results
-    # ------------------------------------------------------------------
-
     async def fetch(
         self,
         session_id: str,
@@ -1451,7 +1421,7 @@ class SessionManager:
         Returns:
             Path to the results directory (or encrypted file).
         """
-        session = await self.status(session_id)  # Refresh status
+        session = await self.status(session_id)
 
         if session.is_running():
             raise RuntimeError(
@@ -1464,11 +1434,9 @@ class SessionManager:
         if session.target == SessionTarget.LOCAL:
             self._fetch_local_results(session, results)
         else:
-            # Cloud — download via SCP
             await self._fetch_cloud_results(session, results)
             session = await self._auto_destroy_after_fetch(session)
 
-        # Re-encrypt with user passphrase if requested
         if passphrase:
             enc_path = encrypt_results(results, passphrase)
             session = self._save_encrypted_results(
@@ -1522,10 +1490,6 @@ class SessionManager:
 
         self._with_reconnected_remote(session, _download_results)
 
-    # ------------------------------------------------------------------
-    # Decrypt
-    # ------------------------------------------------------------------
-
     async def decrypt(
         self,
         session_id: str,
@@ -1545,10 +1509,6 @@ class SessionManager:
         out = output_dir or self.store.results_dir(session_id) / "decrypted"
         result = decrypt_results(enc_path, passphrase, out)
         return result
-
-    # ------------------------------------------------------------------
-    # Cancel
-    # ------------------------------------------------------------------
 
     async def cancel(self, session_id: str) -> Session:
         """Kill the running process and mark session as canceled."""
@@ -1589,10 +1549,6 @@ class SessionManager:
             session,
             self._finished_session_update(SessionStatus.CANCELED),
         )
-
-    # ------------------------------------------------------------------
-    # Destroy (tear down VPS)
-    # ------------------------------------------------------------------
 
     async def destroy(self, session_id: str, force: bool = False) -> Session:
         """Destroy the VPS for a cloud session. Cancel first if still running.
@@ -1660,10 +1616,6 @@ class SessionManager:
             remove_files([manifest_path])
 
         return bundle_path
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _resolve_results_dir(self, session: Session) -> Path:
         """Resolve where to store fetched results.
@@ -1735,8 +1687,8 @@ class SessionManager:
         )
         cfg = CloudConfig(
             provider=session.cloud_provider or "static",
-            os=connection["os_type"],  # type: ignore[arg-type]
-            connection_type=connection["connection_type"],  # type: ignore[arg-type]
+            os=connection["os_type"],
+            connection_type=connection["connection_type"],
             ssh_user=connection["ssh_user"],
             ssh_port=connection["ssh_port"],
             ssh_key=connection["ssh_key"],
@@ -1791,10 +1743,6 @@ class SessionManager:
                 suffix=".py",
             )
 
-
-# ======================================================================
-# Module-level helpers
-# ======================================================================
 def _decrypt_at_rest_openssl(
     enc_file: Path, at_rest_key: str, output_dir: Path
 ) -> None:
@@ -1812,7 +1760,6 @@ def _decrypt_at_rest_openssl(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write key to a temp file for openssl
     key_path = enc_file.parent / f".dec_{_secrets.token_hex(4)}"
     key_path.write_text(at_rest_key)
     key_path.chmod(0o600)
@@ -1845,16 +1792,13 @@ def _decrypt_at_rest_openssl(
                 f"openssl decryption failed (rc={result.returncode}): {result.stderr.strip()}"
             )
 
-        # Extract the tar into output_dir
         with _tarfile.open(str(tar_path), "r:gz") as tar:
-            # Strip the leading "output/" prefix so files land directly in output_dir
             for member in tar.getmembers():
-                # e.g. "output/scan.txt" → "scan.txt"
                 parts = Path(member.name).parts
                 if parts and len(parts) > 1 and parts[0] == "output":
                     member.name = str(Path(*parts[1:]))
                 elif parts and parts[0] == "output":
-                    continue  # skip the bare directory entry
+                    continue
                 tar.extract(member, path=str(output_dir), filter="data")
 
         logger.debug("At-rest decrypted %s → %s", enc_file, output_dir)

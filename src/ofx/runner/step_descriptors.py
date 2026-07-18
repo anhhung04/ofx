@@ -33,7 +33,6 @@ _TIMELINE_COMMAND_PREFIXES: dict[str, str] = {
     "pipe": "pipe:",
 }
 
-
 def step_source_kind_and_value(step: Any) -> tuple[str, Any]:
     """Return a normalized `(kind, value)` pair for a workflow step."""
     if getattr(step, "pipe", None) is not None:
@@ -45,7 +44,6 @@ def step_source_kind_and_value(step: Any) -> tuple[str, Any]:
         if value:
             return kind, value
     return "unknown", None
-
 
 def step_type_label(step: Any, *, command_preview_chars: int = 60) -> str:
     """Return a human-readable summary label for a workflow step."""
@@ -61,7 +59,6 @@ def step_type_label(step: Any, *, command_preview_chars: int = 60) -> str:
     if kind in _STEP_LABEL_PREFIXES:
         return f"{_STEP_LABEL_PREFIXES[kind]}{value}"
     return "unknown"
-
 
 def step_timeline_params(
     step: Any,
@@ -101,7 +98,6 @@ def step_timeline_params(
         "tool": tool,
         "target": target,
     }
-
 
 __all__ = [
     "step_timeline_params",

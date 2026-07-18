@@ -13,11 +13,9 @@ PYTHON_STEP_RUN_TYPES: frozenset[RunType] = frozenset(
     {RunType.SCRIPT, RunType.SCRIPT_FILE}
 )
 
-
 def is_python_step_run_type(run_type: RunType) -> bool:
     """Return whether a run type is backed by staged Python source."""
     return run_type in PYTHON_STEP_RUN_TYPES
-
 
 def resolve_python_step_source(step: Step, *, workflow_dir: Path | None = None) -> str:
     """Resolve Python source for ``script``/``script_file`` step types."""
@@ -39,7 +37,6 @@ def resolve_python_step_source(step: Step, *, workflow_dir: Path | None = None) 
         raise FileNotFoundError(f"Script file not found: {local_path}")
     return local_path.read_text()
 
-
 @lru_cache(maxsize=128)
 def build_python_payload(
     source: str,
@@ -52,7 +49,6 @@ def build_python_payload(
     if opsec_mode:
         return obfuscate_bootstrap(result.bootstrap)
     return result.bootstrap
-
 
 def build_python_step_payload(
     step: Step,

@@ -11,7 +11,6 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "ai"
 HELP = "AI assistant: workflow generation, output analysis, and interactive chat"
 
-
 @app.command("generate")
 def generate(
     prompt: Annotated[
@@ -30,7 +29,6 @@ def generate(
     from ofx.commands.ai.handler import GenerateHandler
 
     GenerateHandler(prompt=prompt, output=output, model=model).run()
-
 
 @app.command("analyze")
 def analyze(
@@ -82,7 +80,6 @@ def analyze(
         model=model,
     ).run()
 
-
 @app.command("chat")
 def chat(
     prompt: Annotated[
@@ -105,14 +102,12 @@ def chat(
 
     ChatHandler(initial_prompt=prompt, model=model).run()
 
-
 @app.command("skills")
 def skills():
     """List available AI skill personas for the analyze command."""
     from ofx.commands.ai.handler import list_skills
 
     list_skills()
-
 
 @app.command("setup")
 def setup():

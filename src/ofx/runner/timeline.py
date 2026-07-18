@@ -19,7 +19,6 @@ _IP_RE = re.compile(r"(?<!\d)(\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?)")
 _URL_RE = re.compile(r"https?://([^\s/]+)")
 _FLAG_TARGET_RE = re.compile(r"(?:-h|--host|--url|--target|-t|-u|-d)\s+(\S+)")
 
-
 def detect_target(command: str) -> str:
     """Extract the most likely target (IP, hostname, URL) from a command."""
     m = _FLAG_TARGET_RE.search(command)
@@ -39,7 +38,6 @@ def detect_target(command: str) -> str:
 
     return ""
 
-
 def _hostname() -> str:
     try:
         return socket.gethostname().split(".")[0]
@@ -47,9 +45,7 @@ def _hostname() -> str:
         logger.debug("Failed to resolve hostname", exc_info=True)
         return "unknown"
 
-
 _source_host_cache: str = ""
-
 
 def _source_host() -> str:
     """Return ``hostname (public_ip)`` when an IP can be determined."""
@@ -96,7 +92,6 @@ def _source_host() -> str:
 
     return _source_host_cache
 
-
 def _resolve_command_log_path(ctx_vars: dict[str, Any]) -> Path:
     """Resolve the command log path, preferring the active project's logs dir."""
     log_file = os.environ.get("OFX_COMMAND_LOG_FILE")
@@ -118,10 +113,8 @@ def _resolve_command_log_path(ctx_vars: dict[str, Any]) -> Path:
 
     return Path("~/.ofx/logs/command/default.ndjson").expanduser()
 
-
 def _ensure_parent_dir(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-
 
 def _format_duration(ms: int | None) -> str:
     if ms is None:
@@ -133,7 +126,6 @@ def _format_duration(ms: int | None) -> str:
         return f"{secs / 60:.1f}m"
     return f"{secs:.1f}s"
 
-
 def _build_tags(*, status: str, duration: str, exit_code: int | str | None, tags: str) -> list[str]:
     parts = ["ofx"]
     if duration:
@@ -144,7 +136,6 @@ def _build_tags(*, status: str, duration: str, exit_code: int | str | None, tags
     if tags:
         parts.extend(tag for tag in tags.split(";") if tag)
     return parts
-
 
 def log_step(
     *,
@@ -189,6 +180,5 @@ def log_step(
             f.write(json.dumps(record, sort_keys=True) + "\n")
     except Exception as exc:
         logger.debug("Failed to write command log entry: %s", exc)
-
 
 __all__ = ["_format_duration", "_resolve_command_log_path", "detect_target", "log_step"]

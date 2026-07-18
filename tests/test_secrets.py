@@ -7,36 +7,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 TEMP_DIR = Path(tempfile.gettempdir())
 
-# --- Setup a guaranteed clean test environment ---
 SECRETS_DIR = TEMP_DIR / Path("./temp_secrets")
 ENV_FILE = TEMP_DIR / Path(".env_test")
 os.makedirs(SECRETS_DIR, exist_ok=True)
 
-# Create a secret file
 (SECRETS_DIR / "secret_from_file").write_text("file_value_123")
 
-# Create a .env file with a different secret
 ENV_FILE.write_text('SECRET_FROM_ENV="dotenv_value_456"')
 
 print(f"⚙️  Created secret file at: {SECRETS_DIR.resolve() / 'secret_from_file'}")
 print(f"⚙️  Created .env file at: {ENV_FILE.resolve()}")
 print("-" * 20)
 
-
-# --- Define the Settings Model ---
 class AppSettings(BaseSettings):
-    secret_from_file: str  # Should be loaded from secrets_dir
-    secret_from_env: str  # Should be loaded from the .env file
+    secret_from_file: str
+    secret_from_env: str
 
     model_config = SettingsConfigDict(
         secrets_dir=str(SECRETS_DIR), env_file=str(ENV_FILE)
     )
 
-
 def test_secrets():
     try:
         print("🚀 Attempting to load settings...")
-        settings = AppSettings()  # type: ignore
+        settings = AppSettings()
         print("\n✅ SUCCESS! Settings loaded correctly.")
         print(f"   -> Loaded from file: '{settings.secret_from_file}'")
         print(f"   -> Loaded from .env: '{settings.secret_from_env}'")

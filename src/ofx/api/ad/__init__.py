@@ -33,20 +33,17 @@ from .kerberos import (
 )
 
 __all__ = [
-    # enum
     "bloodhound_collection_command",
     "ldap_query_command",
     "powerview_command",
     "enumerate_dc_command",
     "enumerate_shares_command",
-    # execution
     "pass_the_hash_command",
     "smb_exec_command",
     "secretsdump_command",
     "dcsync_command",
     "spray_command",
     "acl_abuse_commands",
-    # kerberos
     "kerberoast_command",
     "asreproast_command",
     "pass_the_ticket_command",

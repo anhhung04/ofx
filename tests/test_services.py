@@ -11,18 +11,12 @@ import pytest
 from ofx.models.cloud import CloudConfig
 from ofx.runner.services.cloud_provisioner import CloudProvisioner
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class FakeInstance:
     instance_id: str = "abc12345-6789"
     name: str = "test-vps"
     ip: str = "1.2.3.4"
     provider: str = "fake"
-
 
 class FakeProvider:
     """Minimal async provider stub."""
@@ -45,7 +39,6 @@ class FakeProvider:
     async def close(self):
         pass
 
-
 class FakeRegistry:
     """Mock provider registry."""
 
@@ -54,12 +47,6 @@ class FakeRegistry:
 
     def create(self, _name, **_kwargs):
         return self._provider
-
-
-# =========================================================================
-# CloudProvisioner
-# =========================================================================
-
 
 class TestCloudProvisionerBuildKwargs:
     """Tests for shared provider kwargs builder."""
@@ -126,7 +113,6 @@ class TestCloudProvisionerBuildKwargs:
         cfg = CloudConfig(provider="gcp")
         kw = self._build_provider_kwargs(cfg)
         assert kw == {}
-
 
 class TestCloudProvisionerHelpers:
     def test_runtime_windows_config_matches_provisioner(self):
@@ -218,7 +204,6 @@ class TestCloudProvisionerProvision:
             _, _, _, work_dir = await prov.provision(cfg)
         assert "C:\\Windows\\Temp" in work_dir
 
-
 class TestCloudProvisionerDestroy:
     """Tests for the destroy path."""
 
@@ -240,16 +225,15 @@ class TestCloudProvisionerDestroy:
 
     async def test_destroy_none_provider(self):
         prov = CloudProvisioner(FakeRegistry())
-        await prov.destroy(None, FakeInstance())  # should not raise
+        await prov.destroy(None, FakeInstance())
 
     async def test_destroy_none_instance(self):
         prov = CloudProvisioner(FakeRegistry())
-        await prov.destroy(FakeProvider(), None)  # should not raise
+        await prov.destroy(FakeProvider(), None)
 
     async def test_destroy_skips_missing_provider(self):
         prov = CloudProvisioner(FakeRegistry())
-        await prov.destroy(None, FakeInstance())  # should not raise
-
+        await prov.destroy(None, FakeInstance())
 
 class TestCloudProvisionerCreateRunner:
     """Tests for shared remote runner creation helper."""

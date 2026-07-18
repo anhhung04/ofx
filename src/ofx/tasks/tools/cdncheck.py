@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Ip, Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("cdncheck")
 class CdncheckTask(Task):
     name = "cdncheck"
@@ -33,7 +32,7 @@ class CdncheckTask(Task):
         ),
     }
 
-    input_flag = "-i"  # single input
+    input_flag = "-i"
     file_flag = "-list"
     output_flag = "-o"
     json_flag = "-json"
@@ -68,7 +67,6 @@ class CdncheckTask(Task):
                 Tag(name=cloud_name, value=cloud_name, match=ip, category="cloud")
             )
 
-        # Include type tag (cdn/waf/cloud/none)
         item_type = data.get("type", "")
         if item_type and item_type != "none":
             results.append(

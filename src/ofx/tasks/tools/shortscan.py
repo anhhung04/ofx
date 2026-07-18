@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Url, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("shortscan")
 class ShortscanTask(Task):
     name = "shortscan"
@@ -35,7 +34,7 @@ class ShortscanTask(Task):
         "patience": OptDef(flag="-p", type=int, help="Patience level (0-2)"),
     }
 
-    input_flag = None  # positional URL
+    input_flag = None
     file_flag = None
     output_flag = None
     extra_flags = []
@@ -61,7 +60,6 @@ class ShortscanTask(Task):
             if not line:
                 continue
 
-            # Match shortname discoveries — lines with short filenames (e.g. "ASPNET~1.DLL")
             shortname_match = re.search(
                 r"(?:^|\s)([A-Z0-9_~]+\.[A-Z0-9]{1,3})\b", line, re.IGNORECASE
             )
@@ -75,12 +73,10 @@ class ShortscanTask(Task):
                     )
                 )
 
-            # Match full URL paths
             url_match = re.search(r"(https?://\S+)", line, re.IGNORECASE)
             if url_match:
                 results.append(Url(url=url_match.group(1)))
 
-        # If any shortnames found, report vulnerability
         if found_shortnames:
             results.append(
                 Vulnerability(

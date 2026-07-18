@@ -5,14 +5,10 @@ from unittest.mock import patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# MatrixCombinationBuilder
-# ---------------------------------------------------------------------------
 from ofx.runner.matrix_utils import (
     estimate_matrix_count,
     generate_matrix_combinations,
 )
-
 
 class TestMatrixCombinationBuilder:
     def test_empty_matrix(self):
@@ -70,7 +66,6 @@ class TestMatrixCombinationBuilder:
             generate_matrix_combinations(big_matrix, enforce_limit=True)
 
     def test_enforce_limit_disabled(self):
-        # 3^5 = 243 — fine even with limit
         matrix = {f"k{i}": [1, 2, 3] for i in range(5)}
         result = generate_matrix_combinations(matrix, enforce_limit=False)
         assert len(result) == 243
@@ -80,7 +75,7 @@ class TestMatrixCombinationBuilder:
             {"os": ["a", "b", "c"], "arch": ["x", "y"]},
             exclude=[{"os": "c", "arch": "y"}],
         )
-        assert count == 5  # 6 - 1 excluded
+        assert count == 5
 
     def test_estimate_empty(self):
         assert estimate_matrix_count(None) == 1
@@ -111,15 +106,10 @@ class TestMatrixCombinationBuilder:
             {"target": "example.com"}
         ]
 
-
-# ---------------------------------------------------------------------------
-# CredentialStore
-# ---------------------------------------------------------------------------
-from ofx.runner.services.credential_store import (  # noqa: E402
+from ofx.runner.services.credential_store import (
     should_store_creds,
     store_from_typed_outputs,
 )
-
 
 class TestShouldStoreCreds:
     def test_step_explicit_true(self):
@@ -144,7 +134,6 @@ class TestShouldStoreCreds:
         parent = SimpleNamespace(defaults=SimpleNamespace(store_creds=True))
         assert should_store_creds(False, parent) is False
 
-
 class TestStoreFromTypedOutputs:
     def test_empty_list(self):
         assert store_from_typed_outputs([]) == 0
@@ -159,23 +148,17 @@ class TestStoreFromTypedOutputs:
         account = UserAccount(username="admin", password="pass123")
         logs = []
 
-        # Patch the import path used inside the function
         with patch.dict("sys.modules", {"ofx.api.creds.exegol_history": None}):
             result = store_from_typed_outputs([account], log_fn=logs.append)
         assert result == 0
         assert any("unavailable" in m for m in logs)
 
-
-# ---------------------------------------------------------------------------
-# StepOutputHandler
-# ---------------------------------------------------------------------------
-from ofx.runner.step_descriptors import (  # noqa: E402
+from ofx.runner.step_descriptors import (
     step_timeline_params,
     step_type_label,
 )
-from ofx.runner.step_output import save_output_file  # noqa: E402
-from ofx.runner.step_output import log_output, save_output_file  # noqa: E402
-
+from ofx.runner.step_output import save_output_file
+from ofx.runner.step_output import log_output, save_output_file
 
 class TestLogOutput:
     def test_empty_content_skipped(self):
@@ -203,7 +186,6 @@ class TestLogOutput:
         assert "95 more lines" in messages[0]
         assert "line 0" in messages[0]
         assert "line 4" in messages[0]
-
 
 class TestSaveOutputFile:
     def test_save_creates_file(self, tmp_path):
@@ -293,7 +275,6 @@ class TestSaveOutputFile:
         result = save_output_file(tmp_path, "j", step, "hi")
         content = result.read_text()
         assert ">> script (base64):" in content
-
 
 class TestStepDescriptors:
     def test_public_descriptor_helpers_cover_non_command_cases(self):
@@ -422,28 +403,19 @@ class TestStepDescriptors:
             "target": "",
         }
 
-
-# ---------------------------------------------------------------------------
-# Cloud step retry backoff (matching local StepRunner behavior)
-# ---------------------------------------------------------------------------
 class TestCloudRetryBackoff:
     def test_retry_delay_exponential(self):
         from ofx.runner.cloud_step import CloudStepRunner
 
-        # attempt=0 → base_delay * 2^0 = base_delay
-        # attempt=1 → base_delay * 2^1 = 2*base_delay
-        # attempt=2 → base_delay * 2^2 = 4*base_delay
         for attempt in range(5):
             delay = CloudStepRunner._retry_delay_seconds(attempt, base_delay=10)
             expected_backoff = 10 * (2**attempt)
             expected_capped = min(expected_backoff, 300)
-            # With jitter uniform(0.5, 1.0), delay is in [cap*0.5, cap*1.0]
             assert expected_capped * 0.5 <= delay <= expected_capped * 1.0
 
     def test_retry_delay_capped_at_300(self):
         from ofx.runner.cloud_step import CloudStepRunner
 
-        # attempt=10 with base_delay=10 → 10*1024 = 10240, capped at 300
         delay = CloudStepRunner._retry_delay_seconds(10, base_delay=10)
         assert delay <= 300
 
@@ -451,13 +423,10 @@ class TestCloudRetryBackoff:
         from ofx.runner.cloud_step import CloudStepRunner
         from ofx.runner.step import StepRunner
 
-        # Both should use the same formula
         for attempt in range(5):
-            # Can't compare exact values due to jitter, but verify ranges match
             for _ in range(20):
                 local = StepRunner._retry_delay_seconds(attempt, 10)
                 cloud = CloudStepRunner._retry_delay_seconds(attempt, 10)
-                # Both capped at 300, both use uniform(0.5, 1.0) jitter
                 cap = min(10 * (2**attempt), 300)
                 assert cap * 0.5 <= local <= cap
                 assert cap * 0.5 <= cloud <= cap

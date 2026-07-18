@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
-
 class Result[T]:
     """Simple Result/Either type.
 
@@ -45,7 +44,7 @@ class Result[T]:
 
     def unwrap(self) -> T:
         if self._ok:
-            return self._value  # type: ignore[return-value]
+            return self._value
         raise self._error or RuntimeError("Result has no error")
 
     def unwrap_err(self) -> Exception:
@@ -56,8 +55,8 @@ class Result[T]:
     def map(self, fn: Callable[[T], Any]) -> Result[Any]:
         if self._ok:
             try:
-                return Result.Ok(fn(self._value))  # type: ignore[arg-type]
-            except Exception as exc:  # pragma: no cover
+                return Result.Ok(fn(self._value))
+            except Exception as exc:
                 return Result.Err(exc)
         return Result.Err(self._error or RuntimeError("Unknown error"))
 
@@ -66,13 +65,11 @@ class Result[T]:
             return f"Ok({self._value!r})"
         return f"Err({self._error!r})"
 
-
 @runtime_checkable
 class PostRunnerProtocol(Protocol):
     """Protocol for post‑execution runners (SSH, WinRM, etc.)."""
 
     def run(self, *args: Any, **kwargs: Any) -> Any: ...
-
 
 @runtime_checkable
 class SearchClient(Protocol):
@@ -85,7 +82,6 @@ class SearchClient(Protocol):
     async def search(
         self, query: str, **kwargs: Any
     ) -> Result[list[dict[str, Any]]]: ...
-
 
 @runtime_checkable
 class WebShellGenerator(Protocol):

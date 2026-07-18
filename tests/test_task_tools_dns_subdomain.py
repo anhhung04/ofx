@@ -12,7 +12,6 @@ from ofx.tasks.output_types import (
     Severity,
 )
 
-
 class TestDnsxParser:
     def test_parse_jsonl(self):
         lines = [
@@ -35,7 +34,7 @@ class TestDnsxParser:
         assert len(subdomains) == 1
         assert len(ips) == 1
         assert ips[0].ip == "93.184.216.34"
-        assert len(records) == 2  # CNAME + MX
+        assert len(records) == 2
 
     def test_command_building(self):
         task = TaskRegistry.create("dnsx")
@@ -45,10 +44,6 @@ class TestDnsxParser:
         assert "-a" in cmd
         assert "-cname" in cmd
         assert "-t 50" in cmd
-
-
-# ── Dnsrecon Parser ───────────────────────────────────────────────────
-
 
 class TestDnsreconParser:
     def test_dnsrecon_metadata(self):
@@ -83,7 +78,6 @@ class TestDnsreconParser:
         assert records[0].type == "A"
         assert records[0].name == "www.example.com"
         assert records[0].host == "93.184.216.34"
-        # A and AAAA records produce Subdomains
         assert len(subs) == 2
         assert subs[0].host == "www.example.com"
         assert subs[0].domain == "example.com"
@@ -101,13 +95,6 @@ class TestDnsreconParser:
         task = TaskRegistry.create("dnsrecon")
         assert task.parse_output(json.dumps({"key": "value"}), "") == []
 
-
-# ── TheHarvester Parser ──────────────────────────────────────────────
-
-
-# ── Subfinder Parser ──────────────────────────────────────────────────────
-
-
 class TestSubfinderParser:
     def test_parse_output(self):
         stdout = "api.example.com\nwww.example.com\nmail.example.com\n"
@@ -117,7 +104,6 @@ class TestSubfinderParser:
         assert all(isinstance(r, Subdomain) for r in results)
         assert results[0].host == "api.example.com"
         assert results[0].domain == "example.com"
-
 
 class TestAsnmapParser:
     def test_parse_line(self):
@@ -145,13 +131,6 @@ class TestAsnmapParser:
             "as_country": "US",
         }
 
-
-# ── Ffuf Parser ────────────────────────────────────────────────────────────
-
-
-# ── Amass Parser ──────────────────────────────────────────────────────
-
-
 class TestAmassParser:
     def test_amass_metadata(self):
         task = TaskRegistry.create("amass")
@@ -160,6 +139,7 @@ class TestAmassParser:
         assert task.category == "dns/recon"
         assert Subdomain in task.output_types
         assert "go install" in task.install_cmd
+        assert "/amass/v5/" in task.install_cmd
 
     def test_amass_parse_output(self):
         stdout = "api.example.com\nwww.example.com\nmail.example.com\n"
@@ -191,12 +171,15 @@ class TestAmassParser:
         task = TaskRegistry.create("amass")
         cmd, out_file = task.build_command("example.com", brute=True, timeout=30)
         assert "amass" in cmd
-        assert "enum" in cmd
+        assert "amass -version" in cmd
+        assert "amass enum" in cmd
+        assert "amass subs" in cmd
         assert "-passive" in cmd
         assert "-brute" in cmd
         assert "-timeout 30" in cmd
         assert "-d example.com" in cmd
         assert out_file is not None
+        assert out_file.suffix == ".txt"
         if out_file and out_file.exists():
             out_file.unlink()
 
@@ -205,13 +188,6 @@ class TestAmassParser:
         cmd, _ = task.build_command("example.com", active=True)
         assert "-active" in cmd
         assert "-passive" not in cmd
-
-
-# ── Masscan Parser ────────────────────────────────────────────────────
-
-
-# ── Assetfinder Parser ───────────────────────────────────────────────
-
 
 class TestAssetfinderParser:
     def test_assetfinder_metadata(self):
@@ -247,13 +223,6 @@ class TestAssetfinderParser:
         task = TaskRegistry.create("assetfinder")
         assert task.parse_line("") == []
         assert task.parse_line("# comment") == []
-
-
-# ── Findomain Parser ─────────────────────────────────────────────────
-
-
-# ── Findomain Parser ─────────────────────────────────────────────────
-
 
 class TestFindomainParser:
     def test_findomain_metadata(self):
@@ -300,13 +269,6 @@ class TestFindomainParser:
         if out_file and out_file.exists():
             out_file.unlink()
 
-
-# ── Mapcidr Parser ────────────────────────────────────────────────────
-
-
-# ── Subzy Parser ──────────────────────────────────────────────────────────
-
-
 class TestSubzyParser:
     def test_subzy_metadata(self):
         task = TaskRegistry.create("subzy")
@@ -345,6 +307,3 @@ class TestSubzyParser:
         assert result[0].matched_at == "sub.example.com"
         assert task.parse_line("[NOT VULNERABLE] safe.example.com") == []
         assert task.parse_line("") == []
-
-
-# ── CRLFuzz Parser ────────────────────────────────────────────────────────

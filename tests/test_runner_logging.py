@@ -46,7 +46,7 @@ def test_log_context_prefix_rendering_uses_all_present_fields():
         status="completed",
     )
 
-    assert context.prefix == "[RUN-run-1] | WorkflowRunner | name=wf | job=scan | step=2 | status=completed"
+    assert context.prefix == "WorkflowRunner | name=wf | job=scan | step=2 | status=completed"
 
 
 def test_structured_logger_uses_shared_log_dispatch():
@@ -70,6 +70,7 @@ def test_structured_logger_uses_shared_log_dispatch():
     assert calls[0][0] == "debug"
     assert calls[0][1].endswith("hello")
     assert "log_context" in calls[0][2]
+    assert calls[0][2]["log_context"]["run_id"] == "run-1"
 
 
 def test_structured_logger_derives_context_once_per_log_call():
@@ -91,7 +92,7 @@ def test_structured_logger_derives_context_once_per_log_call():
     mock_from_runner.assert_called_once_with(runner)
     assert calls == [
         (
-            "[RUN-run-1] | WorkflowRunner | hello",
+            "WorkflowRunner | hello",
             {"log_context": context.__dict__},
         )
     ]
@@ -106,7 +107,7 @@ def test_structured_logger_format_message_reuses_optional_context():
         "ofx.runner.logging.LogContext.from_runner",
         side_effect=AssertionError("should not derive context"),
     ):
-        assert logger.format_message("hello", context) == "[RUN-run-1] | WorkflowRunner | hello"
+        assert logger.format_message("hello", context) == "WorkflowRunner | hello"
 
 
 def test_base_runner_produce_log_uses_structured_logger_formatting():

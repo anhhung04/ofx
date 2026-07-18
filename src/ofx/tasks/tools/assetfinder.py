@@ -6,7 +6,6 @@ from ofx.tasks.base import Task
 from ofx.tasks.output_types import Subdomain
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("assetfinder")
 class AssetfinderTask(Task):
     name = "assetfinder"
@@ -20,9 +19,9 @@ class AssetfinderTask(Task):
 
     opts = {}
 
-    input_flag = None  # positional, last argument
-    file_flag = None  # reads stdin
-    output_flag = None  # stdout only
+    input_flag = None
+    file_flag = None
+    output_flag = None
     extra_flags = ["--subs-only"]
 
     def _output_suffix(self) -> str:

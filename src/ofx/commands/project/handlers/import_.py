@@ -12,7 +12,6 @@ from ..project_manager import ProjectManager
 
 logger = logging.getLogger(settings.app_branding)
 
-
 class ImportHandler:
     """Handles project import by cloning from git repository."""
 
@@ -38,7 +37,6 @@ class ImportHandler:
             logger.info(f"Successfully imported project '{self.name}' from {self.url}")
 
         except Exception as e:
-            # Clean up on failure
             if self.project_path.exists():
                 import shutil
 

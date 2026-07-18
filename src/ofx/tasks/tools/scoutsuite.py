@@ -15,7 +15,6 @@ _SEVERITY_MAP = {
     "info": Severity.INFO,
 }
 
-
 @TaskRegistry.register("scoutsuite")
 class ScoutsuiteTask(Task):
     name = "scoutsuite"
@@ -66,7 +65,6 @@ class ScoutsuiteTask(Task):
 
         results: list[Vulnerability | Tag] = []
 
-        # ScoutSuite JSON report has services → service → findings structure
         services = data.get("services", data)
         if not isinstance(services, dict):
             return results
@@ -109,7 +107,6 @@ class ScoutsuiteTask(Task):
                     )
                 )
 
-            # Emit service-level tag
             results.append(Tag(name=svc_name, value="scanned", category="cloud_audit"))
 
         return results

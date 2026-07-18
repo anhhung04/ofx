@@ -15,7 +15,6 @@ _RESULT_RE = re.compile(
     re.IGNORECASE,
 )
 
-
 @TaskRegistry.register("promptfoo")
 class PromptfooTask(Task):
     name = "promptfoo"
@@ -51,7 +50,6 @@ class PromptfooTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # If target looks like a file path use -c, otherwise --providers
         if target:
             if (
                 Path(target).suffix in {".yml", ".yaml", ".json"}

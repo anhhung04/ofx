@@ -11,7 +11,6 @@ from ofx.utils.workflow_utils import (
     workflow_dirs_with_path,
 )
 
-
 class _ReusableWorkflowParentStub:
     """Minimal parent surface for reused workflow runner tests."""
 
@@ -310,7 +309,7 @@ jobs:
         workflow1 = find_workflow(str(workflow_file), workflow_dirs)
         workflow2 = find_workflow(str(workflow_file), workflow_dirs)
 
-        assert workflow1 is not workflow2  # deep copies, not same object
+        assert workflow1 is not workflow2
         assert workflow1.name == workflow2.name
         assert workflow1.workflow_path == workflow2.workflow_path
 

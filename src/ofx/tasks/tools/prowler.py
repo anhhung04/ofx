@@ -22,7 +22,6 @@ _SEVERITY_MAP = {
     "critical": Severity.CRITICAL,
 }
 
-
 @TaskRegistry.register("prowler")
 class ProwlerTask(Task):
     name = "prowler"
@@ -55,7 +54,6 @@ class ProwlerTask(Task):
         """``prowler <provider>`` — target is the provider name."""
         parts: list[str] = [self.cmd]
 
-        # Target is the cloud provider (aws, azure, gcp)
         if target:
             parts.append(self._q(target))
 
@@ -77,7 +75,6 @@ class ProwlerTask(Task):
 
         results: list[Vulnerability | Tag] = []
 
-        # Prowler OCSF JSON output can be a JSON array or newline-delimited JSON
         items = self._parse_json_records(raw)
 
         for item in items:
@@ -91,7 +88,6 @@ class ProwlerTask(Task):
 
             status = str(item.get("status", item.get("status_code", ""))).upper()
             if status in ("PASS", "MANUAL"):
-                # Only emit tags for passing checks
                 check_id = item.get("finding_info", {}).get(
                     "uid", item.get("check_id", "")
                 )

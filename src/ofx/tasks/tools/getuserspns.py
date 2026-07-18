@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("getuserspns")
 class GetUserSPNsTask(Task):
     name = "getuserspns"
@@ -67,9 +66,7 @@ class GetUserSPNsTask(Task):
 
         return " ".join(parts), None
 
-    # ServicePrincipalName  Name  MemberOf  PasswordLastSet  LastLogon  Delegation
     _SPN_RE = re.compile(r"^(\S+)\s+(\S+)\s+(\S*)\s+(\d{4}-\d{2}-\d{2})")
-    # $krb5tgs$23$*user$DOMAIN$...
     _HASH_RE = re.compile(r"^\$krb5tgs\$\d+\$\*?(\S+?)\$(\S+?)\$")
 
     def parse_output(
@@ -90,7 +87,6 @@ class GetUserSPNsTask(Task):
             if not line:
                 continue
 
-            # TGS hash line
             m_hash = self._HASH_RE.match(line)
             if m_hash:
                 user = m_hash.group(1)
@@ -109,7 +105,6 @@ class GetUserSPNsTask(Task):
                     )
                 continue
 
-            # SPN table line
             m_spn = self._SPN_RE.match(line)
             if m_spn:
                 user = m_spn.group(2)

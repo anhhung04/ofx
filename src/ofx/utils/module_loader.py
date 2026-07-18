@@ -8,14 +8,12 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-
 def module_name_for_path(prefix: str, path: Path) -> str:
     """Build a stable, unique module name for a file path."""
     digest = hashlib.sha1(
         path.as_posix().encode("utf-8"), usedforsecurity=False
     ).hexdigest()[:10]
     return f"{prefix}.{path.stem}_{digest}"
-
 
 def load_module_from_file(path: Path, module_prefix: str) -> ModuleType | None:
     """Load a module from a file path under a unique module namespace."""
@@ -28,7 +26,6 @@ def load_module_from_file(path: Path, module_prefix: str) -> ModuleType | None:
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     return module
-
 
 def iter_subclasses(module: ModuleType, base_class: type) -> list[type]:
     """Return subclasses of base_class defined in the given module."""

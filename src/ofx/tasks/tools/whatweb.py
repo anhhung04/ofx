@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("whatweb")
 class WhatwebTask(Task):
     name = "whatweb"
@@ -35,7 +34,7 @@ class WhatwebTask(Task):
         ),
     }
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = "-i"
     output_flag = "--log-json"
     silent_flag = "-q"

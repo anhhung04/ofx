@@ -9,7 +9,6 @@ from ofx.runner.context import RunnerStatus, normalized_runner_status_value
 from ofx.runner.metadata import ModelContext
 from ofx.runner.runner_refs import runner_leaf_descendants
 
-
 @dataclass
 class ExecutionSummary:
     workflow_name: str
@@ -22,7 +21,6 @@ class ExecutionSummary:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
 
 class ExecutionSummaryReporter:
     """Aggregates workflow/job/step execution data."""

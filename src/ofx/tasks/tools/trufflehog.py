@@ -14,7 +14,6 @@ _BARE_DOMAIN_RE = re.compile(
     r"^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+(/.*)?$"
 )
 
-
 @TaskRegistry.register("trufflehog")
 class TrufflehogTask(Task):
     name = "trufflehog"
@@ -60,19 +59,15 @@ class TrufflehogTask(Task):
         if not stripped:
             return stripped
 
-        # Already has a scheme (https://, http://, ssh://, git://, file://)
         if re.match(r"^[a-zA-Z][a-zA-Z0-9+\-.]*://", stripped):
             return stripped
 
-        # SSH-style URI  (git@host:org/repo)
         if re.match(r"^[^/@]+@[^:]+:", stripped):
             return stripped
 
-        # Local filesystem path
         if stripped.startswith(("/", ".", "~")) or Path(stripped).is_dir():
             return stripped
 
-        # Bare domain with optional path — add https://
         if _BARE_DOMAIN_RE.match(stripped):
             return f"https://{stripped}"
 
@@ -114,7 +109,6 @@ class TrufflehogTask(Task):
         source_meta = data.get("SourceMetadata", {}).get("Data", {})
         file_path = source_meta.get("Filesystem", {}).get("file", "")
         if not file_path:
-            # Fall back to Git metadata
             git_data = source_meta.get("Git", {})
             file_path = git_data.get("file", "")
 

@@ -4,11 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Cloud model tests
-# ---------------------------------------------------------------------------
-
-
 class TestCloudConfig:
     def test_parse_cloud_field_string(self):
         from ofx.models.cloud import parse_cloud_field
@@ -60,7 +55,6 @@ class TestCloudConfig:
         )
         assert cfg.extra["token"] == "abc123"
 
-
 class TestFleetStrategy:
     def test_fleet_strategy_defaults(self):
         from ofx.models.strategy import FleetStrategy
@@ -84,7 +78,6 @@ class TestFleetStrategy:
         assert fs.distribution == "round-robin"
         assert len(fs.exclude) == 1
 
-
 class TestMatrixStrategyFleet:
     def test_matrix_with_fleet(self):
         from ofx.models.strategy import FleetStrategy, MatrixStrategy
@@ -94,7 +87,7 @@ class TestMatrixStrategyFleet:
         )
         assert strategy.fleet is not None
         assert strategy.fleet.count == 3
-        assert strategy.matrix == {}  # empty default
+        assert strategy.matrix == {}
 
     def test_matrix_with_both(self):
         from ofx.models.strategy import FleetStrategy, MatrixStrategy
@@ -105,12 +98,6 @@ class TestMatrixStrategyFleet:
         )
         assert len(strategy.matrix["os"]) == 2
         assert strategy.fleet.count == 2
-
-
-# ---------------------------------------------------------------------------
-# Fleet input parser tests
-# ---------------------------------------------------------------------------
-
 
 class TestFleetInputParser:
     def test_parse_single_ip(self):
@@ -132,7 +119,6 @@ class TestFleetInputParser:
 
         parser = FleetInputParser()
         result = parser.parse("10.0.0.0/30")
-        # /30 = 4 IPs, minus network and broadcast = 2 usable
         assert len(result) == 2
         assert "10.0.0.1" in result
         assert "10.0.0.2" in result
@@ -191,20 +177,14 @@ class TestFleetInputParser:
         from ofx.cloud.fleet_input import split_subnet
 
         result = split_subnet("10.0.0.0/24", count=4, min_prefix=26)
-        assert len(result) == 4  # /24 → 4x /26
-
-
-# ---------------------------------------------------------------------------
-# Fleet distributor tests
-# ---------------------------------------------------------------------------
-
+        assert len(result) == 4
 
 class TestFleetDistributor:
     def test_chunk_distribution(self):
         from ofx.cloud.fleet_distributor import FleetDistributor
 
         dist = FleetDistributor()
-        targets = [f"10.0.0.{i}" for i in range(1, 11)]  # 10 targets
+        targets = [f"10.0.0.{i}" for i in range(1, 11)]
         result = dist.distribute(targets, count=3, mode="chunk")
         assert len(result) == 3
         total = sum(len(chunk) for chunk in result)
@@ -214,7 +194,7 @@ class TestFleetDistributor:
         from ofx.cloud.fleet_distributor import FleetDistributor
 
         dist = FleetDistributor()
-        targets = [f"10.0.0.{i}" for i in range(1, 7)]  # 6 targets
+        targets = [f"10.0.0.{i}" for i in range(1, 7)]
         result = dist.distribute(targets, count=3, mode="round-robin")
         assert len(result) == 3
         assert all(len(chunk) == 2 for chunk in result)
@@ -225,7 +205,7 @@ class TestFleetDistributor:
         dist = FleetDistributor()
         targets = ["line1", "line2", "line3", "line4"]
         result = dist.distribute(targets, count=2, mode="line")
-        assert len(result) == 4  # line mode: one chunk per line
+        assert len(result) == 4
 
     def test_expand_fleet_writes_chunk_files(self):
         from ofx.cloud.fleet_distributor import expand_fleet_to_matrix
@@ -240,7 +220,6 @@ class TestFleetDistributor:
         assert len(chunk_files) == 2
         for f in chunk_files:
             assert f.exists()
-        # Cleanup
         for f in chunk_files:
             f.unlink(missing_ok=True)
         chunk_files[0].parent.rmdir()
@@ -266,13 +245,12 @@ class TestFleetDistributor:
         from ofx.cloud.fleet_distributor import FleetDistributor
 
         dist = FleetDistributor()
-        # /16 prefix — two groups: 10.0.x.x and 10.1.x.x
         targets = [
             "10.0.0.1",
             "10.0.0.2",
-            "10.0.1.1",  # all 10.0.0.0/16
+            "10.0.1.1",
             "10.1.0.1",
-            "10.1.0.2",  # 10.1.0.0/16
+            "10.1.0.2",
         ]
         result = dist.distribute(targets, count=2, mode="subnet", min_prefix=16)
         assert len(result) == 2
@@ -292,19 +270,12 @@ class TestFleetDistributor:
             },
         )
         assert len(combos) == 2
-        # Each chunk should have exactly 2 IPs (same /16 grouped together)
         assert combos[0]["fleet_target_count"] == 2
         assert combos[1]["fleet_target_count"] == 2
         for f in chunk_files:
             f.unlink(missing_ok=True)
         if chunk_files:
             chunk_files[0].parent.rmdir()
-
-
-# ---------------------------------------------------------------------------
-# Cloud provider registry tests
-# ---------------------------------------------------------------------------
-
 
 class TestCloudProviderRegistry:
     def test_static_provider_registered(self):
@@ -326,7 +297,6 @@ class TestCloudProviderRegistry:
 
         with pytest.raises(ValueError):
             CloudProviderRegistry.create("nonexistent")
-
 
 class TestStaticProvider:
     @pytest.mark.asyncio
@@ -364,7 +334,6 @@ class TestStaticProvider:
         from ofx.cloud.providers.static import StaticProvider
 
         provider = StaticProvider(host="10.0.0.1")
-        # Should not raise
         await provider.destroy_instance("any-id")
 
     @pytest.mark.asyncio
@@ -375,12 +344,6 @@ class TestStaticProvider:
         instance = await provider.get_instance("static-10.0.0.1")
         assert instance is not None
         assert instance.ip == "10.0.0.1"
-
-
-# ---------------------------------------------------------------------------
-# Cloud config profile tests
-# ---------------------------------------------------------------------------
-
 
 class TestCloudProfileManager:
     def test_add_and_list(self, tmp_path):
@@ -421,14 +384,13 @@ class TestCloudProfileManager:
             },
         )
 
-        # Inline config with profile reference
         cfg = CloudConfig(profile="base", size="s-2vcpu-2gb")
         resolved = mgr.resolve(cfg)
 
         assert resolved.provider == "digitalocean"
         assert resolved.region == "nyc1"
-        assert resolved.size == "s-2vcpu-2gb"  # Overridden
-        assert resolved.image == "ubuntu-24-04-x64"  # From profile
+        assert resolved.size == "s-2vcpu-2gb"
+        assert resolved.image == "ubuntu-24-04-x64"
 
     def test_as_cloud_config(self, tmp_path):
         from ofx.cloud.config import CloudProfileManager
@@ -448,12 +410,6 @@ class TestCloudProfileManager:
         assert not mgr.exists("nope")
         with pytest.raises(KeyError):
             mgr.get_profile_data("nope")
-
-
-# ---------------------------------------------------------------------------
-# Cloud instance info tests
-# ---------------------------------------------------------------------------
-
 
 class TestCloudInstanceInfo:
     def test_is_ready(self):
@@ -487,12 +443,6 @@ class TestCloudInstanceInfo:
         assert fleet.count == 3
         assert len(fleet.ips) == 3
         assert fleet.all_ready
-
-
-# ---------------------------------------------------------------------------
-# Job model cloud field tests
-# ---------------------------------------------------------------------------
-
 
 class TestCloudMatrixFleetModelParsing:
     """Validate that cloud+matrix+fleet workflows parse correctly."""
@@ -587,7 +537,6 @@ jobs:
         assert job.strategy.fleet is not None
         assert job.strategy.fleet.count == 2
 
-
 class TestJobCloudField:
     def test_job_with_cloud_string(self):
         from ofx.models.job import Job
@@ -612,7 +561,6 @@ class TestJobCloudField:
 
         job = Job(jid="test", steps=[{"run": "echo hi"}])
         assert job.cloud is None
-
 
 class TestWaitForLogin:
     """Tests for wait_for_login timeout behaviour."""
@@ -683,7 +631,6 @@ class TestWaitForLogin:
             pass
 
         with pytest.MonkeyPatch.context() as mp:
-            # Patch time so we immediately exceed the timeout
             mp.setattr("ofx.cloud.ssh.time.time", lambda: float(call_count * 10))
             mp.setattr("asyncio.to_thread", mock_to_thread)
             mp.setattr("asyncio.sleep", mock_sleep)
@@ -700,7 +647,7 @@ class TestWaitForLogin:
         cfg = CloudConfig(provider="static", host="10.0.0.1", ssh_key="/tmp/fake.pem")
 
         async def mock_to_thread(fn, *_args, **_kwargs):
-            return None  # probe succeeds
+            return None
 
         with pytest.MonkeyPatch.context() as mp:
             mp.setattr("asyncio.to_thread", mock_to_thread)
@@ -745,7 +692,6 @@ class TestWaitForLogin:
         assert "Administrator" in captured
         assert "whoami" in captured
 
-
 class TestFleetDistributorEdgeCases:
     """Tests for edge cases in FleetDistributor and expand_fleet_to_matrix."""
 
@@ -768,7 +714,7 @@ class TestFleetDistributorEdgeCases:
         d = FleetDistributor()
         chunks = d.distribute(["a", "b"], count=5)
         assert all(len(c) > 0 for c in chunks), f"Empty chunk found: {chunks}"
-        assert len(chunks) == 2  # capped to target count
+        assert len(chunks) == 2
 
     def test_expand_fleet_to_matrix_no_input_returns_empty(self):
         """expand_fleet_to_matrix with no input should raise, not spawn VPSes."""

@@ -17,9 +17,6 @@ from ofx.tasks.output_types import (
     Severity,
 )
 
-# ── Output Types ───────────────────────────────────────────────────────────
-
-
 class TestOutputTypes:
     def test_port_fields(self):
         p = Port(port=80, ip="10.0.0.1", host="web", service_name="http")
@@ -72,7 +69,6 @@ class TestOutputTypes:
 
     def test_all_output_types_have_type_field(self):
         for name, cls in OUTPUT_TYPE_MAP.items():
-            # Instantiate with minimal required fields
             if name == "port":
                 obj = cls(port=80, ip="1.1.1.1")
             elif name == "url":
@@ -120,17 +116,13 @@ class TestOutputTypes:
         assert e._type == "exploit"
         assert "CVE-2024-1234" in e.cves
 
-
-# ── Deduplication ──────────────────────────────────────────────────────────
-
-
 class TestDeduplication:
     def test_deduplicate_with_seen_removes_duplicates(self):
         from ofx.runner.tasks.runner import TaskRunner
 
         items = [
             Port(port=80, ip="10.0.0.1"),
-            Port(port=80, ip="10.0.0.1"),  # duplicate
+            Port(port=80, ip="10.0.0.1"),
             Port(port=443, ip="10.0.0.1"),
         ]
         result = TaskRunner._deduplicate_with_seen(items, set())
@@ -278,10 +270,6 @@ class TestDeduplication:
 
         assert sanitize_target_slug("https://example.com:8443/path") == "example.com_8443"
         assert sanitize_target_slug("192.168.1.0/24") == "192.168.1.0_24"
-
-
-# ── UserAccount Output Type ────────────────────────────────────────────
-
 
 class TestUserAccount:
     def test_basic_fields(self):

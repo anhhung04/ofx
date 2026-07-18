@@ -24,20 +24,18 @@ from ofx.settings import (
 
 _logger = logging.getLogger("ofx.shell_functions")
 
-
 def _is_admin() -> bool:
     """Check if running with admin/root privileges."""
     if IS_WINDOWS:
         try:
             import ctypes
 
-            return ctypes.windll.shell32.IsUserAnAdmin() != 0  # type: ignore
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
         except Exception:
             _logger.debug("Windows admin check failed", exc_info=True)
             return False
     else:
         return os.geteuid() == 0
-
 
 def _get_sudo() -> str:
     """Get sudo prefix for Unix systems."""
@@ -45,12 +43,10 @@ def _get_sudo() -> str:
         return ""
     return "sudo" if not _is_admin() and shutil.which("sudo") else ""
 
-
 def is_powershell(shell: str) -> bool:
     """Check if the shell is PowerShell."""
     shell_lower = shell.lower()
     return "powershell" in shell_lower or "pwsh" in shell_lower
-
 
 def get_shell_functions(shell: str | None = None) -> str:
     """Get shell helper function definitions based on shell type.
@@ -70,7 +66,6 @@ def get_shell_functions(shell: str | None = None) -> str:
         return _get_powershell_functions()
     else:
         return _get_bash_functions()
-
 
 def _get_bash_functions() -> str:
     """Get Bash shell helper functions for Linux/macOS."""
@@ -120,9 +115,6 @@ static_install() {{
 pip_install() {{
     "{python_exe}" -m pip install --upgrade "$@"
 }}
-
-# --- Channel Functions (inter-job communication) ---
-# Uses flock for cross-process safety (compatible with Python fcntl.flock)
 
 ch_publish() {{
     local channel="$1"
@@ -188,9 +180,7 @@ ch_wait_for() {{
     done
 }}
 
-# End of Shell Helper Functions
 '''
-
 
 def _get_powershell_functions() -> str:
     """Get PowerShell helper functions for Windows."""
@@ -246,8 +236,6 @@ function pip_install {{
     & "{python_exe}" -m pip install --upgrade $packages
 }}
 
-# --- Channel Functions (inter-job communication) ---
-
 function ch_publish {{
     param([string]$Channel, [string]$Data)
     $dir = $env:CHANNELS_DIR
@@ -294,9 +282,7 @@ function ch_wait_for {{
     }}
 }}
 
-# End of Shell Helper Functions
 '''
-
 
 def get_shell_exports() -> dict[str, str | bool]:
     """Get shell variable exports for templates.

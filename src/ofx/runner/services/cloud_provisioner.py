@@ -14,7 +14,6 @@ from ofx.cloud.runtime import build_provider_kwargs, create_remote_runner, is_wi
 from ofx.models.cloud import CloudConfig
 from ofx.utils.tempfiles import remote_work_dir
 
-
 class CloudProvisioner:
     """Handles provisioning, connection, and cleanup of a cloud VPS.
 

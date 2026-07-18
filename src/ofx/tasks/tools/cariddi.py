@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("cariddi")
 class CariddiTask(Task):
     name = "cariddi"
@@ -40,9 +39,9 @@ class CariddiTask(Task):
         ),
     }
 
-    input_flag = None  # reads from stdin
+    input_flag = None
     file_flag = None
-    output_flag = None  # stdout JSON
+    output_flag = None
     json_flag = "-json"
     silent_flag = "-s"
     extra_flags = ["-e", "-info"]
@@ -64,7 +63,6 @@ class CariddiTask(Task):
             opt = self.opts.get(key)
             if opt is None:
                 continue
-            # Skip flags already present in extra_flags
             if opt.flag in self.extra_flags:
                 continue
             if opt.is_flag:
@@ -107,7 +105,6 @@ class CariddiTask(Task):
                     )
                 )
 
-        # Handle top-level secrets/errors/infos arrays
         for section, cat in (
             ("secrets", "secret"),
             ("errors", "error"),

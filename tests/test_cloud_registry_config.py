@@ -6,8 +6,6 @@ from ofx.cloud.base import CloudProvider, CloudProviderRegistry
 from ofx.cloud.config import CloudProfileManager
 from ofx.models.cloud import CloudConfig
 
-
-# ── CloudProviderRegistry ────────────────────────────────────────────────
 class TestCloudProviderRegistry:
     def setup_method(self):
         """Save and restore registry state to avoid test pollution."""
@@ -169,8 +167,6 @@ class TestCloudProviderRegistry:
 
         assert result == 3
 
-
-# ── CloudProfileManager ─────────────────────────────────────────────────
 class TestCloudProfileManager:
     @pytest.fixture()
     def manager(self, tmp_path):
@@ -284,8 +280,8 @@ class TestCloudProfileManager:
     def test_resolve_with_overrides(self, populated_manager):
         config = CloudConfig(profile="do-small", ssh_user="admin")
         resolved = populated_manager.resolve(config)
-        assert resolved.host == "10.0.0.1"  # From profile
-        assert resolved.ssh_user == "admin"  # Override
+        assert resolved.host == "10.0.0.1"
+        assert resolved.ssh_user == "admin"
 
     def test_resolve_no_profile_passthrough(self, manager):
         config = CloudConfig(provider="static", host="direct.host")

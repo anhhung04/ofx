@@ -18,13 +18,11 @@ from ofx.runner.executors.pipe import (
 )
 from ofx.runner.runner import Runner
 
-
 class PipeExecution(BaseModel):
     """Execution model wrapping a [`PipeConfig`](src/ofx/models/pipe.py)."""
 
     pipe: PipeConfig
     resolved_input: list = Field(default_factory=list)
-
 
 class PipeRunner(Runner[PipeExecution]):
     """Execute a declarative ETL pipeline and store results as step outputs."""
@@ -38,7 +36,6 @@ class PipeRunner(Runner[PipeExecution]):
     ):
         super().__init__(model, ctx, parent, None, executor=executor or PipeExecutor())
         self._temp_file: Path | None = None
-
 
 __all__ = [
     "PipeExecution",

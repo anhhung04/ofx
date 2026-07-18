@@ -11,9 +11,6 @@ from ofx.tasks.output_types import (
     Tag,
 )
 
-# ── Httpx Parser ───────────────────────────────────────────────────────────
-
-
 class TestHttpxParser:
     def test_parse_jsonl(self):
         lines = [
@@ -39,18 +36,11 @@ class TestHttpxParser:
         tags = [r for r in results if isinstance(r, Tag)]
         assert len(urls) == 2
         assert urls[0].status_code == 200
-        assert len(tags) == 2  # nginx + PHP
+        assert len(tags) == 2
 
     def test_parse_empty(self):
         task = TaskRegistry.create("httpx")
         assert task.parse_output("", "") == []
-
-
-# ── Nuclei Parser ──────────────────────────────────────────────────────────
-
-
-# ── WhatWeb Parser ────────────────────────────────────────────────────
-
 
 class TestWhatwebParser:
     def test_whatweb_metadata(self):
@@ -110,13 +100,6 @@ class TestWhatwebParser:
         if out_file and out_file.exists():
             out_file.unlink()
 
-
-# ── Sqlmap Parser ─────────────────────────────────────────────────────
-
-
-# ── Gowitness Parser ──────────────────────────────────────────────────────
-
-
 class TestGowitnessParser:
     def test_gowitness_metadata(self):
         task = TaskRegistry.create("gowitness")
@@ -170,10 +153,6 @@ class TestGowitnessParser:
         assert "gowitness scan file" in cmd
         assert "-f /tmp/urls.txt" in cmd
 
-
-# ── JWT Tool Parser ───────────────────────────────────────────────────────
-
-
 class TestWafw00fParser:
     def test_parse_output(self):
         stdout = (
@@ -193,10 +172,6 @@ class TestWafw00fParser:
         task = TaskRegistry.create("wafw00f")
         results = task.parse_output(stdout, "")
         assert results == []
-
-
-# ── Ffuf Parser ────────────────────────────────────────────────────────────
-
 
 class TestFfufParser:
     def test_parse_json(self):
@@ -222,10 +197,6 @@ class TestFfufParser:
         results = task.parse_output(json.dumps({"results": []}), "")
         assert results == []
 
-
-# ── Naabu Parser ──────────────────────────────────────────────────────────
-
-
 class TestFeroxbusterParser:
     def test_parse_jsonl(self):
         lines = [
@@ -240,7 +211,7 @@ class TestFeroxbusterParser:
                     "method": "GET",
                 }
             ),
-            json.dumps({"type": "statistics", "elapsed": 10}),  # not a response
+            json.dumps({"type": "statistics", "elapsed": 10}),
         ]
         task = TaskRegistry.create("feroxbuster")
         results = task.parse_output("\n".join(lines), "")
@@ -258,13 +229,6 @@ class TestFeroxbusterParser:
         assert "--json" in cmd
         assert "-w /usr/share/seclists/common.txt" in cmd
         assert "-t 50" in cmd
-
-
-# ── Live Streaming (parse_line) ────────────────────────────────────────
-
-
-# ── Dirsearch Parser ──────────────────────────────────────────────────
-
 
 class TestDirsearchParser:
     def test_parse_output(self, tmp_path):
@@ -309,13 +273,6 @@ class TestDirsearchParser:
     def test_registration(self):
         task = TaskRegistry.create("dirsearch")
         assert task.name == "dirsearch"
-
-
-# ── Arjun Parser ───────────────────────────────────────────────────────
-
-
-# ── Gobuster Parser ───────────────────────────────────────────────────
-
 
 class TestGobusterParser:
     def test_gobuster_metadata(self):
@@ -393,13 +350,6 @@ class TestGobusterParser:
         if out_file and out_file.exists():
             out_file.unlink()
 
-
-# ── Amass Parser ──────────────────────────────────────────────────────
-
-
-# ── Arjun Parser ───────────────────────────────────────────────────────
-
-
 class TestArjunParser:
     def test_parse_output(self, tmp_path):
         data = {
@@ -437,22 +387,13 @@ class TestArjunParser:
         assert "-u https://example.com/api" in cmd
         assert "-m POST" in cmd
         assert "-t 5" in cmd
-        # arjun has output_flag=-oJ, so output_file should be set
         assert out_file is not None
-        # Clean up the temp file
         if out_file and out_file.exists():
             out_file.unlink()
 
     def test_registration(self):
         task = TaskRegistry.create("arjun")
         assert task.name == "arjun"
-
-
-# ── Testssl Parser ─────────────────────────────────────────────────────
-
-
-# ── X8 Parser ─────────────────────────────────────────────────────────
-
 
 class TestX8Parser:
     def test_x8_metadata(self):
@@ -503,10 +444,6 @@ class TestX8Parser:
         task = TaskRegistry.create("x8")
         assert task.parse_output("{broken", "") == []
 
-
-# ── Dnsrecon Parser ───────────────────────────────────────────────────
-
-
 class TestKatanaParser:
     def test_parse_jsonl(self):
         lines = [
@@ -540,10 +477,6 @@ class TestKatanaParser:
         assert "-jsonl" in cmd
         assert "-depth 3" in cmd
         assert "-js-crawl" in cmd
-
-
-# ── Gospider Parser ────────────────────────────────────────────────────
-
 
 class TestGospiderParser:
     def test_parse_output(self):
@@ -589,13 +522,6 @@ class TestGospiderParser:
         task = TaskRegistry.create("gospider")
         assert task.name == "gospider"
 
-
-# ── Gau Parser ─────────────────────────────────────────────────────────
-
-
-# ── Gau Parser ─────────────────────────────────────────────────────────
-
-
 class TestGauParser:
     def test_parse_output(self):
         lines = [
@@ -627,13 +553,6 @@ class TestGauParser:
     def test_registration(self):
         task = TaskRegistry.create("gau")
         assert task.name == "gau"
-
-
-# ── Dalfox Parser ──────────────────────────────────────────────────────
-
-
-# ── Hakrawler Parser ──────────────────────────────────────────────────────
-
 
 class TestHakrawlerParser:
     def test_hakrawler_metadata(self):
@@ -680,13 +599,6 @@ class TestHakrawlerParser:
         assert "-d 3" in cmd
         assert "-subs" in cmd
         assert "-insecure" in cmd
-
-
-# ── Subzy Parser ──────────────────────────────────────────────────────────
-
-
-# ── Cariddi Parser ────────────────────────────────────────────────────
-
 
 class TestCariddiParser:
     def test_cariddi_metadata(self):
@@ -781,13 +693,6 @@ class TestCariddiParser:
         assert "-depth 3" in cmd
         assert out_file is None
 
-
-# ── Nikto Parser ──────────────────────────────────────────────────────
-
-
-# ── Paramspider Parser ────────────────────────────────────────────────────
-
-
 class TestParamspiderParser:
     def test_paramspider_metadata(self):
         task = TaskRegistry.create("paramspider")
@@ -824,6 +729,3 @@ class TestParamspiderParser:
         assert task.parse_line("[INFO] something") == []
         assert task.parse_line("") == []
         assert task.parse_line("plaintext") == []
-
-
-# ── Hakrawler Parser ──────────────────────────────────────────────────────

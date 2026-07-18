@@ -20,7 +20,6 @@ from ofx.runner.handlers import registry as default_handler_registry
 from ofx.runner.services.cloud_provisioner import CloudProvisioner
 from ofx.utils.log import register_secrets
 
-
 @dataclass(frozen=True)
 class _CloudInstanceState:
     provider: Any | None
@@ -32,7 +31,6 @@ class _CloudInstanceState:
     auto_destroy_enabled: bool
     has_destroyable_instance: bool
     has_reportable_instance: bool
-
 
 class CloudExecutor(JobExecutor):
     """Cloud-specific executor helpers composed into cloud runners.

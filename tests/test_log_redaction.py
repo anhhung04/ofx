@@ -8,7 +8,6 @@ import pytest
 
 from ofx.utils.log import SecretRedactFilter, register_secrets, register_sensitive_env
 
-
 @pytest.fixture(autouse=True)
 def _clean_redact_filter():
     """Reset the singleton between tests."""
@@ -16,7 +15,6 @@ def _clean_redact_filter():
     filt.clear()
     yield
     filt.clear()
-
 
 class TestSecretRedactFilter:
     def test_redacts_registered_value(self):
@@ -32,7 +30,7 @@ class TestSecretRedactFilter:
 
     def test_ignores_short_values(self):
         filt = SecretRedactFilter.get_instance()
-        filt.register_values({"ab"})  # too short
+        filt.register_values({"ab"})
 
         record = logging.LogRecord("test", logging.INFO, "", 0, "value=ab", (), None)
         filt.filter(record)
@@ -75,7 +73,6 @@ class TestSecretRedactFilter:
             "test", logging.INFO, "", 0, "val=abcdefgh", (), None
         )
         filt.filter(record)
-        # "abcdefgh" should be replaced as one unit, not partially
         assert "abcd" not in record.msg
         assert record.msg == "val=***"
 
@@ -96,7 +93,6 @@ class TestSecretRedactFilter:
         )
         filt.filter(record)
         assert "secret_value_1234" in record.msg
-
 
 class TestRegisterHelpers:
     def test_register_secrets(self):
@@ -153,10 +149,8 @@ class TestRegisterHelpers:
             None,
         )
         filt.filter(record)
-        # Sensitive keys should be redacted
         assert "secret_api_val_1234" not in record.msg
         assert "db_pass_value_123" not in record.msg
-        # Non-sensitive key should remain
         assert "not_a_secret_1234" in record.msg
 
     def test_register_sensitive_env_matches_token_pattern(self):

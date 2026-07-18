@@ -7,7 +7,6 @@ from ofx.runner.context import context_copy
 from ofx.runner.handlers.registry import registry
 from ofx.runner.run_defaults import resolve_model_shell
 
-
 @registry.register(RunType.TASK)
 def create_runner(step_runner):
     from ofx.runner.task_step import extract_task_target_and_opts

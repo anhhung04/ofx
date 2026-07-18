@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("wafw00f")
 class Wafw00fTask(Task):
     name = "wafw00f"
@@ -26,7 +25,7 @@ class Wafw00fTask(Task):
         "test": OptDef(flag="-t", type=str, help="Test specific WAF"),
     }
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = "-i"
     output_flag = None
     extra_flags = []
@@ -42,11 +41,7 @@ class Wafw00fTask(Task):
 
         for line in lines:
             line = line.strip()
-            # wafw00f outputs lines like:
-            # [*] The site https://example.com is behind Cloudflare (Cloudflare Inc.)
-            # [*] No WAF detected by the generic detection
             if "is behind" in line:
-                # Extract WAF name and URL
                 try:
                     parts = line.split("is behind", 1)
                     url_part = parts[0].strip()

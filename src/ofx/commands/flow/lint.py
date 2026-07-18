@@ -19,13 +19,11 @@ logger = logging.getLogger("ofx")
 CollectionManager = None
 find_workflow = None
 
-
 @dataclass
 class LintIssue:
-    severity: str  # warn, error, info
+    severity: str
     message: str
     location: str = ""
-
 
 @dataclass
 class LintResult:
@@ -40,7 +38,6 @@ class LintResult:
     @property
     def warn_count(self) -> int:
         return sum(1 for i in self.issues if i.severity == "warn")
-
 
 def _lint_workflow(path: Path) -> LintResult:
     """Run best-practice checks on a single workflow file."""
@@ -59,39 +56,32 @@ def _lint_workflow(path: Path) -> LintResult:
 
     result.name = workflow.name
 
-    # Check: missing description
     if not workflow.description or workflow.description == "No provided description":
         result.issues.append(LintIssue("warn", "Missing or default description"))
 
-    # Check: no tags
     if not workflow.tags:
         result.issues.append(LintIssue("warn", "No tags defined"))
 
-    # Check: no dispatch or call
     if not workflow.dispatch and not workflow.call:
         result.issues.append(
             LintIssue("info", "No dispatch or call trigger — can only run directly")
         )
 
-    # Check: dispatch without inputs
     if workflow.dispatch and not workflow.dispatch.inputs:
         result.issues.append(
             LintIssue("info", "Dispatch defined but no inputs declared")
         )
 
     for jid, job in workflow.jobs.items():
-        # Check: job without name
         if not job.name:
             result.issues.append(LintIssue("warn", "Job has no name", location=jid))
 
-        # Check: job has no outputs
         if not job.outputs:
             result.issues.append(
                 LintIssue("info", "Job has no outputs declared", location=jid)
             )
 
         for step in job.steps:
-            # Check: step without a meaningful name
             if not step.name or step.name.startswith("<should_be_replaced>"):
                 result.issues.append(
                     LintIssue(
@@ -101,7 +91,6 @@ def _lint_workflow(path: Path) -> LintResult:
                     )
                 )
 
-            # Check: task step without timeout override
             if step.task and step.timeout == 1440:
                 result.issues.append(
                     LintIssue(
@@ -111,7 +100,6 @@ def _lint_workflow(path: Path) -> LintResult:
                     )
                 )
 
-            # Check: run step with very long command (>500 chars)
             if step.run and len(step.run) > 500:
                 result.issues.append(
                     LintIssue(
@@ -157,6 +145,8 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
         for directory in dirs:
             for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
                 for path in sorted(directory.rglob(f"*{ext}")):
+                    if path.name in ("collection.yaml", "collection.yml"):
+                        continue
                     resolved = str(path.resolve())
                     if resolved not in seen:
                         seen.add(resolved)
@@ -199,7 +189,6 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
     clean = sum(1 for r in results if not r.issues)
 
     if all_workflows:
-        # Summary table
         results_with_issues = [r for r in results if r.issues]
         print_info(
             "Lint Results",
@@ -232,7 +221,6 @@ def lint_workflows(all_workflows: bool = False, workflow_name: str = "") -> None
 
         console.print(table)
     else:
-        # Single workflow
         r = results[0]
         if not r.issues:
             from ofx.commands.ui_helpers import print_success

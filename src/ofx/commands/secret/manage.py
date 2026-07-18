@@ -23,7 +23,6 @@ from ofx.utils import secrets as secrets_store
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 logger = logging.getLogger(settings.app_branding)
 
-
 def _render_secrets_table(
     console,
     title: str,
@@ -53,14 +52,12 @@ def _render_secrets_table(
 
     console.print(table)
 
-
 def _print_values_warning() -> None:
     typer.secho(
         "\n⚠️ WARNING: Secret values are displayed above!",
         fg=typer.colors.YELLOW,
         bold=True,
     )
-
 
 def _render_secret_results(
     console,
@@ -78,7 +75,6 @@ def _render_secret_results(
     if show_values:
         _print_values_warning()
 
-
 def _collect_matching_secrets(
     secrets: dict[str, Any],
     predicate,
@@ -88,7 +84,6 @@ def _collect_matching_secrets(
         for name, value in secrets.items()
         if predicate(name, value)
     }
-
 
 @app.command("set")
 def set_secret(
@@ -154,7 +149,6 @@ def set_secret(
         details={"Location": "Encrypted vault"},
     )
 
-
 @app.command("get")
 def get_secret(
     name: Annotated[str, typer.Argument(help="Secret name")],
@@ -194,7 +188,6 @@ def get_secret(
             f"Secret '{name}' exists in encrypted store",
             details={"Hint": "Use --show to display the value"},
         )
-
 
 @app.command("list")
 def list_secrets(
@@ -261,7 +254,6 @@ def list_secrets(
         show_values=show_values,
     )
 
-
 @app.command("search")
 def search_secrets(
     pattern: Annotated[
@@ -315,7 +307,6 @@ def search_secrets(
         show_values=show_values,
     )
 
-
 @app.command("delete")
 def delete_secret(
     name: Annotated[str, typer.Argument(help="Secret name")],
@@ -362,7 +353,6 @@ def delete_secret(
         f"Secret '{name}' deleted successfully",
         details={"Location": "Encrypted store"},
     )
-
 
 @app.command("export")
 def export_secrets(
@@ -418,7 +408,6 @@ def export_secrets(
         hint="Keep this file secure.",
     )
 
-
 @app.command("import")
 def import_secrets(
     file: Annotated[Path, typer.Argument(..., help="JSON file containing secrets")],
@@ -468,7 +457,6 @@ def import_secrets(
         f"Imported {imported} secrets successfully",
         details={"File": str(file)},
     )
-
 
 @app.command("clear")
 def clear_secrets(
@@ -521,7 +509,6 @@ def clear_secrets(
 
     secrets_store.clear_secrets()
     print_success("Cleared", f"All {len(secrets)} secrets cleared successfully")
-
 
 @app.command("store")
 def show_store_location():

@@ -34,11 +34,8 @@ from ofx.utils.workflow_utils import find_workflow, workflow_dirs_with_path
 
 logger = logging.getLogger(settings.app_branding)
 
-# Matches secrets.KEY_NAME in Jinja2 template expressions.
-# Handles both dot access (secrets.MY_KEY) and bracket access (secrets["MY_KEY"]).
 _SECRETS_DOT_RE = re.compile(r"\bsecrets\.([a-zA-Z_][a-zA-Z0-9_]*)")
 _SECRETS_BRACKET_RE = re.compile(r"""secrets\[['"]([a-zA-Z_][a-zA-Z0-9_]*)["']\]""")
-
 
 async def _build_run_runner(
     workflow: str | Path,
@@ -153,7 +150,6 @@ async def _build_run_runner(
         ),
         output_dir,
     )
-
 
 async def run_workflow(
     workflow: str | Path,

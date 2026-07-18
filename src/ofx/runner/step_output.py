@@ -17,7 +17,6 @@ _OUTPUT_FLAG_LINES: tuple[tuple[str, str], ...] = (
     ("stderr_truncated", "[STDERR TRUNCATED]"),
 )
 
-
 def log_output(
     log_fn: Callable[[str], None],
     stream: str,
@@ -40,7 +39,6 @@ def log_output(
         display = content
 
     log_fn(f"\n==={stream}===\n{display}\n===========")
-
 
 def save_output_file(
     output_path: Path,
@@ -90,6 +88,5 @@ def save_output_file(
         log_fn(f"Saved output to {out_file}")
 
     return out_file
-
 
 __all__ = ["log_output", "save_output_file"]

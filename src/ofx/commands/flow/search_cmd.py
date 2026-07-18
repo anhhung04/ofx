@@ -15,7 +15,6 @@ from ofx.settings import (
     get_console,
 )
 
-
 def show_search(
     *,
     query: str = "",
@@ -29,7 +28,6 @@ def show_search(
     search_term = query.lower().strip()
     console = get_console()
 
-    # Gather all workflow dirs with source labels
     sources: list[tuple[Path, str]] = []
     if BUILTIN_WORKFLOWS_DIR.is_dir():
         sources.append((BUILTIN_WORKFLOWS_DIR, "builtin"))
@@ -44,13 +42,14 @@ def show_search(
         if cpath.is_dir():
             sources.append((cpath, f"collection:{cname}"))
 
-    # Scan and filter
     results: list[dict] = []
     seen: set[str] = set()
 
     for root, source in sources:
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
             for path in sorted(root.rglob(f"*{ext}")):
+                if path.name in ("collection.yaml", "collection.yml"):
+                    continue
                 resolved = str(path.resolve())
                 if resolved in seen:
                     continue

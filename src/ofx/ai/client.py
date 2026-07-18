@@ -15,24 +15,21 @@ from __future__ import annotations
 from collections.abc import Generator
 from dataclasses import dataclass
 
-
 @dataclass(slots=True)
 class StreamChunk:
     """A single chunk from an LLM streaming response."""
 
     text: str
-    kind: str = "content"  # "content" | "thinking"
-
+    kind: str = "content"
 
 def check_ai_available() -> bool:
     """Return True if the openai SDK is installed."""
     try:
-        import openai  # noqa: F401
+        import openai
 
         return True
     except ImportError:
         return False
-
 
 def require_ai() -> None:
     """Raise ImportError with install instructions if openai is missing."""
@@ -44,7 +41,6 @@ def require_ai() -> None:
             "  pip install openai"
         )
 
-
 def _build_client(api_key: str, base_url: str | None):
     """Create and return an openai.OpenAI client."""
     import openai
@@ -53,7 +49,6 @@ def _build_client(api_key: str, base_url: str | None):
     if base_url:
         kwargs["base_url"] = base_url
     return openai.OpenAI(**kwargs)
-
 
 def call_llm_stream(
     messages: list[dict],
@@ -75,7 +70,7 @@ def call_llm_stream(
     client = _build_client(api_key, base_url)
     stream = client.chat.completions.create(
         model=model,
-        messages=messages,  # type: ignore[arg-type]
+        messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         stream=True,
@@ -85,7 +80,6 @@ def call_llm_stream(
             continue
         delta = chunk.choices[0].delta
 
-        # Reasoning / thinking tokens (OpenAI o-series, Anthropic extended thinking)
         thinking = getattr(delta, "reasoning_content", None)
         if thinking:
             yield StreamChunk(text=thinking, kind="thinking")
@@ -93,7 +87,6 @@ def call_llm_stream(
         content = delta.content
         if content:
             yield StreamChunk(text=content, kind="content")
-
 
 def call_llm(
     messages: list[dict],

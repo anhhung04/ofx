@@ -28,20 +28,16 @@ from .traffic import (
 )
 
 __all__ = [
-    # cleanup
     "clean_history_commands",
     "clean_linux_logs",
     "clean_windows_artifacts",
     "timestomp_command",
     "remove_ssh_known_host",
     "secure_delete_command",
-    # proxy
     "build_proxychains_conf",
     "http_proxy_env",
-    # timing
     "is_business_hours",
     "random_sleep_seconds",
-    # traffic
     "rotate_user_agent",
     "traffic_blend_headers",
     "domain_fronting_headers",

@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from random import uniform
 
-import paramiko  # type: ignore[import-untyped]
+import paramiko
 from ofx.utils.file_cleanup import remove_file
 
 from ..base import AuthenticationError, ConnectionError, PostRunnerBase, PostRunnerError
@@ -23,18 +23,14 @@ __all__ = ["PostSSH"]
 
 logger = logging.getLogger("ofx")
 
-
 class SSHConnectionError(ConnectionError):
     """SSH connection failed."""
-
 
 class SSHAuthError(AuthenticationError):
     """SSH authentication failed."""
 
-
 class SSHTimeoutError(PostRunnerError):
     """SSH command timed out."""
-
 
 class SSHCommandError(PostRunnerError):
     """Remote command returned non-zero exit code."""
@@ -43,7 +39,6 @@ class SSHCommandError(PostRunnerError):
         super().__init__(message, exit_code=exit_code, stderr=stderr)
         self.exit_code = exit_code
         self.stderr = stderr
-
 
 @RunnerRegistry.register("ssh")
 class PostSSH(PostRunnerBase):
@@ -114,12 +109,10 @@ class PostSSH(PostRunnerBase):
         self.proxy_command = proxy_command
         self.jump_host = jump_host
 
-        # Paramiko client — lazy-connected
         self._client: paramiko.SSHClient | None = None
         self._sftp: paramiko.SFTPClient | None = None
         self._jump_client: paramiko.SSHClient | None = None
 
-        # Command log
         self._log_file: Path | None = None
         if log_commands:
             if log_path:
@@ -129,7 +122,6 @@ class PostSSH(PostRunnerBase):
                 os.close(fd)
                 self._log_file = Path(log_tmp)
 
-        # Track temp files on remote for cleanup
         self._remote_temp_files: list[str] = []
 
     def __enter__(self):
@@ -139,17 +131,12 @@ class PostSSH(PostRunnerBase):
     def __exit__(self, *exc):
         self.cleanup()
 
-    # -------------------------------------------------------------------------
-    # Connection Management
-    # -------------------------------------------------------------------------
-
     def _connect(self) -> paramiko.SSHClient:
         """Establish SSH connection if not already connected."""
         if self._client is not None:
             transport = self._client.get_transport()
             if transport is not None and transport.is_active():
                 return self._client
-            # Stale connection — reconnect
             self._close_client()
 
         client = paramiko.SSHClient()
@@ -166,7 +153,6 @@ class PostSSH(PostRunnerBase):
             "look_for_keys": False,
         }
 
-        # Auth
         if self.identity_file:
             try:
                 pkey = self._load_key(self.identity_file)
@@ -183,7 +169,6 @@ class PostSSH(PostRunnerBase):
         if self.identity_file and self.password:
             connect_kwargs["password"] = self.password
 
-        # Proxy/jump host
         sock = self._create_proxy_sock()
         if sock:
             connect_kwargs["sock"] = sock
@@ -258,7 +243,6 @@ class PostSSH(PostRunnerBase):
             return paramiko.ProxyCommand(self.proxy_command)
 
         if self.jump_host:
-            # Parse jump_host: user@host:port or host:port or host
             jh = self.jump_host
             jump_user = self.user
             jump_port = 22
@@ -270,7 +254,6 @@ class PostSSH(PostRunnerBase):
                     jump_port = int(port_str)
             jump_host = jh
 
-            # Connect to jump host
             jump_client = paramiko.SSHClient()
             jump_client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             jump_kwargs: dict = {
@@ -307,10 +290,6 @@ class PostSSH(PostRunnerBase):
                 raise
 
         return None
-
-    # -------------------------------------------------------------------------
-    # Command Execution
-    # -------------------------------------------------------------------------
 
     def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a command over SSH with retry logic.
@@ -415,13 +394,11 @@ class PostSSH(PostRunnerBase):
 
         script_content = f"#!/bin/bash\n{command}\n"
 
-        # Upload script via SFTP (no shell escaping needed)
         sftp = self._get_sftp()
         with sftp.open(remote_tmp, "w") as f:
             f.write(script_content)
         sftp.chmod(remote_tmp, 0o700)
 
-        # Execute and cleanup
         wrapper = f"{remote_tmp}; _rc=$?; rm -f {remote_tmp}; exit $_rc"
         try:
             return self._run_direct(wrapper, timeout)
@@ -466,7 +443,6 @@ class PostSSH(PostRunnerBase):
         wrapped = f"({command}) > {remote_out} 2>&1; echo $?"
         self._run_direct(wrapped, timeout)
 
-        # Download via SFTP
         fd, local_tmp = tempfile.mkstemp(prefix=".tmp_dl_")
         os.close(fd)
         try:
@@ -483,10 +459,6 @@ class PostSSH(PostRunnerBase):
                 logger.debug("Failed to remove remote output file: %s", e)
 
         return output
-
-    # -------------------------------------------------------------------------
-    # File Transfer (SFTP)
-    # -------------------------------------------------------------------------
 
     def _sftp_with_retry(
         self, operation: str, sftp_fn: str, src: str, dst: str
@@ -559,13 +531,8 @@ class PostSSH(PostRunnerBase):
         try:
             self._sftp_with_retry("DOWNLOAD", "get", remote_path, local_path)
         except Exception:
-            # Remove partial file left by a failed transfer
             remove_file(local_path)
             raise
-
-    # -------------------------------------------------------------------------
-    # Interactive Shell
-    # -------------------------------------------------------------------------
 
     def supports_interactive(self) -> bool:
         return True
@@ -588,25 +555,18 @@ class PostSSH(PostRunnerBase):
         cmd.append(target)
         subprocess.run(cmd, check=False)
 
-    # -------------------------------------------------------------------------
-    # Logging
-    # -------------------------------------------------------------------------
-
     @staticmethod
     def _sanitize_for_log(text: str) -> str:
         """Redact common credential patterns from text before logging."""
         import re
 
-        # URL credentials: https://user:pass@host
         text = re.sub(r"(https?://[^:]+:)[^\s@]+(@)", r"\1***\2", text)
-        # Key=value patterns: password=secret, token=abc, key=xyz
         text = re.sub(
             r"((?:password|passwd|token|secret|api_key|apikey|auth|credential|jwt)=)[^\s&\"']+",
             r"\1***",
             text,
             flags=re.IGNORECASE,
         )
-        # Flag patterns: --password secret, --token secret (only for known flags)
         text = re.sub(
             r"(--(?:password|passwd|token|secret|api-key)\s+)\S+",
             r"\1***",
@@ -637,10 +597,6 @@ class PostSSH(PostRunnerBase):
                 f.write(entry)
         except OSError as e:
             logger.warning("Failed to write command log: %s", e)
-
-    # -------------------------------------------------------------------------
-    # Cleanup
-    # -------------------------------------------------------------------------
 
     def cleanup(self) -> None:
         """Clean up remote temp files and close connection."""

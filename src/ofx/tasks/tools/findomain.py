@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Subdomain
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("findomain")
 class FindomainTask(Task):
     name = "findomain"

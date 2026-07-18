@@ -8,13 +8,11 @@ from typing import Any
 
 __all__ = ["find_minidumps", "list_browser_profiles", "load_json_lines"]
 
-
 def find_minidumps(root: str | Path) -> list[Path]:
     base = Path(root).expanduser().resolve()
     if not base.exists():
         return []
     return sorted(base.rglob("*.dmp"))
-
 
 def list_browser_profiles(root: str | Path) -> list[Path]:
     base = Path(root).expanduser().resolve()
@@ -30,7 +28,6 @@ def list_browser_profiles(root: str | Path) -> list[Path]:
     for pattern in patterns:
         hits.extend(base.glob(pattern))
     return sorted(set(hits))
-
 
 def load_json_lines(path: str | Path) -> list[dict[str, Any]]:
     file_path = Path(path).expanduser().resolve()

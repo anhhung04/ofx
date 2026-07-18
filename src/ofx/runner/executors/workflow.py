@@ -28,7 +28,6 @@ _INPUT_TYPE_MAP: dict[str, type[Any] | tuple[type[Any], ...]] = {
     "object": dict,
 }
 
-
 class WorkflowExecutor(Executor):
     @staticmethod
     def _activate_time_window(

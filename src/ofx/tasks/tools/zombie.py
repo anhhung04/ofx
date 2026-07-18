@@ -27,7 +27,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("zombie")
 class ZombieTask(Task):
     name = "zombie"
@@ -124,8 +123,6 @@ class ZombieTask(Task):
 
         return " ".join(parts), output_file
 
-    # zombie JSON output: {"host":"1.1.1.1","port":22,"service":"ssh","user":"root","password":"toor","status":"success"}
-    # Also supports: string format "service://user:password@host:port"
     _STRING_RE = re.compile(
         r"(?P<service>\w+)://(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)"
     )
@@ -142,7 +139,6 @@ class ZombieTask(Task):
         if not raw:
             return results
 
-        # Try full JSON array/object first.
         json_output = self._read_json_output(raw)
         if isinstance(json_output, list):
             for entry in json_output:
@@ -156,13 +152,11 @@ class ZombieTask(Task):
             acct = self._parse_json_entry(json_output)
             return [acct] if acct else []
 
-        # Fall back to line-by-line
         for line in raw.splitlines():
             line = line.strip()
             if not line:
                 continue
 
-            # Try JSON line
             if line.startswith("{"):
                 entry = self._parse_json_line(line)
                 if entry is not None:
@@ -171,7 +165,6 @@ class ZombieTask(Task):
                         results.append(acct)
                     continue
 
-            # Try string format
             m = self._STRING_RE.search(line)
             if m:
                 results.append(
@@ -198,7 +191,6 @@ class ZombieTask(Task):
         if not host or not user:
             return None
 
-        # Only include successful results
         if status and status.lower() not in ("success", "ok", ""):
             return None
 

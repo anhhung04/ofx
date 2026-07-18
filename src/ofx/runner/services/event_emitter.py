@@ -13,7 +13,6 @@ from ofx.runner.logging import LogContext
 if TYPE_CHECKING:
     from ofx.runner.runner import Runner
 
-
 class EventEmitter:
     """Best-effort NDJSON event emitter for runner lifecycle events."""
 

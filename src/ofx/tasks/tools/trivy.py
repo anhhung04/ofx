@@ -16,7 +16,6 @@ _SEVERITY_MAP = {
     "unknown": Severity.UNKNOWN,
 }
 
-
 @TaskRegistry.register("trivy")
 class TrivyTask(Task):
     name = "trivy"

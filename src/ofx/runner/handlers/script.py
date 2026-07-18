@@ -8,7 +8,6 @@ from ofx.runner.context import context_copy
 from ofx.runner.handlers.registry import registry
 from ofx.runner.run_defaults import resolve_model_shell
 
-
 @registry.register(RunType.SCRIPT, RunType.SCRIPT_FILE)
 def create_runner(step_runner):
     """Create a ScriptRunner for inline and file-backed Python steps."""

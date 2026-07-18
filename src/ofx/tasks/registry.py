@@ -19,14 +19,11 @@ logger = logging.getLogger(__name__)
 
 TASK_TOOLS_PACKAGE = "ofx.tasks.tools"
 
-
 class TaskRegistry:
     """Central registry of available task wrappers."""
 
     _tasks: dict[str, type[Task]] = {}
     _lock = threading.Lock()
-
-    # ── Registration ───────────────────────────────────────────────
 
     @classmethod
     def register(cls, name: str) -> Callable[[type[Task]], type[Task]]:
@@ -48,8 +45,6 @@ class TaskRegistry:
             return task_cls
 
         return decorator
-
-    # ── Lookup ─────────────────────────────────────────────────────
 
     @classmethod
     def get(cls, name: str) -> type[Task] | None:
@@ -73,8 +68,6 @@ class TaskRegistry:
         """Return tasks whose category starts with *category*."""
         cls._ensure_loaded()
         return cls._category_tasks(category)
-
-    # ── Internals ──────────────────────────────────────────────────
 
     _loaded = False
 

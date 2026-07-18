@@ -7,7 +7,6 @@ import time
 
 __all__ = ["jitter_delay", "sleep_with_jitter"]
 
-
 def jitter_delay(
     base_seconds: float,
     jitter_pct: float = 0.2,
@@ -28,7 +27,6 @@ def jitter_delay(
     delta = base * spread
     _rng = rng or random.SystemRandom()
     return max(0.0, _rng.uniform(base - delta, base + delta))
-
 
 def sleep_with_jitter(base_seconds: float, jitter_pct: float = 0.2) -> float:
     """Sleep for a jittered interval and return the actual delay."""

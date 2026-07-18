@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("subzy")
 class SubzyTask(Task):
     name = "subzy"
@@ -34,7 +33,6 @@ class SubzyTask(Task):
     def _output_suffix(self) -> str:
         return ".txt"
 
-    # [VULNERABLE] subdomain.example.com - Service: GitHub Pages - ...
     _VULN_RE = re.compile(
         r"\[VULNERABLE\]\s+(\S+)\s*-\s*(?:Service:\s*)?(.+)", re.IGNORECASE
     )

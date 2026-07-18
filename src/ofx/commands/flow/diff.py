@@ -9,7 +9,6 @@ from ofx.commands.flow.info import _find_workflow_fuzzy
 from ofx.runner.step_descriptors import step_type_label
 from ofx.settings import get_console
 
-
 def show_diff(name_a: str, name_b: str) -> None:
     """Compare two workflows and display structural differences."""
     console = get_console()
@@ -30,7 +29,6 @@ def show_diff(name_a: str, name_b: str) -> None:
 
     has_diff = False
 
-    # ── Overview ──
     overview = Table(
         title=f"Diff: {wf_a.name} ↔ {wf_b.name}",
         title_style="bold",
@@ -69,7 +67,6 @@ def show_diff(name_a: str, name_b: str) -> None:
     console.print(overview)
     console.print()
 
-    # ── Tags diff ──
     tags_a = {tag.lower() for tag in wf_a.tags}
     tags_b = {tag.lower() for tag in wf_b.tags}
     added_tags = sorted(tags_b - tags_a)
@@ -84,7 +81,6 @@ def show_diff(name_a: str, name_b: str) -> None:
         console.print(f"[bold]Tags:[/] {' '.join(tag_parts)}")
         console.print()
 
-    # ── Jobs diff ──
     jobs_a = set(wf_a.jobs.keys())
     jobs_b = set(wf_b.jobs.keys())
     added_jobs = sorted(jobs_b - jobs_a)
@@ -110,7 +106,6 @@ def show_diff(name_a: str, name_b: str) -> None:
         job_b = wf_b.jobs[jid]
         changes: list[str] = []
 
-        # Compare job fields
         if job_a.name != job_b.name:
             changes.append(f"name: {job_a.name} → {job_b.name}")
         needs_a = sorted(
@@ -136,7 +131,6 @@ def show_diff(name_a: str, name_b: str) -> None:
             for c in changes:
                 job_branch.add(f"[dim]{c}[/]")
 
-            # Step-level diff
             steps_a = {s.name: s for s in job_a.steps}
             steps_b = {s.name: s for s in job_b.steps}
             step_names_a = set(steps_a.keys())
@@ -177,7 +171,6 @@ def show_diff(name_a: str, name_b: str) -> None:
     console.print(tree)
     console.print()
 
-    # ── Env diff ──
     env_rows: list[tuple[str, str, str]] = []
     for key in sorted(set(wf_a.env) | set(wf_b.env)):
         if key not in wf_a.env:
@@ -203,7 +196,6 @@ def show_diff(name_a: str, name_b: str) -> None:
         console.print(env_table)
         console.print()
 
-    # ── Tools diff ──
     tools_a = {k: str(v) for k, v in wf_a.tools.items()}
     tools_b = {k: str(v) for k, v in wf_b.tools.items()}
     tool_rows: list[tuple[str, str, str]] = []

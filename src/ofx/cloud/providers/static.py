@@ -14,7 +14,6 @@ from ofx.models.cloud import CloudConfig
 
 logger = logging.getLogger("ofx")
 
-
 @CloudProviderRegistry.register("static")
 class StaticProvider(CloudProvider):
     """Provider for pre-existing VPS instances.

@@ -7,7 +7,6 @@ from pathlib import Path
 
 __all__ = ["archive_path", "split_file"]
 
-
 def archive_path(
     src: str | Path, *, output: str | Path | None = None, fmt: str = "zip"
 ) -> Path:
@@ -18,7 +17,6 @@ def archive_path(
     archive_base = str(base_name)
     archive = shutil.make_archive(archive_base, fmt, root_dir=src_path)
     return Path(archive)
-
 
 def split_file(
     path: str | Path, *, chunk_mb: int, output_dir: str | Path | None = None

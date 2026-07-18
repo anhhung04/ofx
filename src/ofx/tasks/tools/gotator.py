@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Subdomain
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("gotator")
 class GotatorTask(Task):
     name = "gotator"
@@ -44,7 +43,6 @@ class GotatorTask(Task):
         """
         parts: list[str] = [self.cmd]
 
-        # Collect extra_flags but allow kwargs to override depth/numbers
         depth_override = kwargs.get("depth")
         numbers_override = kwargs.get("numbers")
 

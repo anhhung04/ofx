@@ -12,10 +12,6 @@ __all__ = [
     "detect_ofx_imports",
 ]
 
-# ---------------------------------------------------------------------------
-# Known top-level ofx.api modules — derived from ofx/api/__init__.py __all__
-# ---------------------------------------------------------------------------
-
 KNOWN_API_MODULES: frozenset[str] = frozenset(
     {
         "ad",
@@ -48,15 +44,8 @@ KNOWN_API_MODULES: frozenset[str] = frozenset(
     }
 )
 
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
 class BundleError(Exception):
     """Base exception for all bundle operations."""
-
 
 class AnalysisError(BundleError):
     """Raised when AST parsing or module analysis fails."""
@@ -64,12 +53,6 @@ class AnalysisError(BundleError):
     def __init__(self, message: str, *, source: str | None = None) -> None:
         self.source = source
         super().__init__(message)
-
-
-# ---------------------------------------------------------------------------
-# AST helpers
-# ---------------------------------------------------------------------------
-
 
 def _top_module_from_dotted(dotted: str) -> str | None:
     """Return the top-level ofx.api submodule name from a dotted import path.
@@ -90,14 +73,11 @@ def _top_module_from_dotted(dotted: str) -> str | None:
         return None
     return rest.split(".")[0]
 
-
 def _modules_from_node(node: ast.AST) -> set[str]:
     """Return ofx.api top-level module names referenced in a single AST node."""
     found: set[str] = set()
 
     if isinstance(node, ast.Import):
-        # import ofx.api.opsec
-        # import ofx.api.opsec.proxy
         for alias in node.names:
             top = _top_module_from_dotted(alias.name)
             if top:
@@ -107,24 +87,15 @@ def _modules_from_node(node: ast.AST) -> set[str]:
         module = node.module or ""
 
         if module == "ofx.api":
-            # from ofx.api import opsec, c2, ad
             for alias in node.names:
                 found.add(alias.name)
 
         elif module.startswith("ofx.api."):
-            # from ofx.api.opsec import clean_history_commands
-            # from ofx.api.opsec.cleanup import clean_history_commands
             top = _top_module_from_dotted(module)
             if top:
                 found.add(top)
 
     return found
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 
 def detect_ofx_imports(
     script: str,
@@ -157,7 +128,6 @@ def detect_ofx_imports(
     Raises:
         AnalysisError: If *script* cannot be parsed as valid Python.
     """
-    # Parse
     try:
         tree = ast.parse(script, filename=source_name)
     except SyntaxError as exc:
@@ -166,14 +136,12 @@ def detect_ofx_imports(
             source=source_name,
         ) from exc
 
-    # Walk AST collecting all references
     found: set[str] = set()
     for node in ast.walk(tree):
         found |= _modules_from_node(node)
 
     validated = found & KNOWN_API_MODULES
 
-    # Merge extra_modules
     if extra_modules:
         for name in extra_modules:
             if name in KNOWN_API_MODULES:

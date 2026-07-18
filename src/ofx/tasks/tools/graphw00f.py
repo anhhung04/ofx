@@ -11,7 +11,6 @@ from ofx.tasks.registry import TaskRegistry
 
 _ENGINE_RE = re.compile(r"(?:is\s+|Detected:\s*)(\w[\w\s.-]*\w)", re.IGNORECASE)
 
-
 @TaskRegistry.register("graphw00f")
 class Graphw00fTask(Task):
     name = "graphw00f"
@@ -50,7 +49,6 @@ class Graphw00fTask(Task):
             if not line:
                 continue
 
-            # Detect target URL echoed in output
             if not target and ("http://" in line or "https://" in line):
                 for token in line.split():
                     if token.startswith("http://") or token.startswith("https://"):

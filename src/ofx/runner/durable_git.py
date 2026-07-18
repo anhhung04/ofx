@@ -14,7 +14,6 @@ logger = logging.getLogger(settings.app_branding)
 
 _GIT_TIMEOUT_SECONDS = 10
 
-
 async def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
     def _run_sync() -> tuple[int, str, str]:
         try:
@@ -51,11 +50,9 @@ async def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
     return await asyncio.to_thread(_run_sync)
 
-
 async def is_git_repo(path: Path) -> bool:
     rc, _, _ = await _run_git(["rev-parse", "--is-inside-work-tree"], path)
     return rc == 0
-
 
 async def auto_commit(output_path: Path, message: str | None = None) -> bool:
     if not output_path.is_dir():
@@ -86,7 +83,6 @@ async def auto_commit(output_path: Path, message: str | None = None) -> bool:
     logger.info("auto-commit: committed checkpoint data in %s", output_path)
     return True
 
-
 async def auto_push(output_path: Path) -> bool:
     if not output_path.is_dir():
         return False
@@ -113,7 +109,6 @@ async def auto_push(output_path: Path) -> bool:
     logger.info("auto-push: pushed to %s/%s", remote, branch)
     return True
 
-
 async def commit_and_push(
     output_path: Path,
     *,
@@ -133,7 +128,6 @@ async def commit_and_push(
             await auto_push(output_path)
     except Exception as exc:
         logger.warning("auto-commit/push failed: %s", exc)
-
 
 __all__ = [
     "auto_commit",

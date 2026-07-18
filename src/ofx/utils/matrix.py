@@ -2,14 +2,12 @@
 
 from ofx.models.job import Job, MatrixStrategy
 
-
 def expand_jobs(jobs: dict[str, Job]) -> dict[str, Job]:
     """Process jobs, keeping matrix jobs as single units for MatrixJobRunner to handle."""
     processed_jobs: dict[str, Job] = {}
 
     for job_id, job in jobs.items():
         if job.strategy and job.strategy.matrix:
-            # Keep matrix jobs as single units, MatrixJobRunner will expand internally
             processed_job = job.model_copy(deep=True)
             processed_job.jid = job_id
             processed_job.matrix_values = {}

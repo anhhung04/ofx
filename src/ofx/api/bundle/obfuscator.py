@@ -28,21 +28,8 @@ from .analyzer import BundleError
 
 __all__ = ["ObfuscationError", "obfuscate_bootstrap", "obfuscate_sources"]
 
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
 class ObfuscationError(BundleError):
     """Raised when the obfuscation step fails."""
-
-
-# ---------------------------------------------------------------------------
-# Loader template
-#
-# Intentionally kept short and variable-name-free of obvious identifiers.
-# Use !r / hex strings so no bytes need escaping in the rendered output.
-# ---------------------------------------------------------------------------
 
 _LOADER_TEMPLATE = """\
 import marshal as _m
@@ -52,22 +39,12 @@ _d=bytes(a^_k[i%len(_k)]for i,a in enumerate(_e))
 exec(_m.loads(_d))
 """
 
-# Per-source-file encrypted stub: compile → marshal → XOR → hex.
-# Same scheme as the bootstrap loader, applied per module.  exec() at module
-# scope without an explicit globals dict uses the calling frame's globals,
-# which is the module's own __dict__ — so all defs/assignments land in the
-# right place and imports work normally.
 _SOURCE_STUB_TEMPLATE = """\
 import marshal as _m
 _k=bytes.fromhex({key_hex!r})
 _e=bytes.fromhex({enc_hex!r})
 exec(_m.loads(bytes(a^_k[i%len(_k)]for i,a in enumerate(_e))))
 """
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 
 def _strip_code(code, *, _generic: str = "<module>") -> types.CodeType:
     """Recursively strip identifying metadata from a code object.
@@ -82,10 +59,8 @@ def _strip_code(code, *, _generic: str = "<module>") -> types.CodeType:
     new_consts: list[object] = []
     for i, c in enumerate(code.co_consts):
         if hasattr(c, "co_code"):
-            # Nested code object (function/class body) — recurse
             new_consts.append(_strip_code(c, _generic=_generic))
         elif i == 0 and isinstance(c, str):
-            # First const is the docstring by convention — strip it
             new_consts.append(None)
         else:
             new_consts.append(c)
@@ -94,12 +69,6 @@ def _strip_code(code, *, _generic: str = "<module>") -> types.CodeType:
         co_filename=_generic,
         co_consts=tuple(new_consts),
     )
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 
 def obfuscate_sources(files: dict[str, bytes]) -> dict[str, bytes]:
     """Compile every ``.py`` file in *files* to marshalled, XOR-encrypted bytecode.
@@ -146,7 +115,6 @@ def obfuscate_sources(files: dict[str, bytes]) -> dict[str, bytes]:
         stub = _SOURCE_STUB_TEMPLATE.format(key_hex=key.hex(), enc_hex=enc.hex())
         result[path] = stub.encode()
     return result
-
 
 def obfuscate_bootstrap(bootstrap: str, *, key: bytes | None = None) -> str:
     """Compile *bootstrap* to bytecode, XOR-encrypt it, and return a loader.

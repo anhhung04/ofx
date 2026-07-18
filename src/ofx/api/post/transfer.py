@@ -4,7 +4,6 @@ from __future__ import annotations
 
 __all__ = ["build_download_command"]
 
-
 def build_download_command(url: str, dest: str, platform: str = "unix") -> str:
     """Build a best-effort download command for a target platform.
 

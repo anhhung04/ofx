@@ -14,9 +14,6 @@ from ofx.tasks.output_types import (
     Tag,
 )
 
-# ── Nmap Parser ────────────────────────────────────────────────────────────
-
-
 class TestNmapParser:
     def _make_nmap_xml(self, ports: list[dict]) -> str:
         root = ET.Element("nmaprun")
@@ -102,13 +99,6 @@ class TestNmapParser:
         results = task.parse_output("<invalid>", "")
         assert results == []
 
-
-# ── Httpx Parser ───────────────────────────────────────────────────────────
-
-
-# ── Naabu Parser ──────────────────────────────────────────────────────────
-
-
 class TestNaabuParser:
     def test_parse_jsonl(self):
         lines = [
@@ -132,10 +122,6 @@ class TestNaabuParser:
         assert "-silent" in cmd
         assert "-p 80,443" in cmd
         assert "-rate 1000" in cmd
-
-
-# ── Masscan Parser ────────────────────────────────────────────────────
-
 
 class TestMasscanParser:
     def test_masscan_metadata(self):
@@ -227,13 +213,6 @@ class TestMasscanParser:
         if out_file and out_file.exists():
             out_file.unlink()
 
-
-# ── Assetfinder Parser ───────────────────────────────────────────────
-
-
-# ── Rustscan Parser ───────────────────────────────────────────────────────
-
-
 class TestRustscanParser:
     def test_rustscan_metadata(self):
         task = TaskRegistry.create("rustscan")
@@ -283,13 +262,6 @@ class TestRustscanParser:
         assert result[0].ip == "192.168.1.1"
         assert task.parse_line("") == []
         assert task.parse_line("some random text") == []
-
-
-# ── Gowitness Parser ──────────────────────────────────────────────────────
-
-
-# ── Fping Parser ──────────────────────────────────────────────────────
-
 
 class TestFpingParser:
     def test_fping_metadata(self):
@@ -341,10 +313,6 @@ class TestFpingParser:
         assert "-c 3" in cmd
         assert "10.0.0.0/24" in cmd
         assert out_file is None
-
-
-# ── Cariddi Parser ────────────────────────────────────────────────────
-
 
 class TestNervaParser:
     def test_nerva_metadata(self):
@@ -449,7 +417,7 @@ class TestNervaParser:
             )
         )
         results = task.parse_output("", "", output_file=f)
-        assert len(results) == 2  # Port + Tag
+        assert len(results) == 2
         assert results[0].port == 3306
         assert results[1].name == "MySQL"
 
@@ -460,13 +428,6 @@ class TestNervaParser:
     def test_nerva_streaming(self):
         task = TaskRegistry.create("nerva")
         assert task.supports_streaming is True
-
-
-# ── Brutus Parser ─────────────────────────────────────────────────────────
-
-
-# ── Mapcidr Parser ────────────────────────────────────────────────────
-
 
 class TestMapcidrParser:
     def test_mapcidr_metadata(self):
@@ -502,6 +463,3 @@ class TestMapcidrParser:
         task = TaskRegistry.create("mapcidr")
         assert task.parse_line("") == []
         assert task.parse_line("# comment") == []
-
-
-# ── Fping Parser ──────────────────────────────────────────────────────

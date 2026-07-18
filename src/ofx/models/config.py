@@ -7,7 +7,6 @@ from pydantic import Field
 from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL, DEFAULT_WORKFLOWS_DIR
 
-
 class RunConfig(OFXBaseModel):
     """Shell and working directory configuration."""
 
@@ -19,7 +18,6 @@ class RunConfig(OFXBaseModel):
         default_factory=Path.cwd,
         description="Working directory for the workflow execution",
     )
-
 
 class DurableRunConfig(OFXBaseModel):
     """Durable execution configuration for workflows."""
@@ -50,7 +48,6 @@ class DurableRunConfig(OFXBaseModel):
         description="Auto-push committed checkpoint data to git remote (implies auto-commit)",
         alias="auto-push",
     )
-
 
 class DefaultConfig(OFXBaseModel):
     """Default configuration for workflows."""

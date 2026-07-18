@@ -25,22 +25,17 @@ from .jitter import jitter_delay, sleep_with_jitter
 from .payload import obfuscate_cmd, obfuscate_payload
 
 __all__ = [
-    # bypass
     "amsi_bypass",
     "etw_bypass",
     "defender_exclusion_command",
     "disable_defender_realtime",
     "scriptblock_logging_disable",
     "constrained_language_check",
-    # chunking
     "chunk_string",
-    # encoding
     "rot13",
     "xor_bytes",
-    # jitter
     "jitter_delay",
     "sleep_with_jitter",
-    # payload
     "obfuscate_payload",
     "obfuscate_cmd",
 ]

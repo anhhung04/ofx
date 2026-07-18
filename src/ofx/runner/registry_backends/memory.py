@@ -7,10 +7,8 @@ from ofx.runner.registry_adapter import RegistryAdapter
 
 _DEFAULT_MAX_SIZE = 100_000
 
-
 class RegistryOverflowError(RuntimeError):
     """Raised when the in-memory registry exceeds its configured size limit."""
-
 
 class MemoryJobRegistry(RegistryAdapter):
     """In-memory implementation of job registry

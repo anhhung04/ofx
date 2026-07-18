@@ -34,7 +34,6 @@ fleet_app = typer.Typer(
     no_args_is_help=True, help="Manage cloud fleet (multiple instances)"
 )
 
-
 async def _refresh_sessions(mgr, sessions: list):
     """Best-effort status refresh; keep original session on failure."""
     refreshed = []
@@ -46,13 +45,11 @@ async def _refresh_sessions(mgr, sessions: list):
             refreshed.append(s)
     return refreshed
 
-
 def _get_session_store_cls():
     session_store_cls = SessionStore
     if session_store_cls is None:
         from ofx.cloud.sessions import SessionStore as session_store_cls
     return session_store_cls
-
 
 def _get_session_manager_cls():
     session_manager_cls = SessionManager
@@ -60,13 +57,11 @@ def _get_session_manager_cls():
         from ofx.cloud.sessions import SessionManager as session_manager_cls
     return session_manager_cls
 
-
 def _get_session_target_cls():
     session_target_cls = SessionTarget
     if session_target_cls is None:
         from ofx.cloud.sessions import SessionTarget as session_target_cls
     return session_target_cls
-
 
 def _get_fleet_run_deps():
     key_value_parser = parse_key_value_pairs
@@ -97,7 +92,6 @@ def _get_fleet_run_deps():
         fleet_distributor_cls,
     )
 
-
 def _get_fleet_create_deps():
     provider_registry = CloudProviderRegistry
     if provider_registry is None:
@@ -115,7 +109,6 @@ def _get_fleet_create_deps():
 
     return provider_registry, profile_manager_getter, cloud_config_cls
 
-
 def _get_fleet_temp_dir_deps():
     temp_dir = TEMP_DIR
     ensure_dir_fn = ensure_dir
@@ -124,14 +117,12 @@ def _get_fleet_temp_dir_deps():
 
     return temp_dir, ensure_dir_fn
 
-
 def _get_encrypt_results_fn():
     encrypt_results_fn = encrypt_results
     if encrypt_results_fn is None:
         from ofx.cloud.sessions.encryption import encrypt_results as encrypt_results_fn
 
     return encrypt_results_fn
-
 
 def _apply_fleet_profile_defaults(
     profile: str,
@@ -155,25 +146,20 @@ def _apply_fleet_profile_defaults(
         image or cfg.image or "",
     )
 
-
 def _fail_missing_fleet_sessions(console, fleet_group_id: str) -> None:
     console.print(f"[red]No sessions found for fleet group '{fleet_group_id}'[/red]")
     raise typer.Exit(code=1)
 
-
 def _print_dim_empty(console, message: str) -> None:
     console.print(f"[dim]{message}[/dim]")
-
 
 def _fail_red(console, message: str, code: int = 1) -> None:
     console.print(f"[red]{message}[/red]")
     raise typer.Exit(code=code)
 
-
 def _print_fleet_followups(console, fleet_group_id: str) -> None:
     console.print(f"[dim]Fleet status:  ofx cloud fleet status {fleet_group_id}[/dim]")
     console.print(f"[dim]Fleet results: ofx cloud fleet results {fleet_group_id}[/dim]")
-
 
 def _resolve_fleet_project(project_getter) -> str:
     fleet_project = project_getter()
@@ -183,20 +169,17 @@ def _resolve_fleet_project(project_getter) -> str:
     active_path = ProjectManager.get_active_path()
     return active_path.name if active_path else ""
 
-
 def _load_fleet_sessions(fleet_group_id: str):
     session_store_cls = _get_session_store_cls()
     store = session_store_cls()
     sessions = store.list_by_fleet_group(fleet_group_id)
     return store, sessions
 
-
 def _load_fleet_sessions_or_exit(console, fleet_group_id: str):
     store, sessions = _load_fleet_sessions(fleet_group_id)
     if not sessions:
         _fail_missing_fleet_sessions(console, fleet_group_id)
     return store, sessions
-
 
 def _refresh_fleet_sessions(console, store, sessions: list, status_message: str):
     session_manager_cls = _get_session_manager_cls()
@@ -205,13 +188,11 @@ def _refresh_fleet_sessions(console, store, sessions: list, status_message: str)
         sessions = asyncio.run(_refresh_sessions(mgr, sessions))
     return mgr, sessions
 
-
 def _fleet_results_summary(completed: list, failed: list, running: list, fetchable: list) -> str:
     return (
         f"  Completed: {len(completed)}  Failed: {len(failed)}  "
         f"Running: {len(running)}  Fetchable: {len(fetchable)}"
     )
-
 
 def _print_fleet_fetch_summary(console, fetched: int, total: int, agg_dir: Path, enc_path: Path | None = None) -> None:
     if total == 0:
@@ -223,42 +204,32 @@ def _print_fleet_fetch_summary(console, fetched: int, total: int, agg_dir: Path,
     if enc_path is not None:
         console.print(f"[green]Encrypted → {enc_path}[/green]")
 
-
 def _print_fleet_cancel_summary(console, canceled: int, total: int) -> None:
     console.print(f"[yellow]Canceled {canceled}/{total} sessions.[/yellow]")
-
 
 def _print_destroyed_instances(console, destroyed: int, total: int) -> None:
     console.print(f"[green]Destroyed {destroyed}/{total} instances.[/green]")
 
-
 def _print_fleet_ready(console, total: int) -> None:
     console.print(f"[green]Fleet of {total} instances ready.[/green]")
-
 
 def _print_created_instance(console, instance_id: str) -> None:
     console.print(f"  [dim]Created {instance_id}[/dim]")
 
-
 def _print_create_failure(console, instance_name: str, exc: Exception) -> None:
     console.print(f"  [red]Failed to create {instance_name}: {exc}[/red]")
-
 
 def _print_ready_instance(console, instance_id: str, ip: str | None) -> None:
     console.print(f"  [green]{instance_id}[/green] → {ip or 'no IP'}")
 
-
 def _print_create_wait_warning(console, instance_id: str, exc: Exception) -> None:
     console.print(f"  [yellow]{instance_id}: {exc}[/yellow]")
-
 
 def _print_waiting_for_instances(console, count: int) -> None:
     console.print(f"[dim]Waiting for {count} instances...[/dim]")
 
-
 def _print_destroy_target_heading(console, total: int) -> None:
     console.print(f"Found {total} instances to destroy:")
-
 
 def _select_destroy_targets(all_instances: list, tag: str, prefix: str) -> list:
     targets = []
@@ -269,26 +240,21 @@ def _select_destroy_targets(all_instances: list, tag: str, prefix: str) -> list:
             targets.append(inst)
     return targets
 
-
 def _print_destroy_targets(console, targets: list) -> None:
     _print_destroy_target_heading(console, len(targets))
     for inst in targets:
         console.print(f"  {inst.instance_id} ({inst.name}) → {inst.ip or 'no IP'}")
 
-
 def _print_running_session_count(console, count: int, suffix: str) -> None:
     console.print(f"[yellow]{count} session(s) {suffix}[/yellow]")
-
 
 def _fail_no_submitted_sessions(console) -> None:
     console.print("[red]No sessions submitted.[/red]")
     raise typer.Exit(code=1)
 
-
 def _fail_no_instances_created(console) -> None:
     console.print("[red]No instances created.[/red]")
     raise typer.Exit(code=1)
-
 
 def _print_fleet_submission_summary(console, sessions: list, effective_count: int, fleet_group_id: str) -> None:
     console.print()
@@ -300,7 +266,6 @@ def _print_fleet_submission_summary(console, sessions: list, effective_count: in
     )
     console.print()
     _print_fleet_followups(console, fleet_group_id)
-
 
 def _resolve_project_results_dir(fetchable: list, fleet_group_id: str) -> Path | None:
     fleet_proj = next((s.project for s in fetchable if s.project), "")
@@ -318,7 +283,6 @@ def _resolve_project_results_dir(fetchable: list, fleet_group_id: str) -> Path |
 
     return proj_path / "evidence" / "sessions" / f"fleet-{fleet_group_id}"
 
-
 def _resolve_fleet_results_dir(output: str, fetchable: list, fleet_group_id: str) -> Path:
     if output:
         return Path(output)
@@ -329,7 +293,6 @@ def _resolve_fleet_results_dir(output: str, fetchable: list, fleet_group_id: str
 
     temp_dir, ensure_dir_fn = _get_fleet_temp_dir_deps()
     return ensure_dir_fn(temp_dir) / f"fleet-{fleet_group_id}"
-
 
 async def _create_fleet_instances(
     console,
@@ -360,7 +323,6 @@ async def _create_fleet_instances(
             _print_create_failure(console, instance_name, exc)
     return instances
 
-
 async def _wait_for_fleet_instances(console, cloud, instances: list) -> None:
     for inst in instances:
         try:
@@ -370,7 +332,6 @@ async def _wait_for_fleet_instances(console, cloud, instances: list) -> None:
                 _print_ready_instance(console, refreshed.instance_id, refreshed.ip)
         except (RuntimeError, TimeoutError, OSError) as exc:
             _print_create_wait_warning(console, inst.instance_id, exc)
-
 
 async def _submit_fleet_sessions(
     console,
@@ -428,7 +389,6 @@ async def _submit_fleet_sessions(
             console.print(f"  [red]#{i} failed: {exc}[/red]")
     return sessions
 
-
 def _prepare_fleet_run_targets(
     console,
     distributor,
@@ -459,7 +419,6 @@ def _prepare_fleet_run_targets(
         chunk_paths.append(chunk_file)
 
     return effective_count, chunk_paths, temp_dir
-
 
 @fleet_app.command("create")
 def fleet_create(
@@ -513,12 +472,10 @@ def fleet_create(
     if not instances:
         _fail_no_instances_created(console)
 
-    # Wait for all
     _print_waiting_for_instances(console, len(instances))
     asyncio.run(_wait_for_fleet_instances(console, cloud, instances))
 
     _print_fleet_ready(console, len(instances))
-
 
 @fleet_app.command("run")
 def fleet_run(
@@ -545,7 +502,7 @@ def fleet_run(
     name: Annotated[str, typer.Option("--name", help="Fleet run name")] = "",
     inputs: Annotated[
         list[str], typer.Option("--input", "-i", help="Input key=value pairs")
-    ] = [],  # noqa: B006
+    ] = [],
     target_var: Annotated[
         str,
         typer.Option(
@@ -584,17 +541,15 @@ def fleet_run(
     if not profile:
         _fail_red(console, "Fleet run requires --profile for cloud execution")
 
-    # Parse and distribute targets
     parser = fleet_input_parser_cls()
     target_list = parser.parse(targets) if targets else []
 
     if count == 0:
         if target_list:
-            count = min(len(target_list), 10)  # sensible default cap
+            count = min(len(target_list), 10)
         else:
             count = 1
 
-    # Write per-instance chunk files so sessions receive valid file paths
     distributor = fleet_distributor_cls()
     effective_count, chunk_paths, temp_dir = _prepare_fleet_run_targets(
         console,
@@ -642,7 +597,6 @@ def fleet_run(
                 )
             )
         finally:
-            # Chunk files have been uploaded by the session manager — safe to remove
             if temp_dir:
                 import shutil as _shutil
 
@@ -651,7 +605,6 @@ def fleet_run(
     _print_fleet_submission_summary(
         console, sessions, effective_count, fleet_group_id
     )
-
 
 @fleet_app.command("status")
 def fleet_status(
@@ -672,7 +625,6 @@ def fleet_status(
             console, store, sessions, "Refreshing session statuses..."
         )
 
-    # Summary counts
     status_counts: dict[str, int] = {}
     for s in sessions:
         status_counts[s.status.value] = status_counts.get(s.status.value, 0) + 1
@@ -708,7 +660,6 @@ def fleet_status(
         )
 
     console.print(table)
-
 
 @fleet_app.command("results")
 def fleet_results(
@@ -782,7 +733,6 @@ def fleet_results(
 
     _print_fleet_fetch_summary(console, fetched, len(fetchable), agg_dir, enc_path)
 
-
 @fleet_app.command("cancel")
 def fleet_cancel(
     fleet_group_id: Annotated[str, typer.Argument(help="Fleet group ID")],
@@ -821,7 +771,6 @@ def fleet_cancel(
 
     canceled = asyncio.run(_cancel_all())
     _print_fleet_cancel_summary(console, canceled, len(running))
-
 
 @fleet_app.command("destroy")
 def fleet_destroy(

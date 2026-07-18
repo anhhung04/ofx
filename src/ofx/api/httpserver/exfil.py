@@ -10,7 +10,6 @@ from ofx.api.httpserver.server_base import BaseServerFacade
 
 logger = get_logger()
 
-
 def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
     """Create a request handler with injected upload directory."""
 
@@ -22,7 +21,7 @@ def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
 
         def __init__(self, *args: object, **kwargs: object) -> None:
             self._upload_dir = upload_dir
-            super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+            super().__init__(*args, **kwargs)
 
         def log_message(self, format: str, *args: object) -> None:
             logger.info(
@@ -101,7 +100,6 @@ def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
                 headers = part[:headers_end].decode("utf-8", errors="ignore")
                 content = part[headers_end + 4 :]
 
-                # Check for Content-Disposition header
                 if "Content-Disposition: form-data;" in headers:
                     filename = None
                     for line in headers.split("\r\n"):
@@ -119,7 +117,6 @@ def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
                         self._upload_dir.mkdir(parents=True, exist_ok=True)
                         file_path = self._upload_dir / filename
 
-                        # Prevent directory traversal
                         if ".." in filename or "/" in filename or "\\" in filename:
                             logger.warning(
                                 f"Blocked potential directory traversal: {filename}"
@@ -164,7 +161,6 @@ def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
             """Serve a specific uploaded file."""
             file_path = self._upload_dir / filename
 
-            # Prevent directory traversal
             if ".." in filename or "/" in filename or "\\" in filename:
                 self.send_error(403, "Access denied")
                 return
@@ -191,7 +187,6 @@ def build_exfil_handler(upload_dir: Path) -> type[BaseHTTPRequestHandler]:
 
     return ExfilRequestHandler
 
-
 class ExfilServer(BaseServerFacade):
     """HTTP server for data exfiltration and file collection.
 
@@ -203,8 +198,8 @@ class ExfilServer(BaseServerFacade):
     Example:
         >>> server = ExfilServer(host='0.0.0.0', port=8080, save_dir='/tmp/uploads')
         >>> server.start()
-        >>> # Server is now accepting file uploads at http://0.0.0.0:8080
-        >>> # Files can be listed at http://0.0.0.0:8080/ and downloaded individually
+        >>>
+        >>>
         >>> server.stop()
     """
 
@@ -240,7 +235,6 @@ class ExfilServer(BaseServerFacade):
         self.upload_dir = Path(save_dir) if save_dir else Path("./exfil")
         self._auto_timestamp = auto_timestamp
 
-        # Create upload directory if it doesn't exist
         self.upload_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Upload directory: {self.upload_dir}")
 

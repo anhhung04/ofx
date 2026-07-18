@@ -15,7 +15,6 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "project"
 HELP = "Manage Red Team projects."
 
-
 @app.command()
 def init(
     name: Annotated[str, typer.Argument(help="Project name")],
@@ -38,7 +37,6 @@ def init(
         f"Project '{name}' initialized successfully!",
         details={"Location": base},
     )
-
 
 @app.command()
 def sync(
@@ -95,7 +93,6 @@ def sync(
         details={"Project": project},
     )
 
-
 @app.command(name="import")
 def import_project(
     url: Annotated[str, typer.Argument(help="Git repository URL to clone")],
@@ -121,7 +118,6 @@ def import_project(
         "Project imported successfully!",
         details={"Name": name, "URL": url},
     )
-
 
 @app.command(name="list")
 @app.command(name="ls", hidden=True)
@@ -156,7 +152,7 @@ def list_projects():
     table.add_column("#", style="dim", width=4)
     table.add_column("Project Name", style="cyan")
     table.add_column("Path", style="dim")
-    table.add_column("", width=2)  # active indicator
+    table.add_column("", width=2)
 
     for idx, p in enumerate(projects, 1):
         full_path = ProjectManager._get_default_path() / p
@@ -164,7 +160,6 @@ def list_projects():
         table.add_row(str(idx), p, str(full_path), indicator)
 
     console.print(table)
-
 
 @app.command(name="remove")
 @app.command(name="rm", hidden=True)
@@ -203,7 +198,6 @@ def remove(name: Annotated[str, typer.Argument(help="Project name to delete")]):
             f"Failed to delete project '{name}'",
         )
 
-
 @app.command(name="use")
 def use(
     name: Annotated[
@@ -237,7 +231,6 @@ def use(
     settings.active_project = name
     console.print(f"[green]Active project set to:[/] {name} → {resolved}")
 
-
 @app.command()
 def status(
     name: Annotated[
@@ -269,7 +262,6 @@ def status(
     from rich.panel import Panel
     from rich.text import Text
 
-    # Count files in key directories
     dir_stats: list[tuple[str, int]] = []
     key_dirs = [
         "hosts",
@@ -296,7 +288,6 @@ def status(
             if count > 0:
                 dir_stats.append((d, count))
 
-    # Disk usage
     total_bytes = sum(f.stat().st_size for f in project_path.rglob("*") if f.is_file())
     if total_bytes > 1_048_576:
         size_str = f"{total_bytes / 1_048_576:.1f} MB"
@@ -305,7 +296,6 @@ def status(
     else:
         size_str = f"{total_bytes} B"
 
-    # Git info
     git_info = ""
     try:
         import git as gitlib
@@ -327,7 +317,6 @@ def status(
     except ImportError:
         git_info = "  [dim]Git:[/] [yellow]GitPython not installed[/]"
 
-    # Build display
     lines = [
         f"  [bold]Project:[/] {project_path.name}",
         f"  [dim]Path:[/] {project_path}",
@@ -352,14 +341,12 @@ def status(
     )
     console.print(panel)
 
-
 @app.command(hidden=True)
 def encrypt_filter():
     """Git clean filter: Encrypt stdin to stdout (used by git attributes)"""
     from .encryption import GitFilterHandler
 
     GitFilterHandler.encrypt_stdin_to_stdout()
-
 
 @app.command(hidden=True)
 def decrypt_filter():

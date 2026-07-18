@@ -11,7 +11,6 @@ profile_app = typer.Typer(
     no_args_is_help=True, help="Manage cloud configuration profiles"
 )
 
-
 @profile_app.command("list")
 def profile_list():
     """List all configured cloud profiles."""
@@ -49,7 +48,6 @@ def profile_list():
         )
 
     console.print(table)
-
 
 @profile_app.command("add")
 def profile_add(
@@ -118,7 +116,6 @@ def profile_add(
     if set_default:
         console.print("[dim]Set as default profile.[/dim]")
 
-
 @profile_app.command("remove")
 def profile_remove(
     name: Annotated[str, typer.Argument(help="Profile name to remove")],
@@ -135,7 +132,6 @@ def profile_remove(
     mgr.remove(name)
     console.print(f"[green]Profile '{name}' removed.[/green]")
 
-
 @profile_app.command("default")
 def profile_default(
     name: Annotated[str, typer.Argument(help="Profile name to set as default")],
@@ -151,7 +147,6 @@ def profile_default(
 
     mgr.set_default(name)
     console.print(f"[green]Default profile set to '{name}'.[/green]")
-
 
 @profile_app.command("show")
 def profile_show(

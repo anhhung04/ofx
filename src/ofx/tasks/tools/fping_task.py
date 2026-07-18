@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Ip
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("fping")
 class FpingTask(Task):
     name = "fping"
@@ -20,7 +19,6 @@ class FpingTask(Task):
     install_cmd = "apt install -y fping"
     output_types = [Ip]
 
-    # fping returns 1 when some hosts are unreachable — normal in network recon.
     success_codes = [0, 1]
 
     opts = {
@@ -32,9 +30,9 @@ class FpingTask(Task):
         ),
     }
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = "-f"
-    output_flag = None  # stdout only
+    output_flag = None
     silent_flag = "-q"
     extra_flags = ["-a"]
 
@@ -55,7 +53,6 @@ class FpingTask(Task):
 
         return " ".join(parts), None
 
-    # Match bare IPs or IPs in parentheses
     _IP_RE = re.compile(r"^\(?(\d{1,3}(?:\.\d{1,3}){3})\)?$")
 
     def parse_line(self, line: str) -> list[Ip]:
@@ -67,7 +64,6 @@ class FpingTask(Task):
         if m:
             return [Ip(ip=m.group(1), alive=True)]
 
-        # Also handle plain IPs without regex anchoring issues
         parts = line.split()
         if parts:
             candidate = parts[0].strip("()")

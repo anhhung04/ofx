@@ -24,7 +24,6 @@ Custom delivery adapter::
             self.runner = runner
 
         def deliver(self, bootstrap: str) -> str:
-            # write and execute however you need
             self.runner.run(f"echo '{bootstrap}' > /tmp/t.py && python3 /tmp/t.py")
 
     result  = build_bundle(script)
@@ -58,32 +57,26 @@ from .deliverer import (
 from .obfuscator import ObfuscationError, obfuscate_bootstrap, obfuscate_sources
 
 __all__ = [
-    # Exceptions
     "BundleError",
     "AnalysisError",
     "CollectionError",
     "ObfuscationError",
     "DeliveryError",
-    # Data
     "KNOWN_API_MODULES",
     "BundleResult",
-    # Adapters
     "BundleAdapter",
     "UploadAdapter",
     "HttpAdapter",
     "InlineAdapter",
     "make_adapter",
-    # Pipeline steps
     "detect_ofx_imports",
     "collect_modules",
     "build_bundle",
     "obfuscate_sources",
     "obfuscate_bootstrap",
     "deliver_and_run",
-    # Convenience
     "run_remote",
 ]
-
 
 def run_remote(
     script: str,

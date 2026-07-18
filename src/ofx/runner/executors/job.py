@@ -31,7 +31,7 @@ class JobExecutor(Executor):
         runner.update_env(runner.model.env)
         runner._log_debug(f"Resolved job: {runner.model.model_dump(exclude={'steps'})}")
 
-        workflow_defaults = runner.parent.model.defaults.model_dump()  # type: ignore[union-attr]
+        workflow_defaults = runner.parent.model.defaults.model_dump()
         _merge_overrides(
             workflow_defaults,
             runner.model.defaults.model_dump(exclude_defaults=True),

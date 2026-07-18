@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("john")
 class JohnTask(Task):
     name = "john"
@@ -57,14 +56,11 @@ class JohnTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Hash file is positional
         parts.append(self._q(target))
 
         return " ".join(parts), None
 
-    # user:password  (from --show output)
     _SHOW_RE = re.compile(r"^(\S+?):(.*?)(?:::.*)?$")
-    # N password hashes cracked, N left
     _SUMMARY_RE = re.compile(r"(\d+) password hash(?:es)? cracked")
 
     def parse_output(
@@ -82,7 +78,6 @@ class JohnTask(Task):
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            # Skip summary lines
             if self._SUMMARY_RE.search(line):
                 continue
             if "password hashes cracked" in line or "Loaded" in line:

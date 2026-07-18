@@ -7,7 +7,6 @@ from ofx.runner.context import context_copy
 from ofx.runner.handlers.registry import registry
 from ofx.runner.run_defaults import resolve_model_shell
 
-
 @registry.register(RunType.COMMAND)
 def create_runner(step_runner):
     from ofx.runner.commands.command import Command, CommandRunner

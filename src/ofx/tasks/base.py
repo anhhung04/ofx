@@ -21,10 +21,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from ofx.utils.file_cleanup import remove_file, remove_files
+from ofx.utils.file_cleanup import remove_file
 from ofx.settings import TOOLS_BIN_DIR, TOOLS_DIR
 from ofx.tasks.output_types import OutputType
-
 
 @dataclass
 class OptDef:
@@ -41,7 +40,6 @@ class OptDef:
         if not self.flag or not self.flag.strip():
             raise ValueError("OptDef.flag must be a non-empty string")
 
-
 class Task(ABC):
     """Abstract base class for all security tool wrappers.
 
@@ -49,7 +47,6 @@ class Task(ABC):
     ``parse_output`` (or just ``parse_line``) to integrate a new tool.
     """
 
-    # ── Metadata (override in subclasses) ──────────────────────────
     name: str = ""
     cmd: str = ""
     description: str = ""
@@ -57,41 +54,21 @@ class Task(ABC):
     install_cmd: str = ""
     output_types: list[type[OutputType]] = []
 
-    # ── Option mapping ─────────────────────────────────────────────
     opts: dict[str, OptDef] = {}
     input_flag: str | None = None
     file_flag: str | None = None
     output_flag: str | None = None
 
-    # ── Subcommand ────────────────────────────────────────────────
-    # Inserted after the command binary, before extra_flags.
-    # e.g. ``subcommand = "image"`` → ``trivy image -f json …``
     subcommand: str = ""
 
-    # ── Extra flags (override in subclasses) ─────────────────────
-    # Flags prepended right after the command binary (and subcommand).
     extra_flags: list[str] = []
 
-    # ── Auto-optimized flags ───────────────────────────────────────
-    # Set these to auto-inject machine-friendly output flags.
-    # They are appended to the command automatically.  Set to ``""``
-    # to disable a particular auto-flag.
-    json_flag: str = ""  # e.g. "-json", "--json", "-jsonl"
-    silent_flag: str = ""  # e.g. "-silent", "--silent", "-s"
+    json_flag: str = ""
+    silent_flag: str = ""
 
-    # ── Exit code handling ─────────────────────────────────────────
-    # Exit codes considered successful.  Override in subclasses for tools
-    # that return non-zero on "warnings found" or similar expected states.
     success_codes: list[int] = [0]
 
-    # ── Output export control ──────────────────────────────────────
-    # Set to ``False`` for tools whose output is intermediate data
-    # (e.g. permutation generators) that should not be persisted in
-    # ``<output_path>/scans/``.
     export_output: bool = True
-
-    # ── Instance state (set during build_command) ────────────────
-    _temp_target_files: list[str]
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Ensure mutable class attributes are copied per-subclass."""
@@ -106,9 +83,7 @@ class Task(ABC):
                     setattr(cls, attr, list(inherited))
 
     def __init__(self) -> None:
-        self._temp_target_files: list[str] = []
-
-    # ── Helpers ────────────────────────────────────────────────────
+        pass
 
     @staticmethod
     def _q(value: Any) -> str:
@@ -158,8 +133,6 @@ class Task(ABC):
         remove_file(tmp_path)
         return Path(tmp_path)
 
-    # ── Public API ─────────────────────────────────────────────────
-
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
         """Build the full CLI command string from *target* and keyword options.
 
@@ -177,7 +150,6 @@ class Task(ABC):
         parts.extend(self.extra_flags)
         output_file: Path | None = None
 
-        # Auto-inject optimized flags
         if self.json_flag:
             parts.append(self.json_flag)
         if self.silent_flag:
@@ -185,7 +157,6 @@ class Task(ABC):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Output file for tools that write structured output to a file
         if self.output_flag:
             output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
@@ -195,24 +166,20 @@ class Task(ABC):
         return " ".join(parts), output_file
 
     def _target_parts(self, target: str) -> list[str]:
+        """Resolve target into CLI arguments. Single targets are passed
+        directly via ``input_flag`` or positionally.  Multi-target strings
+        (newline- or comma-separated lists) require a file path — workflows
+        should create one via ``uses: target-file`` before invoking the task.
+        """
         is_target_file = (
             self.file_flag
             and target
             and not target.startswith("http")
             and Path(target).is_file()
         )
-        is_multi_target = bool(target and "," in target and not Path(target).is_file())
 
         if is_target_file and self.file_flag:
             return [self.file_flag, shlex.quote(target)]
-
-        if is_multi_target:
-            target_file = self._write_target_file(target)
-            if self.file_flag:
-                return [self.file_flag, shlex.quote(target_file)]
-            if self.input_flag:
-                return [self.input_flag, shlex.quote(target_file)]
-            return [shlex.quote(target_file)]
 
         if self.input_flag:
             return [self.input_flag, shlex.quote(target)]
@@ -260,8 +227,6 @@ class Task(ABC):
             )
         return cmd
 
-    # ── Helpers ────────────────────────────────────────────────────
-
     @property
     def supports_streaming(self) -> bool:
         """Whether the task supports line-by-line live streaming.
@@ -277,23 +242,6 @@ class Task(ABC):
         output.  Return an empty list for non-parseable lines.
         """
         return []
-
-    def _write_target_file(self, target: str) -> str:
-        """Write comma-separated targets to a temp file, one per line."""
-        tf = tempfile.NamedTemporaryFile(
-            mode="w",
-            prefix=f".ofx_targets_{self.name}_",
-            suffix=".txt",
-            delete=False,
-        )
-        tf.write("\n".join(t.strip() for t in target.split(",") if t.strip()))
-        tf.close()
-        self._temp_target_files.append(tf.name)
-        return tf.name
-
-    def cleanup_target_files(self) -> None:
-        """Remove temporary target files created by :meth:`build_command`."""
-        remove_files(self._temp_target_files, clear=self._temp_target_files)
 
     def _output_suffix(self) -> str:
         """File suffix for the structured output file."""

@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("nikto")
 class NiktoTask(Task):
     name = "nikto"
@@ -56,7 +55,6 @@ class NiktoTask(Task):
 
         results: list[Vulnerability] = []
 
-        # nikto JSON may be a single object or a list
         entries = data if isinstance(data, list) else [data]
 
         for entry in entries:

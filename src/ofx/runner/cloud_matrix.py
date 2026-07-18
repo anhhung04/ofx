@@ -14,7 +14,6 @@ from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.metadata import ModelContext
 from ofx.runner.runner import Runner
 
-
 class CloudMatrixJobRunner(CloudJobRunner):
     def __init__(
         self,
@@ -63,6 +62,5 @@ class CloudMatrixJobRunner(CloudJobRunner):
             return
 
         await self._matrix_executor.do_run(self)
-
 
 __all__ = ["CloudMatrixJobRunner"]

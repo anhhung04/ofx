@@ -11,10 +11,8 @@ from ofx.api.http import requests
 
 logger = get_logger()
 
-
 def is_ipv6_address_format(address: str) -> bool:
     return ":" in address and "." not in address
-
 
 class ZoomEye:
     """ZoomEye cyberspace search engine client.
@@ -212,7 +210,6 @@ class ZoomEye:
         except Exception as ex:
             logger.error(str(ex))
         return search_result
-
 
 ZoomEyeClient = ZoomEye
 

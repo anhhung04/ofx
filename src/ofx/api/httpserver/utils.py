@@ -10,7 +10,6 @@ from ofx.api.httpserver.simple import SimpleHTTPServer
 
 logger = get_logger()
 
-
 def start_server(
     server_type: str,
     host: str = "0.0.0.0",
@@ -41,11 +40,11 @@ def start_server(
     server_type = server_type.lower()
 
     if server_type == "simple":
-        server: PHTTPServer = SimpleHTTPServer(host=host, port=port, **kwargs)  # type: ignore[arg-type, assignment]
+        server: PHTTPServer = SimpleHTTPServer(host=host, port=port, **kwargs)
     elif server_type == "payload":
-        server = PayloadServer(host=host, port=port, **kwargs)  # type: ignore[arg-type, assignment]
+        server = PayloadServer(host=host, port=port, **kwargs)
     elif server_type == "exfil":
-        server = ExfilServer(host=host, port=port, **kwargs)  # type: ignore[arg-type, assignment]
+        server = ExfilServer(host=host, port=port, **kwargs)
     else:
         raise ValueError(
             f"Unknown server type: {server_type}. Must be 'simple', 'payload', or 'exfil'"
@@ -54,7 +53,6 @@ def start_server(
     server.start()
     logger.info(f"Started {server_type} server at {server.url}")
     return server
-
 
 def create_oneliner(
     url: str,

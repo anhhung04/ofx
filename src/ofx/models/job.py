@@ -10,7 +10,6 @@ from ofx.models.config import DefaultConfig
 from ofx.models.step import Step
 from ofx.models.strategy import MatrixStrategy
 
-
 class Job(OFXBaseModel):
     """Job definition within a workflow."""
 

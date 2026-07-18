@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Port, Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("nerva")
 class NervaTask(Task):
     name = "nerva"

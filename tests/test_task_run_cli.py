@@ -9,9 +9,6 @@ from types import SimpleNamespace
 from rich.console import Console
 from typer.testing import CliRunner
 
-# ── parse_opt_args ────────────────────────────────────────────────────────
-
-
 class TestParseOptArgs:
     """Verify CLI --opt parsing into a dict."""
 
@@ -74,10 +71,6 @@ class TestParseOptArgs:
 
         result = parse_opt_args(["  key = value  "])
         assert result == {"key": "value"}
-
-
-# ── TaskRunHandler ────────────────────────────────────────────────────────
-
 
 class TestTaskRunHandler:
     """Test the task run handler logic."""
@@ -226,7 +219,6 @@ class TestTaskRunHandler:
         assert result == 1
         assert "outside the allowed window" in console.export_text()
 
-
 class TestTaskRunCommand:
     def test_run_command_uses_module_parse_and_handler(self, monkeypatch):
         task_commands = importlib.import_module("ofx.commands.flow.task_commands")
@@ -370,10 +362,6 @@ class TestTaskRunCommand:
         assert "fakebin" in output
         assert "threads" in output
 
-
-# ── Profile Common Opt Injection ──────────────────────────────────────────
-
-
 class TestProfileCommonOptInjection:
     """Verify that profile-level settings auto-map to task opts."""
 
@@ -388,7 +376,6 @@ class TestProfileCommonOptInjection:
             opts=user_opts or {},
         )
         runner = TaskRunner(model, ctx)
-        # Pre-initialize the task so common mapping can inspect opts
         from ofx.tasks import TaskRegistry
 
         task_cls = TaskRegistry.get(task_name)
@@ -434,9 +421,7 @@ class TestProfileCommonOptInjection:
         profile = OFXProfile(threads=5, rate_limit=30)
         runner = self._make_runner(profile, user_opts={"threads": 100})
         runner._apply_profile_task_options()
-        # User's threads=100 should win
         assert runner.model.opts["threads"] == 100
-        # Profile's rate_limit should still be injected
         assert runner.model.opts.get("rate_limit") == 30
 
     def test_zero_values_not_injected(self):
@@ -476,15 +461,9 @@ class TestProfileCommonOptInjection:
         )
         runner = self._make_runner(profile, task_name="feroxbuster")
         runner._apply_profile_task_options()
-        # Common field injection
         assert runner.model.opts.get("threads") == 5
         assert runner.model.opts.get("proxy") == "socks5://127.0.0.1:9050"
-        # Per-task override
         assert runner.model.opts.get("insecure") is True
-
-
-# ── Task CLI: list_tasks & task_info ─────────────────────────────────────
-
 
 class TestListTasks:
     """Verify the ``ofx flow tasks list`` command logic."""
@@ -503,7 +482,6 @@ class TestListTasks:
         port_tasks = TaskRegistry.get_by_category("port/")
         names = [n for n, _ in port_tasks]
         assert "nmap" in names
-        # Should not include tasks from other categories
         for _name, cls in port_tasks:
             assert cls is not None
             assert cls().category.startswith("port/")
@@ -513,7 +491,6 @@ class TestListTasks:
 
         results = TaskRegistry.get_by_category("nonexistent_category_xyz/")
         assert results == []
-
 
 class TestTaskInfo:
     """Verify task info display data for key tasks."""
@@ -553,11 +530,8 @@ class TestTaskInfo:
         cls = TaskRegistry.get("nuclei")
         assert cls is not None
         task = cls()
-        # nuclei supports streaming (has parse_line)
         assert task.supports_streaming is True
-        # Should have output types
         assert len(task.output_types) > 0
-        # success_codes should be a list
         assert isinstance(task.success_codes, list)
 
     def test_unknown_task_returns_none(self):
@@ -570,7 +544,6 @@ class TestTaskInfo:
         """Tasks with extra_flags should expose them for CLI display."""
         from ofx.tasks import TaskRegistry
 
-        # Find any task that has extra_flags set
         for name in TaskRegistry.list_tasks():
             cls = TaskRegistry.get(name)
             if cls is not None:
@@ -579,7 +552,6 @@ class TestTaskInfo:
                     assert isinstance(task.extra_flags, list)
                     assert all(isinstance(f, str) for f in task.extra_flags)
                     return
-        # If no task has extra_flags, that's fine — just verify the attribute exists
         cls = TaskRegistry.get("nmap")
         task = cls()
         assert hasattr(task, "extra_flags")

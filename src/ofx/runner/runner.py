@@ -27,7 +27,6 @@ from ofx.runner.registry_adapter import RegistryAdapter
 from ofx.runner.services.event_emitter import EventEmitter
 from ofx.runner.templates import TemplateResolver
 
-
 class Runner[TModel: BaseModel]:
     """Lean runner that owns lifecycle state and delegates execution."""
 
@@ -343,6 +342,5 @@ class Runner[TModel: BaseModel]:
     @log_level.setter
     def log_level(self, level: int) -> None:
         self._log_level = level
-
 
 __all__ = ["Runner"]

@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Certificate, Subdomain
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("tlsx")
 class TlsxTask(Task):
     name = "tlsx"
@@ -87,7 +86,6 @@ class TlsxTask(Task):
             )
         )
 
-        # Extract subdomains from SANs
         seen: set[str] = set()
         for san in subject_an:
             san = san.lstrip("*.")
@@ -96,7 +94,6 @@ class TlsxTask(Task):
                 domain = ".".join(san.rsplit(".", 2)[-2:])
                 results.append(Subdomain(host=san, domain=domain, sources=["tlsx"]))
 
-        # Also extract subdomain from CN if it looks like a hostname
         if subject_cn and "." in subject_cn and subject_cn not in seen:
             cn_clean = subject_cn.lstrip("*.")
             if cn_clean:

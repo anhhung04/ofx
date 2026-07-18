@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("coercer")
 class CoercerTask(Task):
     name = "coercer"
@@ -69,9 +68,7 @@ class CoercerTask(Task):
 
         return " ".join(parts), None
 
-    # [+] MS-EFSR (EfsRpcOpenFileRaw) on 10.0.0.1 -> VULNERABLE
     _VULN_RE = re.compile(r"\[\+\]\s*(\S+)\s*\((\S+)\)\s*on\s*(\S+)")
-    # [-] MS-RPRN (RpcRemoteFindFirstPrinterChangeNotification) on 10.0.0.1 -> NOT VULNERABLE
     _SAFE_RE = re.compile(r"\[-\]\s*(\S+)\s*\((\S+)\)\s*on\s*(\S+)")
 
     def parse_output(

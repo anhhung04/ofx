@@ -23,9 +23,6 @@ from ofx.runner.templates.helpers import (
     build_all_helpers,
 )
 
-# ── File helpers ─────────────────────────────────────────────────────────
-
-
 class TestFileHelpers:
     def test_read_nonexistent(self):
         h = _file_helpers()
@@ -85,10 +82,6 @@ class TestFileHelpers:
             assert h["file_read"](str(path)) == ""
             assert h["file_lines"](str(path)) == []
 
-
-# ── Path helpers ─────────────────────────────────────────────────────────
-
-
 class TestPathHelpers:
     def test_join_path(self):
         h = _path_helpers()
@@ -118,10 +111,6 @@ class TestPathHelpers:
         results = h["glob"]("*.txt", str(tmp_path))
         assert len(results) == 2
 
-
-# ── Encoding helpers ─────────────────────────────────────────────────────
-
-
 class TestEncodingHelpers:
     def test_b64_roundtrip(self):
         h = _encoding_helpers()
@@ -139,10 +128,6 @@ class TestEncodingHelpers:
         encoded = h["hex_encode"]("test")
         assert h["hex_decode"](encoded) == "test"
 
-
-# ── Hash helpers ─────────────────────────────────────────────────────────
-
-
 class TestHashHelpers:
     def test_md5(self):
         h = _hash_helpers()
@@ -158,10 +143,6 @@ class TestHashHelpers:
         h = _hash_helpers()
         expected = hashlib.sha256(b"test").hexdigest()
         assert h["sha256"]("test") == expected
-
-
-# ── Random helpers ───────────────────────────────────────────────────────
-
 
 class TestRandomHelpers:
     def test_random_string_default(self):
@@ -199,10 +180,6 @@ class TestRandomHelpers:
         h = _random_helpers()
         t = h["token"]()
         assert len(t) > 0
-
-
-# ── Network helpers ──────────────────────────────────────────────────────
-
 
 class TestNetworkHelpers:
     def test_is_port_open_closed(self):
@@ -245,10 +222,6 @@ class TestNetworkHelpers:
         h = _network_helpers()
         assert h["cidr_size"]("192.168.1.0/24,10.0.0.0/24") == 508
 
-
-# ── Datetime helpers ─────────────────────────────────────────────────────
-
-
 class TestDatetimeHelpers:
     def test_now_format(self):
         h = _datetime_helpers()
@@ -267,10 +240,6 @@ class TestDatetimeHelpers:
         assert isinstance(ts, int)
         assert ts > 1_000_000_000
 
-
-# ── JSON helpers ─────────────────────────────────────────────────────────
-
-
 class TestJsonHelpers:
     def test_to_json(self):
         h = _json_helpers()
@@ -278,7 +247,7 @@ class TestJsonHelpers:
 
     def test_to_json_unencodable(self):
         h = _json_helpers()
-        assert h["to_json"](object()) != ""  # uses default=str
+        assert h["to_json"](object()) != ""
 
     def test_from_json(self):
         h = _json_helpers()
@@ -287,10 +256,6 @@ class TestJsonHelpers:
     def test_from_json_invalid(self):
         h = _json_helpers()
         assert h["from_json"]("not json") is None
-
-
-# ── Regex helpers ────────────────────────────────────────────────────────
-
 
 class TestRegexHelpers:
     def test_regex_match(self):
@@ -310,10 +275,6 @@ class TestRegexHelpers:
     def test_regex_sub(self):
         h = _regex_helpers()
         assert h["regex_sub"](r"\d", "X", "a1b2") == "aXbX"
-
-
-# ── Type filter helpers ──────────────────────────────────────────────────
-
 
 class TestTypeFilterHelpers:
     def test_of_type_filters_correctly(self):
@@ -357,10 +318,6 @@ class TestTypeFilterHelpers:
         items = [{"port": 80}, "string_item", 42]
         assert h["ports"](items) == []
 
-
-# ── build_all_helpers integration ────────────────────────────────────────
-
-
 class TestBuildAllHelpers:
     def test_returns_dict(self):
         h = build_all_helpers()
@@ -368,36 +325,24 @@ class TestBuildAllHelpers:
 
     def test_contains_all_categories(self):
         h = build_all_helpers()
-        # File helpers
         assert "file_read" in h
         assert "file_write" in h
-        # Path helpers
         assert "join_path" in h
-        # Encoding
         assert "b64encode" in h
-        # Hash
         assert "md5" in h
         assert "sha256" in h
-        # Random
         assert "random_string" in h
         assert "uuid" in h
-        # Network
         assert "local_ip" in h
-        # Datetime
         assert "now" in h
         assert "timestamp" in h
-        # JSON
         assert "to_json" in h
-        # Regex
         assert "regex_match" in h
-        # Type filters
         assert "of_type" in h
         assert "ports" in h
         assert "users" in h
-        # Misc
         assert "is_windows" in h
         assert "platform" in h
-        # ETL helpers
         assert "pluck" in h
         assert "to_lines" in h
         assert "sort_by" in h
@@ -407,9 +352,6 @@ class TestBuildAllHelpers:
         assert "flatten" in h
         assert "count_by" in h
 
-
-# ── ETL helpers ──────────────────────────────────────────────────────────
-
 _ETL_ITEMS = [
     {"host": "10.0.0.1", "port": 22, "state": "open", "svc": "ssh"},
     {"host": "10.0.0.1", "port": 80, "state": "open", "svc": "http"},
@@ -417,7 +359,6 @@ _ETL_ITEMS = [
     {"host": "10.0.0.2", "port": 443, "state": "open", "svc": "https"},
     {"host": "10.0.0.3", "port": 22, "state": "closed", "svc": "ssh"},
 ]
-
 
 class TestETLHelpers:
     def test_pluck(self):
@@ -445,7 +386,7 @@ class TestETLHelpers:
         result = h["to_csv"]([{"a": 1, "b": 2}])
         assert "a" in result and "b" in result
         lines = result.strip().split("\n")
-        assert len(lines) == 2  # header + 1 data row
+        assert len(lines) == 2
 
     def test_to_csv_no_headers(self):
         h = _etl_helpers()
@@ -554,10 +495,6 @@ class TestETLHelpers:
         assert h["flatten"](None) == []
         assert h["count_by"](123, "x") == {}
 
-
-# ── Jinja2 filter integration ───────────────────────────────────────────
-
-
 class TestJinjaFilterRegistration:
     """Verify that type filters and ETL helpers work as Jinja2 pipe filters."""
 
@@ -565,12 +502,10 @@ class TestJinjaFilterRegistration:
         from ofx.runner.templates.resolver import _ensure_filters_registered, _jinja_env
 
         _ensure_filters_registered(_jinja_env)
-        # Type filters
         assert "ports" in _jinja_env.filters
         assert "urls" in _jinja_env.filters
         assert "vulns" in _jinja_env.filters
         assert "of_type" in _jinja_env.filters
-        # ETL filters
         assert "pluck" in _jinja_env.filters
         assert "to_lines" in _jinja_env.filters
         assert "sort_by" in _jinja_env.filters
@@ -582,5 +517,5 @@ class TestJinjaFilterRegistration:
         from ofx.runner.templates.resolver import _ensure_filters_registered, _jinja_env
 
         _ensure_filters_registered(_jinja_env)
-        _ensure_filters_registered(_jinja_env)  # must not raise
+        _ensure_filters_registered(_jinja_env)
         assert _jinja_env._ofx_filters_registered is True

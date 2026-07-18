@@ -8,11 +8,6 @@ from typing import Any
 from ofx.runner.context import RunnerStatus, normalized_runner_status_value
 from ofx.runner.metadata import ModelContext
 
-# ---------------------------------------------------------------------------
-# Result dataclasses
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class StepExecutionResult:
     step_index: int
@@ -25,7 +20,6 @@ class StepExecutionResult:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
 
 @dataclass
 class JobExecutionResult:
@@ -40,7 +34,6 @@ class JobExecutionResult:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
-
 
 def build_step_execution_result_for_runner(
     step_runner: Any,
@@ -65,7 +58,6 @@ def build_step_execution_result_for_runner(
         outputs=outputs,
         duration_ms=step_runner.duration_ms(),
     )
-
 
 def build_job_execution_result(
     runner: Any,
@@ -101,7 +93,6 @@ def build_job_execution_result(
         steps=step_results,
         duration_ms=runner.duration_ms(),
     )
-
 
 def build_run_if_context(dep_runners: list[Any]) -> dict[str, Any]:
     """Build the run_if evaluation context for a job runner.

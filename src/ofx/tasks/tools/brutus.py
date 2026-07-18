@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("brutus")
 class BrutusTask(Task):
     name = "brutus"

@@ -30,7 +30,6 @@ logger = logging.getLogger(settings.app_branding)
 
 ChannelValue = str | int | float | bool | list | dict | None
 
-
 class ChannelStore:
     """Fast per-channel file store with cross-process flock locking.
 
@@ -54,17 +53,11 @@ class ChannelStore:
             channels_dir = Path(settings.channels_dir)
         self._dir = Path(channels_dir)
         self._dir.mkdir(parents=True, exist_ok=True)
-        # Per-channel mtime cache: channel → (mtime, parsed_value)
         self._cache: dict[str, tuple[int, Any]] = {}
-        # Per-channel asyncio.Event for in-process notification
         self._events: dict[
             str, tuple[asyncio.AbstractEventLoop | None, asyncio.Event]
         ] = {}
         logger.debug("ChannelStore initialized at %s", self._dir)
-
-    # ------------------------------------------------------------------
-    # In-process event helpers
-    # ------------------------------------------------------------------
 
     def _get_event(self, channel: str) -> asyncio.Event:
         """Return (or create) an asyncio.Event for *channel*."""
@@ -114,10 +107,6 @@ class ChannelStore:
     def _channel_paths(self, channel: str) -> tuple[Path, Path]:
         return self._dir / channel, self._dir / f"{channel}.lock"
 
-    # ------------------------------------------------------------------
-    # Low-level I/O with flock
-    # ------------------------------------------------------------------
-
     def _write(self, channel: str, value: Any) -> None:
         """Write *value* as JSON under an exclusive flock."""
         data_path, lock_path = self._channel_paths(channel)
@@ -130,7 +119,6 @@ class ChannelStore:
                     f"Failed to serialize channel '{channel}' data: {exc}"
                 ) from exc
             data_path.write_text(json_text)
-            # Update cache immediately
             try:
                 mtime = data_path.stat().st_mtime_ns
             except OSError:
@@ -138,7 +126,6 @@ class ChannelStore:
             if mtime is not None:
                 self._cache[channel] = (mtime, value)
 
-        # Wake in-process subscribers
         self._notify(channel)
 
     def _read(self, channel: str) -> Any | None:
@@ -147,7 +134,6 @@ class ChannelStore:
         if not data_path.exists():
             return None
 
-        # Fast-path: mtime unchanged → return cached value
         try:
             current_mtime = data_path.stat().st_mtime_ns
         except OSError:
@@ -172,10 +158,6 @@ class ChannelStore:
         except (json.JSONDecodeError, OSError):
             return None
 
-    # ------------------------------------------------------------------
-    # Public API (sync — used from script processes & subscribe loops)
-    # ------------------------------------------------------------------
-
     def publish(self, channel: str, data: ChannelValue) -> None:
         """Publish *data* to *channel* (atomic write under exclusive lock)."""
         self._write(channel, data)
@@ -193,7 +175,7 @@ class ChannelStore:
         value changes.
         """
 
-        last_value = object()  # sentinel
+        last_value = object()
         while True:
             value = self._read(channel)
             if value is not None and value != last_value:
@@ -221,10 +203,6 @@ class ChannelStore:
             time.sleep(poll_interval)
         raise TimeoutError(f"Timeout waiting for channel '{channel}'")
 
-    # ------------------------------------------------------------------
-    # Async API — non-blocking variants for asyncio runners
-    # ------------------------------------------------------------------
-
     async def async_publish(self, channel: str, data: ChannelValue) -> None:
         """Async publish *data* to *channel*.
 
@@ -246,7 +224,7 @@ class ChannelStore:
         timed polling for cross-process updates.
         """
         event = self._get_event(channel)
-        last_value = object()  # sentinel
+        last_value = object()
         while True:
             value = self._read(channel)
             if value is not None and value != last_value:
@@ -254,7 +232,6 @@ class ChannelStore:
                 last_value = value
                 continue
 
-            # Wait for notification or poll timeout
             event.clear()
             with suppress(TimeoutError):
                 await asyncio.wait_for(event.wait(), timeout=poll_interval)
@@ -285,10 +262,6 @@ class ChannelStore:
             event.clear()
             with suppress(TimeoutError):
                 await asyncio.wait_for(event.wait(), timeout=min(poll_interval, remaining))
-
-    # ------------------------------------------------------------------
-    # Management
-    # ------------------------------------------------------------------
 
     def delete(self, channel: str) -> bool:
         """Remove a channel file and its lock."""
@@ -324,12 +297,7 @@ class ChannelStore:
             if not self._dir.exists():
                 logger.debug("Removed channels directory %s", self._dir)
 
-
-# ------------------------------------------------------------------
-# Module-level convenience (singleton per channels_dir)
-# ------------------------------------------------------------------
 _default_store: ChannelStore | None = None
-
 
 def get_channel_store(channels_dir: str | Path | None = None) -> ChannelStore:
     """Return (or create) the default :class:`ChannelStore`."""
@@ -337,7 +305,6 @@ def get_channel_store(channels_dir: str | Path | None = None) -> ChannelStore:
     if _default_store is None:
         _default_store = ChannelStore(channels_dir)
     return _default_store
-
 
 def close_channel_store() -> None:
     """Close and discard the default :class:`ChannelStore`."""

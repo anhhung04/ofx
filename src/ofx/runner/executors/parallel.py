@@ -11,7 +11,6 @@ from ofx.runner.context import RunnerStatus, RunResult
 T = TypeVar("T")
 R = TypeVar("R")
 
-
 async def run_limited_fail_fast(
     items: Sequence[T],
     *,
@@ -48,7 +47,6 @@ async def run_limited_fail_fast(
     ]
     return await asyncio.gather(*tasks, return_exceptions=True)
 
-
 async def run_parallel_runner_items[TItem](
     items: Sequence[TItem],
     *,
@@ -71,13 +69,11 @@ async def run_parallel_runner_items[TItem](
         describe_item=describe_item,
     )
 
-
 def parallel_run_settings(strategy, *, item_count: int) -> tuple[int, bool]:
     """Derive bounded-parallel settings from an optional strategy object."""
     if strategy is None:
         return item_count, True
     return strategy.max_parallel, strategy.fail_fast
-
 
 def collect_parallel_run_errors[TItem](
     items: Sequence[TItem],
@@ -98,7 +94,6 @@ def collect_parallel_run_errors[TItem](
         elif result.status != RunnerStatus.COMPLETED:
             errors.append(f"{prefix}: {result.error or 'Failed'}")
     return errors
-
 
 __all__ = [
     "collect_parallel_run_errors",

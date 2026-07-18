@@ -9,7 +9,6 @@ from typing import Any
 MAX_MATRIX_COMBINATIONS = 10_000
 ValueProcessor = Callable[[Any], Any]
 
-
 def generate_matrix_combinations(
     matrix: dict[str, Any] | None,
     *,
@@ -63,7 +62,6 @@ def generate_matrix_combinations(
 
     return base_combinations
 
-
 def estimate_matrix_count(
     matrix: dict[str, Any] | None,
     *,
@@ -76,7 +74,6 @@ def estimate_matrix_count(
     )
     return max(len(combos), 1)
 
-
 def _enforce_matrix_limit(matrix_values: list[list[Any]]) -> None:
     """Raise when a matrix would exceed the supported combination limit."""
     estimated = _estimate_combinations(matrix_values)
@@ -87,7 +84,6 @@ def _enforce_matrix_limit(matrix_values: list[list[Any]]) -> None:
         f"(limit: {MAX_MATRIX_COMBINATIONS}). "
         f"Reduce matrix values or add exclude rules."
     )
-
 
 def _estimate_combinations(matrix_values: list[list[Any]]) -> int:
     """Return the cartesian-product size for normalized matrix values."""
@@ -105,7 +101,6 @@ def _process_values(
     if value_processor is None:
         return dict(values)
     return {key: value_processor(value) for key, value in values.items()}
-
 
 __all__ = [
     "MAX_MATRIX_COMBINATIONS",

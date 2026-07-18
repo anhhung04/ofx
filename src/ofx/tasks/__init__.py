@@ -38,11 +38,9 @@ from ofx.tasks.output_types import (
 from ofx.tasks.registry import TaskRegistry
 
 __all__ = [
-    # Core
     "Task",
     "OptDef",
     "TaskRegistry",
-    # Output types
     "OutputType",
     "OUTPUT_TYPE_MAP",
     "Ip",
@@ -56,7 +54,6 @@ __all__ = [
     "Certificate",
     "Exploit",
     "UserAccount",
-    # Enums
     "Severity",
     "Confidence",
 ]

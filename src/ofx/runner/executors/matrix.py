@@ -12,7 +12,6 @@ from ofx.runner.executors.parallel import (
     run_parallel_runner_items,
 )
 
-
 class MatrixExecutor(Executor):
     async def pre_run(self, runner) -> None:
         await runner._resolve_template_fields(["strategy"])

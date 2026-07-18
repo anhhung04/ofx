@@ -2,7 +2,6 @@
 
 Requires the optional 'boto3' package:
     pip install boto3
-    # or: pip install ofx[aws]
 """
 
 from __future__ import annotations
@@ -19,10 +18,9 @@ from ofx.models.cloud import CloudConfig
 logger = logging.getLogger("ofx")
 
 try:
-    import boto3  # type: ignore
+    import boto3
 except ImportError:
     boto3 = None
-
 
 @CloudProviderRegistry.register("aws")
 class AWSProvider(CloudProvider):
@@ -237,7 +235,7 @@ class AWSProvider(CloudProvider):
 
         return CloudInstanceInfo(
             instance_id=instance_id,
-            ip="",  # Not assigned yet
+            ip="",
             status=instance["State"]["Name"],
             provider="aws",
             region=config.region or self._region,

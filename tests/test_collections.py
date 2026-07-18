@@ -11,11 +11,6 @@ from pathlib import Path
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Semver / version constraint helpers
-# ---------------------------------------------------------------------------
-
-
 class TestSemver:
     """Tests for the lightweight semver helpers in manager.py."""
 
@@ -79,7 +74,6 @@ class TestSemver:
     def test_check_constraint_compatible_release(self):
         from ofx.collections.manager import check_version_constraint
 
-        # ~=1.2.0 means >=1.2.0, <2.0.0
         assert check_version_constraint("1.2.0", "~=1.2.0")
         assert check_version_constraint("1.9.9", "~=1.2.0")
         assert not check_version_constraint("2.0.0", "~=1.2.0")
@@ -102,16 +96,13 @@ class TestSemver:
     def test_cmp_prerelease_ordering(self):
         from ofx.collections.manager import _semver_cmp
 
-        # Pre-release < release
         assert _semver_cmp("1.0.0-alpha", "1.0.0") == -1
         assert _semver_cmp("1.0.0", "1.0.0-alpha") == 1
-        # Both with pre-release — lexicographic
         assert _semver_cmp("1.0.0-alpha", "1.0.0-beta") == -1
 
     def test_parse_malformed_version(self):
         from ofx.collections.manager import _parse_semver
 
-        # Non-standard versions fall back to (0,0,0,"")
         result = _parse_semver("1.0")
         assert result == (0, 0, 0, "")
 
@@ -120,12 +111,6 @@ class TestSemver:
 
         assert check_version_constraint("1.0.0", ">= 1.0.0")
         assert check_version_constraint("1.0.0", "== 1.0.0")
-
-
-# ---------------------------------------------------------------------------
-# InstalledCollection
-# ---------------------------------------------------------------------------
-
 
 class TestInstalledCollection:
     """Tests for installed-collection metadata model."""
@@ -136,7 +121,7 @@ class TestInstalledCollection:
         ic = InstalledCollection(name="test")
         assert ic.version == "0.0.0"
         assert ic.source == ""
-        assert ic.installed_at  # auto-filled
+        assert ic.installed_at
 
     def test_round_trip(self):
         from ofx.collections.manifest import InstalledCollection
@@ -152,12 +137,6 @@ class TestInstalledCollection:
         restored = InstalledCollection.model_validate(data)
         assert restored.name == ic.name
         assert restored.version == ic.version
-
-
-# ---------------------------------------------------------------------------
-# CollectionManager
-# ---------------------------------------------------------------------------
-
 
 class TestCollectionManager:
     """Tests for the core manager lifecycle (without real git clones)."""
@@ -187,7 +166,6 @@ class TestCollectionManager:
         mgr._installed["my-coll"] = entry
         mgr._save_installed()
 
-        # Reload and check
         from ofx.collections.manager import CollectionManager
 
         mgr2 = CollectionManager(base_dir=tmp_path)
@@ -233,7 +211,6 @@ class TestCollectionManager:
         assert dirs[0] == d
 
     def test_migrate_from_assets(self, mgr, tmp_path):
-        # Create a fake legacy asset directory
         legacy_dir = tmp_path / "legacy-coll"
         legacy_dir.mkdir()
         (legacy_dir / "action.yml").write_text("name: action\n")
@@ -263,23 +240,15 @@ class TestCollectionManager:
 
         assert mgr.migrate_from_assets(assets_file) == 0
 
-
-# ---------------------------------------------------------------------------
-# Workflow search integration
-# ---------------------------------------------------------------------------
-
-
 class TestWorkflowSearchIntegration:
     """Verify that get_workflow_search_dirs() picks up collection directories."""
 
     def test_includes_collection_dirs(self, tmp_path: Path, monkeypatch):
         """Collections directory is scanned and added to search dirs."""
-        # Create fake collection dirs
         coll_a = tmp_path / "collections" / "coll-a"
         coll_b = tmp_path / "collections" / "coll-b"
         coll_a.mkdir(parents=True)
         coll_b.mkdir(parents=True)
-        # random file — should be ignored (not a dir)
         (tmp_path / "collections" / "installed.json").write_text("{}")
 
         import ofx.settings as s
@@ -301,6 +270,5 @@ class TestWorkflowSearchIntegration:
         monkeypatch.setattr(s, "DEFAULT_WORKFLOWS_DIRS", [tmp_path / "wf"])
 
         dirs = s.get_workflow_search_dirs()
-        # Should include default dir + built-in workflow subdirs
         assert dirs[0] == tmp_path / "wf"
         assert len(dirs) >= 1

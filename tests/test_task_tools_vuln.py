@@ -13,9 +13,6 @@ from ofx.tasks.output_types import (
     Tag,
 )
 
-# ── Nuclei Parser ──────────────────────────────────────────────────────────
-
-
 class TestNucleiParser:
     def test_parse_jsonl(self):
         entry = {
@@ -35,13 +32,6 @@ class TestNucleiParser:
         assert len(vulns) == 1
         assert vulns[0].severity == Severity.CRITICAL
         assert vulns[0].name == "Log4Shell"
-
-
-# ── Subfinder Parser ──────────────────────────────────────────────────────
-
-
-# ── Nikto Parser ──────────────────────────────────────────────────────
-
 
 class TestNiktoParser:
     def test_nikto_metadata(self):
@@ -85,7 +75,7 @@ class TestNiktoParser:
         assert vulns[0].provider == "nikto"
         assert vulns[0].extra_data["method"] == "GET"
         assert vulns[0].extra_data["host"] == "example.com"
-        assert vulns[1].id == "0"  # OSVDB=0 used as id
+        assert vulns[1].id == "0"
 
     def test_nikto_parse_output_list(self):
         data = [
@@ -116,13 +106,6 @@ class TestNiktoParser:
     def test_nikto_parse_invalid_json(self):
         task = TaskRegistry.create("nikto")
         assert task.parse_output("{broken", "") == []
-
-
-# ── WhatWeb Parser ────────────────────────────────────────────────────
-
-
-# ── WPScan Parser ─────────────────────────────────────────────────────
-
 
 class TestWpscanParser:
     def test_parse_output(self):
@@ -177,13 +160,6 @@ class TestWpscanParser:
         task = TaskRegistry.create("wpscan")
         assert task.name == "wpscan"
 
-
-# ── SSH-Audit Parser ──────────────────────────────────────────────────
-
-
-# ── Sqlmap Parser ─────────────────────────────────────────────────────
-
-
 class TestSqlmapParser:
     def test_sqlmap_metadata(self):
         task = TaskRegistry.create("sqlmap")
@@ -237,13 +213,6 @@ class TestSqlmapParser:
         task = TaskRegistry.create("sqlmap")
         assert task.parse_output("", "") == []
 
-
-# ── X8 Parser ─────────────────────────────────────────────────────────
-
-
-# ── Dalfox Parser ──────────────────────────────────────────────────────
-
-
 class TestDalfoxParser:
     def test_parse_output(self):
         lines = [
@@ -295,13 +264,6 @@ class TestDalfoxParser:
         task = TaskRegistry.create("dalfox")
         assert task.name == "dalfox"
 
-
-# ── Maigret Parser ─────────────────────────────────────────────────────
-
-
-# ── Commix Parser ─────────────────────────────────────────────────────────
-
-
 class TestCommixParser:
     def test_commix_metadata(self):
         task = TaskRegistry.create("commix")
@@ -332,7 +294,6 @@ class TestCommixParser:
         assert results[0].severity == Severity.CRITICAL
         assert "classic" in results[0].description
         assert "eval-based" in results[0].description
-        # Second vuln resets techniques
         assert results[1].matched_at == "name"
         assert "time-based" in results[1].description
 
@@ -349,13 +310,6 @@ class TestCommixParser:
         )
         task = TaskRegistry.create("commix")
         assert task.parse_output(stdout, "") == []
-
-
-# ── Rustscan Parser ───────────────────────────────────────────────────────
-
-
-# ── CRLFuzz Parser ────────────────────────────────────────────────────────
-
 
 class TestCrlfuzzParser:
     def test_crlfuzz_metadata(self):
@@ -393,13 +347,6 @@ class TestCrlfuzzParser:
         assert task.parse_line("[info] scanning") == []
         assert task.parse_line("") == []
         assert task.parse_line("no-url-text") == []
-
-
-# ── Commix Parser ─────────────────────────────────────────────────────────
-
-
-# ── Grype Parser ───────────────────────────────────────────────────────
-
 
 class TestGrypeParser:
     def test_parse_output(self):
@@ -442,13 +389,6 @@ class TestGrypeParser:
     def test_registration(self):
         task = TaskRegistry.create("grype")
         assert task.name == "grype"
-
-
-# ── Trivy Parser ───────────────────────────────────────────────────────
-
-
-# ── Trivy Parser ───────────────────────────────────────────────────────
-
 
 class TestTrivyParser:
     def test_parse_output(self):
@@ -501,13 +441,6 @@ class TestTrivyParser:
     def test_registration(self):
         task = TaskRegistry.create("trivy")
         assert task.name == "trivy"
-
-
-# ── WPScan Parser ─────────────────────────────────────────────────────
-
-
-# ── Sslscan Parser ────────────────────────────────────────────────────
-
 
 class TestSslscanParser:
     def _make_sslscan_xml(
@@ -650,13 +583,6 @@ class TestSslscanParser:
         if out_file and out_file.exists():
             out_file.unlink()
 
-
-# ── Netexec Parser ─────────────────────────────────────────────────────────
-
-
-# ── Testssl Parser ─────────────────────────────────────────────────────
-
-
 class TestTestsslParser:
     def test_parse_output(self, tmp_path):
         data = [
@@ -683,11 +609,9 @@ class TestTestsslParser:
 
         certs = [r for r in results if isinstance(r, Certificate)]
         tags = [r for r in results if isinstance(r, Tag)]
-        # cert_notAfter starts with "cert_" → Certificate
         assert len(certs) == 1
         assert certs[0].subject_cn == "2025-01-01"
         assert certs[0].host == "93.184.216.34:443"
-        # LUCKY13 severity LOW → Tag (not vuln, no "vuln" in id, severity not medium/high/critical)
         assert len(tags) == 1
         assert tags[0].name == "LUCKY13"
         assert tags[0].value == "LUCKY13 potentially vulnerable"
@@ -723,7 +647,6 @@ class TestTestsslParser:
         assert "-p" in cmd
         assert "-U" in cmd
         assert "example.com:443" in cmd
-        # testssl has output_flag=--jsonfile
         assert out_file is not None
         if out_file and out_file.exists():
             out_file.unlink()
@@ -731,13 +654,6 @@ class TestTestsslParser:
     def test_registration(self):
         task = TaskRegistry.create("testssl")
         assert task.name == "testssl"
-
-
-# ── H8mail Parser ─────────────────────────────────────────────────────
-
-
-# ── SSH-Audit Parser ──────────────────────────────────────────────────
-
 
 class TestSshAuditParser:
     def test_parse_output(self):
@@ -757,7 +673,6 @@ class TestSshAuditParser:
         assert vulns[0].severity == Severity.HIGH
         assert vulns[0].provider == "ssh-audit"
         assert vulns[0].cvss_score == 7.0
-        # One weak algo tag + one banner tag
         weak_tags = [t for t in tags if t.value == "weak"]
         banner_tags = [t for t in tags if t.category == "banner"]
         assert len(weak_tags) == 1
@@ -780,6 +695,3 @@ class TestSshAuditParser:
     def test_registration(self):
         task = TaskRegistry.create("ssh-audit")
         assert task.name == "ssh-audit"
-
-
-# ── Dirsearch Parser ──────────────────────────────────────────────────

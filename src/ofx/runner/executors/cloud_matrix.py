@@ -10,7 +10,6 @@ from typing import Any
 from ofx.runner.context import RunnerStatus, RunResult
 from ofx.runner.executors.matrix import MatrixExecutor
 
-
 class CloudMatrixExecutor(MatrixExecutor):
     """Run each matrix combination as remote steps on one cloud instance."""
 
@@ -30,6 +29,5 @@ class CloudMatrixExecutor(MatrixExecutor):
             run_id=runner.run_id,
             status=RunnerStatus.COMPLETED,
         )
-
 
 __all__ = ["CloudMatrixExecutor"]

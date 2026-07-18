@@ -14,7 +14,6 @@ __all__ = [
     "minimum_version_required",
 ]
 
-
 def url2ip(url: str, with_port: bool = False) -> str | tuple[str, int]:
     """Convert a URL to an IP address with optional port.
 
@@ -50,7 +49,6 @@ def url2ip(url: str, with_port: bool = False) -> str | tuple[str, int]:
 
     return ret if with_port else ret[0]
 
-
 def str_to_dict(value: str) -> dict[str, Any]:
     """Convert a string representation of a dictionary to an actual dict.
 
@@ -71,7 +69,6 @@ def str_to_dict(value: str) -> dict[str, Any]:
     except ValueError as e:
         logger.error(f"conv string failed : {e}")
         return {}
-
 
 def generate_random_user_agent() -> str:
     """Generate a random realistic user agent string.
@@ -94,7 +91,6 @@ def generate_random_user_agent() -> str:
     except ImportError:
         print("warning: faker not installed, using default user agent")
         return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
 
 def minimum_version_required(version: str, current_version: str) -> bool:
     """Check if current version meets minimum version requirement.

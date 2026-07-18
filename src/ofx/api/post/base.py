@@ -17,7 +17,6 @@ __all__ = [
     "PostRunnerError",
 ]
 
-
 class PostRunnerError(Exception):
     """Standardized exception for post-exploitation runner failures."""
 
@@ -51,18 +50,15 @@ class PostRunnerError(Exception):
             parts.append(f"cmd={cmd_preview}")
         return " | ".join(parts)
 
-
-class ConnectionError(PostRunnerError):  # noqa: A001
+class ConnectionError(PostRunnerError):
     """Failed to establish connection to target host."""
 
     ...
-
 
 class AuthenticationError(PostRunnerError):
     """Authentication failed (bad credentials, key, etc.)."""
 
     ...
-
 
 @runtime_checkable
 class CommandRunner(Protocol):
@@ -78,7 +74,6 @@ class CommandRunner(Protocol):
     def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a command and return output."""
         ...
-
 
 class PostRunnerBase(ABC):
     """Abstract base class for all post-exploitation runners.
@@ -120,10 +115,6 @@ class PostRunnerBase(ABC):
         """
         ...
 
-    # -------------------------------------------------------------------------
-    # File Transfer Methods (override in subclass if supported)
-    # -------------------------------------------------------------------------
-
     def upload(self, local_path: str, remote_path: str) -> None:
         """Upload a file to the remote target.
 
@@ -152,10 +143,6 @@ class PostRunnerBase(ABC):
             f"{self.__class__.__name__} does not support file download"
         )
 
-    # -------------------------------------------------------------------------
-    # Interactive Shell (override in subclass if supported)
-    # -------------------------------------------------------------------------
-
     def supports_interactive(self) -> bool:
         """Check if interactive shell is supported.
 
@@ -173,10 +160,6 @@ class PostRunnerBase(ABC):
         raise NotImplementedError(
             f"{self.__class__.__name__} does not support interactive shell"
         )
-
-    # -------------------------------------------------------------------------
-    # Common Utility Methods
-    # -------------------------------------------------------------------------
 
     def get_uname(self) -> str:
         """Fetch uname output (Unix-like systems)."""
@@ -217,10 +200,6 @@ class PostRunnerBase(ABC):
             platform = "windows" if self.detect_os() == "windows" else "unix"
         return build_download_command(url, dest, platform=platform)
 
-    # -------------------------------------------------------------------------
-    # Deploy and Run Helper
-    # -------------------------------------------------------------------------
-
     def deploy_and_run(
         self,
         local_path: str,
@@ -242,5 +221,4 @@ class PostRunnerBase(ABC):
 
     def cleanup(self) -> None:
         """Optional cleanup after deploy_and_run. Default does nothing."""
-        # No-op by default; subclasses can override if needed
         return None

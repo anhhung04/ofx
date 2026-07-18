@@ -105,7 +105,6 @@ def checkpoint_list(
 
     console.print(table)
 
-
 @app.command("show")
 def checkpoint_show(
     output: Annotated[
@@ -171,7 +170,6 @@ def checkpoint_show(
             print_info("Checkpoints", "No checkpoints found.")
             return
         console.print_json(json.dumps(checkpoints, default=str, indent=2))
-
 
 @app.command("clean")
 def checkpoint_clean(

@@ -8,14 +8,12 @@ import pytest
 
 from ofx.runner import RegistryFactory
 
-
 def _can_import(module: str) -> bool:
     try:
         importlib.import_module(module)
         return True
     except Exception:
         return False
-
 
 async def _assert_basic_operations(registry) -> None:
     test_data = {"name": "test-job", "status": "running"}
@@ -34,7 +32,6 @@ async def _assert_basic_operations(registry) -> None:
     deleted = await registry.delete("job1")
     assert deleted is True
     assert await registry.get("job1") is None
-
 
 class TestMemcachedJobRegistry:
     """Test suite for MemcachedJobRegistry"""
@@ -59,11 +56,9 @@ class TestMemcachedJobRegistry:
             await _assert_basic_operations(registry)
             await registry.close()
         except Exception as e:
-            # Connection errors are expected if Memcached server is not running
             if "Connection refused" in str(e) or "ECONNREFUSED" in str(e):
                 pytest.skip("Memcached server not available")
             raise
-
 
 class TestEtcdJobRegistry:
     """Test suite for EtcdJobRegistry"""
@@ -88,14 +83,12 @@ class TestEtcdJobRegistry:
             await _assert_basic_operations(registry)
             await registry.close()
         except Exception as e:
-            # Connection errors are expected if etcd server is not running
             if any(
                 marker in str(e).lower()
                 for marker in ("connection refused", "econnrefused", "connection failed")
             ):
                 pytest.skip("etcd server not available")
             raise
-
 
 class TestRegistryFactoryExtended:
     """Test factory with new backends"""

@@ -11,7 +11,6 @@ from ofx.runner.context import RunContext
 from ofx.runner.executors.fleet import FleetExecutor
 from ofx.runner.runner import Runner
 
-
 class CloudFleetRunner(Runner[Job]):
     def __init__(
         self,

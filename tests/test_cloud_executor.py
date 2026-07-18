@@ -11,14 +11,12 @@ from ofx.runner.context import RunContext
 from ofx.runner.context import context_for_step
 from ofx.runner.executors.cloud import CloudExecutor
 
-
 class _Provider:
     def __init__(self) -> None:
         self.destroyed: list[str] = []
 
     async def destroy_instance(self, instance_id: str) -> None:
         self.destroyed.append(instance_id)
-
 
 class _Provisioner:
     def __init__(self) -> None:
@@ -27,10 +25,8 @@ class _Provisioner:
     async def destroy(self, provider: _Provider, instance: SimpleNamespace) -> None:
         self.destroyed.append((provider, instance))
 
-
 async def _run_sync_in_thread(func, *args, **kwargs):
     return func(*args, **kwargs)
-
 
 def _make_runner(*, provider_name: str = "digitalocean", auto_destroy: bool = True):
     provider = _Provider()
@@ -51,7 +47,6 @@ def _make_runner(*, provider_name: str = "digitalocean", auto_destroy: bool = Tr
         _log_warning=lambda _message: None,
         _log_debug=lambda _message: None,
     )
-
 
 @pytest.mark.asyncio
 async def test_pre_run_resolves_cloud_config_and_registers_all_credentials(monkeypatch):
@@ -96,7 +91,6 @@ async def test_pre_run_resolves_cloud_config_and_registers_all_credentials(monke
     assert secret_calls == [["ssh-secret", "api-token", "aws-secret"]]
     assert runner._cloud_config is resolved_cfg
 
-
 @pytest.mark.asyncio
 async def test_pre_run_parses_string_cloud_config_before_resolution(monkeypatch):
     from ofx.models.cloud import CloudConfig
@@ -134,7 +128,6 @@ async def test_pre_run_parses_string_cloud_config_before_resolution(monkeypatch)
 
     assert runner._cloud_config is resolved_cfg
 
-
 @pytest.mark.asyncio
 async def test_destroy_instance_uses_provider_when_allowed():
     logs: list[str] = []
@@ -145,7 +138,6 @@ async def test_destroy_instance_uses_provider_when_allowed():
 
     assert runner._provider.destroyed == ["i-123"]
     assert logs == ["Destroying instance 'scan-node'[i-123] (provider=digitalocean)"]
-
 
 @pytest.mark.asyncio
 async def test_pre_run_registers_cloud_credentials(monkeypatch):
@@ -180,7 +172,6 @@ async def test_pre_run_registers_cloud_credentials(monkeypatch):
     await executor.pre_run(runner)
 
     assert secret_calls == [["ssh-secret", "api-token"]]
-
 
 @pytest.mark.asyncio
 async def test_pre_run_stores_cloud_instance_metadata(monkeypatch):
@@ -230,7 +221,6 @@ async def test_pre_run_stores_cloud_instance_metadata(monkeypatch):
         },
     )]
 
-
 @pytest.mark.asyncio
 async def test_pre_run_raises_clear_message_when_cloud_config_missing(monkeypatch):
     runner = SimpleNamespace(
@@ -243,7 +233,6 @@ async def test_pre_run_raises_clear_message_when_cloud_config_missing(monkeypatc
 
     with pytest.raises(RuntimeError, match="Cloud config is required for job 'job-1'"):
         await executor.pre_run(runner)
-
 
 @pytest.mark.asyncio
 async def test_post_run_downloads_then_tears_down(monkeypatch):
@@ -276,7 +265,6 @@ async def test_post_run_downloads_then_tears_down(monkeypatch):
 
     assert calls == ["save", "download", "destroy", "cleanup"]
 
-
 @pytest.mark.asyncio
 async def test_provision_instance_logs_connection_message(monkeypatch):
     executor = CloudExecutor(provisioner=SimpleNamespace())
@@ -307,7 +295,6 @@ async def test_provision_instance_logs_connection_message(monkeypatch):
     assert runner._remote_runner is not None
     assert runner._work_dir == "/tmp/work"
 
-
 @pytest.mark.asyncio
 async def test_provision_instance_falls_back_when_work_dir_creation_fails(monkeypatch):
     executor = CloudExecutor(provisioner=SimpleNamespace())
@@ -333,7 +320,6 @@ async def test_provision_instance_falls_back_when_work_dir_creation_fails(monkey
 
     assert runner._work_dir == "/tmp"
     assert warnings == ["Work dir creation failed, using /tmp: boom"]
-
 
 @pytest.mark.asyncio
 async def test_on_failure_warns_on_salvage_error_then_tears_down(monkeypatch):
@@ -363,17 +349,15 @@ async def test_on_failure_warns_on_salvage_error_then_tears_down(monkeypatch):
     assert warnings == ["Output salvage on failure failed: boom"]
     assert calls == ["destroy", "cleanup"]
 
-
 @pytest.mark.asyncio
 async def test_destroy_instance_uses_provisioner_when_injected():
     provisioner = _Provisioner()
     runner = _make_runner()
 
-    await CloudExecutor(provisioner=provisioner).destroy_instance(runner)  # type: ignore[arg-type]
+    await CloudExecutor(provisioner=provisioner).destroy_instance(runner)
 
     assert provisioner.destroyed == [(runner._provider, runner._instance)]
     assert runner._provider.destroyed == []
-
 
 @pytest.mark.asyncio
 async def test_destroy_instance_skips_static_and_auto_destroy_false():
@@ -387,7 +371,6 @@ async def test_destroy_instance_skips_static_and_auto_destroy_false():
     assert static_runner._provider.destroyed == []
     assert disabled_runner._provider.destroyed == []
 
-
 @pytest.mark.asyncio
 async def test_emergency_deprovision_ignores_auto_destroy_but_skips_static():
     disabled_runner = _make_runner(auto_destroy=False)
@@ -400,7 +383,6 @@ async def test_emergency_deprovision_ignores_auto_destroy_but_skips_static():
     assert disabled_runner._provider.destroyed == ["i-123"]
     assert static_runner._provider.destroyed == []
 
-
 def test_instance_helper_accessors_handle_missing_instance():
     runner = SimpleNamespace(_instance=None, _cloud_config=SimpleNamespace(provider="static"))
 
@@ -409,7 +391,6 @@ def test_instance_helper_accessors_handle_missing_instance():
     assert state.instance_name == "unknown"
     assert state.instance_id == "unknown"
     assert state.instance_ip == ""
-
 
 def test_instance_attr_and_connection_messages_cover_provisioning_helpers():
     runner = SimpleNamespace(
@@ -422,7 +403,6 @@ def test_instance_attr_and_connection_messages_cover_provisioning_helpers():
     assert CloudExecutor._cloud_instance_state(
         SimpleNamespace(_instance=None, _cloud_config=SimpleNamespace(provider="static"))
     ).instance_name == "unknown"
-
 
 def test_destroyability_and_reportability_helpers_cover_runner_state():
     allowed_runner = _make_runner(provider_name="digitalocean", auto_destroy=True)
@@ -445,7 +425,6 @@ def test_destroyability_and_reportability_helpers_cover_runner_state():
 
     allowed_runner._instance.ip = "10.0.0.8"
     assert CloudExecutor._cloud_instance_state(allowed_runner).has_reportable_instance is True
-
 
 @pytest.mark.asyncio
 async def test_dispatch_remote_steps_merges_matrix_into_copied_context(monkeypatch):
@@ -489,7 +468,6 @@ async def test_dispatch_remote_steps_merges_matrix_into_copied_context(monkeypat
         "tool": "nmap",
     }
     assert runner.ctx.vars["matrix"] == {"region": "us-east-1"}
-
 
 @pytest.mark.asyncio
 async def test_dispatch_remote_steps_resets_non_inherited_step_secrets(monkeypatch):
@@ -537,7 +515,6 @@ async def test_dispatch_remote_steps_resets_non_inherited_step_secrets(monkeypat
     assert captured_secrets[0] == {"token": "secret"}
     assert captured_secrets[1] == {}
     assert runner.ctx.secrets == {"token": "secret"}
-
 
 @pytest.mark.asyncio
 async def test_dispatch_remote_steps_merges_matrix_and_create_step_runner_kwargs(monkeypatch):
@@ -611,7 +588,6 @@ async def test_cleanup_remote_runs_workdir_cleanup_and_runner_cleanup(monkeypatc
         ("cleanup", (), {}),
     ]
 
-
 @pytest.mark.asyncio
 async def test_cleanup_remote_skips_default_workdir_cleanup(monkeypatch):
     calls: list[str] = []
@@ -632,13 +608,11 @@ async def test_cleanup_remote_skips_default_workdir_cleanup(monkeypatch):
 
     assert calls == ["cleanup"]
 
-
 @pytest.mark.asyncio
 async def test_cleanup_remote_returns_when_remote_runner_missing():
     runner = SimpleNamespace(_log_debug=lambda _message: None)
 
     await CloudExecutor().cleanup_remote(runner)
-
 
 @pytest.mark.asyncio
 async def test_cleanup_remote_uses_windows_cleanup_command_for_non_default_workdir(monkeypatch):
@@ -688,7 +662,6 @@ async def test_download_outputs_returns_when_remote_runner_or_output_path_missin
 
     await CloudExecutor().download_outputs(runner)
 
-
 @pytest.mark.asyncio
 async def test_download_outputs_downloads_safe_files_only(tmp_path):
     downloads: list[tuple[str, str]] = []
@@ -715,7 +688,6 @@ async def test_download_outputs_downloads_safe_files_only(tmp_path):
         ("/tmp/ofx-run/output/report.txt", str(tmp_path / "job-1" / "report.txt")),
         ("/tmp/ofx-run/output/summary.json", str(tmp_path / "job-1" / "summary.json")),
     ]
-
 
 @pytest.mark.asyncio
 async def test_download_outputs_uses_windows_list_command(tmp_path):

@@ -7,18 +7,15 @@ from pydantic import BaseModel
 
 from ofx.runner import RunContext, Runner
 
-
 class _Model(BaseModel):
     name: str = "m"
-
 
 class _Runner(Runner[_Model]):
     async def _pre_run(self) -> None: ...
     async def _do_run(self) -> None: ...
     async def _post_run(self) -> None: ...
-    def _produce_log(self, message):  # type: ignore[override]
+    def _produce_log(self, message):
         return str(message)
-
 
 def test_get_key_includes_class_namespace():
     parent = _Runner(_Model(), RunContext())
@@ -28,7 +25,6 @@ def test_get_key_includes_class_namespace():
     assert "_Runner:" in key
     assert "_Runner:" in parent.get_key("outputs")
     assert key.count("_Runner:") >= 2
-
 
 def test_get_key_caches_prefix_for_reuse():
     parent = _Runner(_Model(), RunContext())
@@ -41,7 +37,6 @@ def test_get_key_caches_prefix_for_reuse():
     assert cached_prefix is not None
     assert first.startswith(cached_prefix)
     assert second.startswith(cached_prefix)
-
 
 @pytest.mark.asyncio
 async def test_registry_call_uses_namespaced_key() -> None:
@@ -58,7 +53,6 @@ async def test_registry_call_uses_namespaced_key() -> None:
     await Runner._registry_call(runner, "set", "outputs", {"x": 1})
 
     assert calls == [("set", "prefix:outputs", {"x": 1})]
-
 
 @pytest.mark.asyncio
 async def test_registry_call_requires_configured_registry() -> None:

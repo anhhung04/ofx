@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Url, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("tinja")
 class TinjaTask(Task):
     name = "tinja"

@@ -17,7 +17,6 @@ _SEVERITY_MAP = {
     "critical": Severity.CRITICAL,
 }
 
-
 @TaskRegistry.register("testssl")
 class TestsslTask(Task):
     name = "testssl"
@@ -51,7 +50,7 @@ class TestsslTask(Task):
         "full": OptDef(flag="--full", is_flag=True, help="Full test"),
     }
 
-    input_flag = None  # positional host:port
+    input_flag = None
     file_flag = "--file"
     output_flag = "--jsonfile"
     extra_flags = ["--color", "0"]

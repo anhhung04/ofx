@@ -10,7 +10,6 @@ __all__ = [
     "random_sleep_seconds",
 ]
 
-
 def is_business_hours(
     tz_offset: int = 0,
     start: int = 9,
@@ -32,7 +31,6 @@ def is_business_hours(
     weekday = (now.weekday() + day_shift) % 7
     is_weekday = include_weekends or weekday < 5
     return is_weekday and start <= adjusted_hour < end
-
 
 def random_sleep_seconds(min_s: float, max_s: float) -> float:
     """Return a random sleep duration between *min_s* and *max_s* seconds."""

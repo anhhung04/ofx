@@ -15,7 +15,6 @@ from ofx.runner.commands.command import CommandRunner, ScriptRunner
 from ofx.runner.tool_installer import ToolInstallation, ToolInstallerRunner
 from ofx.settings import settings
 
-
 async def _capture_script_exec_invocation(script: ScriptRunner):
     submitted: list[tuple[object, tuple]] = []
 
@@ -39,13 +38,12 @@ async def _capture_script_exec_invocation(script: ScriptRunner):
         return fn(*args)
 
     try:
-        loop.run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+        loop.run_in_executor = _fake_run_in_executor
         await script._exec_script()
         return submitted[0][1][0]
     finally:
-        loop.run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+        loop.run_in_executor = original_run_in_executor
         command_module._shared_executor = original_shared_executor
-
 
 class TestCommandRunnerEdgeCases:
     """Test CommandRunner edge cases"""
@@ -82,18 +80,15 @@ class TestCommandRunnerEdgeCases:
             ctx=RunContext(),
         )
 
-        # Start the runner and cancel after a brief delay
         task = asyncio.create_task(cmd.run())
         await asyncio.sleep(0.2)
         task.cancel()
 
-        # Wait for the task to finish (with a safety timeout)
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
         except (asyncio.CancelledError, TimeoutError):
             pass
 
-        # Runner should be in a terminal state after cancellation
         assert cmd.status.value in ("failed", "canceled", "completed")
 
     @pytest.mark.asyncio
@@ -128,13 +123,11 @@ class TestCommandRunnerEdgeCases:
         )
         result = await cmd.run()
         assert result.status == RunnerStatus.COMPLETED
-        # Output may be base64 encoded or marked as binary
         assert "binary_output" in result.outputs or "stdout" in result.outputs
 
     @pytest.mark.asyncio
     async def test_command_with_large_output(self):
         """Test command with output exceeding max size"""
-        # Generate more than 60KB of output (default max size)
         from ofx.models.command import Command
 
         cmd_model = Command(
@@ -147,9 +140,8 @@ class TestCommandRunnerEdgeCases:
         )
         result = await cmd.run()
         assert result.status == RunnerStatus.COMPLETED
-        # Check if output was truncated or fully captured
         stdout = result.outputs.get("stdout", "")
-        assert len(stdout) > 0  # Should have some output
+        assert len(stdout) > 0
 
     @pytest.mark.asyncio
     async def test_command_with_runner_outputs(self):
@@ -267,7 +259,6 @@ jobs:
         assert debugs[0].startswith("cmd result: \n---\nRESULT\n---\n")
         assert "RunContext(" in debugs[0]
 
-
 class TestScriptRunnerEdgeCases:
     """Test ScriptRunner edge cases"""
 
@@ -325,7 +316,6 @@ print(json.dumps(data))
         )
         result = await script.run()
         assert result.status == RunnerStatus.COMPLETED
-        # assert "test" in result.outputs.get("stdout", "")
 
     @pytest.mark.asyncio
     async def test_script_runner_inherits_parent_shell_and_working_directory(self):
@@ -624,14 +614,14 @@ print("Injected variables work!")
             return fn(*args)
 
         try:
-            asyncio.get_running_loop().run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+            asyncio.get_running_loop().run_in_executor = _fake_run_in_executor
             result = await script._exec_script()
             assert result == "future-result"
             invocation = submitted[0][1][0]
             assert invocation.script == "print('hi')"
             assert invocation.working_directory == "/tmp/work"
         finally:
-            asyncio.get_running_loop().run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+            asyncio.get_running_loop().run_in_executor = original_run_in_executor
             command_module._shared_executor = original_shared_executor
 
     @pytest.mark.asyncio
@@ -663,10 +653,10 @@ print("Injected variables work!")
             return fn(*args)
 
         try:
-            loop.run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+            loop.run_in_executor = _fake_run_in_executor
             result = await script._exec_script()
         finally:
-            loop.run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+            loop.run_in_executor = original_run_in_executor
             command_module._shared_executor = original_shared_executor
 
         assert result.exit_code == 0
@@ -844,10 +834,10 @@ print("Injected variables work!")
             return fn(*args)
 
         try:
-            loop.run_in_executor = _fake_run_in_executor  # type: ignore[method-assign]
+            loop.run_in_executor = _fake_run_in_executor
             await script._exec_script()
         finally:
-            loop.run_in_executor = original_run_in_executor  # type: ignore[method-assign]
+            loop.run_in_executor = original_run_in_executor
             command_module._shared_executor = original_shared_executor
 
         registered_fn, registered_args, registered_kwargs = registered[0]
@@ -855,7 +845,6 @@ print("Injected variables work!")
         assert registered_kwargs == {"wait": False}
         assert getattr(registered_fn, "__self__", None) is not None
         assert getattr(registered_fn, "__name__", "") == "shutdown"
-
 
 class TestToolInstallerEdgeCases:
     """Test ToolInstallerRunner edge cases"""
@@ -878,7 +867,7 @@ class TestToolInstallerEdgeCases:
             tools={
                 "test_tool": ToolConfig(
                     install="echo 'would install'",
-                    check="true",  # Always succeeds
+                    check="true",
                 )
             },
             ctx=RunContext(),
@@ -886,7 +875,6 @@ class TestToolInstallerEdgeCases:
         )
         result = await installer.run()
         assert result.status == RunnerStatus.COMPLETED
-        # assert installer.skipped_count == 1
         assert installer.installed_count == 0
 
     @pytest.mark.asyncio
@@ -896,7 +884,7 @@ class TestToolInstallerEdgeCases:
             tools={
                 "test_tool": ToolConfig(
                     install="echo 'installed' > /dev/null",
-                    check="false",  # Always fails
+                    check="false",
                 )
             },
             ctx=RunContext(),
@@ -952,7 +940,6 @@ class TestToolInstallerEdgeCases:
             ctx=RunContext(),
             show_console=False,
         )
-        # Should convert string to ToolConfig
         assert isinstance(installer.model.tools["simple_tool"], (str, dict, ToolConfig))
 
     @pytest.mark.asyncio
@@ -1016,7 +1003,6 @@ class TestToolInstallerEdgeCases:
         assert len(config.tools) == 2
         assert config.show_console is False
 
-
 class TestRunContextEdgeCases:
     """Test RunContext edge cases"""
 
@@ -1046,9 +1032,7 @@ class TestRunContextEdgeCases:
         """Test RunContext environment variable handling"""
         custom_envs = {"CUSTOM_VAR": "value", "PATH": "/custom/path"}
         ctx = RunContext(envs=custom_envs)
-        # PATH should be present (either custom or default)
         assert "PATH" in ctx.envs
-
 
 class TestStepRetryProfileDefaults:
     def test_retry_profile_applies_when_step_not_explicit(self):
@@ -1094,10 +1078,8 @@ class TestStepRetryProfileDefaults:
         runner.parent = parent
         runner._apply_retry_profile_defaults()
 
-        # Profile (aggressive: retry=2, retry_delay=2) overrides step values
         assert runner.model.retry == 2
         assert runner.model.retry_delay == 2
-
 
 class TestStepDynamicTimeout:
     """Tests for Jinja2 template expressions in step timeout field."""
@@ -1127,15 +1109,13 @@ class TestStepDynamicTimeout:
         from ofx.runner.templates.resolver import TemplateResolver
 
         resolver = TemplateResolver()
-        # Simulate what _pre_run does: resolve a timeout expression
         timeout_expr = "42"
         resolved = await resolver.resolve(timeout_expr, {})
         assert int(float(resolved)) == 42
 
-        # Formula expression
         timeout_expr2 = "{{ (100 / 50 * 15 + 30) | int }}"
         resolved2 = await resolver.resolve(timeout_expr2, {})
-        assert int(float(resolved2)) == 60  # 100/50=2, 2*15=30, 30+30=60
+        assert int(float(resolved2)) == 60
 
     @pytest.mark.asyncio
     async def test_step_runner_timeout_formula_scales(self):
@@ -1144,28 +1124,23 @@ class TestStepDynamicTimeout:
 
         resolver = TemplateResolver()
 
-        # 50 inputs: 50/50*15+30 = 45 min
         r = await resolver.resolve("{{ (50 / 50 * 15 + 30) | int }}", {})
         assert int(float(r)) == 45
 
-        # 200 inputs: 200/50*15+30 = 90 min
         r = await resolver.resolve("{{ (200 / 50 * 15 + 30) | int }}", {})
         assert int(float(r)) == 90
 
-        # 0 inputs (default 50): should still work
         r = await resolver.resolve("{{ (0 / 50 * 15 + 30) | int }}", {})
         assert int(float(r)) == 30
 
     def test_step_timeout_invalid_fallback(self):
         """Invalid timeout expression should be handled gracefully."""
-        # Test the coercion logic used in step runner
         resolved = "not-a-number"
         try:
             timeout = int(float(resolved))
         except (ValueError, TypeError):
             timeout = 60
         assert timeout == 60
-
 
 class TestMatrixValidation:
     """Test matrix combination size validation."""
@@ -1224,7 +1199,6 @@ class TestMatrixValidation:
         )
         assert len(combos) == 6
 
-
 class TestTemplateCircularDetection:
     """Test circular template reference detection."""
 
@@ -1259,7 +1233,6 @@ class TestTemplateCircularDetection:
         with pytest.raises(ValueError, match="Circular template reference"):
             await resolver.resolve("{{ a }}", {"a": "val"}, _memo=memo)
 
-
 class TestWorkflowExecutionCancellation:
     """Test async task cancellation in stage execution."""
 
@@ -1276,7 +1249,6 @@ class TestWorkflowExecutionCancellation:
 
         mgr = WorkflowExecutionManager(parent)
 
-        # Create mock runners that simulate a slow job
         runner_fast = MagicMock()
         runner_fast.is_failed = False
         runner_fast.run = AsyncMock(return_value=None)
@@ -1291,8 +1263,5 @@ class TestWorkflowExecutionCancellation:
 
         stage_runners = {"fast": runner_fast, "slow": runner_slow}
 
-        # The fast one completes, slow one should be pending
-        # This validates the try/finally structure works
         failed = await mgr._run_stage(0, stage_runners)
-        # fast completed OK, slow completed OK (asyncio.wait handles both)
         assert "fast" not in failed

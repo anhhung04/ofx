@@ -11,7 +11,6 @@ import pytest
 
 from ofx.runner.channels import ChannelStore
 
-
 @pytest.fixture
 def channels_dir(tmp_path):
     """Create a temporary channels directory."""
@@ -19,12 +18,10 @@ def channels_dir(tmp_path):
     d.mkdir()
     return d
 
-
 @pytest.fixture
 def store(channels_dir):
     """Create a ChannelStore backed by a temp directory."""
     return ChannelStore(channels_dir)
-
 
 class TestChannelStoreBasic:
     """Basic publish/get tests for ChannelStore."""
@@ -71,7 +68,6 @@ class TestChannelStoreBasic:
         assert store.get("a") == 1
         assert store.get("b") == 2
 
-
 class TestChannelStoreSubscribe:
     """Subscribe and wait_for tests."""
 
@@ -80,7 +76,6 @@ class TestChannelStoreSubscribe:
         gen = store.subscribe("ch1", poll_interval=0.01)
         assert next(gen) == "initial"
 
-        # Publish new value in background
         def update():
             time.sleep(0.05)
             store.publish("ch1", "updated")
@@ -110,7 +105,6 @@ class TestChannelStoreSubscribe:
             store.wait_for(
                 "ch1", lambda v: v == "never", timeout=0.1, poll_interval=0.01
             )
-
 
 class TestChannelStoreManagement:
     """Delete, list, clear tests."""
@@ -153,23 +147,19 @@ class TestChannelStoreManagement:
 
         assert not channels_dir.exists()
 
-
 class TestChannelStoreMtimeCache:
     """Test that mtime-based caching works correctly."""
 
     def test_cache_returns_same_value_without_reread(self, store):
         store.publish("ch1", "val")
-        # First read populates cache
         assert store.get("ch1") == "val"
-        # Second read should hit cache (same mtime)
         assert store.get("ch1") == "val"
 
     def test_cache_invalidated_on_external_write(self, store, channels_dir):
         store.publish("ch1", "original")
         assert store.get("ch1") == "original"
 
-        # Simulate external write (e.g., from bash)
-        time.sleep(0.01)  # Ensure mtime changes
+        time.sleep(0.01)
         (channels_dir / "ch1").write_text('"modified"')
 
         assert store.get("ch1") == "modified"
@@ -180,7 +170,6 @@ class TestChannelStoreMtimeCache:
         cached = store._cache.get("ch1")
         assert cached is not None and cached[0] == 1.23 and cached[1] == "cached"
         assert not (cached is not None and cached[0] == 2.34)
-
 
 class TestChannelStoreHelpers:
     def test_subscribe_skips_duplicate_values(self, store):
@@ -209,7 +198,6 @@ class TestChannelStoreHelpers:
         assert store.delete("jobs") is True
         assert not (channels_dir / "jobs").exists()
         assert not (channels_dir / "jobs.lock").exists()
-
 
 class TestChannelStoreAsync:
     @pytest.mark.asyncio
@@ -272,7 +260,6 @@ class TestChannelStoreAsync:
         assert result == "ready"
         await publish_task
 
-
 class TestChannelStoreCrossProcess:
     """Test cross-process locking via flock."""
 
@@ -298,11 +285,9 @@ for i in range(50):
         for p in procs:
             p.wait()
 
-        # After all writes, the file should contain valid JSON
         store = ChannelStore(channels_dir)
         value = store.get("counter")
         assert isinstance(value, int)
-
 
 class TestBashChannelFunctions:
     """Test that bash ofx_publish / ofx_get work and share the same lock."""
@@ -428,7 +413,6 @@ ofx_wait_for "wait_chan" '"done"' 5 0.1
         t.join()
         assert result.returncode == 0, f"bash failed: {result.stderr}"
         assert '"done"' in result.stdout
-
 
 class TestScriptRunnerChannelPrimitives:
     """Test that Python script runner supports primitive channel values."""

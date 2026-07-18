@@ -11,7 +11,6 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
-
 class RegistryAdapter(ABC):
     """Abstract base class for job registry implementations using adapter pattern."""
 
@@ -173,7 +172,6 @@ class RegistryAdapter(ABC):
     async def _close(self) -> None:
         ...
 
-
 class PrefixedRegistryAdapter(RegistryAdapter):
     """Shared helpers for backends that store logical keys under a prefix."""
 
@@ -188,7 +186,6 @@ class PrefixedRegistryAdapter(RegistryAdapter):
 
     def _logical_key(self, stored_key: str) -> str:
         return self._unprefixed_key(stored_key, self.prefix, self._prefix_separator)
-
 
 class SerializedPrefixedRegistryAdapter(PrefixedRegistryAdapter):
     """Shared CRUD helpers for prefixed backends storing serialized values."""
@@ -264,7 +261,6 @@ class SerializedPrefixedRegistryAdapter(PrefixedRegistryAdapter):
     @abstractmethod
     async def _clear_storage(self) -> None:
         ...
-
 
 __all__ = [
     "PrefixedRegistryAdapter",

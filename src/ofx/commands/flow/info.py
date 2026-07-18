@@ -12,13 +12,11 @@ from ofx.runner.step_descriptors import step_type_label
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS, get_console
 from ofx.utils.workflow_utils import find_workflow
 
-
 def _find_workflow_fuzzy(name: str) -> Workflow:
     """Find workflow by name, with recursive fallback for bare names."""
     dirs = tuple(DEFAULT_WORKFLOWS_DIRS)
     with suppress(RuntimeError):
         return find_workflow(name, dirs)
-    # Fallback: search recursively for <name>.yml in all search dirs
     from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
     for d in DEFAULT_WORKFLOWS_DIRS:
@@ -33,7 +31,6 @@ def _find_workflow_fuzzy(name: str) -> Workflow:
                 wf.workflow_path = match
                 return wf
     raise RuntimeError(f"Could not find workflow '{name}'")
-
 
 def show_info(workflow_name: str, detailed: bool = False) -> None:
     """Display detailed information about a workflow."""
@@ -93,7 +90,6 @@ def show_info(workflow_name: str, detailed: bool = False) -> None:
         )
     )
 
-    # Inputs
     if workflow.dispatch and workflow.dispatch.inputs:
         inputs_table = Table(title="Inputs", title_style="bold yellow", padding=(0, 1))
         inputs_table.add_column("Name", style="cyan bold")

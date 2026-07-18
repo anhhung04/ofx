@@ -6,7 +6,6 @@ from ofx.models.step import RunType
 from ofx.runner.context import context_copy
 from ofx.runner.handlers.registry import registry
 
-
 @registry.register(RunType.WORKFLOW)
 def create_runner(step_runner):
     from ofx.runner.workflow import WorkflowRunner

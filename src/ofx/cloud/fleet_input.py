@@ -16,12 +16,10 @@ from pathlib import Path
 
 logger = logging.getLogger("ofx")
 
-# Pattern for IP ranges like 10.0.0.1-10.0.0.50 or 10.0.0.1-50
 _RANGE_FULL = re.compile(
     r"^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s*-\s*(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$"
 )
 _RANGE_SHORT = re.compile(r"^(\d{1,3}\.\d{1,3}\.\d{1,3})\.(\d{1,3})\s*-\s*(\d{1,3})$")
-
 
 class FleetInputParser:
     """Parses and expands fleet input into distributable targets.
@@ -178,7 +176,6 @@ class FleetInputParser:
         if not line or line.startswith("#"):
             return
 
-        # Remove inline comments
         if "#" in line:
             line = line[: line.index("#")].strip()
 
@@ -261,7 +258,6 @@ class FleetInputParser:
         if end < start:
             start, end = end, start
 
-        # Validate octet range
         if start > 255 or end > 255:
             logger.warning(
                 "IP range '%s' contains invalid octets (>255); skipping", range_str
@@ -283,7 +279,6 @@ class FleetInputParser:
         except ValueError:
             return False
         return False
-
 
 def split_subnet(cidr: str, count: int, min_prefix: int = 32) -> list[str]:
     """Split a CIDR into sub-subnets for distribution.
@@ -307,7 +302,6 @@ def split_subnet(cidr: str, count: int, min_prefix: int = 32) -> list[str]:
     if count <= 1:
         return [str(network)]
 
-    # Calculate prefix for splitting
     extra_bits = math.ceil(math.log2(count))
     new_prefix = network.prefixlen + extra_bits
 
@@ -318,9 +312,7 @@ def split_subnet(cidr: str, count: int, min_prefix: int = 32) -> list[str]:
 
     subnets = list(network.subnets(new_prefix=new_prefix))
 
-    # If we generated more subnets than needed, group them
     if len(subnets) > count:
-        # Merge surplus subnets into the last groups
         result = []
         chunk_size = len(subnets) // count
         remainder = len(subnets) % count
@@ -331,7 +323,6 @@ def split_subnet(cidr: str, count: int, min_prefix: int = 32) -> list[str]:
             if len(group) == 1:
                 result.append(str(group[0]))
             else:
-                # Return individual subnets in the group
                 result.extend(str(s) for s in group)
             start = end
         return result[:count] if len(result) > count else result

@@ -18,7 +18,6 @@ from ofx.runner.runner import Runner
 from ofx.runner.step_fields import BASE_STEP_TEMPLATE_FIELDS, RUN_TYPE_TEMPLATE_FIELDS
 from ofx.runner.step_mixin import StepRunnerMixin
 
-
 class StepRunner(StepRunnerMixin, Runner[Step]):
     def __init__(
         self,
@@ -85,6 +84,5 @@ class StepRunner(StepRunnerMixin, Runner[Step]):
         if step_path.is_absolute():
             return step_path
         return (base_path / step_path).resolve()
-
 
 __all__ = ["StepRunner", "_timeout_int"]

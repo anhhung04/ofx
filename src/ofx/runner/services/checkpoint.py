@@ -20,7 +20,6 @@ from ofx.runner.registry_keys import RunnerRegistryKeys
 if TYPE_CHECKING:
     from ofx.runner.runner import Runner
 
-
 class CheckpointManager:
     """Manage durable checkpoint persistence and restoration."""
 
@@ -169,7 +168,6 @@ class CheckpointManager:
             )
         except Exception as exc:
             self._runner._log_warning(f"auto-commit/push failed: {exc}")
-
 
 __all__ = [
     "CheckpointManager",

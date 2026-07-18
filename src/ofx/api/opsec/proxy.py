@@ -9,7 +9,6 @@ __all__ = [
     "http_proxy_env",
 ]
 
-
 def build_proxychains_conf(
     proxies: list[dict[str, Any]],
     *,
@@ -36,7 +35,6 @@ def build_proxychains_conf(
             entry += f" {p['user']} {p['pass']}"
         lines.append(entry)
     return "\n".join(lines)
-
 
 def http_proxy_env(
     host: str,

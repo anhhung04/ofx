@@ -7,7 +7,6 @@ import threading
 import pytest
 import yaml
 
-
 @pytest.fixture()
 def isolated_config(tmp_path, monkeypatch):
     """Redirect CONFIG_YAML and BASE_DATA_DIR to a tmp dir for each test."""
@@ -17,12 +16,6 @@ def isolated_config(tmp_path, monkeypatch):
     monkeypatch.setattr(sm, "CONFIG_YAML", cfg)
     monkeypatch.setattr(sm, "BASE_DATA_DIR", tmp_path)
     return cfg
-
-
-# ---------------------------------------------------------------------------
-# update_config_field
-# ---------------------------------------------------------------------------
-
 
 class TestUpdateConfigField:
     def test_creates_config_when_missing(self, isolated_config):
@@ -65,7 +58,7 @@ class TestUpdateConfigField:
         from ofx.settings import update_config_field
 
         isolated_config.write_text("other: 1\n")
-        update_config_field("active_project", None)  # should not raise
+        update_config_field("active_project", None)
         data = yaml.safe_load(isolated_config.read_text()) or {}
         assert "active_project" not in data
 
@@ -73,7 +66,6 @@ class TestUpdateConfigField:
         from ofx.settings import update_config_field
 
         isolated_config.write_text("not: valid: yaml: {{{{")
-        # Should not raise; should start fresh
         update_config_field("active_project", "safe")
         data = yaml.safe_load(isolated_config.read_text()) or {}
         assert data["active_project"] == "safe"
@@ -107,15 +99,8 @@ class TestUpdateConfigField:
         assert errors == [], f"Errors during concurrent writes: {errors}"
 
         data = yaml.safe_load(isolated_config.read_text()) or {}
-        # All 10 keys should be present
         for i in range(10):
             assert f"key_{i}" in data, f"key_{i} missing from config"
-
-
-# ---------------------------------------------------------------------------
-# _dump_default_config
-# ---------------------------------------------------------------------------
-
 
 class TestDumpDefaultConfig:
     def test_returns_yaml_string_with_header(self):
@@ -123,7 +108,6 @@ class TestDumpDefaultConfig:
 
         result = _dump_default_config()
         assert result.startswith(_CONFIG_YAML_HEADER)
-        # Should be valid YAML after the header
         body = result[len(_CONFIG_YAML_HEADER) :]
         data = yaml.safe_load(body)
         assert isinstance(data, dict)
@@ -143,12 +127,6 @@ class TestDumpDefaultConfig:
         for field in _CONFIG_EXCLUDE_FIELDS:
             assert field not in data
 
-
-# ---------------------------------------------------------------------------
-# _ensure_default_config
-# ---------------------------------------------------------------------------
-
-
 class TestEnsureDefaultConfig:
     def test_creates_config_when_missing(self, isolated_config):
         from ofx.settings import _ensure_default_config
@@ -166,7 +144,6 @@ class TestEnsureDefaultConfig:
         _ensure_default_config()
         data = yaml.safe_load(isolated_config.read_text()) or {}
         assert data.get("custom_key") == "custom_value"
-
 
 class TestEnsureDefaultLayout:
     def test_creates_standard_ofx_directories(self, tmp_path, monkeypatch):

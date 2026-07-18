@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("gitleaks")
 class GitleaksTask(Task):
     name = "gitleaks"
@@ -21,7 +20,6 @@ class GitleaksTask(Task):
     )
     output_types = [Tag]
 
-    # gitleaks returns exit code 1 when secrets/leaks are found — that's expected.
     success_codes = [0, 1]
 
     opts = {

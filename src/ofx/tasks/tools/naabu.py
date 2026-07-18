@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Port
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("naabu")
 class NaabuTask(Task):
     name = "naabu"

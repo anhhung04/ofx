@@ -14,9 +14,6 @@ from ofx.collections.manager import (
     check_version_constraint,
 )
 
-# ── Semver parsing ───────────────────────────────────────────────────────
-
-
 class TestParseSemver:
     def test_basic(self):
         assert _parse_semver("1.2.3") == (1, 2, 3, "")
@@ -38,10 +35,6 @@ class TestParseSemver:
 
     def test_leading_whitespace(self):
         assert _parse_semver("  v1.2.3 ") == (1, 2, 3, "")
-
-
-# ── Semver comparison ────────────────────────────────────────────────────
-
 
 class TestSemverCmp:
     def test_equal(self):
@@ -71,10 +64,6 @@ class TestSemverCmp:
 
     def test_same_pre(self):
         assert _semver_cmp("1.0.0-rc.1", "1.0.0-rc.1") == 0
-
-
-# ── Version constraint checking ──────────────────────────────────────────
-
 
 class TestCheckVersionConstraint:
     def test_empty_constraint(self):
@@ -116,10 +105,6 @@ class TestCheckVersionConstraint:
         assert check_version_constraint("1.0.0", "1.0.0") is True
         assert check_version_constraint("1.0.1", "1.0.0") is False
 
-
-# ── CollectionManager ────────────────────────────────────────────────────
-
-
 class TestCollectionManager:
     @pytest.fixture
     def mgr(self, tmp_path):
@@ -140,7 +125,6 @@ class TestCollectionManager:
 
     def test_save_and_reload(self, tmp_path):
         mgr = CollectionManager(base_dir=tmp_path)
-        # Manually insert an entry
         from ofx.collections.manifest import InstalledCollection
 
         entry = InstalledCollection(
@@ -152,7 +136,6 @@ class TestCollectionManager:
         mgr._installed["test-coll"] = entry
         mgr._save_installed()
 
-        # Reload
         mgr2 = CollectionManager(base_dir=tmp_path)
         assert "test-coll" in mgr2.list_installed()
         assert mgr2.get("test-coll").name == "test-coll"
@@ -213,7 +196,7 @@ class TestCollectionManager:
             name="gone",
             source="local",
             pinned_ref="abc",
-            path=str(tmp_path / "gone"),  # doesn't exist
+            path=str(tmp_path / "gone"),
         )
         assert mgr.collection_workflow_dirs() == []
 
@@ -235,10 +218,6 @@ class TestCollectionManager:
         (tmp_path / "my-repo").mkdir()
         with pytest.raises(ValueError, match="already exists"):
             mgr.add("https://github.com/example/my-repo")
-
-
-# ── Migration ────────────────────────────────────────────────────────────
-
 
 class TestMigration:
     def test_migrate_missing_file(self, tmp_path):
@@ -274,10 +253,6 @@ class TestMigration:
         assets.write_text(json.dumps({"gone": {"path": "/nonexistent", "url": "u"}}))
         assert mgr.migrate_from_assets(assets) == 0
 
-
-# ── Authenticated URL ────────────────────────────────────────────────────
-
-
 class TestAuthenticatedUrl:
     def test_no_token(self):
         with patch(
@@ -285,7 +260,6 @@ class TestAuthenticatedUrl:
             create=True,
         ):
             pass
-        # Direct call
         with patch("ofx.settings.get_github_token", return_value=""):
             result = CollectionManager._authenticated_url("https://github.com/org/repo")
             assert result == "https://github.com/org/repo"

@@ -7,16 +7,13 @@ from .http import chunk_b64, http_chunks, icmp_exfil_command, reassemble_b64
 from .pipeline import compress_encrypt, decompress_decrypt
 
 __all__ = [
-    # dns
     "dns_encode_payload",
     "dns_decode_payload",
     "dns_exfil_commands",
-    # http / chunking
     "http_chunks",
     "chunk_b64",
     "reassemble_b64",
     "icmp_exfil_command",
-    # pipeline
     "compress_encrypt",
     "decompress_decrypt",
 ]

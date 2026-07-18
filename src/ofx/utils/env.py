@@ -6,7 +6,6 @@ from ofx.settings import TOOLS_BIN_DIR
 
 _TOOLS_BIN_PATH = TOOLS_BIN_DIR.absolute().as_posix()
 
-
 def populate_env(alt_env=None) -> dict[str, str]:
     """Populate environment variables including tools bin directory.
 

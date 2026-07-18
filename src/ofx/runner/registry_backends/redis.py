@@ -11,7 +11,7 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    Redis = None  # type: ignore
+    Redis = None
 
 class RedisJobRegistry(SerializedPrefixedRegistryAdapter):
     """Redis-based implementation of registry

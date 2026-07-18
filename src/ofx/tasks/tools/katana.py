@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("katana")
 class KatanaTask(Task):
     name = "katana"
@@ -75,7 +74,6 @@ class KatanaTask(Task):
         if not line:
             return []
 
-        # Try JSON first (katana -jsonl output)
         if line.startswith("{"):
             data = self._parse_json_line(line)
             if data is None:
@@ -94,7 +92,6 @@ class KatanaTask(Task):
                 )
             ]
         else:
-            # Plain URL line
             if line.startswith("http://") or line.startswith("https://"):
                 return [Url(url=line)]
 

@@ -18,7 +18,6 @@ from ofx.utils.file_cleanup import remove_tree
 
 logger = logging.getLogger("ofx")
 
-
 class SessionStore:
     """CRUD operations for session metadata stored on disk.
 
@@ -41,10 +40,6 @@ class SessionStore:
     @property
     def base_dir(self) -> Path:
         return self._base_dir
-
-    # ------------------------------------------------------------------
-    # CRUD
-    # ------------------------------------------------------------------
 
     def save(self, session: Session) -> Path:
         """Persist a session to disk (create or overwrite)."""
@@ -88,7 +83,6 @@ class SessionStore:
         with self._locked_fd(path, os.O_RDWR) as fd:
             data = self._read_locked_json_fd(fd)
 
-            # Apply updates
             data["status"] = status.value if hasattr(status, "value") else status
             data.update(extra_fields)
 
@@ -130,10 +124,6 @@ class SessionStore:
         d.mkdir(parents=True, exist_ok=True)
         return d
 
-    # ------------------------------------------------------------------
-    # Cleanup
-    # ------------------------------------------------------------------
-
     def clean(
         self,
         older_than_seconds: int | None = None,
@@ -153,10 +143,6 @@ class SessionStore:
             self.delete(session.id)
             removed += 1
         return removed
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _session_file(self, session_id: str, *, ensure_dir: bool = False) -> Path:
         session_dir = self.session_dir(session_id)

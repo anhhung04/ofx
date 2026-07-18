@@ -21,7 +21,6 @@ from ofx.tasks.output_types import OutputType
 
 logger = logging.getLogger(__name__)
 
-
 class TaskExecution(BaseModel):
     """Model describing a single task execution."""
 
@@ -39,7 +38,6 @@ class TaskExecution(BaseModel):
         default=False,
         description="Store discovered UserAccount credentials into the credential store",
     )
-
 
 class TaskRunner(Runner[TaskExecution]):
     """Runner that wraps a :class:`Task` tool definition.
@@ -76,8 +74,6 @@ class TaskRunner(Runner[TaskExecution]):
     def _produce_log(self, message: str) -> str:
         return f"[Task:{self.model.task_name}] {message}"
 
-    # ── Profile integration ────────────────────────────────────────
-
     def _apply_profile_task_options(self) -> None:
         """Merge profile settings into the execution opts.
 
@@ -109,8 +105,6 @@ class TaskRunner(Runner[TaskExecution]):
                 f"Applied profile task_options for '{self.model.task_name}': "
                 f"{override_keys}"
             )
-
-    # ── Live streaming ─────────────────────────────────────────────
 
     def _on_stdout_line(self, line: str) -> None:
         """Called for each stdout line during streaming execution.
@@ -147,8 +141,6 @@ class TaskRunner(Runner[TaskExecution]):
             logger.debug(
                 "Channel publish failed (task=%s): %s", self.model.task_name, e
             )
-
-    # ── Helpers ────────────────────────────────────────────────────
 
     def _parse_outputs(self, result: CommandExecutionResult) -> list[OutputType]:
         """Delegate to the task's parse_output method with deduplication.

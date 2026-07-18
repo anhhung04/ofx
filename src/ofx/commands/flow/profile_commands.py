@@ -13,7 +13,6 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 get_profile_manager = None
 get_console = None
 
-
 def _get_profile_deps():
     profile_manager_getter = get_profile_manager
     if profile_manager_getter is None:
@@ -25,7 +24,6 @@ def _get_profile_deps():
 
     return console_getter(), profile_manager_getter()
 
-
 def _run_profile_mutation(action, success_message: str) -> None:
     console, mgr = _get_profile_deps()
     try:
@@ -34,21 +32,17 @@ def _run_profile_mutation(action, success_message: str) -> None:
     except KeyError as e:
         _profile_error(console, e)
 
-
 def _fail_invalid_set_syntax(console, item: str) -> None:
     console.print(f"[error]Invalid format '{item}', use key=value[/error]")
     raise typer.Exit(1)
-
 
 def _print_no_profiles_hint(console) -> None:
     console.print("[dim]No profiles configured. Add one with:[/dim]")
     console.print("  ofx flow profile add <name> --set rate_limit=30")
 
-
 def _profile_error(console, error: Exception) -> None:
     console.print(f"[error]{error}[/error]")
     raise typer.Exit(1) from None
-
 
 def _parse_profile_set_value(value: str) -> object:
     value = value.strip()
@@ -68,7 +62,6 @@ def _parse_profile_set_value(value: str) -> object:
                 return [v.strip() for v in inner.split(",") if v.strip()]
             return value
 
-
 def _apply_profile_set_value(console, data: dict, item: str) -> None:
     if "=" not in item:
         _fail_invalid_set_syntax(console, item)
@@ -81,7 +74,6 @@ def _apply_profile_set_value(console, data: dict, item: str) -> None:
     for part in keys[:-1]:
         current = current.setdefault(part, {})
     current[keys[-1]] = parsed_value
-
 
 @app.command("list")
 def list_profiles():
@@ -119,7 +111,6 @@ def list_profiles():
 
     console.print(table)
 
-
 @app.command("show")
 def show_profile(
     name: Annotated[str, typer.Argument(help="Profile name to inspect")],
@@ -144,7 +135,6 @@ def show_profile(
             border_style="cyan",
         )
     )
-
 
 @app.command("add")
 def add_profile(
@@ -186,7 +176,6 @@ def add_profile(
         f"[success]Profile '{name}' saved[/success]",
     )
 
-
 @app.command("remove")
 def remove_profile(
     name: Annotated[str, typer.Argument(help="Profile name to remove")],
@@ -196,7 +185,6 @@ def remove_profile(
         lambda mgr: mgr.remove(name),
         f"[success]Profile '{name}' removed[/success]",
     )
-
 
 @app.command("default")
 def set_default(

@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("sqlmap")
 class SqlmapTask(Task):
     name = "sqlmap"
@@ -65,13 +64,11 @@ class SqlmapTask(Task):
 
         results: list[Vulnerability] = []
 
-        # Extract target URL from sqlmap output
         target_url = ""
         target_match = re.search(r"(?:testing URL|URL)\s*['\"]?(https?://\S+)", raw)
         if target_match:
             target_url = target_match.group(1).rstrip("'\"")
 
-        # Split on separator lines to find individual findings
         current_param = ""
         current_type = ""
         current_title = ""
@@ -126,7 +123,6 @@ class SqlmapTask(Task):
                     current_title = ""
                     current_payload = ""
 
-        # Catch last finding if no trailing separator
         if current_title:
             results.append(
                 Vulnerability(

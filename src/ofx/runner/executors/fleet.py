@@ -14,7 +14,6 @@ from ofx.runner.executors.parallel import (
     run_parallel_runner_items,
 )
 
-
 class FleetExecutor(Executor):
     """Fleet-specific execution logic extracted from cloud fleet runners."""
 

@@ -9,7 +9,6 @@ from ofx.settings import TOOLS_BIN_DIR, get_workflow_search_dirs, settings
 
 logger = logging.getLogger(settings.app_branding)
 
-
 class ToolsInstallHandler:
     def __init__(
         self,
@@ -106,7 +105,6 @@ class ToolsInstallHandler:
 
             workflow = Workflow.model_validate(workflow_data)
 
-            # Collect from workflow-level tools: block
             if workflow.tools:
                 for tool_bin, tool_val in workflow.tools.items():
                     if isinstance(tool_val, str):
@@ -116,7 +114,6 @@ class ToolsInstallHandler:
                     elif isinstance(tool_val, dict):
                         all_tools[tool_bin] = tool_val.get("install", "")
 
-            # Build search dirs including the parent workflow's directory
             search_dirs = list(get_workflow_search_dirs())
             parent_dir = workflow_path.parent.resolve()
             if parent_dir not in search_dirs:
@@ -124,13 +121,11 @@ class ToolsInstallHandler:
 
             for job in workflow.jobs.values():
                 for step in job.steps:
-                    # Collect from task: steps via TaskRegistry
                     if step.task:
                         task_cls = TaskRegistry.get(step.task)
                         if task_cls and task_cls.install_cmd and task_cls.cmd:
                             all_tools[task_cls.cmd] = task_cls.install_cmd
 
-                    # Recurse into uses: subworkflows
                     if step.uses:
                         try:
                             sub_wf = find_workflow(step.uses, tuple(search_dirs))

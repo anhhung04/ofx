@@ -18,9 +18,6 @@ from ofx.runner.registry import FileRegistry, MemoryJobRegistry, RegistryAdapter
 from ofx.runner.registry_backends.memcached import MemcachedJobRegistry
 from ofx.runner.registry_backends.memory import RegistryOverflowError
 
-# ── MemoryJobRegistry maxsize ────────────────────────────────────────────
-
-
 class TestMemoryRegistryMaxsize:
     async def test_default_maxsize_is_large(self):
         reg = MemoryJobRegistry()
@@ -37,7 +34,6 @@ class TestMemoryRegistryMaxsize:
         reg = MemoryJobRegistry(maxsize=2)
         await reg.set("a", {"v": 1})
         await reg.set("b", {"v": 2})
-        # Updating existing key should not raise
         await reg.set("a", {"v": 3})
         assert (await reg.get("a")) == {"v": 3}
 
@@ -46,7 +42,6 @@ class TestMemoryRegistryMaxsize:
         await reg.set("a", {"v": 1})
         await reg.set("b", {"v": 2})
         await reg.delete("a")
-        # Now there's room again
         await reg.set("c", {"v": 3})
         assert (await reg.get("c")) == {"v": 3}
 
@@ -58,10 +53,6 @@ class TestMemoryRegistryMaxsize:
         with pytest.raises(ValueError, match="positive"):
             MemoryJobRegistry(maxsize=-1)
 
-
-# ── FileRegistry atomic writes ──────────────────────────────────────────
-
-
 class TestFileRegistryAtomicWrite:
     async def test_write_is_atomic(self, tmp_path):
         """Verify writes go through tmp file + os.replace."""
@@ -70,11 +61,9 @@ class TestFileRegistryAtomicWrite:
 
         await reg.set("key1", {"val": 42})
 
-        # The file should exist and be valid JSON
         data = json.loads(filepath.read_text())
         assert data["key1"]["val"] == 42
 
-        # No leftover tmp file
         tmp_file = filepath.with_suffix(".json.tmp")
         assert not tmp_file.exists()
 
@@ -91,11 +80,9 @@ class TestFileRegistryAtomicWrite:
         reg = FileRegistry(filepath=filepath)
         await reg.set("original", {"v": 1})
 
-        # Simulate a "crash" by leaving a tmp file
         tmp_file = filepath.with_suffix(".json.tmp")
-        tmp_file.write_text('{"corrupt": tru')  # malformed
+        tmp_file.write_text('{"corrupt": tru')
 
-        # The real file should still be valid
         data = json.loads(filepath.read_text())
         assert data["original"]["v"] == 1
 
@@ -113,10 +100,6 @@ class TestFileRegistryAtomicWrite:
 
         all_data = await reg.get_all()
         assert len(all_data) == 400
-
-
-# ── Protocol conformance ────────────────────────────────────────────────
-
 
 class TestProtocolConformance:
     """Verify all adapters implement the required interface."""
@@ -178,7 +161,7 @@ class TestProtocolConformance:
     async def test_invalid_updates_rejected(self, adapter):
         await adapter.set("k", {"a": 1})
         with pytest.raises(ValueError):
-            await adapter.update("k", "not_a_dict")  # type: ignore[arg-type]
+            await adapter.update("k", "not_a_dict")
 
     async def test_get_returns_copy(self, adapter):
         """Mutations to returned value must not affect stored data."""
@@ -219,7 +202,6 @@ class TestProtocolConformance:
 
         stored = await adapter.get("k")
         assert stored["nested"]["status"] == "complete"
-
 
 class TestRegistryAdapterWrapperHelpers:
     class _Adapter(RegistryAdapter):
@@ -276,7 +258,6 @@ class TestRegistryAdapterWrapperHelpers:
         await adapter.update("job", {"status": "done"})
 
         assert adapter.calls == [("update", ("job", {"status": "done"}))]
-
 
 class TestRegistrySerializationHelpers:
     @pytest.mark.asyncio
@@ -469,7 +450,6 @@ class TestRegistrySerializationHelpers:
         assert MemoryJobRegistry._deserialize_value("k", b'{"a": 1}') == {"a": 1}
         assert MemoryJobRegistry._deserialize_value("bad", b'{"a":') is None
 
-
 class FakeMemcachedClient:
     def __init__(self):
         self.store: dict[bytes, bytes] = {}
@@ -483,7 +463,6 @@ class FakeMemcachedClient:
     async def delete(self, key: bytes) -> None:
         self.store.pop(key, None)
 
-
 class FakeMemcachedRegistry(MemcachedJobRegistry):
     def __init__(self, client: FakeMemcachedClient):
         self.prefix = "ofx:job:"
@@ -491,7 +470,6 @@ class FakeMemcachedRegistry(MemcachedJobRegistry):
 
     async def _get_client(self):
         return self._client
-
 
 class TestMemcachedRegistryIndexHelpers:
     async def test_key_byte_helpers_use_prefixed_keys(self):

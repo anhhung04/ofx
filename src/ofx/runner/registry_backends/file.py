@@ -13,7 +13,6 @@ from ofx.settings import BASE_DATA_DIR, settings
 
 logger = logging.getLogger(settings.app_branding)
 
-
 class FileRegistry(RegistryAdapter):
     """File-based implementation of job registry
 
@@ -37,15 +36,12 @@ class FileRegistry(RegistryAdapter):
         self.filepath = Path(filepath)
         self.filepath.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
 
-        # Create lock file alongside the data file
         self.lockfile = self.filepath.with_suffix(".lock")
         self._lock = FileLock(str(self.lockfile), timeout=10)
 
-        # In-memory cache with mtime tracking
         self._cache: dict[str, Any] | None = None
         self._cache_mtime: float = 0.0
 
-        # Initialize file if it doesn't exist
         if not self.filepath.exists():
             self.filepath.write_text("{}")
 
@@ -64,7 +60,7 @@ class FileRegistry(RegistryAdapter):
     async def _read_registry(self) -> dict[str, Any]:
         """Read the registry file with caching."""
         if self._read_cache_valid():
-            return self._cache  # type: ignore[return-value]
+            return self._cache
 
         with self._lock:
             content = self.filepath.read_text()
@@ -90,7 +86,6 @@ class FileRegistry(RegistryAdapter):
             logger.warning("Failed to serialize registry data: %s", exc)
             return
         with self._lock:
-            # Atomic write: write to tmp file, then rename into place.
             tmp_path = self.filepath.with_suffix(".json.tmp")
             tmp_path.write_text(json_text)
             tmp_path.chmod(0o600)

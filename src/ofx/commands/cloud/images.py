@@ -12,7 +12,6 @@ from ofx.settings import get_console
 
 image_app = typer.Typer(no_args_is_help=True, help="Manage cloud images/snapshots")
 
-
 @image_app.command("list")
 def image_list(
     provider: Annotated[
@@ -49,7 +48,6 @@ def image_list(
 
     console.print(table)
 
-
 @image_app.command("create")
 def image_create(
     instance_id: Annotated[str, typer.Argument(help="Instance ID to snapshot")],
@@ -74,7 +72,6 @@ def image_create(
     console.print("[green]Snapshot created:[/green]")
     console.print(f"  ID:   {snapshot.snapshot_id}")
     console.print(f"  Name: {snapshot.name}")
-
 
 @image_app.command("delete")
 def image_delete(

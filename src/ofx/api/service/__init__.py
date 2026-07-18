@@ -9,7 +9,6 @@ from dataclasses import dataclass
 
 __all__ = ["ServiceInfo", "scan_banner", "detect_protocol"]
 
-
 @dataclass(slots=True)
 class ServiceInfo:
     host: str
@@ -18,14 +17,12 @@ class ServiceInfo:
     tls: bool
     protocol: str | None
 
-
 def _recv_banner(sock: socket.socket, max_bytes: int) -> str | None:
     try:
         data = sock.recv(max_bytes)
         return data.decode(errors="ignore").strip() if data else None
     except OSError:
         return None
-
 
 def detect_protocol(port: int, banner: str | None = None) -> str | None:
     known = {
@@ -53,7 +50,6 @@ def detect_protocol(port: int, banner: str | None = None) -> str | None:
         if "imap" in lower:
             return "imap"
     return None
-
 
 def scan_banner(
     host: str,

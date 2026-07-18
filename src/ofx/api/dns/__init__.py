@@ -14,7 +14,6 @@ __all__ = [
     "bruteforce_subdomains_sync",
 ]
 
-
 async def resolve_host(host: str, *, timeout: float = 2.0) -> list[str]:
     """Resolve a hostname to all available IPs."""
     loop = asyncio.get_running_loop()
@@ -28,7 +27,6 @@ async def resolve_host(host: str, *, timeout: float = 2.0) -> list[str]:
             results.append(ip)
     return sorted(set(results))
 
-
 def resolve_host_sync(host: str, *, timeout: float = 2.0) -> list[str]:
     """Synchronous resolver wrapper."""
     socket.setdefaulttimeout(timeout)
@@ -41,7 +39,6 @@ def resolve_host_sync(host: str, *, timeout: float = 2.0) -> list[str]:
         else:
             results.append(ip)
     return sorted(set(results))
-
 
 async def bruteforce_subdomains(
     domain: str,
@@ -75,7 +72,6 @@ async def bruteforce_subdomains(
     if tasks:
         await asyncio.gather(*tasks)
     return sorted(results)
-
 
 def bruteforce_subdomains_sync(
     domain: str,

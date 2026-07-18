@@ -24,11 +24,6 @@ from ofx.runner.commands.command_executor import (
     prepare_outputs_file_env,
 )
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _make_executor(
     cmd: str = "echo hello",
     shell: str = "/bin/bash",
@@ -47,12 +42,6 @@ def _make_executor(
         kwargs["working_directory"] = working_directory
     command = Command(**kwargs)
     return CommandExecutor(command, envs=dict(os.environ, **(envs or {})))
-
-
-# ===================================================================
-# 1. TestDecodeOutput
-# ===================================================================
-
 
 class TestDecodeOutput:
     """Test _decode_output directly."""
@@ -74,7 +63,6 @@ class TestDecodeOutput:
         stdout, stderr, outputs = executor._decode_output(large, b"")
         assert "OUTPUT TRUNCATED" in stdout
         assert outputs.get("output_truncated") is True
-        # Truncated content should start with the first 100 bytes
         assert stdout.startswith("A" * 100)
 
     @patch("ofx.runner.commands.command_executor.settings")
@@ -96,11 +84,9 @@ class TestDecodeOutput:
 
     def test_binary_output_base64(self):
         executor = _make_executor()
-        # Bytes that cannot be decoded as UTF-8
         binary_data = bytes(range(256))
         stdout, stderr, outputs = executor._decode_output(binary_data, b"\x80\x81")
         assert outputs.get("binary_output") is True
-        # Verify the base64 is decodable back
         assert base64.b64encode(binary_data).decode("utf-8") == stdout
 
     @patch("ofx.runner.commands.command_executor.settings")
@@ -112,7 +98,6 @@ class TestDecodeOutput:
         assert outputs.get("binary_output") is True
         assert outputs.get("output_truncated") is True
         assert "BINARY OUTPUT TRUNCATED" in stdout
-
 
 class TestDecodeOutputHelpers:
     def test_parse_outputs_file_filters_invalid_entries_and_logs(self, tmp_path):
@@ -140,12 +125,6 @@ class TestDecodeOutputHelpers:
         assert isinstance(stdout, str)
         assert isinstance(stderr, str)
 
-
-# ===================================================================
-# 2. TestPrepareOutputsFile
-# ===================================================================
-
-
 class TestPrepareOutputsFile:
     """Test temp file creation for step outputs."""
 
@@ -159,7 +138,6 @@ class TestPrepareOutputsFile:
         assert executor.outputs_file is not None
         assert executor.outputs_file.exists()
         assert "RUNNER_OUTPUTS" in envs
-        # Cleanup
         executor.outputs_file.unlink(missing_ok=True)
 
     def test_reuses_existing_runner_outputs(self):
@@ -189,7 +167,6 @@ class TestPrepareOutputsFile:
         )
         executor.prepare_outputs_file()
         assert executor.outputs_file is None
-
 
 class TestPrepareOutputsFileEnv:
     def test_sets_ofx_alias_when_requested(self):
@@ -223,11 +200,6 @@ class TestPrepareOutputsFileEnv:
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-# ===================================================================
-# 4. TestExecuteCommand (async integration)
-# ===================================================================
-
-
 class TestExecuteCommand:
     """Integration tests running real subprocesses."""
 
@@ -259,7 +231,6 @@ class TestExecuteCommand:
     async def test_working_directory_respected(self):
         executor = _make_executor(cmd="pwd", working_directory=Path("/tmp"))
         result = await executor.execute()
-        # /tmp may be a symlink to /private/tmp on macOS, so just check the base
         assert result.stdout.strip().endswith("/tmp")
 
     async def test_multiline_stdout(self):
@@ -274,12 +245,6 @@ class TestExecuteCommand:
         result = await executor.execute()
         assert isinstance(result, CommandExecutionResult)
         assert isinstance(result.outputs, dict)
-
-
-# ===================================================================
-# 5. TestExecuteStreaming (async)
-# ===================================================================
-
 
 class TestExecuteStreaming:
     """Streaming execution tests."""
@@ -332,7 +297,6 @@ class TestExecuteStreaming:
 
         assert result.stdout.endswith("[OUTPUT TRUNCATED]")
         assert result.outputs == {"output_truncated": True}
-
 
 class TestCommandExecutionHelpers:
     """Small helper tests for command construction."""
@@ -619,12 +583,6 @@ class TestCommandExecutionHelpers:
             ("close", None),
         ]
 
-
-# ===================================================================
-# 6. TestCaptureOutputsFile (async)
-# ===================================================================
-
-
 class TestCaptureOutputsFile:
     """Output file parsing tests."""
 
@@ -648,7 +606,7 @@ class TestCaptureOutputsFile:
         await executor.capture_outputs_file(runner, "step_key", logs.append)
 
         assert captured == {"name": "alice", "age": "30"}
-        assert not Path(tmp_path).exists()  # cleaned up
+        assert not Path(tmp_path).exists()
 
     async def test_handles_empty_file(self):
         fd, tmp_path = tempfile.mkstemp(prefix=".test_cap_", suffix=".txt")
@@ -675,7 +633,6 @@ class TestCaptureOutputsFile:
         runner.reg_update = AsyncMock()
         logs: list[str] = []
 
-        # Should not raise
         await executor.capture_outputs_file(runner, "step_key", logs.append)
         runner.reg_update.assert_not_called()
 
@@ -745,18 +702,11 @@ class TestCaptureOutputsFile:
 
         assert calls == [("outputs", {"a": "1", "b": "2"})]
 
-# ===================================================================
-# 7. TestTimeout (async)
-# ===================================================================
-
-
 class TestTimeout:
     """Timeout handling tests."""
 
     async def test_command_timeout_raises(self):
-        # sleep 10 with a tiny timeout should trigger RuntimeError
         executor = _make_executor(cmd="sleep 10", timeout_minutes=1)
-        # Bypass Pydantic validation to set a fractional minute timeout
         object.__setattr__(executor._command, "timeout_minutes", 0.01)
         with pytest.raises(RuntimeError, match="timed out"):
             await executor.execute()

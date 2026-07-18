@@ -10,13 +10,11 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Port, UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-# Matches: [+] SUCCESS: ssh://user:pass@host:22
 _SUCCESS_RE = re.compile(
     r"\[\+\]\s*SUCCESS[:\s]*"
     r"(?:(?P<service>\w+)://)?"
     r"(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)"
 )
-
 
 @TaskRegistry.register("brutespray")
 class BrutesprayTask(Task):

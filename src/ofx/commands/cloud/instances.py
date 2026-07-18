@@ -12,7 +12,6 @@ from ofx.settings import get_console
 
 instance_app = typer.Typer(no_args_is_help=True, help="Manage cloud instances")
 
-
 @instance_app.command("list")
 def instance_list(
     provider: Annotated[
@@ -55,7 +54,6 @@ def instance_list(
 
     console.print(table)
 
-
 @instance_app.command("destroy")
 def instance_destroy(
     instance_id: Annotated[str, typer.Argument(help="Instance ID to destroy")],
@@ -80,7 +78,6 @@ def instance_destroy(
         "destroy instance", lambda: asyncio.run(cloud.destroy_instance(instance_id))
     )
     console.print(f"[green]Instance {instance_id} destroyed.[/green]")
-
 
 @instance_app.command("create")
 def instance_create(

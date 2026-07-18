@@ -22,11 +22,9 @@ _USER_AGENTS = [
     "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:124.0) Gecko/20100101 Firefox/124.0",
 ]
 
-
 def rotate_user_agent() -> str:
     """Return a random realistic browser User-Agent string."""
     return random.choice(_USER_AGENTS)
-
 
 def traffic_blend_headers(referer: str = "https://www.google.com") -> dict[str, str]:
     """Return HTTP headers that blend C2/recon traffic with normal browser requests."""
@@ -43,7 +41,6 @@ def traffic_blend_headers(referer: str = "https://www.google.com") -> dict[str, 
         "Sec-Fetch-Site": "cross-site",
     }
 
-
 def domain_fronting_headers(front_domain: str, real_host: str) -> dict[str, str]:
     """Return headers for HTTP domain fronting.
 
@@ -56,9 +53,8 @@ def domain_fronting_headers(front_domain: str, real_host: str) -> dict[str, str]
     return {
         "Host": real_host,
         "X-Forwarded-Host": real_host,
-        "_front_domain": front_domain,  # informational — use for SNI override
+        "_front_domain": front_domain,
     }
-
 
 def cdncheck_command(domain: str) -> str:
     """Return a shell command to detect whether *domain* is behind a CDN/WAF."""

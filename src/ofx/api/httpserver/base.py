@@ -15,7 +15,6 @@ from ofx.api.exploitation.exploit.utils import check_port, get_host_ip, get_host
 
 logger = get_logger()
 
-
 class BaseRequestHandler(SimpleHTTPRequestHandler):
     """Custom HTTP request handler with logging.
 
@@ -34,18 +33,15 @@ class BaseRequestHandler(SimpleHTTPRequestHandler):
             f"{self.address_string()} -- [{self.log_date_time_string()}] {format % args}\n"
         )
 
-
 class HTTPServerV6(HTTPServer):
     """HTTP server that uses IPv6 addressing."""
 
     address_family = socket.AF_INET6
 
-
 class HTTPServerV4(HTTPServer):
     """HTTP server that uses IPv4 addressing."""
 
     address_family = socket.AF_INET
-
 
 class PHTTPServer(threading.Thread):
     """Threaded HTTP/HTTPS server with SSL support.
@@ -56,7 +52,7 @@ class PHTTPServer(threading.Thread):
     Example:
         >>> server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)
         >>> server.start()
-        >>> # Server is now running at http://0.0.0.0:8080
+        >>>
         >>> server.stop()
     """
 
@@ -202,7 +198,7 @@ class PHTTPServer(threading.Thread):
             >>> server = PHTTPServer(bind_ip='0.0.0.0', bind_port=8080)
             >>> server.start()
             [INFO] Starting httpd on http://0.0.0.0:8080
-            >>> # Server is now running in background
+            >>>
         """
         if self.server_locked:
             logger.info(f"Httpd serve has been started on {self.url}")
@@ -286,9 +282,9 @@ class PHTTPServer(threading.Thread):
 
         Example:
             >>> server.pause()
-            >>> # Server stops accepting requests
+            >>>
             >>> server.resume()
-            >>> # Server resumes accepting requests
+            >>>
         """
         self.__flag.clear()
 

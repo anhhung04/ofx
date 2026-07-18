@@ -2,7 +2,6 @@
 
 __all__ = ["remove_duplicate_string"]
 
-
 def remove_duplicate_string(strings: list[str]) -> list[str]:
     """Remove duplicate strings from a list while preserving order.
 

@@ -23,15 +23,12 @@ LINPEAS_URL = (
 WINPEAS_URL = f"https://github.com/peass-ng/PEASS-ng/releases/download/{_PEASS_TAG}/winPEASx64.exe"
 LES_URL = "https://raw.githubusercontent.com/mzet-/linux-exploit-suggester/master/linux-exploit-suggester.sh"
 
-
 def bundled_tool_path(filename: str) -> Path:
     """Return the bundled tool path under the data directory."""
     return DATA_DIR / "post" / filename
 
-
 def _prefer_local(local_path: Path | None) -> bool:
     return local_path is not None and local_path.exists()
-
 
 def linpeas_command(
     url: str | None = None,
@@ -52,7 +49,6 @@ def linpeas_command(
     download = build_download_command(url or LINPEAS_URL, dest, platform="unix")
     return f"{download} && chmod +x '{dest}' && '{dest}'"
 
-
 def linux_exploit_suggester_command(
     url: str | None = None,
     dest: str = "/tmp/linux-exploit-suggester.sh",
@@ -71,7 +67,6 @@ def linux_exploit_suggester_command(
         return f"chmod +x '{dest}' && '{dest}'"
     download = build_download_command(url or LES_URL, dest, platform="unix")
     return f"{download} && chmod +x '{dest}' && '{dest}'"
-
 
 def winpeas_command(
     url: str | None = None,

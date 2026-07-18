@@ -4,7 +4,6 @@ from pathlib import Path
 
 __all__ = ["read_file", "write_file"]
 
-
 def write_file(content: str, path: Path | str) -> None:
     """Write content to a file, creating parent directories if needed.
 
@@ -19,7 +18,6 @@ def write_file(content: str, path: Path | str) -> None:
         path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content)
-
 
 def read_file(path: Path | str) -> str:
     """Read content from a file.

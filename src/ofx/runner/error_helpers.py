@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 def coerce_timeout_minutes(value: int | str) -> int:
     """Coerce a template-resolved timeout value to minutes."""
     try:
@@ -12,17 +11,14 @@ def coerce_timeout_minutes(value: int | str) -> int:
     except (ValueError, TypeError):
         return 60 * 24
 
-
 def step_execution_error(status: Any, error: Any) -> str:
     return f"Step execution failed with status: {status}, error: {error}"
-
 
 def step_timeout_error(timeout_minutes: int) -> str:
     return (
         f"Step timed out after {timeout_minutes} minute(s). "
         f"Increase with 'timeout: {timeout_minutes * 2}' in the step definition."
     )
-
 
 def step_retry_error(max_attempts: int, error: Any) -> str:
     return (
@@ -32,16 +28,13 @@ def step_retry_error(max_attempts: int, error: Any) -> str:
         f"If permanent, fix the root cause before retrying."
     )
 
-
 def job_step_failed(step_name_or_index: Any, error: Any) -> str:
     return f"Step '{step_name_or_index}' failed: {error}"
-
 
 def job_failure_summary(job_id: str, error: str | None) -> str:
     """Format a job failure line for the CLI error summary."""
     root = extract_root_error(error)
     return f"  job '{job_id}': {root}"
-
 
 def extract_root_error(error: str | None) -> str:
     """Extract the most meaningful error from a nested error chain.
@@ -62,7 +55,6 @@ def extract_root_error(error: str | None) -> str:
         ):
             return stripped
     return lines[-1].strip() if lines else error
-
 
 __all__ = [
     "coerce_timeout_minutes",

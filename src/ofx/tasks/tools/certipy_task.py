@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("certipy")
 class CertipyTask(Task):
     name = "certipy"
@@ -73,13 +72,11 @@ class CertipyTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # If target looks like an IP for dc-ip, and dc_ip not already set
         if target and "-dc-ip" not in " ".join(parts):
             parts.extend(["-dc-ip", self._q(target)])
 
         return " ".join(parts), None
 
-    # ESC1: Template 'VulnTemplate' ...
     _ESC_RE = re.compile(r"(ESC\d+)\s*(?:[-:])?\s*(.+)", re.IGNORECASE)
     _TEMPLATE_RE = re.compile(r"Template Name\s*:\s*(.+)", re.IGNORECASE)
     _CA_RE = re.compile(r"CA Name\s*:\s*(.+)", re.IGNORECASE)

@@ -10,7 +10,6 @@ __all__ = [
     "enumerate_shares_command",
 ]
 
-
 def bloodhound_collection_command(
     domain: str,
     username: str,
@@ -34,7 +33,6 @@ def bloodhound_collection_command(
         f"--domaincontroller {dc} --zipfilename {zip_filename}"
     )
 
-
 def ldap_query_command(
     dc_ip: str,
     domain: str,
@@ -56,7 +54,6 @@ def ldap_query_command(
         f"ldapsearch -x -H ldap://{dc_ip} -D '{username}@{domain}' -w '{password}' "
         f"-b '{dn}' '{query}' {attrs}"
     )
-
 
 def powerview_command(
     module: str,
@@ -80,7 +77,6 @@ def powerview_command(
         parts.append(extra_args)
     return " ".join(parts)
 
-
 def enumerate_dc_command(domain: str) -> list[str]:
     """Return commands to locate domain controllers for *domain*."""
     return [
@@ -88,7 +84,6 @@ def enumerate_dc_command(domain: str) -> list[str]:
         f"dig +short SRV _ldap._tcp.dc._msdcs.{domain}",
         f"nltest /dclist:{domain} 2>/dev/null || true",
     ]
-
 
 def enumerate_shares_command(
     target: str,

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-
 class Executor(ABC):
     """Pluggable execution strategy for a runner."""
 

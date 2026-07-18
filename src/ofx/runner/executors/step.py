@@ -22,7 +22,6 @@ from ofx.runner.registry_keys import RunnerRegistryKeys
 if TYPE_CHECKING:
     from ofx.runner.runner import Runner
 
-
 class StepExecutor(Executor):
     @staticmethod
     async def _store_child_result(runner, result: RunResult) -> None:

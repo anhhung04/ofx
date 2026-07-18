@@ -25,27 +25,18 @@ logger = logging.getLogger(settings.app_branding)
 
 ENCRYPTION_KEY_FILE = ".ofx-encryption-key"
 
-# Magic bytes written at the start of every encrypted blob.
-_MAGIC = b"OFX_ENC\x01"  # 8 bytes — version 1 of the wire format
+_MAGIC = b"OFX_ENC\x01"
 _MAGIC_LEN = len(_MAGIC)
 _SALT_LEN = 16
 _NONCE_LEN = 12
-_HEADER_LEN = _MAGIC_LEN + _SALT_LEN + _NONCE_LEN  # 36 bytes
+_HEADER_LEN = _MAGIC_LEN + _SALT_LEN + _NONCE_LEN
 
-# Legacy format used a static salt and no magic header.
 _LEGACY_SALT = b"ofx-project-encryption-salt"
 _KDF_ITERATIONS = 100_000
-
-
-# ------------------------------------------------------------------
-# Key management helpers
-# ------------------------------------------------------------------
-
 
 def generate_encryption_key() -> str:
     """Generate a new encryption key."""
     return secrets.token_urlsafe(32)
-
 
 def find_encryption_key(project_path: Path) -> str | None:
     """Find encryption key by searching project and parent directories.
@@ -63,7 +54,6 @@ def find_encryption_key(project_path: Path) -> str | None:
             return key_file.read_text().strip()
     return None
 
-
 def save_encryption_key(project_path: Path, key: str) -> Path:
     """Save encryption key to project directory.
 
@@ -76,7 +66,6 @@ def save_encryption_key(project_path: Path, key: str) -> Path:
     logger.info("Encryption key saved to %s", key_file)
     return key_file
 
-
 def ensure_key_in_gitignore(project_path: Path) -> None:
     """Ensure encryption key file is in ``.gitignore``."""
     gitignore = project_path / ".gitignore"
@@ -87,16 +76,9 @@ def ensure_key_in_gitignore(project_path: Path) -> None:
     else:
         gitignore.write_text(f"{ENCRYPTION_KEY_FILE}\n")
 
-
 def is_encrypted(data: bytes) -> bool:
     """Return ``True`` if *data* starts with the OFX encryption magic header."""
     return data[:_MAGIC_LEN] == _MAGIC
-
-
-# ------------------------------------------------------------------
-# Core encryption / decryption
-# ------------------------------------------------------------------
-
 
 def _derive_key(passphrase: str, salt: bytes) -> bytes:
     """Derive a 256-bit AES key from *passphrase* and *salt* via PBKDF2."""
@@ -111,7 +93,6 @@ def _derive_key(passphrase: str, salt: bytes) -> bytes:
     )
     return kdf.derive(passphrase.encode())
 
-
 class EncryptionHandler:
     """Handles AES-256-GCM encryption/decryption for project files.
 
@@ -121,10 +102,7 @@ class EncryptionHandler:
 
     def __init__(self, key: str):
         self._passphrase = key
-        # Pre-derive a legacy key for backward-compatible decryption.
         self._legacy_key = _derive_key(key, _LEGACY_SALT)
-
-    # -- public API ---------------------------------------------------
 
     def encrypt_data(self, data: bytes) -> bytes:
         """Encrypt *data* → ``magic + salt + nonce + ciphertext``.
@@ -152,7 +130,6 @@ class EncryptionHandler:
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
         if is_encrypted(blob):
-            # New v2 format
             salt = blob[_MAGIC_LEN : _MAGIC_LEN + _SALT_LEN]
             nonce = blob[_MAGIC_LEN + _SALT_LEN : _HEADER_LEN]
             ciphertext = blob[_HEADER_LEN:]
@@ -164,7 +141,6 @@ class EncryptionHandler:
                     "Decryption failed — wrong key or corrupt data"
                 ) from exc
 
-        # Legacy format: first 12 bytes = nonce, rest = ciphertext, static salt
         if len(blob) < _NONCE_LEN + 1:
             raise ValueError("Data too short to be an encrypted blob")
         nonce = blob[:_NONCE_LEN]
@@ -182,8 +158,6 @@ class EncryptionHandler:
     def decrypt_file(self, encrypted_data: bytes) -> bytes:
         """Decrypt a blob and return plaintext. Alias for ``decrypt_data``."""
         return self.decrypt_data(encrypted_data)
-
-    # -- git filter setup ---------------------------------------------
 
     def setup_git_filters(self, repo_path: Path, patterns: list | None = None) -> None:
         """Set up git clean/smudge filters for transparent encryption."""
@@ -217,12 +191,6 @@ class EncryptionHandler:
 
         config.release()
 
-
-# ------------------------------------------------------------------
-# Git filter handlers (called via hidden CLI commands)
-# ------------------------------------------------------------------
-
-
 class GitFilterHandler:
     """Git clean/smudge filter operations invoked by ``ofx project encrypt-filter``
     and ``ofx project decrypt-filter``.
@@ -239,7 +207,6 @@ class GitFilterHandler:
         try:
             encryption_key = find_encryption_key(Path.cwd())
             if not encryption_key:
-                # No key → pass-through (no encryption configured)
                 sys.stdout.buffer.write(sys.stdin.buffer.read())
                 return
 
@@ -247,7 +214,6 @@ class GitFilterHandler:
             handler = EncryptionHandler(encryption_key)
             sys.stdout.buffer.write(handler.encrypt_data(data))
         except Exception:
-            # Safety: never corrupt the repository — pass data through on error
             import traceback
 
             logger.debug("encrypt-filter error: %s", traceback.format_exc())
@@ -266,7 +232,6 @@ class GitFilterHandler:
 
             data = sys.stdin.buffer.read()
 
-            # If data doesn't look encrypted at all, pass through unchanged.
             if not is_encrypted(data) and len(data) < _NONCE_LEN + 1:
                 sys.stdout.buffer.write(data)
                 return
@@ -274,7 +239,6 @@ class GitFilterHandler:
             handler = EncryptionHandler(encryption_key)
             sys.stdout.buffer.write(handler.decrypt_data(data))
         except Exception:
-            # Safety: pass through on any error so the working tree stays usable
             import traceback
 
             logger.debug("decrypt-filter error: %s", traceback.format_exc())

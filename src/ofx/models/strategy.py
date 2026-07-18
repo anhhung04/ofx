@@ -6,7 +6,6 @@ from pydantic import Field, field_validator
 
 from ofx.models.base import OFXBaseModel
 
-
 class FleetStrategy(OFXBaseModel):
     """Fleet distribution strategy for running across multiple VPS instances."""
 
@@ -31,7 +30,6 @@ class FleetStrategy(OFXBaseModel):
         default_factory=list,
         description="IPs or CIDRs to exclude from distribution",
     )
-
 
 class MatrixStrategy(OFXBaseModel):
     """Matrix strategy for running job variations."""

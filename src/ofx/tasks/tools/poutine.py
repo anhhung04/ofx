@@ -20,7 +20,6 @@ _SEVERITY_MAP = {
     "error": Severity.HIGH,
 }
 
-
 @TaskRegistry.register("poutine")
 class PoutineTask(Task):
     name = "poutine"

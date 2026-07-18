@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("hashid")
 class HashidTask(Task):
     name = "hashid"
@@ -32,7 +31,6 @@ class HashidTask(Task):
     def _output_suffix(self) -> str:
         return ".json"
 
-    # [+] MD5 [Hashcat Mode: 0] [JtR Format: raw-md5]
     _TYPE_RE = re.compile(
         r"\[\+\]\s+(.+?)(?:\s+\[Hashcat Mode:\s*(\d+)\])?(?:\s+\[JtR Format:\s*(\S+)\])?"
     )
@@ -55,7 +53,6 @@ class HashidTask(Task):
             if not line:
                 continue
 
-            # Lines like "Analyzing 'hash_value'"
             if line.startswith("Analyzing"):
                 m = re.search(r"'([^']+)'", line)
                 if m:

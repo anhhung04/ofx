@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("wpscan")
 class WpscanTask(Task):
     name = "wpscan"
@@ -18,7 +17,6 @@ class WpscanTask(Task):
     install_cmd = "GEM_HOME=$TOOLS_DIR gem install wpscan"
     output_types = [Vulnerability, Tag]
 
-    # wpscan: exit 5 = vulnerabilities found — that's expected useful output.
     success_codes = [0, 5]
 
     opts = {
@@ -64,7 +62,6 @@ class WpscanTask(Task):
         results: list[Vulnerability | Tag] = []
         target_url = data.get("target_url", "")
 
-        # Parse plugins, themes, and main_theme sections
         for section in ("plugins", "themes", "main_theme"):
             items = data.get(section, {})
             if isinstance(items, dict):
@@ -87,7 +84,6 @@ class WpscanTask(Task):
         if not key:
             return
 
-        # Detected component tag
         version_info = item.get("version", {})
         version_number = ""
         if isinstance(version_info, dict):
@@ -103,7 +99,6 @@ class WpscanTask(Task):
                 )
             )
 
-        # Vulnerabilities in this component
         for vuln in item.get("vulnerabilities", []):
             title = vuln.get("title", "")
             if not title:

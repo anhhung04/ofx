@@ -1,6 +1,5 @@
 from ofx.api.exploitation.webshell.connectors.template import TemplateConnector
 
-
 def test_templates():
     connector = TemplateConnector()
 
@@ -8,17 +7,14 @@ def test_templates():
     php = connector.generate("php", password="pass", obfuscate=True)
     print(f"PHP Preview: {php[:100]}...")
     assert "eval" in php or "base64" in php
-    # With smart templates, tags should be preserved correctly
     assert "<?php" in php
-    # Base64 encoded payload inside
     assert "base64_decode" in php
 
     print("\nTesting ASPX Obfuscation...")
     aspx = connector.generate("aspx", password="pass", obfuscate=True)
     print(f"ASPX Preview: {aspx[:100]}...")
     assert "<%@ Page" in aspx
-    assert "System.Diagnostics" in aspx  # Directive preserved
-    # Check for obfuscation evidence
+    assert "System.Diagnostics" in aspx
     assert "Convert.FromBase64String" in aspx or "System.Text.Encoding" in aspx
 
     print("\nTesting JSP Obfuscation...")
@@ -32,7 +28,6 @@ def test_templates():
     print(f"ASP Preview: {asp[:100]}...")
     assert "<%" in asp
     assert "Chr(" in asp or "Execute" in asp
-
 
 if __name__ == "__main__":
     try:

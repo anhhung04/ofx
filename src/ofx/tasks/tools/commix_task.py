@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("commix")
 class CommixTask(Task):
     name = "commix"
@@ -44,9 +43,7 @@ class CommixTask(Task):
     def _output_suffix(self) -> str:
         return ".txt"
 
-    # The parameter 'id' is vulnerable.
     _VULN_PARAM_RE = re.compile(r"The parameter '([^']+)' is vulnerable", re.IGNORECASE)
-    # The ('...') technique appears to be injectable.
     _TECHNIQUE_RE = re.compile(
         r"The \('([^']+)'\) technique appears to be injectable", re.IGNORECASE
     )

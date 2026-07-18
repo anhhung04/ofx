@@ -15,7 +15,6 @@ from ofx.runner.executors.workflow import (
     WorkflowExecutor,
 )
 
-
 class _ProcessRunner:
     def __init__(self) -> None:
         self.warnings: list[str] = []
@@ -29,7 +28,6 @@ class _ProcessRunner:
 
     async def _resolve_template(self, value):
         return f"resolved:{value}"
-
 
 class _MatrixRunner:
     def __init__(self, workflow: Workflow, ctx: RunContext) -> None:
@@ -48,14 +46,12 @@ class _MatrixRunner:
         for key, value in updates.items():
             setattr(self.ctx, key, value)
 
-
 class _AsyncCallRecorder:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict]] = []
 
     async def __call__(self, key: str, value: dict) -> None:
         self.calls.append((key, value))
-
 
 class _RegistryRunner:
     def __init__(self) -> None:
@@ -78,7 +74,6 @@ class _RegistryRunner:
     def _log_debug(self, message: str) -> None:
         self._logged_debug.append(message)
 
-
 class _ProfileRunner:
     def __init__(self, profile_name: str = "") -> None:
         self.model = SimpleNamespace(defaults=SimpleNamespace(profile=profile_name))
@@ -94,7 +89,6 @@ class _ProfileRunner:
     def update_env_and_vars(self, env: dict, vars_update: dict) -> None:
         self.env_updates.append(dict(env))
         self.var_updates.append(dict(vars_update))
-
 
 class _PreRunRunner:
     def __init__(self) -> None:
@@ -129,7 +123,6 @@ class _PreRunRunner:
     def update_context(self, **updates) -> None:
         self.context_updates.append(dict(updates))
 
-
 class _PostRunRunner:
     def __init__(self, *, is_reused: bool) -> None:
         self._time_guard = SimpleNamespace(stop=lambda: stops.append("stop"))
@@ -142,7 +135,6 @@ class _PostRunRunner:
 
     def _log_debug(self, message: str) -> None:
         self.debug_messages.append(message)
-
 
 class _EntrypointRunner:
     def __init__(self, *, is_reused: bool, dispatch=None, call=None) -> None:
@@ -188,7 +180,6 @@ class _EntrypointRunner:
     def update_secrets(self, values: dict) -> None:
         self.secret_updates.append(dict(values))
 
-
 @pytest.mark.asyncio
 async def test_process_inputs_prefers_primary_key_over_alias() -> None:
     runner = _ProcessRunner()
@@ -206,7 +197,6 @@ async def test_process_inputs_prefers_primary_key_over_alias() -> None:
     assert runner.warnings == [
         "Both input 'target' and its alias 't' are provided. Using value from 'target' and ignoring alias."
     ]
-
 
 @pytest.mark.asyncio
 async def test_process_inputs_raises_for_missing_required_input() -> None:
@@ -228,7 +218,6 @@ async def test_process_inputs_raises_for_invalid_value_type() -> None:
     with pytest.raises(ValueError, match="Expected type: number"):
         await WorkflowExecutor().process_inputs(runner, {"count": "abc"}, blueprint)
 
-
 @pytest.mark.asyncio
 async def test_process_inputs_raises_for_unsupported_type(monkeypatch) -> None:
     import ofx.runner.executors.workflow as workflow_executor_module
@@ -245,7 +234,6 @@ async def test_process_inputs_raises_for_unsupported_type(monkeypatch) -> None:
 
     with pytest.raises(ValueError, match="Unsupported input type 'number'"):
         await WorkflowExecutor().process_inputs(runner, {"count": 1}, blueprint)
-
 
 @pytest.mark.asyncio
 async def test_process_inputs_uses_alias_defaults_and_template_resolution() -> None:
@@ -264,7 +252,6 @@ async def test_process_inputs_uses_alias_defaults_and_template_resolution() -> N
         "target": "resolved:alias",
         "count": "resolved:3",
     }
-
 
 @pytest.mark.asyncio
 async def test_process_inputs_uses_current_alias_membership_after_alias_pop() -> None:
@@ -290,7 +277,6 @@ async def test_process_inputs_uses_current_alias_membership_after_alias_pop() ->
         "Both input 'target' and its alias 't' are provided. Using value from 'target' and ignoring alias."
     ]
 
-
 @pytest.mark.asyncio
 async def test_process_inputs_warns_when_key_and_alias_are_both_provided() -> None:
     runner = _ProcessRunner()
@@ -309,7 +295,6 @@ async def test_process_inputs_warns_when_key_and_alias_are_both_provided() -> No
         "Both input 'target' and its alias 't' are provided. Using value from 'target' and ignoring alias."
     ]
 
-
 @pytest.mark.asyncio
 async def test_process_inputs_resolves_defaults_and_templates() -> None:
     runner = _ProcessRunner()
@@ -324,7 +309,6 @@ async def test_process_inputs_resolves_defaults_and_templates() -> None:
         "target": "resolved:{{ inputs.seed }}",
         "count": "resolved:3",
     }
-
 
 def test_expand_list_inputs_to_matrix_updates_only_referenced_jobs() -> None:
     from ofx.models.strategy import MatrixStrategy
@@ -368,7 +352,6 @@ def test_expand_list_inputs_to_matrix_updates_only_referenced_jobs() -> None:
     assert runner.ctx.vars["_matrix_input_keys"] == ["target"]
     assert runner.info_messages == ["Auto-expanding input 'target' (2 values) as matrix"]
 
-
 def test_expand_list_inputs_to_matrix_skips_reused_or_non_matrix_inputs() -> None:
     workflow = Workflow.model_validate(
         {
@@ -406,7 +389,6 @@ async def test_post_run_raises_when_reused_child_jobs_failed(monkeypatch) -> Non
     with pytest.raises(RuntimeError, match=r"Reusable workflow 'child-workflow': 1/2 job\(s\) failed \(job-a\)"):
         await WorkflowExecutor().post_run(runner)
 
-
 @pytest.mark.asyncio
 async def test_post_run_reused_workflow_stores_resolved_outputs(monkeypatch) -> None:
     global stops
@@ -437,7 +419,6 @@ async def test_post_run_reused_workflow_stores_resolved_outputs(monkeypatch) -> 
         ("outputs", {"target": "resolved:{{ jobs.scan.outputs.host }}"})
     ]
 
-
 @pytest.mark.asyncio
 async def test_post_run_reused_workflow_skips_empty_resolved_outputs(monkeypatch) -> None:
     global stops
@@ -459,7 +440,6 @@ async def test_post_run_reused_workflow_skips_empty_resolved_outputs(monkeypatch
 
     assert runner.registry_updates.calls == []
 
-
 @pytest.mark.asyncio
 async def test_pre_run_runs_dispatch_for_non_reused_workflow(monkeypatch) -> None:
     runner = _EntrypointRunner(
@@ -473,7 +453,7 @@ async def test_pre_run_runs_dispatch_for_non_reused_workflow(monkeypatch) -> Non
         assert blueprint == {"target": "blueprint"}
         return {"target": "resolved"}
 
-    executor.process_inputs = _process_inputs  # type: ignore[method-assign]
+    executor.process_inputs = _process_inputs
     monkeypatch.setattr(
         "ofx.runner.executors.workflow.tempfile.mkdtemp",
         lambda prefix: "/tmp/test-run-dir",
@@ -491,7 +471,6 @@ async def test_pre_run_runs_dispatch_for_non_reused_workflow(monkeypatch) -> Non
 
     assert runner.input_updates == [{"target": "resolved"}]
 
-
 @pytest.mark.asyncio
 async def test_pre_run_updates_inputs_and_secrets_for_reuse(monkeypatch) -> None:
     runner = _EntrypointRunner(
@@ -506,7 +485,7 @@ async def test_pre_run_updates_inputs_and_secrets_for_reuse(monkeypatch) -> None
         seen.append((dict(current_values), dict(blueprint)))
         return {next(iter(blueprint)): "resolved"}
 
-    executor.process_inputs = _process_inputs  # type: ignore[method-assign]
+    executor.process_inputs = _process_inputs
     monkeypatch.setattr(
         "ofx.utils.log.register_secrets",
         lambda secrets: registered.append(dict(secrets)),
@@ -583,7 +562,7 @@ async def test_do_run_cleans_up_and_stores_error_payload_on_failed_jobs(monkeypa
     async def _store_summaries(_runner):
         return None
 
-    executor.store_summaries = _store_summaries  # type: ignore[method-assign]
+    executor.store_summaries = _store_summaries
 
     with pytest.raises(RuntimeError, match=r"Job failure\(s\):") as exc:
         await executor.do_run(runner)
@@ -601,7 +580,6 @@ async def test_do_run_cleans_up_and_stores_error_payload_on_failed_jobs(monkeypa
             },
         )
     ]
-
 
 @pytest.mark.asyncio
 async def test_plan_jobs_sets_runner_fields_and_logs(monkeypatch) -> None:
@@ -628,7 +606,6 @@ async def test_plan_jobs_sets_runner_fields_and_logs(monkeypatch) -> None:
     assert list(runner._staged_jobs) == ["job-a"]
     assert runner._schedule == [["job-a"]]
     assert runner.debug_messages == ["Stages: [['job-a']]"]
-
 
 @pytest.mark.asyncio
 async def test_do_run_skips_failure_handler_when_result_clean(monkeypatch) -> None:
@@ -678,7 +655,6 @@ async def test_store_summaries_writes_summary_unified_and_output_projection(monk
         "__summary__": {"workflow_name": "wf-a", "jobs": []}
     }
 
-
 @pytest.mark.asyncio
 async def test_store_summaries_adds_time_window_metadata(monkeypatch) -> None:
     runner = _RegistryRunner()
@@ -719,7 +695,6 @@ async def test_store_summaries_adds_time_window_metadata(monkeypatch) -> None:
             "aborted": True,
         },
     }
-
 
 @pytest.mark.asyncio
 async def test_store_summaries_merges_exported_summaries(monkeypatch) -> None:
@@ -767,7 +742,6 @@ async def test_store_summaries_merges_exported_summaries(monkeypatch) -> None:
         "__findings_export__": ["subdomains/subdomains.txt"],
     }
 
-
 @pytest.mark.asyncio
 async def test_store_summaries_skips_export_without_project_path(monkeypatch) -> None:
     runner = _RegistryRunner()
@@ -794,7 +768,6 @@ async def test_store_summaries_skips_export_without_project_path(monkeypatch) ->
     assert await runner.reg_get(RunnerRegistryKeys.OUTPUTS) == {
         "__summary__": {"workflow_name": "wf-a"}
     }
-
 
 @pytest.mark.asyncio
 async def test_store_summaries_skips_export_when_no_typed_outputs(monkeypatch) -> None:
@@ -831,7 +804,6 @@ async def test_store_summaries_skips_export_when_no_typed_outputs(monkeypatch) -
     assert await runner.reg_get(RunnerRegistryKeys.OUTPUTS) == {
         "__summary__": {"workflow_name": "wf-a"}
     }
-
 
 @pytest.mark.asyncio
 async def test_store_summaries_logs_debug_on_export_failure(monkeypatch) -> None:
@@ -872,9 +844,6 @@ async def test_store_summaries_logs_debug_on_export_failure(monkeypatch) -> None
 
     assert runner._logged_debug == ["Findings export failed: boom"]
 
-
-
-
 @pytest.mark.asyncio
 async def test_apply_profile_skips_without_profile_name() -> None:
     runner = _ProfileRunner("")
@@ -884,7 +853,6 @@ async def test_apply_profile_skips_without_profile_name() -> None:
     assert runner._profile is None
     assert runner._logged_info == []
     assert runner.env_updates == []
-
 
 @pytest.mark.asyncio
 async def test_apply_profile_prefers_cli_profile_override(monkeypatch) -> None:
@@ -905,7 +873,6 @@ async def test_apply_profile_prefers_cli_profile_override(monkeypatch) -> None:
     assert runner._logged_info == ["Applying profile: stealth"]
     assert runner.var_updates[0]["profile_model"] is profile
 
-
 @pytest.mark.asyncio
 async def test_apply_profile_skips_when_profile_resolution_returns_none(monkeypatch) -> None:
     runner = _ProfileRunner("stealth")
@@ -919,7 +886,6 @@ async def test_apply_profile_skips_when_profile_resolution_returns_none(monkeypa
     assert runner._profile is None
     assert runner._logged_info == []
     assert runner.env_updates == []
-
 
 @pytest.mark.asyncio
 async def test_apply_profile_updates_runtime_and_activates_time_window(monkeypatch) -> None:
@@ -971,7 +937,6 @@ async def test_apply_profile_updates_runtime_and_activates_time_window(monkeypat
     )
     assert kwargs.get("active_message") is None
 
-
 @pytest.mark.asyncio
 async def test_apply_profile_only_includes_non_default_profile_envs(monkeypatch) -> None:
     runner = _ProfileRunner("stealth")
@@ -1015,7 +980,6 @@ async def test_apply_profile_only_includes_non_default_profile_envs(monkeypatch)
     assert env["HTTPS_PROXY"] == "socks5://127.0.0.1:9050"
     assert env["ALL_PROXY"] == "socks5://127.0.0.1:9050"
 
-
 @pytest.mark.asyncio
 async def test_apply_profile_skips_default_profile_envs(monkeypatch) -> None:
     runner = _ProfileRunner("stealth")
@@ -1046,7 +1010,6 @@ async def test_apply_profile_skips_default_profile_envs(monkeypatch) -> None:
     assert env["OFX_PROFILE_TIME_WINDOW"] == "namespace(enabled=False)"
     assert '"name": "stealth"' in env["OFX_PROFILE_JSON"]
 
-
 def test_apply_cli_time_window_returns_without_runner_var() -> None:
     runner = SimpleNamespace(
         _time_guard=None,
@@ -1055,12 +1018,11 @@ def test_apply_cli_time_window_returns_without_runner_var() -> None:
     )
     calls: list[object] = []
     executor = WorkflowExecutor()
-    executor._activate_time_window = lambda _runner, *args, **kwargs: calls.append((args, kwargs))  # type: ignore[method-assign]
+    executor._activate_time_window = lambda _runner, *args, **kwargs: calls.append((args, kwargs))
 
     executor.apply_cli_time_window(runner)
 
     assert calls == []
-
 
 def test_apply_cli_time_window_resolves_window_and_messages() -> None:
     runner = SimpleNamespace(
@@ -1070,7 +1032,7 @@ def test_apply_cli_time_window_resolves_window_and_messages() -> None:
     )
     activations: list[tuple[tuple[object, ...], dict[str, object]]] = []
     executor = WorkflowExecutor()
-    executor._activate_time_window = lambda _runner, *args, **kwargs: activations.append((args, kwargs))  # type: ignore[method-assign]
+    executor._activate_time_window = lambda _runner, *args, **kwargs: activations.append((args, kwargs))
 
     executor.apply_cli_time_window(runner)
 
@@ -1121,7 +1083,6 @@ def test_activate_time_window_checks_starts_and_logs(monkeypatch) -> None:
     assert infos == ["Time window active"]
     guard_callbacks[0]("expired")
     assert errors == ["🛑 expired - workflow will be aborted"]
-
 
 @pytest.mark.asyncio
 async def test_pre_run_runs_setup_steps_in_order(monkeypatch) -> None:
@@ -1212,7 +1173,6 @@ async def test_pre_run_runs_setup_steps_in_order(monkeypatch) -> None:
         "install_tools",
     ]
 
-
 @pytest.mark.asyncio
 async def test_pre_run_initializes_run_context(monkeypatch, tmp_path) -> None:
     runner = _PreRunRunner()
@@ -1273,7 +1233,6 @@ async def test_post_run_finalizes_reused_workflow_then_summaries_and_cleanup(mon
     assert calls == ["summaries", "cleanup"]
     assert runner.debug_messages == ["result: done"]
 
-
 @pytest.mark.asyncio
 async def test_post_run_skips_reused_finalization_for_normal_workflow(monkeypatch) -> None:
     global stops
@@ -1298,7 +1257,6 @@ async def test_post_run_skips_reused_finalization_for_normal_workflow(monkeypatc
     assert stops == ["stop"]
     assert calls == ["summaries", "cleanup"]
 
-
 def test_on_failure_cleans_up_run_dir(monkeypatch) -> None:
     executor = WorkflowExecutor()
     runner = SimpleNamespace(_run_dir=Path("/tmp/ofx-run"))
@@ -1313,7 +1271,6 @@ def test_on_failure_cleans_up_run_dir(monkeypatch) -> None:
     asyncio.run(executor.on_failure(runner))
 
     assert calls == [runner._run_dir]
-
 
 @pytest.mark.asyncio
 async def test_pre_run_runs_runtime_steps_in_order_after_context_prep(monkeypatch) -> None:

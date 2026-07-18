@@ -13,7 +13,6 @@ from ofx.utils.log import reload_logging_config
 
 _logger: logging.Logger | None = None
 
-
 @dataclass(frozen=True)
 class LogContext:
     """Structured metadata attached to runner log records."""
@@ -29,8 +28,6 @@ class LogContext:
     @property
     def prefix(self) -> str:
         parts: list[str] = []
-        if self.run_id:
-            parts.append(f"[RUN-{self.run_id}]")
         if self.runner_type:
             parts.append(self.runner_type)
         if self.model_name:
@@ -62,7 +59,6 @@ class LogContext:
             status=status,
             parent_run_id=getattr(parent, "run_id", None),
         )
-
 
 class StructuredLogger:
     """Thin adapter that emits runner logs with structured context."""
@@ -99,7 +95,6 @@ class StructuredLogger:
     def error(self, message: Any) -> None:
         self._log("error", message)
 
-
 def bubble_context_log(parent: Any, message: Any, **context_fields: Any) -> str:
     """Format a message from log context fields and bubble it to the parent."""
     head = LogContext(**context_fields).prefix
@@ -109,7 +104,6 @@ def bubble_context_log(parent: Any, message: Any, **context_fields: Any) -> str:
         return parent._produce_log(formatted)
     return formatted
 
-
 def get_logger() -> logging.Logger:
     """Return the shared OFX logger instance."""
 
@@ -118,7 +112,6 @@ def get_logger() -> logging.Logger:
         _logger = logging.getLogger(settings.app_branding)
         reload_logging_config(settings)
     return _logger
-
 
 __all__ = [
     "LogContext",

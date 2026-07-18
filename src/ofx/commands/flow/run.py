@@ -25,11 +25,10 @@ logger = logging.getLogger(f"{settings.app_branding}.console")
 
 list_available_workflows = None
 
-
 class JsonFormatter(logging.Formatter):
     """Simple JSON formatter for cron-friendly logs."""
 
-    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+    def format(self, record: logging.LogRecord) -> str:
         payload = {
             "ts": datetime.now(UTC).isoformat(),
             "level": record.levelname.lower(),
@@ -39,7 +38,6 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             payload["exc_info"] = self.formatException(record.exc_info)
         return json.dumps(payload)
-
 
 def get_tmp_dir(output: str = "") -> Path:
     """Get the temporary directory for workflow runs"""
@@ -51,7 +49,6 @@ def get_tmp_dir(output: str = "") -> Path:
             dir=ensure_dir(TEMP_DIR),
         )
     )
-
 
 class FlowRunHandler:
     def __init__(
@@ -75,7 +72,6 @@ class FlowRunHandler:
         project: str = "",
         events: bool = False,
         time_window: str = "",
-        load_targets: bool = False,
     ):
         self.workflow_name = workflow_name
         self.preprocess_input = input or []
@@ -95,7 +91,6 @@ class FlowRunHandler:
         self.project_vars: dict[str, str] = {}
         self.events = events
         self.time_window = time_window
-        self.load_targets = load_targets
 
         if project:
             self._resolve_project(project)
@@ -166,7 +161,6 @@ class FlowRunHandler:
 
             durable_overrides = self._durable_overrides()
 
-            # Inject CLI time window into vars for WorkflowRunner
             run_vars = dict(self.project_vars) if self.project_vars else {}
             if self.profile_name:
                 run_vars["_cli_profile_name"] = self.profile_name
@@ -180,7 +174,7 @@ class FlowRunHandler:
                 inputs=self.input,
                 env=self.env,
                 output_path=self.output,
-                workflow_search_paths=get_workflow_search_dirs(),  # type: ignore
+                workflow_search_paths=get_workflow_search_dirs(),
                 quiet=self.quiet,
                 durable_overrides=durable_overrides,
                 vars=run_vars or None,
@@ -195,11 +189,9 @@ class FlowRunHandler:
                 logger.error("Workflow failed")
                 self._print_failure_details(result)
 
-            # Display execution summary
             if not self.quiet:
                 self._print_summary(result, start_time)
 
-            # Save to run history
             self._save_history(result, start_time)
 
         finally:
@@ -236,13 +228,11 @@ class FlowRunHandler:
         from ofx.runner.error_helpers import extract_root_error
 
         error_str = result.error or ""
-        # Parse job failures from the error string
         if "Job failure" in error_str:
             logger.error("Job failure(s):")
             for line in error_str.strip().splitlines():
                 line = line.strip()
                 if line.startswith("job '") or line.startswith("- job '"):
-                    # Extract root error for each job
                     root = extract_root_error(
                         line.split(":", 1)[-1] if ":" in line else line
                     )
@@ -272,14 +262,12 @@ class FlowRunHandler:
             return
 
         elapsed = time.time() - start_time
-        # Inject elapsed time into summary
         summary["elapsed_seconds"] = round(elapsed, 1)
 
         panel = execution_summary_panel(summary)
         console.print()
         console.print(panel)
 
-        # Show findings export summary
         findings = result.outputs.pop("__findings_export__", None)
         if findings:
             console.print("  [bold green]📁 Findings exported:[/]")
@@ -287,7 +275,6 @@ class FlowRunHandler:
                 console.print(f"  {line}")
             console.print()
 
-        # Show output path
         console.print(f"  [dim]Output:[/] {self.output}")
         console.print()
 
@@ -315,53 +302,7 @@ class FlowRunHandler:
 
         self.input = parse_key_value_pairs(self.preprocess_input)
 
-        # Expand @file references: target=@targets.txt reads file lines
-        self._expand_file_refs()
-
-        # Load targets from project targets/ folder (requires -T / --load-targets)
-        if self.load_targets and self.project_vars:
-            targets_dir = Path(self.project_vars.get("project_targets", ""))
-            if targets_dir.is_dir():
-                targets = self._load_targets_dir(targets_dir)
-                if targets:
-                    if "target" in self.input:
-                        logger.warning(
-                            "Overriding input 'target' with %d target(s) from %s",
-                            len(targets),
-                            targets_dir,
-                        )
-                    self.input["target"] = targets[0] if len(targets) == 1 else targets
-                    logger.info(
-                        "Loaded %d target(s) from %s",
-                        len(targets),
-                        targets_dir,
-                    )
-
-        # Validate inputs against workflow dispatch schema
         self._validate_inputs()
-
-    def _expand_file_refs(self) -> None:
-        """Expand @file references in input values.
-
-        When a value starts with ``@``, treat the remainder as a file path.
-        Read the file, one entry per line (skip blanks and ``#`` comments),
-        and replace the value with a single string (one line) or a list.
-        """
-        for key, value in list(self.input.items()):
-            if not isinstance(value, str) or not value.startswith("@"):
-                continue
-            filepath = Path(value[1:]).expanduser()
-            if not filepath.is_file():
-                raise typer.BadParameter(
-                    f"File not found for input '{key}': {filepath}"
-                )
-            entries = self._read_target_file(filepath)
-            if not entries:
-                raise typer.BadParameter(f"File for input '{key}' is empty: {filepath}")
-            self.input[key] = entries[0] if len(entries) == 1 else entries
-            logger.info(
-                "Loaded %d value(s) for '%s' from %s", len(entries), key, filepath
-            )
 
     def _validate_inputs(self) -> None:
         """Validate inputs against the workflow dispatch schema.
@@ -375,7 +316,6 @@ class FlowRunHandler:
         try:
             wf = find_workflow(self.workflow_name, tuple(get_workflow_search_dirs()))
         except Exception:
-            # Try to suggest similar workflow names
             self._suggest_similar_workflows()
             return
 
@@ -385,7 +325,6 @@ class FlowRunHandler:
         errors: list[str] = []
         for name, spec in wf.dispatch.inputs.items():
             alias = getattr(spec, "alias", None)
-            # Resolve alias: if alias was used, map it to the canonical name
             if alias and alias in self.input and name not in self.input:
                 self.input[name] = self.input.pop(alias)
 
@@ -395,12 +334,10 @@ class FlowRunHandler:
                 continue
 
             if name not in self.input:
-                # Apply default if not provided
                 if spec.default is not None:
                     self.input[name] = spec.default
                 continue
 
-            # Type coercion — warn on failure instead of blocking execution
             value = self.input[name]
             declared_type = getattr(spec, "type", "string") or "string"
             try:
@@ -408,7 +345,6 @@ class FlowRunHandler:
             except ValueError as exc:
                 logger.warning("%s — keeping original value", exc)
 
-        # Warn about inputs that don't match any declared dispatch input
         declared_names = set(wf.dispatch.inputs.keys())
         unknown = set(self.input.keys()) - declared_names
         if unknown:
@@ -457,31 +393,6 @@ class FlowRunHandler:
             logger.warning(
                 f"Workflow '{self.workflow_name}' not found. Did you mean: {suggestions}?"
             )
-
-    @staticmethod
-    def _read_target_file(filepath: Path) -> list[str]:
-        """Read a target file, returning unique non-empty, non-comment lines."""
-        entries: list[str] = []
-        seen: set[str] = set()
-        for line in filepath.read_text().splitlines():
-            entry = line.strip()
-            if entry and not entry.startswith("#") and entry not in seen:
-                seen.add(entry)
-                entries.append(entry)
-        return entries
-
-    @staticmethod
-    def _load_targets_dir(targets_dir: Path) -> list[str]:
-        """Read all .txt files in a targets directory and return unique targets."""
-        targets: list[str] = []
-        seen: set[str] = set()
-        for txt_file in sorted(targets_dir.glob("*.txt")):
-            for line in txt_file.read_text().splitlines():
-                entry = line.strip()
-                if entry and not entry.startswith("#") and entry not in seen:
-                    seen.add(entry)
-                    targets.append(entry)
-        return targets
 
     def _durable_overrides(self) -> DurableRunConfig | None:
         if (
@@ -541,7 +452,7 @@ class FlowRunHandler:
             try:
                 fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 break
-            except OSError as exc:  # pragma: no cover - platform specific
+            except OSError as exc:
                 if time.time() >= deadline:
                     os.close(fd)
                     raise RuntimeError(

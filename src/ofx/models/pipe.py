@@ -8,7 +8,6 @@ from pydantic import Field, model_validator
 
 from ofx.models.base import OFXBaseModel
 
-
 class PipeConfig(OFXBaseModel):
     """Declarative ETL pipeline executed as a step.
 

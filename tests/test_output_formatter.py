@@ -10,21 +10,10 @@ from ofx.runner.output_formatter import (
     format_typed_outputs,
 )
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _capture_console() -> tuple[Console, io.StringIO]:
     """Return a Console that writes to a StringIO buffer."""
     buf = io.StringIO()
     return Console(file=buf, force_terminal=True, width=200), buf
-
-
-# ---------------------------------------------------------------------------
-# TestFormatTypedOutputs
-# ---------------------------------------------------------------------------
-
 
 class TestFormatTypedOutputs:
     """Tests for format_typed_outputs."""
@@ -100,7 +89,6 @@ class TestFormatTypedOutputs:
         assert "1 item(s)" in output
 
     def test_all_empty_fields_skipped(self):
-        # Every data field is None/empty/0 — the type should be skipped
         items = [
             {
                 "_type": "port",
@@ -113,7 +101,6 @@ class TestFormatTypedOutputs:
         ]
         console, buf = _capture_console()
         format_typed_outputs(items, task_name="test", console=console)
-        # Nothing renderable → no output
         assert buf.getvalue() == ""
 
     def test_overflow_more_than_50_items(self):
@@ -126,7 +113,7 @@ class TestFormatTypedOutputs:
                 "state": "open",
                 "service_name": "http",
             }
-            for i in range(1, 62)  # 61 items
+            for i in range(1, 62)
         ]
         console, buf = _capture_console()
         format_typed_outputs(items, task_name="nmap", console=console)
@@ -162,7 +149,6 @@ class TestFormatTypedOutputs:
         console, buf = _capture_console()
         format_typed_outputs(items, task_name="multi", console=console)
         output = buf.getvalue()
-        # Summary shows counts per type
         assert "2" in output
         assert "1" in output
 

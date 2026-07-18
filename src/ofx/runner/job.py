@@ -17,8 +17,6 @@ from ofx.runner.executors.matrix import MatrixExecutor
 from ofx.runner.logging import bubble_context_log
 from ofx.runner.runner import Runner
 
-
-
 def build_indexed_job_context(
     runner,
     *,
@@ -46,7 +44,6 @@ def build_indexed_job_context(
         )
 
     return job_ctx
-
 
 def attach_indexed_job_runner(
     runner,
@@ -78,7 +75,6 @@ def attach_indexed_job_runner(
     runner._runners[job_copy.jid] = child_runner
     return job_copy, child_runner
 
-
 class JobRunner(Runner[Job]):
     def __init__(
         self,
@@ -98,7 +94,6 @@ class JobRunner(Runner[Job]):
     def _produce_log(self, message: Any) -> str:
         return bubble_context_log(self.parent, message, model_jid=self.model.jid)
 
-
 class MatrixJobRunner(JobRunner):
     """Runner for jobs with matrix strategy, handling multiple combinations."""
 
@@ -111,7 +106,6 @@ class MatrixJobRunner(JobRunner):
     ):
         super().__init__(job, ctx, parent, executor=executor or MatrixExecutor())
         self.name = f"Matrix{self.name}"
-
 
 __all__ = [
     "JobRunner",

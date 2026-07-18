@@ -12,7 +12,6 @@ from ofx.models.cloud import CloudConfig
 
 logger = logging.getLogger("ofx")
 
-
 class CloudProvider(ABC):
     """Abstract base class for all cloud providers.
 
@@ -123,8 +122,6 @@ class CloudProvider(ABC):
         """Clean up any resources (HTTP sessions, etc.)."""
         ...
 
-    # ── Shared helpers for subclasses ─────────────────────────────
-
     def _unsupported_operation(self, operation: str) -> NotImplementedError:
         return NotImplementedError(
             f"{self.__class__.__name__} does not support {operation}"
@@ -186,7 +183,6 @@ class CloudProvider(ABC):
                 return last_result
             await _aio.sleep(interval)
         return last_result
-
 
 class CloudProviderRegistry:
     """Registry for cloud provider implementations.

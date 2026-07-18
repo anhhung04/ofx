@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("holehe")
 class HoleheTask(Task):
     name = "holehe"
@@ -29,7 +28,7 @@ class HoleheTask(Task):
         "timeout": OptDef(flag="-t", type=int, help="Request timeout"),
     }
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = None
     output_flag = None
     extra_flags = ["--no-color"]
@@ -63,9 +62,7 @@ class HoleheTask(Task):
             return []
 
         results: list[UserAccount] = []
-        # holehe lines: [+] email is used on: SiteName
         used_re = re.compile(r"\[\+\]\s*(\S+@\S+)\s+is used on:\s*(.+)", re.IGNORECASE)
-        # Alternative format: [+] SiteName
         alt_re = re.compile(r"\[\+\]\s+(.+)")
 
         email = ""
@@ -85,9 +82,7 @@ class HoleheTask(Task):
                 )
                 continue
 
-            # Some holehe versions list sites after the email header
             if not email:
-                # Try to find email from a header line
                 email_match = re.search(r"([\w.+-]+@[\w.-]+\.\w+)", line)
                 if email_match:
                     email = email_match.group(1)

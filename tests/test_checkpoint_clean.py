@@ -27,9 +27,6 @@ from ofx.runner.durable_git import (
     is_git_repo,
 )
 
-# ── Clean checkpoint tests ────────────────────────────────────────
-
-
 @pytest.mark.asyncio
 async def test_clean_checkpoints_by_status(tmp_path: Path) -> None:
     config = DurableRunConfig(enabled=True, resume=True, backend="file")
@@ -48,7 +45,6 @@ async def test_clean_checkpoints_by_status(tmp_path: Path) -> None:
     assert len(remaining) == 1
     assert remaining[0]["status"] == "failed"
 
-
 @pytest.mark.asyncio
 async def test_clean_checkpoints_by_multiple_statuses(tmp_path: Path) -> None:
     config = DurableRunConfig(enabled=True, resume=True, backend="file")
@@ -62,7 +58,6 @@ async def test_clean_checkpoints_by_multiple_statuses(tmp_path: Path) -> None:
     remaining = await list_checkpoints(tmp_path, config)
     assert len(remaining) == 1
     assert remaining[0]["status"] == "running"
-
 
 @pytest.mark.asyncio
 async def test_clean_stale_checkpoints(tmp_path: Path) -> None:
@@ -81,7 +76,6 @@ async def test_clean_stale_checkpoints(tmp_path: Path) -> None:
     assert len(remaining) == 1
     assert remaining[0]["status"] == "completed"
 
-
 @pytest.mark.asyncio
 async def test_clean_all_checkpoints(tmp_path: Path) -> None:
     config = DurableRunConfig(enabled=True, resume=True, backend="file")
@@ -94,7 +88,6 @@ async def test_clean_all_checkpoints(tmp_path: Path) -> None:
 
     remaining = await list_checkpoints(tmp_path, config)
     assert len(remaining) == 0
-
 
 @pytest.mark.asyncio
 async def test_clean_checkpoints_by_age(tmp_path: Path) -> None:
@@ -119,13 +112,11 @@ async def test_clean_checkpoints_by_age(tmp_path: Path) -> None:
     assert len(remaining) == 1
     assert remaining[0].get("finished_at", "").startswith("2099")
 
-
 @pytest.mark.asyncio
 async def test_clean_empty_dir(tmp_path: Path) -> None:
     config = DurableRunConfig(enabled=True, resume=True, backend="file")
     removed = await clean_checkpoints(tmp_path, config, status="completed")
     assert removed == 0
-
 
 def test_get_registry_caches_by_backend_and_redis_prefix(tmp_path: Path, monkeypatch) -> None:
     durable_store._registry_cache.clear()
@@ -146,11 +137,9 @@ def test_get_registry_caches_by_backend_and_redis_prefix(tmp_path: Path, monkeyp
     assert first_registry is first_registry_cached
     assert first_registry is not second_registry
 
-
 def test_durable_module_all_exports_exist() -> None:
     for name in durable_store.__all__:
         assert hasattr(durable_store, name), name
-
 
 def test_get_registry_builds_file_registry_for_file_backend(tmp_path: Path) -> None:
     durable_store._registry_cache.clear()
@@ -161,7 +150,6 @@ def test_get_registry_builds_file_registry_for_file_backend(tmp_path: Path) -> N
     assert isinstance(registry, durable_store.FileRegistry)
     assert registry.filepath == tmp_path / ".durable" / "checkpoints.json"
     assert (tmp_path / ".durable").is_dir()
-
 
 def test_get_registry_builds_redis_registry_with_resolved_prefix(tmp_path: Path, monkeypatch) -> None:
     durable_store._registry_cache.clear()
@@ -192,31 +180,21 @@ def test_get_registry_builds_redis_registry_with_resolved_prefix(tmp_path: Path,
         )
     ]
 
-
-# ── DurableRunConfig model tests ──────────────────────────────────
-
-
 def test_durable_config_auto_commit_default() -> None:
     config = DurableRunConfig()
     assert config.auto_commit is False
     assert config.auto_push is False
-
 
 def test_durable_config_auto_commit_set() -> None:
     config = DurableRunConfig(auto_commit=True, auto_push=True)
     assert config.auto_commit is True
     assert config.auto_push is True
 
-
 def test_durable_config_alias() -> None:
     data = {"auto-commit": True, "auto-push": True, "enabled": True}
     config = DurableRunConfig.model_validate(data)
     assert config.auto_commit is True
     assert config.auto_push is True
-
-
-# ── Git helper tests ──────────────────────────────────────────────
-
 
 def _run_git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -227,17 +205,14 @@ def _run_git(*args: str, cwd: Path) -> subprocess.CompletedProcess[str]:
         capture_output=True,
     )
 
-
 def test_is_git_repo_false(tmp_path: Path) -> None:
     result = asyncio.run(is_git_repo(tmp_path))
     assert result is False
-
 
 def test_is_git_repo_true(tmp_path: Path) -> None:
     _run_git("git", "init", cwd=tmp_path)
     result = asyncio.run(is_git_repo(tmp_path))
     assert result is True
-
 
 def test_auto_commit_creates_commit(tmp_path: Path) -> None:
     _run_git("git", "init", cwd=tmp_path)
@@ -251,18 +226,15 @@ def test_auto_commit_creates_commit(tmp_path: Path) -> None:
     result = _run_git("git", "log", "--oneline", cwd=tmp_path)
     assert "test commit" in result.stdout
 
-
 def test_auto_commit_nothing_to_commit(tmp_path: Path) -> None:
     _run_git("git", "init", cwd=tmp_path)
 
     result = asyncio.run(auto_commit(tmp_path))
     assert result is False
 
-
 def test_auto_commit_non_git_dir(tmp_path: Path) -> None:
     result = asyncio.run(auto_commit(tmp_path))
     assert result is False
-
 
 def test_auto_push_no_remote(tmp_path: Path) -> None:
     _run_git("git", "init", cwd=tmp_path)
@@ -270,10 +242,8 @@ def test_auto_push_no_remote(tmp_path: Path) -> None:
     result = asyncio.run(auto_push(tmp_path))
     assert result is False
 
-
 def test_commit_and_push_no_action(tmp_path: Path) -> None:
     asyncio.run(commit_and_push(tmp_path, do_commit=False, do_push=False))
-
 
 def test_commit_and_push_push_implies_commit(tmp_path: Path) -> None:
     _run_git("git", "init", cwd=tmp_path)
@@ -285,7 +255,6 @@ def test_commit_and_push_push_implies_commit(tmp_path: Path) -> None:
 
     result = _run_git("git", "log", "--oneline", cwd=tmp_path)
     assert "test push" in result.stdout
-
 
 def test_run_git_returns_timeout_tuple(monkeypatch) -> None:
     async def _run_inline(func, *args):
@@ -307,10 +276,6 @@ def test_run_git_returns_timeout_tuple(monkeypatch) -> None:
     assert rc == 124
     assert stdout == "partial-out"
     assert stderr == "partial-err\ngit command timed out after 10s"
-
-
-# ── checkpoint command output-path resolution tests ───────────────
-
 
 def test_checkpoint_list_uses_explicit_output_path(tmp_path: Path, monkeypatch) -> None:
     from ofx.commands.flow.checkpoint import checkpoint_list
@@ -339,7 +304,6 @@ def test_checkpoint_list_uses_explicit_output_path(tmp_path: Path, monkeypatch) 
     assert seen == [explicit]
     assert messages == [("Checkpoints", "No checkpoints found.")]
 
-
 def test_checkpoint_list_uses_global_cli_project(tmp_path: Path, monkeypatch) -> None:
     from ofx.commands.flow.checkpoint import checkpoint_list
 
@@ -359,7 +323,6 @@ def test_checkpoint_list_uses_global_cli_project(tmp_path: Path, monkeypatch) ->
     checkpoint_list(output="")
 
     assert seen == [tmp_path]
-
 
 def test_checkpoint_show_uses_active_project(tmp_path: Path, monkeypatch) -> None:
     from ofx.commands.flow.checkpoint import checkpoint_show
@@ -385,7 +348,6 @@ def test_checkpoint_show_uses_active_project(tmp_path: Path, monkeypatch) -> Non
 
     assert seen == [tmp_path]
 
-
 def test_checkpoint_clean_without_project_raises(monkeypatch) -> None:
     from ofx.commands.flow.checkpoint import checkpoint_clean
 
@@ -396,7 +358,6 @@ def test_checkpoint_clean_without_project_raises(monkeypatch) -> None:
     )
     with pytest.raises(typer.BadParameter, match="No output directory"):
         checkpoint_clean(output="")
-
 
 def test_checkpoint_clean_invalid_older_than_raises(tmp_path: Path) -> None:
     from ofx.commands.flow.checkpoint import checkpoint_clean

@@ -12,7 +12,6 @@ from ofx.api.http import requests
 
 logger = get_logger()
 
-
 class Interactsh:
     """Interactsh Out-of-Band (OOB) interaction client.
 
@@ -29,7 +28,7 @@ class Interactsh:
     Example:
         >>> interactsh = Interactsh()
         >>> url, flag = interactsh.build_request(method='http')
-        >>> # Use url in your payload
+        >>>
         >>> time.sleep(2)
         >>> if interactsh.verify(flag):
         ...     print('Callback received!')
@@ -210,7 +209,7 @@ class Interactsh:
 
         Example:
             >>> url, flag = interactsh.build_request()
-            >>> # ... use url in exploit ...
+            >>>
             >>> found, interactions = interactsh.verify(flag, get_result=True)
             >>> if found:
             ...     print('Vulnerable!', interactions)
@@ -220,7 +219,6 @@ class Interactsh:
             if flag.lower() in item["full-id"].lower():
                 return (True, result) if get_result else True
         return (False, result) if get_result else False
-
 
 InteractshClient = Interactsh
 

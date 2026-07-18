@@ -2,8 +2,6 @@
 
 from ofx.cloud.fleet_input import FleetInputParser, split_subnet
 
-
-# ── Individual IP ────────────────────────────────────────────────────────
 class TestParseIP:
     def test_single_ip(self):
         p = FleetInputParser()
@@ -24,19 +22,16 @@ class TestParseIP:
         result = p.parse(["10.0.0.1", "10.0.0.2"])
         assert result == ["10.0.0.1", "10.0.0.2"]
 
-
-# ── CIDR expansion ──────────────────────────────────────────────────────
 class TestParseCIDR:
     def test_expand_small_cidr(self):
         p = FleetInputParser(expand_cidrs=True)
         result = p.parse("192.168.1.0/30")
-        # /30 = 4 addresses, 2 hosts (network + broadcast excluded)
         assert result == ["192.168.1.1", "192.168.1.2"]
 
     def test_expand_cidr_28(self):
         p = FleetInputParser(expand_cidrs=True)
         result = p.parse("10.0.0.0/28")
-        assert len(result) == 14  # /28 = 16 addresses - network - broadcast
+        assert len(result) == 14
 
     def test_no_expand_cidr(self):
         p = FleetInputParser(expand_cidrs=False)
@@ -48,8 +43,6 @@ class TestParseCIDR:
         result = p.parse("10.0.0.5/32")
         assert result == ["10.0.0.5"]
 
-
-# ── IP ranges ────────────────────────────────────────────────────────────
 class TestParseRanges:
     def test_full_range(self):
         p = FleetInputParser()
@@ -76,8 +69,6 @@ class TestParseRanges:
         result = p.parse("10.0.0.1-10.0.0.1")
         assert result == ["10.0.0.1"]
 
-
-# ── Hostnames ────────────────────────────────────────────────────────────
 class TestParseHostnames:
     def test_single_hostname(self):
         p = FleetInputParser()
@@ -88,8 +79,6 @@ class TestParseHostnames:
         result = p.parse(["10.0.0.1", "web.example.com", "192.168.1.1"])
         assert result == ["10.0.0.1", "web.example.com", "192.168.1.1"]
 
-
-# ── File input ───────────────────────────────────────────────────────────
 class TestFileInput:
     def test_file_with_ips(self, tmp_path):
         f = tmp_path / "targets.txt"
@@ -122,7 +111,6 @@ class TestFileInput:
         f1.write_text(f"{f2}\n")
         f2.write_text(f"{f1}\n")
         p = FleetInputParser()
-        # Should not infinite loop; loop is broken by _seen_files
         result = p.parse(str(f1))
         assert isinstance(result, list)
 
@@ -133,8 +121,6 @@ class TestFileInput:
         result = p.parse(str(f))
         assert result == ["10.0.0.1", "10.0.0.2"]
 
-
-# ── Exclusions ───────────────────────────────────────────────────────────
 class TestExclusions:
     def test_exclude_single_ip(self):
         p = FleetInputParser(exclude=["10.0.0.2"])
@@ -145,7 +131,6 @@ class TestExclusions:
     def test_exclude_cidr(self):
         p = FleetInputParser(exclude=["10.0.0.0/30"])
         result = p.parse("10.0.0.1-10")
-        # /30 covers 10.0.0.0-3, so 1, 2, 3 excluded
         assert "10.0.0.1" not in result
         assert "10.0.0.2" not in result
         assert "10.0.0.3" not in result
@@ -157,8 +142,6 @@ class TestExclusions:
         assert "skip.example.com" not in result
         assert "keep.example.com" in result
 
-
-# ── parse_preserving_cidrs ──────────────────────────────────────────────
 class TestParsePreservingCIDRs:
     def test_keeps_cidr_intact(self):
         p = FleetInputParser(expand_cidrs=True)
@@ -171,8 +154,6 @@ class TestParsePreservingCIDRs:
         result = p.parse_preserving_cidrs(["10.0.0.1", "10.0.0.1"])
         assert result == ["10.0.0.1"]
 
-
-# ── detect_type ─────────────────────────────────────────────────────────
 class TestDetectType:
     def test_ip(self):
         p = FleetInputParser()
@@ -194,8 +175,6 @@ class TestDetectType:
         p = FleetInputParser()
         assert p._detect_type("target.example.com") == "hostname"
 
-
-# ── split_subnet ────────────────────────────────────────────────────────
 class TestSplitSubnet:
     def test_split_16_into_4(self):
         result = split_subnet("10.0.0.0/16", 4)

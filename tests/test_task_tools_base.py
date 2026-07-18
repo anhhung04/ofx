@@ -8,9 +8,6 @@ from ofx.tasks import (
     TaskRegistry,
 )
 
-# ── Live Streaming (parse_line) ────────────────────────────────────────
-
-
 class TestParseLine:
     def test_httpx_parse_line(self):
         task = TaskRegistry.create("httpx")
@@ -92,13 +89,6 @@ class TestParseLine:
         task = TaskRegistry.create("naabu")
         assert task.supports_streaming
 
-
-# ── Error Scenarios & Edge Cases ───────────────────────────────────────
-
-
-# ── Error Scenarios & Edge Cases ───────────────────────────────────────
-
-
 class TestParseLineEdgeCases:
     """Edge cases for parse_line across streaming tools."""
 
@@ -125,7 +115,6 @@ class TestParseLineEdgeCases:
         from ofx.tasks.tools.httpx import HttpxTask
 
         task = HttpxTask()
-        # Valid JSON but no url field
         assert task.parse_line('{"status_code": 200}') == []
 
     def test_naabu_non_json_line(self):
@@ -138,7 +127,6 @@ class TestParseLineEdgeCases:
         from ofx.tasks.tools.feroxbuster import FeroxbusterTask
 
         task = FeroxbusterTask()
-        # Lines without "type":"response" should be skipped
         assert task.parse_line('{"type": "statistics", "data": {}}') == []
 
     def test_invalid_url_host_is_empty(self):
@@ -157,7 +145,6 @@ class TestParseLineEdgeCases:
 
         task = DnsxTask()
         assert task.parse_line("{}") == []
-
 
 class TestParseOutputEdgeCases:
     """Edge cases for parse_output file/stdout handling."""
@@ -208,7 +195,6 @@ class TestParseOutputEdgeCases:
         bad_file = tmp_path / "bad.xml"
         bad_file.write_text("<nmaprun><host><broken>")
         result = task.parse_output(stdout="", stderr="", output_file=bad_file)
-        # Should handle gracefully — either empty or partial results
         assert isinstance(result, list)
 
     def test_ffuf_empty_json_returns_empty(self, tmp_path):
@@ -229,7 +215,6 @@ class TestParseOutputEdgeCases:
         result = task.parse_output(stdout="", stderr="", output_file=bad_file)
         assert result == []
 
-
 class TestReadOutputFile:
     """Tests for Task._read_output_file helper."""
 
@@ -246,7 +231,6 @@ class TestReadOutputFile:
         f.write_bytes(b"\x00\x01\x02\xff")
         result = Task._read_output_file(f)
         assert isinstance(result, str)
-
 
 class TestStreamingDetectionEdgeCases:
     """Additional streaming detection tests."""
@@ -279,6 +263,3 @@ class TestStreamingDetectionEdgeCases:
 
         task = StreamTask()
         assert task.supports_streaming
-
-
-# ── Gospider Parser ────────────────────────────────────────────────────

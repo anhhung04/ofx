@@ -12,7 +12,6 @@ from ofx.models.strategy import FleetStrategy, MatrixStrategy
 from ofx.runner.executors.fleet import FleetExecutor
 from ofx.runner.executors.matrix import MatrixExecutor
 
-
 class TestCloudFleetRunner:
     """Test the fleet expansion logic in CloudFleetRunner."""
 
@@ -53,7 +52,7 @@ class TestCloudFleetRunner:
 
         parent = _ParentStub()
         ctx = RunContext()
-        runner = CloudFleetRunner(job, ctx, parent=parent)  # type: ignore
+        runner = CloudFleetRunner(job, ctx, parent=parent)
         return runner
 
     def test_fleet_only_expansion(self, tmp_path):
@@ -102,7 +101,6 @@ class TestCloudFleetRunner:
         runner = self._make_runner(strategy)
         combos = self.fleet_executor.expand_fleet(runner)
 
-        # 3 fleet chunks (matrix combos are handled by CloudMatrixJobRunner)
         assert len(combos) == 3
         for c in combos:
             assert "fleet_index" in c
@@ -162,7 +160,6 @@ class TestCloudFleetRunner:
         runner = self._make_runner(strategy)
         combos = self.fleet_executor.expand_fleet(runner)
 
-        # Only 2 targets → reduced to 2 instances
         assert len(combos) == 2
         self._cleanup_chunk_files(runner)
 
@@ -179,7 +176,6 @@ class TestCloudFleetRunner:
         runner = self._make_runner(strategy)
         combos = self.fleet_executor.expand_fleet(runner)
 
-        # Two /16 subnets → two instances, each with 2 targets
         assert len(combos) == 2
         assert combos[0]["fleet_target_count"] == 2
         assert combos[1]["fleet_target_count"] == 2
@@ -275,7 +271,6 @@ class TestCloudFleetRunner:
         assert captured["ctx"].vars["strategy"]["fleet"]["count"] == 2
         assert runner.ctx.vars == {"base": "keep"}
         assert "fleet-job_0" in runner._runners
-
 
 class TestCloudMatrixProduceLog:
     """Test _produce_log helpers for fleet/matrix runners."""
@@ -373,7 +368,6 @@ class TestCloudMatrixProduceLog:
         assert "name=recon | job=cloud-job" in msg
         assert "[cloud]" in msg
 
-
 class TestFleetSurvivingInstances:
     @pytest.mark.asyncio
     async def test_report_surviving_instances_warns_when_instances_left_running(
@@ -447,7 +441,6 @@ class TestFleetSurvivingInstances:
 
         assert destroyed == ["scan-node"]
 
-
 class TestCloudMatrixExecutor:
     """Cloud matrix combinations should dispatch on the cloud runner."""
 
@@ -483,7 +476,6 @@ class TestCloudMatrixExecutor:
             ({"tool": "nmap"}, "_0"),
             ({"tool": "nuclei"}, "_1"),
         ]
-
 
 class TestCloudMatrixJobRunnerExecution:
     @pytest.mark.asyncio
@@ -524,7 +516,6 @@ class TestCloudMatrixJobRunnerExecution:
         assert runner._matrix_combinations == []
         assert calls[-1] == ("dispatch", None)
 
-
 class TestCloudMatrixExpansion:
     """Test the matrix expansion logic in CloudMatrixJobRunner."""
 
@@ -544,7 +535,6 @@ class TestCloudMatrixExpansion:
             strategy=strategy,
             steps=[{"run": "echo hi"}],
         )
-        # We only test the expansion helper, no need for real parent
         runner = CloudMatrixJobRunner.__new__(CloudMatrixJobRunner)
         runner.model = job
         combos = self.matrix_executor.generate_matrix_combinations(runner)
@@ -642,7 +632,6 @@ class TestCloudMatrixExpansion:
         }
         assert runner._matrix_combinations == ["combo"]
         runner._log_debug.assert_called_once_with("Matrix key 'tool' resolved to 2 item(s)")
-
 
 class TestCloudStepRunnerEnvPrefix:
     """Tests for CloudStepRunner._build_env_prefix and _shell_escape."""
@@ -749,7 +738,6 @@ class TestCloudStepRunnerEnvPrefix:
             == "/tmp/.run-abc/fleet_targets.txt"
         )
 
-
 class TestCloudMatrixFailFast:
     """Tests for fail_fast behavior in CloudMatrixJobRunner."""
 
@@ -807,7 +795,6 @@ class TestCloudMatrixFailFast:
         runner = self._make_runner_with_strategy(strategy)
         assert runner.model.strategy.fail_fast is False
 
-
 class TestDiscoverPythonCache:
     """Tests that _discover_python caches its result at the parent job level."""
 
@@ -818,7 +805,6 @@ class TestDiscoverPythonCache:
         from ofx.runner.cloud_job import CloudJobRunner
         from ofx.runner.cloud_step import CloudStepRunner
 
-        # Minimal CloudJobRunner stub — only needs _cached_python
         parent_job = object.__new__(CloudJobRunner)
         parent_job._cached_python = None
 
@@ -826,7 +812,7 @@ class TestDiscoverPythonCache:
         ctx = RunContext()
 
         class _FakeRemote:
-            def run(self, cmd, timeout=None):  # noqa: D401
+            def run(self, cmd, timeout=None):
                 return "python3 3.11.0"
 
         step_runner = CloudStepRunner.__new__(CloudStepRunner)
@@ -835,7 +821,7 @@ class TestDiscoverPythonCache:
         step_runner.parent = parent_job
         step_runner._remote = _FakeRemote()
         step_runner._work_dir = "/tmp"
-        step_runner._log_info = lambda msg: None  # avoid Runner slot access
+        step_runner._log_info = lambda msg: None
         step_runner._log_debug = lambda msg: None
         return step_runner, parent_job
 
@@ -863,7 +849,7 @@ class TestDiscoverPythonCache:
     async def test_discover_python_uses_parent_cache_on_second_step(self):
         """Second CloudStepRunner reuses parent cache without probing remote."""
         step_runner, parent_job = self._make_step_runner_with_parent()
-        parent_job._cached_python = "python3"  # pre-populated
+        parent_job._cached_python = "python3"
 
         call_count = 0
 
@@ -877,7 +863,7 @@ class TestDiscoverPythonCache:
             result = await step_runner._discover_python()
 
         assert result == "python3"
-        assert call_count == 0  # no SSH probe needed
+        assert call_count == 0
 
     @pytest.mark.asyncio
     async def test_discover_python_raises_when_none_found(self):
@@ -891,7 +877,6 @@ class TestDiscoverPythonCache:
             mp.setattr("asyncio.to_thread", mock_to_thread)
             with pytest.raises(RuntimeError, match="No python3 or python"):
                 await step_runner._discover_python()
-
 
 class TestFleetInputUploadFailure:
     """Tests that fleet input upload failure raises, not warns."""
@@ -1116,7 +1101,6 @@ class TestFleetInputUploadFailure:
         from ofx.runner import RunContext
         from ofx.runner.cloud_job import CloudJobRunner
 
-        # Create a real chunk file to pass the is_file() check
         chunk = tmp_path / "chunk.txt"
         chunk.write_text("10.0.0.1\n")
 
@@ -1149,7 +1133,6 @@ class TestFleetInputUploadFailure:
 
         with pytest.raises(RuntimeError, match="Failed to upload fleet input file"):
             await runner._upload_fleet_input()
-
 
 class TestCloudStepRunIfContext:
     """Tests that _run_if_context builds the correct helpers for cloud steps."""
@@ -1218,7 +1201,7 @@ class TestCloudStepRunIfContext:
         runner = self._make_step_runner(step_index=2)
 
         class _ParentStub:
-            _runners = {}  # step 1 not present
+            _runners = {}
 
         runner.parent = _ParentStub()
         ctx = runner._run_if_context()
@@ -1229,7 +1212,7 @@ class TestCloudStepRunIfContext:
         """Cloud step logs should include index, step name, and run type."""
         runner = self._make_step_runner(step_index=2)
         runner.model.name = "recon-step"
-        runner._run_type = None  # force fallback path
+        runner._run_type = None
 
         msg = runner._produce_log("hello")
         assert "workflow[wf-a]" in msg
@@ -1238,7 +1221,6 @@ class TestCloudStepRunIfContext:
         assert "[recon-step]" in msg
         assert "[command]" in msg
         assert "hello" in msg
-
 
 class TestCloudStepWindowsSupport:
     """Tests for Windows-specific (WinRM) env prefix and command formatting."""
@@ -1257,7 +1239,6 @@ class TestCloudStepWindowsSupport:
         step = Step(run="echo hi", step_index=0)
         ctx = RunContext()
 
-        # Parent CloudJobRunner stub with _cloud_config
         parent_job = object.__new__(CloudJobRunner)
         parent_job._cached_python = None
         parent_job._cloud_config = CloudConfig(
@@ -1299,6 +1280,6 @@ class TestCloudStepWindowsSupport:
 
     def test_build_env_prefix_empty_when_no_fleet_vars(self):
         runner = self._make_runner("winrm")
-        runner.ctx.envs["SOME_LOCAL_VAR"] = "value"  # not FLEET_ or REMOTE_
+        runner.ctx.envs["SOME_LOCAL_VAR"] = "value"
         prefix = runner._build_env_prefix()
         assert prefix == ""

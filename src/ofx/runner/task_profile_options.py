@@ -11,17 +11,14 @@ from typing import Callable
 from typing import Any
 from urllib.parse import urlparse
 
-
 @dataclass(frozen=True)
 class ProfileTaskOptMapping:
     profile_attr: str
     candidate_names: tuple[str, ...]
     resolver: Callable[[str, Any, Any], Any] | None = None
 
-
 def _identity_resolver(_opt_name: str, _opt_def: Any, value: Any) -> Any:
     return value
-
 
 def _timeout_resolver(opt_name: str, opt_def: Any, value: Any) -> Any:
     minutes = int(value)
@@ -33,7 +30,6 @@ def _timeout_resolver(opt_name: str, opt_def: Any, value: Any) -> Any:
         return minutes
     return minutes * 60
 
-
 def _delay_resolver(opt_name: str, opt_def: Any, value: Any) -> Any:
     delay = float(value)
     help_text = str(getattr(opt_def, "help", "") or "").lower()
@@ -43,12 +39,10 @@ def _delay_resolver(opt_name: str, opt_def: Any, value: Any) -> Any:
         return str(value)
     return value
 
-
 def _user_agent_resolver(opt_name: str, _opt_def: Any, value: Any) -> Any:
     if opt_name in {"header", "headers"}:
         return f"User-Agent: {value}"
     return value
-
 
 COMMON_TASK_PROFILE_MAPPINGS: tuple[ProfileTaskOptMapping, ...] = (
     ProfileTaskOptMapping("proxy", ("proxy", "proxy_url", "http_proxy")),
@@ -100,7 +94,6 @@ _PROFILE_TOP_LEVEL_FIELDS: tuple[str, ...] = (
 )
 
 _ENV_KEY_SANITIZE_RE = re.compile(r"[^A-Z0-9_]+")
-
 
 def merge_profile_task_options(
     *,
@@ -159,7 +152,6 @@ def merge_profile_task_options(
 
     return merged, injected, override_keys
 
-
 def build_profile_env_overrides(profile: Any | None) -> dict[str, str]:
     """Build environment variables implied by a profile.
 
@@ -191,7 +183,6 @@ def build_profile_env_overrides(profile: Any | None) -> dict[str, str]:
     env.update({key: str(value) for key, value in (getattr(profile, "env", None) or {}).items()})
     return env
 
-
 def build_profile_var_overrides(profile: Any | None) -> dict[str, Any]:
     """Build shared profile vars injected into runner contexts."""
     if profile is None:
@@ -201,7 +192,6 @@ def build_profile_var_overrides(profile: Any | None) -> dict[str, Any]:
         "profile": profile_to_dict(profile),
         "profile_model": profile,
     }
-
 
 def profile_to_dict(profile: Any | None) -> dict[str, Any]:
     """Normalize profile-like objects to a serializable dict."""
@@ -221,7 +211,6 @@ def profile_to_dict(profile: Any | None) -> dict[str, Any]:
         else:
             data[field] = value
     return data
-
 
 def adapt_task_command_for_profile(
     command: str,
@@ -254,7 +243,6 @@ def adapt_task_command_for_profile(
     )
     return f"env {assignments} {command}"
 
-
 def _task_uses_native_proxy(
     task_declared_opts: Mapping[str, Any] | None,
     resolved_opts: Mapping[str, Any],
@@ -269,7 +257,6 @@ def _task_uses_native_proxy(
         opt_name in declared and resolved_opts.get(opt_name)
         for opt_name in proxy_opt_names
     )
-
 
 def _build_proxy_env_overrides(proxy_url: str) -> dict[str, str]:
     if not proxy_url:
@@ -287,11 +274,9 @@ def _build_proxy_env_overrides(proxy_url: str) -> dict[str, str]:
         "ALL_PROXY": proxy_url,
     }
 
-
 def _profile_field_env_key(field_name: str) -> str:
     normalized = _ENV_KEY_SANITIZE_RE.sub("_", field_name.upper()).strip("_")
     return f"OFX_PROFILE_{normalized}"
-
 
 def _serialize_profile_env_value(value: Any) -> str:
     if isinstance(value, (dict, list, tuple)):
@@ -299,7 +284,6 @@ def _serialize_profile_env_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
-
 
 __all__ = [
     "COMMON_TASK_PROFILE_MAPPING",

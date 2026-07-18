@@ -45,7 +45,6 @@ _SECURITY_HEADERS: list[str] = [
     "cross-origin-resource-policy",
 ]
 
-
 def web_fingerprint(headers: dict[str, str]) -> dict[str, str]:
     """Detect web technologies from HTTP response headers.
 
@@ -72,11 +71,9 @@ def web_fingerprint(headers: dict[str, str]) -> dict[str, str]:
 
     return findings
 
-
 def robots_txt_url(base_url: str) -> str:
     """Return the ``robots.txt`` URL for *base_url*."""
     return base_url.rstrip("/") + "/robots.txt"
-
 
 def security_headers_audit(headers: dict[str, str]) -> dict[str, str]:
     """Evaluate the presence of HTTP security headers.

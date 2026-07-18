@@ -17,9 +17,6 @@ from ofx.runner.pipe import (
     _safe_eval,
 )
 
-# ── PipeConfig model ────────────────────────────────────────────────────
-
-
 class TestPipeConfig:
     def test_minimal(self):
         cfg = PipeConfig(input="{{ steps.0.outputs.data }}")
@@ -56,10 +53,6 @@ class TestPipeConfig:
         with pytest.raises(ValueError):
             PipeConfig(input="{{ x }}", limit=0)
 
-
-# ── Step model integration ──────────────────────────────────────────────
-
-
 class TestStepPipe:
     def test_pipe_run_type(self):
         step = Step(pipe={"input": "{{ x }}"})
@@ -73,10 +66,6 @@ class TestStepPipe:
         step = Step(pipe={"input": "{{ x }}", "filter": "port > 80"})
         assert isinstance(step.pipe, PipeConfig)
         assert step.pipe.filter == "port > 80"
-
-
-# ── Input coercion ──────────────────────────────────────────────────────
-
 
 class TestCoerceToList:
     def test_list_passthrough(self):
@@ -106,10 +95,6 @@ class TestCoerceToList:
 
     def test_dict_wrapped(self):
         assert _coerce_to_list({"a": 1}) == [{"a": 1}]
-
-
-# ── Safe eval ───────────────────────────────────────────────────────────
-
 
 class TestSafeEval:
     def test_simple_comparison(self):
@@ -145,10 +130,6 @@ class TestSafeEval:
         assert _safe_eval("a or b", {"a": False, "b": True}) is True
         assert _safe_eval("not a", {"a": False}) is True
 
-
-# ── Pipeline execution ──────────────────────────────────────────────────
-
-
 SAMPLE_DATA = [
     {"host": "10.0.0.1", "port": 22, "state": "open", "svc": "ssh"},
     {"host": "10.0.0.1", "port": 80, "state": "open", "svc": "http"},
@@ -156,7 +137,6 @@ SAMPLE_DATA = [
     {"host": "10.0.0.2", "port": 443, "state": "open", "svc": "https"},
     {"host": "10.0.0.3", "port": 22, "state": "closed", "svc": "ssh"},
 ]
-
 
 class TestExecutePipeline:
     def test_filter(self):
@@ -179,7 +159,7 @@ class TestExecutePipeline:
         )
         result = _execute_pipeline(SAMPLE_DATA.copy(), cfg)
         assert result[0]["url"] == "http://10.0.0.1:22"
-        assert "port" not in result[0]  # only mapped fields kept
+        assert "port" not in result[0]
 
     def test_sort(self):
         cfg = PipeConfig(input="{{ x }}", sort="port")
@@ -211,7 +191,7 @@ class TestExecutePipeline:
     def test_unique_multi(self):
         cfg = PipeConfig(input="{{ x }}", unique=["host", "svc"])
         result = _execute_pipeline(SAMPLE_DATA.copy(), cfg)
-        assert len(result) == 5  # all unique by (host, svc) pair
+        assert len(result) == 5
 
     def test_unique_object_items_by_attribute(self):
         data = [
@@ -285,10 +265,6 @@ class TestExecutePipeline:
         result = _execute_pipeline([], cfg)
         assert result == []
 
-
-# ── Format output ───────────────────────────────────────────────────────
-
-
 class TestFormatItems:
     def test_json(self):
         cfg = PipeConfig(input="{{ x }}", format="json")
@@ -333,10 +309,6 @@ class TestFormatItems:
         cfg = PipeConfig(input="{{ x }}", format="json")
         assert _format_items([], cfg) == "[]"
 
-
-# ── Integration: full workflow run ──────────────────────────────────────
-
-
 class TestPipeFlowRun:
     @pytest.mark.asyncio
     async def test_pipe_basic_workflow(self, tmp_path):
@@ -356,10 +328,6 @@ class TestPipeFlowRun:
         assert result.status == RunnerStatus.COMPLETED, (
             f"Pipe workflow failed: {result.error}"
         )
-
-
-# ── Edge cases ──────────────────────────────────────────────────────────
-
 
 class TestSafeEvalEdgeCases:
     """Edge cases for the safe expression evaluator."""
@@ -400,7 +368,6 @@ class TestSafeEvalEdgeCases:
         with pytest.raises(AttributeError):
             _safe_eval("x.nonexistent", {"x": None})
 
-
 class TestPipelineEdgeCases:
     """Edge cases and combined operations."""
 
@@ -425,7 +392,6 @@ class TestPipelineEdgeCases:
         )
         result = _execute_pipeline(data.copy(), cfg)
         assert len(result) <= 2
-        # All remaining items should be open
         for item in result:
             assert "host" in item
             assert "port" in item
@@ -481,7 +447,6 @@ class TestPipelineEdgeCases:
         assert set(result.keys()) == {"a", "b"}
         assert len(result["a"]) == 2
         assert len(result["b"]) == 1
-
 
 class TestStepPipeEdgeCases:
     """Validate pipe step model constraints."""

@@ -4,7 +4,6 @@ from pydantic import Field
 
 from ofx.models.base import OFXBaseModel
 
-
 class ToolConfig(OFXBaseModel):
     """Configuration for tool installation and verification."""
 

@@ -10,7 +10,6 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
-
 def should_store_creds(
     step_store_creds: bool | None,
     parent_model: Any | None = None,
@@ -28,7 +27,6 @@ def should_store_creds(
     if global_default is not None:
         return global_default
     return settings.auto_store_creds
-
 
 def store_from_typed_outputs(
     typed_outputs: list[Any] | Sequence[Any],
@@ -51,7 +49,10 @@ def store_from_typed_outputs(
     try:
         from ofx.api.creds.exegol_history import ExegolHistoryDB
 
-        db = ExegolHistoryDB()
+        db = ExegolHistoryDB(
+            db_path=settings.credential_db_path,
+            key_path=settings.credential_key_path,
+        )
     except (ImportError, FileNotFoundError) as exc:
         debug(f"Credential store unavailable: {exc}")
         return 0
@@ -81,7 +82,6 @@ def store_from_typed_outputs(
             debug(f"Failed to store credential for {account.username}: {exc}")
     return stored
 
-
 def store_and_log_typed_outputs(
     typed_outputs: list[Any] | Sequence[Any],
     *,
@@ -94,7 +94,6 @@ def store_and_log_typed_outputs(
     if stored and info_fn is not None:
         info_fn(f"Stored {stored} credential(s) in credential store")
     return stored
-
 
 __all__ = [
     "should_store_creds",

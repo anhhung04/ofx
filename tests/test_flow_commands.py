@@ -10,7 +10,6 @@ from rich.console import Console
 
 from ofx.models.workflow import Workflow
 
-# Minimal valid workflow for testing
 MINIMAL_WORKFLOW = {
     "name": "test-workflow",
     "description": "A test workflow for validation",
@@ -41,14 +40,12 @@ MINIMAL_WORKFLOW = {
     },
 }
 
-
 @pytest.fixture
 def workflow_file(tmp_path: Path) -> Path:
     """Create a temporary workflow YAML file."""
     path = tmp_path / "test-workflow.yml"
     path.write_text(yaml.dump(MINIMAL_WORKFLOW))
     return path
-
 
 @pytest.fixture
 def workflow(workflow_file: Path) -> Workflow:
@@ -57,7 +54,6 @@ def workflow(workflow_file: Path) -> Workflow:
     wf = Workflow.model_validate(data)
     wf.workflow_path = workflow_file
     return wf
-
 
 class TestFlowInfo:
     def test_show_info_renders_overview_inputs_jobs_and_outputs(self, workflow_file: Path, monkeypatch):
@@ -127,7 +123,6 @@ class TestFlowInfo:
         assert "script" == step_type_label(Step(script="print(1)", name="s"))
         assert "uses:" in step_type_label(Step(uses="./other.yml", name="s"))
 
-
 class TestFlowCompletions:
     def test_complete_workflow_names_uses_module_search_dirs(self, tmp_path: Path, monkeypatch):
         flow_app = importlib.import_module("ofx.commands.flow.app")
@@ -154,7 +149,6 @@ class TestFlowCompletions:
         monkeypatch.setattr("yaml.safe_load", lambda _text: {"tags": ["ignored"]})
 
         assert flow_app._complete_tag_names("re") == ["recon"]
-
 
 class TestFlowDiff:
     def test_show_diff_identical(self, workflow_file: Path, capsys):
@@ -230,7 +224,6 @@ class TestFlowDiff:
         assert "Tools" in output
         assert "removed" in output
 
-
 class TestFlowVisualize:
     def test_visualize_json_prints_dag_structure(self, workflow_file: Path, monkeypatch):
         import json
@@ -301,7 +294,6 @@ class TestFlowVisualize:
         )
 
         visualize("fallback", format="json")
-
 
 class TestFlowValidate:
     def test_validate_workflow_reports_success(self, workflow_file: Path, monkeypatch):
@@ -434,7 +426,6 @@ class TestFlowValidate:
         assert "Workflow Validation" in output
         assert "test-workflow" in output
 
-
 class TestFlowRunSuggestions:
     def test_suggest_similar_workflows_uses_module_workflow_lister(self, monkeypatch):
         import importlib
@@ -479,7 +470,6 @@ class TestFlowRunSuggestions:
         flow_run.FlowRunHandler("scan")._suggest_similar_workflows()
 
         assert any("dns-scan" in message for message in warnings)
-
 
 class TestFlowLint:
     def test_lint_workflow_reports_single_output(self, workflow_file: Path, monkeypatch):
@@ -582,7 +572,6 @@ class TestFlowLint:
         assert "Lint Issues" in output
         assert "test-workflow" in output
 
-
 class TestFlowHistory:
     """Tests for flow run history tracking."""
 
@@ -608,7 +597,7 @@ class TestFlowHistory:
 
         records = history.load_history(limit=10)
         assert len(records) == 2
-        assert records[0]["run_id"] == "def-456"  # newest first
+        assert records[0]["run_id"] == "def-456"
         assert records[1]["run_id"] == "abc-123"
 
     def test_filter_by_workflow(self, tmp_path: Path, monkeypatch):
@@ -737,7 +726,6 @@ class TestFlowHistory:
         records = history.load_history()
         assert records == []
 
-
 class TestFlowCommandExitCodes:
     """Verify that flow subcommands exit non-zero on error conditions."""
 
@@ -812,7 +800,6 @@ class TestFlowCommandExitCodes:
         )
         assert result.exit_code != 0
 
-
 class TestFlowInit:
     """Tests for the flow init command and FlowInitHandler."""
 
@@ -882,7 +869,6 @@ class TestFlowInit:
         assert isinstance(data, dict)
         assert data["name"] == "valid-check"
         assert "jobs" in data
-
 
 class TestFlowListHandler:
     """Tests for the list_cmd handler."""
@@ -957,7 +943,6 @@ class TestFlowListHandler:
         assert "b" in output
         assert "c.txt" not in output
 
-
 class TestFlowCollectionCommands:
     def test_collection_list_uses_module_manager(self, monkeypatch):
         from typer.testing import CliRunner
@@ -1028,7 +1013,6 @@ class TestFlowCollectionCommands:
         output = console.export_text()
         assert "demo" in output
         assert "scan.yml" in output
-
 
 class TestFlowSearchHandler:
     """Tests for the search_cmd handler."""

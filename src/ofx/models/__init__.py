@@ -25,34 +25,23 @@ from ofx.models.tools import ToolConfig
 from ofx.models.workflow import Workflow, WorkflowCall, WorkflowDispatch
 
 __all__ = [
-    # Base
     "OFXBaseModel",
-    # Cloud
     "CloudConfig",
     "CloudHostEntry",
     "FleetStrategy",
     "parse_cloud_field",
-    # Config
     "DefaultConfig",
     "RunConfig",
-    # Command
     "Command",
     "Script",
-    # Inputs
     "WorkflowInput",
     "WorkflowSecret",
-    # Strategy
     "MatrixStrategy",
-    # Pipe
     "PipeConfig",
-    # Tools
     "ToolConfig",
-    # Step
     "Step",
     "RunType",
-    # Job
     "Job",
-    # Workflow
     "Workflow",
     "WorkflowCall",
     "WorkflowDispatch",

@@ -7,13 +7,11 @@ import pytest
 from ofx.runner import cleanup_registry
 from ofx.runner.registry import MemoryJobRegistry
 
-
 @pytest.fixture
 async def registry():
     reg = MemoryJobRegistry()
     yield reg
     await cleanup_registry(reg)
-
 
 @pytest.mark.asyncio
 class TestDeepCopyIsolation:
@@ -24,7 +22,6 @@ class TestDeepCopyIsolation:
         data = {"nested": {"secret": "original"}}
         await registry.set("k1", data)
 
-        # Mutate caller's copy
         data["nested"]["secret"] = "mutated"
 
         stored = await registry.get("k1")
@@ -40,7 +37,6 @@ class TestDeepCopyIsolation:
         copy_a["nested"]["val"] = 999
         assert copy_b["nested"]["val"] == 1
 
-        # And the stored copy is untouched
         stored = await registry.get("k1")
         assert stored["nested"]["val"] == 1
 
@@ -72,7 +68,6 @@ class TestDeepCopyIsolation:
         stored = await registry.get("k1")
         assert stored[0]["host"] == "a"
 
-
 @pytest.mark.asyncio
 class TestConcurrentAccess:
     """Verify that concurrent coroutines don't corrupt registry state."""
@@ -102,7 +97,6 @@ class TestConcurrentAccess:
         await asyncio.gather(*(increment(i) for i in range(n)))
 
         result = await registry.get("counter")
-        # All fields should be present
         for i in range(n):
             assert f"field_{i}" in result, f"field_{i} missing from result"
 
@@ -143,7 +137,6 @@ class TestConcurrentAccess:
 
         all_data = await registry.get_all()
         assert len(all_data) == 0
-
 
 @pytest.mark.asyncio
 class TestUpdateAtomicity:

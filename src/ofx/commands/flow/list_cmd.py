@@ -20,7 +20,6 @@ from ofx.settings import (
 
 logger = logging.getLogger("ofx")
 
-
 def show_list(
     *,
     builtin: bool = False,
@@ -91,7 +90,6 @@ def show_list(
 
     console = get_console()
 
-    # --list-tags mode
     if list_tags:
         tag_counts: dict[str, int] = defaultdict(int)
         for file, _, _ in all_files:
@@ -110,7 +108,6 @@ def show_list(
         console.print(table)
         return
 
-    # Read metadata when filtering or showing extra columns
     need_metadata = (
         bool(filter_tags) or bool(search_term) or show_tags or show_descriptions
     )
@@ -119,7 +116,6 @@ def show_list(
         for file, _, _ in all_files:
             file_meta[str(file.resolve())] = _read_metadata(file)
 
-    # Build grouped tree: source_label -> {category -> [(name, tags, description)]}
     groups: dict[str, dict[str, list[tuple[str, list[str], str]]]] = {}
 
     for file, source, base_root in all_files:

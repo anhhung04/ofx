@@ -11,7 +11,6 @@ from pydantic import Field, model_validator
 from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL
 
-
 class RunType(Enum):
     """Type of step execution."""
 
@@ -21,7 +20,6 @@ class RunType(Enum):
     SCRIPT_FILE = "script_file"
     TASK = "task"
     PIPE = "pipe"
-
 
 class Step(OFXBaseModel):
     """Step definition within a job."""
@@ -153,7 +151,6 @@ class Step(OFXBaseModel):
                 f"Step '{self.name}' retry_delay must be non-negative, got {self.retry_delay}"
             )
 
-        # Validate and coerce pipe config
         if self.pipe is not None:
             from ofx.models.pipe import PipeConfig
 

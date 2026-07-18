@@ -7,7 +7,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 class TimeWindow(BaseModel):
     """Defines an allowed execution time window.
 
@@ -59,7 +58,6 @@ class TimeWindow(BaseModel):
         h, m = self.end.split(":")
         return time(int(h), int(m))
 
-
 class OFXProfile(BaseModel):
     """A named profile containing reusable workflow settings.
 
@@ -70,7 +68,6 @@ class OFXProfile(BaseModel):
     name: str = Field(default="", description="Profile display name")
     description: str = Field(default="", description="What this profile is for")
 
-    # ── Rate & intensity controls ──────────────────────────────────
     rate_limit: int = Field(
         default=0,
         description="Max requests per minute (0 = unlimited)",
@@ -103,7 +100,6 @@ class OFXProfile(BaseModel):
         ),
     )
 
-    # ── Stealth / opsec ────────────────────────────────────────────
     delay: float = Field(
         default=0.0,
         description="Delay between requests in seconds",
@@ -121,13 +117,11 @@ class OFXProfile(BaseModel):
         description="Proxy URL (e.g. socks5://127.0.0.1:9050)",
     )
 
-    # ── Time window ────────────────────────────────────────────────
     time_window: TimeWindow = Field(
         default_factory=TimeWindow,
         description="Allowed execution time window",
     )
 
-    # ── Workflow-level defaults ─────────────────────────────────────
     env: dict[str, str] = Field(
         default_factory=dict,
         description="Additional env vars injected into all jobs",
@@ -137,7 +131,6 @@ class OFXProfile(BaseModel):
         description="Tags for filtering profiles",
     )
 
-    # ── Task option overrides ──────────────────────────────────────
     task_options: dict[str, dict[str, Any]] = Field(
         default_factory=dict,
         description=(

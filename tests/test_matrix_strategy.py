@@ -11,15 +11,12 @@ from ofx.runner.executors.workflow import WorkflowExecutor
 from ofx.utils.matrix import get_expanded_job_ids
 from ofx.runner.matrix_utils import generate_matrix_combinations
 
-
 @pytest.fixture
 def workflow_dir():
     return Path(__file__).parent / "flows"
 
-
 async def plan_jobs(runner: WorkflowRunner) -> None:
     await WorkflowExecutor().plan_jobs(runner)
-
 
 def _strategy_combinations(strategy):
     def _parse_matrix_value(value):
@@ -36,7 +33,6 @@ def _strategy_combinations(strategy):
         exclude=strategy.exclude,
         value_processor=_parse_matrix_value,
     )
-
 
 class TestMatrixStrategy:
     """Test suite for matrix strategy features"""
@@ -269,38 +265,6 @@ jobs:
         assert "build" in stage_0_jobs
         assert "test" in stage_1_jobs
 
-    # @pytest.mark.asyncio
-    # async def test_get_job_status_matrix(self):
-    #     """Test get_job_status handles matrix jobs correctly"""
-    #     workflow_yaml = """
-    # name: Job Status Test
-    # jobs:
-    #   test:
-    #     strategy:
-    #       matrix:
-    #         id: [1, 2]
-    #     steps:
-    #       - run: echo "{{ matrix.id }}"
-    # """
-    #     workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
-    #     runner = WorkflowRunner(workflow, RunContext())
-
-    #     await plan_jobs(runner)
-
-    #     await runner._registry.set("test_0", {"status": RunnerStatus.COMPLETED})
-    #     await runner._registry.set("test_1", {"status": RunnerStatus.RUNNING})
-
-    #     status = runner.get_job_status("test")
-    #     assert status == RunnerStatus.RUNNING
-
-    #     await runner._registry.set("test_1", {"status": RunnerStatus.COMPLETED})
-    #     status = runner.get_job_status("test")
-    #     assert status == RunnerStatus.COMPLETED
-
-    #     await runner._registry.set("test_0", {"status": RunnerStatus.FAILED})
-    #     status = runner.get_job_status("test")
-    #     assert status == RunnerStatus.FAILED
-
     @pytest.mark.asyncio
     async def test_single_value_matrix(self):
         """Test matrix with single value still expands"""
@@ -480,7 +444,6 @@ jobs:
         assert "with-dash" in values
         assert "with_underscore" in values
 
-
 class TestMatrixFailFast:
     """Tests for fail_fast behavior in local MatrixJobRunner."""
 
@@ -505,10 +468,7 @@ jobs:
         ctx = RunContext()
         runner = WorkflowRunner(workflow, ctx)
         result = await runner.run()
-        # Should fail overall (one combo failed)
         assert result.status.value == "failed"
-        # But all 3 combinations should have been attempted
-        # (with fail_fast: true, combo 2 would stop combo 3)
         assert "test_0" in runner._runners or "test" in runner._runners
 
     @pytest.mark.asyncio
@@ -527,7 +487,6 @@ jobs:
 """
         workflow = Workflow.model_validate(yaml.safe_load(workflow_yaml))
         assert workflow.jobs["test"].strategy.fail_fast is True
-
 
 class TestStepNameUniqueness:
     """Tests for step name uniqueness validation."""

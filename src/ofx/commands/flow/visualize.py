@@ -9,7 +9,6 @@ from ofx.models.job import Job
 from ofx.models.workflow import Workflow
 from ofx.settings import get_console
 
-
 def visualize(
     workflow_name: str,
     format: str = "terminal",

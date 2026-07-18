@@ -10,7 +10,6 @@ from ofx.tasks.registry import TaskRegistry
 
 _VULN_RE = re.compile(r"\[VULNERABLE\]\s+(\S+)")
 
-
 @TaskRegistry.register("dnstake")
 class DnstakeTask(Task):
     name = "dnstake"
@@ -54,7 +53,6 @@ class DnstakeTask(Task):
                 Subdomain(host=host, domain=domain),
             ]
 
-        # Non-vulnerable lines may still contain a hostname
         parts = line.split()
         for part in parts:
             if "." in part and not part.startswith("["):

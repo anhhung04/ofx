@@ -11,7 +11,6 @@ __all__ = [
     "decompress_decrypt",
 ]
 
-
 def compress_encrypt(data: bytes, key: bytes) -> bytes:
     """Compress (zlib level 9) then XOR-encrypt *data* with *key*.
 
@@ -25,7 +24,6 @@ def compress_encrypt(data: bytes, key: bytes) -> bytes:
     encrypted = bytes(a ^ b for a, b in zip(compressed, key_stream, strict=False))
     checksum = hashlib.md5(data).digest()[:4]
     return checksum + struct.pack(">I", len(data)) + encrypted
-
 
 def decompress_decrypt(data: bytes, key: bytes) -> bytes:
     """Reverse of :func:`compress_encrypt`: XOR-decrypt then zlib-decompress.

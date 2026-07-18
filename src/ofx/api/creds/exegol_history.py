@@ -9,7 +9,6 @@ from uuid import UUID
 
 __all__ = ["Credential", "Host", "ExegolHistoryDB"]
 
-
 @dataclass
 class Credential:
     """Represents a credential entry in the KeePass database."""
@@ -40,7 +39,6 @@ class Credential:
             ]
         )
 
-
 @dataclass
 class Host:
     """Represents a host entry in the KeePass database."""
@@ -60,7 +58,6 @@ class Host:
     def __iter__(self):
         return iter([self.id, self.ip, self.hostname, self.role, self.comment])
 
-
 class ExegolHistoryDB:
     """KeePass-backed credential/host store for Exegol History."""
 
@@ -73,8 +70,8 @@ class ExegolHistoryDB:
         self.key_path = Path(key_path).expanduser()
 
         try:
-            from pykeepass import PyKeePass  # type: ignore
-        except Exception as exc:  # pragma: no cover
+            from pykeepass import PyKeePass
+        except Exception as exc:
             raise ImportError(
                 "Exegol History support requires the 'pykeepass' package. "
                 "Install it with: pip install pykeepass"

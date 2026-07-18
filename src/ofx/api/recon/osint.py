@@ -17,7 +17,6 @@ __all__ = [
     "zone_transfer_command",
 ]
 
-
 def email_patterns(first: str, last: str, domain: str) -> list[str]:
     """Generate common corporate email address patterns for a person.
 
@@ -42,7 +41,6 @@ def email_patterns(first: str, last: str, domain: str) -> list[str]:
         f"{fi}_{last_name}@{domain}",
     ]
     return list(dict.fromkeys(patterns))
-
 
 def domain_permutations(domain: str) -> list[str]:
     """Return typosquatting and lookalike domain permutations.
@@ -93,7 +91,6 @@ def domain_permutations(domain: str) -> list[str]:
 
     return list(dict.fromkeys(p for p in perms if p and "." in p))
 
-
 async def crtsh_subdomains(domain: str, *, timeout: float = 15.0) -> list[str]:
     """Query crt.sh certificate transparency logs for subdomains of *domain*.
 
@@ -122,26 +119,21 @@ async def crtsh_subdomains(domain: str, *, timeout: float = 15.0) -> list[str]:
         )
         return []
 
-
 def crtsh_subdomains_sync(domain: str, *, timeout: float = 15.0) -> list[str]:
     """Synchronous wrapper around :func:`crtsh_subdomains`."""
     return asyncio.run(crtsh_subdomains(domain, timeout=timeout))
-
 
 def asn_lookup_command(ip: str) -> str:
     """Return a shell command to look up the ASN/org for *ip* via Team Cymru whois."""
     return f"whois -h whois.cymru.com ' -v {ip}'"
 
-
 def whois_command(target: str) -> str:
     """Return a whois command for a domain or IP address."""
     return f"whois {target}"
 
-
 def reverse_dns_command(ip: str) -> str:
     """Return a dig command for a reverse DNS lookup."""
     return f"dig +short -x {ip}"
-
 
 def zone_transfer_command(domain: str, nameserver: str = "") -> str:
     """Return a dig AXFR command attempting a DNS zone transfer.

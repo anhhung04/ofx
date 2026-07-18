@@ -24,14 +24,12 @@ logger = logging.getLogger("ofx")
 RUNNER_OUTPUTS_ENV = "RUNNER_OUTPUTS"
 OFX_OUTPUTS_ENV = "OFX_OUTPUTS"
 
-
 @dataclass
 class CommandExecutionResult:
     exit_code: int | None
     stdout: str
     stderr: str
     outputs: dict[str, Any]
-
 
 def parse_outputs_file(
     outputs_file: Path,
@@ -61,7 +59,6 @@ def parse_outputs_file(
             log_fn(f"Failed to remove outputs file: {exc}")
     return parsed
 
-
 def prepare_outputs_file_env(
     envs: dict[str, Any],
     *,
@@ -86,7 +83,6 @@ def prepare_outputs_file_env(
 
     return outputs_file
 
-
 def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     """Send SIGTERM to the process group, then SIGKILL if still alive.
 
@@ -102,7 +98,6 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
     with suppress(OSError, ProcessLookupError):
         os.killpg(pgid, signal.SIGTERM)
 
-    # Give children 2 seconds to exit, then force-kill
     import time
 
     deadline = time.monotonic() + 2.0
@@ -119,7 +114,6 @@ def _kill_process_tree(proc: asyncio.subprocess.Process) -> None:
 
     with suppress(OSError, ProcessLookupError):
         os.killpg(pgid, signal.SIGKILL)
-
 
 def _process_group_id(proc: asyncio.subprocess.Process) -> int | None:
     pid = proc.pid
@@ -210,10 +204,7 @@ class CommandExecutor:
         Each line is passed to *on_line* as it arrives.  The full stdout
         is still collected and returned in the result.
         """
-        # Raise the StreamReader line-buffer limit to 10 MB.
-        # The default 64 KB causes "Separator is not found, and chunk exceed
-        # the limit" errors when tools like katana emit long JSONL lines.
-        _STREAM_LIMIT = 10 * 1024 * 1024  # 10 MB
+        _STREAM_LIMIT = 10 * 1024 * 1024
 
         proc = await self._spawn_subprocess(
             stdout=asyncio.subprocess.PIPE,
@@ -245,10 +236,6 @@ class CommandExecutor:
                         except Exception as e:
                             logger.debug("on_line callback failed: %s", e)
             except ValueError as e:
-                # asyncio raises ValueError("Separator is not found, and chunk
-                # exceed the limit") when a single line exceeds the StreamReader
-                # buffer limit even after we raised it. Log and stop reading
-                # rather than crashing the whole task.
                 logger.debug("stdout readline limit exceeded, stopping stream: %s", e)
 
         async def _read_stderr():

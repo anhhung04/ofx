@@ -2,7 +2,6 @@
 
 from enum import StrEnum
 
-
 class RunnerRegistryKeys(StrEnum):
     MODEL = "model"
     OUTPUTS = "outputs"
@@ -11,6 +10,5 @@ class RunnerRegistryKeys(StrEnum):
     ERRORS = "errors"
     SUMMARY = "workflow:summary"
     SUMMARY_UNIFIED = "workflow:summary:unified"
-
 
 __all__ = ["RunnerRegistryKeys"]

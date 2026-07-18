@@ -11,7 +11,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Subdomain, UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("theharvester")
 class TheHarvesterTask(Task):
     name = "theharvester"
@@ -49,7 +48,6 @@ class TheHarvesterTask(Task):
         """Override to replace default ``-b all`` when source opt is given."""
         base_flags = list(self.extra_flags)
 
-        # If the user supplied a source, drop the default -b all
         if kwargs.get("source"):
             base_flags = []
 
@@ -77,7 +75,6 @@ class TheHarvesterTask(Task):
     ) -> list[Subdomain | UserAccount]:
         results: list[Subdomain | UserAccount] = []
 
-        # Try XML first (theharvester writes .xml with -f)
         xml_content = ""
         if output_file:
             xml_path = output_file.with_suffix(".xml")
@@ -91,7 +88,6 @@ class TheHarvesterTask(Task):
             if results:
                 return results
 
-        # Fallback: parse stdout
         if stdout:
             results.extend(self._parse_stdout(stdout))
 
@@ -122,7 +118,6 @@ class TheHarvesterTask(Task):
                 host = (host_el.text or "").strip()
                 if not host:
                     continue
-                # Strip trailing IP in format "host:ip"
                 host = host.split(":")[0].strip()
                 if host:
                     domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host

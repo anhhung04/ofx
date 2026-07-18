@@ -36,8 +36,6 @@ from ofx.utils.shell import bash_dquote_escape
 if TYPE_CHECKING:
     from ofx.runner.cloud_job import CloudJobRunner
 
-# Grace period (seconds) added to the configured timeout to account for
-# network latency when executing commands on a remote host.
 _NETWORK_GRACE_SECONDS = 30
 _RUNNER_ENV_PREFIXES: tuple[str, ...] = ("FLEET_", "REMOTE_")
 
@@ -83,7 +81,6 @@ class _RemoteHandlerRunner:
             outputs_dict,
         )
         return await self._outer.get_result()
-
 
 class CloudStepRunner(StepRunnerMixin, Runner):
     """Runs a step remotely via PostSSH or PostWinRM.
@@ -138,8 +135,6 @@ class CloudStepRunner(StepRunnerMixin, Runner):
 
     async def _on_failure_cleanup(self) -> None:
         """Best-effort cleanup of remote temp files on step failure."""
-        # Remote scripts are cleaned in their own finally blocks, but
-        # this hook ensures any leaked temp files in the work dir are noted.
         self._log_debug("Cloud step failure cleanup completed")
 
     def _build_timeline_params(self, result) -> dict[str, str]:
@@ -150,10 +145,6 @@ class CloudStepRunner(StepRunnerMixin, Runner):
             "tags": "cloud",
         })
         return params
-
-    # ------------------------------------------------------------------
-    # Remote execution methods
-    # ------------------------------------------------------------------
 
     async def _discover_python(self) -> str:
         """Find a working python3/python executable on the remote host.
@@ -236,10 +227,6 @@ class CloudStepRunner(StepRunnerMixin, Runner):
                 except Exception as e:
                     self._log_debug(f"Failed to remove remote file {remote_path}: {e}")
 
-    # ------------------------------------------------------------------
-    # Task execution (remote)
-    # ------------------------------------------------------------------
-
     async def _execute_remote_run_type(
         self,
         run_type: RunType,
@@ -319,10 +306,6 @@ class CloudStepRunner(StepRunnerMixin, Runner):
         except Exception as e:
             self._log_debug(f"Failed to parse task output for '{self.model.task}': {e}")
             return []
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     def _resolve_remote_work_dir(self) -> str:
         """Resolve the working directory for remote execution.

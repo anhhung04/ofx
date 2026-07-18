@@ -11,7 +11,6 @@ from ofx.runner.task_profile_options import (
 )
 from ofx.runner.task_step import extract_task_target_and_opts
 
-
 def build_task_command_from_step(
     step: Step,
     profile: Any | None = None,

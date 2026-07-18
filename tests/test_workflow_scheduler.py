@@ -6,9 +6,6 @@ import pytest
 
 from ofx.utils.scheduling import find_parallel_schedule
 
-# ── find_parallel_schedule ───────────────────────────────────────────────
-
-
 class TestFindParallelSchedule:
     """Topological sort that groups independent jobs into parallel stages."""
 
@@ -26,7 +23,6 @@ class TestFindParallelSchedule:
         assert schedule == [["a"], ["b"]]
 
     def test_diamond_dependency(self):
-        # a → b, a → c, b → d, c → d
         jobs = ["a", "b", "c", "d"]
         deps = [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d")]
         schedule = find_parallel_schedule(jobs, deps)
@@ -36,7 +32,6 @@ class TestFindParallelSchedule:
         assert schedule[2] == ["d"]
 
     def test_three_stages(self):
-        # a → b → c, a → d (d parallel with b)
         jobs = ["a", "b", "c", "d"]
         deps = [("a", "b"), ("b", "c"), ("a", "d")]
         schedule = find_parallel_schedule(jobs, deps)
@@ -58,9 +53,7 @@ class TestFindParallelSchedule:
             find_parallel_schedule(["a", "b", "c"], deps)
 
     def test_unknown_dependency_ignored(self):
-        # Dependency on a job not in the list is ignored
         schedule = find_parallel_schedule(["a", "b"], [("x", "b")])
-        # Both are independent since x doesn't exist
         assert len(schedule) == 1
         assert set(schedule[0]) == {"a", "b"}
 
@@ -75,17 +68,12 @@ class TestFindParallelSchedule:
         assert len(schedule[0]) == 20
 
     def test_linear_chain(self):
-        # a → b → c → d → e
         jobs = ["a", "b", "c", "d", "e"]
         deps = [("a", "b"), ("b", "c"), ("c", "d"), ("d", "e")]
         schedule = find_parallel_schedule(jobs, deps)
         assert len(schedule) == 5
         for i, stage in enumerate(schedule):
             assert stage == [jobs[i]]
-
-
-# ── WorkflowScheduler ───────────────────────────────────────────────────
-
 
 class TestWorkflowScheduler:
     """Tests for the WorkflowScheduler wrapper."""

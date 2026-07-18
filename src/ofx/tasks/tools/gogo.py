@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Port, Tag, Url, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("gogo")
 class GogoTask(Task):
     name = "gogo"
@@ -70,7 +69,6 @@ class GogoTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Quiet mode + uncompressed jsonlines output
         parts.extend(["-q", "-C", "-O", "jsonlines"])
 
         output_file = self._make_output_path()
@@ -78,7 +76,6 @@ class GogoTask(Task):
 
         if wf:
             parts.extend(["-w", self._q(wf)])
-            # Workflow already defines target, but -i overrides
             if target:
                 parts.extend([self.input_flag, self._q(target)])
         else:
@@ -111,7 +108,6 @@ class GogoTask(Task):
         if not ip and not host:
             return []
 
-        # Port result
         if port:
             frameworks = data.get("frameworks", [])
             service = ""
@@ -132,7 +128,6 @@ class GogoTask(Task):
                 )
             )
 
-        # URL result (if HTTP)
         url = data.get("url", "")
         status_code = self._safe_int(data.get("status", 0))
         title = data.get("title", "")
@@ -151,7 +146,6 @@ class GogoTask(Task):
                 )
             )
 
-        # Tags from frameworks/fingerprints
         frameworks = data.get("frameworks", [])
         for fw in frameworks:
             name = fw.get("name", "") if isinstance(fw, dict) else str(fw)
@@ -164,7 +158,6 @@ class GogoTask(Task):
                     )
                 )
 
-        # Vulnerabilities from nuclei results
         for vuln in data.get("vulns", []):
             vuln_name = (
                 vuln if isinstance(vuln, str) else vuln.get("name", vuln.get("id", ""))

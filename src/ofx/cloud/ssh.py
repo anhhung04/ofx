@@ -13,7 +13,6 @@ logger = logging.getLogger("ofx")
 
 _LOGIN_RETRY_INTERVAL = 5
 
-
 async def _wait_for_port(
     host: str,
     port: int,
@@ -40,7 +39,6 @@ async def _wait_for_port(
 
     raise TimeoutError(f"{label} on {host}:{port} not reachable after {timeout}s")
 
-
 async def wait_for_ssh(
     host: str, port: int = 22, timeout: int = 300, interval: int = 5
 ) -> bool:
@@ -65,7 +63,6 @@ async def wait_for_ssh(
         timeout=timeout,
         interval=interval,
     )
-
 
 async def wait_for_winrm(
     host: str, port: int = 5985, timeout: int = 300, interval: int = 10
@@ -92,7 +89,6 @@ async def wait_for_winrm(
         interval=interval,
     )
 
-
 async def wait_for_connectivity(
     host: str,
     os_type: str = "linux",
@@ -116,7 +112,6 @@ async def wait_for_connectivity(
         return await wait_for_winrm(host, winrm_port, timeout)
     return await wait_for_ssh(host, ssh_port, timeout)
 
-
 def _probe_ssh_login(host: str, cfg: CloudConfig) -> None:
     from ofx.api.post.runners.ssh import PostSSH
 
@@ -129,7 +124,6 @@ def _probe_ssh_login(host: str, cfg: CloudConfig) -> None:
         connect_timeout=10,
     )
     runner.run("id")
-
 
 def _probe_winrm_login(host: str, cfg: CloudConfig) -> None:
     from ofx.api.post.runners.winrm import PostWinRM
@@ -144,7 +138,6 @@ def _probe_winrm_login(host: str, cfg: CloudConfig) -> None:
         command_timeout=10,
     )
     runner.run("whoami")
-
 
 async def wait_for_login(
     host: str,

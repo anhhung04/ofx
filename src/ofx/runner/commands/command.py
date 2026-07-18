@@ -33,16 +33,13 @@ from ofx.runner.run_defaults import (
 from ofx.runner.runner import Runner
 from ofx.settings import settings
 
-# Shared ProcessPoolExecutor — avoids creating a new executor per script call.
 _shared_executor: ProcessPoolExecutor | None = None
-
 
 @dataclass(frozen=True)
 class _ScriptScopeModels:
     job_model: Any | None
     step_model: Any | None
     workflow_model: Any | None
-
 
 @dataclass(frozen=True)
 class _ScriptProcessInvocation:
@@ -55,13 +52,11 @@ class _ScriptProcessInvocation:
     channels_dir: str
     outputs_file: str | None
 
-
 @dataclass(frozen=True)
 class _ScriptExecutionResult:
     exit_code: int
     stdout: str
     stderr: str
-
 
 def write_outputs_file(outputs_file: str | os.PathLike[str] | None, **kwargs: Any) -> None:
     """Append `key=value` output lines, JSON-encoding structured values."""
@@ -72,7 +67,6 @@ def write_outputs_file(outputs_file: str | os.PathLike[str] | None, **kwargs: An
         for key, value in kwargs.items():
             serialized = json.dumps(value) if isinstance(value, (dict, list)) else str(value)
             handle.write(f"{key}={serialized}\n")
-
 
 def exec_script_in_process(invocation: _ScriptProcessInvocation) -> _ScriptExecutionResult:
     """Execute script in a separate process with channel communication"""
@@ -123,7 +117,6 @@ def exec_script_in_process(invocation: _ScriptProcessInvocation) -> _ScriptExecu
         stderr=stderr_capture.getvalue(),
     )
 
-
 class _ExecutionDefaultsMixin:
     """Shared inherited shell/working-directory resolution for command-like runners."""
 
@@ -149,7 +142,6 @@ class _ExecutionDefaultsMixin:
         self._log_debug(
             f"{result_label} result: \n---\n{await self.get_result()}\n---\n with context: \n---\n{self.ctx}\n---"
         )
-
 
 class CommandRunner(_ExecutionDefaultsMixin, Runner[Command]):
     def __init__(
@@ -216,7 +208,6 @@ class CommandRunner(_ExecutionDefaultsMixin, Runner[Command]):
 
     def _produce_log(self, message: Any) -> str:
         return bubble_context_log(self.parent, message)
-
 
 class ScriptRunner(_ExecutionDefaultsMixin, Runner[Script]):
     async def _do_run(self) -> None:

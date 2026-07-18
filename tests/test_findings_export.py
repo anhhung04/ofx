@@ -12,10 +12,6 @@ from ofx.runner.findings_export import (
 )
 from ofx.runner.target_paths import sanitize_target_slug
 
-
-# ── export_typed_outputs ──────────────────────────────────────────
-
-
 class TestExportTypedOutputs:
     def test_empty_list_returns_empty(self, tmp_path):
         assert export_typed_outputs(str(tmp_path), []) == []
@@ -160,7 +156,7 @@ class TestExportTypedOutputs:
     def test_deduplicates_jsonl(self, tmp_path):
         item = {"_type": "vulnerability", "name": "XSS", "url": "https://x.com"}
         export_typed_outputs(str(tmp_path), [item])
-        export_typed_outputs(str(tmp_path), [item])  # Second call with same item
+        export_typed_outputs(str(tmp_path), [item])
         content = (tmp_path / "vulns" / "vulnerabilities.jsonl").read_text()
         lines = content.strip().splitlines()
         assert len(lines) == 1
@@ -214,7 +210,7 @@ class TestExportTypedOutputs:
 
     def test_skips_items_without_type(self, tmp_path):
         items = [
-            {"host": "a.example.com"},  # No _type
+            {"host": "a.example.com"},
             {"_type": "subdomain", "host": "b.example.com"},
         ]
         summaries = export_typed_outputs(str(tmp_path), items)
@@ -264,10 +260,6 @@ class TestExportTypedOutputs:
         export_typed_outputs(str(tmp_path), items)
         assert (tmp_path / "evidence" / "creds" / "accounts.jsonl").exists()
 
-
-# ── timestamped snapshots ─────────────────────────────────────────
-
-
 class TestTimestampedExport:
     def test_only_master_file_created(self, tmp_path):
         """No timestamped snapshots — only master files."""
@@ -282,7 +274,6 @@ class TestTimestampedExport:
         export_typed_outputs(str(tmp_path), items)
         master = tmp_path / "evidence" / "creds" / "accounts.jsonl"
         assert master.exists()
-        # No timestamped file
         files = list((tmp_path / "evidence" / "creds").iterdir())
         assert len(files) == 1
 
@@ -316,10 +307,6 @@ class TestTimestampedExport:
         content = master.read_text().strip().splitlines()
         assert "1.1.1.1" in content
         assert "2.2.2.2" in content
-
-
-# ── collect_typed_outputs ─────────────────────────────────────────
-
 
 class TestCollectTypedOutputs:
     def _make_step_runner(self, typed_outputs: list) -> MagicMock:
@@ -398,7 +385,6 @@ class TestCollectTypedOutputs:
     def test_runners_with_no_typed_outputs(self):
         runner = MagicMock()
         runner.reg_get = AsyncMock(return_value={"stdout": "hello"})
-        # Make it look like a generic runner (not JobRunner or MatrixJobRunner)
         runners = {"other": runner}
         result = asyncio.run(collect_typed_outputs(runners))
         assert result == []

@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Port
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("rustscan")
 class RustscanTask(Task):
     name = "rustscan"
@@ -39,9 +38,7 @@ class RustscanTask(Task):
     def _output_suffix(self) -> str:
         return ".txt"
 
-    # Open IP:PORT or standalone port lines
     _OPEN_RE = re.compile(r"Open\s+(\S+?):(\d+)", re.IGNORECASE)
-    # Greppable grouped: Host: IP () Ports: 22/open/tcp//ssh///, 80/open/tcp//http///
     _GREPPABLE_RE = re.compile(r"Host:\s+(\S+)")
     _PORT_ENTRY_RE = re.compile(r"(\d+)/open/(\w+)//(\w*)")
 
@@ -77,7 +74,6 @@ class RustscanTask(Task):
             if not line:
                 continue
 
-            # Try "Open IP:PORT" lines
             m = self._OPEN_RE.search(line)
             if m:
                 results.append(
@@ -90,7 +86,6 @@ class RustscanTask(Task):
                 )
                 continue
 
-            # Try greppable format
             host_m = self._GREPPABLE_RE.match(line)
             if host_m:
                 ip = host_m.group(1)

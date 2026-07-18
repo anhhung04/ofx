@@ -46,12 +46,6 @@ get_cli_project = None
 parse_key_value_pairs = None
 ProjectManager = None
 
-
-# ======================================================================
-# Helpers
-# ======================================================================
-
-
 def _run_session_op(
     session_id: str,
     op_name: str,
@@ -69,7 +63,6 @@ def _run_session_op(
         error_exit("Session not found", f"Session '{session_id}' not found.")
     except (*extra_exc,) as exc:
         error_exit(error_title, error_msg or f"{op_name} failed.", details=str(exc))
-
 
 def _session_detail_table(session) -> Table:
     """Build a key-value detail table for a session."""
@@ -115,15 +108,12 @@ def _session_detail_table(session) -> Table:
         table.add_row(key, val)
     return table
 
-
-
 def _get_session_manager_cls():
     session_manager_cls = SessionManager
     if session_manager_cls is None:
         from ofx.cloud.sessions import SessionManager as session_manager_cls
 
     return session_manager_cls
-
 
 def _get_session_store_cls():
     session_store_cls = SessionStore
@@ -132,7 +122,6 @@ def _get_session_store_cls():
 
     return session_store_cls
 
-
 def _get_session_status_cls():
     session_status_cls = SessionStatus
     if session_status_cls is None:
@@ -140,10 +129,8 @@ def _get_session_status_cls():
 
     return session_status_cls
 
-
 def _get_session_store_and_status_deps():
     return _get_session_store_cls()(), _get_session_status_cls()
-
 
 def _parse_age_seconds(value: str) -> int | None:
     raw = value.strip().lower()
@@ -160,7 +147,6 @@ def _parse_age_seconds(value: str) -> int | None:
     except ValueError:
         return None
 
-
 def _parse_age_seconds_or_exit(value: str) -> int:
     age_seconds = _parse_age_seconds(value)
     if age_seconds is None:
@@ -170,8 +156,6 @@ def _parse_age_seconds_or_exit(value: str) -> int:
             details="Examples: 7d, 24h, 30m, 3600s",
         )
     return age_seconds
-
-
 
 def _get_session_submit_deps():
     key_value_parser = parse_key_value_pairs
@@ -202,7 +186,6 @@ def _get_session_submit_deps():
         session_manager_cls,
     )
 
-
 def _resolve_session_project(cli_project_getter) -> str:
     session_project = cli_project_getter()
     if session_project:
@@ -215,10 +198,8 @@ def _resolve_session_project(cli_project_getter) -> str:
     active_path = project_manager_cls.get_active_path()
     return active_path.name if active_path else ""
 
-
 def _print_session_update(session_id: str, session) -> None:
     print_info("Session updated", f"Session {session_id} → {session.status.value}")
-
 
 def _print_success_path(title: str, message: str, path: Path) -> None:
     print_success(title, message, details={"Path": str(path)})
@@ -226,40 +207,31 @@ def _print_success_path(title: str, message: str, path: Path) -> None:
 def _print_result_path(message: str, result_path: Path) -> None:
     _print_success_path("Results", message, result_path)
 
-
 def _print_cleanup_result(title: str, message: str, removed: int) -> None:
     print_success(title, message, details={"Removed sessions": removed})
-
 
 def _print_info_message(title: str, message: str) -> None:
     print_info(title, message)
 
-
 def _print_sessions_info(message: str) -> None:
     _print_info_message("Sessions", message)
 
-
 def _print_clean_aborted() -> None:
     _print_info_message("Clean", "Aborted.")
-
 
 def _fail_unknown_session_status(console, status: str, session_status_cls, exc: Exception) -> None:
     console.print(f"[red]Unknown status: {status}[/red]")
     _print_valid_session_statuses(console, session_status_cls)
     raise typer.Exit(code=1) from exc
 
-
 def _print_valid_session_statuses(console, session_status_cls) -> None:
     console.print(f"[dim]Valid: {', '.join(s.value for s in session_status_cls)}[/dim]")
-
 
 def _print_session_op_output(console, value) -> None:
     console.print(value)
 
-
 def _optional_output_path(output: str) -> Path | None:
     return Path(output) if output else None
-
 
 def _run_result_path_op(
     session_id: str,
@@ -281,7 +253,6 @@ def _run_result_path_op(
     )
     _print_result_path(success_message, result_path)
 
-
 def _run_session_cleanup(
     store,
     *,
@@ -292,7 +263,6 @@ def _run_session_cleanup(
 ) -> None:
     removed = store.clean(older_than_seconds=age_seconds, statuses=statuses or None)
     _print_cleanup_result(title, message.format(removed=removed), removed)
-
 
 def _run_session_update_op(
     session_id: str,
@@ -313,7 +283,6 @@ def _run_session_update_op(
     )
     _print_session_update(session_id, session)
 
-
 def _session_submit_success_details(session) -> dict[str, str]:
     details = {
         "Session ID": session.id,
@@ -331,7 +300,6 @@ def _session_submit_success_details(session) -> dict[str, str]:
         details["Project"] = session.project
     return details
 
-
 def _parse_session_statuses(status_value: str, session_status_cls) -> list[object]:
     statuses: list[object] = []
     for raw in status_value.split(","):
@@ -343,12 +311,6 @@ def _parse_session_statuses(status_value: str, session_status_cls) -> list[objec
         except ValueError:
             error_exit("Invalid status", f"Unknown status: {current}")
     return statuses
-
-
-# ======================================================================
-# Submit
-# ======================================================================
-
 
 @app.command("submit")
 def session_submit(
@@ -421,12 +383,6 @@ def session_submit(
         },
     )
 
-
-# ======================================================================
-# List
-# ======================================================================
-
-
 @app.command("list")
 def session_list(
     status: Annotated[
@@ -469,7 +425,7 @@ def session_list(
         ("PID", {}),
         ("Age", {"justify": "right"}),
     ]:
-        table.add_column(col, **opts)  # type: ignore[arg-type]
+        table.add_column(col, **opts)
 
     for s in sessions:
         ss = session_status_style(s.status.value)
@@ -486,24 +442,12 @@ def session_list(
         )
     console.print(table)
 
-
-# ======================================================================
-# Status
-# ======================================================================
-
-
 @app.command("status")
 def session_status(session_id: Annotated[str, typer.Argument(help="Session ID")]):
     """Check the status of a session (probes PID if running)."""
     console = get_console()
     session = _run_session_op(session_id, "status", lambda mgr: mgr.status(session_id))
     _print_session_op_output(console, _session_detail_table(session))
-
-
-# ======================================================================
-# Logs
-# ======================================================================
-
 
 @app.command("logs")
 def session_logs(
@@ -516,12 +460,6 @@ def session_logs(
         session_id, "logs", lambda mgr: mgr.logs(session_id, tail=tail)
     )
     _print_session_op_output(console, output)
-
-
-# ======================================================================
-# Fetch
-# ======================================================================
-
 
 @app.command("fetch")
 def session_fetch(
@@ -547,12 +485,6 @@ def session_fetch(
         error_msg="Failed to fetch session results.",
         extra_exc=(RuntimeError,),
     )
-
-
-# ======================================================================
-# Decrypt
-# ======================================================================
-
 
 @app.command("decrypt")
 def session_decrypt(
@@ -585,12 +517,6 @@ def session_decrypt(
         extra_exc=(RuntimeError, ValueError),
     )
 
-
-# ======================================================================
-# Cancel
-# ======================================================================
-
-
 @app.command("cancel")
 def session_cancel(session_id: Annotated[str, typer.Argument(help="Session ID")]):
     """Cancel a running session (kills the process)."""
@@ -599,12 +525,6 @@ def session_cancel(session_id: Annotated[str, typer.Argument(help="Session ID")]
         "cancel",
         lambda mgr: mgr.cancel(session_id),
     )
-
-
-# ======================================================================
-# Destroy
-# ======================================================================
-
 
 @app.command("destroy")
 def session_destroy(
@@ -622,12 +542,6 @@ def session_destroy(
         error_msg="Failed to destroy session.",
         extra_exc=(RuntimeError,),
     )
-
-
-# ======================================================================
-# Clean
-# ======================================================================
-
 
 @app.command("clean")
 def session_clean(
@@ -685,7 +599,6 @@ def session_clean(
         message="Removed {removed} session(s).",
     )
 
-
 @app.command("guard")
 def session_guard(
     older_than: Annotated[
@@ -708,7 +621,6 @@ def session_guard(
         title="Guard cleanup",
         message="Auto-cleanup completed.",
     )
-
 
 @app.command("bundle")
 def session_bundle(

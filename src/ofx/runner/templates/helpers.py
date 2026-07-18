@@ -26,16 +26,13 @@ from urllib.parse import quote, unquote
 
 _logger = logging.getLogger("ofx.templates")
 
-
 def _field_value(item: Any, field: str, default: Any = None) -> Any:
     if isinstance(item, dict):
         return item.get(field, default)
     return getattr(item, field, default)
 
-
 def _as_list(items: Any) -> list | None:
     return items if isinstance(items, list) else None
-
 
 def _slice_list(items: Any, n: int = 1, *, from_end: bool = False) -> list | Any:
     items_list = _as_list(items)
@@ -47,7 +44,6 @@ def _slice_list(items: Any, n: int = 1, *, from_end: bool = False) -> list | Any
         return items_list[-1] if from_end else items_list[0]
     return items_list[-n:] if from_end else items_list[:n]
 
-
 def _group_list(items: Any, field: str) -> dict[str, list]:
     items_list = _as_list(items)
     if items_list is None:
@@ -58,7 +54,6 @@ def _group_list(items: Any, field: str) -> dict[str, list]:
         groups.setdefault(key, []).append(item)
     return groups
 
-# ── File I/O ─────────────────────────────────────────────────────────────
 def _file_helpers() -> dict[str, Any]:
     def _read_file(path: str) -> str:
         file_path = path if isinstance(path, Path) else Path(path)
@@ -101,8 +96,6 @@ def _file_helpers() -> dict[str, Any]:
         "is_dir": lambda path: (path if isinstance(path, Path) else Path(path)).is_dir(),
     }
 
-
-# ── Paths ────────────────────────────────────────────────────────────────
 def _path_helpers() -> dict[str, Any]:
     return {
         "join_path": lambda *parts: str(Path(*parts)),
@@ -115,8 +108,6 @@ def _path_helpers() -> dict[str, Any]:
         "home": lambda: str(Path.home()),
     }
 
-
-# ── String encoding ─────────────────────────────────────────────────────
 def _encoding_helpers() -> dict[str, Any]:
     return {
         "b64encode": lambda s: base64.b64encode(s.encode()).decode(),
@@ -127,8 +118,6 @@ def _encoding_helpers() -> dict[str, Any]:
         "hex_decode": lambda s: bytes.fromhex(s).decode(),
     }
 
-
-# ── Hashing ──────────────────────────────────────────────────────────────
 def _hash_helpers() -> dict[str, Any]:
     return {
         "md5": lambda s: hashlib.new("md5", s.encode()).hexdigest(),
@@ -136,8 +125,6 @@ def _hash_helpers() -> dict[str, Any]:
         "sha256": lambda s: hashlib.new("sha256", s.encode()).hexdigest(),
     }
 
-
-# ── Random generators ───────────────────────────────────────────────────
 def _random_helpers() -> dict[str, Any]:
     def _random_string(length: int = 8, charset: str = "alphanumeric") -> str:
         charsets = {
@@ -156,8 +143,6 @@ def _random_helpers() -> dict[str, Any]:
         "token": lambda n=32: secrets.token_urlsafe(n),
     }
 
-
-# ── Network ──────────────────────────────────────────────────────────────
 def _network_helpers() -> dict[str, Any]:
     def _get_local_ip() -> str:
         try:
@@ -194,7 +179,7 @@ def _network_helpers() -> dict[str, Any]:
                 net = ipaddress.ip_network(part, strict=False)
                 total += max(net.num_addresses - 2, 1)
             except ValueError:
-                total += 1  # hostname or single IP
+                total += 1
         return total
 
     return {
@@ -203,16 +188,12 @@ def _network_helpers() -> dict[str, Any]:
         "cidr_size": _cidr_size,
     }
 
-
-# ── Date / time ──────────────────────────────────────────────────────────
 def _datetime_helpers() -> dict[str, Any]:
     return {
         "now": lambda fmt="%Y-%m-%d %H:%M:%S": datetime.now().strftime(fmt),
         "timestamp": lambda: int(datetime.now().timestamp()),
     }
 
-
-# ── JSON ─────────────────────────────────────────────────────────────────
 def _json_helpers() -> dict[str, Any]:
     def _to_json(obj: Any) -> str:
         try:
@@ -231,8 +212,6 @@ def _json_helpers() -> dict[str, Any]:
         "from_json": _from_json,
     }
 
-
-# ── Regex ────────────────────────────────────────────────────────────────
 def _regex_helpers() -> dict[str, Any]:
     return {
         "regex_match": lambda pattern, s: bool(re.match(pattern, s)),
@@ -241,8 +220,6 @@ def _regex_helpers() -> dict[str, Any]:
         "regex_sub": lambda pattern, repl, s: re.sub(pattern, repl, s),
     }
 
-
-# ── Task typed-output filters ───────────────────────────────────────────
 _TYPE_FILTER_MAP: dict[str, str] = {
     "ports": "port",
     "urls": "url",
@@ -257,13 +234,11 @@ _TYPE_FILTER_MAP: dict[str, str] = {
     "exploits": "exploit",
 }
 
-
 def _pluck_field(items: list, field: str) -> list:
     items_list = _as_list(items)
     if items_list is None:
         return []
     return [_field_value(item, field) for item in items_list]
-
 
 def _join_lines(items: list, field: str | None = None, sep: str = "\n") -> str:
     items_list = _as_list(items)
@@ -277,7 +252,6 @@ def _join_lines(items: list, field: str | None = None, sep: str = "\n") -> str:
         else:
             parts.append(str(item))
     return sep.join(parts)
-
 
 def _to_csv_string(items: list, headers: bool = True) -> str:
     import csv as _csv
@@ -295,7 +269,6 @@ def _to_csv_string(items: list, headers: bool = True) -> str:
         for item in items:
             writer.writerow({key: str(value) for key, value in item.items()})
     return buf.getvalue().rstrip("\r\n")
-
 
 def _to_jsonl_string(items: list) -> str:
     items_list = _as_list(items)
@@ -324,7 +297,6 @@ def _sort_items(items: list, field: str, reverse: bool = False) -> list:
     except TypeError:
         return items_list
 
-
 def _unique_items(items: list, field: str) -> list:
     items_list = _as_list(items)
     if items_list is None:
@@ -339,7 +311,6 @@ def _unique_items(items: list, field: str) -> list:
             result.append(item)
     return result
 
-
 def _filter_where(items: list, field: str, value: Any, *, negate: bool = False) -> list:
     items_list = _as_list(items)
     if items_list is None:
@@ -350,7 +321,6 @@ def _filter_where(items: list, field: str, value: Any, *, negate: bool = False) 
         if (not matches) if negate else matches:
             result.append(item)
     return result
-
 
 def _flatten_items(items: list, field: str | None = None) -> list:
     items_list = _as_list(items)
@@ -374,7 +344,6 @@ def _flatten_items(items: list, field: str | None = None) -> list:
             result.append(item)
     return result
 
-
 def _of_type(items: list, type_name: str) -> list:
     items_list = _as_list(items)
     if items_list is None:
@@ -385,7 +354,6 @@ def _of_type(items: list, type_name: str) -> list:
         if isinstance(item, dict) and item.get("_type") == type_name
     ]
 
-
 def _type_filter_helpers() -> dict[str, Any]:
     return {
         "of_type": _of_type,
@@ -395,8 +363,6 @@ def _type_filter_helpers() -> dict[str, Any]:
         },
     }
 
-
-# ── ETL / pipe helpers ──────────────────────────────────────────────────
 def _etl_helpers() -> dict[str, Any]:
     """Helpers for data transformation in templates.
 
@@ -422,8 +388,6 @@ def _etl_helpers() -> dict[str, Any]:
         },
     }
 
-
-# ── Public aggregator ───────────────────────────────────────────────────
 _HELPER_GROUP_FACTORIES = (
     _file_helpers,
     _path_helpers,
@@ -437,7 +401,6 @@ _HELPER_GROUP_FACTORIES = (
     _type_filter_helpers,
     _etl_helpers,
 )
-
 
 def build_all_helpers() -> dict[str, Any]:
     """Aggregate every helper group into a single dict.

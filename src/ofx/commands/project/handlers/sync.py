@@ -15,7 +15,6 @@ from ..storage import GitHandler, SSHHandler
 
 logger = logging.getLogger(settings.app_branding)
 
-
 class SyncHandler:
     """Handles project synchronization with remote storage."""
 

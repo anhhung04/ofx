@@ -55,7 +55,6 @@ _TEXT_EXPORT_KEY_EXTRACTORS: dict[str, Any] = {
     "domain": "domain",
 }
 
-
 def export_typed_outputs(
     project_path: str,
     all_typed_outputs: list,
@@ -156,7 +155,6 @@ def export_typed_outputs(
         summaries.append(f"  [+] {summary_path} ({label})")
 
     return summaries
-
 
 async def collect_typed_outputs(runners: dict[str, Runner]) -> list[dict]:
     """Collect typed outputs from all job runners (including matrix children).

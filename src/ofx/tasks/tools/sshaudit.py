@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("ssh-audit")
 class SshAuditTask(Task):
     name = "ssh-audit"
@@ -18,8 +17,6 @@ class SshAuditTask(Task):
     install_cmd = "uv tool install ssh-audit"
     output_types = [Vulnerability, Tag]
 
-    # ssh-audit exit codes: 0=pass, 1=connection error, 2=unknown error, 3=one or more warnings/failures
-    # Exit code 3 is expected — it means weak algorithms were detected (useful audit output).
     success_codes = [0, 3]
 
     opts = {
@@ -49,7 +46,6 @@ class SshAuditTask(Task):
         results: list[Vulnerability | Tag] = []
         target = data.get("target", "")
 
-        # CVEs
         for cve in data.get("cves", []):
             cve_name = cve.get("name", "")
             if not cve_name:
@@ -78,7 +74,6 @@ class SshAuditTask(Task):
                 )
             )
 
-        # Weak algorithms (enc, mac, kex)
         for category in ("enc", "mac", "kex"):
             for algo in data.get(category, []):
                 if not isinstance(algo, dict):
@@ -97,7 +92,6 @@ class SshAuditTask(Task):
                         )
                     )
 
-        # Banner
         banner_info = data.get("banner", {})
         if isinstance(banner_info, dict):
             raw_banner = banner_info.get("raw", "")

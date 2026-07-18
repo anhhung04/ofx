@@ -10,7 +10,6 @@ import yaml
 
 logger = logging.getLogger("ofx")
 
-
 def load_yaml_dict(path: Path, *, warn_prefix: str) -> dict[str, Any]:
     """Load a YAML mapping from file, returning an empty dict on failure."""
     if not path.exists():
@@ -20,7 +19,6 @@ def load_yaml_dict(path: Path, *, warn_prefix: str) -> dict[str, Any]:
     except Exception as exc:
         logger.warning("%s from %s: %s", warn_prefix, path, exc)
         return {}
-
 
 def save_yaml_dict(path: Path, data: dict[str, Any]) -> None:
     """Save a mapping to YAML with stable formatting."""

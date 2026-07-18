@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("hydra")
 class HydraTask(Task):
     name = "hydra"
@@ -61,7 +60,6 @@ class HydraTask(Task):
 
         return " ".join(parts), None
 
-    # [22][ssh] host: 10.0.0.1   login: admin   password: secret
     _RESULT_RE = re.compile(
         r"\[(\d+)\]\[(\S+)\]\s+host:\s+(\S+)\s+login:\s+(\S+)\s+password:\s+(.*)",
         re.IGNORECASE,

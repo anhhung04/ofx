@@ -8,7 +8,7 @@ app = typer.Typer(
     invoke_without_command=True,
 )
 
-from ofx.commands import (  # noqa: E402
+from ofx.commands import (
     ai,
     api,
     cloud,
@@ -23,7 +23,6 @@ COMMAND_ALIASES = {
     flow: ["x"],
     project: ["p"],
 }
-
 
 def add_app(sub_app):
     help = sub_app.HELP
@@ -42,7 +41,6 @@ def add_app(sub_app):
         help=help,
     )
 
-
 def add_aliases():
     for command_module, aliases in COMMAND_ALIASES.items():
         for alias in aliases:
@@ -50,21 +48,16 @@ def add_aliases():
                 command_module.app, name=alias, help=command_module.HELP, hidden=True
             )
 
-
-# Global callback to inject environment variables and project override
 _cli_env_vars: dict[str, str] = {}
 _cli_project: str = ""
-
 
 def get_cli_env_vars() -> dict[str, str]:
     """Return environment variables injected via the global -e/--env flag."""
     return _cli_env_vars
 
-
 def get_cli_project() -> str:
     """Return project name/path set via the global -p/--project flag."""
     return _cli_project
-
 
 def inject_env_vars(
     ctx: typer.Context,
@@ -121,9 +114,7 @@ def inject_env_vars(
 
     print_banner()
 
-
 app.callback()(inject_env_vars)
-
 
 def _register_commands():
     add_app(flow)
@@ -136,7 +127,6 @@ def _register_commands():
     add_app(ai)
     add_aliases()
 
-
 def _clean_up():
     import os
     import shutil
@@ -145,7 +135,6 @@ def _clean_up():
 
     if os.path.exists(TEMP_DIR):
         shutil.rmtree(TEMP_DIR, ignore_errors=True)
-
 
 def main():
     """Main entry point for the OFX CLI application"""

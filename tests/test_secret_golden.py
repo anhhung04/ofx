@@ -9,7 +9,6 @@ import pytest
 from ofx.runner.templates.resolver import TemplateResolver
 from ofx.utils.log import SecretRedactFilter
 
-
 @pytest.fixture(autouse=True)
 def _clean_redact_filter():
     """Reset the singleton between tests."""
@@ -18,19 +17,12 @@ def _clean_redact_filter():
     yield
     filt.clear()
 
-
 @pytest.fixture
 def resolver():
     r = TemplateResolver()
     r.clear_cache()
     r._support_funcs_cache = None
     return r
-
-
-# ---------------------------------------------------------------------------
-# Golden: secret value never appears in rendered output
-# ---------------------------------------------------------------------------
-
 
 class TestSecretGolden:
     """Secrets referenced via {{ secrets.X }} must render as the actual value
@@ -100,7 +92,6 @@ class TestSecretGolden:
         filt.register_values({self.SECRET_VALUE})
 
         ctx = {"secrets": {"API_KEY": self.SECRET_VALUE}}
-        # Cause a Jinja error by dividing by zero after referencing the secret
         with pytest.raises(Exception) as exc_info:
             await resolver.resolve("{{ 1 / 0 }}", ctx)
         error_text = str(exc_info.value)
@@ -152,12 +143,6 @@ class TestSecretGolden:
             logger.removeHandler(handler)
             logger.removeFilter(filt)
 
-
-# ---------------------------------------------------------------------------
-# LRU cache: hit/miss counting and eviction order
-# ---------------------------------------------------------------------------
-
-
 class TestLRUCacheMetrics:
     """Verify that the template resolver LRU cache tracks hits, misses,
     and evicts in the correct (least-recently-used) order."""
@@ -184,10 +169,8 @@ class TestLRUCacheMetrics:
         await resolver.resolve("{{ b }}", {"b": "1"})
         await resolver.resolve("{{ c }}", {"c": "1"})
 
-        # Re-access "a" to make it most-recently-used
         await resolver.resolve("{{ a }}", {"a": "2"})
 
-        # Adding a 4th should evict "b" (LRU)
         await resolver.resolve("{{ d }}", {"d": "1"})
 
         assert "{{ a }}" in resolver._template_cache

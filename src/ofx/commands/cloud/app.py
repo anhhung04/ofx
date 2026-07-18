@@ -25,12 +25,6 @@ app.add_typer(instance_app, name="instance")
 app.add_typer(image_app, name="image")
 app.add_typer(fleet_app, name="fleet")
 
-
-# ---------------------------------------------------------------------------
-# Quick connectivity test
-# ---------------------------------------------------------------------------
-
-
 @app.command("test")
 def cloud_test(
     host: Annotated[str, typer.Argument(help="Host to test connectivity")],
@@ -63,12 +57,6 @@ def cloud_test(
         except (TimeoutError, OSError) as e:
             console.print(f"[red]Connection failed: {e}[/red]")
             raise typer.Exit(code=1) from e
-
-
-# ---------------------------------------------------------------------------
-# Provider info
-# ---------------------------------------------------------------------------
-
 
 @app.command("providers")
 def list_providers():

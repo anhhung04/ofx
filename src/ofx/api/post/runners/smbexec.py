@@ -13,7 +13,6 @@ __all__ = ["PostSMBExec"]
 
 logger = logging.getLogger(__name__)
 
-
 @RunnerRegistry.register("smbexec")
 @dataclass
 class PostSMBExec(PostRunnerBase):
@@ -42,17 +41,17 @@ class PostSMBExec(PostRunnerBase):
     def __post_init__(self) -> None:
         try:
             from impacket.examples import smbexec as smbexec_module
-            from impacket.examples.secretsdump import RemoteOperations  # noqa: F401
-            from impacket.smbconnection import SMBConnection  # noqa: F401
+            from impacket.examples.secretsdump import RemoteOperations
+            from impacket.smbconnection import SMBConnection
 
             self._smb_module = smbexec_module
-        except Exception as exc:  # pragma: no cover - import gate
+        except Exception as exc:
             raise ImportError(
                 "SMBExec support requires the 'impacket' package. "
                 "Install it with: pip install impacket"
             ) from exc
 
-    def run(self, command: str, timeout: int | None = None) -> str:  # noqa: ARG002
+    def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a command via SMB exec.
 
         Args:
@@ -89,8 +88,6 @@ class PostSMBExec(PostRunnerBase):
         try:
             smb.login(self.username, self.password, self.domain)
 
-            # Parse share and path from remote_path
-            # Expected format: "SHARE/path/to/file" or "C$/path/to/file"
             parts = remote_path.replace("\\", "/").split("/", 1)
             share = parts[0]
             path = parts[1] if len(parts) > 1 else ""
@@ -116,7 +113,6 @@ class PostSMBExec(PostRunnerBase):
         try:
             smb.login(self.username, self.password, self.domain)
 
-            # Parse share and path
             parts = remote_path.replace("\\", "/").split("/", 1)
             share = parts[0]
             path = parts[1] if len(parts) > 1 else ""

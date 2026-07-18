@@ -13,7 +13,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-
 class Severity(str, Enum):
     """Vulnerability severity levels."""
 
@@ -24,14 +23,12 @@ class Severity(str, Enum):
     HIGH = "high"
     CRITICAL = "critical"
 
-
 class Confidence(str, Enum):
     """Confidence level for findings."""
 
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
-
 
 class OutputType(BaseModel):
     """Base class for all structured output types."""
@@ -57,7 +54,6 @@ class OutputType(BaseModel):
         data["_uuid"] = self._uuid
         return data
 
-
 class Ip(OutputType):
     """An IP address discovered during scanning."""
 
@@ -66,7 +62,6 @@ class Ip(OutputType):
     host: str = ""
     alive: bool = False
     protocol: str = "IPv4"
-
 
 class Port(OutputType):
     """An open port discovered during scanning."""
@@ -86,7 +81,6 @@ class Port(OutputType):
         h = self.host or self.ip
         return f"{h}:{self.port}"
 
-
 class Subdomain(OutputType):
     """A subdomain discovered during enumeration."""
 
@@ -94,7 +88,6 @@ class Subdomain(OutputType):
     host: str
     domain: str = ""
     sources: list[str] = Field(default_factory=list)
-
 
 class Url(OutputType):
     """A URL discovered or probed."""
@@ -112,7 +105,6 @@ class Url(OutputType):
     words: int = 0
     lines: int = 0
 
-
 class Vulnerability(OutputType):
     """A vulnerability discovered during scanning."""
 
@@ -128,7 +120,6 @@ class Vulnerability(OutputType):
     tags: list[str] = Field(default_factory=list)
     references: list[str] = Field(default_factory=list)
 
-
 class Tag(OutputType):
     """A tag/label discovered (tech, WAF, etc.)."""
 
@@ -138,7 +129,6 @@ class Tag(OutputType):
     match: str = ""
     category: str = "general"
 
-
 class Record(OutputType):
     """A DNS record."""
 
@@ -146,7 +136,6 @@ class Record(OutputType):
     name: str
     type: str
     host: str = ""
-
 
 class Domain(OutputType):
     """A domain with registration info."""
@@ -157,7 +146,6 @@ class Domain(OutputType):
     alive: bool = False
     creation_date: str = ""
     expiration_date: str = ""
-
 
 class Certificate(OutputType):
     """A TLS/SSL certificate."""
@@ -172,7 +160,6 @@ class Certificate(OutputType):
     not_after: str = ""
     self_signed: bool = True
 
-
 class Exploit(OutputType):
     """An exploit reference found for a target."""
 
@@ -185,7 +172,6 @@ class Exploit(OutputType):
     reference: str = ""
     cves: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
-
 
 class UserAccount(OutputType):
     """A user account / credential discovered during enumeration or exploitation.
@@ -200,8 +186,8 @@ class UserAccount(OutputType):
     hash: str = ""
     domain: str = ""
     host: str = ""
-    account_type: str = ""  # local, domain, service, machine, ...
-    privilege_level: str = ""  # user, admin, system, root, ...
+    account_type: str = ""
+    privilege_level: str = ""
     enabled: bool = True
     groups: list[str] = Field(default_factory=list)
     source: str = ""
@@ -244,8 +230,6 @@ class UserAccount(OutputType):
             comment=cred.comment,
         )
 
-
-# Lookup for resolving type names to classes
 OUTPUT_TYPE_MAP: dict[str, type[OutputType]] = {
     "ip": Ip,
     "port": Port,
@@ -260,8 +244,6 @@ OUTPUT_TYPE_MAP: dict[str, type[OutputType]] = {
     "user_account": UserAccount,
 }
 
-# Mapping from output type to project subdirectory.
-# Used by workflows to auto-route typed outputs into the correct folder.
 OUTPUT_TYPE_DIR_MAP: dict[str, str] = {
     "ip": "hosts",
     "port": "hosts",
@@ -276,7 +258,6 @@ OUTPUT_TYPE_DIR_MAP: dict[str, str] = {
     "user_account": "evidence/creds",
 }
 
-# Default filename per output type for project exports.
 OUTPUT_TYPE_FILE_MAP: dict[str, str] = {
     "ip": "ips.txt",
     "port": "ports.txt",

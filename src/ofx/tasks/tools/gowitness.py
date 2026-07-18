@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("gowitness")
 class GowitnessTask(Task):
     name = "gowitness"
@@ -57,7 +56,6 @@ class GowitnessTask(Task):
 
         return " ".join(parts), None
 
-    # [200] https://example.com - Example Title
     _STATUS_RE = re.compile(r"\[(\d{3})\]\s+(\S+)\s*(?:-\s*(.*))?")
 
     def parse_output(

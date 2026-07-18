@@ -6,7 +6,6 @@ import os
 import tempfile
 from pathlib import Path
 
-
 def make_temp_file(*, prefix: str = ".tmp_", suffix: str = ".txt") -> Path:
     """Create a temporary file and return its path.
 
@@ -16,7 +15,6 @@ def make_temp_file(*, prefix: str = ".tmp_", suffix: str = ".txt") -> Path:
     fd, tmp_path = tempfile.mkstemp(prefix=prefix, suffix=suffix)
     os.close(fd)
     return Path(tmp_path)
-
 
 def remote_work_dir(identifier: str, *, is_windows: bool = False) -> str:
     """Build a temporary work directory path for a remote host."""

@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Subdomain, Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("gau")
 class GauTask(Task):
     name = "gau"
@@ -62,7 +61,6 @@ class GauTask(Task):
                 domain = ".".join(host.rsplit(".", 2)[-2:])
                 results.append(Subdomain(host=host, domain=domain))
         else:
-            # Plain URL fallback (non-JSON mode)
             if line.startswith("http://") or line.startswith("https://"):
                 results.append(Url(url=line))
 

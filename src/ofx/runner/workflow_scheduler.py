@@ -7,14 +7,12 @@ from dataclasses import dataclass
 from ofx.models.job import Job
 from ofx.utils.scheduling import find_parallel_schedule
 
-
 @dataclass(frozen=True)
 class WorkflowSchedule:
     """Topologically sorted execution plan for workflow jobs."""
 
     staged_jobs: dict[str, Job]
     schedule: list[list[str]]
-
 
 class WorkflowScheduler:
     """Builds an execution schedule for workflow jobs."""

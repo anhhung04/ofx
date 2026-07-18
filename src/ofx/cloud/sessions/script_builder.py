@@ -19,7 +19,6 @@ from ofx.utils.shell import bash_dquote_escape
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RESERVED_ENV_KEYS = frozenset({"PATH", "HOME", "USER", "SHELL"})
 
-
 def _validate_env_key(key: str) -> None:
     """Validate environment variable names used in generated session scripts."""
     if not _ENV_KEY_RE.fullmatch(key):
@@ -27,7 +26,6 @@ def _validate_env_key(key: str) -> None:
             f"Invalid environment variable name: {key!r}. "
             "Expected [A-Za-z_][A-Za-z0-9_]*."
         )
-
 
 def _iter_session_env_assignments(
     env: dict[str, str],
@@ -43,7 +41,6 @@ def _iter_session_env_assignments(
         lines.append(render_assignment(key, str(value)))
     return lines
 
-
 def _append_step_blocks(
     lines: list[str],
     steps: list[Step],
@@ -53,7 +50,6 @@ def _append_step_blocks(
     for step_index, step in enumerate(steps):
         lines.extend(build_step_block(step, step_index))
         lines.append("")
-
 
 def build_session_script(
     steps: list[Step],
@@ -106,12 +102,6 @@ def build_session_script(
         encrypt_at_rest,
     )
 
-
-# ------------------------------------------------------------------
-# Bash (Linux)
-# ------------------------------------------------------------------
-
-
 def _build_bash(
     steps: list[Step],
     session_id: str,
@@ -134,7 +124,6 @@ def _build_bash(
         "",
     ]
 
-    # Environment variables
     lines.extend(
         _iter_session_env_assignments(
             env,
@@ -144,7 +133,6 @@ def _build_bash(
     if env:
         lines.append("")
 
-    # Logging helper
     lines.extend(
         [
             '_log() { echo "[$(date +%Y-%m-%dT%H:%M:%S)] $*" >> "$LOG_FILE"; }',
@@ -173,9 +161,6 @@ def _build_bash(
         ]
     )
 
-    # Self-shred AFTER markers are written so bash can finish cleanly.
-    # Must come last — shred overwrites file content on disk and bash
-    # may not have buffered the rest of the script yet.
     if encrypt_at_rest:
         lines.extend(
             [
@@ -186,7 +171,6 @@ def _build_bash(
         )
 
     return "\n".join(lines) + "\n"
-
 
 def _build_bash_step_block(
     step: Step,
@@ -225,7 +209,6 @@ def _build_bash_step_block(
     lines.append(f'_log "<<< Step {step_index} ({step_desc}) done"')
     return lines
 
-
 def _python_step_command_bash(step_index: int) -> str:
     """Return the bash command used for staged Python step files."""
     escaped_name = bash_dquote_escape(step_bundle_filename(step_index))
@@ -236,13 +219,11 @@ def _python_step_command_bash(step_index: int) -> str:
         f'"$__OFX_PY_BIN" "{escaped_name}"'
     )
 
-
 def _step_log_descriptor(step: Step, step_index: int) -> str:
     """Build a consistent, human-readable step descriptor for logs."""
     step_name = step.name or f"step_{step_index}"
     run_type = step.get_run_type().value
     return f"{step_name} [{run_type}]"
-
 
 def _step_command_for_session_script(
     step: Step,
@@ -268,7 +249,6 @@ def _step_command_for_session_script(
         return unsupported_command(run_type)
 
     return f"{prefix}{suffix}"
-
 
 def _bash_encrypt_epilogue() -> list[str]:
     """Return bash lines that encrypt the output/ directory at rest.
@@ -313,12 +293,6 @@ def _bash_encrypt_epilogue() -> list[str]:
         "",
     ]
 
-
-# ------------------------------------------------------------------
-# PowerShell (Windows)
-# ------------------------------------------------------------------
-
-
 def _build_powershell(
     steps: list[Step],
     session_id: str,
@@ -341,7 +315,6 @@ def _build_powershell(
         "",
     ]
 
-    # Environment variables
     lines.extend(
         _iter_session_env_assignments(
             env,
@@ -351,7 +324,6 @@ def _build_powershell(
     if env:
         lines.append("")
 
-    # Log helper
     lines.extend(
         [
             'function Write-Log($msg) { "[$((Get-Date).ToString("yyyy-MM-ddTHH:mm:ss"))] $msg" | Out-File -Append -FilePath $LOG_FILE }',
@@ -376,7 +348,6 @@ def _build_powershell(
 
     lines.extend(['Write-Log "All steps completed successfully"', 'Write-Log "__TASK_OK__"'])
 
-    # Self-destruct AFTER markers are written
     if encrypt_at_rest:
         lines.extend(
             [
@@ -387,7 +358,6 @@ def _build_powershell(
         )
 
     return "\n".join(lines) + "\n"
-
 
 def _build_powershell_step_block(
     step: Step,
@@ -434,7 +404,6 @@ def _build_powershell_step_block(
     lines.append(f'Write-Log "<<< Step {step_index} ({step_desc}) done"')
     return lines
 
-
 def _ps_encrypt_epilogue() -> list[str]:
     r"""Return PowerShell lines that encrypt the output\ directory at rest.
 
@@ -479,7 +448,6 @@ def _ps_encrypt_epilogue() -> list[str]:
         "",
     ]
 
-
 def _ps_escape(s: str) -> str:
     """Escape a string for safe embedding inside PowerShell double-quoted strings.
 
@@ -487,7 +455,6 @@ def _ps_escape(s: str) -> str:
     the value is treated literally rather than expanded or misinterpreted.
     """
     return s.replace("`", "``").replace('"', '`"').replace("$", "`$")
-
 
 def _python_step_command_ps(step_index: int) -> str:
     """Return the PowerShell command used for staged Python step files."""

@@ -11,7 +11,6 @@ from ofx.models.inputs import WorkflowInput, WorkflowSecret
 from ofx.models.job import Job
 from ofx.models.tools import ToolConfig
 
-
 class WorkflowCall(OFXBaseModel):
     """Configuration for reusable workflow calls."""
 
@@ -26,14 +25,12 @@ class WorkflowCall(OFXBaseModel):
         description="Secrets to pass to the reusable workflow (key-value pairs)",
     )
 
-
 class WorkflowDispatch(OFXBaseModel):
     """Configuration for manual workflow triggers."""
 
     inputs: dict[str, WorkflowInput] = Field(
         default_factory=dict, description="Inputs for the workflow dispatch event"
     )
-
 
 class Workflow(BaseModel):
     """Main workflow definition."""

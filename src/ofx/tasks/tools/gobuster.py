@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("gobuster")
 class GobusterTask(Task):
     name = "gobuster"
@@ -74,8 +73,6 @@ class GobusterTask(Task):
                 if key == "status_codes":
                     has_status_codes = True
 
-        # Gobuster has a default status-codes-blacklist (404) that conflicts
-        # with explicit status-codes; clear it to avoid the mutual-exclusion error.
         if has_status_codes:
             parts.extend(["-b", self._q("")])
 
@@ -88,7 +85,6 @@ class GobusterTask(Task):
 
         return " ".join(parts), output_file
 
-    # Pattern: /path (Status: 200) [Size: 1234]
     _LINE_RE = re.compile(r"^(/\S*)\s+\(Status:\s*(\d+)\)\s+\[Size:\s*(\d+)\]")
 
     def parse_line(self, line: str) -> list[Url]:

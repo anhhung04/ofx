@@ -6,11 +6,9 @@ import re
 
 __all__ = ["is_admin_from_whoami", "is_root_from_id"]
 
-
 def is_root_from_id(id_output: str) -> bool:
     """Detect root privileges from `id` output (uid=0)."""
     return "uid=0" in (id_output or "")
-
 
 def is_admin_from_whoami(whoami_output: str) -> bool:
     """Detect Windows admin privileges from whoami output.

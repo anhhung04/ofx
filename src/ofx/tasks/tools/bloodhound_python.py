@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("bloodhound-python")
 class BloodhoundPythonTask(Task):
     name = "bloodhound-python"
@@ -56,13 +55,11 @@ class BloodhoundPythonTask(Task):
         """Build: ``bloodhound-python -u user -p pass -d domain -dc dc -c All``."""
         parts: list[str] = [self.cmd]
 
-        # If no collection method specified, default to All
         if "collection" not in kwargs:
             kwargs["collection"] = "All"
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Use target as domain if -d not specified
         if "-d" not in " ".join(parts) and target:
             parts.extend(["-d", self._q(target)])
 
@@ -81,12 +78,10 @@ class BloodhoundPythonTask(Task):
             line = line.strip()
             if not line:
                 continue
-            # INFO: Done in 00m 05s
             if "Done in" in line:
                 results.append(
                     Tag(name="status", value="completed", category="bloodhound")
                 )
-            # INFO: Found 42 users
             elif "Found" in line:
                 results.append(
                     Tag(
@@ -97,7 +92,6 @@ class BloodhoundPythonTask(Task):
                         category="bloodhound",
                     )
                 )
-            # Output file names
             elif line.endswith(".json") or line.endswith(".zip"):
                 results.append(
                     Tag(name="output_file", value=line, category="bloodhound")

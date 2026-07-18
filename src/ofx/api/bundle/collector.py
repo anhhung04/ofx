@@ -5,14 +5,9 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-from .analyzer import KNOWN_API_MODULES, BundleError  # noqa: F401
+from .analyzer import KNOWN_API_MODULES, BundleError
 
 __all__ = ["CollectionError", "collect_modules"]
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
 
 class CollectionError(BundleError):
     """Raised when a requested module's source files cannot be located."""
@@ -21,13 +16,7 @@ class CollectionError(BundleError):
         self.module_name = module_name
         super().__init__(message)
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
 _STUB_INIT = b"# ofx bundle stub\n"
-
 
 def _resolve_api_root() -> Path:
     """Return the filesystem path of the ``ofx/api/`` package directory."""
@@ -36,8 +25,7 @@ def _resolve_api_root() -> Path:
         raise CollectionError(
             "Cannot locate ofx.api package – ensure ofx is installed in the current environment."
         )
-    return Path(spec.origin).parent  # .../site-packages/ofx/api
-
+    return Path(spec.origin).parent
 
 def _pkg_files(module_name: str, api_root: Path) -> dict[str, bytes]:
     """Return ``{archive_path: bytes}`` for a single ``ofx.api`` submodule.
@@ -45,7 +33,7 @@ def _pkg_files(module_name: str, api_root: Path) -> dict[str, bytes]:
     The archive path is relative to the virtual ``site-packages/`` root so
     that extracting the archive adds importable packages directly.
     """
-    site_packages = api_root.parent.parent  # .../site-packages
+    site_packages = api_root.parent.parent
 
     pkg_dir = api_root / module_name
     if pkg_dir.is_dir():
@@ -66,12 +54,6 @@ def _pkg_files(module_name: str, api_root: Path) -> dict[str, bytes]:
         f"No source file found for ofx.api.{module_name}",
         module_name=module_name,
     )
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
 
 def collect_modules(module_names: set[str]) -> dict[str, bytes]:
     """Return ``{archive_path: bytes}`` for all requested ``ofx.api`` modules.
@@ -96,9 +78,6 @@ def collect_modules(module_names: set[str]) -> dict[str, bytes]:
         "ofx/api/__init__.py": _STUB_INIT,
     }
 
-    # Always include _compat.py — provides stdlib-only shims for
-    # ofx.settings, ofx.exceptions, and ofx.utils.module_loader so
-    # bundled API modules work on remote hosts without the full ofx package.
     compat_file = api_root / "_compat.py"
     if compat_file.is_file():
         site_packages = api_root.parent.parent

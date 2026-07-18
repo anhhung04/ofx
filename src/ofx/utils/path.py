@@ -8,7 +8,6 @@ from git import Git
 
 from ofx.settings import ALLOWED_WORKFLOW_FILE_EXTENSIONS
 
-
 @lru_cache(maxsize=128)
 def is_remote_path(path: str) -> bool:
     """Check if the given path is a remote URL (http or https).
@@ -16,7 +15,6 @@ def is_remote_path(path: str) -> bool:
     Cached for repeated checks.
     """
     return urlparse(path).scheme in ["http", "https"]
-
 
 @lru_cache(maxsize=128)
 def is_git_repo(url: str) -> bool:
@@ -26,7 +24,6 @@ def is_git_repo(url: str) -> bool:
         return True
     except Exception:
         return False
-
 
 def find_valid_flow(dir: Path, name: str) -> Path | None:
     """Check if a workflow file exists in the given directory."""

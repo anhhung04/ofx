@@ -14,7 +14,6 @@ HISTORY_DIR = BASE_DATA_DIR / "history"
 HISTORY_FILE = HISTORY_DIR / "runs.ndjson"
 MAX_HISTORY_ENTRIES = 500
 
-
 def save_run_record(
     *,
     run_id: str,
@@ -54,7 +53,6 @@ def save_run_record(
     except Exception as e:
         logger.debug("Failed to save run history: %s", e)
 
-
 def load_history(limit: int = 50, workflow: str = "", status: str = "") -> list[dict]:
     """Load run history records, newest first."""
     if not HISTORY_FILE.exists():
@@ -83,10 +81,8 @@ def load_history(limit: int = 50, workflow: str = "", status: str = "") -> list[
         logger.debug("Failed to read run history: %s", e)
         return []
 
-    # Newest first
     records.reverse()
     return records[:limit]
-
 
 def clear_history() -> int:
     """Clear all run history. Returns number of records cleared."""
@@ -99,7 +95,6 @@ def clear_history() -> int:
     except Exception as e:
         logger.debug("Failed to clear history: %s", e)
         return 0
-
 
 def prune_history(keep: int = MAX_HISTORY_ENTRIES) -> int:
     """Prune history to keep only the most recent N entries. Returns number pruned."""
@@ -121,7 +116,6 @@ def prune_history(keep: int = MAX_HISTORY_ENTRIES) -> int:
     except Exception as e:
         logger.debug("Failed to prune history: %s", e)
         return 0
-
 
 def show_history(
     limit: int = 20,
@@ -171,7 +165,6 @@ def show_history(
         elapsed = rec.get("elapsed_seconds", 0)
         ts = rec.get("timestamp", "")
 
-        # Status formatting
         if st == "completed":
             status_str = "[green]✓ OK[/green]"
         elif st == "failed":
@@ -181,7 +174,6 @@ def show_history(
         else:
             status_str = f"[dim]{st}[/dim]"
 
-        # Duration formatting
         if elapsed >= 3600:
             dur = f"{elapsed / 3600:.1f}h"
         elif elapsed >= 60:

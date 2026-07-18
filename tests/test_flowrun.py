@@ -10,12 +10,10 @@ from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
 from ofx.models.workflow import Workflow
 from ofx.utils.workflow_utils import find_workflow
 
-
 def _workflow_from_yaml(yaml_str: str, workflow_path: Path) -> Workflow:
     workflow = Workflow.model_validate(yaml.safe_load(yaml_str))
     workflow.workflow_path = workflow_path
     return workflow
-
 
 class TestFlowRun:
     @pytest.mark.asyncio
@@ -611,8 +609,6 @@ class TestFlowRun:
         assert event_file.exists()
         lines = [ln for ln in event_file.read_text().splitlines() if ln.strip()]
         assert lines, "expected structured events"
-
-    # ── new integration tests ──────────────────────────────────────────
 
     @pytest.mark.asyncio
     async def test_parallel_jobs(self, tmp_path):

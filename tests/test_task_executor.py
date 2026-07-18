@@ -13,7 +13,6 @@ from ofx.runner.executors.task import TaskExecutor
 from ofx.runner.task_step import extract_output_item_target
 from ofx.tasks.output_types import Port, Url
 
-
 @pytest.mark.asyncio
 async def test_pre_run_auto_installs_with_isolated_env_context(monkeypatch):
     captured_envs = []
@@ -67,7 +66,6 @@ async def test_pre_run_auto_installs_with_isolated_env_context(monkeypatch):
         "Tool 'fake-tool' installed successfully",
     ]
 
-
 @pytest.mark.asyncio
 async def test_pre_run_sets_registered_task_instance(monkeypatch):
     class _Task:
@@ -84,7 +82,6 @@ async def test_pre_run_sets_registered_task_instance(monkeypatch):
 
     assert isinstance(runner._task, _Task)
 
-
 @pytest.mark.asyncio
 async def test_pre_run_raises_for_missing_task(monkeypatch):
     monkeypatch.setattr("ofx.runner.executors.task.TaskRegistry.get", lambda _name: None)
@@ -96,7 +93,6 @@ async def test_pre_run_raises_for_missing_task(monkeypatch):
 
     with pytest.raises(RuntimeError, match="Task 'missing' is not registered"):
         await TaskExecutor().pre_run(runner)
-
 
 @pytest.mark.asyncio
 async def test_pre_run_skips_install_when_task_already_installed(monkeypatch):
@@ -119,7 +115,6 @@ async def test_pre_run_skips_install_when_task_already_installed(monkeypatch):
     await executor.pre_run(runner)
 
     assert install_calls == []
-
 
 @pytest.mark.asyncio
 async def test_pre_run_auto_installs_when_command_present(monkeypatch):
@@ -150,7 +145,6 @@ async def test_pre_run_auto_installs_when_command_present(monkeypatch):
 
     assert install_calls == [("tool", "install tool")]
 
-
 @pytest.mark.asyncio
 async def test_pre_run_warns_when_install_command_missing(monkeypatch):
     warnings: list[str] = []
@@ -168,7 +162,6 @@ async def test_pre_run_warns_when_install_command_missing(monkeypatch):
     assert warnings == [
         "Task 'scan' requires 'tool' but it is not installed and no install command is defined."
     ]
-
 
 @pytest.mark.asyncio
 async def test_pre_run_warns_when_tool_still_missing_after_install(monkeypatch):
@@ -215,7 +208,6 @@ async def test_pre_run_warns_when_tool_still_missing_after_install(monkeypatch):
         "Install command succeeded but 'fake-tool' still not found on PATH",
     ]
 
-
 @pytest.mark.asyncio
 async def test_finalize_task_execution_tags_typed_outputs_from_target_file(tmp_path):
     target_file = tmp_path / "targets.txt"
@@ -250,10 +242,8 @@ async def test_finalize_task_execution_tags_typed_outputs_from_target_file(tmp_p
     assert typed_dicts[0]["_target"] == "10.0.0.1"
     assert typed_dicts[1]["_target"] == "example.com"
 
-
 def test_extract_output_item_target_handles_invalid_url_gracefully():
     assert extract_output_item_target({"url": object()}) == ""
-
 
 @pytest.mark.asyncio
 async def test_finalize_task_execution_tags_typed_outputs_from_literal_target():
@@ -282,7 +272,6 @@ async def test_finalize_task_execution_tags_typed_outputs_from_literal_target():
     typed_dicts = recorded[0][1]["typed_outputs"]
     assert typed_dicts[0]["_target"] == "example.com"
 
-
 @pytest.mark.asyncio
 async def test_finalize_task_execution_without_target_preserves_plain_dicts():
     item = Port(ip="10.0.0.1", port=80)
@@ -310,7 +299,6 @@ async def test_finalize_task_execution_without_target_preserves_plain_dicts():
 
     typed_dicts = recorded[0][1]["typed_outputs"]
     assert typed_dicts == [item.to_dict()]
-
 
 @pytest.mark.asyncio
 async def test_finalize_task_execution_uses_blank_result_when_executor_returns_none():
@@ -349,7 +337,6 @@ async def test_finalize_task_execution_uses_blank_result_when_executor_returns_n
         ("parse", ""),
         ("update", (None, "", "", [])),
     ]
-
 
 @pytest.mark.asyncio
 async def test_do_run_sets_outputs_command_and_prepares_executor(monkeypatch):
@@ -400,14 +387,13 @@ async def test_do_run_sets_outputs_command_and_prepares_executor(monkeypatch):
 
     assert runner._output_file == Path("/tmp/result.txt")
     assert recorded == [("outputs", {}), ("prepared", {})]
-    task_executor._finalize_task_execution.assert_awaited_once_with(  # type: ignore[attr-defined]
+    task_executor._finalize_task_execution.assert_awaited_once_with(
         runner,
         outputs={},
         command="httpx -u x",
         executor=executor,
         result=SimpleNamespace(exit_code=0, stdout="ok", stderr="", outputs={}),
     )
-
 
 @pytest.mark.asyncio
 async def test_do_run_uses_streaming_executor_and_stdout_callback(monkeypatch):
@@ -449,7 +435,6 @@ async def test_do_run_uses_streaming_executor_and_stdout_callback(monkeypatch):
     await task_executor.do_run(runner)
 
     assert calls == [("line", "streamed"), "finalize"]
-
 
 @pytest.mark.asyncio
 async def test_do_run_adapts_command_for_profile(monkeypatch):
@@ -501,7 +486,6 @@ async def test_do_run_adapts_command_for_profile(monkeypatch):
 
     assert captured_commands == ["env HTTP_PROXY=socks5://127.0.0.1:9050 whois example.com"]
 
-
 @pytest.mark.asyncio
 async def test_do_run_raises_for_failed_exit_code_and_still_finalizes(monkeypatch):
     calls: list[str] = []
@@ -543,7 +527,6 @@ async def test_do_run_raises_for_failed_exit_code_and_still_finalizes(monkeypatc
 
     assert calls == ["finalize"]
 
-
 @pytest.mark.asyncio
 async def test_finalize_task_execution_merges_and_persists_outputs():
     recorded: list[tuple[str, dict]] = []
@@ -580,7 +563,6 @@ async def test_finalize_task_execution_merges_and_persists_outputs():
     assert outputs["extra"] == 1
     assert outputs["typed_outputs"][0]["_target"] == "example.com"
     assert recorded == [("outputs", dict(outputs))]
-
 
 @pytest.mark.asyncio
 async def test_finalize_task_execution_runs_finalization_steps_in_order(monkeypatch):
@@ -634,7 +616,6 @@ async def test_finalize_task_execution_runs_finalization_steps_in_order(monkeypa
         ("store", [typed_item]),
     ]
 
-
 @pytest.mark.asyncio
 async def test_finalize_task_execution_updates_registry_for_local_output_file(tmp_path):
     output_file = tmp_path / "result.txt"
@@ -678,7 +659,6 @@ async def test_finalize_task_execution_updates_registry_for_local_output_file(tm
             },
         )
     ]
-
 
 @pytest.mark.asyncio
 async def test_finalize_task_execution_exports_and_cleans_output_file(tmp_path, monkeypatch):
@@ -732,7 +712,6 @@ async def test_finalize_task_execution_exports_and_cleans_output_file(tmp_path, 
             },
         )
     ]
-
 
 @pytest.mark.asyncio
 async def test_finalize_task_execution_skips_or_stores_credentials_based_on_state():

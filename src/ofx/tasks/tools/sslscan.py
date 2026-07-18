@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Certificate, Severity, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("sslscan")
 class SslscanTask(Task):
     name = "sslscan"
@@ -45,7 +44,7 @@ class SslscanTask(Task):
         "targets": OptDef(flag="--targets", type=str, help="File containing targets"),
     }
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = None
     output_flag = "--xml"
     extra_flags = ["--no-colour"]
@@ -94,7 +93,6 @@ class SslscanTask(Task):
             port = ssltest.get("port", "")
             target_str = f"{target}:{port}" if port else target
 
-            # Parse certificates
             for cert_el in ssltest.findall(".//certificate"):
                 subject = self._child_text(cert_el, "subject")
                 issuer = self._child_text(cert_el, "issuer")
@@ -140,7 +138,6 @@ class SslscanTask(Task):
                     )
                 )
 
-            # Parse weak ciphers
             for cipher_el in ssltest.findall(".//cipher"):
                 status = cipher_el.get("status", "").lower()
                 ssl_version = cipher_el.get("sslversion", "")
@@ -188,7 +185,6 @@ class SslscanTask(Task):
                         )
                     )
 
-            # Heartbleed check
             for hb_el in ssltest.findall(".//heartbleed"):
                 vuln_attr = hb_el.get("vulnerable", "").lower()
                 if vuln_attr in ("1", "true", "yes"):

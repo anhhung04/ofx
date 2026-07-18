@@ -8,10 +8,6 @@ from pydantic import Field, model_validator
 
 from ofx.models.base import OFXBaseModel
 
-# FleetStrategy is defined in strategy.py to avoid circular imports.
-# Re-export for convenience.
-
-
 class CloudHostEntry(OFXBaseModel):
     """A single static host entry for fleet usage."""
 
@@ -23,7 +19,6 @@ class CloudHostEntry(OFXBaseModel):
         default="", description="Override SSH password for this host"
     )
 
-
 class CloudConfig(OFXBaseModel):
     """Cloud configuration for running a job on a cloud VPS or existing host.
 
@@ -33,19 +28,16 @@ class CloudConfig(OFXBaseModel):
 
     model_config = {**OFXBaseModel.model_config, "extra": "allow"}
 
-    # Profile reference
     profile: str = Field(
         default="",
         description="Reference to a named profile in ~/.ofx/cloud.yml",
     )
 
-    # Provider
     provider: str = Field(
         default="",
         description="Cloud provider: digitalocean, aws, or static",
     )
 
-    # Instance spec (ignored for static provider)
     region: str = Field(default="", description="Cloud region (e.g., nyc3, us-east-1)")
     size: str = Field(
         default="", description="Instance size/type (e.g., s-1vcpu-1gb, t3.medium)"
@@ -53,13 +45,11 @@ class CloudConfig(OFXBaseModel):
     image: str = Field(default="", description="Snapshot/AMI name or ID")
     tags: list[str] = Field(default_factory=list, description="Instance tags")
 
-    # OS selection
     os: Literal["linux", "windows"] = Field(
         default="linux",
         description="Target OS: linux (SSH) or windows (WinRM)",
     )
 
-    # SSH config (Linux)
     ssh_user: str = Field(default="root", description="SSH username")
     ssh_key: str = Field(default="", description="Path to SSH private key file")
     ssh_password: str = Field(default="", description="SSH password (if key not used)")
@@ -69,7 +59,6 @@ class CloudConfig(OFXBaseModel):
         default_factory=dict, description="Extra provider-specific config"
     )
 
-    # WinRM config (Windows)
     winrm_user: str = Field(default="Administrator", description="WinRM username")
     winrm_password: str = Field(default="", description="WinRM password")
     winrm_ssl: bool = Field(default=False, description="Use HTTPS for WinRM")
@@ -80,7 +69,6 @@ class CloudConfig(OFXBaseModel):
         default="ntlm", description="WinRM transport: ntlm, kerberos, credssp"
     )
 
-    # Opsec
     opsec_mode: bool = Field(
         default=False,
         description="Enable opsec mode: command-to-file execution, avoids ps visibility",
@@ -90,7 +78,6 @@ class CloudConfig(OFXBaseModel):
         description="Log all commands and outputs locally for debrief",
     )
 
-    # Lifecycle
     auto_destroy: bool = Field(
         default=True,
         description="Destroy instance after job completes",
@@ -100,14 +87,12 @@ class CloudConfig(OFXBaseModel):
         description="Seconds to wait for instance to be ready",
     )
 
-    # Static provider fields
     host: str = Field(default="", description="Hostname/IP for static provider")
     hosts: list[CloudHostEntry] = Field(
         default_factory=list,
         description="Multiple hosts for static fleet",
     )
 
-    # AWS-specific
     key_pair_name: str = Field(default="", description="AWS EC2 key pair name")
     security_group: str = Field(default="", description="AWS security group ID")
     subnet_id: str = Field(default="", description="AWS subnet ID")
@@ -115,7 +100,6 @@ class CloudConfig(OFXBaseModel):
         default="", description="AWS IAM instance profile"
     )
 
-    # DigitalOcean-specific
     vpc_uuid: str = Field(default="", description="DigitalOcean VPC UUID")
     project_id: str = Field(default="", description="DigitalOcean project ID")
 
@@ -148,7 +132,6 @@ class CloudConfig(OFXBaseModel):
             object.__setattr__(self, "connection_type", "winrm")
 
         return self
-
 
 def parse_cloud_field(
     value: str | dict[str, Any] | CloudConfig | None,

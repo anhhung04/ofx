@@ -93,14 +93,12 @@ TOP_100_PORTS: list[int] = [
     61616,
 ]
 
-
 @dataclass
 class PortResult:
     host: str
     port: int
     open: bool
     banner: str = ""
-
 
 async def _probe(host: str, port: int, timeout: float) -> PortResult:
     try:
@@ -117,7 +115,6 @@ async def _probe(host: str, port: int, timeout: float) -> PortResult:
         return PortResult(host=host, port=port, open=True, banner=banner)
     except (OSError, TimeoutError):
         return PortResult(host=host, port=port, open=False)
-
 
 async def async_port_scan(
     host: str,
@@ -144,7 +141,6 @@ async def async_port_scan(
 
     results = await asyncio.gather(*[_guarded(p) for p in ports])
     return sorted([r for r in results if r.open], key=lambda r: r.port)
-
 
 def port_scan(
     host: str,

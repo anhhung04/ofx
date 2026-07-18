@@ -20,7 +20,6 @@ from ofx.utils import secrets as secrets_store
 backup_app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 logger = logging.getLogger(settings.app_branding)
 
-
 def _resolve_passphrase(passphrase: str, ask_passphrase: bool) -> str | None:
     if ask_passphrase:
         return (
@@ -31,7 +30,6 @@ def _resolve_passphrase(passphrase: str, ask_passphrase: bool) -> str | None:
             or None
         )
     return passphrase or None
-
 
 @backup_app.command("create")
 def backup_secrets(
@@ -125,7 +123,6 @@ def backup_secrets(
             "Backup failed",
             details=str(e),
         )
-
 
 @backup_app.command("restore")
 def restore_secrets(
@@ -287,7 +284,6 @@ def restore_secrets(
             details=str(e),
         )
 
-
 @backup_app.command("history")
 def show_backup_history(
     directory: Annotated[
@@ -363,7 +359,6 @@ def show_backup_history(
         table.add_row(filename, created, count, size)
 
     console.print(table)
-
 
 @backup_app.command("migrate")
 def migrate_from_files(

@@ -7,7 +7,6 @@ from pydantic import Field
 from ofx.models.base import OFXBaseModel
 from ofx.settings import DEFAULT_SHELL
 
-
 class Command(OFXBaseModel):
     """Model for shell command execution."""
 
@@ -24,7 +23,6 @@ class Command(OFXBaseModel):
     interactive: bool = Field(
         default=False, description="Enable interactive mode (stdin/stdout passthrough)"
     )
-
 
 class Script(Command):
     """Model for Python script execution."""

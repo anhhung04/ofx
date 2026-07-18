@@ -11,7 +11,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("feroxbuster")
 class FeroxbusterTask(Task):
     name = "feroxbuster"
@@ -98,7 +97,6 @@ class FeroxbusterTask(Task):
         has_newlines = target and "\n" in target
 
         if target_is_file or has_newlines:
-            # Write multi-line string to a temp file if needed
             if has_newlines and not target_is_file:
                 tmp = tempfile.NamedTemporaryFile(
                     mode="w",
@@ -112,7 +110,6 @@ class FeroxbusterTask(Task):
             else:
                 file_path = target
 
-            # Build command WITHOUT target, then prepend cat pipe
             saved = self.file_flag
             self.file_flag = None
             cmd, output_file = super().build_command("", **kwargs)
@@ -130,7 +127,6 @@ class FeroxbusterTask(Task):
         if data is None:
             return []
 
-        # feroxbuster JSON has type field; we only want "response" entries
         entry_type = data.get("type", "")
         if entry_type and entry_type != "response":
             return []

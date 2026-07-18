@@ -7,7 +7,6 @@ import pytest
 from ofx.runner import RunContext, RunnerStatus, WorkflowRunner
 from ofx.utils.workflow_utils import find_workflow
 
-
 @pytest.mark.asyncio
 async def test_script_file_relative_and_absolute(caplog):
     with caplog.at_level("INFO"):
@@ -31,8 +30,6 @@ async def test_script_file_relative_and_absolute(caplog):
             assert "EXAMPLE_SCRIPT_OK" in caplog.text, "Relative script_file should run"
             assert "Random string:" in caplog.text, "Absolute script_file should run"
 
-            # Full stdout is saved to log files (not dumped to console),
-            # so check the saved log files for multi-line output assertions.
             log_dir = tmpdir / "logs"
             log_files = list(
                 log_dir.glob(

@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("httpx")
 class HttpxTask(Task):
     name = "httpx"

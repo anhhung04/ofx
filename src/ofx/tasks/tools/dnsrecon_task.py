@@ -11,7 +11,6 @@ from ofx.tasks.registry import TaskRegistry
 
 _ADDRESS_TYPES = {"A", "AAAA"}
 
-
 @TaskRegistry.register("dnsrecon")
 class DnsreconTask(Task):
     name = "dnsrecon"
@@ -40,7 +39,6 @@ class DnsreconTask(Task):
     extra_flags = []
 
     def build_command(self, target: str, **kwargs: Any) -> tuple[str, Path | None]:
-        # Strip 'brt' from type if no wordlist is provided (it requires -D)
         enum_type = kwargs.get("type", "")
         if enum_type and "brt" in enum_type and not kwargs.get("wordlist"):
             types = [t.strip() for t in enum_type.split(",") if t.strip() != "brt"]

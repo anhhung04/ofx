@@ -7,7 +7,6 @@ from configparser import ConfigParser
 from configparser import Error as ConfigParserError
 from pathlib import Path
 
-
 def load_section_values(
     path: Path | None,
     section: str,
@@ -37,7 +36,6 @@ def load_section_values(
         if logger:
             logger.debug("Failed to read %s credentials from %s: %s", section, path, exc)
     return parser, values
-
 
 def save_section_values(
     path: Path | None,

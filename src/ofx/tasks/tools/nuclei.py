@@ -14,7 +14,6 @@ _SEVERITY_MAP = {
     "critical": Severity.CRITICAL,
 }
 
-
 @TaskRegistry.register("nuclei")
 class NucleiTask(Task):
     name = "nuclei"

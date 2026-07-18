@@ -6,9 +6,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from ofx.tasks.base import OptDef, Task
-from ofx.tasks.output_types import Confidence, Port, Severity, Vulnerability
+from ofx.tasks.output_types import Confidence, Ip, Port, Severity, Vulnerability
 from ofx.tasks.registry import TaskRegistry
-
 
 @TaskRegistry.register("nmap")
 class NmapTask(Task):
@@ -17,10 +16,13 @@ class NmapTask(Task):
     description = "Network port scanner and service detector"
     category = "port/scan"
     install_cmd = "apt install -y nmap"
-    output_types = [Port, Vulnerability]
+    output_types = [Ip, Port, Vulnerability]
 
     opts = {
         "ports": OptDef(flag="-p", type=str, help="Port range to scan"),
+        "ping_scan": OptDef(
+            flag="-sn", is_flag=True, help="Ping scan only — no port scan"
+        ),
         "version_detection": OptDef(
             flag="-sV", is_flag=True, help="Detect service versions"
         ),
@@ -36,7 +38,7 @@ class NmapTask(Task):
         ),
     }
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = "-iL"
     output_flag = "-oX"
 
@@ -48,8 +50,8 @@ class NmapTask(Task):
         stdout: str,
         stderr: str,
         output_file: Path | None = None,
-    ) -> list[Port | Vulnerability]:
-        results: list[Port | Vulnerability] = []
+    ) -> list[Ip | Port | Vulnerability]:
+        results: list[Ip | Port | Vulnerability] = []
 
         xml_source = self._raw_output(
             stdout if "<nmaprun" in stdout else "",
@@ -75,8 +77,13 @@ class NmapTask(Task):
                 if hn_el is not None:
                     hostname = hn_el.get("name", "")
 
+            status_el = host_el.find("status")
+            host_state = status_el.get("state", "") if status_el is not None else ""
+
             ports_el = host_el.find("ports")
             if ports_el is None:
+                if host_state == "up":
+                    results.append(Ip(ip=ip, host=hostname, alive=True))
                 continue
 
             for port_el in ports_el.findall("port"):
@@ -122,7 +129,6 @@ class NmapTask(Task):
                     )
                 )
 
-                # Extract script output as vulnerabilities
                 for script_el in port_el.findall("script"):
                     script_id = script_el.get("id", "")
                     script_output = script_el.get("output", "")

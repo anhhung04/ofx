@@ -17,11 +17,6 @@ from ofx.commands.ui_helpers import (
 )
 from ofx.settings import get_console
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _ai_config(model_override: str | None = None) -> dict:
     """Return resolved AI config dict from settings + env."""
     import os
@@ -38,7 +33,6 @@ def _ai_config(model_override: str | None = None) -> dict:
         "max_history_tokens": ai.max_history_tokens,
         "base_url": ai.base_url or None,
     }
-
 
 def _require_deps(cfg: dict) -> None:
     """Ensure the openai SDK is installed and credentials are available."""
@@ -60,13 +54,11 @@ def _require_deps(cfg: dict) -> None:
             "Run 'ofx ai setup' for configuration help.",
         )
 
-
-def _prepare(model: str | None = None) -> tuple[dict, Console]:  # noqa: F821
+def _prepare(model: str | None = None) -> tuple[dict, Console]:
     """Resolve config, check deps, return ``(cfg, console)``."""
     cfg = _ai_config(model)
     _require_deps(cfg)
     return cfg, get_console()
-
 
 def _stream_to_stdout(cfg: dict, messages: list[dict]) -> str:
     """Stream LLM response to stdout with rich rendering.
@@ -98,7 +90,6 @@ def _stream_to_stdout(cfg: dict, messages: list[dict]) -> str:
         base_url=cfg["base_url"],
     )
 
-    # --- Wait for first token with a spinner ----------------------------
     first_chunk = None
     try:
         with Live(
@@ -115,7 +106,6 @@ def _stream_to_stdout(cfg: dict, messages: list[dict]) -> str:
     if first_chunk is None:
         return ""
 
-    # --- Stream thinking tokens live ------------------------------------
     if first_chunk.kind == "thinking":
         thinking_parts.append(first_chunk.text)
         try:
@@ -141,7 +131,6 @@ def _stream_to_stdout(cfg: dict, messages: list[dict]) -> str:
             return ""
         console.print()
 
-    # --- Stream content with Live markdown ------------------------------
     content_parts.append(first_chunk.text)
 
     try:
@@ -162,7 +151,6 @@ def _stream_to_stdout(cfg: dict, messages: list[dict]) -> str:
 
     return "".join(content_parts)
 
-
 def _build_skill_prompt(skill: str | None) -> str:
     """Return the skill system-prompt addition, or empty string."""
     if not skill:
@@ -181,12 +169,6 @@ def _build_skill_prompt(skill: str | None) -> str:
         )
         return ""
     return text
-
-
-# ---------------------------------------------------------------------------
-# GenerateHandler
-# ---------------------------------------------------------------------------
-
 
 class GenerateHandler:
     """Generate an OFX workflow YAML from a natural language description."""
@@ -226,12 +208,6 @@ class GenerateHandler:
             console.print(
                 "\n[dim]Tip: use -o <file.yml> to save the generated workflow.[/dim]"
             )
-
-
-# ---------------------------------------------------------------------------
-# AnalyzeHandler
-# ---------------------------------------------------------------------------
-
 
 class AnalyzeHandler:
     """Analyze workflow output with an optional skill persona."""
@@ -318,12 +294,6 @@ class AnalyzeHandler:
 
         return parts
 
-
-# ---------------------------------------------------------------------------
-# ChatHandler
-# ---------------------------------------------------------------------------
-
-
 class ChatHandler:
     """Interactive multi-turn chat session."""
 
@@ -381,12 +351,6 @@ class ChatHandler:
             response = _stream_to_stdout(cfg, history.to_list())
             history.add_assistant(response)
 
-
-# ---------------------------------------------------------------------------
-# list_skills / SetupHandler
-# ---------------------------------------------------------------------------
-
-
 def list_skills() -> None:
     """Print a table of available AI skill personas."""
     from ofx.ai.prompts import AI_SKILLS
@@ -412,7 +376,6 @@ def list_skills() -> None:
     console.print(
         "\n[dim]Usage:[/dim] [bold]ofx ai analyze --skill <name> -f output.json[/bold]"
     )
-
 
 class SetupHandler:
     def run(self) -> None:

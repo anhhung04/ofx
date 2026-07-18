@@ -14,7 +14,6 @@ __all__ = [
     "reverse_shell",
 ]
 
-
 def bind_shell(host: str = "0.0.0.0", port: int = 4444, shell: str = "/bin/sh") -> None:
     """Create a bind shell that listens for incoming connections.
 
@@ -68,7 +67,6 @@ def bind_shell(host: str = "0.0.0.0", port: int = 4444, shell: str = "/bin/sh") 
         process.terminate()
         process.wait()
 
-
 def bind_tcp_shell(host: str = "0.0.0.0", port: int = 4444) -> None:
     """Create a TCP bind shell using /bin/bash.
 
@@ -83,7 +81,6 @@ def bind_tcp_shell(host: str = "0.0.0.0", port: int = 4444) -> None:
     """
     bind_shell(host, port, "/bin/bash")
 
-
 def bind_telnet_shell(host: str = "0.0.0.0", port: int = 23) -> None:
     """Create a telnet-style bind shell on port 23.
 
@@ -97,7 +94,6 @@ def bind_telnet_shell(host: str = "0.0.0.0", port: int = 23) -> None:
         >>> bind_telnet_shell('0.0.0.0', 23)
     """
     bind_shell(host, port, "/bin/sh")
-
 
 def generate_shellcode_list(arch: str = "x86", platform: str = "linux") -> list[str]:
     """Get a list of shellcode payloads for specific architecture and platform.
@@ -133,7 +129,6 @@ def generate_shellcode_list(arch: str = "x86", platform: str = "linux") -> list[
 
     key = f"{platform}_{arch}"
     return shellcode.get(key, [])
-
 
 def reverse_shell(host: str, port: int, shell: str = "/bin/bash") -> None:
     """Create a reverse shell that connects to a remote host.

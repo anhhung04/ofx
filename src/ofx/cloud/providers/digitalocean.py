@@ -2,7 +2,6 @@
 
 Requires the optional 'pydo' package:
     pip install pydo
-    # or: pip install ofx[digitalocean]
 """
 
 from __future__ import annotations
@@ -22,10 +21,9 @@ from ofx.utils.secrets import get_secret
 logger = logging.getLogger("ofx")
 
 try:
-    from pydo import Client as DOClient  # type: ignore
+    from pydo import Client as DOClient
 except ImportError:
     DOClient = None
-
 
 @CloudProviderRegistry.register("digitalocean")
 class DigitalOceanProvider(CloudProvider):
@@ -293,7 +291,7 @@ class DigitalOceanProvider(CloudProvider):
         """List droplets, optionally filtered by tag."""
         params = {}
         if tags:
-            params["tag_name"] = tags[0]  # DO API supports single tag filter
+            params["tag_name"] = tags[0]
 
         resp = await asyncio.to_thread(self._client.droplets.list, **params)
         instances = []

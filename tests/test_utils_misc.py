@@ -10,11 +10,6 @@ from pathlib import Path
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# json_utils.py
-# ---------------------------------------------------------------------------
-
-
 class TestEnumEncoder:
     def test_encodes_enum_as_value(self):
         from ofx.utils.json_utils import EnumEncoder
@@ -42,12 +37,6 @@ class TestEnumEncoder:
         result = json.loads(json.dumps(data, cls=EnumEncoder))
         assert result == ["ok", "plain", 42]
 
-
-# ---------------------------------------------------------------------------
-# module_loader.py
-# ---------------------------------------------------------------------------
-
-
 class TestModuleLoader:
     def test_module_name_is_stable(self):
         from ofx.utils.module_loader import module_name_for_path
@@ -73,7 +62,7 @@ class TestModuleLoader:
         f.write_text("X = 42\n")
         mod = load_module_from_file(f, "testprefix")
         assert mod is not None
-        assert mod.X == 42  # type: ignore[attr-defined]
+        assert mod.X == 42
 
     def test_load_module_returns_none_for_missing_spec(self, tmp_path, monkeypatch):
         import importlib.util
@@ -111,13 +100,12 @@ class TestModuleLoader:
         class Grandchild(Child):
             pass
 
-        module.Base = Base  # type: ignore[attr-defined]
-        module.Child = Child  # type: ignore[attr-defined]
-        module.Grandchild = Grandchild  # type: ignore[attr-defined]
-        module.not_a_class = 42  # type: ignore[attr-defined]
+        module.Base = Base
+        module.Child = Child
+        module.Grandchild = Grandchild
+        module.not_a_class = 42
 
         results = iter_subclasses(module, Base)
-        # Should find Child and Grandchild, not Base itself
         assert Base not in results
         assert Child in results
         assert Grandchild in results
@@ -132,12 +120,6 @@ class TestModuleLoader:
 
         results = iter_subclasses(module, Base)
         assert results == []
-
-
-# ---------------------------------------------------------------------------
-# utils/args.py
-# ---------------------------------------------------------------------------
-
 
 class TestParseKeyValuePairs:
     def test_empty_inputs(self):
@@ -174,7 +156,6 @@ class TestParseKeyValuePairs:
         from ofx.utils.args import parse_key_value_pairs
 
         result = parse_key_value_pairs(["key=value"])
-        # Single-element lists are flattened
         assert isinstance(result["key"], str)
         assert result["key"] == "value"
 
@@ -195,12 +176,6 @@ class TestParseKeyValuePairs:
 
         result = parse_key_value_pairs(["url=http://host/path?a=1"])
         assert result["url"] == "http://host/path?a=1"
-
-
-# ---------------------------------------------------------------------------
-# utils/matrix.py — expand_jobs + get_expanded_job_ids fallback
-# ---------------------------------------------------------------------------
-
 
 class TestExpandJobs:
     def _make_job(self, matrix: dict | None = None, needs: list | None = None):
@@ -229,7 +204,6 @@ class TestExpandJobs:
         job = self._make_job(matrix={"os": ["linux", "windows"]})
         result = expand_jobs({"test": job})
         assert "test" in result
-        # matrix job: max_parallel and fail_fast propagated from strategy
         assert result["test"].original_job_id == "test"
 
     def test_multiple_jobs(self):
@@ -239,7 +213,6 @@ class TestExpandJobs:
         j2 = self._make_job(matrix={"env": ["prod", "dev"]})
         result = expand_jobs({"j1": j1, "j2": j2})
         assert set(result.keys()) == {"j1", "j2"}
-
 
 class TestGetExpandedJobIds:
     def _make_expanded(self, original: str, jids: list[str]):
@@ -264,23 +237,14 @@ class TestGetExpandedJobIds:
         from ofx.utils.matrix import get_expanded_job_ids
 
         expanded = self._make_expanded("other", ["other_0"])
-        # 'missing' not in expanded → should return ["missing"]
         result = get_expanded_job_ids(expanded, "missing")
         assert result == ["missing"]
-
-
-# ---------------------------------------------------------------------------
-# coerce_input_value (workflow_utils.py)
-# ---------------------------------------------------------------------------
-
 
 class TestCoerceInputValue:
     def _coerce(self, value, expected_type, name="test"):
         from ofx.utils.workflow_utils import coerce_input_value
 
         return coerce_input_value(value, expected_type, name)
-
-    # -- number --
 
     def test_number_from_int(self):
         assert self._coerce(42, "number") == 42
@@ -308,8 +272,6 @@ class TestCoerceInputValue:
         with pytest.raises(ValueError, match="Cannot convert list"):
             self._coerce([1, 2], "number")
 
-    # -- boolean --
-
     def test_boolean_passthrough(self):
         assert self._coerce(True, "boolean") is True
         assert self._coerce(False, "boolean") is False
@@ -330,8 +292,6 @@ class TestCoerceInputValue:
         assert self._coerce(1, "boolean") is True
         assert self._coerce(0, "boolean") is False
 
-    # -- array --
-
     def test_array_passthrough(self):
         assert self._coerce([1, 2, 3], "array") == [1, 2, 3]
 
@@ -349,8 +309,6 @@ class TestCoerceInputValue:
     def test_array_rejects_json_object_string(self):
         with pytest.raises(ValueError, match="Cannot convert"):
             self._coerce('{"a": 1}', "array")
-
-    # -- object --
 
     def test_object_passthrough(self):
         assert self._coerce({"key": "val"}, "object") == {"key": "val"}
@@ -370,8 +328,6 @@ class TestCoerceInputValue:
         with pytest.raises(ValueError, match="Cannot convert"):
             self._coerce("[1, 2]", "object")
 
-    # -- string --
-
     def test_string_passthrough(self):
         assert self._coerce("hello", "string") == "hello"
 
@@ -380,8 +336,6 @@ class TestCoerceInputValue:
 
     def test_string_from_bool(self):
         assert self._coerce(True, "string") == "True"
-
-    # -- unknown type --
 
     def test_unknown_type_passthrough(self):
         assert self._coerce("val", "custom") == "val"

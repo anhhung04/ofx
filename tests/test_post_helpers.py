@@ -16,8 +16,6 @@ from ofx.api.post.enum import (
     winpeas_command,
 )
 
-
-# Create a concrete runner for testing (since PostRunnerBase is abstract)
 class InTestRunner(PostRunnerBase):
     """Concrete runner for testing purposes."""
 
@@ -36,7 +34,6 @@ class InTestRunner(PostRunnerBase):
             raise NotImplementedError("Interactive shell not supported")
         return self._interactive_fn(**kwargs)
 
-
 def test_enum_prefers_local(tmp_path):
     local = tmp_path / "linpeas.sh"
     local.write_text("x")
@@ -54,7 +51,6 @@ def test_enum_prefers_local(tmp_path):
 
     assert bundled_tool_path("linpeas.sh").as_posix().endswith("/data/post/linpeas.sh")
 
-
 def test_post_runner_helpers():
     outputs = {
         "uname -a": "Linux test",
@@ -71,7 +67,6 @@ def test_post_runner_helpers():
         "powershell" in win_runner.download_command("http://x", "C:\\Temp\\a").lower()
     )
 
-
 def test_post_runner_interactive():
     runner = InTestRunner(lambda cmd: "")
     with pytest.raises(NotImplementedError):
@@ -85,7 +80,6 @@ def test_post_runner_interactive():
     runner = InTestRunner(lambda cmd: "", _interactive)
     runner.interactive_shell(ok=True)
     assert called["ok"] is True
-
 
 def _make_channel(exit_code=0, stdout=b"ok", stderr=b""):
     """Build mock stdout/stderr channel objects for paramiko exec_command."""
@@ -101,7 +95,6 @@ def _make_channel(exit_code=0, stdout=b"ok", stderr=b""):
 
     return ch, out, err
 
-
 @patch("paramiko.SSHClient")
 def test_postssh_run_success(mock_ssh_cls):
     mock_client = MagicMock()
@@ -115,14 +108,12 @@ def test_postssh_run_success(mock_ssh_cls):
     mock_client.exec_command.return_value = (None, out, err)
 
     runner = PostSSH("host", user="root", port=2222, identity_file="/dev/null")
-    # Bypass key loading
     with patch.object(PostSSH, "_load_key", return_value=MagicMock()):
         assert runner.run("whoami") == "ok"
 
     mock_client.exec_command.assert_called_once()
     call_args = mock_client.exec_command.call_args
     assert call_args[0][0] == "whoami"
-
 
 @patch("paramiko.SSHClient")
 def test_postssh_run_failure(mock_ssh_cls):
@@ -139,7 +130,6 @@ def test_postssh_run_failure(mock_ssh_cls):
     runner = PostSSH("host")
     with pytest.raises(PostRunnerError):
         runner.run("id")
-
 
 @patch("paramiko.SSHClient")
 def test_postssh_upload_download(mock_ssh_cls, tmp_path):

@@ -24,7 +24,6 @@ _SALT_PREFIX = os.getenv("USER", "ofx").encode()[:4].ljust(4, b"_") + os.getenv(
 )[:12].encode().ljust(12, b"_")
 _KDF_ITERATIONS = 100_000
 
-
 def derive_key(passphrase: str, salt: bytes | None = None) -> tuple[bytes, bytes]:
     """Derive a Fernet key from a passphrase.
 
@@ -46,7 +45,6 @@ def derive_key(passphrase: str, salt: bytes | None = None) -> tuple[bytes, bytes
     )
     key = base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
     return key, salt
-
 
 def encrypt_results(
     results_dir: Path, passphrase: str, output_file: Path | None = None
@@ -74,18 +72,15 @@ def encrypt_results(
     if output_file is None:
         output_file = results_dir.parent / "results.enc"
 
-    # Create tar.gz in memory
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         tar.add(str(results_dir), arcname="results")
     tar_data = buf.getvalue()
 
-    # Encrypt
     key, salt = derive_key(passphrase)
     cipher = Fernet(key)
     encrypted = cipher.encrypt(tar_data)
 
-    # Write: [16 bytes salt][encrypted data]
     output_file.write_bytes(salt + encrypted)
     output_file.chmod(0o600)
 
@@ -96,7 +91,6 @@ def encrypt_results(
         output_file,
     )
     return output_file
-
 
 def decrypt_results(
     enc_file: Path, passphrase: str, output_dir: Path | None = None

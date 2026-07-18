@@ -19,7 +19,6 @@ logger = logging.getLogger("ofx")
 
 app = typer.Typer()
 
-
 def discover_api_modules() -> dict[str, dict[str, str]]:
     """Auto-discover all API modules from ofx.api package."""
     try:
@@ -51,7 +50,6 @@ def discover_api_modules() -> dict[str, dict[str, str]]:
         logger.debug("Failed to discover API modules: %s", e)
         return {}
 
-
 def _try_register_module(
     module_path: str, name: str, registry: dict, *, require_all: bool = False
 ) -> None:
@@ -67,7 +65,6 @@ def _try_register_module(
             registry[name] = {"path": module_path, "description": doc.split("\n")[0]}
     except Exception as e:
         logger.debug("Failed to register API module '%s': %s", name, e)
-
 
 def format_type(type_hint: Any, model_registry: dict[str, Any]) -> str:
     """Format a type hint into a string, recursively handling nested models."""
@@ -93,7 +90,6 @@ def format_type(type_hint: Any, model_registry: dict[str, Any]) -> str:
     if hasattr(type_hint, "_name"):
         return type_hint._name
     return getattr(type_hint, "__name__", str(type_hint))
-
 
 def get_model_schema(
     model: Any, model_registry: dict[str, Any]
@@ -123,7 +119,6 @@ def get_model_schema(
 
     model_registry[model.__name__] = schema
     return schema
-
 
 def _extract_params(
     sig: inspect.Signature,
@@ -172,14 +167,12 @@ def _extract_params(
             )
     return parameters
 
-
 def _resolve_type_hints(func: Any) -> dict:
     """Safely resolve type hints for a callable."""
     try:
         return get_type_hints(func)
     except Exception:
         return getattr(func, "__annotations__", {})
-
 
 def _normalize_doc_and_example(doc: str) -> tuple[str, str | None]:
     """Split docstring into normalized description and optional example."""
@@ -195,7 +188,6 @@ def _normalize_doc_and_example(doc: str) -> tuple[str, str | None]:
             if line
         )
     return description, example
-
 
 def _print_data_directories(console: Any, base_data_dir: str, data_dir: str) -> None:
     from rich.panel import Panel
@@ -218,7 +210,6 @@ def _print_data_directories(console: Any, base_data_dir: str, data_dir: str) -> 
     )
     console.print()
 
-
 def _print_list_usage(console: Any) -> None:
     console.print("\n⚠️ No module specified.")
     console.print("\nUse one of the following options:")
@@ -231,7 +222,6 @@ def _print_list_usage(console: Any) -> None:
     console.print("\nExample:")
     console.print("  [dim]$ ofx docs --list[/dim]")
     console.print("  [dim]$ ofx docs --module webshell[/dim]")
-
 
 def _print_module_list(
     console: Any, modules: dict[str, str], descriptions: dict[str, str]
@@ -252,7 +242,6 @@ def _print_module_list(
     console.print(table)
     console.print(f"\n[dim]Total: {len(modules)} modules[/dim]")
     console.print("\nUse [cyan]--module MODULE[/cyan] to view detailed documentation")
-
 
 def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
     """Get detailed information about a specific class method."""
@@ -280,7 +269,6 @@ def get_method_info(cls, method_name: str) -> dict[str, Any] | None:
     except Exception as e:
         logger.debug("Failed to introspect method '%s': %s", method_name, e)
         return None
-
 
 def get_module_functions(module) -> list[dict[str, Any]]:
     """Get all public functions from a module with their documentation."""
@@ -381,7 +369,6 @@ def get_module_functions(module) -> list[dict[str, Any]]:
 
     return sorted(functions, key=lambda x: x["name"])
 
-
 def format_parameters(params: list[dict[str, Any]]):
     """Format parameters into a rich Table."""
     from rich.table import Table
@@ -404,7 +391,6 @@ def format_parameters(params: list[dict[str, Any]]):
         table.add_row(param["name"], param["type"], required, default)
 
     return table
-
 
 def format_model(schema: list[dict[str, Any]]):
     """Format a model schema into a rich Table."""
@@ -429,7 +415,6 @@ def format_model(schema: list[dict[str, Any]]):
         )
 
     return table
-
 
 def create_function_tree(
     functions: list[dict[str, Any]], category: str, full_detail: bool = True
@@ -536,7 +521,6 @@ def create_function_tree(
                 )
 
     return tree
-
 
 @app.command()
 def show_api(

@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Subdomain
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("puredns")
 class PurednsTask(Task):
     name = "puredns"
@@ -37,7 +36,6 @@ class PurednsTask(Task):
         ),
     }
 
-    # puredns resolve <file> — positional file, no flags
     input_flag = None
     file_flag = None
     output_flag = "-w"

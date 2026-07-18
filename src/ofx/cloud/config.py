@@ -41,7 +41,6 @@ logger = logging.getLogger("ofx")
 
 CLOUD_CONFIG_FILE = BASE_DATA_DIR / "cloud.yml"
 
-
 def _default_cloud_config_data() -> dict[str, Any]:
     """Starter cloud config created on first user use."""
     return {
@@ -49,44 +48,9 @@ def _default_cloud_config_data() -> dict[str, Any]:
         "defaults": {"profile": ""},
     }
 
-
 _CLOUD_CONFIG_FILE_HEADER = """# OFX cloud profiles
-#
-# File format:
-#   profiles:
-#     <name>:
-#       provider: static | digitalocean | aws
-#       host: <ip-or-hostname>        # static only
-#       region: <cloud-region>
-#       size: <instance-size>
-#       image: <image-or-ami>
-#       ssh_user: <user>
-#       ssh_key: <path>
-#       ssh_password: <password>
-#       auto_destroy: <bool>
-#   defaults:
-#     profile: <name or empty>
-#
-# Example:
-#   profiles:
-#     do-small:
-#       provider: digitalocean
-#       region: nyc3
-#       size: s-1vcpu-1gb
-#       image: ubuntu-24-04-x64
-#       ssh_user: root
-#       auto_destroy: true
-#
-#     lab-host:
-#       provider: static
-#       host: 10.10.10.5
-#       ssh_user: root
-#       ssh_key: ~/.ssh/id_ed25519
-#   defaults:
-#     profile: do-small
 
 """
-
 
 def _dump_default_cloud_config_file() -> str:
     return _CLOUD_CONFIG_FILE_HEADER + yaml.dump(
@@ -96,15 +60,14 @@ def _dump_default_cloud_config_file() -> str:
         allow_unicode=True,
     )
 
-
 class CloudProfileManager:
     """Manages cloud profiles stored in ~/.ofx/cloud.yml.
 
     Usage:
         manager = CloudProfileManager()
-        config = manager.resolve("do-small")  # Load profile by name
-        manager.add("new-profile", {...})      # Add new profile
-        manager.list_profiles()                # List all profiles
+        config = manager.resolve("do-small")
+        manager.add("new-profile", {...})
+        manager.list_profiles()
     """
 
     def __init__(self, config_path: Path | None = None):
@@ -297,10 +260,7 @@ class CloudProfileManager:
         data = self.get_profile_data(name)
         return CloudConfig(**data)
 
-
-# Module-level singleton for convenience
 _manager: CloudProfileManager | None = None
-
 
 def get_cloud_profile_manager() -> CloudProfileManager:
     """Get the global cloud profile manager (lazy singleton)."""

@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("netexec")
 class NetexecTask(Task):
     name = "netexec"
@@ -81,11 +80,9 @@ class NetexecTask(Task):
 
         return " ".join(parts), None
 
-    # SMB 10.0.0.1 445 DC01 [+] domain\user:password
     _SUCCESS_RE = re.compile(
         r"\[\+\]\s+(?:(\S+)\\)?(\S+?)(?::(\S+))?\s*(\(Pwn3d!\))?\s*$"
     )
-    # user RID:1001
     _USER_RE = re.compile(r"^\S+\s+\d+\s+\S+\s+(.+?)\s+rid:\s*(\d+)", re.IGNORECASE)
     _SHARE_RE = re.compile(
         r"^\S+\s+\d+\s+\S+\s+(\S+)\s+(READ|WRITE|NO ACCESS)", re.IGNORECASE
@@ -107,11 +104,9 @@ class NetexecTask(Task):
             if not line:
                 continue
 
-            # Skip failure lines
             if "[-]" in line and "STATUS_LOGON_FAILURE" in line:
                 continue
 
-            # Successful authentication
             m = self._SUCCESS_RE.search(line)
             if m and "[+]" in line:
                 domain = m.group(1) or ""
@@ -130,7 +125,6 @@ class NetexecTask(Task):
                 )
                 continue
 
-            # User enumeration
             m_user = self._USER_RE.match(line)
             if m_user:
                 results.append(
@@ -142,7 +136,6 @@ class NetexecTask(Task):
                 )
                 continue
 
-            # Share enumeration
             m_share = self._SHARE_RE.match(line)
             if m_share:
                 results.append(
@@ -154,7 +147,6 @@ class NetexecTask(Task):
                 )
                 continue
 
-            # Info lines
             if "[*]" in line:
                 info = line.split("[*]", 1)[-1].strip()
                 if info:

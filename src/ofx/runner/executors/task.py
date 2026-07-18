@@ -21,7 +21,6 @@ from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger(__name__)
 
-
 class TaskExecutor(Executor):
     """Execution strategy for [`TaskRunner`](src/ofx/runner/tasks/runner.py)."""
 
@@ -205,7 +204,6 @@ class TaskExecutor(Executor):
             )
 
     async def post_run(self, runner) -> None:
-        if runner._task is not None:
-            runner._task.cleanup_target_files()
+        pass
 
 __all__ = ["TaskExecutor"]

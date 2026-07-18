@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Ip, Record, Subdomain
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("dnsx")
 class DnsxTask(Task):
     name = "dnsx"
@@ -44,7 +43,7 @@ class DnsxTask(Task):
         "wordlist": OptDef(flag="-w", type=str, help="Wordlist for DNS bruteforcing"),
     }
 
-    input_flag = "-d"
+    input_flag = None
     file_flag = "-l"
     output_flag = "-o"
     json_flag = "-json"
@@ -65,27 +64,21 @@ class DnsxTask(Task):
         domain = ".".join(host.rsplit(".", 2)[-2:]) if "." in host else host
         results: list[Subdomain | Ip | Record] = [Subdomain(host=host, domain=domain)]
 
-        # A records → IP
         for a_record in data.get("a", []):
             results.append(Ip(ip=a_record, host=host))
 
-        # AAAA records → IP
         for aaaa_record in data.get("aaaa", []):
             results.append(Ip(ip=aaaa_record, host=host))
 
-        # CNAME records
         for cname in data.get("cname", []):
             results.append(Record(name=cname, type="CNAME", host=host))
 
-        # MX records
         for mx in data.get("mx", []):
             results.append(Record(name=mx, type="MX", host=host))
 
-        # NS records
         for ns in data.get("ns", []):
             results.append(Record(name=ns, type="NS", host=host))
 
-        # TXT records
         for txt in data.get("txt", []):
             results.append(Record(name=txt, type="TXT", host=host))
 

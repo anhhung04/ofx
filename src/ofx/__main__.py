@@ -1,6 +1,5 @@
 import typer
 
-
 def main():
     try:
         from ofx.commands import main
@@ -11,8 +10,7 @@ def main():
 
     return exit_status.exit_code
 
-
-if __name__ == "__main__":  # pragma: nocover
+if __name__ == "__main__":
     import sys
 
     sys.exit(main())

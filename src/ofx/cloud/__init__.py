@@ -8,12 +8,10 @@ Usage:
     provider = CloudProviderRegistry.create("digitalocean", token="...")
     instance = await provider.create_instance(config)
     await provider.wait_until_ready(instance.instance_id)
-    # ... run job via SSH/WinRM ...
     await provider.destroy_instance(instance.instance_id)
 """
 
-# Import providers to trigger registration
-import ofx.cloud.providers  # noqa: F401
+import ofx.cloud.providers
 from ofx.cloud.base import CloudProvider, CloudProviderRegistry
 from ofx.cloud.models import CloudInstanceInfo, SnapshotInfo
 

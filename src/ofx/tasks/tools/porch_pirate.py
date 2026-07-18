@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("porch-pirate")
 class PorchPirateTask(Task):
     name = "porch-pirate"
@@ -52,14 +51,12 @@ class PorchPirateTask(Task):
             if not line:
                 continue
 
-            # Extract URLs
             for url_match in re.finditer(r"(https?://\S+)", line):
                 url = url_match.group(1).rstrip(".,;\"')")
                 if url not in seen_urls:
                     seen_urls.add(url)
                     results.append(Url(url=url))
 
-            # Tag lines containing potential secrets
             secret_patterns = [
                 (r"(?:api[_-]?key|apikey)\s*[:=]\s*(\S+)", "api-key"),
                 (r"(?:token|bearer)\s*[:=]\s*(\S+)", "token"),
@@ -79,7 +76,6 @@ class PorchPirateTask(Task):
                         )
                     )
 
-            # Tag workspace/collection names
             if line.startswith("Collection:") or line.startswith("Workspace:"):
                 parts = line.split(":", 1)
                 if len(parts) == 2:

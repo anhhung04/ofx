@@ -9,7 +9,6 @@ from ofx.api.post.registry import RunnerRegistry
 
 __all__ = ["copy_and_exec", "exec_command"]
 
-
 def copy_and_exec(
     target: str,
     src: str | Path,
@@ -23,7 +22,6 @@ def copy_and_exec(
     runner = RunnerRegistry.create(method, host=target, **runner_kwargs)
     runner.upload(str(Path(src).expanduser()), dst)
     return runner.run(command or dst)
-
 
 def exec_command(
     target: str,

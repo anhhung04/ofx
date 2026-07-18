@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
-
 class InstalledCollection(BaseModel):
     """Metadata for an installed collection stored in installed.json."""
 

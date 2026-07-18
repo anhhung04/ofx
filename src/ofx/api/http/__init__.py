@@ -21,7 +21,6 @@ from ofx.api._compat import APIError, OFXTimeoutError
 _http_client: httpx.Client | None = None
 _T = TypeVar("_T")
 
-
 def get_http_client(
     timeout: int = 30,
     max_connections: int = 100,
@@ -41,14 +40,12 @@ def get_http_client(
         )
     return _http_client
 
-
 def close_http_clients() -> None:
     """Close all HTTP clients and free resources."""
     global _http_client
     if _http_client:
         _http_client.close()
         _http_client = None
-
 
 class RateLimiter:
     """Simple rate limiter for API calls."""
@@ -66,12 +63,10 @@ class RateLimiter:
             time.sleep(self.min_interval - elapsed)
         self.last_call = time.time()
 
-
 @lru_cache(maxsize=10)
 def get_rate_limiter(calls_per_second: float = 10.0) -> RateLimiter:
     """Get a cached rate limiter instance."""
     return RateLimiter(calls_per_second)
-
 
 def retry_with_backoff(
     max_retries: int = 3,
@@ -89,7 +84,7 @@ def retry_with_backoff(
             for attempt in range(max_retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except exceptions as e:  # type: ignore[misc]
+                except exceptions as e:
                     last_exception = e
                     if attempt < max_retries:
                         wait_time = backoff_factor**attempt
@@ -102,11 +97,9 @@ def retry_with_backoff(
 
     return decorator
 
-
 def _apply_rate_limit(rate_limit: float | None) -> None:
     if rate_limit:
         get_rate_limiter(rate_limit).wait()
-
 
 def _raise_http_error(
     url: str, timeout: int, exc: Exception
@@ -122,7 +115,6 @@ def _raise_http_error(
     if isinstance(exc, httpx.RequestError):
         return APIError(f"Request failed: {exc}")
     return APIError(f"Request failed: {exc}")
-
 
 def _request(
     method: str,
@@ -151,7 +143,6 @@ def _request(
             raise _raise_http_error(url, timeout, e) from e
 
     return _do_request()
-
 
 def fetch(
     url: str,
@@ -185,7 +176,6 @@ def fetch(
         **kwargs,
     )
 
-
 def post(
     url: str,
     data: dict[str, Any] | str,
@@ -205,9 +195,7 @@ def post(
         **kwargs,
     )
 
-
 requests = httpx
-
 
 __all__ = [
     "fetch",

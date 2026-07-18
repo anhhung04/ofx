@@ -10,23 +10,15 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.text import Text
 
-# ---------------------------------------------------------------------------
-# Secret redaction
-# ---------------------------------------------------------------------------
-
-# Minimum length for a value to be considered redactable.  Very short values
-# (e.g. "1", "ok") would cause excessive false-positive replacements.
 _MIN_REDACT_LEN = 4
 
 _REDACTED = "***"
 
-# Env-var name patterns that should always be redacted when seen in log output.
 _SENSITIVE_KEY_RE = re.compile(
     r"(password|passwd|secret|token|api[_-]?key|private[_-]?key|credential"
     r"|auth|bearer|access[_-]?key|ssh[_-]?key|ssh[_-]?pass)",
     re.IGNORECASE,
 )
-
 
 class SecretRedactFilter(logging.Filter):
     """Logging filter that replaces registered secret values with ``***``.
@@ -34,7 +26,6 @@ class SecretRedactFilter(logging.Filter):
     Usage::
 
         redact_filter.register_values({"my_api_key_value", "db_password"})
-        # All subsequent log records containing those strings are redacted.
     """
 
     _instance: SecretRedactFilter | None = None
@@ -82,8 +73,6 @@ class SecretRedactFilter(logging.Filter):
         self._values.clear()
         self._pattern = None
 
-    # -- logging.Filter interface ------------------------------------------
-
     def filter(self, record: logging.LogRecord) -> bool:
         if self._pattern and record.msg:
             record.msg = self._redact(record.msg)
@@ -91,13 +80,10 @@ class SecretRedactFilter(logging.Filter):
             record.args = self._redact_args(record.args)
         return True
 
-    # -- internal ----------------------------------------------------------
-
     def _rebuild_pattern(self) -> None:
         if not self._values:
             self._pattern = None
             return
-        # Sort longest-first so longer secrets are matched before substrings.
         escaped = sorted((re.escape(v) for v in self._values), key=len, reverse=True)
         self._pattern = re.compile("|".join(escaped))
 
@@ -115,7 +101,6 @@ class SecretRedactFilter(logging.Filter):
             return tuple(self._redact(a) if isinstance(a, str) else a for a in args)
         return args
 
-
 def register_secrets(secrets: Mapping[str, Any] | Iterable[Any]) -> None:
     """Register secret values for redaction from a mapping or iterable."""
     values = secrets.values() if isinstance(secrets, Mapping) else secrets
@@ -123,16 +108,9 @@ def register_secrets(secrets: Mapping[str, Any] | Iterable[Any]) -> None:
         {str(value) for value in values if value}
     )
 
-
 def register_sensitive_env(envs: dict[str, Any]) -> None:
     """Convenience: register env values whose keys look sensitive."""
     SecretRedactFilter.get_instance().register_dict(envs, sensitive_only=True)
-
-
-# ---------------------------------------------------------------------------
-# Rich logging handler
-# ---------------------------------------------------------------------------
-
 
 class BeautifiedMetadataHandler(RichHandler):
     def __init__(self, *args, **kwargs):
@@ -178,14 +156,12 @@ class BeautifiedMetadataHandler(RichHandler):
         full_line = Text.assemble(time_text, level_text, message_text)
         self.console.print(full_line)
 
-
 def reload_logging_config(settings):
     from ofx.settings import RICH_THEME
 
     branding = settings.app_branding
     logger = logging.getLogger(branding)
 
-    # Remove existing console handlers
     for handler in logger.handlers[:]:
         if handler.name == f"{branding}.console":
             logger.removeHandler(handler)
@@ -206,7 +182,6 @@ def reload_logging_config(settings):
     logger.setLevel(level)
     logger.addHandler(log_handler)
 
-    # Attach the redaction filter to the logger so it applies to all handlers.
     redact = SecretRedactFilter.get_instance()
     if redact not in logger.filters:
         logger.addFilter(redact)

@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ofx.api.httpserver.base import PHTTPServer
 
-
 class BaseServerFacade:
     """Abstract base class for HTTP server facades.
 

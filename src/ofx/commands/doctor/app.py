@@ -16,19 +16,16 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "doctor"
 HELP = "Run reliability diagnostics"
 
-
 @dataclass
 class CheckResult:
     name: str
-    status: str  # pass, warn, fail
+    status: str
     detail: str
-
 
 def _check_status_style(status: str) -> str:
     return {"pass": "green", "warn": "yellow", "fail": "red"}.get(
         status, "white"
     )
-
 
 def _doctor_error(console, message: str, code: int = 1, exc: Exception | None = None) -> None:
     console.print(f"[red]{message}[/red]")
@@ -110,7 +107,6 @@ def _score_fleet_config(cfg: Any, provider_registered: bool) -> list[CheckResult
 
     return checks
 
-
 async def _probe_connectivity(cfg: Any, host: str, timeout: int) -> list[CheckResult]:
     from ofx.cloud.ssh import wait_for_connectivity, wait_for_login
 
@@ -142,7 +138,6 @@ async def _probe_connectivity(cfg: Any, host: str, timeout: int) -> list[CheckRe
         checks.append(CheckResult("Authenticated login", "fail", str(exc)))
     return checks
 
-
 @app.command("workflows")
 def doctor_workflows(
     check_tasks: Annotated[
@@ -156,7 +151,6 @@ def doctor_workflows(
     from ofx.commands.flow.validate import validate_workflows
 
     validate_workflows(all_workflows=True, check_tasks=check_tasks)
-
 
 @app.command("fleet")
 def doctor_fleet(

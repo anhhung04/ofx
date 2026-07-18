@@ -23,7 +23,6 @@ _DATA_RE = re.compile(
     re.IGNORECASE,
 )
 
-
 @TaskRegistry.register("pacu")
 class PacuTask(Task):
     name = "pacu"
@@ -52,7 +51,6 @@ class PacuTask(Task):
         """``pacu --cli --module <target>`` — target is the module name."""
         parts: list[str] = [self.cmd, *self.extra_flags]
 
-        # Target is the module name
         if target and "module" not in kwargs:
             parts.extend(["--module", self._q(target)])
 

@@ -12,7 +12,6 @@ from ofx.cloud.sessions.script_builder import (
 from ofx.models.step import Step
 from ofx.utils.shell import bash_dquote_escape
 
-
 def _make_step(
     run: str | None = None, script: str | None = None, name: str = "s"
 ) -> Step:
@@ -23,10 +22,6 @@ def _make_step(
         data["script"] = script
     return Step.model_validate(data)
 
-
-# ---------------------------------------------------------------------------
-# bash_dquote_escape
-# ---------------------------------------------------------------------------
 class TestBashDquoteEscape:
     def test_double_quote(self):
         assert bash_dquote_escape('say "hello"') == 'say \\"hello\\"'
@@ -43,10 +38,6 @@ class TestBashDquoteEscape:
     def test_backtick(self):
         assert bash_dquote_escape("`whoami`") == "\\`whoami\\`"
 
-
-# ---------------------------------------------------------------------------
-# _ps_escape
-# ---------------------------------------------------------------------------
 class TestPsEscape:
     def test_double_quote(self):
         assert _ps_escape('"hello"') == '`"hello`"'
@@ -61,7 +52,6 @@ class TestPsEscape:
         result = _ps_escape('$HOME`"end')
         assert result == "`$HOME``" + '`"end'
 
-
 class TestEnvKeyValidation:
     @pytest.mark.parametrize("key", ["TARGET", "TARGET_1", "_TARGET", "a1"])
     def test_valid_env_key(self, key):
@@ -72,17 +62,12 @@ class TestEnvKeyValidation:
         with pytest.raises(ValueError, match="Invalid environment variable name"):
             _validate_env_key(key)
 
-
-# ---------------------------------------------------------------------------
-# build_session_script (bash) — env var escaping
-# ---------------------------------------------------------------------------
 class TestBuildBashEnvEscaping:
     def test_dollar_in_env_value(self):
         step = _make_step(run="echo test")
         script = build_session_script(
             [step], session_id="s1", work_dir="/tmp/s", env={"MY_VAR": "$SECRET"}
         )
-        # Value should be backslash-escaped so it's not expanded
         assert 'export MY_VAR="\\$SECRET"' in script
 
     def test_double_quote_in_env_value(self):
@@ -95,7 +80,6 @@ class TestBuildBashEnvEscaping:
     def test_work_dir_with_spaces_escaped_in_bash(self):
         step = _make_step(run="echo hi")
         script = build_session_script([step], session_id="s1", work_dir="/tmp/my dir/s")
-        # bash_dquote_escape leaves spaces alone — they're inside double-quotes in the assignment
         assert 'WORK_DIR="/tmp/my dir/s"' in script
 
     def test_session_id_escaped_in_bash(self):
@@ -122,16 +106,11 @@ class TestBuildBashEnvEscaping:
         assert 'export PATH=' not in script
         assert 'export HOME=' not in script
 
-
-# ---------------------------------------------------------------------------
-# build_session_script (bash) — step command uses $WORK_DIR not literal
-# ---------------------------------------------------------------------------
 class TestBashStepUsesWorkDirVar:
     def test_command_step_uses_work_dir_var(self):
         step = _make_step(run="whoami")
         script = build_session_script([step], session_id="s1", work_dir="/some/path")
         assert 'cd "$WORK_DIR"' in script
-        # Should NOT embed the literal path in the step command
         lines = [line for line in script.split("\n") if "whoami" in line]
         assert lines
         assert "/some/path" not in lines[0]
@@ -150,10 +129,6 @@ class TestBashStepUsesWorkDirVar:
         assert lines
         assert "/some/path" not in lines[0]
 
-
-# ---------------------------------------------------------------------------
-# build_session_script (bash) — inline script with single-quotes
-# ---------------------------------------------------------------------------
 class TestBashInlineScriptEscape:
     def test_single_quote_in_script(self):
         step = _make_step(script="x = 'hello world'")
@@ -169,7 +144,6 @@ class TestBashInlineScriptEscape:
         assert exec_lines
         assert long_script[:40] not in exec_lines[0]
         assert '".ofx_step_0.py"' in exec_lines[0]
-
 
 class TestTaskStepCommands:
     def test_bash_task_step_builds_task_command(self):
@@ -218,7 +192,6 @@ class TestTaskStepCommands:
         )
         assert "Pipe steps run locally and cannot be executed in cloud sessions" in script
 
-
 class TestScriptOpsecPayload:
     def test_inline_python_step_bundle_is_obfuscated(self):
         from ofx.cloud.sessions.python_steps import iter_python_step_bundles
@@ -231,10 +204,6 @@ class TestScriptOpsecPayload:
         assert "SECRET_TOKEN_123" not in payload
         assert "marshal.loads" in payload or "exec(" in payload
 
-
-# ---------------------------------------------------------------------------
-# build_session_script (powershell) — env var escaping
-# ---------------------------------------------------------------------------
 class TestBuildPowerShellEnvEscaping:
     def test_dollar_in_ps_env_value(self):
         step = _make_step(run="Write-Output test")
@@ -293,10 +262,6 @@ class TestBuildPowerShellEnvEscaping:
         assert '$env:PATH =' not in script
         assert '$env:USER =' not in script
 
-
-# ---------------------------------------------------------------------------
-# build_session_script (powershell) — inline script uses here-string
-# ---------------------------------------------------------------------------
 class TestPowerShellInlineScriptHereString:
     def test_inline_script_uses_python_temp_file(self):
         step = _make_step(script='print("$var")')

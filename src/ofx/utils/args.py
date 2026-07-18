@@ -9,7 +9,6 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
-
 def parse_key_value_pairs(
     inputs: list[str] | None, keep_string=False
 ) -> dict[str, Any]:
@@ -33,7 +32,6 @@ def parse_key_value_pairs(
                 f"Invalid input format: {inp}. Expected key=value."
             ) from None
         if not keep_string:
-            # Try JSON parsing for value
             with suppress(json.JSONDecodeError):
                 value = json.loads(value)
 
@@ -42,7 +40,6 @@ def parse_key_value_pairs(
         else:
             processed_inputs[key].append(value)
 
-    # Flatten single-item lists
     for key in processed_inputs:
         if len(processed_inputs[key]) == 1:
             processed_inputs[key] = processed_inputs[key][0]

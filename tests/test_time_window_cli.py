@@ -7,11 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# A. CLI time-window executor tests
-# ---------------------------------------------------------------------------
-
-
 def _make_runner(*, vars_: dict | None = None, time_guard=None, is_reused=False):
     """Build a minimal mock that quacks like WorkflowRunner."""
     runner = MagicMock()
@@ -24,13 +19,11 @@ def _make_runner(*, vars_: dict | None = None, time_guard=None, is_reused=False)
     runner._log_info = MagicMock()
     return runner
 
-
 def _call_apply(runner):
     """Invoke the real WorkflowExecutor time-window helper."""
     from ofx.runner.executors.workflow import WorkflowExecutor
 
     WorkflowExecutor().apply_cli_time_window(runner)
-
 
 def _call_activate(runner, window, *, denied_message: str, active_message: str | None = None):
     from ofx.runner.executors.workflow import WorkflowExecutor
@@ -41,7 +34,6 @@ def _call_activate(runner, window, *, denied_message: str, active_message: str |
         denied_message=denied_message,
         active_message=active_message,
     )
-
 
 class TestApplyCliTimeWindow:
     """Tests for WorkflowExecutor.apply_cli_time_window."""
@@ -148,7 +140,6 @@ class TestApplyCliTimeWindow:
         assert window_arg.start == "08:30"
         assert window_arg.end == "16:30"
 
-
 class TestActivateTimeWindow:
     @patch("ofx.profiles.time_window.check_time_window")
     @patch("ofx.profiles.time_window.TimeWindowGuard")
@@ -187,12 +178,6 @@ class TestActivateTimeWindow:
         with pytest.raises(RuntimeError, match="outside. denied"):
             _call_activate(runner, MagicMock(), denied_message="denied")
 
-
-# ---------------------------------------------------------------------------
-# B. Execution summary panel with time window
-# ---------------------------------------------------------------------------
-
-
 def _minimal_summary(*, time_window=None):
     """Return a minimal unified summary dict."""
     data = {
@@ -218,7 +203,6 @@ def _minimal_summary(*, time_window=None):
     if time_window is not None:
         data["time_window"] = time_window
     return data
-
 
 class TestExecutionSummaryPanel:
     """Tests for execution_summary_panel time-window rendering."""
@@ -280,12 +264,6 @@ class TestExecutionSummaryPanel:
         assert "EXPIRED" in output
         assert "aborted" in output
 
-
-# ---------------------------------------------------------------------------
-# C. Project init — ENGAGEMENT_FILE_STRUCTURE
-# ---------------------------------------------------------------------------
-
-
 class TestEngagementFileStructure:
     """Test that ENGAGEMENT_FILE_STRUCTURE includes notes and reports."""
 
@@ -306,12 +284,6 @@ class TestEngagementFileStructure:
 
         assert isinstance(ENGAGEMENT_FILE_STRUCTURE, list)
         assert len(ENGAGEMENT_FILE_STRUCTURE) > 0
-
-
-# ---------------------------------------------------------------------------
-# D. FlowRunHandler time window injection
-# ---------------------------------------------------------------------------
-
 
 class TestFlowRunHandlerTimeWindow:
     """Test that FlowRunHandler injects _cli_time_window into run_vars."""

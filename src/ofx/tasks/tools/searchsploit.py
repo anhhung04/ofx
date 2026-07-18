@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Exploit
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("searchsploit")
 class SearchsploitTask(Task):
     name = "searchsploit"

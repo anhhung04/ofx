@@ -40,7 +40,6 @@ SESSION_STATUS_STYLES: dict[str, str] = {
     "destroyed": "dim red",
 }
 
-
 def _format_details(details: dict[str, Any] | None) -> Text:
     if not details:
         return Text("")
@@ -48,7 +47,6 @@ def _format_details(details: dict[str, Any] | None) -> Text:
     for key, value in details.items():
         lines.append(f"[bold]{key}:[/bold] {value}")
     return Text.from_markup("\n".join(lines))
-
 
 def banner_panel() -> Group:
     art = Text(BANNER_ART, style="header")
@@ -61,12 +59,9 @@ def banner_panel() -> Group:
     )
     return content
 
-
 def print_banner() -> None:
-    # Print banner to stderr to avoid interfering with stdout redirection
     stderr_console = Console(file=sys.stderr, theme=RICH_THEME)
     stderr_console.print(banner_panel())
-
 
 def success_panel(
     title: str, message: str, details: dict[str, Any] | None = None
@@ -84,7 +79,6 @@ def success_panel(
         box=box.ROUNDED,
     )
 
-
 def error_panel(title: str, message: str, details: str | None = None) -> Panel:
     content = f"[bold red]{message}[/bold red]"
     if details:
@@ -97,7 +91,6 @@ def error_panel(title: str, message: str, details: str | None = None) -> Panel:
         box=box.ROUNDED,
     )
 
-
 def warning_panel(title: str, message: str, hint: str | None = None) -> Panel:
     content = f"[bold yellow]{message}[/bold yellow]"
     if hint:
@@ -109,7 +102,6 @@ def warning_panel(title: str, message: str, hint: str | None = None) -> Panel:
         padding=(1, 2),
         box=box.ROUNDED,
     )
-
 
 def info_panel(
     title: str, message: str, details: dict[str, Any] | None = None
@@ -127,16 +119,13 @@ def info_panel(
         box=box.ROUNDED,
     )
 
-
 def print_success(
     title: str, message: str, details: dict[str, Any] | None = None
 ) -> None:
     get_console().print(success_panel(title, message, details))
 
-
 def print_error(title: str, message: str, details: str | None = None) -> None:
     get_console().print(error_panel(title, message, details))
-
 
 def error_exit(
     title: str, message: str, details: str | None = None, *, code: int = 1
@@ -151,14 +140,11 @@ def error_exit(
     print_error(title, message, details)
     raise typer.Exit(code=code)
 
-
 def print_warning(title: str, message: str, hint: str | None = None) -> None:
     get_console().print(warning_panel(title, message, hint))
 
-
 def print_info(title: str, message: str, details: dict[str, Any] | None = None) -> None:
     get_console().print(info_panel(title, message, details))
-
 
 def key_value_table(
     title: str, rows: dict[str, Any] | Iterable[tuple[str, Any]]
@@ -176,7 +162,6 @@ def key_value_table(
     for key, value in items:
         table.add_row(str(key), str(value))
     return table
-
 
 def inputs_table(inputs: dict[str, Any]) -> Table:
     table = Table(
@@ -198,7 +183,6 @@ def inputs_table(inputs: dict[str, Any]) -> Table:
 
     return table
 
-
 def _format_input_value(value: Any) -> tuple[str, str]:
     if isinstance(value, dict):
         return _format_json_value(value), "object"
@@ -210,7 +194,6 @@ def _format_input_value(value: Any) -> tuple[str, str]:
         return str(value), "number"
     return str(value), "string"
 
-
 def _format_json_value(value: Any) -> str:
     try:
         import json
@@ -218,7 +201,6 @@ def _format_json_value(value: Any) -> str:
         return json.dumps(value, indent=2)
     except Exception:
         return str(value)
-
 
 def workflow_start_panel(
     workflow_name: str, output_path: str, inputs: dict[str, Any] | None = None
@@ -237,7 +219,6 @@ def workflow_start_panel(
         padding=(1, 2),
         box=box.ROUNDED,
     )
-
 
 def execution_summary_panel(summary: Any) -> Panel:
     data = summary.to_dict() if hasattr(summary, "to_dict") else summary
@@ -288,7 +269,6 @@ def execution_summary_panel(summary: Any) -> Panel:
 
     content_items: list[Any] = [Text.from_markup(f"[bold]Summary:[/bold] {totals}")]
 
-    # Time window info
     tw = data.get("time_window")
     if tw:
         remaining = tw.get("remaining_minutes")
@@ -301,7 +281,6 @@ def execution_summary_panel(summary: Any) -> Panel:
 
     content_items.append(table)
 
-    # Failed steps detail section
     failed_details = _collect_failed_steps(data)
     if failed_details:
         content_items.append(Text(""))
@@ -336,14 +315,12 @@ def execution_summary_panel(summary: Any) -> Panel:
         box=box.ROUNDED,
     )
 
-
 def _count_failed_steps(job: dict[str, Any]) -> int:
     failed_steps = job.get("failed_steps")
     if isinstance(failed_steps, list):
         return len(failed_steps)
     steps = job.get("steps") or []
     return sum(1 for step in steps if step.get("status") == "failed")
-
 
 def _collect_failed_steps(data: dict[str, Any]) -> list[dict[str, str]]:
     """Collect failed step details from all jobs for display."""
@@ -362,10 +339,8 @@ def _collect_failed_steps(data: dict[str, Any]) -> list[dict[str, str]]:
                 )
     return failed
 
-
 def _count_completed_steps(steps: list[dict[str, Any]]) -> int:
     return sum(1 for step in steps if step.get("status") == "completed")
-
 
 def _status_color(status: str) -> str:
     status_map = {
@@ -377,17 +352,14 @@ def _status_color(status: str) -> str:
     }
     return status_map.get(status, "white")
 
-
 def session_status_style(status: str) -> str:
     """Rich style for session/fleet status labels."""
     return SESSION_STATUS_STYLES.get(status, "white")
-
 
 def _truncate_text(value: str, limit: int = 120) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 3] + "..."
-
 
 def _format_duration_ms(duration_ms: int | None) -> str:
     if duration_ms is None:
@@ -405,7 +377,6 @@ def _format_duration_ms(duration_ms: int | None) -> str:
     minutes = minutes % 60
     return f"{hours}h {minutes}m"
 
-
 def _format_elapsed(seconds: float) -> str:
     """Format elapsed seconds into a human-readable string."""
     if seconds < 60:
@@ -417,7 +388,6 @@ def _format_elapsed(seconds: float) -> str:
     hours = minutes // 60
     minutes = minutes % 60
     return f"{hours}h {minutes}m"
-
 
 def _format_step_durations(
     steps: list[dict[str, Any]], limit: int = 5, max_chars: int = 80
@@ -436,12 +406,6 @@ def _format_step_durations(
         parts.append("…")
     text = ", ".join(parts)
     return _truncate_text(text, limit=max_chars)
-
-
-# ---------------------------------------------------------------------------
-# Reusable header / status panels
-# ---------------------------------------------------------------------------
-
 
 def header_panel(title: str, subtitle: str, **fields: str) -> Panel:
     """Compact cyan info panel used by command handlers.
@@ -463,7 +427,6 @@ def header_panel(title: str, subtitle: str, **fields: str) -> Panel:
         box=box.ROUNDED,
         padding=(0, 2),
     )
-
 
 def status_table(
     *columns: tuple[str, str],

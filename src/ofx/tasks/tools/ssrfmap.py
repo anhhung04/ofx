@@ -16,7 +16,6 @@ _SSRF_RE = re.compile(
 )
 _URL_RE = re.compile(r"(https?://[^\s\"'<>]+)")
 
-
 @TaskRegistry.register("ssrfmap")
 class SSRFmapTask(Task):
     name = "ssrfmap"
@@ -77,14 +76,12 @@ class SSRFmapTask(Task):
             if not line:
                 continue
 
-            # Extract discovered URLs
             for m_url in _URL_RE.finditer(line):
                 url = m_url.group(1)
                 if url not in seen_urls:
                     seen_urls.add(url)
                     results.append(Url(url=url))
 
-            # Detect SSRF findings
             if _SSRF_RE.search(line):
                 results.append(
                     Vulnerability(

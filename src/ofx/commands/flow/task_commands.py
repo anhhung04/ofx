@@ -15,7 +15,6 @@ parse_opt_args = None
 TaskRegistry = None
 get_console = None
 
-
 def _get_run_deps():
     task_run_handler_cls = TaskRunHandler
     if task_run_handler_cls is None:
@@ -27,7 +26,6 @@ def _get_run_deps():
 
     return task_run_handler_cls, parse_opt_args_fn
 
-
 def _get_task_deps():
     console_getter = get_console
     if console_getter is None:
@@ -38,7 +36,6 @@ def _get_task_deps():
         from ofx.tasks import TaskRegistry as task_registry
 
     return console_getter(), task_registry
-
 
 @app.command("run")
 def run_task(
@@ -122,7 +119,6 @@ def run_task(
     if exit_code:
         raise typer.Exit(exit_code)
 
-
 @app.command("list")
 def list_tasks(
     category: Annotated[
@@ -167,7 +163,6 @@ def list_tasks(
         table.add_row(name, task.category, task.description, status)
 
     console.print(table)
-
 
 @app.command("info")
 def task_info(

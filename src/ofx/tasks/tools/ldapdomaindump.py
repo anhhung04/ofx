@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("ldapdomaindump")
 class LdapDomainDumpTask(Task):
     name = "ldapdomaindump"
@@ -44,7 +43,6 @@ class LdapDomainDumpTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Target as LDAP URI
         if not target.startswith("ldap"):
             target = f"ldap://{target}"
         parts.append(self._q(target))

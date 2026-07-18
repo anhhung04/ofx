@@ -20,26 +20,15 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
-# ---------------------------------------------------------------------------
-# Optional paramiko import
-# ---------------------------------------------------------------------------
-
 try:
-    import paramiko  # type: ignore[import-untyped]
+    import paramiko
 
     HAS_PARAMIKO = True
 except ImportError:
     HAS_PARAMIKO = False
 
-
 def _is_windows() -> bool:
     return sys.platform == "win32"
-
-
-# ---------------------------------------------------------------------------
-# SSH key helpers (pure-Python via ``cryptography``)
-# ---------------------------------------------------------------------------
-
 
 def _generate_ssh_keypair(key_path: Path) -> str:
     """Generate an RSA-4096 SSH key pair using the ``cryptography`` library.
@@ -69,12 +58,6 @@ def _generate_ssh_keypair(key_path: Path) -> str:
     pub_path = Path(str(key_path) + ".pub")
     pub_path.write_text(pub_text + "\n")
     return pub_text
-
-
-# ---------------------------------------------------------------------------
-# Paramiko-based SSH handler
-# ---------------------------------------------------------------------------
-
 
 class _ParamikoSSH:
     """Pure-Python SSH operations via ``paramiko``."""
@@ -164,10 +147,8 @@ class _ParamikoSSH:
         finally:
             sftp.close()
 
-    # -- helpers -------------------------------------------------------
-
     @staticmethod
-    def _ensure_remote_dir(sftp: paramiko.SFTPClient, path: str) -> None:  # type: ignore[name-defined]
+    def _ensure_remote_dir(sftp: paramiko.SFTPClient, path: str) -> None:
         parts = path.replace("\\", "/").split("/")
         current = ""
         for part in parts:
@@ -183,7 +164,7 @@ class _ParamikoSSH:
                 sftp.mkdir(current)
 
     @staticmethod
-    def _upload_tree(sftp: paramiko.SFTPClient, local: Path, remote: str) -> None:  # type: ignore[name-defined]
+    def _upload_tree(sftp: paramiko.SFTPClient, local: Path, remote: str) -> None:
         for item in local.iterdir():
             remote_item = f"{remote}/{item.name}"
             if item.is_dir():
@@ -194,12 +175,6 @@ class _ParamikoSSH:
                 _ParamikoSSH._upload_tree(sftp, item, remote_item)
             else:
                 sftp.put(str(item), remote_item)
-
-
-# ---------------------------------------------------------------------------
-# SSHHandler — cross-platform
-# ---------------------------------------------------------------------------
-
 
 class SSHHandler:
     """Handles SSH/rsync-based remote synchronization.
@@ -262,7 +237,6 @@ class SSHHandler:
             ).add_authorized_key(pub_key, password)
             return
 
-        # Fallback: system commands (Linux/macOS only)
         if _is_windows():
             raise RuntimeError(
                 "paramiko is required for SSH key deployment on Windows. "
@@ -334,7 +308,6 @@ class SSHHandler:
                 "Install it with: pip install ofx[ssh]"
             )
 
-        # Fallback: rsync
         remote_uri = f"{self.user}@{self.host}:{self.remote_path}"
         try:
             result = subprocess.run(
@@ -380,7 +353,6 @@ class SSHHandler:
                 "Install it with: pip install ofx[ssh]"
             )
 
-        # Fallback: scp
         remote_target = f"{self.user}@{self.host}:{remote_file}"
         try:
             subprocess.run(
@@ -405,7 +377,6 @@ class SSHHandler:
             ) from None
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"SCP upload failed: {e.stderr}") from e
-
 
 class GitHandler:
     """Handles Git-based remote synchronization."""

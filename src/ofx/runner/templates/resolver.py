@@ -16,7 +16,6 @@ from ofx.runner.registry_keys import RunnerRegistryKeys
 _logger = logging.getLogger("ofx.templates")
 _resolver_lock = threading.Lock()
 
-
 def _tojson_python(value: Any, indent: int | None = None) -> str:
     """JSON serialization that outputs Python-compatible literals.
 
@@ -25,7 +24,6 @@ def _tojson_python(value: Any, indent: int | None = None) -> str:
     """
     normalized = json.loads(json.dumps(value, default=str))
     return _python_literal(normalized, indent=indent)
-
 
 def _python_literal(value: Any, indent: int | None = None, level: int = 0) -> str:
     """Render JSON-compatible data as a Python literal."""
@@ -45,7 +43,6 @@ def _python_literal(value: Any, indent: int | None = None, level: int = 0) -> st
         return _python_mapping_literal(value, indent, level)
     return json.dumps(str(value))
 
-
 def _python_sequence_literal(
     items: list[Any], indent: int | None, level: int
 ) -> str:
@@ -62,7 +59,6 @@ def _python_sequence_literal(
         for item in items
     ]
     return "[\n" + ",\n".join(rendered) + f"\n{outer_prefix}]"
-
 
 def _python_mapping_literal(
     mapping: dict[str, Any], indent: int | None, level: int
@@ -85,13 +81,11 @@ def _python_mapping_literal(
     ]
     return "{\n" + ",\n".join(rendered) + f"\n{outer_prefix}}}"
 
-
 def _build_jinja_env():
     """Create a Jinja2 Environment with Python-safe ``tojson`` filter."""
     env = Environment(enable_async=True)
     env.filters["tojson"] = _tojson_python
     return env
-
 
 def _ensure_filters_registered(env: Environment) -> None:
     """Lazily register ETL and type-filter helpers as Jinja2 filters.
@@ -110,11 +104,9 @@ def _ensure_filters_registered(env: Environment) -> None:
             env.filters[name] = fn
         for name, fn in _etl_helpers().items():
             env.filters[name] = fn
-        env._ofx_filters_registered = True  # type: ignore[attr-defined]
-
+        env._ofx_filters_registered = True
 
 _jinja_env = _build_jinja_env()
-
 
 class _EmptyStep:
     """Safe proxy returned for missing steps so ``| default()`` works."""
@@ -140,9 +132,7 @@ class _EmptyStep:
     def __radd__(self, other: Any) -> Any:
         return other
 
-
 _EMPTY_STEP = _EmptyStep()
-
 
 class _StepAccessor(dict):
     """Dict that supports both name-based and integer-index access for steps.
@@ -166,7 +156,6 @@ class _StepAccessor(dict):
         except KeyError:
             return _EMPTY_STEP
 
-
 class TemplateResolver:
     """Handles template resolution with caching and optimization"""
 
@@ -177,7 +166,6 @@ class TemplateResolver:
     _cache_hits: int
     _cache_misses: int
 
-    # Maximum nesting depth for recursive template resolution.
     _MAX_RESOLVE_DEPTH = 64
 
     def __new__(cls):
@@ -210,7 +198,6 @@ class TemplateResolver:
         if value is None:
             return value
 
-        # Guard against deeply nested structures (malicious or accidental)
         depth: int = memo.get("_resolve_depth", 0)
         if depth > self._MAX_RESOLVE_DEPTH:
             raise RecursionError(
@@ -246,7 +233,6 @@ class TemplateResolver:
         if not self._contains_template_syntax(value_str):
             return value
 
-        # Circular reference detection
         resolve_stack: list[str] = memo.setdefault("_resolve_stack", [])
         if value_str in resolve_stack:
             chain = " → ".join(resolve_stack + [value_str])

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any
 
-
 def is_windows_config(cfg: Any) -> bool:
     return (
         getattr(cfg, "connection_type", "") == "winrm"
@@ -18,7 +17,6 @@ def remote_join(base: str, *parts: str, is_windows: bool) -> str:
     for part in parts:
         path /= str(part).strip("\\/")
     return str(path)
-
 
 def build_provider_kwargs(cfg: Any) -> dict[str, Any]:
     """Build kwargs for ``CloudProviderRegistry.create()`` from cloud config."""
@@ -54,7 +52,6 @@ def build_provider_kwargs(cfg: Any) -> dict[str, Any]:
             return kwargs
         case _:
             return {}
-
 
 def create_remote_runner(
     cfg: Any,

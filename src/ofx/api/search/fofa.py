@@ -11,10 +11,8 @@ from ofx.api.http import requests
 
 logger = get_logger()
 
-
 def is_ipv6_address_format(address: str) -> bool:
     return ":" in address and "." not in address
-
 
 class Fofa:
     """FOFA (Cyberspace Assets Retrieval) search engine client.
@@ -191,7 +189,6 @@ class Fofa:
         except Exception as ex:
             logger.error(str(ex))
         return search_result
-
 
 FofaClient = Fofa
 

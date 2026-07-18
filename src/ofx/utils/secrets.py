@@ -17,7 +17,6 @@ from ofx.utils.file_cleanup import remove_file
 
 logger = logging.getLogger("ofx")
 
-
 class SecretStore:
     _instance: SecretStore | None = None
     _store_path: Path | None = None
@@ -70,7 +69,6 @@ class SecretStore:
 
     @classmethod
     def is_store_encrypted(cls, store_path: Path) -> bool:
-        # try decrypt with empty passphrase; if it fails, assume it's encrypted
         if not store_path.exists():
             return False
         try:
@@ -196,36 +194,30 @@ def set_secret(
 ) -> None:
     SecretStore.get_instance(store_path, passphrase).set(name, value)
 
-
 def get_secret(
     name: str, store_path: Path | None = None, passphrase: str | None = None
 ) -> Any:
     return SecretStore.get_instance(store_path, passphrase).get(name)
-
 
 def delete_secret(
     name: str, store_path: Path | None = None, passphrase: str | None = None
 ) -> bool:
     return SecretStore.get_instance(store_path, passphrase).delete(name)
 
-
 def list_secrets(
     store_path: Path | None = None, passphrase: str | None = None
 ) -> dict[str, Any]:
     return SecretStore.get_instance(store_path, passphrase).list()
-
 
 def secret_exists(
     name: str, store_path: Path | None = None, passphrase: str | None = None
 ) -> bool:
     return SecretStore.get_instance(store_path, passphrase).exists(name)
 
-
 def clear_secrets(
     store_path: Path | None = None, passphrase: str | None = None
 ) -> None:
     SecretStore.get_instance(store_path, passphrase).clear()
-
 
 def export_secrets(
     output_path: Path, store_path: Path | None = None, passphrase: str | None = None
@@ -234,7 +226,6 @@ def export_secrets(
     if secrets:
         output_path.write_text(json.dumps(secrets, indent=2))
     return len(secrets)
-
 
 def import_secrets_from_file(
     input_path: Path,
@@ -253,7 +244,6 @@ def import_secrets_from_file(
     existing_count = len(store.list())
     store.import_unencrypted(data, overwrite)
     return len(data) if overwrite else len(store.list()) - existing_count
-
 
 def migrate_from_directory(
     directory: Path, store_path: Path | None = None, passphrase: str | None = None
@@ -312,7 +302,6 @@ def backup_secrets(
     output_path.chmod(0o600)
     return len(secrets)
 
-
 def restore_secrets(
     backup_path: Path,
     overwrite: bool = False,
@@ -338,7 +327,6 @@ def restore_secrets(
             store.set(name, value)
             imported += 1
     return imported
-
 
 def get_backup_info(
     backup_path: Path, store_path: Path | None = None, passphrase: str | None = None
@@ -381,7 +369,6 @@ def load_secrets(secrets_dir: Path | None = None) -> dict[str, str]:
                     content = json.loads(content)
                 secrets[secret_file.name] = content
     return secrets
-
 
 def load_secrets_by_keys(
     keys: set[str],

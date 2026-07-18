@@ -17,7 +17,6 @@ from ofx.utils.path import find_valid_flow, is_git_repo, is_remote_path
 
 logger = logging.getLogger(settings.app_branding)
 
-
 def coerce_input_value(value: Any, expected_type: str, name: str = "") -> Any:
     """Coerce an input value to the expected workflow input type.
 
@@ -36,7 +35,6 @@ def coerce_input_value(value: Any, expected_type: str, name: str = "") -> Any:
         ValueError: If coercion is not possible.
     """
     if expected_type == "number":
-        # bool is a subclass of int — reject it explicitly
         if isinstance(value, bool):
             raise ValueError(
                 f"Cannot convert boolean '{value}' to number for input '{name}'"
@@ -109,9 +107,7 @@ def coerce_input_value(value: Any, expected_type: str, name: str = "") -> Any:
             return str(value)
         return value
 
-    # Unknown type — pass through
     return value
-
 
 def workflow_dirs_with_path(
     workflow_dirs: list[Path] | tuple[Path, ...],
@@ -123,7 +119,6 @@ def workflow_dirs_with_path(
     if abs_path not in updated:
         updated.append(abs_path)
     return updated
-
 
 def _load_workflow_yaml(text: str, *, source: str) -> Workflow:
     """Parse workflow YAML text into a validated workflow model."""
@@ -154,7 +149,6 @@ def find_workflow(
     """
     cached = _find_workflow_cached(workflow_name, search_dirs_tuple, flow_registry_url)
     return cached.model_copy(deep=True)
-
 
 @lru_cache(maxsize=32)
 def _find_workflow_cached(
@@ -212,7 +206,6 @@ def _find_workflow_cached(
     workflow.workflow_path = main_path
     return workflow
 
-
 def list_available_workflows(search_dirs: tuple[str | Path, ...]) -> list[str]:
     """List all available workflow names from search directories."""
     workflows: list[str] = []
@@ -225,7 +218,6 @@ def list_available_workflows(search_dirs: tuple[str | Path, ...]) -> list[str]:
         for f in d.rglob("*.yaml"):
             workflows.append(f.stem)
     return sorted(set(workflows))
-
 
 def find_all_workflows(search_dirs: list[Path]) -> list[Path]:
     """Find all workflow files in the specified directories.
@@ -245,4 +237,4 @@ def find_all_workflows(search_dirs: list[Path]) -> list[Path]:
         for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
             workflow_files.extend(directory.glob(f"*{ext}"))
 
-    return sorted(set(workflow_files))  # Deduplicate and sort
+    return sorted(set(workflow_files))

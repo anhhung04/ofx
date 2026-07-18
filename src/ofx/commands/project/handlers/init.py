@@ -42,7 +42,6 @@ DIRECTORY_STRUCTURE: list[str | tuple[str, list]] = [
     ("ipt", ENGAGEMENT_FILE_STRUCTURE + ["lateral-movement"]),
 ]
 
-
 class InitConfig:
     """Configuration for project initialization."""
 
@@ -61,7 +60,6 @@ class InitConfig:
         self.remote_config = remote_config or {}
         self.encrypt = encrypt
         self.encryption_key = encryption_key
-
 
 class InitHandler:
     """Handles project initialization."""

@@ -7,11 +7,9 @@ from typing import Any
 
 from ofx.settings import DEFAULT_SHELL
 
-
 def model_field_is_explicitly_set(model: Any, field: str) -> bool:
     """Return whether a pydantic-backed model field was explicitly provided."""
     return field in getattr(model, "model_fields_set", set())
-
 
 def resolve_model_run_default(
     runner: Any,
@@ -36,7 +34,6 @@ def resolve_model_run_default(
 
     return fallback
 
-
 def resolve_model_shell(runner: Any, model: Any) -> str:
     """Resolve shell from explicit model state or inherited run defaults."""
     return resolve_model_run_default(
@@ -45,7 +42,6 @@ def resolve_model_shell(runner: Any, model: Any) -> str:
         "shell",
         fallback=DEFAULT_SHELL,
     )
-
 
 __all__ = [
     "model_field_is_explicitly_set",

@@ -9,11 +9,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# analyzer
-# ---------------------------------------------------------------------------
-
-
 class TestDetectOfxImports:
     """detect_ofx_imports() covers all four import patterns."""
 
@@ -78,18 +73,11 @@ class TestDetectOfxImports:
         result = self._detect("")
         assert result == set()
 
-
-# ---------------------------------------------------------------------------
-# collector
-# ---------------------------------------------------------------------------
-
-
 class TestCollectModules:
     def test_collect_opsec(self):
         from ofx.api.bundle.collector import collect_modules
 
         files = collect_modules({"opsec"})
-        # Must include parent stubs and at least the opsec package
         assert "ofx/__init__.py" in files
         assert "ofx/api/__init__.py" in files
         opsec_keys = [k for k in files if "opsec" in k]
@@ -124,12 +112,6 @@ class TestCollectModules:
         files = collect_modules(set())
         assert files["ofx/__init__.py"] == _STUB_INIT
 
-
-# ---------------------------------------------------------------------------
-# builder
-# ---------------------------------------------------------------------------
-
-
 class TestBuildBundle:
     def test_build_bundle_no_imports(self):
         from ofx.api.bundle.builder import build_bundle
@@ -152,7 +134,6 @@ class TestBuildBundle:
         from ofx.api.bundle.builder import build_bundle
 
         result = build_bundle("print('hello')")
-        # Must parse without error
         ast.parse(result.bootstrap)
 
     def test_bootstrap_executes_correctly(self):
@@ -180,13 +161,7 @@ class TestBuildBundle:
 
         result = build_bundle("x = 1")
         with pytest.raises(AttributeError):
-            result.script = "changed"  # type: ignore[misc]
-
-
-# ---------------------------------------------------------------------------
-# obfuscator
-# ---------------------------------------------------------------------------
-
+            result.script = "changed"
 
 class TestObfuscateBootstrap:
     def test_obfuscated_is_valid_python(self):
@@ -195,7 +170,7 @@ class TestObfuscateBootstrap:
         from ofx.api.bundle.obfuscator import obfuscate_bootstrap
 
         loader = obfuscate_bootstrap("x = 42")
-        ast.parse(loader)  # must not raise
+        ast.parse(loader)
 
     def test_obfuscated_executes_correctly(self):
         from ofx.api.bundle.obfuscator import obfuscate_bootstrap
@@ -257,7 +232,6 @@ class TestObfuscateBootstrap:
 
         with pytest.raises(ObfuscationError):
             obfuscate_bootstrap("def broken(")
-
 
 class TestObfuscateSources:
     def _make_files(self) -> dict[str, bytes]:
@@ -365,7 +339,6 @@ class TestObfuscateSources:
 
         result = obfuscate_sources({"mod.py": b"x = 1\n"})
         stub = result["mod.py"].decode()
-        # Two fromhex calls: one for key, one for encrypted data
         assert stub.count("fromhex") == 2
 
     def test_metadata_stripped_filename(self):
@@ -384,17 +357,9 @@ class TestObfuscateSources:
         src = b'"""Module doc."""\ndef foo():\n    """Func doc."""\n    return 1\n'
         code = compile(src, "mod.py", "exec")
         stripped = _strip_code(code)
-        # Module docstring (first const) should be None
         assert stripped.co_consts[0] is None
-        # Function code object's docstring should also be None
         func_code = [c for c in stripped.co_consts if hasattr(c, "co_code")][0]
         assert func_code.co_consts[0] is None
-
-
-# ---------------------------------------------------------------------------
-# deliverer — adapters
-# ---------------------------------------------------------------------------
-
 
 class TestUploadAdapter:
     def _make_runner(self, upload_side_effect=None, run_return="ok"):
@@ -411,7 +376,6 @@ class TestUploadAdapter:
         result = adapter.deliver("print('hi')")
 
         runner.upload.assert_called_once()
-        # Two run calls: execute the script + rm cleanup
         assert runner.run.call_count == 2
         assert result == "ok"
 
@@ -472,7 +436,6 @@ class TestUploadAdapter:
         assert captured["local_path"]
         assert not Path(captured["local_path"]).exists()
 
-
 class TestInlineAdapter:
     def test_deliver_runs_base64_python_command(self):
         from ofx.api.bundle.deliverer import InlineAdapter
@@ -498,7 +461,6 @@ class TestInlineAdapter:
 
         cmd = runner.run.call_args[0][0]
         assert cmd.startswith("python -c")
-
 
 class TestMakeAdapter:
     def test_upload_method_returns_upload_adapter(self):
@@ -533,7 +495,6 @@ class TestMakeAdapter:
         from ofx.api.bundle.deliverer import UploadAdapter, make_adapter
 
         runner = MagicMock()
-        # MagicMock has upload attr, and _runner_has_upload falls back to hasattr check
         adapter = make_adapter(runner, "auto")
         assert isinstance(adapter, UploadAdapter)
 
@@ -545,7 +506,6 @@ class TestMakeAdapter:
         assert isinstance(adapter, UploadAdapter)
         assert adapter.windows is True
         assert adapter.python == "python"
-
 
 class TestCustomAdapter:
     def test_custom_adapter_used_directly(self):
@@ -565,7 +525,6 @@ class TestCustomAdapter:
 
         assert adapter.called
         assert result.startswith("custom:")
-        # Runner methods should NOT be called if custom adapter is used
         runner.upload.assert_not_called()
         runner.run.assert_not_called()
 
@@ -577,7 +536,6 @@ class TestCustomAdapter:
                 return "ok"
 
         assert isinstance(GoodAdapter(), BundleAdapter)
-
 
 class TestDeliverAndRun:
     def _make_runner(self, upload_side_effect=None, run_return="ok"):
@@ -595,7 +553,7 @@ class TestDeliverAndRun:
         )
 
         runner.upload.assert_called_once()
-        assert runner.run.call_count == 2  # exec + rm
+        assert runner.run.call_count == 2
         assert result == "ok"
 
     def test_upload_failure_raises_delivery_error(self):
@@ -624,12 +582,6 @@ class TestDeliverAndRun:
         result = deliver_and_run(runner, "x=1", adapter=StubAdapter(), method="upload")
         assert result == "stub"
         runner.upload.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# run_remote convenience wrapper
-# ---------------------------------------------------------------------------
-
 
 class TestRunRemote:
     def test_run_remote_upload_no_obfuscation(self):
@@ -677,5 +629,5 @@ class TestRunRemote:
         )
 
         exec_cmd = runner.run.call_args_list[0][0][0]
-        assert "python " in exec_cmd  # not python3
+        assert "python " in exec_cmd
         assert result == "win_ok"

@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("gettgt")
 class GetTGTTask(Task):
     name = "gettgt"
@@ -59,7 +58,6 @@ class GetTGTTask(Task):
 
         return " ".join(parts), None
 
-    # [*] Saving ticket in user.ccache
     _TICKET_RE = re.compile(r"Saving ticket in\s+(\S+)")
 
     def parse_output(

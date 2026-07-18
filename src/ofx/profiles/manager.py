@@ -19,7 +19,6 @@ logger = logging.getLogger("ofx")
 
 PROFILES_FILE = BASE_DATA_DIR / "profiles.yml"
 
-
 def _default_profiles_data() -> dict[str, Any]:
     """Starter execution profiles created on first user use."""
     return {
@@ -42,58 +41,9 @@ def _default_profiles_data() -> dict[str, Any]:
         "defaults": {"profile": ""},
     }
 
-
 _PROFILES_FILE_HEADER = """# OFX execution profiles
-#
-# File format:
-#   profiles:
-#     <name>:
-#       description: <text>
-#       rate_limit: <int>
-#       threads: <int>
-#       delay: <float seconds>
-#       jitter: <float seconds>
-#       proxy: <url>
-#       user_agent: <string>
-#       timeout_minutes: <int>
-#       max_retries: <int>
-#       time_window:
-#         enabled: <bool>
-#         start: \"HH:MM\"
-#         end: \"HH:MM\"
-#         days: [monday, tuesday, ...]
-#         timezone: <IANA tz>
-#       env:
-#         KEY: VALUE
-#       task_options:
-#         <task_name>:
-#           <opt>: <value>
-#   defaults:
-#     profile: <name or empty>
-#
-# Example:
-#   profiles:
-#     stealth:
-#       description: Low-and-slow recon
-#       rate_limit: 30
-#       threads: 2
-#       delay: 2.0
-#       jitter: 1.0
-#       timeout_minutes: 120
-#       time_window:
-#         enabled: true
-#         start: \"09:00\"
-#         end: \"17:00\"
-#         days: [monday, tuesday, wednesday, thursday, friday]
-#         timezone: UTC
-#       task_options:
-#         httpx:
-#           tech_detect: true
-#   defaults:
-#     profile: stealth
 
 """
-
 
 def _dump_default_profiles_file() -> str:
     return _PROFILES_FILE_HEADER + yaml.dump(
@@ -102,7 +52,6 @@ def _dump_default_profiles_file() -> str:
         sort_keys=False,
         allow_unicode=True,
     )
-
 
 class ProfileManager:
     """Manages execution profiles stored in ``~/.ofx/profiles.yml``.
@@ -137,8 +86,6 @@ class ProfileManager:
         self._data: dict[str, Any] = {}
         self._load()
 
-    # ── I/O ────────────────────────────────────────────────────────
-
     def _load(self) -> None:
         self._bootstrap_defaults()
         self._data = load_yaml_dict(self._path, warn_prefix="Failed to load profiles")
@@ -153,8 +100,6 @@ class ProfileManager:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(_dump_default_profiles_file())
 
-    # ── Properties ─────────────────────────────────────────────────
-
     @property
     def profiles(self) -> dict[str, dict[str, Any]]:
         return self._data.get("profiles", {})
@@ -162,8 +107,6 @@ class ProfileManager:
     @property
     def default_profile_name(self) -> str:
         return self._data.get("defaults", {}).get("profile", "")
-
-    # ── Public API ─────────────────────────────────────────────────
 
     def list_profiles(self) -> list[str]:
         """Return sorted list of profile names."""
@@ -220,7 +163,6 @@ class ProfileManager:
         if name not in profiles:
             raise KeyError(f"Profile '{name}' not found")
         del profiles[name]
-        # Clear default if it pointed to this profile
         defaults = self._data.get("defaults", {})
         if defaults.get("profile") == name:
             defaults.pop("profile", None)
@@ -247,11 +189,7 @@ class ProfileManager:
         name = data.pop("name", "") or "unnamed"
         self.add(name, data)
 
-
-# ── Module singleton ───────────────────────────────────────────────
-
 _manager: ProfileManager | None = None
-
 
 def get_profile_manager() -> ProfileManager:
     """Return (or create) the global :class:`ProfileManager`."""

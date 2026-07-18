@@ -11,7 +11,6 @@ from ofx.api.httpserver.server_base import BaseServerFacade
 
 logger = get_logger()
 
-
 class SimpleHTTPHandler(SimpleHTTPRequestHandler):
     """Custom HTTP request handler for SimpleHTTPServer.
 
@@ -24,7 +23,7 @@ class SimpleHTTPHandler(SimpleHTTPRequestHandler):
             f"{self.address_string()} - - [{self.log_date_time_string()}] {format % args}\n"
         )
 
-    def list_directory(self, path: str | os.PathLike[str]) -> bytes | None:  # type: ignore[override]
+    def list_directory(self, path: str | os.PathLike[str]) -> bytes | None:
         """Override directory listing to disable it.
 
         Returns None to prevent directory listing, which is a security
@@ -39,7 +38,6 @@ class SimpleHTTPHandler(SimpleHTTPRequestHandler):
         self.send_error(403, "Directory listing not allowed")
         return None
 
-
 class SimpleHTTPServer(BaseServerFacade):
     """Simple HTTP file server with directory serving capabilities.
 
@@ -50,7 +48,7 @@ class SimpleHTTPServer(BaseServerFacade):
     Example:
         >>> server = SimpleHTTPServer(host='0.0.0.0', port=8080, directory='/var/www')
         >>> server.start()
-        >>> # Server is now serving files from /var/www at http://0.0.0.0:8080
+        >>>
         >>> server.stop()
     """
 
@@ -86,7 +84,6 @@ class SimpleHTTPServer(BaseServerFacade):
         self.directory = Path(directory) if directory else Path.cwd()
         self.allow_upload = allow_upload
 
-        # Change to the specified directory
         if self.directory.exists() and self.directory.is_dir():
             os.chdir(self.directory)
             logger.info(f"Serving files from directory: {self.directory}")

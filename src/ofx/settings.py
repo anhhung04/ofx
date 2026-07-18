@@ -49,7 +49,6 @@ CHANNELS_DIR = TEMP_DIR / "channels"
 
 ALLOWED_WORKFLOW_FILE_EXTENSIONS = (".yml", ".yaml")
 
-
 def get_workflow_search_dirs() -> list[Path]:
     """Return all workflow search directories including installed collections.
 
@@ -58,7 +57,6 @@ def get_workflow_search_dirs() -> list[Path]:
     installed after process start are still found.
     """
     dirs = list(DEFAULT_WORKFLOWS_DIRS)
-    # Include installed collections
     collections_dir = COLLECTIONS_DIR
     if collections_dir.is_dir():
         for child in sorted(collections_dir.iterdir()):
@@ -67,7 +65,6 @@ def get_workflow_search_dirs() -> list[Path]:
                 if abs_child not in dirs:
                     dirs.append(abs_child)
     return dirs
-
 
 DEFAULT_SHELL = "powershell.exe" if IS_WINDOWS else "/bin/bash"
 
@@ -102,13 +99,11 @@ RICH_THEME = Theme(
     }
 )
 
-
 def ensure_dir(path: Path) -> Path:
     """Create directory only if it doesn't exist. Call this when a command needs the directory."""
     if not path.exists():
         path.mkdir(parents=True, exist_ok=True)
     return path
-
 
 def _ensure_default_layout() -> None:
     """Create the standard OFX filesystem layout on first user use."""
@@ -125,14 +120,7 @@ def _ensure_default_layout() -> None:
     ):
         ensure_dir(path)
 
-
 _ensure_default_layout()
-
-
-# ------------------------------------------------------------------
-# GitHub token resolution: explicit setting → env → gh CLI
-# ------------------------------------------------------------------
-
 
 @lru_cache(maxsize=1)
 def _gh_cli_token() -> str:
@@ -156,7 +144,6 @@ def _gh_cli_token() -> str:
         return ""
     return ""
 
-
 def get_github_token() -> str:
     """Resolve a GitHub token using the following precedence:
 
@@ -167,9 +154,7 @@ def get_github_token() -> str:
     """
     return settings.github_token.get_secret_value() or _gh_cli_token()
 
-
 _console = None
-
 
 def get_console():
     """Get a Rich console with the red team theme applied."""
@@ -177,7 +162,6 @@ def get_console():
     if _console is None:
         _console = Console(theme=RICH_THEME)
     return _console
-
 
 class AiSettings(BaseModel):
     """AI assistant configuration.
@@ -208,22 +192,19 @@ class AiSettings(BaseModel):
         default=30000, description="Chat history token threshold before compaction"
     )
 
-
 class Settings(BaseSettings):
     """Application settings or OFX"""
 
     app_name: str = "Offensive Flow Executor"
     app_branding: str = "ofx"
 
-    # AI assistant settings
     ai: AiSettings = Field(default_factory=AiSettings)
 
-    # Active project name (populated from env var or CLI)
     active_project: str | None = Field(default=None, description="Active project name")
 
     debug: bool = Field(default=False, description="Enable debug mode")
     max_output_size: int = Field(
-        default=10 * 1024 * 1024,  # 10MB
+        default=10 * 1024 * 1024,
         description="Maximum output size in bytes before truncation",
     )
 
@@ -238,6 +219,23 @@ class Settings(BaseSettings):
             "Automatically store discovered UserAccount credentials from task outputs "
             "into the credential store (exegol-history KeePass DB). "
             "Can be overridden per-step with 'store-creds: true/false'."
+        ),
+    )
+
+    credential_db_path: str = Field(
+        default="~/.exh/DB.kdbx",
+        description=(
+            "Path to the KeePass database for storing discovered credentials. "
+            "Set to a custom path if you use a non-default exegol-history database. "
+            "Env: OFX_CREDENTIAL_DB_PATH"
+        ),
+    )
+
+    credential_key_path: str = Field(
+        default="~/.exh/db.key",
+        description=(
+            "Path to the KeePass key file. "
+            "Env: OFX_CREDENTIAL_KEY_PATH"
         ),
     )
 
@@ -264,7 +262,6 @@ class Settings(BaseSettings):
         description="Default remote registry URL for cloning repositories",
     )
 
-    # GitHub token
     github_token: SecretStr = Field(
         default=SecretStr(""),
         description=(
@@ -308,16 +305,6 @@ class Settings(BaseSettings):
             SecretsSettingsSource(settings_cls, secrets_dir=SECRETS_DIR.absolute()),
         )
 
-
-# ------------------------------------------------------------------
-# Default config.yml generation
-# ------------------------------------------------------------------
-
-# Fields excluded from config.yml — internal / runtime-only values that
-# should not be persisted or edited by the user directly.
-# NOTE: active_project is excluded from the auto-generated defaults but CAN
-# appear in config.yml when written by update_config_field(); pydantic-settings'
-# YamlConfigSettingsSource will load it from there regardless.
 _CONFIG_EXCLUDE_FIELDS = frozenset(
     {
         "app_name",
@@ -328,12 +315,7 @@ _CONFIG_EXCLUDE_FIELDS = frozenset(
 )
 
 _CONFIG_YAML_HEADER = """\
-# OFX Configuration — ~/.ofx/config.yml
-# Environment variables (OFX_ prefix) override values set here.
-# SecretStr values (github_token, ai.api_key, registry passwords)
-# won't be leaked in logs or repr().
 """
-
 
 def _dump_default_config() -> str:
     """Build a YAML string with all user-facing settings and their defaults."""
@@ -368,7 +350,6 @@ def _dump_default_config() -> str:
     )
     return _CONFIG_YAML_HEADER + body
 
-
 def _ensure_default_config() -> None:
     """Create ``~/.ofx/config.yml`` with all defaults on first run."""
     if not CONFIG_YAML.exists():
@@ -376,7 +357,6 @@ def _ensure_default_config() -> None:
             CONFIG_YAML.write_text(_dump_default_config())
 
 _ensure_default_config()
-
 
 def update_config_field(key: str, value: object) -> None:
     """Update a single field in ``~/.ofx/config.yml``, preserving other values.
@@ -446,8 +426,6 @@ def update_config_field(key: str, value: object) -> None:
                 _do_update()
             finally:
                 fcntl.flock(lock_fh, fcntl.LOCK_UN)
-
-
 
 settings = Settings()
 reload_logging_config(settings)

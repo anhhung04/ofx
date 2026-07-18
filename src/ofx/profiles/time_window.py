@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(settings.app_branding)
 
-
 def _now_in_tz(tz_name: str) -> datetime:
     """Return current datetime in the specified timezone."""
     try:
@@ -30,7 +29,6 @@ def _now_in_tz(tz_name: str) -> datetime:
         logger.warning("Timezone '%s' not available, falling back to UTC", tz_name)
         return datetime.now(UTC)
 
-
 def _time_in_range(start: time, end: time, current: time) -> bool:
     """Check if *current* is between *start* and *end*.
 
@@ -38,9 +36,7 @@ def _time_in_range(start: time, end: time, current: time) -> bool:
     """
     if start <= end:
         return start <= current <= end
-    # Overnight: e.g. start=22:00, end=06:00
     return current >= start or current <= end
-
 
 def check_time_window(window: TimeWindow) -> dict[str, Any]:
     """Validate current time against the window.
@@ -57,7 +53,6 @@ def check_time_window(window: TimeWindow) -> dict[str, Any]:
     current_day = now.strftime("%A").lower()
     current_time = now.time()
 
-    # Day check
     if current_day not in [d.lower() for d in window.days]:
         return {
             "allowed": False,
@@ -68,7 +63,6 @@ def check_time_window(window: TimeWindow) -> dict[str, Any]:
             ),
         }
 
-    # Time check
     start = window.start_time()
     end = window.end_time()
 
@@ -82,10 +76,8 @@ def check_time_window(window: TimeWindow) -> dict[str, Any]:
             ),
         }
 
-    # Calculate remaining minutes
     end_dt = now.replace(hour=end.hour, minute=end.minute, second=0, microsecond=0)
     if end < start:
-        # Overnight: end is tomorrow
         from datetime import timedelta
 
         if current_time >= start:
@@ -107,7 +99,6 @@ def check_time_window(window: TimeWindow) -> dict[str, Any]:
         "message": msg,
     }
 
-
 class TimeWindowGuard:
     """Background task that periodically checks the time window.
 
@@ -126,8 +117,8 @@ class TimeWindowGuard:
         check_interval: int = 30,
     ) -> None:
         self._window = window
-        self._on_warn = on_warn  # Callable[[str], None]
-        self._on_abort = on_abort  # Callable[[str], None]
+        self._on_warn = on_warn
+        self._on_abort = on_abort
         self._check_interval = check_interval
         self._task: asyncio.Task | None = None
         self._warned = False

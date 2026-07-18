@@ -15,11 +15,6 @@ from ofx.cloud.task_runtime import build_task_command_from_step
 from ofx.models.step import RunType, Step
 from ofx.runner.task_step import extract_output_item_target, extract_task_target_and_opts
 
-# =========================================================================
-# resolve_python_step_source
-# =========================================================================
-
-
 class TestResolvePythonStepSource:
     """Tests for script source resolution."""
 
@@ -36,7 +31,7 @@ class TestResolvePythonStepSource:
     def test_script_file_absolute(self, tmp_path):
         script = tmp_path / "run.py"
         script.write_text("x = 1\n")
-        step = Step(script_file=str(script.with_suffix("")))  # without .py
+        step = Step(script_file=str(script.with_suffix("")))
         result = resolve_python_step_source(step)
         assert result == "x = 1\n"
 
@@ -65,7 +60,6 @@ class TestResolvePythonStepSource:
         with pytest.raises(ValueError, match="Unsupported step run type"):
             resolve_python_step_source(step)
 
-
 class TestIsPythonStepRunType:
     @pytest.mark.parametrize(
         ("run_type", "expected"),
@@ -79,12 +73,6 @@ class TestIsPythonStepRunType:
     def test_recognizes_python_backed_step_types(self, run_type, expected):
         assert is_python_step_run_type(run_type) is expected
 
-
-# =========================================================================
-# build_python_payload
-# =========================================================================
-
-
 class TestBuildPythonPayload:
     """Tests for payload building with caching."""
 
@@ -97,20 +85,13 @@ class TestBuildPythonPayload:
         """Same input should return same cached object."""
         r1 = build_python_payload("print(2)")
         r2 = build_python_payload("print(2)")
-        assert r1 is r2  # exact same object from lru_cache
+        assert r1 is r2
 
     def test_opsec_mode(self):
         _normal = build_python_payload("print(3)", opsec_mode=False)
         opsec = build_python_payload("print(3)", opsec_mode=True)
-        # Both produce strings; opsec should differ (obfuscated)
         assert isinstance(opsec, str)
         assert len(opsec) > 0
-
-
-# =========================================================================
-# build_task_command_from_step
-# =========================================================================
-
 
 class TestBuildTaskCommandFromStep:
     """Tests for task command building."""
@@ -139,7 +120,6 @@ class TestBuildTaskCommandFromStep:
             result = build_task_command_from_step(step)
 
         assert result == "nmap -sV 10.0.0.1"
-        # output_flag should be restored after build
         assert mock_task.output_flag == "-oX"
 
     def test_output_flag_restored_on_error(self):
@@ -253,7 +233,6 @@ class TestBuildTaskCommandFromStep:
             profile=profile,
         )
         assert result == "env HTTP_PROXY=socks5://127.0.0.1:9050 whois example.com"
-
 
 class TestTaskStepHelpers:
     def test_extract_task_target_and_opts_normalizes_lists_and_scalars(self):

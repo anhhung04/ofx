@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 __all__ = ["RunnerRegistry"]
 
-
 class RunnerRegistry:
     """Registry for post-exploitation runners.
 

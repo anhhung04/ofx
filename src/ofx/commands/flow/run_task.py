@@ -24,7 +24,6 @@ from ofx.tasks import TaskRegistry
 
 logger = logging.getLogger(settings.app_branding)
 
-
 def _print_stdout_output(console, stdout: str) -> None:
     lines = stdout.strip().splitlines()
     display = lines[:50]
@@ -32,7 +31,6 @@ def _print_stdout_output(console, stdout: str) -> None:
         console.print(f"  {line}")
     if len(lines) > 50:
         console.print(f"  [dim]... {len(lines) - 50} more lines[/dim]")
-
 
 class TaskRunHandler:
     """Execute a single registered task with CLI-provided options."""
@@ -215,7 +213,6 @@ class TaskRunHandler:
                 console.print("[yellow]No output produced.[/yellow]")
 
         return 0
-
 
 def parse_opt_args(opt_strings: list[str]) -> dict[str, Any]:
     """Parse ``--opt key=value`` strings into a dict.

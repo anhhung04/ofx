@@ -22,7 +22,6 @@ _INJECTABLE_RE = re.compile(
     re.IGNORECASE,
 )
 
-
 @TaskRegistry.register("tplmap")
 class TplmapTask(Task):
     name = "tplmap"

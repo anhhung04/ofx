@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("hashcat")
 class HashcatTask(Task):
     name = "hashcat"
@@ -95,16 +94,13 @@ class HashcatTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Hash file (target)
         parts.append(self._q(target))
 
-        # Wordlist as positional argument
         if wordlist:
             parts.append(self._q(wordlist))
 
         return " ".join(parts), None
 
-    # hash:password  or  user:hash:password
     _CRACKED_RE = re.compile(r"^(.+):(.+)$")
 
     def parse_output(
@@ -123,12 +119,9 @@ class HashcatTask(Task):
             if not line or line.startswith("#"):
                 continue
 
-            # Standard format: hash:password
-            # With --username: user:hash:password
             parts = line.split(":")
             if len(parts) >= 2:
                 password = parts[-1]
-                # Skip if the "password" looks like a hash component
                 if re.match(r"^[a-fA-F0-9]{32}$", password):
                     continue
                 username = ""

@@ -17,7 +17,6 @@ _SEVERITY_MAP = {
     "info": Severity.INFO,
 }
 
-
 @TaskRegistry.register("legitify")
 class LegitifyTask(Task):
     name = "legitify"
@@ -46,7 +45,6 @@ class LegitifyTask(Task):
         """Target is the org name, passed via ``--org``."""
         parts: list[str] = [self.cmd, *self.extra_flags]
 
-        # If target provided and --org not already in kwargs
         if target and "org" not in kwargs and "repo" not in kwargs:
             parts.extend(["--org", self._q(target)])
 
@@ -66,7 +64,6 @@ class LegitifyTask(Task):
 
         results: list[Vulnerability | Tag] = []
 
-        # Legitify JSON may be a list or dict with nested violation arrays
         violations: list[dict[str, Any]] = []
         if isinstance(data, list):
             violations = data

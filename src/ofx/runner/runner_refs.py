@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 def runner_leaf_descendants(runner: Any) -> list[Any]:
     if runner is None:
         return []

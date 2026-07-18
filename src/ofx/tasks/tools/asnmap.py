@@ -6,7 +6,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Ip
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("asnmap")
 class AsnmapTask(Task):
     name = "asnmap"

@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("secretsdump")
 class SecretsdumpTask(Task):
     name = "secretsdump"
@@ -84,7 +83,6 @@ class SecretsdumpTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Build credential string: domain/user:pass@target
         cred = ""
         if domain:
             cred += f"{domain}/"
@@ -97,13 +95,10 @@ class SecretsdumpTask(Task):
 
         return " ".join(parts), None
 
-    # Administrator:500:aad3b435...:31d6cfe0...:::
     _NTDS_RE = re.compile(r"^(.+?):(\d+):([a-fA-F0-9]{32}):([a-fA-F0-9]{32}):::")
 
-    # domain\user:plain_password_here
     _CLEARTEXT_RE = re.compile(r"^(?:(\S+?)\\)?(\S+?):(.+)$")
 
-    # $MACHINE.ACC: ... :aad3b435...:hash:::
     _MACHINE_RE = re.compile(r"^\$MACHINE\.ACC:", re.IGNORECASE)
 
     def parse_output(

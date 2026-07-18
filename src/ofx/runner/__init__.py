@@ -27,11 +27,9 @@ from ofx.runner.tool_installer import ToolInstallerRunner
 from ofx.runner.workflow import WorkflowRunner
 from ofx.runner.workflow_execution import ExecutionResult, WorkflowExecutionManager
 
-
 def create_registry(*, backend: str = "memory", **config):
     """Create a runner registry using the configured backend."""
     return RegistryFactory.create(backend, **config)
-
 
 __all__ = [
     "CloudExecutor",

@@ -9,7 +9,6 @@ from typing import Any
 
 from ofx.utils.file_cleanup import remove_file
 
-
 def upload_temp_content(
     remote: Any,
     content: str,
@@ -26,6 +25,5 @@ def upload_temp_content(
         remote.upload(local_path, remote_path)
     finally:
         remove_file(local_path)
-
 
 __all__ = ["upload_temp_content"]

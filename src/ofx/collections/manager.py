@@ -17,16 +17,11 @@ from ofx.settings import settings
 
 logger = logging.getLogger(settings.app_branding)
 
-# ------------------------------------------------------------------
-# Lightweight semver helpers (no external dependency)
-# ------------------------------------------------------------------
-
 _SEMVER_RE = re.compile(
     r"^(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)"
     r"(?:-(?P<pre>[0-9A-Za-z\-.]+))?"
     r"(?:\+(?P<build>[0-9A-Za-z\-.]+))?$"
 )
-
 
 def _parse_semver(version: str) -> tuple[int, int, int, str]:
     """Parse a semver string into (major, minor, patch, pre-release)."""
@@ -40,17 +35,14 @@ def _parse_semver(version: str) -> tuple[int, int, int, str]:
         m.group("pre") or "",
     )
 
-
 def _semver_cmp(a: str, b: str) -> int:
     """Compare two semver strings. Returns -1|0|1."""
     pa, pb = _parse_semver(a), _parse_semver(b)
-    # Numeric part comparison
     for x, y in zip(pa[:3], pb[:3], strict=False):
         if x < y:
             return -1
         if x > y:
             return 1
-    # Pre-release: presence means *less than* release (1.0.0-alpha < 1.0.0)
     if pa[3] and not pb[3]:
         return -1
     if not pa[3] and pb[3]:
@@ -60,7 +52,6 @@ def _semver_cmp(a: str, b: str) -> int:
     if pa[3] > pb[3]:
         return 1
     return 0
-
 
 def check_version_constraint(installed: str, constraint: str) -> bool:
     """Check *installed* version against a *constraint* like ``>=1.2.0``.
@@ -88,15 +79,12 @@ def check_version_constraint(installed: str, constraint: str) -> bool:
             if op == "!=":
                 return cmp != 0
             if op == "~=":
-                # Compatible release: >=ver, <next major
                 if cmp < 0:
                     return False
                 pm = _parse_semver(ver)
                 return _parse_semver(installed)[:1] == pm[:1]
             break
-    # Bare version ⟹ exact match
     return _semver_cmp(installed, constraint) == 0
-
 
 class CollectionManager:
     """Manages installation and lifecycle of workflow collections.
@@ -104,9 +92,9 @@ class CollectionManager:
     Storage layout::
 
         ~/.ofx/collections/
-            installed.json          # registry of installed collections
-            <name>/                 # cloned collection directory
-                *.yaml              # workflows
+            installed.json
+            <name>/
+                *.yaml
     """
 
     def __init__(self, base_dir: Path | None = None):
@@ -115,11 +103,7 @@ class CollectionManager:
         self.base_dir = ensure_dir(base_dir or BASE_DATA_DIR / "collections")
         self.installed_file = self.base_dir / "installed.json"
         self._installed: dict[str, InstalledCollection] = self._load_installed()
-        self._installing: set[str] = set()  # circular-dep guard
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
+        self._installing: set[str] = set()
 
     def _load_installed(self) -> dict[str, InstalledCollection]:
         if not self.installed_file.exists():
@@ -138,10 +122,6 @@ class CollectionManager:
     def _save_installed(self) -> None:
         data = {k: v.model_dump() for k, v in self._installed.items()}
         self.installed_file.write_text(json.dumps(data, indent=2))
-
-    # ------------------------------------------------------------------
-    # Add / Install
-    # ------------------------------------------------------------------
 
     def add(
         self,
@@ -169,7 +149,6 @@ class CollectionManager:
         source = name_or_url.strip()
         inferred_name = alias or Path(source).stem.removesuffix(".git")
 
-        # Circular dependency guard
         if inferred_name in self._installing:
             logger.warning(
                 "Circular dependency detected: '%s' is already being installed, skipping.",
@@ -194,7 +173,6 @@ class CollectionManager:
         if ref:
             clone_opts.append(f"--branch={ref}")
 
-        # Inject token into HTTPS URLs for private repo access
         clone_url = self._authenticated_url(source)
 
         try:
@@ -202,7 +180,6 @@ class CollectionManager:
         except GitCommandError as exc:
             raise RuntimeError(f"Failed to clone '{source}': {exc}") from exc
 
-        # Validate cloned directory structure
         try:
             self._validate_collection_dir(target)
         except Exception:
@@ -227,16 +204,11 @@ class CollectionManager:
 
             return entry
         except Exception:
-            # Roll back: remove the cloned directory and registry entry
             self._installed.pop(inferred_name, None)
             shutil.rmtree(target, ignore_errors=True)
             raise
         finally:
             self._installing.discard(inferred_name)
-
-    # ------------------------------------------------------------------
-    # Remove
-    # ------------------------------------------------------------------
 
     def remove(self, name: str) -> bool:
         """Remove an installed collection by name."""
@@ -250,10 +222,6 @@ class CollectionManager:
         self._save_installed()
         logger.info("Removed collection '%s'", name)
         return True
-
-    # ------------------------------------------------------------------
-    # Update
-    # ------------------------------------------------------------------
 
     def update(self, name: str = "") -> list[str]:
         """Pull latest changes for one or all collections.
@@ -286,10 +254,6 @@ class CollectionManager:
             self._save_installed()
         return updated
 
-    # ------------------------------------------------------------------
-    # Query
-    # ------------------------------------------------------------------
-
     def list_installed(self) -> dict[str, InstalledCollection]:
         """Return all installed collections."""
         return dict(self._installed)
@@ -305,10 +269,6 @@ class CollectionManager:
     def collection_workflow_dirs(self) -> list[Path]:
         """Return paths of all installed collections for workflow search."""
         return [Path(e.path) for e in self._installed.values() if Path(e.path).is_dir()]
-
-    # ------------------------------------------------------------------
-    # Migration
-    # ------------------------------------------------------------------
 
     def migrate_from_assets(self, assets_file: Path) -> int:
         """Import entries from the legacy assets.json into the collection registry.
@@ -333,7 +293,6 @@ class CollectionManager:
             if not old_path.exists():
                 continue
 
-            # Move into collections dir if stored elsewhere
             dest = self.base_dir / name
             if old_path != dest:
                 if dest.exists():
@@ -353,10 +312,6 @@ class CollectionManager:
             self._save_installed()
             logger.info("Migrated %d legacy asset(s) into collections.", count)
         return count
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
 
     @staticmethod
     def _validate_collection_dir(target: Path) -> None:
@@ -429,7 +384,6 @@ class CollectionManager:
         token = get_github_token()
         if not token:
             return source
-        # Only inject into HTTPS GitHub URLs
         if source.startswith("https://github.com/"):
             return source.replace(
                 "https://github.com/",

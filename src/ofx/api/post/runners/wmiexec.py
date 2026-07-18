@@ -10,7 +10,6 @@ from ..registry import RunnerRegistry
 
 __all__ = ["PostWMIExec"]
 
-
 @RunnerRegistry.register("wmiexec")
 @dataclass
 class PostWMIExec(PostRunnerBase):
@@ -41,13 +40,13 @@ class PostWMIExec(PostRunnerBase):
             from impacket.examples import wmiexec as wmiexec_module
 
             self._wmi_module = wmiexec_module
-        except Exception as exc:  # pragma: no cover - import gate
+        except Exception as exc:
             raise ImportError(
                 "WMIExec support requires the 'impacket' package. "
                 "Install it with: pip install impacket"
             ) from exc
 
-    def run(self, command: str, timeout: int | None = None) -> str:  # noqa: ARG002
+    def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a command via WMI exec.
 
         Args:

@@ -15,7 +15,6 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
 logger = logging.getLogger(settings.app_branding)
 
-
 def get_property_type(
     prop_info: dict[str, Any], definitions: dict[str, Any] | None = None
 ) -> str:
@@ -55,7 +54,6 @@ def get_property_type(
         return ref_name
     return "Any"
 
-
 def get_property_default(prop_info: dict[str, Any]) -> str:
     """Get the default value of a property as a string."""
     if "default" in prop_info:
@@ -67,7 +65,6 @@ def get_property_default(prop_info: dict[str, Any]) -> str:
         else:
             return str(default_value)
     return ""
-
 
 def extract_schema_properties(
     schema: dict[str, Any],
@@ -143,7 +140,6 @@ def extract_schema_properties(
 
     return properties_list
 
-
 def display_schema_tree(schema: dict[str, Any], title: str, console) -> None:
     """Display the schema properties in a hierarchical tree format."""
     from rich.tree import Tree
@@ -199,7 +195,6 @@ def display_schema_tree(schema: dict[str, Any], title: str, console) -> None:
     add_schema(tree, schema)
     console.print(tree)
 
-
 @app.command("flow")
 def dump_workflow():
     """
@@ -214,7 +209,6 @@ def dump_workflow():
 
     console.print("\n[bold]Workflow Model Schema[/]\n", style="cyan")
     display_schema_tree(schema, "Workflow Properties", console)
-
 
 @app.command("job")
 def dump_job():
@@ -231,7 +225,6 @@ def dump_job():
     console.print("\n[bold]Job Model Schema[/]\n", style="cyan")
     display_schema_tree(schema, "Job Properties", console)
 
-
 @app.command("step")
 def dump_step():
     """
@@ -246,7 +239,6 @@ def dump_step():
 
     console.print("\n[bold]Step Model Schema[/]\n", style="cyan")
     display_schema_tree(schema, "Step Properties", console)
-
 
 @app.command("schema")
 def export_schema(

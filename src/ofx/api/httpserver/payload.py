@@ -10,7 +10,6 @@ from ofx.api.httpserver.server_base import BaseServerFacade
 
 logger = get_logger()
 
-
 def build_payload_handler(
     payload_path: Path | None,
     payloads: dict[str, bytes],
@@ -28,7 +27,7 @@ def build_payload_handler(
             self._payload_path = payload_path
             self._payloads = payloads
             self._hits = hits
-            super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+            super().__init__(*args, **kwargs)
 
         def log_message(self, format: str, *args: object) -> None:
             print(
@@ -89,7 +88,6 @@ def build_payload_handler(
 
     return PayloadRequestHandler
 
-
 class PayloadServer(BaseServerFacade):
     """HTTP server for delivering payloads and collecting data.
 
@@ -100,7 +98,7 @@ class PayloadServer(BaseServerFacade):
     Example:
         >>> server = PayloadServer(host='0.0.0.0', port=8080, payload_path='/path/to/payload.exe')
         >>> server.start()
-        >>> # Server is now serving payload at http://0.0.0.0:8080/payload
+        >>>
         >>> server.stop()
     """
 
@@ -135,8 +133,8 @@ class PayloadServer(BaseServerFacade):
         self.payload_path.mkdir(
             parents=True, exist_ok=True
         ) if self.payload_path else None
-        self.payloads: dict[str, bytes] = {}  # path -> content
-        self.hits: dict[str, int] = {}  # path -> count
+        self.payloads: dict[str, bytes] = {}
+        self.hits: dict[str, int] = {}
 
         if self.payload_path and not self.payload_path.exists():
             logger.warning(f"Payload file {self.payload_path} does not exist")

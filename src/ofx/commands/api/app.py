@@ -7,7 +7,6 @@ app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 NAME = "api"
 HELP = "Display OFX API reference"
 
-
 @app.command("show")
 def show(
     module: str = typer.Option(

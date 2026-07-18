@@ -20,7 +20,6 @@ from ofx.runner.services.event_emitter import EventEmitter
 if TYPE_CHECKING:
     from ofx.runner.runner import Runner
 
-
 class RunnerStateMachine:
     """Finite State Machine for managing runner execution states."""
 
@@ -69,7 +68,6 @@ class RunnerStateMachine:
 
     def set_state(self, state: RunnerStatus) -> None:
         self._current_state = state
-
 
 class LifecycleManager:
     """Coordinate runner execution, state transitions, and timing."""

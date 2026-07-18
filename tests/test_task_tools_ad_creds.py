@@ -11,9 +11,6 @@ from ofx.tasks.output_types import (
     UserAccount,
 )
 
-# ── Netexec Parser ─────────────────────────────────────────────────────────
-
-
 class TestNetexecParser:
     def test_netexec_metadata(self):
         task = TaskRegistry.create("netexec")
@@ -102,13 +99,6 @@ class TestNetexecParser:
         assert "-p pass" in cmd
         assert "--shares" in cmd
 
-
-# ── Kerbrute Parser ────────────────────────────────────────────────────────
-
-
-# ── Kerbrute Parser ────────────────────────────────────────────────────────
-
-
 class TestKerbruteParser:
     def test_kerbrute_metadata(self):
         task = TaskRegistry.create("kerbrute")
@@ -133,7 +123,6 @@ class TestKerbruteParser:
 
         users = [r for r in results if isinstance(r, UserAccount)]
         assert len(users) == 3
-        # Lines processed in order: userenum admin, userenum jsmith, login admin
         assert users[0].username == "admin"
         assert users[0].domain == "corp.local"
         assert users[0].password == ""
@@ -161,13 +150,6 @@ class TestKerbruteParser:
         assert "-d corp.local" in cmd
         assert "-t 20" in cmd
         assert "/tmp/users.txt" in cmd
-
-
-# ── Hydra Parser ───────────────────────────────────────────────────────────
-
-
-# ── Enum4linux Parser ──────────────────────────────────────────────────────
-
 
 class TestEnum4linuxParser:
     def test_enum4linux_metadata(self):
@@ -242,13 +224,6 @@ class TestEnum4linuxParser:
         if out_file and out_file.exists():
             out_file.unlink()
 
-
-# ── Paramspider Parser ────────────────────────────────────────────────────
-
-
-# ── Secretsdump Parser ────────────────────────────────────────────────────
-
-
 class TestSecretsdumpParser:
     def test_build_command(self):
         task = TaskRegistry.create("secretsdump")
@@ -296,13 +271,6 @@ class TestSecretsdumpParser:
         task = TaskRegistry.create("secretsdump")
         assert task.parse_output("", "") == []
 
-
-# ── GetUserSPNs Parser ───────────────────────────────────────────────────
-
-
-# ── GetUserSPNs Parser ───────────────────────────────────────────────────
-
-
 class TestGetUserSPNsParser:
     def test_build_command(self):
         task = TaskRegistry.create("getuserspns")
@@ -347,13 +315,6 @@ class TestGetUserSPNsParser:
         task = TaskRegistry.create("getuserspns")
         assert task.parse_output("", "") == []
 
-
-# ── GetNPUsers Parser ────────────────────────────────────────────────────
-
-
-# ── GetNPUsers Parser ────────────────────────────────────────────────────
-
-
 class TestGetNPUsersParser:
     def test_build_command(self):
         task = TaskRegistry.create("getnpusers")
@@ -384,13 +345,6 @@ class TestGetNPUsersParser:
         task = TaskRegistry.create("getnpusers")
         assert task.parse_output("", "") == []
 
-
-# ── GetTGT Parser ────────────────────────────────────────────────────────
-
-
-# ── GetTGT Parser ────────────────────────────────────────────────────────
-
-
 class TestGetTGTParser:
     def test_build_command(self):
         task = TaskRegistry.create("gettgt")
@@ -420,13 +374,6 @@ class TestGetTGTParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("gettgt")
         assert task.parse_output("", "") == []
-
-
-# ── GetST Parser ─────────────────────────────────────────────────────────
-
-
-# ── GetST Parser ─────────────────────────────────────────────────────────
-
 
 class TestGetSTParser:
     def test_build_command(self):
@@ -461,13 +408,6 @@ class TestGetSTParser:
         task = TaskRegistry.create("getst")
         assert task.parse_output("", "") == []
 
-
-# ── Certipy Parser ───────────────────────────────────────────────────────
-
-
-# ── Certipy Parser ───────────────────────────────────────────────────────
-
-
 class TestCertipyParser:
     def test_build_command(self):
         task = TaskRegistry.create("certipy")
@@ -496,7 +436,6 @@ class TestCertipyParser:
         assert len(vulns) == 1
         assert "ESC1" in vulns[0].name
         assert "VulnTemplate" in vulns[0].description
-        # Both templates produce a tag
         assert len(tags) == 2
         tpl_names = {t.value for t in tags}
         assert "VulnTemplate" in tpl_names
@@ -524,13 +463,6 @@ class TestCertipyParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("certipy")
         assert task.parse_output("", "") == []
-
-
-# ── BloodHound-Python Parser ─────────────────────────────────────────────
-
-
-# ── BloodHound-Python Parser ─────────────────────────────────────────────
-
 
 class TestBloodhoundPythonParser:
     def test_build_command(self):
@@ -563,7 +495,7 @@ class TestBloodhoundPythonParser:
         status_tags = [r for r in results if r.name == "status"]
         assert (
             len(info_tags) == 4
-        )  # Found AD domain, Found 42 users, Found 15 groups, Found 3 computers
+        )
         assert len(status_tags) == 1
         assert status_tags[0].value == "completed"
         assert "42 users" in info_tags[1].value
@@ -571,13 +503,6 @@ class TestBloodhoundPythonParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("bloodhound-python")
         assert task.parse_output("", "") == []
-
-
-# ── Hashcat Parser ───────────────────────────────────────────────────────
-
-
-# ── Ldeep Parser ─────────────────────────────────────────────────────────
-
 
 class TestLdeepParser:
     def test_build_command(self):
@@ -638,13 +563,6 @@ class TestLdeepParser:
         task = TaskRegistry.create("ldeep")
         assert task.parse_output("", "") == []
 
-
-# ── LdapDomainDump Parser ───────────────────────────────────────────────
-
-
-# ── LdapDomainDump Parser ───────────────────────────────────────────────
-
-
 class TestLdapDomainDumpParser:
     def test_build_command(self):
         task = TaskRegistry.create("ldapdomaindump")
@@ -657,7 +575,6 @@ class TestLdapDomainDumpParser:
         task = TaskRegistry.create("ldapdomaindump")
         cmd, _ = task.build_command("ldap://10.0.0.1")
         assert "ldap://10.0.0.1" in cmd
-        # Should not double-prefix
         assert "ldap://ldap://" not in cmd
 
     def test_parse_json_entries(self):
@@ -685,13 +602,6 @@ class TestLdapDomainDumpParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("ldapdomaindump")
         assert task.parse_output("", "") == []
-
-
-# ── Coercer Parser ───────────────────────────────────────────────────────
-
-
-# ── Responder Parser ─────────────────────────────────────────────────────
-
 
 class TestResponderParser:
     def test_build_command(self):
@@ -727,13 +637,6 @@ class TestResponderParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("responder")
         assert task.parse_output("", "") == []
-
-
-# ── Ldeep Parser ─────────────────────────────────────────────────────────
-
-
-# ── Coercer Parser ───────────────────────────────────────────────────────
-
 
 class TestCoercerParser:
     def test_build_command(self):
@@ -774,13 +677,6 @@ class TestCoercerParser:
         task = TaskRegistry.create("coercer")
         assert task.parse_output("", "") == []
 
-
-# ── Linpeas Parser ───────────────────────────────────────────────────────
-
-
-# ── Hashcat Parser ───────────────────────────────────────────────────────
-
-
 class TestHashcatParser:
     def test_build_command(self):
         task = TaskRegistry.create("hashcat")
@@ -818,7 +714,6 @@ class TestHashcatParser:
 
     def test_parse_skips_hash_only(self):
         task = TaskRegistry.create("hashcat")
-        # When "password" is another 32-char hex hash, it should be skipped
         stdout = "aad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0\n"
         results = task.parse_output(stdout, "")
         assert len(results) == 0
@@ -826,13 +721,6 @@ class TestHashcatParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("hashcat")
         assert task.parse_output("", "") == []
-
-
-# ── John Parser ──────────────────────────────────────────────────────────
-
-
-# ── John Parser ──────────────────────────────────────────────────────────
-
 
 class TestJohnParser:
     def test_build_command(self):
@@ -869,13 +757,6 @@ class TestJohnParser:
         task = TaskRegistry.create("john")
         assert task.parse_output("", "") == []
 
-
-# ── Responder Parser ─────────────────────────────────────────────────────
-
-
-# ── Linpeas Parser ───────────────────────────────────────────────────────
-
-
 class TestLinpeasParser:
     def test_build_command(self):
         task = TaskRegistry.create("linpeas")
@@ -909,13 +790,6 @@ class TestLinpeasParser:
         task = TaskRegistry.create("linpeas")
         assert task.parse_output("", "") == []
 
-
-# ── Winpeas Parser ───────────────────────────────────────────────────────
-
-
-# ── Winpeas Parser ───────────────────────────────────────────────────────
-
-
 class TestWinpeasParser:
     def test_build_command(self):
         task = TaskRegistry.create("winpeas")
@@ -946,10 +820,6 @@ class TestWinpeasParser:
     def test_parse_empty(self):
         task = TaskRegistry.create("winpeas")
         assert task.parse_output("", "") == []
-
-
-# ── Hydra Parser ───────────────────────────────────────────────────────────
-
 
 class TestHydraParser:
     def test_hydra_metadata(self):
@@ -1005,13 +875,6 @@ class TestHydraParser:
         assert "-f" in cmd
         assert "10.0.0.1" in cmd
         assert cmd.endswith("ssh")
-
-
-# ── Enum4linux Parser ──────────────────────────────────────────────────────
-
-
-# ── Brutus Parser ─────────────────────────────────────────────────────────
-
 
 class TestBrutusParser:
     def test_brutus_metadata(self):
@@ -1127,7 +990,6 @@ class TestBrutusParser:
         task = TaskRegistry.create("brutus")
         assert task.supports_streaming is True
 
-
 class TestZombieParser:
     def test_zombie_parse_json_array(self):
         task = TaskRegistry.create("zombie")
@@ -1165,6 +1027,3 @@ class TestZombieParser:
         assert results[0].username == "root"
         assert results[0].password == "toor"
         assert results[0].host == "10.0.0.5"
-
-
-# ── Secretsdump Parser ────────────────────────────────────────────────────

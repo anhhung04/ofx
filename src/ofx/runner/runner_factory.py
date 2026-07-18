@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ofx.models.job import Job
 
-
 def job_runner_class(job: Job):
     """Return the runner class appropriate for the given job configuration."""
     has_cloud = job.cloud is not None
@@ -37,6 +36,5 @@ def job_runner_class(job: Job):
     from ofx.runner.job import JobRunner
 
     return JobRunner
-
 
 __all__ = ["job_runner_class"]

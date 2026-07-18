@@ -4,7 +4,6 @@ from __future__ import annotations
 
 __all__ = ["chunk_string"]
 
-
 def chunk_string(value: str, size: int) -> list[str]:
     """Split a string into fixed-size chunks."""
     if size <= 0:

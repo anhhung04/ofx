@@ -42,12 +42,12 @@ class CloudJobRunner(Runner[Job]):
             parent.registry,
             executor=self._cloud_executor,
         )
-        self._cloud_config: CloudConfig = cloud_config or job.cloud  # type: ignore[assignment]
+        self._cloud_config: CloudConfig = cloud_config or job.cloud
         self._provider: CloudProvider | None = None
         self._instance: CloudInstanceInfo | None = None
-        self._remote_runner: Any = None  # PostSSH or PostWinRM
+        self._remote_runner: Any = None
         self._work_dir: str | None = None
-        self._cached_python: str | None = None  # Cached across steps on same VPS
+        self._cached_python: str | None = None
 
     async def _upload_fleet_input(self) -> None:
         """Upload the local fleet chunk file to the remote host.

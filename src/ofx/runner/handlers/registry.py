@@ -7,7 +7,6 @@ from typing import Any, Protocol, TypeVar
 
 from ofx.models.step import RunType
 
-
 class SupportsStepHandler(Protocol):
     """Protocol describing the step runner API required by handlers."""
 
@@ -20,9 +19,7 @@ class SupportsStepHandler(Protocol):
     def _log_info(self, message: str) -> None: ...
     def _resolve_working_dir(self): ...
 
-
 StepHandlerT = TypeVar("StepHandlerT", bound=Callable[[SupportsStepHandler], Any])
-
 
 class HandlerRegistry:
     """Map [`RunType`](src/ofx/models/step.py) values to runner factory callables."""
@@ -48,7 +45,6 @@ class HandlerRegistry:
         if handler is None:
             raise ValueError(f"Invalid run type '{run_type}'. No handler registered.")
         return handler
-
 
 registry = HandlerRegistry()
 

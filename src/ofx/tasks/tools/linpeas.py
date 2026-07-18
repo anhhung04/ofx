@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("linpeas")
 class LinpeasTask(Task):
     name = "linpeas"
@@ -51,7 +50,6 @@ class LinpeasTask(Task):
 
         return " ".join(parts), None
 
-    # ╔══════════╗ pattern or [!] 95% PE vectors
     _PE_RE = re.compile(r"\[!\]\s*(\d+%\s+PE.*|.*CVE-\d{4}-\d+.*)", re.IGNORECASE)
     _SUID_RE = re.compile(r"^-[rw]s", re.IGNORECASE)
     _WRITABLE_RE = re.compile(r"You can write (.*)", re.IGNORECASE)
@@ -75,7 +73,6 @@ class LinpeasTask(Task):
             if not clean:
                 continue
 
-            # CVE references
             for m in self._CVE_RE.finditer(clean):
                 cve = m.group(1).upper()
                 if cve not in seen_cves:
@@ -89,7 +86,6 @@ class LinpeasTask(Task):
                         )
                     )
 
-            # PE vectors
             m_pe = self._PE_RE.search(clean)
             if m_pe and not any(c in clean for c in seen_cves):
                 results.append(

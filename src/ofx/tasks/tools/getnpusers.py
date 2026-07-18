@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("getnpusers")
 class GetNPUsersTask(Task):
     name = "getnpusers"
@@ -69,13 +68,10 @@ class GetNPUsersTask(Task):
 
         return " ".join(parts), None
 
-    # $krb5asrep$23$user@DOMAIN:...
     _HASH_RE = re.compile(r"^\$krb5asrep\$\d+\$(\S+?)@(\S+?):")
 
-    # [*] Getting TGT for user
     _USER_RE = re.compile(r"\[\*\]\s+Getting TGT for\s+(\S+)")
 
-    # User user doesn't have UF_DONT_REQUIRE_PREAUTH set
     _NO_VULN_RE = re.compile(r"doesn't have UF_DONT_REQUIRE_PREAUTH", re.IGNORECASE)
 
     def parse_output(

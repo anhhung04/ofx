@@ -11,7 +11,7 @@ try:
     ETCD_AVAILABLE = True
 except Exception:
     ETCD_AVAILABLE = False
-    etcd3 = None  # type: ignore
+    etcd3 = None
 
 class EtcdJobRegistry(SerializedPrefixedRegistryAdapter):
     """etcd-based implementation of registry
@@ -55,7 +55,7 @@ class EtcdJobRegistry(SerializedPrefixedRegistryAdapter):
             )
 
         self.prefix = prefix
-        client_factory = etcd3.client  # type: ignore[union-attr]
+        client_factory = etcd3.client
         self._client = client_factory(
             host=host,
             port=port,

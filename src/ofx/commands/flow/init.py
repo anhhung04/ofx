@@ -35,36 +35,7 @@ jobs:
             echo "Scanning {{{{ inputs.target }}}}..."
             echo "result=success" >> "$OFX_OUTPUTS"
 
-      # Uncomment to use a task wrapper:
-      # - name: nmap_scan
-      #   task: nmap
-      #   with:
-      #     target: '{{{{ inputs.target }}}}'
-
-      # Uncomment for declarative data transformation:
-      # - name: filter_results
-      #   pipe:
-      #     input: '{{{{ steps["nmap_scan"].outputs.typed_outputs }}}}'
-      #     filter: "port > 1024"
-      #     sort: port
-      #     format: csv
-      #     field: host,port
-
-      # Uncomment for inline Python:
-      # - name: process
-      #   script: |
-      #       data = {{"target": "{{{{ inputs.target }}}}"}}
-      #       add_outputs(processed=True, data=data)
-
-  # Uncomment for a dependent job:
-  # report:
-  #   name: Generate Report
-  #   needs: [scan]
-  #   steps:
-  #     - run: echo "Scan result: {{{{ jobs.scan.outputs.result }}}}"
-
 """
-
 
 class FlowInitHandler:
     """Creates a new workflow file pre-configured for YAML language server."""
@@ -109,7 +80,6 @@ class FlowInitHandler:
         """Derive the output file path from the name and optional override."""
         if output:
             p = Path(output)
-            # If output is an existing directory, place the file inside it
             if p.is_dir():
                 return p / f"{workflow_name}.yml"
             return p

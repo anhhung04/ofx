@@ -5,7 +5,6 @@ from collections.abc import Callable
 from ofx.cloud.base import CloudProvider
 from ofx.commands.ui_helpers import error_exit
 
-
 def resolve_provider(profile: str = "", provider: str = "") -> str:
     """Resolve a cloud provider name from a profile or explicit --provider flag.
 
@@ -26,7 +25,6 @@ def resolve_provider(profile: str = "", provider: str = "") -> str:
 
     return provider
 
-
 def create_cloud_provider(
     profile: str = "", provider: str = ""
 ) -> tuple[str, CloudProvider]:
@@ -43,7 +41,6 @@ def create_cloud_provider(
             details=str(exc),
         )
     return provider_name, cloud
-
 
 def run_cloud_sync[T](operation: str, fn: Callable[[], T]) -> T:
     """Run a sync cloud operation with consistent CLI error handling."""

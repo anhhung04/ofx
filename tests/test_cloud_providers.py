@@ -12,9 +12,6 @@ import pytest
 
 from ofx.models.cloud import CloudConfig
 
-# ─── AWS Provider Tests ────────────────────────────────────────────
-
-
 def _make_aws_provider():
     """Create an AWSProvider with mocked boto3 session."""
     mock_session = MagicMock()
@@ -30,7 +27,6 @@ def _make_aws_provider():
         provider = AWSProvider(region="us-east-1")
     return provider, mock_ec2_client
 
-
 def _make_cloud_config(**overrides) -> CloudConfig:
     defaults = {
         "provider": "aws",
@@ -40,7 +36,6 @@ def _make_cloud_config(**overrides) -> CloudConfig:
     }
     defaults.update(overrides)
     return CloudConfig(**defaults)
-
 
 class TestAWSCreateInstance:
     def test_run_instances_kwargs_builds_optional_fields(self):
@@ -178,7 +173,6 @@ class TestAWSCreateInstance:
         assert "rootpass" in user_data
         assert "PasswordAuthentication yes" in user_data
 
-
 class TestAWSGetInstance:
     def test_instance_info_helper_extracts_fields(self):
         provider, _ec2 = _make_aws_provider()
@@ -284,7 +278,6 @@ class TestAWSGetInstance:
         assert info.ip == ""
         assert info.name == ""
 
-
 class TestAWSDestroyInstance:
     def test_destroy(self):
         provider, ec2 = _make_aws_provider()
@@ -292,7 +285,6 @@ class TestAWSDestroyInstance:
 
         asyncio.run(provider.destroy_instance("i-abc123"))
         ec2.terminate_instances.assert_called_once_with(InstanceIds=["i-abc123"])
-
 
 class TestAWSListInstances:
     def test_list_instances(self):
@@ -334,7 +326,6 @@ class TestAWSListInstances:
         instances = asyncio.run(provider.list_instances())
         assert instances == []
 
-
 class TestAWSSnapshots:
     def test_create_snapshot(self):
         provider, ec2 = _make_aws_provider()
@@ -373,10 +364,6 @@ class TestAWSSnapshots:
         asyncio.run(provider.delete_snapshot("ami-001"))
         ec2.deregister_image.assert_called_once_with(ImageId="ami-001")
 
-
-# ─── DigitalOcean Provider Tests ───────────────────────────────────
-
-
 def _make_do_provider():
     """Create a DigitalOceanProvider with mocked pydo client."""
     mock_client = MagicMock()
@@ -393,7 +380,6 @@ def _make_do_provider():
         provider = DigitalOceanProvider(token="test-token")
     provider._client = mock_client
     return provider, mock_client
-
 
 class TestDOCreateInstance:
     def test_droplet_create_body_builds_optional_fields(self):
@@ -519,7 +505,6 @@ class TestDOCreateInstance:
         assert body["vpc_uuid"] == "vpc-abc123"
         assert body["project_ids"] == ["proj-xyz"]
 
-
 class TestDOGetInstance:
     def test_droplet_info_helper_extracts_fields(self):
         provider, _client = _make_do_provider()
@@ -589,7 +574,6 @@ class TestDOGetInstance:
         info = asyncio.run(provider.get_instance("12345"))
         assert info.ip == ""
 
-
 class TestDODestroyInstance:
     def test_destroy(self):
         provider, client = _make_do_provider()
@@ -597,7 +581,6 @@ class TestDODestroyInstance:
 
         asyncio.run(provider.destroy_instance("12345"))
         client.droplets.destroy.assert_called_once_with(droplet_id=12345)
-
 
 class TestDOListInstances:
     def test_list_all(self):
@@ -637,14 +620,12 @@ class TestDOListInstances:
         asyncio.run(provider.list_instances(tags=["scan"]))
         client.droplets.list.assert_called_once_with(tag_name="scan")
 
-
 class TestDOSnapshots:
     def test_create_snapshot(self):
         provider, client = _make_do_provider()
         client.droplet_actions.post.return_value = {
             "action": {"id": 9999, "status": "in-progress"}
         }
-        # Mock wait_for_action
         client.actions.get.return_value = {
             "action": {"id": 9999, "status": "completed"}
         }
@@ -734,7 +715,6 @@ class TestDOSnapshots:
         asyncio.run(provider.delete_snapshot("snap-001"))
         client.snapshots.delete.assert_called_once_with(snapshot_id="snap-001")
 
-
 class TestDOWaitForAction:
     def test_action_completes(self):
         provider, client = _make_do_provider()
@@ -758,10 +738,6 @@ class TestDOWaitForAction:
 
         with pytest.raises(RuntimeError, match="failed"):
             asyncio.run(provider._wait_for_action(9999, timeout=30))
-
-
-# ─── Provider Initialization Tests ─────────────────────────────────
-
 
 class TestProviderInit:
     def test_aws_requires_boto3(self):

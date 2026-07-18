@@ -14,12 +14,6 @@ from ofx.settings import get_console
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 
-
-# ------------------------------------------------------------------
-# add
-# ------------------------------------------------------------------
-
-
 @app.command()
 def add(
     name_or_url: Annotated[
@@ -53,12 +47,6 @@ def add(
         },
     )
 
-
-# ------------------------------------------------------------------
-# remove
-# ------------------------------------------------------------------
-
-
 @app.command()
 def remove(
     name: Annotated[str, typer.Argument(help="Collection name to remove.")],
@@ -74,12 +62,6 @@ def remove(
         print_success("Removed", f"Collection '{name}' removed.")
     else:
         console.print(f"[yellow]Collection '{name}' not found.[/yellow]")
-
-
-# ------------------------------------------------------------------
-# update
-# ------------------------------------------------------------------
-
 
 @app.command()
 def update(
@@ -98,10 +80,6 @@ def update(
     else:
         console.print("[dim]Nothing to update.[/dim]")
 
-
-# ------------------------------------------------------------------
-# list
-# ------------------------------------------------------------------
 @app.command("list")
 def list_collections():
     """List installed collections."""
@@ -137,12 +115,6 @@ def list_collections():
 
     console.print(table)
 
-
-# ------------------------------------------------------------------
-# info
-# ------------------------------------------------------------------
-
-
 @app.command()
 def info(
     name: Annotated[str, typer.Argument(help="Collection name.")],
@@ -168,7 +140,6 @@ def info(
     tree.add(f"[bold]Path:[/bold] [dim]{entry.path}[/dim]")
     tree.add(f"[bold]Installed:[/bold] {entry.installed_at}")
 
-    # Discover workflows from disk
     coll_path = Path(entry.path)
     if coll_path.is_dir():
         workflows: list[str] = []

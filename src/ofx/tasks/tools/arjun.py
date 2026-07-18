@@ -8,7 +8,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, Url
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("arjun")
 class ArjunTask(Task):
     name = "arjun"

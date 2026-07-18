@@ -13,7 +13,6 @@ from ofx.api.http import requests
 
 logger = get_logger()
 
-
 class CEye:
     """CEye Out-of-Band (OOB) interaction platform client.
 
@@ -31,7 +30,7 @@ class CEye:
     Example:
         >>> ceye = CEye(token='your_api_token')
         >>> payload = ceye.build_request('test', type='dns')
-        >>> # Use payload['url'] in your exploit
+        >>>
         >>> if ceye.verify_request(payload['flag'], type='dns'):
         ...     print('DNS callback received!')
     """
@@ -241,7 +240,6 @@ class CEye:
             'abc123.ceye.io'
         """
         return f"{self.identify}.ceye.io"
-
 
 CEyeClient = CEye
 

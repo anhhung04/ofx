@@ -9,9 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Url, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-# Match failure/error lines like:
-#   FAILED: GET /api/users 500 server_error
-#   Failure: POST /items [not_a_server_error] ...
 _FAILURE_RE = re.compile(
     r"(?:FAIL(?:ED|URE)?|ERROR)\s*:?\s*"
     r"(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)?\s*"
@@ -20,7 +17,6 @@ _FAILURE_RE = re.compile(
     r"([\w_.-]+)?",
     re.IGNORECASE,
 )
-
 
 @TaskRegistry.register("schemathesis")
 class SchemathesisTask(Task):

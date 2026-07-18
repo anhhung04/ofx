@@ -19,12 +19,10 @@ ALLOWED_WORKFLOW_FILE_EXTENSIONS = None
 get_workflow_search_dirs = None
 yaml_safe_load = None
 
-
 class VisualizeFormat(str, enum.Enum):
     terminal = "terminal"
     dot = "dot"
     json = "json"
-
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_show_locals=False)
 app.add_typer(dump_app, name="dump", help="Dumping workflow/job/step model schemas")
@@ -47,7 +45,6 @@ ALIAS = ["x"]
 
 HELP = "Manage and run workflows in the OFX system"
 
-
 def _complete_workflow_names(incomplete: str) -> list[str]:
     """Shell completion for workflow names, with directory-aware segmented completion.
 
@@ -63,10 +60,8 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
     if workflow_search_dirs_getter is None:
         from ofx.settings import get_workflow_search_dirs as workflow_search_dirs_getter
 
-    # Normalise backslash to forward-slash so Windows paths work too
     incomplete = incomplete.replace("\\", "/")
 
-    # Split into directory prefix and leaf incomplete part
     if "/" in incomplete:
         prefix, _leaf = incomplete.rsplit("/", 1)
     else:
@@ -82,14 +77,11 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
         if not search_root.is_dir():
             continue
 
-        # Offer immediate children: subdirectories (with trailing /)
-        # and workflow files (stem only)
         for child in search_root.iterdir():
             if child.name.startswith(".") or child.name.startswith("__"):
                 continue
             rel_prefix = f"{prefix}/" if prefix else ""
             if child.is_dir():
-                # Only suggest directories that contain workflow files
                 has_workflows = any(
                     f.suffix in workflow_file_extensions
                     for f in child.rglob("*")
@@ -106,7 +98,6 @@ def _complete_workflow_names(incomplete: str) -> list[str]:
                     names.add(wf_name)
 
     return sorted(names)
-
 
 def _complete_tag_names(incomplete: str) -> list[str]:
     """Shell completion for workflow tags."""
@@ -138,7 +129,6 @@ def _complete_tag_names(incomplete: str) -> list[str]:
                             if t_lower.startswith(incomplete):
                                 tags.add(t_lower)
     return sorted(tags)
-
 
 @app.command("list")
 def list_workflows(
@@ -205,7 +195,6 @@ def list_workflows(
         show_descriptions=show_descriptions,
         list_tags=list_tags,
     )
-
 
 @app.command()
 def run(
@@ -344,14 +333,6 @@ def run(
             help="Restrict execution to a time window (HH:MM-HH:MM, e.g. '09:00-17:00').",
         ),
     ] = "",
-    load_targets: Annotated[
-        bool,
-        typer.Option(
-            "-T",
-            "--load-targets",
-            help="Load targets from project targets/ folder and expand as matrix input.",
-        ),
-    ] = False,
 ):
     if dry_run:
         from ofx.commands.flow.info import show_info
@@ -362,7 +343,6 @@ def run(
     from ofx.commands import get_cli_env_vars, get_cli_project
     from ofx.commands.flow.run import FlowRunHandler
 
-    # Priority: command --project > global -p > active project
     if not project:
         project = get_cli_project()
     if not project:
@@ -391,10 +371,8 @@ def run(
             project=project,
             events=events,
             time_window=time_window,
-            load_targets=load_targets,
         ).run()
     )
-
 
 @app.command()
 def validate(
@@ -429,7 +407,6 @@ def validate(
         check_tasks=check_tasks,
     )
 
-
 @app.command()
 def lint(
     workflow_name: Annotated[
@@ -447,7 +424,6 @@ def lint(
     from ofx.commands.flow.lint import lint_workflows
 
     lint_workflows(all_workflows=all_workflows, workflow_name=workflow_name)
-
 
 @app.command()
 def init(
@@ -473,7 +449,6 @@ def init(
 
     FlowInitHandler().run(workflow_name=workflow_name, output=output, force=force)
 
-
 @app.command()
 def info(
     workflow_name: Annotated[
@@ -492,7 +467,6 @@ def info(
     from ofx.commands.flow.info import show_info
 
     show_info(workflow_name, detailed=detailed)
-
 
 @app.command("visualize")
 def visualize_cmd(
@@ -526,7 +500,6 @@ def visualize_cmd(
     from ofx.commands.flow.visualize import visualize
 
     visualize(workflow_name, format=format.value, output=output, detailed=detailed)
-
 
 @app.command()
 def history(
@@ -581,7 +554,6 @@ def history(
 
     show_history(limit=limit, workflow=workflow, status=status, verbose=verbose)
 
-
 @app.command()
 def tools(
     workflow_name: Annotated[
@@ -607,7 +579,6 @@ def tools(
             all_workflows=all_workflows,
         ).run()
     )
-
 
 @app.command()
 def search(
@@ -653,7 +624,6 @@ def search(
     from ofx.commands.flow.search_cmd import show_search
 
     show_search(query=query, filter_tags=filter_tags, show_tags=show_tags)
-
 
 @app.command("diff")
 def diff_cmd(

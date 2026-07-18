@@ -9,10 +9,6 @@ from ofx.models.step import Step
 from ofx.models.strategy import MatrixStrategy
 from ofx.models.workflow import Workflow
 
-
-# ---------------------------------------------------------------------------
-# 1. MatrixStrategy validation
-# ---------------------------------------------------------------------------
 class TestMatrixStrategyValidation:
     """Matrix key identifiers and field constraints."""
 
@@ -61,10 +57,6 @@ class TestMatrixStrategyValidation:
         ms = MatrixStrategy(matrix={"host": "{{ inputs.targets }}"})
         assert ms.matrix["host"] == "{{ inputs.targets }}"
 
-
-# ---------------------------------------------------------------------------
-# 2. Workflow validation edge cases
-# ---------------------------------------------------------------------------
 class TestWorkflowValidation:
     """Workflow-level model validation."""
 
@@ -189,10 +181,6 @@ jobs: {}
                 )
             )
 
-
-# ---------------------------------------------------------------------------
-# 3. Step validation
-# ---------------------------------------------------------------------------
 class TestStepValidation:
     """Step-level field constraints."""
 
@@ -232,10 +220,6 @@ class TestStepValidation:
         with pytest.raises(ValidationError):
             Step.model_validate({"run": "echo hi", "retry-delay": -1})
 
-
-# ---------------------------------------------------------------------------
-# 4. CloudConfig validation
-# ---------------------------------------------------------------------------
 class TestCloudConfigValidation:
     """CloudConfig defaults and normalization."""
 
@@ -272,4 +256,4 @@ class TestCloudConfigValidation:
     def test_extra_fields_allowed(self):
         """CloudConfig uses extra='allow' unlike other models."""
         cfg = CloudConfig(custom_field="value")
-        assert cfg.custom_field == "value"  # type: ignore[attr-defined]
+        assert cfg.custom_field == "value"

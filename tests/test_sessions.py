@@ -23,11 +23,6 @@ from ofx.cloud.sessions.script_builder import build_session_script
 from ofx.cloud.sessions.store import SessionStore
 from ofx.models.step import Step
 
-# ======================================================================
-# Session model tests
-# ======================================================================
-
-
 class TestSessionModel:
     def test_create_minimal(self):
         s = Session(id="aabbccdd", workflow_file="scan.yml")
@@ -85,12 +80,6 @@ class TestSessionModel:
         s = Session(id="test", workflow_file="w.yml", custom_field="hello")
         assert s.custom_field == "hello"
 
-
-# ======================================================================
-# Session store tests
-# ======================================================================
-
-
 class TestSessionStore:
     def test_save_and_load(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
@@ -145,7 +134,6 @@ class TestSessionStore:
         assert updated.status == SessionStatus.COMPLETED
         assert updated.project == "myproject"
         assert updated.error == "test error"
-        # Verify persistence
         reloaded = store.load("abc12345")
         assert reloaded.status == SessionStatus.COMPLETED
         assert reloaded.project == "myproject"
@@ -230,12 +218,6 @@ class TestSessionStore:
         store = SessionStore(base_dir=tmp_path / "sessions")
         d = store.session_dir("myid")
         assert d == tmp_path / "sessions" / "myid"
-
-
-# ======================================================================
-# Script builder tests
-# ======================================================================
-
 
 class TestScriptBuilder:
     def _make_step(self, **kwargs):
@@ -352,7 +334,7 @@ class TestScriptBuilder:
         assert "openssl enc" in script
         assert "output.enc" in script
         assert "shred" in script
-        assert "__TASK_OK__" in script  # marker still present after encryption block
+        assert "__TASK_OK__" in script
 
     def test_bash_encrypt_failure_is_fatal(self):
         """Encryption failure must abort the script, not leave data unencrypted."""
@@ -363,10 +345,8 @@ class TestScriptBuilder:
             work_dir="/tmp/test",
             encrypt_at_rest=True,
         )
-        # Encryption failure path must include __TASK_ERR__ and exit
         assert "FATAL" in script
         assert "__TASK_ERR__" in script
-        # Should NOT contain a WARNING-only fallback that continues
         assert "output left unencrypted" not in script
 
     def test_bash_no_encrypt_by_default(self):
@@ -406,12 +386,6 @@ class TestScriptBuilder:
         assert "FATAL" in script
         assert "__TASK_ERR__" in script
 
-
-# ======================================================================
-# Encryption tests
-# ======================================================================
-
-
 class TestEncryption:
     def test_derive_key_deterministic(self):
         salt = b"test_salt_123456"
@@ -429,26 +403,22 @@ class TestEncryption:
     def test_derive_key_random_salt(self):
         key1, salt1 = derive_key("same")
         key2, salt2 = derive_key("same")
-        assert salt1 != salt2  # Random salts differ
-        assert key1 != key2  # So keys differ
+        assert salt1 != salt2
+        assert key1 != key2
 
     def test_encrypt_decrypt_roundtrip(self, tmp_path):
-        # Create a results directory with some files
         results = tmp_path / "results"
         results.mkdir()
         (results / "output.txt").write_text("scan results here")
         (results / "nmap.xml").write_text("<nmap>data</nmap>")
 
-        # Encrypt
         enc_file = encrypt_results(results, "hunter2")
         assert enc_file.exists()
         assert enc_file.name == "results.enc"
         assert enc_file.stat().st_size > 0
 
-        # Decrypt
         out = tmp_path / "decrypted"
         decrypt_results(enc_file, "hunter2", out)
-        # tarball unpacks to "results/" inside output
         assert (out / "results" / "output.txt").exists()
         assert (out / "results" / "output.txt").read_text() == "scan results here"
         assert (out / "results" / "nmap.xml").read_text() == "<nmap>data</nmap>"
@@ -486,12 +456,6 @@ class TestEncryption:
         out = encrypt_results(results, "pass", output_file=custom)
         assert out == custom
         assert custom.exists()
-
-
-# ======================================================================
-# Session manager tests (local mode — no VPS needed)
-# ======================================================================
-
 
 class TestSessionManagerLocal:
     """Tests for local session submission and lifecycle.
@@ -564,12 +528,10 @@ class TestSessionManagerLocal:
         assert session.remote_pid is not None
         assert session.name == "test-local"
 
-        # At-rest encryption should be enabled
         assert session.at_rest_key
-        assert len(session.at_rest_key) == 64  # 32 bytes hex
+        assert len(session.at_rest_key) == 64
         assert session.at_rest_encrypted
 
-        # Should be persisted
         loaded = store.load(session.id)
         assert loaded.id == session.id
         assert loaded.at_rest_key == session.at_rest_key
@@ -581,7 +543,6 @@ class TestSessionManagerLocal:
 
         session = asyncio.run(mgr.submit(str(wf_path), target=SessionTarget.LOCAL))
 
-        # Wait for the process to finish
         import time
 
         for _ in range(50):
@@ -591,11 +552,9 @@ class TestSessionManagerLocal:
             except ProcessLookupError:
                 break
 
-        # Check status
         session = asyncio.run(mgr.status(session.id))
         assert session.status == SessionStatus.COMPLETED
 
-        # At-rest encryption: output.enc should exist, output/ should be removed
         work = Path(session.remote_work_dir)
         assert (work / "output.enc").exists(), (
             "output.enc missing — at-rest encryption failed"
@@ -603,9 +562,7 @@ class TestSessionManagerLocal:
         assert not (work / "output").exists(), (
             "output/ dir should be removed after encryption"
         )
-        # Key file should have been shredded
         assert not (work / ".skey").exists(), "key file should be shredded"
-        # Bundled python step artifact should exist for script step in local workspace
 
     def test_submit_local_runs_full_workflow_by_default(self, tmp_path):
         wf_path = self._create_multi_job_workflow(tmp_path)
@@ -807,13 +764,10 @@ class TestSessionManagerLocal:
         results_path = asyncio.run(mgr.fetch(session.id))
         assert results_path.exists()
 
-        # The at-rest encryption should have been transparently decrypted
-        # and result.txt from "echo result data > output/result.txt" should be there
         assert (results_path / "result.txt").exists(), (
             f"result.txt missing; contents: {list(results_path.iterdir())}"
         )
 
-        # Fetched status
         session = store.load(session.id)
         assert session.status == SessionStatus.FETCHED
 
@@ -859,20 +813,17 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.submit(str(wf), target=SessionTarget.LOCAL))
         assert session.remote_pid is not None
 
-        # Cancel
         import time
 
-        time.sleep(0.2)  # Let it start
+        time.sleep(0.2)
         session = asyncio.run(mgr.cancel(session.id))
         assert session.status == SessionStatus.CANCELED
 
-        # PID should be dead
         time.sleep(0.2)
         try:
             os.kill(session.remote_pid, 0)
-            # Process still alive — that's ok, SIGTERM may take a moment
         except ProcessLookupError:
-            pass  # Expected
+            pass
 
     def test_destroy_local_cleans_workspace(self, tmp_path):
         wf_path = self._create_test_workflow(tmp_path)
@@ -1045,14 +996,11 @@ class TestSessionManagerLocal:
         with pytest.raises(RuntimeError, match="still running"):
             asyncio.run(mgr.fetch(session.id))
 
-        # Cleanup
         asyncio.run(mgr.cancel(session.id))
-
 
 class TestSessionManagerDecrypt:
     def test_decrypt_after_encrypted_fetch(self, tmp_path):
         store = SessionStore(base_dir=tmp_path / "sessions")
-        # Manually create a session with encrypted results
         session_dir = tmp_path / "sessions" / "testid"
         results_dir = session_dir / "results"
         results_dir.mkdir(parents=True)
@@ -1074,14 +1022,7 @@ class TestSessionManagerDecrypt:
         mgr = SessionManager(store=store)
         out = asyncio.run(mgr.decrypt("testid", "mypass"))
         assert out.exists()
-        # Check the decrypted content is available
         assert (out / "results" / "data.txt").exists()
-
-
-# ======================================================================
-# Session input injection tests
-# ======================================================================
-
 
 class TestSessionInputInjection:
     """Tests for session input → env var injection and local file staging."""
@@ -1144,10 +1085,8 @@ class TestSessionInputInjection:
             )
 
             work_dir = Path(session.remote_work_dir)
-            # File should be staged in workspace
             staged = work_dir / targets.name
             assert staged.exists()
-            # Env var should point to staged path
             script = (work_dir / "run.sh").read_text()
             assert str(staged) in script
 
@@ -1242,7 +1181,6 @@ class TestSessionInputInjection:
                     workflow_dir=None,
                     workflow_name="wf-name",
                 )
-
 
 class TestSessionSubmitHelpers:
     def test_resolved_cloud_submit_state_normalizes_connection_defaults(self):
@@ -1674,7 +1612,6 @@ class TestSessionSubmitHelpers:
         assert calls[2][1]["target"] is target
         assert calls[2][1]["runtime"] is runtime
 
-
 class TestCloudCancelTmux:
     @pytest.mark.asyncio
     async def test_cancel_cloud_tmux_uses_kill_session(self, tmp_path):
@@ -1805,7 +1742,6 @@ class TestCloudAutoDestroyAfterFetch:
         assert out.instance_id == "i-keep"
         assert out.instance_ip == "10.0.0.7"
 
-
 class TestCloudDestroy:
     @pytest.mark.asyncio
     async def test_destroy_cloud_non_static_marks_destroyed(self, tmp_path):
@@ -1850,7 +1786,6 @@ class TestCloudDestroy:
         assert out.status == SessionStatus.DESTROYED
         assert out.instance_id == "i-123"
         assert out.instance_ip == "10.0.0.5"
-
 
 class TestCloudFetchMaterialization:
     @pytest.mark.asyncio
@@ -1965,7 +1900,6 @@ class TestCloudFetchMaterialization:
         assert (results / "two.txt").read_text() == "two.txt"
         assert (results / "output.log").read_text() == "output.log"
 
-
 class TestCloudLogs:
     @pytest.mark.asyncio
     async def test_logs_cloud_returns_remote_tail_output(self, tmp_path):
@@ -2049,12 +1983,6 @@ class TestCloudLogs:
 
         assert output == "(cannot read log)"
 
-
-# ======================================================================
-# Helper
-# ======================================================================
-
-
 def _make_manager(store: SessionStore, search_dir: Path):
     """Create a SessionManager with patched workflow search dirs.
 
@@ -2064,16 +1992,12 @@ def _make_manager(store: SessionStore, search_dir: Path):
     from ofx.cloud.sessions import SessionManager
 
     mgr = SessionManager(store=store)
-    # Prepend search_dir so find_workflow looks in tmp_path, but keep a
-    # clean snapshot of the default list to avoid mutation leak.
     import ofx.settings as settings_mod
 
     settings_mod.DEFAULT_WORKFLOWS_DIRS = [search_dir, *_ORIGINAL_WORKFLOW_DIRS]
     return mgr
 
-
 _ORIGINAL_WORKFLOW_DIRS: list[Path] = list(_settings_mod.DEFAULT_WORKFLOWS_DIRS)
-
 
 class TestSessionWinRMFields:
     """Tests that Session model stores and rounds-trips WinRM connection fields."""
@@ -2123,7 +2047,6 @@ class TestSessionWinRMFields:
         assert s2.winrm_port == 5986
         assert s2.winrm_ssl is True
         assert s2.winrm_user == "svcacct"
-
 
 class TestCheckCloudStatusNoPid:
     """Tests for _check_cloud_status when remote_pid is None."""
@@ -2266,7 +2189,6 @@ class TestCheckCloudStatusNoPid:
 
         assert result.status == SessionStatus.COMPLETED
         assert seen == ["tail -5 '/tmp/work dir/output.log' 2>/dev/null"]
-
 
 class TestCloudStatusBackoff:
     """Tests for exponential backoff and circuit breaker in _check_cloud_status."""
@@ -2426,7 +2348,6 @@ class TestCloudStatusBackoff:
         restored = Session.model_validate(dumped)
         assert restored.remote_tmux_session == "ofx-ses-tmux1234"
         assert restored.remote_launcher == "tmux"
-
 
 class TestSessionManagerScriptBundling:
     def _make_step(self, **kwargs) -> Step:

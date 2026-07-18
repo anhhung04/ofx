@@ -14,14 +14,12 @@ from ofx.settings import settings
 logger = logging.getLogger(settings.app_branding)
 _MEMORY_POLL_INTERVAL = 5
 
-
 @dataclass
 class ExecutionResult:
     """Aggregated results from all workflow stages."""
 
     failed_job_ids: list[str] = field(default_factory=list)
     failed_stage_indices: list[int] = field(default_factory=list)
-
 
 class WorkflowExecutionManager:
     """Executes workflow stages and aggregates errors."""
@@ -139,6 +137,5 @@ class WorkflowExecutionManager:
                 task.cancel()
             await asyncio.gather(*task_map, return_exceptions=True)
             raise
-
 
 __all__ = ["ExecutionResult", "WorkflowExecutionManager"]

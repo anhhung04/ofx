@@ -19,7 +19,6 @@ logger = logging.getLogger("ofx")
 CollectionManager = None
 find_workflow = None
 
-
 @dataclass
 class ValidationResult:
     path: Path
@@ -34,7 +33,6 @@ class ValidationResult:
     warnings: list[str] = field(default_factory=list)
     task_refs: list[str] = field(default_factory=list)
     unknown_tasks: list[str] = field(default_factory=list)
-
 
 def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
     """Validate a single workflow file and return diagnostics."""
@@ -58,7 +56,6 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
     result.has_call = workflow.call is not None
     result.tags = list(workflow.tags)
 
-    # Check for common issues
     for jid, job in workflow.jobs.items():
         needs = (
             job.needs
@@ -86,7 +83,6 @@ def _validate_one(path: Path, check_tasks: bool) -> ValidationResult:
     if not result.has_dispatch and not result.has_call:
         result.warnings.append("No dispatch or call trigger defined")
 
-    # Check task references against registry
     if check_tasks and result.task_refs:
         from ofx.tasks.registry import TaskRegistry
 
@@ -136,6 +132,9 @@ def validate_workflows(
         for directory in dirs:
             for ext in ALLOWED_WORKFLOW_FILE_EXTENSIONS:
                 for path in sorted(directory.rglob(f"*{ext}")):
+                    # Skip collection manifest files (they lack a `jobs` section)
+                    if path.name in ("collection.yaml", "collection.yml"):
+                        continue
                     resolved = str(path.resolve())
                     if resolved not in seen:
                         seen.add(resolved)
@@ -206,7 +205,6 @@ def validate_workflows(
         wf = workflow_finder(workflow_name, tuple(DEFAULT_WORKFLOWS_DIRS))
         path = wf.workflow_path
     except RuntimeError:
-        # Recursive fallback
         for d in DEFAULT_WORKFLOWS_DIRS:
             if not d.is_dir():
                 continue

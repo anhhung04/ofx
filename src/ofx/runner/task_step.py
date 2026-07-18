@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from urllib.parse import urlparse
 
-
 def extract_task_target_and_opts(
     run_with: Mapping[str, object],
 ) -> tuple[str, dict[str, object]]:
@@ -24,7 +23,6 @@ def extract_task_target_and_opts(
         target = str(raw_target)
     return target, task_opts
 
-
 def extract_output_item_target(item: Mapping[str, Any]) -> str:
     """Return the best target label from a typed-output item."""
     for key in ("domain", "host", "ip"):
@@ -39,7 +37,6 @@ def extract_output_item_target(item: Mapping[str, Any]) -> str:
         except Exception:
             return ""
     return ""
-
 
 __all__ = [
     "extract_output_item_target",

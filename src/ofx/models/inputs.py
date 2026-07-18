@@ -7,7 +7,6 @@ from pydantic import Field, model_validator
 
 from ofx.models.base import OFXBaseModel
 
-
 class WorkflowInput(OFXBaseModel):
     """Input parameter definition for workflows."""
 
@@ -45,7 +44,6 @@ class WorkflowInput(OFXBaseModel):
             else:
                 raise ValueError("Alias must be a string or a list of strings.")
         return self
-
 
 class WorkflowSecret(OFXBaseModel):
     """Secret parameter definition for workflows."""

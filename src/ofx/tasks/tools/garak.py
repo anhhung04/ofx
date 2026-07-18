@@ -19,7 +19,6 @@ _PASS_RE = re.compile(
     re.IGNORECASE,
 )
 
-
 @TaskRegistry.register("garak")
 class GarakTask(Task):
     name = "garak"
@@ -87,7 +86,6 @@ class GarakTask(Task):
             if not line:
                 continue
 
-            # Try JSONL report lines first
             if line.startswith("{"):
                 data = self._parse_json_line(line)
                 if data is not None:
@@ -115,7 +113,6 @@ class GarakTask(Task):
                         )
                     continue
 
-            # Fall back to text summary parsing
             m_fail = _FAIL_RE.search(line)
             if m_fail:
                 results.append(

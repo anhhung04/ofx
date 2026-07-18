@@ -11,7 +11,6 @@ __all__ = [
     "secure_delete_command",
 ]
 
-
 def clean_history_commands() -> list[str]:
     """Return shell commands that wipe common Linux shell history artefacts."""
     return [
@@ -23,7 +22,6 @@ def clean_history_commands() -> list[str]:
         "cat /dev/null > ~/.zsh_history",
         "ln -sf /dev/null ~/.bash_history",
     ]
-
 
 def clean_linux_logs(*, aggressive: bool = False) -> list[str]:
     """Return commands to clear common Linux log artefacts.
@@ -48,7 +46,6 @@ def clean_linux_logs(*, aggressive: bool = False) -> list[str]:
         ]
     return cmds
 
-
 def clean_windows_artifacts() -> list[str]:
     """Return PowerShell/cmd snippets that remove common Windows forensic artefacts."""
     return [
@@ -62,16 +59,13 @@ def clean_windows_artifacts() -> list[str]:
         "[System.Diagnostics.Eventing.Reader.EventLogSession]::GlobalSession.ClearLog('Security')",
     ]
 
-
 def timestomp_command(target: str, reference: str) -> str:
     """Return a ``touch`` command that clones timestamps from *reference* onto *target*."""
     return f"touch -r '{reference}' '{target}'"
 
-
 def remove_ssh_known_host(hostname: str) -> str:
     """Return a command to remove *hostname* from ``~/.ssh/known_hosts``."""
     return f"ssh-keygen -R '{hostname}' 2>/dev/null; true"
-
 
 def secure_delete_command(
     path: str,

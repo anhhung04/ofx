@@ -29,7 +29,6 @@ from .windows import (
 )
 
 __all__ = [
-    # linux
     "suid_commands",
     "capabilities_command",
     "sudo_check_command",
@@ -41,7 +40,6 @@ __all__ = [
     "path_hijack_check_commands",
     "writable_passwd_command",
     "kernel_exploit_check_command",
-    # windows
     "uac_bypass_commands",
     "token_privileges_commands",
     "unquoted_service_path_command",

@@ -2,9 +2,6 @@
 
 import pytest
 
-# ── Template Helpers ──────────────────────────────────────────────────────
-
-
 class TestTemplateHelpers:
     """Verify template helper functions filter typed_output dicts correctly."""
 
@@ -102,10 +99,6 @@ class TestTemplateHelpers:
         ):
             assert name in funcs, f"Helper '{name}' not in support functions"
 
-
-# ── Template Helper: users() ───────────────────────────────────────────
-
-
 class TestUsersTemplateHelper:
     def test_users_filter(self):
         from ofx.runner.templates.resolver import TemplateResolver
@@ -123,10 +116,6 @@ class TestUsersTemplateHelper:
         assert len(result) == 2
         assert result[0]["username"] == "admin"
         assert result[1]["username"] == "guest"
-
-
-# ── Template Helpers: certs() and exploits() ───────────────────────────
-
 
 class TestCertsTemplateHelper:
     def test_certs_filter(self):
@@ -162,7 +151,6 @@ class TestCertsTemplateHelper:
         assert funcs["certs"]([]) == []
         assert funcs["certs"]([{"_type": "port", "port": 80}]) == []
 
-
 class TestExploitsTemplateHelper:
     def test_exploits_filter(self):
         from ofx.runner.templates.resolver import TemplateResolver
@@ -188,10 +176,6 @@ class TestExploitsTemplateHelper:
         funcs = resolver.get_support_functions()
         assert funcs["exploits"]([]) == []
         assert funcs["exploits"]([{"_type": "url", "url": "http://x.com"}]) == []
-
-
-# ── Profile System ─────────────────────────────────────────────────────
-
 
 class TestProfiles:
     def test_profile_model_defaults(self):
@@ -297,10 +281,6 @@ class TestProfiles:
         assert "standard" in p.retry_profiles
         assert p.retry_profiles["standard"]["retry_delay"] == 5
 
-
-# ── Time Window Enforcement ────────────────────────────────────────────
-
-
 class TestTimeWindow:
     def test_disabled_window_always_allowed(self):
         from ofx.profiles.models import TimeWindow
@@ -316,8 +296,6 @@ class TestTimeWindow:
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        # Build a window around the current UTC time (check_time_window
-        # defaults to UTC) so the assertion is timezone-independent.
         now = datetime.now(UTC)
         start = f"{max(0, now.hour - 1):02d}:00"
         end = f"{min(23, now.hour + 1):02d}:59"
@@ -331,7 +309,6 @@ class TestTimeWindow:
         from ofx.profiles.models import TimeWindow
         from ofx.profiles.time_window import check_time_window
 
-        # No valid days
         tw = TimeWindow(enabled=True, start="00:00", end="23:59", days=[])
         result = check_time_window(tw)
         assert result["allowed"] is False
@@ -344,7 +321,6 @@ class TestTimeWindow:
         from ofx.profiles.time_window import check_time_window
 
         now = datetime.now(UTC)
-        # Set window to an hour that's definitely not now
         if now.hour < 12:
             start, end = "18:00", "19:00"
         else:
@@ -372,7 +348,6 @@ class TestTimeWindow:
 
         from ofx.profiles.time_window import _time_in_range
 
-        # Overnight window: 22:00 → 06:00
         assert _time_in_range(time(22, 0), time(6, 0), time(23, 0)) is True
         assert _time_in_range(time(22, 0), time(6, 0), time(3, 0)) is True
         assert _time_in_range(time(22, 0), time(6, 0), time(12, 0)) is False
@@ -394,7 +369,6 @@ class TestTimeWindow:
 
         now = datetime.now(UTC)
         day = now.strftime("%A").lower()
-        # Window that ends in 5 minutes
         end_min = (now.minute + 5) % 60
         end_hour = now.hour + ((now.minute + 5) // 60)
         if end_hour > 23:
@@ -412,10 +386,6 @@ class TestTimeWindow:
         if result["allowed"] and 0 < result["remaining_minutes"] <= 10:
             assert "remaining" in result["message"]
 
-
-# ── DefaultConfig Profile Field ────────────────────────────────────────
-
-
 class TestDefaultConfigProfile:
     def test_default_config_has_profile_field(self):
         from ofx.models.config import DefaultConfig
@@ -428,10 +398,6 @@ class TestDefaultConfigProfile:
 
         dc = DefaultConfig(profile="stealth")
         assert dc.profile == "stealth"
-
-
-# ── Profile Task Options ──────────────────────────────────────────────
-
 
 class TestProfileTaskOptions:
     """Verify profile task_options are applied to TaskRunner."""
@@ -446,14 +412,12 @@ class TestProfileTaskOptions:
         model = TaskExecution(
             task_name="httpx",
             target="example.com",
-            opts={"threads": 10},  # user override
+            opts={"threads": 10},
         )
         runner = TaskRunner(model, ctx)
         runner._apply_profile_task_options()
 
-        # User's threads=10 should win over profile's threads=5
         assert runner.model.opts["threads"] == 10
-        # Profile's rate_limit=20 should be applied (no user override)
         assert runner.model.opts["rate_limit"] == 20
 
     def test_no_profile_does_nothing(self):
@@ -496,7 +460,6 @@ class TestProfileTaskOptions:
             user_agent="StealthBot/2.0",
         )
         ctx = RunContext(vars={"profile_model": profile})
-        # feroxbuster has proxy, threads, rate_limit, user_agent opts
         model = TaskExecution(
             task_name="feroxbuster",
             target="http://example.com",
@@ -523,31 +486,25 @@ class TestProfileTaskOptions:
         model = TaskExecution(
             task_name="httpx",
             target="example.com",
-            opts={"threads": 20},  # explicit user value
+            opts={"threads": 20},
         )
         runner = TaskRunner(model, ctx)
         runner._task = TaskRegistry.get("httpx")()
         runner._apply_profile_task_options()
 
-        assert runner.model.opts["threads"] == 20  # user wins
-        assert runner.model.opts.get("rate_limit") == 50  # profile fills gap
+        assert runner.model.opts["threads"] == 20
+        assert runner.model.opts.get("rate_limit") == 50
 
     def test_dict_at_profile_key_does_not_crash(self):
         """Regression: the old 'profile' key holds a dict — must not crash."""
         from ofx.runner.context import RunContext
         from ofx.runner.tasks.runner import TaskExecution, TaskRunner
 
-        # Simulate real runtime: 'profile' is dict, 'profile_model' missing
         ctx = RunContext(vars={"profile": {"proxy": "http://x", "threads": 2}})
         model = TaskExecution(task_name="httpx", target="example.com", opts={})
         runner = TaskRunner(model, ctx)
         runner._apply_profile_task_options()
-        # No profile_model → no injection, no crash
         assert runner.model.opts == {}
-
-
-# ── Cloud Task Profile Integration ─────────────────────────────────────
-
 
 class TestCloudTaskProfileIntegration:
     """Verify profile settings are applied to cloud task commands."""
@@ -567,7 +524,6 @@ class TestCloudTaskProfileIntegration:
             run_with={"target": "http://example.com"},
         )
         cmd = build_task_command_from_step(step, profile=profile)
-        # feroxbuster uses -p for proxy and -t for threads
         assert "socks5://127.0.0.1:9050" in cmd
         assert "-t 3" in cmd
 
@@ -613,10 +569,6 @@ class TestCloudTaskProfileIntegration:
         cmd = build_task_command_from_step(step, profile=profile)
         assert "-rate-limit 20" in cmd
 
-
-# ── Step Retry Profile Defaults ────────────────────────────────────────
-
-
 class TestStepRetryProfileDefaults:
     """Verify max_retries and timeout_minutes fallbacks in step_mixin."""
 
@@ -636,7 +588,6 @@ class TestStepRetryProfileDefaults:
         )
         step = self._make_step()
 
-        # Create a minimal mock that has the interface StepRunnerMixin expects
         class FakeRunner(StepRunnerMixin):
             def __init__(self):
                 self.model = step
@@ -672,7 +623,7 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.retry == 5  # top-level knob wins
+        assert runner.model.retry == 5
 
     def test_default_max_retries_uses_policy(self):
         """Default max_retries=3 does NOT override policy.retry."""
@@ -680,7 +631,6 @@ class TestStepRetryProfileDefaults:
         from ofx.runner.step_mixin import StepRunnerMixin
 
         profile = OFXProfile(
-            # max_retries=3 (default)
             retry_profiles={"standard": {"retry": 2, "retry_delay": 10}},
         )
         step = self._make_step()
@@ -696,7 +646,7 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.retry == 2  # policy wins when max_retries is default
+        assert runner.model.retry == 2
 
     def test_timeout_minutes_fallback(self):
         """profile.timeout_minutes is used when policy has no timeout."""
@@ -727,8 +677,6 @@ class TestStepRetryProfileDefaults:
         from ofx.profiles.models import OFXProfile
         from ofx.runner.step_mixin import StepRunnerMixin
 
-        # User sets timeout_minutes=15 but uses default retry_profiles
-        # which has standard.timeout=1440
         profile = OFXProfile(timeout_minutes=15)
         step = self._make_step()
 
@@ -743,14 +691,13 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.timeout == 15  # top-level knob wins
+        assert runner.model.timeout == 15
 
     def test_default_timeout_minutes_uses_policy(self):
         """Default timeout_minutes=60 does NOT override policy.timeout."""
         from ofx.profiles.models import OFXProfile
         from ofx.runner.step_mixin import StepRunnerMixin
 
-        # Default profile with stealth policy (timeout=180)
         profile = OFXProfile(retry_policy="stealth")
         step = self._make_step()
 
@@ -767,7 +714,7 @@ class TestStepRetryProfileDefaults:
         runner._apply_retry_profile_defaults()
         assert (
             runner.model.timeout == 180
-        )  # policy wins when timeout_minutes is default
+        )
 
     def test_explicit_step_timeout_overridden_by_profile(self):
         """Profile timeout_minutes overrides even explicit step timeout."""
@@ -791,7 +738,7 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.timeout == 30  # profile wins
+        assert runner.model.timeout == 30
 
     def test_explicit_step_retry_overridden_by_profile(self):
         """Profile max_retries overrides even explicit step retry."""
@@ -812,7 +759,7 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.retry == 1  # profile wins
+        assert runner.model.retry == 1
 
     def test_policy_retry_delay_overrides_step(self):
         """Profile retry_delay from policy overrides step value."""
@@ -835,14 +782,13 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        assert runner.model.retry_delay == 30  # profile wins
+        assert runner.model.retry_delay == 30
 
     def test_step_values_kept_when_profile_is_default(self):
         """Default profile values do not override explicit step values."""
         from ofx.profiles.models import OFXProfile
         from ofx.runner.step_mixin import StepRunnerMixin
 
-        # All defaults — timeout_minutes=60, max_retries=3
         profile = OFXProfile()
         step = self._make_step(timeout=120, retry=5)
 
@@ -857,7 +803,5 @@ class TestStepRetryProfileDefaults:
 
         runner = FakeRunner()
         runner._apply_retry_profile_defaults()
-        # Default policy has timeout=1440 → overrides step's 120
         assert runner.model.timeout == 1440
-        # Default policy has retry=0 → zero doesn't override step's 5
         assert runner.model.retry == 5

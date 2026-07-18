@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("responder")
 class ResponderTask(Task):
     name = "responder"
@@ -45,7 +44,6 @@ class ResponderTask(Task):
         """Build: ``responder -I eth0 [options]``."""
         parts: list[str] = [self.cmd]
 
-        # Target is typically the interface
         interface = kwargs.pop("interface", target)
         parts.extend(["-I", self._q(interface)])
 
@@ -53,9 +51,6 @@ class ResponderTask(Task):
 
         return " ".join(parts), None
 
-    # [SMB] NTLMv2-SSP Client   : 10.0.0.5
-    # [SMB] NTLMv2-SSP Username : DOMAIN\user
-    # [SMB] NTLMv2-SSP Hash     : user::DOMAIN:hash...
     _HASH_RE = re.compile(
         r"^\[(?:SMB|HTTP|LDAP|MSSQL|FTP)\]\s+NTLMv[12]-SSP\s+Hash\s*:\s*(.+)",
         re.IGNORECASE,
@@ -87,7 +82,6 @@ class ResponderTask(Task):
             m = self._HASH_RE.match(line)
             if m:
                 hash_line = m.group(1).strip()
-                # Parse: user::DOMAIN:challenge:response:blob
                 parts = hash_line.split(":")
                 if len(parts) >= 3:
                     username = parts[0]

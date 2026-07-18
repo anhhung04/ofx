@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 
 __all__ = ["PostWebShell"]
 
-
 @RunnerRegistry.register("webshell")
 class PostWebShell(PostRunnerBase):
     """Post-exploitation runner bound to a WebShellClient.
@@ -33,7 +32,7 @@ class PostWebShell(PostRunnerBase):
     def __init__(self, client: WebShellClient):
         self.client = client
 
-    def run(self, command: str, timeout: int | None = None) -> str:  # noqa: ARG002
+    def run(self, command: str, timeout: int | None = None) -> str:
         """Execute a command via the webshell.
 
         Args:
@@ -70,6 +69,4 @@ class PostWebShell(PostRunnerBase):
         """Start an interactive shell session via the webshell."""
         self.client.interactive_shell(**kwargs)
 
-
-# Backward compatibility alias
 PostRemote = PostWebShell

@@ -49,7 +49,6 @@ def _write_chunk_files(chunks: list[list[str]]) -> tuple[Path, list[Path]]:
         raise
     return output_dir, chunk_files
 
-
 class FleetDistributor:
     """Distributes targets across fleet instances.
 
@@ -62,7 +61,6 @@ class FleetDistributor:
     Example:
         distributor = FleetDistributor()
         chunks = distributor.distribute(targets, count=10, mode="chunk")
-        # chunks[0] = ["10.0.0.1", "10.0.0.2", ...] for instance 0
     """
 
     def distribute(
@@ -174,7 +172,6 @@ class FleetDistributor:
 
         return buckets
 
-
 def expand_fleet_to_matrix(
     fleet_config: dict[str, Any],
     expand_cidrs: bool = True,
@@ -210,7 +207,6 @@ def expand_fleet_to_matrix(
     parser = FleetInputParser(expand_cidrs=expand_cidrs, exclude=exclude_list)
     distributor = FleetDistributor()
 
-    # Parse targets
     targets = parser.parse(input_data) if input_data else []
 
     if not targets:
@@ -220,10 +216,8 @@ def expand_fleet_to_matrix(
             f"or file paths (got input={input_data!r})."
         )
 
-    # Distribute once, then write chunk files from the result
     chunks = distributor.distribute(targets, count, distribution, min_prefix)
 
-    # Empty result means count=0 — skip temp dir creation entirely
     if not chunks:
         raise ValueError(
             f"Fleet: distribution produced no chunks (count={count}). "

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 __all__ = ["detect_os"]
 
-
 def detect_os(uname_output: str) -> str:
     """Detect OS family from uname output.
 

@@ -87,14 +87,12 @@ _SEVERITY_STYLES = {
 
 _STATUS_CODE_STYLES = {2: "green", 3: "yellow", 4: "red", 5: "bold red"}
 
-
 def _summary_label(key: str, value: int) -> str:
     if value == 1:
         return key
     if key.endswith("s"):
         return key + "es"
     return key + "s"
-
 
 def _display_output_value(value: Any) -> str:
     if value is None or value == "" or value == 0:
@@ -107,14 +105,12 @@ def _display_output_value(value: Any) -> str:
         return "✓" if value else ""
     return str(value)
 
-
 def _contextual_cell_style(field: str, value: Any, default_style: str) -> str:
     if field == "severity":
         return _SEVERITY_STYLES.get(str(value or "").lower(), default_style)
     if field == "status_code" and isinstance(value, int) and value > 0:
         return _STATUS_CODE_STYLES.get(value // 100, default_style)
     return default_style
-
 
 def format_typed_outputs(
     typed_outputs: list[dict[str, Any]],
@@ -212,6 +208,5 @@ def format_typed_outputs(
         padding=(0, 1),
     )
     console.print(panel)
-
 
 __all__ = ["format_typed_outputs"]

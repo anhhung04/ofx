@@ -12,14 +12,12 @@ from ofx.runner.registry import (
     RegistryAdapter,
 )
 
-
 @pytest.fixture
 async def memory_registry():
     """Fixture for memory-based registry"""
     registry = MemoryJobRegistry()
     yield registry
     await cleanup_registry(registry)
-
 
 @pytest.fixture
 async def file_registry():
@@ -31,13 +29,11 @@ async def file_registry():
     yield registry
     await cleanup_registry(registry)
 
-    # Clean up test file
     if filepath.exists():
         filepath.unlink()
     lockfile = filepath.with_suffix(".lock")
     if lockfile.exists():
         lockfile.unlink()
-
 
 @pytest.mark.asyncio
 class TestMemoryJobRegistry:
@@ -113,7 +109,6 @@ class TestMemoryJobRegistry:
         all_jobs = await memory_registry.get_all()
         assert len(all_jobs) == 0
 
-
 @pytest.mark.asyncio
 class TestFileJobRegistry:
     """Test suite for FileJobRegistry"""
@@ -132,12 +127,10 @@ class TestFileJobRegistry:
             filepath = Path(f.name)
 
         try:
-            # First registry instance
             registry1 = FileRegistry(filepath=filepath)
             await registry1.set("job1", {"name": "persistent-job"})
             await cleanup_registry(registry1)
 
-            # Second registry instance
             registry2 = FileRegistry(filepath=filepath)
             result = await registry2.get("job1")
             assert result["name"] == "persistent-job"
@@ -173,7 +166,6 @@ class TestFileJobRegistry:
         assert len(all_jobs) == 2
         assert all_jobs["job1"] == job1
         assert all_jobs["job2"] == job2
-
 
 @pytest.mark.asyncio
 class TestRegistryFactory:
@@ -217,7 +209,6 @@ class TestRegistryFactory:
         with pytest.raises(ValueError, match="Unsupported registry backend"):
             RegistryFactory.create("invalid_backend")
 
-
 @pytest.mark.asyncio
 class TestAdapterContract:
     """Test that all adapters follow the same contract"""
@@ -236,7 +227,6 @@ class TestAdapterContract:
 
         await cleanup_registry(reg)
 
-        # Clean up file registry artifacts
         if request.param == "file":
             if filepath.exists():
                 filepath.unlink()
@@ -246,7 +236,6 @@ class TestAdapterContract:
 
     async def test_adapter_interface(self, registry):
         """Test that all adapters implement the full interface"""
-        # Test basic operations
         await registry.set("job1", {"status": "running"})
         assert await registry.exists("job1")
 

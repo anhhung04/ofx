@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-
 @dataclass
 class CloudInstanceInfo:
     """Runtime information about a cloud VPS instance."""
@@ -26,7 +25,6 @@ class CloudInstanceInfo:
     def is_ready(self) -> bool:
         return self.status in ("active", "running")
 
-
 @dataclass
 class SnapshotInfo:
     """Information about a cloud snapshot/AMI."""
@@ -39,7 +37,6 @@ class SnapshotInfo:
     status: str = ""
     created_at: datetime | None = None
     metadata: dict = field(default_factory=dict)
-
 
 @dataclass
 class FleetInfo:

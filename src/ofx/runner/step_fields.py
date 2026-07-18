@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from ofx.models.step import RunType
 
-
 BASE_STEP_TEMPLATE_FIELDS: tuple[str, ...] = (
     "name",
     "shell",
@@ -15,7 +14,6 @@ BASE_STEP_TEMPLATE_FIELDS: tuple[str, ...] = (
     "run_if",
 )
 
-
 RUN_TYPE_TEMPLATE_FIELDS: dict[RunType, list[str]] = {
     RunType.WORKFLOW: ["uses"],
     RunType.SCRIPT: ["script"],
@@ -24,6 +22,5 @@ RUN_TYPE_TEMPLATE_FIELDS: dict[RunType, list[str]] = {
     RunType.TASK: ["task", "run_with"],
     RunType.PIPE: [],
 }
-
 
 __all__ = ["BASE_STEP_TEMPLATE_FIELDS", "RUN_TYPE_TEMPLATE_FIELDS"]

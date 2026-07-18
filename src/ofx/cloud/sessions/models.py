@@ -10,7 +10,6 @@ from pydantic import Field
 
 from ofx.models.base import OFXBaseModel
 
-
 class SessionStatus(str, Enum):
     """Lifecycle states for a detached session."""
 
@@ -25,32 +24,27 @@ class SessionStatus(str, Enum):
     DESTROYED = "destroyed"
     UNREACHABLE = "unreachable"
 
-
 class SessionTarget(str, Enum):
     """Where the session executes."""
 
     LOCAL = "local"
     CLOUD = "cloud"
 
-
 class Session(OFXBaseModel):
     """Persistent session metadata for a detached workflow run."""
 
     model_config = {**OFXBaseModel.model_config, "extra": "allow"}
 
-    # Identity
     id: str = Field(..., description="Short session identifier (8-char hex)")
     name: str = Field(default="", description="User-provided session name or tag")
     project: str = Field(default="", description="Project name this session belongs to")
 
-    # What to run
     workflow_file: str = Field(..., description="Workflow path or name")
     job_id: str = Field(
         default="",
         description="Specific job ID override (empty = full workflow session)",
     )
 
-    # Execution target
     target: SessionTarget = Field(
         default=SessionTarget.LOCAL,
         description="Where to run: local or cloud",
@@ -60,7 +54,6 @@ class Session(OFXBaseModel):
         description="Current session lifecycle state",
     )
 
-    # Cloud fields (empty for local)
     cloud_profile: str = Field(default="", description="Cloud profile name")
     cloud_provider: str = Field(default="", description="Provider name")
     instance_id: str = Field(default="", description="Cloud instance ID")
@@ -70,7 +63,6 @@ class Session(OFXBaseModel):
         description="Whether to auto-destroy non-static cloud instances after fetch",
     )
 
-    # Process tracking
     remote_pid: int | None = Field(
         default=None, description="PID of the detached process"
     )
@@ -89,7 +81,6 @@ class Session(OFXBaseModel):
         description="Detached launcher backend (e.g., nohup, tmux, start-process)",
     )
 
-    # Timestamps
     started_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="When the session was submitted",
@@ -98,13 +89,11 @@ class Session(OFXBaseModel):
         default=None, description="When the session completed/failed"
     )
 
-    # Local paths
     output_path: str = Field(default="", description="Local directory for session data")
     results_path: str = Field(
         default="", description="Local directory where fetched results live"
     )
 
-    # At-rest encryption (transparent — key stored locally in session metadata)
     at_rest_key: str = Field(
         default="",
         description="Random AES key for at-rest encryption on VPS/local (hex-encoded)",
@@ -114,13 +103,11 @@ class Session(OFXBaseModel):
         description="Whether output on the remote/local target is encrypted at rest",
     )
 
-    # User-requested encryption (passphrase-based, applied at fetch time)
     encrypted: bool = Field(default=False, description="Whether results are encrypted")
     encrypted_file: str = Field(
         default="", description="Path to encrypted results archive"
     )
 
-    # Fleet grouping
     fleet_group_id: str = Field(
         default="",
         description="Groups sessions that belong to the same fleet run",
@@ -134,7 +121,6 @@ class Session(OFXBaseModel):
         description="Total number of sessions in the fleet group",
     )
 
-    # Inputs & metadata
     inputs: dict[str, Any] = Field(
         default_factory=dict, description="Workflow inputs passed at submit time"
     )
@@ -143,7 +129,6 @@ class Session(OFXBaseModel):
         default_factory=dict, description="Arbitrary key-value tags"
     )
 
-    # Connection details (for cloud reconnection)
     ssh_user: str = Field(default="root", description="SSH user for reconnection")
     ssh_port: int = Field(default=22, description="SSH port")
     ssh_key: str = Field(default="", description="SSH key path")

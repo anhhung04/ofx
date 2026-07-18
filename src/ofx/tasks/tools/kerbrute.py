@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("kerbrute")
 class KerbruteTask(Task):
     name = "kerbrute"
@@ -61,7 +60,6 @@ class KerbruteTask(Task):
 
         parts.extend(self._build_opt_parts(kwargs))
 
-        # Wordlist or target is positional
         if users:
             parts.append(self._q(users))
         elif target:
@@ -69,11 +67,9 @@ class KerbruteTask(Task):
 
         return " ".join(parts), None
 
-    # [+] VALID USERNAME:	 user@domain.local
     _VALID_USER_RE = re.compile(
         r"\[\+\]\s+VALID USERNAME:\s+(\S+?)@(\S+)", re.IGNORECASE
     )
-    # [+] VALID LOGIN:	 user@domain.local:password
     _VALID_LOGIN_RE = re.compile(
         r"\[\+\]\s+VALID LOGIN:\s+(\S+?)@(\S+?):(.+)", re.IGNORECASE
     )

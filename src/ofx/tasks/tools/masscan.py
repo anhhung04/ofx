@@ -10,7 +10,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Ip, Port
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("masscan")
 class MasscanTask(Task):
     name = "masscan"
@@ -35,7 +34,7 @@ class MasscanTask(Task):
         ),
     }
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = "-iL"
     output_flag = "-oJ"
     extra_flags = ["--rate=1000"]
@@ -47,7 +46,6 @@ class MasscanTask(Task):
         """Target is positional; override default rate if ``rate`` kwarg is set."""
         parts: list[str] = [self.cmd]
 
-        # Only include the default --rate flag if the user didn't override it
         rate_override = kwargs.get("rate")
         if rate_override is not None:
             parts.append(f"--rate={rate_override}")
@@ -68,14 +66,9 @@ class MasscanTask(Task):
 
         output_file: Path | None = None
         if self.output_flag:
-            # Generate a unique path without pre-creating the file — masscan
-            # (which may run as root) must create the output file itself.
-            # Pre-creating with mkstemp can cause "could not open file for
-            # writing" when masscan runs as a different uid (e.g. via sudo).
             output_file = self._make_output_path()
             parts.extend([self.output_flag, str(output_file)])
 
-        # masscan only accepts IPs/CIDRs — resolve hostnames automatically
         resolved = self._resolve_to_ip(target)
         parts.append(self._q(resolved))
 
@@ -88,7 +81,6 @@ class MasscanTask(Task):
 
         target = target.strip()
 
-        # Already an IP or CIDR — pass through
         base = target.split("/")[0]
         try:
             socket.inet_pton(socket.AF_INET, base)
@@ -96,11 +88,9 @@ class MasscanTask(Task):
         except OSError:
             pass
 
-        # File path — pass through
         if Path(target).is_file():
             return target
 
-        # Hostname — resolve
         try:
             info = socket.getaddrinfo(base, None, socket.AF_INET, socket.SOCK_STREAM)
             if info:
@@ -120,8 +110,6 @@ class MasscanTask(Task):
         if not raw:
             return []
 
-        # masscan JSON output may have trailing commas or be wrapped in []
-        # Strip the trailing comma before the closing bracket if present
         raw = raw.rstrip().rstrip(",")
         if not raw.startswith("["):
             raw = f"[{raw}]"

@@ -14,9 +14,6 @@ from ofx.tasks import (
     Url,
 )
 
-# ── DummyTask for TestTaskBase ─────────────────────────────────────────────
-
-
 class DummyTask(Task):
     name = "dummy"
     cmd = "echo"
@@ -35,10 +32,6 @@ class DummyTask(Task):
 
     def parse_output(self, stdout, stderr, output_file=None):
         return [Url(url=line.strip()) for line in stdout.splitlines() if line.strip()]
-
-
-# ── Task Base ──────────────────────────────────────────────────────────────
-
 
 class TestTaskBase:
     def test_build_command_basic(self):
@@ -96,7 +89,7 @@ class TestTaskBase:
 
     def test_check_installed(self):
         t = DummyTask()
-        assert t.check_installed()  # echo should exist
+        assert t.check_installed()
 
     def test_get_install_command(self):
         t = DummyTask()
@@ -188,69 +181,15 @@ class TestTaskBase:
             success_codes = [0, 42]
 
         class TaskB(DummyTask):
-            pass  # inherits default [0]
+            pass
 
         assert TaskA().success_codes == [0, 42]
         assert TaskB().success_codes == [0]
-        # Mutating TaskA's list must not affect TaskB
         TaskA.success_codes.append(99)
         assert 99 not in TaskB().success_codes
 
-    def test_write_target_file_tracks_temp_files(self):
-        """_write_target_file should track files for later cleanup."""
-        t = DummyTask()
-        path = t._write_target_file("a.com,b.com,c.com")
-        assert Path(path).exists()
-        contents = Path(path).read_text()
-        assert "a.com" in contents
-        assert "b.com" in contents
-        assert "c.com" in contents
-        assert len(t._temp_target_files) == 1
-        assert t._temp_target_files[0] == path
-
-    def test_cleanup_target_files_removes_tracked_files(self):
-        """cleanup_target_files should remove all tracked temp files."""
-        t = DummyTask()
-        p1 = t._write_target_file("a.com,b.com")
-        p2 = t._write_target_file("c.com,d.com")
-        assert Path(p1).exists()
-        assert Path(p2).exists()
-        t.cleanup_target_files()
-        assert not Path(p1).exists()
-        assert not Path(p2).exists()
-        assert t._temp_target_files == []
-
-    def test_cleanup_target_files_handles_already_removed(self):
-        """cleanup_target_files should not raise if files are already gone."""
-        t = DummyTask()
-        path = t._write_target_file("x.com,y.com")
-        Path(path).unlink()  # remove before cleanup
-        t.cleanup_target_files()  # should not raise
-        assert t._temp_target_files == []
-
-    def test_build_command_multi_target_creates_temp_file(self):
-        """build_command with comma-separated targets should create a tracked temp file."""
-
-        class FileTask(DummyTask):
-            file_flag = "-iL"
-
-        t = FileTask()
-        cmd, _ = t.build_command("a.com,b.com,c.com")
-        assert "-iL" in cmd
-        assert len(t._temp_target_files) == 1
-        assert Path(t._temp_target_files[0]).exists()
-        t.cleanup_target_files()
-        assert (
-            not Path(t._temp_target_files[0]).exists() if t._temp_target_files else True
-        )
-
-
-# ── Task Registry ─────────────────────────────────────────────────────────
-
-
 class TestTaskRegistry:
     def setup_method(self):
-        # Force re-load so tasks are always available
         TaskRegistry._ensure_loaded()
 
     def test_builtin_tasks_registered(self):
@@ -283,9 +222,8 @@ class TestTaskRegistry:
         assert len(all_tasks) == len(TaskRegistry.list_tasks())
 
     def test_register_duplicate_raises(self):
-        # Register a fresh name then try to register it again
         name = "_test_dup_check"
-        TaskRegistry.unregister(name)  # ensure clean
+        TaskRegistry.unregister(name)
 
         @TaskRegistry.register(name)
         class FirstTool(Task):
@@ -373,10 +311,6 @@ class TestTaskRegistry:
 
         assert LocalRegistry._loaded is False
 
-
-# ── Step Model Integration ─────────────────────────────────────────────────
-
-
 class TestStepModelTask:
     def test_step_with_task_field(self):
         s = Step(task="nmap", **{"with": {"target": "1.2.3.4"}})
@@ -416,10 +350,6 @@ class TestStepModelTask:
         s3 = Step(uses="./other.yml")
         assert s3.get_run_type() == RunType.WORKFLOW
 
-
-# ── Command Building ──────────────────────────────────────────────────────
-
-
 class TestCommandBuilding:
     def test_nmap_command(self):
         task = TaskRegistry.create("nmap")
@@ -430,7 +360,7 @@ class TestCommandBuilding:
         assert "-p 22,80,443" in cmd
         assert "-sV" in cmd
         assert "192.168.1.0/24" in cmd
-        assert out is not None  # output file created for -oX
+        assert out is not None
 
     def test_httpx_command(self):
         task = TaskRegistry.create("httpx")
@@ -471,10 +401,6 @@ class TestCommandBuilding:
         assert not out.exists()
         assert out.parent.exists()
 
-
-# ── Extra Flags Refactor ──────────────────────────────────────────────────
-
-
 class TestExtraFlags:
     """Verify the DRY refactor: extra_flags are included in build_command."""
 
@@ -503,12 +429,7 @@ class TestExtraFlags:
         """Nmap doesn't need extra_flags — it uses the base build_command."""
         task = TaskRegistry.create("nmap")
         cmd, _ = task.build_command("10.0.0.1")
-        # Should start with just "nmap" — no extra flags
         assert cmd.startswith("nmap ")
-
-
-# ── Registry — New Tools ──────────────────────────────────────────────────
-
 
 class TestNewToolsRegistered:
     def test_all_tools_registered(self):
@@ -529,17 +450,13 @@ class TestNewToolsRegistered:
 
     def test_categories(self):
         port_tasks = TaskRegistry.get_by_category("port/")
-        assert len(port_tasks) >= 2  # nmap + naabu
+        assert len(port_tasks) >= 2
 
         dns_tasks = TaskRegistry.get_by_category("dns/")
-        assert len(dns_tasks) >= 2  # subfinder + dnsx
+        assert len(dns_tasks) >= 2
 
         url_tasks = TaskRegistry.get_by_category("url/")
-        assert len(url_tasks) >= 3  # httpx + ffuf + katana + feroxbuster
-
-
-# ── Mutable Default Isolation ─────────────────────────────────────────────
-
+        assert len(url_tasks) >= 3
 
 class TestMutableDefaults:
     """Verify __init_subclass__ prevents cross-class mutation."""
@@ -556,14 +473,11 @@ class TestMutableDefaults:
         original_httpx_flags = list(httpx.extra_flags)
         original_nmap_flags = list(nmap.extra_flags)
 
-        # Mutate httpx's extra_flags (on the class)
         httpx_cls.extra_flags.append("--SHOULD-NOT-LEAK")
 
-        # nmap's extra_flags must be unaffected
         assert "--SHOULD-NOT-LEAK" not in nmap_cls.extra_flags
         assert nmap_cls.extra_flags == original_nmap_flags
 
-        # Restore
         httpx_cls.extra_flags[:] = original_httpx_flags
 
     def test_opts_isolated_between_subclasses(self):
@@ -577,7 +491,6 @@ class TestMutableDefaults:
         nmap_cls.opts["_test_key"] = OptDef(flag="--test")
         assert "_test_key" not in subfinder_cls.opts
 
-        # Restore
         del nmap_cls.opts["_test_key"]
         assert set(nmap_cls.opts.keys()) == original_nmap_opts
 
@@ -587,16 +500,11 @@ class TestMutableDefaults:
         assert Task.opts == {}
         assert Task.output_types == []
 
-
-# ── Pre-flight Binary Check ───────────────────────────────────────────────
-
-
 class TestPreflightCheck:
     """Verify TaskRunner warns when tool binary is not installed."""
 
     def test_check_installed_returns_bool(self):
         task = TaskRegistry.create("nmap")
-        # Just verify the method returns a bool (actual result depends on system)
         assert isinstance(task.check_installed(), bool)
 
     def test_get_install_command(self):
@@ -616,10 +524,6 @@ class TestPreflightCheck:
 
         t = BareTask()
         assert t.get_install_command() is None
-
-
-# ── OptDef Validation ──────────────────────────────────────────────────
-
 
 class TestOptDefValidation:
     def test_valid_optdef(self):

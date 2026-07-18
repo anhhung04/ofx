@@ -9,9 +9,6 @@ import pytest
 from ofx.cloud.fleet_distributor import FleetDistributor, expand_fleet_to_matrix
 from ofx.cloud.fleet_input import FleetInputParser, split_subnet
 
-# ── FleetInputParser: basic parsing ──────────────────────────────────────
-
-
 class TestFleetInputParserBasic:
     """Core parsing of IPs, CIDRs, ranges, hostnames."""
 
@@ -52,20 +49,14 @@ class TestFleetInputParserBasic:
         targets = FleetInputParser().parse(data)
         assert "10.0.0.1" in targets
         assert "target.example.com" in targets
-        # /30 expands to 2 hosts
         assert "192.168.1.1" in targets
         assert "192.168.1.2" in targets
-
-
-# ── FleetInputParser: CIDR expansion ────────────────────────────────────
-
 
 class TestFleetInputParserCIDR:
     """CIDR expansion and preserve-CIDR mode."""
 
     def test_expand_cidr_slash_30(self):
         targets = FleetInputParser(expand_cidrs=True).parse("192.168.1.0/30")
-        # /30 has 2 usable hosts
         assert targets == ["192.168.1.1", "192.168.1.2"]
 
     def test_expand_cidr_slash_32(self):
@@ -78,11 +69,9 @@ class TestFleetInputParserCIDR:
 
     def test_expand_cidr_slash_29(self):
         targets = FleetInputParser(expand_cidrs=True).parse("10.0.0.0/29")
-        # /29 = 8 addresses, 6 usable hosts
         assert len(targets) == 6
         assert "10.0.0.1" in targets
         assert "10.0.0.6" in targets
-        # Network and broadcast excluded by .hosts()
         assert "10.0.0.0" not in targets
         assert "10.0.0.7" not in targets
 
@@ -95,10 +84,6 @@ class TestFleetInputParserCIDR:
     def test_invalid_cidr_treated_as_hostname(self):
         targets = FleetInputParser().parse("not-a-cidr/foo")
         assert targets == ["not-a-cidr/foo"]
-
-
-# ── FleetInputParser: IP range expansion ────────────────────────────────
-
 
 class TestFleetInputParserRanges:
     """Full and short IP range expansion."""
@@ -128,10 +113,6 @@ class TestFleetInputParserRanges:
         targets = FleetInputParser().parse("10.0.0.250-300")
         assert targets == []
 
-
-# ── FleetInputParser: file reading ──────────────────────────────────────
-
-
 class TestFleetInputParserFiles:
     """File-based input reading."""
 
@@ -157,14 +138,9 @@ class TestFleetInputParserFiles:
         file_b = tmp_path / "b.txt"
         file_a.write_text(f"10.0.0.1\n{file_b}\n")
         file_b.write_text(f"10.0.0.2\n{file_a}\n")
-        # Should not infinite loop — cycle detection stops it
         targets = FleetInputParser().parse(str(file_a))
         assert "10.0.0.1" in targets
         assert "10.0.0.2" in targets
-
-
-# ── FleetInputParser: exclusion ──────────────────────────────────────────
-
 
 class TestFleetInputParserExclusion:
     """Exclusion of IPs and networks."""
@@ -177,7 +153,6 @@ class TestFleetInputParserExclusion:
     def test_exclude_cidr(self):
         parser = FleetInputParser(exclude=["10.0.0.0/30"])
         targets = parser.parse(["10.0.0.1", "10.0.0.2", "10.0.0.5"])
-        # 10.0.0.1 and 10.0.0.2 are in /30 (0-3)
         assert targets == ["10.0.0.5"]
 
     def test_exclude_hostname(self):
@@ -189,10 +164,6 @@ class TestFleetInputParserExclusion:
         parser = FleetInputParser(exclude=["10.0.0.99"])
         targets = parser.parse(["10.0.0.1", "10.0.0.2"])
         assert targets == ["10.0.0.1", "10.0.0.2"]
-
-
-# ── FleetInputParser: edge cases ─────────────────────────────────────────
-
 
 class TestFleetInputParserEdgeCases:
     """Edge cases and empty inputs."""
@@ -213,10 +184,6 @@ class TestFleetInputParserEdgeCases:
         targets = FleetInputParser().parse("# just a comment\n# another")
         assert targets == []
 
-
-# ── FleetDistributor ─────────────────────────────────────────────────────
-
-
 class TestFleetDistributorChunk:
     """Chunk distribution mode."""
 
@@ -228,18 +195,16 @@ class TestFleetDistributorChunk:
         assert len(chunks[1]) == 5
 
     def test_uneven_split(self):
-        targets = [f"10.0.0.{i}" for i in range(1, 8)]  # 7 targets
+        targets = [f"10.0.0.{i}" for i in range(1, 8)]
         chunks = FleetDistributor().distribute(targets, count=3, mode="chunk")
         assert len(chunks) == 3
         total = sum(len(c) for c in chunks)
         assert total == 7
-        # First chunks get extra
         assert len(chunks[0]) >= len(chunks[2])
 
     def test_more_instances_than_targets(self):
         targets = ["10.0.0.1", "10.0.0.2"]
         chunks = FleetDistributor().distribute(targets, count=5, mode="chunk")
-        # Should reduce to 2 instances
         assert len(chunks) == 2
         assert all(len(c) == 1 for c in chunks)
 
@@ -262,12 +227,11 @@ class TestFleetDistributorChunk:
         assert len(chunks) == 1
         assert len(chunks[0]) == 5
 
-
 class TestFleetDistributorRoundRobin:
     """Round-robin distribution mode."""
 
     def test_round_robin_even(self):
-        targets = [f"10.0.0.{i}" for i in range(1, 7)]  # 6 targets
+        targets = [f"10.0.0.{i}" for i in range(1, 7)]
         chunks = FleetDistributor().distribute(targets, count=3, mode="round-robin")
         assert len(chunks) == 3
         assert all(len(c) == 2 for c in chunks)
@@ -280,11 +244,10 @@ class TestFleetDistributorRoundRobin:
         assert chunks[2] == ["c", "f"]
 
     def test_round_robin_uneven(self):
-        targets = [f"10.0.0.{i}" for i in range(1, 6)]  # 5 targets
+        targets = [f"10.0.0.{i}" for i in range(1, 6)]
         chunks = FleetDistributor().distribute(targets, count=3, mode="round-robin")
         total = sum(len(c) for c in chunks)
         assert total == 5
-
 
 class TestFleetDistributorSubnet:
     """Subnet-aware distribution mode."""
@@ -293,20 +256,18 @@ class TestFleetDistributorSubnet:
         targets = [
             "10.0.0.1",
             "10.0.0.2",
-            "10.0.0.3",  # /24 group 1
+            "10.0.0.3",
             "10.0.1.1",
             "10.0.1.2",
-            "10.0.1.3",  # /24 group 2
+            "10.0.1.3",
         ]
         chunks = FleetDistributor().distribute(targets, count=2, mode="subnet")
         assert len(chunks) == 2
-        # Each chunk should contain IPs from the same subnet
         for chunk in chunks:
             subnets = set()
             for ip in chunk:
                 parts = ip.rsplit(".", 1)
                 subnets.add(parts[0])
-            # All IPs should be from the same /24
             assert len(subnets) == 1
 
     def test_hostnames_grouped_separately(self):
@@ -330,7 +291,6 @@ class TestFleetDistributorSubnet:
         assert sorted(len(chunk) for chunk in chunks) == [3, 3]
         assert any("host.example.com" in chunk for chunk in chunks)
 
-
 class TestFleetDistributorLine:
     """Line distribution mode (one target per instance)."""
 
@@ -342,10 +302,8 @@ class TestFleetDistributorLine:
 
     def test_line_mode_ignores_count(self):
         targets = ["10.0.0.1", "10.0.0.2", "10.0.0.3"]
-        # Count doesn't matter in line mode — one per target
         chunks = FleetDistributor().distribute(targets, count=10, mode="line")
         assert len(chunks) == 3
-
 
 class TestFleetDistributorEdgeCases:
     """Edge cases for FleetDistributor."""
@@ -377,10 +335,6 @@ class TestFleetDistributorEdgeCases:
             "bad_mode",
         )]
 
-
-# ── split_subnet ─────────────────────────────────────────────────────────
-
-
 class TestSplitSubnet:
     """Tests for the split_subnet utility."""
 
@@ -400,12 +354,7 @@ class TestSplitSubnet:
 
     def test_min_prefix_limits_split(self):
         result = split_subnet("10.0.0.0/30", 8, min_prefix=32)
-        # /30 can split into at most /32s (4 addresses)
         assert len(result) <= 8
-
-
-# ── expand_fleet_to_matrix ───────────────────────────────────────────────
-
 
 class TestExpandFleetToMatrix:
     """Integration tests for expand_fleet_to_matrix."""
@@ -423,14 +372,12 @@ class TestExpandFleetToMatrix:
         try:
             assert len(combos) == 2
             assert len(chunk_files) == 2
-            # Each combo has fleet context
             for combo in combos:
                 assert "fleet_index" in combo
                 assert "fleet_total" in combo
                 assert "fleet_input_file" in combo
                 assert "fleet_target_count" in combo
                 assert "fleet_input" in combo
-            # Total targets distributed
             total = sum(c["fleet_target_count"] for c in combos)
             assert total == 4
         finally:
@@ -451,7 +398,6 @@ class TestExpandFleetToMatrix:
         config = {"count": 2, "input": str(target_file), "distribution": "chunk"}
         combos, chunk_files = expand_fleet_to_matrix(config, exclude=["10.0.0.2"])
         try:
-            # Only 2 targets after exclusion
             total = sum(c["fleet_target_count"] for c in combos)
             assert total == 2
         finally:
@@ -469,7 +415,7 @@ class TestExpandFleetToMatrix:
         try:
             for i, chunk_file in enumerate(chunk_files):
                 content = chunk_file.read_text().strip()
-                assert content  # Not empty
+                assert content
                 lines = content.splitlines()
                 assert lines == combos[i]["fleet_input"]
         finally:

@@ -7,7 +7,6 @@ from ofx.settings import DEFAULT_PROJECTS_PATH
 
 logger = logging.getLogger("ofx")
 
-
 class ProjectManager:
     @classmethod
     def _get_default_path(cls) -> Path:

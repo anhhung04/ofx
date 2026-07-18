@@ -16,7 +16,6 @@ protocol:
 
     class MyAdapter:
         def deliver(self, bootstrap: str) -> str:
-            # write bootstrap to the target however you like, return stdout
             ...
 
     deliver_and_run(runner, payload, adapter=MyAdapter())
@@ -44,19 +43,8 @@ __all__ = [
     "deliver_and_run",
 ]
 
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-
 class DeliveryError(BundleError):
     """Raised when remote delivery or execution fails."""
-
-
-# ---------------------------------------------------------------------------
-# Adapter protocol — implement this to write a custom delivery handler
-# ---------------------------------------------------------------------------
-
 
 @runtime_checkable
 class BundleAdapter(Protocol):
@@ -73,20 +61,13 @@ class BundleAdapter(Protocol):
                 self.runner = runner
 
             def deliver(self, bootstrap: str) -> str:
-                # custom delivery logic
                 self.runner.run(f"echo '{bootstrap}' > /tmp/t.py")
                 return self.runner.run("python3 /tmp/t.py")
     """
 
-    def deliver(self, bootstrap: str) -> str:  # pragma: no cover
+    def deliver(self, bootstrap: str) -> str:
         """Deliver *bootstrap* and return execution output."""
         ...
-
-
-# ---------------------------------------------------------------------------
-# Built-in adapters
-# ---------------------------------------------------------------------------
-
 
 class UploadAdapter:
     """Deliver via runner.upload() + runner.run().
@@ -134,7 +115,6 @@ class UploadAdapter:
         try:
             self.runner.upload(local_path, self.remote_tmp)
             output = self.runner.run(f"{self.python} {self.remote_tmp}")
-            # Clean up remote temp file (best effort)
             with suppress(Exception):
                 if self.windows:
                     self.runner.run(f"del /f /q {self.remote_tmp}")
@@ -143,7 +123,6 @@ class UploadAdapter:
             return output
         finally:
             remove_file(local_path)
-
 
 class HttpAdapter:
     """Deliver by serving bootstrap over a local HTTP server.
@@ -193,7 +172,6 @@ class HttpAdapter:
         server.start()
         try:
             url = f"http://{self.host}:{self.port}{self.route}"
-            # urllib.request is stdlib — no curl, no bash process substitution needed.
             cmd = (
                 f"{self.python} -c "
                 f'"import urllib.request as _r; '
@@ -203,7 +181,6 @@ class HttpAdapter:
         finally:
             server.stop()
             server.remove_payload(self.route)
-
 
 class InlineAdapter:
     """Deliver by embedding the bootstrap as base64 inside a ``python -c`` command.
@@ -244,12 +221,6 @@ class InlineAdapter:
         )
         return self.runner.run(cmd)
 
-
-# ---------------------------------------------------------------------------
-# Auto-detection helpers
-# ---------------------------------------------------------------------------
-
-
 def _runner_has_upload(runner) -> bool:
     """Return True if *runner* has a real ``upload()`` implementation.
 
@@ -262,9 +233,7 @@ def _runner_has_upload(runner) -> bool:
 
         return type(runner).upload is not PostRunnerBase.upload
     except Exception:
-        # If base class can't be imported (custom runner), assume upload exists
         return hasattr(runner, "upload") and callable(runner.upload)
-
 
 def make_adapter(
     runner,
@@ -309,25 +278,19 @@ def make_adapter(
     inline_kwargs = {"python": python, "windows": windows}
 
     if method == "upload":
-        return UploadAdapter(runner, **upload_kwargs)  # type: ignore[arg-type]
+        return UploadAdapter(runner, **upload_kwargs)
     if method == "http":
-        return HttpAdapter(runner, **http_kwargs)  # type: ignore[arg-type]
+        return HttpAdapter(runner, **http_kwargs)
     if method == "inline":
-        return InlineAdapter(runner, **inline_kwargs)  # type: ignore[arg-type]
+        return InlineAdapter(runner, **inline_kwargs)
     if method == "auto":
         if _runner_has_upload(runner):
-            return UploadAdapter(runner, **upload_kwargs)  # type: ignore[arg-type]
-        return HttpAdapter(runner, **http_kwargs)  # type: ignore[arg-type]
+            return UploadAdapter(runner, **upload_kwargs)
+        return HttpAdapter(runner, **http_kwargs)
     raise ValueError(
         f"Unknown delivery method: {method!r}. "
         "Choose 'auto', 'upload', 'http', or 'inline'."
     )
-
-
-# ---------------------------------------------------------------------------
-# Public entry-point
-# ---------------------------------------------------------------------------
-
 
 def deliver_and_run(
     runner,

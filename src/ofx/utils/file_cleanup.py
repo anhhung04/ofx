@@ -7,15 +7,12 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Callable, Sequence
 
-
 def _clear_sequence(values: list[Path] | list[str] | None) -> None:
     if values is not None:
         values.clear()
 
-
 def _path_matches_required_substring(path: Path, required_substring: str | None) -> bool:
     return not required_substring or required_substring in str(path)
-
 
 def remove_file(
     path_value: str | Path | None,
@@ -47,7 +44,6 @@ def remove_file(
         return exc
     return None
 
-
 def remove_tree(
     path: Path | None,
     *,
@@ -63,7 +59,6 @@ def remove_tree(
     except Exception as exc:
         on_error(f"Failed to clean up {label} {path}: {exc}")
 
-
 def remove_empty_dirs(root: Path | None) -> None:
     """Remove empty directories bottom-up under *root*, including *root*."""
     if root is None or not root.is_dir():
@@ -75,7 +70,6 @@ def remove_empty_dirs(root: Path | None) -> None:
                 child.rmdir()
     with suppress(OSError):
         root.rmdir()
-
 
 def remove_files_and_parent_dir(
     paths: Sequence[Path],
@@ -108,7 +102,6 @@ def remove_files_and_parent_dir(
 
     _clear_sequence(clear)
 
-
 def remove_files(
     paths: Sequence[str | Path],
     *,
@@ -122,7 +115,6 @@ def remove_files(
             on_error(f"Failed to remove file {path_value}: {exc}")
 
     _clear_sequence(clear)
-
 
 __all__ = [
     "remove_empty_dirs",

@@ -17,7 +17,6 @@ from ofx.settings import TOOLS_BIN_DIR, ensure_dir
 
 console = Console()
 
-
 class ToolInstallation(BaseModel):
     """Model for tool installation configuration."""
 
@@ -29,7 +28,6 @@ class ToolInstallation(BaseModel):
         default=True,
         description="Whether to show console output during installation",
     )
-
 
 class ToolInstallerRunner(Runner[ToolInstallation]):
     """Runner for installing tools with template resolution support."""

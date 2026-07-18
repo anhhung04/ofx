@@ -15,18 +15,15 @@ logger = logging.getLogger("ofx")
 
 _REPO_CACHE_DIR = TEMP_DIR / "repos"
 
-
 def _normalize_repo_name(url: str) -> str:
     name = Path(urlparse(url).path).name
     if name.endswith(".git"):
         name = name[:-4]
     return name or "repo"
 
-
 def _cache_key(url: str, ref: str) -> str:
     key = f"{url}@{ref}" if ref else url
     return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]
-
 
 def clone_remote_repo(path: str, default_registry: str | None) -> Path | None:
     """Clone a remote repo into a shared cache and reuse if already present."""

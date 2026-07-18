@@ -9,7 +9,6 @@ from ofx.tasks.base import Task
 from ofx.tasks.output_types import Domain
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("whois")
 class WhoisTask(Task):
     name = "whois"
@@ -21,7 +20,7 @@ class WhoisTask(Task):
 
     opts = {}
 
-    input_flag = None  # positional
+    input_flag = None
     file_flag = None
     output_flag = None
     extra_flags = []

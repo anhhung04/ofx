@@ -9,7 +9,6 @@ from ofx.tasks.base import OptDef, Task
 from ofx.tasks.output_types import Tag, UserAccount
 from ofx.tasks.registry import TaskRegistry
 
-
 @TaskRegistry.register("ldeep")
 class LdeepTask(Task):
     name = "ldeep"
@@ -73,16 +72,13 @@ class LdeepTask(Task):
         if isinstance(data, list):
             return self._parse_json_list(data)
 
-        # Plain text output — one entry per line
         raw = self._raw_output(stdout)
         results: list[UserAccount | Tag] = []
         for line in raw.splitlines():
             line = line.strip()
             if not line:
                 continue
-            # User lines often look like: sAMAccountName
             if "\t" in line or "," in line:
-                # Tab-delimited fields
                 parts = line.split("\t") if "\t" in line else line.split(",")
                 if parts:
                     results.append(
@@ -114,7 +110,6 @@ class LdeepTask(Task):
                         else item.get("description", ""),
                     )
                 )
-            # ASREQ-roastable
             uac = item.get("userAccountControl", 0)
             if isinstance(uac, int) and uac & 0x400000:
                 results.append(Tag(name="asreproastable", value=sam, category="ad"))

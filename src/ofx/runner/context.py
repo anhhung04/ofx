@@ -13,7 +13,6 @@ from ofx.models.config import DurableRunConfig
 from ofx.settings import DEFAULT_WORKFLOWS_DIRS
 from ofx.utils.env import populate_env
 
-
 class RunnerStatus(Enum):
     """Status of a runner execution."""
 
@@ -24,16 +23,13 @@ class RunnerStatus(Enum):
     FAILED = "failed"
     CANCELED = "canceled"
 
-
 def normalize_runner_status(status: RunnerStatus) -> RunnerStatus:
     """Map transient terminal runner states to their external representation."""
     return RunnerStatus.COMPLETED if status == RunnerStatus.FINISHED else status
 
-
 def normalized_runner_status_value(status: RunnerStatus) -> str:
     """Return the external string value for a runner status."""
     return normalize_runner_status(status).value
-
 
 class RunContext(BaseModel):
     """Execution context shared by runners and executors."""
@@ -78,7 +74,6 @@ class RunContext(BaseModel):
     def __str__(self) -> str:
         return self.__repr__()
 
-
 class RunResult(BaseModel):
     """Result of a runner execution."""
 
@@ -95,30 +90,24 @@ class RunResult(BaseModel):
     def __str__(self) -> str:
         return self.__repr__()
 
-
 class ConditionNotMetError(RuntimeError):
     """Raised when a job or step condition evaluates to false."""
-
 
 def context_with_env(ctx: RunContext, env: dict[str, Any]) -> RunContext:
     """Return a context copy with merged environment updates."""
     return _context_with_merged_field_update(ctx, "envs", env)
 
-
 def context_with_secrets(ctx: RunContext, secrets: dict[str, Any]) -> RunContext:
     """Return a context copy with merged secret updates."""
     return _context_with_merged_field_update(ctx, "secrets", secrets)
-
 
 def context_with_vars(ctx: RunContext, vars_update: dict[str, Any]) -> RunContext:
     """Return a context copy with merged variable updates."""
     return _context_with_merged_field_update(ctx, "vars", vars_update)
 
-
 def context_with_update(ctx: RunContext, update: dict[str, Any]) -> RunContext:
     """Return a context copy with arbitrary field updates."""
     return context_copy(ctx, update)
-
 
 def context_copy(
     ctx: RunContext,
@@ -129,7 +118,6 @@ def context_copy(
     """Return a copied context, optionally applying field replacements."""
     return ctx.model_copy(update=update or {}, deep=deep)
 
-
 def _context_with_merged_dict_updates(
     ctx: RunContext,
     **updates_by_field: dict[str, Any],
@@ -139,7 +127,6 @@ def _context_with_merged_dict_updates(
         for field, updates in updates_by_field.items()
     }
     return ctx.model_copy(update=merged_updates)
-
 
 def _context_with_merged_field_update(
     ctx: RunContext,

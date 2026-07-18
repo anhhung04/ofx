@@ -20,7 +20,6 @@ DURABLE_DIR_NAME = ".durable"
 _CHECKPOINTS_FILENAME = "checkpoints.json"
 _registry_cache: dict[str, RegistryAdapter] = {}
 
-
 def _get_registry(output_path: Path, config: DurableRunConfig) -> RegistryAdapter:
     key_parts = [output_path.resolve().as_posix(), config.backend]
     if config.backend == "redis":
@@ -49,14 +48,12 @@ def _get_registry(output_path: Path, config: DurableRunConfig) -> RegistryAdapte
     _registry_cache[key] = registry
     return registry
 
-
 async def _checkpoint_data(
     output_path: Path,
     config: DurableRunConfig,
 ) -> dict[str, dict[str, Any]]:
     registry = _get_registry(output_path, config)
     return await registry.get_all()
-
 
 async def write_checkpoint(
     output_path: Path,
@@ -67,19 +64,16 @@ async def write_checkpoint(
     registry = _get_registry(output_path, config)
     await registry.set(checkpoint_id, payload)
 
-
 async def get_checkpoint(
     output_path: Path, config: DurableRunConfig, checkpoint_id: str
 ) -> dict[str, Any] | None:
     registry = _get_registry(output_path, config)
     return await registry.get(checkpoint_id)
 
-
 async def list_checkpoints(
     output_path: Path, config: DurableRunConfig
 ) -> list[dict[str, Any]]:
     return list((await _checkpoint_data(output_path, config)).values())
-
 
 async def clean_checkpoints(
     output_path: Path,
@@ -117,13 +111,11 @@ async def clean_checkpoints(
 
     return len(to_remove)
 
-
 async def clean_stale_checkpoints(
     output_path: Path,
     config: DurableRunConfig,
 ) -> int:
     return await clean_checkpoints(output_path, config, status="running")
-
 
 async def clean_all_checkpoints(
     output_path: Path,
@@ -135,7 +127,6 @@ async def clean_all_checkpoints(
     if count:
         await registry.clear()
     return count
-
 
 __all__ = [
     "DURABLE_DIR_NAME",

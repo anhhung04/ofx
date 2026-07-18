@@ -5,7 +5,6 @@ import typer
 
 from ofx.utils import secrets as secrets_store
 
-
 def _maybe_backup_store(
     backup_path: str, passphrase: str | None, overwrite: bool
 ) -> None:
@@ -34,7 +33,6 @@ def _maybe_backup_store(
         fg=typer.colors.CYAN,
     )
 
-
 def _get_secret_type(value) -> str:
     """Determine the type of a secret value"""
     if isinstance(value, dict):
@@ -57,7 +55,6 @@ def _get_secret_type(value) -> str:
     else:
         return "unknown"
 
-
 def _format_file_size(size_bytes: int) -> str:
     """Format file size in human readable format"""
     if size_bytes == 0:
@@ -69,7 +66,6 @@ def _format_file_size(size_bytes: int) -> str:
             return f"{size:.1f} {unit}"
         size /= 1024.0
     return f"{size:.1f} TB"
-
 
 def _format_secret_value(value) -> str:
     """Format a secret value for display in tables"""
