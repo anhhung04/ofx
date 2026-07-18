@@ -1,0 +1,137 @@
+name: cloud-enum
+description: >
+  Cloud infrastructure enumeration for AWS, Azure, and GCP. Uses cloudfox for
+  rapid resource discovery, scoutsuite for multi-cloud security auditing,
+  and prowler for compliance checking. Requires cloud credentials.
+tags:
+- recon
+- cloud
+- aws
+- azure
+- gcp
+- infrastructure
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target cloud provider scope (e.g. aws profile name, azure sub ID)
+      alias: t
+    provider:
+      type: string
+      default: 'aws'
+      description: Cloud provider (aws, azure, gcp, all)
+    region:
+      type: string
+      default: ''
+      description: AWS region or Azure region filter
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  resource-enum:
+    name: Cloud Resource Enumeration
+    outputs:
+      resource_count: '{{ steps["report-resources"].outputs.resource_count | default("0", true) }}'
+    steps:
+    - task: cloudfox
+      log-command: '{{ inputs.log_command }}'
+      name: cloudfox-enum
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        provider: '{{ inputs.provider }}'
+      continue-on-error: true
+    - task: s3scanner
+      log-command: '{{ inputs.log_command }}'
+      name: s3-buckets
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        provider: '{{ inputs.provider }}'
+        write_test: true
+      continue-on-error: true
+    - name: report-resources
+      script: |
+        import json
+        from pathlib import Path
+
+        cloudfox_out = {{ steps["cloudfox-enum"].outputs.typed_outputs | default([], true) | tojson }}
+        buckets = {{ vulns(steps["s3-buckets"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        writable_buckets = [b for b in buckets if b.get('writable')]
+        add_outputs(resource_count=len(cloudfox_out), writable_buckets=len(writable_buckets), report_data=json.dumps({'resources': cloudfox_out, 'buckets': buckets}, indent=2, default=str)
+        print(f'Cloud resources: {len(cloudfox_out)}')
+        print(f'S3 buckets: {len(buckets)} ({len(writable_buckets)} writable)')
+    needs: []
+  security-audit:
+    name: Cloud Security Audit
+    needs:
+    - resource-enum
+    steps:
+    - task: prowler
+      log-command: '{{ inputs.log_command }}'
+      name: prowler-audit
+      retry: 2
+      retry-delay: 5
+      with:
+        provider: '{{ inputs.provider }}'
+        region: '{{ inputs.region if inputs.region else "" }}'
+        severity: critical,high,medium
+        output_formats: json
+        output_directory: '{{ env("OFX_RUN_DIR", "/tmp") }}/ofx_cloud_prowler'
+      continue-on-error: true
+    - task: scoutsuite
+      log-command: '{{ inputs.log_command }}'
+      name: scoutsuite-audit
+      retry: 2
+      retry-delay: 5
+      with:
+        provider: '{{ inputs.provider }}'
+        no_browser: true
+        result_format: json
+        report_dir: '{{ env("OFX_RUN_DIR", "/tmp") }}/ofx_cloud_scoutsuite'
+      continue-on-error: true
+    - name: report-audit
+      script: |
+        import json
+
+        prowler_vulns = {{ vulns(steps["prowler-audit"].outputs.typed_outputs) | default([], true) | tojson }}
+        scoutsuite_vulns = {{ steps["scoutsuite-audit"].outputs.typed_outputs | default([], true) | tojson }}
+
+        all_vulns = prowler_vulns + scoutsuite_vulns
+        critical = [v for v in all_vulns if v.get('severity') == 'critical']
+        high = [v for v in all_vulns if v.get('severity') == 'high']
+
+        add_outputs(vuln_count=len(all_vulns), critical_count=len(critical), high_count=len(high))
+        print(f'Cloud security: {len(all_vulns)} findings (C:{len(critical)} H:{len(high)})')
+    needs: []
+  summary:
+    name: Cloud Enum Summary
+    needs:
+    - resource-enum
+    - security-audit
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " CLOUD ENUM: {{ inputs.target }}"
+        echo "======================================================"
+        echo "  Provider: {{ inputs.provider }}"
+        echo "  Resources: {{ jobs['resource-enum'].outputs.resource_count }}"
+        echo "  Vulnerabilities: {{ jobs['security-audit'].outputs.vuln_count }}"
+        echo "    Critical: {{ jobs['security-audit'].outputs.critical_count }}"
+        echo "    High: {{ jobs['security-audit'].outputs.high_count }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

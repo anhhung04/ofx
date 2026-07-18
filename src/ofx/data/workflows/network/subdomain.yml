@@ -1,0 +1,292 @@
+name: subdomain
+description: >
+  Subdomain enumeration — combines passive, active, and cert-based
+  enumeration: subfinder, assetfinder, findomain, amass, crtsh API, CDN name
+  permutations, DNS bruteforce, and verification. Includes wildcard detection
+  and DNS resolution.
+tags:
+- recon
+- subdomain
+- dns
+- passive
+- cert
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+      alias: t
+    wordlist:
+      type: string
+      default: ''
+      description: Custom subdomain wordlist for bruteforce
+    resolvers:
+      type: string
+      default: ''
+      description: Custom DNS resolvers file
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  passive-enum:
+    name: Passive Enumeration
+    outputs:
+      passive_file: '{{ steps["merge-passive"].outputs.passive_file | default("", true) }}'
+      passive_count: '{{ steps["merge-passive"].outputs.passive_count | default("0", true) }}'
+    steps:
+    - task: subfinder
+      log-command: '{{ inputs.log_command }}'
+      name: subfinder-enum
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      continue-on-error: true
+    - task: assetfinder
+      log-command: '{{ inputs.log_command }}'
+      name: assetfinder-enum
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: findomain
+      log-command: '{{ inputs.log_command }}'
+      name: findomain-enum
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: amass
+      log-command: '{{ inputs.log_command }}'
+      name: amass-passive
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        active: false
+      continue-on-error: true
+    - name: merge-passive
+      script: |
+        from pathlib import Path
+
+        subs = {{ subdomains(steps["subfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["assetfinder-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["findomain-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        unique = sorted(set(subs))
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(passive_data='\n'.join(unique, passive_count=len(unique))
+        print(f'Passive enum: {len(unique)} unique subdomains')
+    needs: []
+  cert-enum:
+    name: Certificate Transparency Enum
+    outputs:
+      cert_file: '{{ steps["collect-crtsh"].outputs.cert_file | default("", true) }}'
+      cert_count: '{{ steps["collect-crtsh"].outputs.cert_count | default("0", true) }}'
+    steps:
+    - name: crtsh-lookup
+      log-command: '{{ inputs.log_command }}'
+      script: |
+        from ofx.api.recon import crtsh_subdomains_sync
+        import json
+
+        domain = "{{ inputs.target }}"
+        print(f"[*] Querying crt.sh for: {domain}")
+        try:
+            subs = crtsh_subdomains_sync(domain, timeout=30.0)
+            print(f"[+] crt.sh returned {len(subs)} subdomains")
+        except Exception as e:
+            subs = []
+            print(f"[!] crt.sh lookup failed: {e}")
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(cert_data='\n'.join(sorted(set(subs, cert_count=len(subs), crtsh_subs=json.dumps(subs))
+        for s in subs[:10]:
+            print(f"    {s}")
+    needs: []
+  bruteforce:
+    name: DNS Bruteforce
+    needs:
+    - passive-enum
+    outputs:
+      bruteforce_file: '{{ steps["collect-bruteforce"].outputs.bruteforce_file | default("", true) }}'
+      bruteforce_count: '{{ steps["collect-bruteforce"].outputs.bruteforce_count | default("0", true) }}'
+    steps:
+    - task: puredns
+      log-command: '{{ inputs.log_command }}'
+      name: puredns-brute
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        wordlist: '{{ inputs.wordlist if inputs.wordlist else "/usr/share/wordlists/dns/namelist.txt" }}'
+        resolvers: '{{ inputs.resolvers if inputs.resolvers else "" }}'
+        rate: 10000
+        wildcard_batch: 2000
+      continue-on-error: true
+    - task: gotator
+      log-command: '{{ inputs.log_command }}'
+      name: gotator-perm
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        wordlist: '{{ inputs.wordlist if inputs.wordlist else "/usr/share/wordlists/dns/namelist.txt" }}'
+      continue-on-error: true
+    - task: dnsx
+      log-command: '{{ inputs.log_command }}'
+      name: dnsx-resolve-gotator
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ steps["gotator-perm"].outputs.stdout | default(inputs.target, true) }}'
+        a: true
+        cname: true
+        resp: true
+      continue-on-error: true
+    - name: collect-bruteforce
+      script: |
+        from pathlib import Path
+
+        puredns_subs = {{ subdomains(steps["puredns-brute"].outputs.typed_outputs) | default([], true) | tojson }}
+        gotator_subs = {{ subdomains(steps["dnsx-resolve-gotator"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        all_subs = sorted(set(puredns_subs + gotator_subs))
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(bruteforce_data='\n'.join(all_subs, bruteforce_count=len(all_subs))
+        print(f'Bruteforce: {len(all_subs)} valid subdomains')
+    needs: []
+  merge-all:
+    name: Merge & Verify All Sources
+    needs:
+    - passive-enum
+    - cert-enum
+    - bruteforce
+    outputs:
+      all_subs_file: '{{ steps["collect-all"].outputs.all_subs_file | default("", true) }}'
+      all_count: '{{ steps["collect-all"].outputs.all_count | default("0", true) }}'
+      wildcard_detected: '{{ steps["check-wildcard"].outputs.wildcard | default("false", true) }}'
+    steps:
+    - task: dnsx
+      log-command: '{{ inputs.log_command }}'
+      name: dnsx-verify
+      retry: 2
+      retry-delay: 5
+      with:
+        target: |
+          {{ jobs['passive-enum'].outputs.passive_file if true }}
+        a: true
+        aaaa: true
+        cname: true
+        resp: true
+      continue-on-error: true
+    - name: check-wildcard
+      script: |
+        domain = "{{ inputs.target }}"
+        import socket
+
+        try:
+            socket.gethostbyname(domain)
+            root_resolves = True
+        except:
+            root_resolves = False
+
+        test_host = f"random-{os.urandom(4).hex()}.{domain}"
+        try:
+            ips = socket.getaddrinfo(test_host, 80)
+            wildcard = True
+        except:
+            wildcard = False
+
+        add_outputs(wildcard="true" if wildcard else "false",
+                    root_resolves="true" if root_resolves else "false")
+        print(f"Root resolves: {root_resolves}, Wildcard: {wildcard}")
+    - name: collect-all
+      script: |
+        from pathlib import Path
+
+        passive = {{ subdomains(jobs['passive-enum'].outputs.passive_file | file | splitlines) | default([], true) | tojson }}
+        cert = {{ subdomains(jobs['cert-enum'].outputs.cert_file | file | splitlines) | default([], true) | tojson }}
+        bruteforce = {{ subdomains(jobs['bruteforce'].outputs.bruteforce_file | file | splitlines) | default([], true) | tojson }}
+        verified = {{ subdomains(steps["dnsx-verify"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        all_subs = sorted(set(passive + cert + bruteforce + verified))
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(all_subs_file='\n'.join(all_subs, all_count=len(all_subs))
+        print(f'Total unique subdomains: {len(all_subs)} (P:{len(passive)} C:{len(cert)} B:{len(bruteforce)} V:{len(verified)})')
+    needs: []
+  resolve-ips:
+    name: DNS Resolution to IPs
+    needs:
+    - merge-all
+    steps:
+    - task: dnsx
+      log-command: '{{ inputs.log_command }}'
+      name: dnsx-resolve-all
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["merge-all"].outputs.all_subs_file }}'
+        a: true
+        aaaa: true
+        resp: true
+      continue-on-error: true
+    - name: collect-ips
+      script: |
+        import json
+        from pathlib import Path
+        from collections import defaultdict
+
+        resolved = {{ steps["dnsx-resolve-all"].outputs.typed_outputs | default([], true) | tojson }}
+        subdomain_to_ips = {}
+        all_ips = set()
+        for r in resolved:
+            sub = r.get('host', '')
+            ip = r.get('value', r.get('a', ''))
+            if ip:
+                subdomain_to_ips.setdefault(sub, []).append(ip)
+                all_ips.add(ip)
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(resolved_data=json.dumps({'subdomain_to_ips': subdomain_to_ips, 'all_ips': sorted(all_ips, unique_ips=len(all_ips))
+        print(f'Resolved {len(subdomain_to_ips)} subdomains to {len(all_ips)} unique IPs')
+    needs: []
+  summary:
+    name: Subdomain Enum Summary
+    needs:
+    - merge-all
+    - resolve-ips
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " SUBDOMAIN ENUM: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "  Passive sources: {{ jobs['passive-enum'].outputs.passive_count }}"
+        echo "  Certificate CT: {{ jobs['cert-enum'].outputs.cert_count }}"
+        echo "  Bruteforce/permutations: {{ jobs['bruteforce'].outputs.bruteforce_count }}"
+        echo "  Total unique: {{ jobs['merge-all'].outputs.all_count }}"
+        echo "  Wildcard DNS: {{ jobs['merge-all'].outputs.wildcard_detected }}"
+        echo "  Unique IPs: {{ jobs['resolve-ips'].outputs.unique_ips }}"
+        echo ""
+        echo "  All subs: {{ jobs['merge-all'].outputs.all_subs_file }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

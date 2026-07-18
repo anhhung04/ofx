@@ -1,0 +1,52 @@
+name: crtsh-enum
+description: >
+  Certificate transparency and subdomain enumeration — combines crt.sh
+
+  lookups with subfinder for comprehensive subdomain discovery.
+tags:
+- recon
+- subdomains
+- crtsh
+- osint
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable stdout output log files for steps when set to true/false.
+    target:
+      required: true
+      type: string
+      description: Target domain to enumerate subdomains for
+      alias: t
+jobs:
+  enumerate:
+    name: Subdomain Enumeration
+    outputs:
+      subdomains_file: '{{ steps["merge-results"].outputs.subdomains_file | default("", true) }}'
+      total_count: '{{ steps["merge-results"].outputs.total_count | default("", true) }}'
+    steps:
+    - name: subfinder-scan
+      log-command: '{{ inputs.log_command | default(true) }}'
+      task: subfinder
+      continue-on-error: true
+      with:
+        target: '{{ inputs.target }}'
+    - name: crtsh-lookup
+      continue-on-error: true
+      log-command: '{{ inputs.log_command | default(true) }}'
+      script: "from ofx.api.recon import crtsh_subdomains_sync\n\ndomain = \"{{ inputs.target }}\"\nprint(f\"[*] Querying crt.sh for: {domain}\")\nsubs = crtsh_subdomains_sync(domain, timeout=30.0)\nprint(f\"\
+        [+] crt.sh returned {len(subs)} subdomains\")\nfor s in subs[:20]:\n    print(f\"    {s}\")\nif len(subs) > 20:\n    print(f\"    ... and {len(subs) - 20} more\")\n\nimport json\nadd_outputs(crtsh_subs=json.dumps(subs),\
+        \ crtsh_count=len(subs))\n"
+    - name: merge-results
+      script: "import json\n\ndomain = \"{{ inputs.target }}\"\nall_subs = set()\n\ncrtsh_raw = '{{ steps.1.outputs.crtsh_subs | default(\"[]\", true) }}'\ntry:\n    crtsh_subs = json.loads(crtsh_raw)\n\
+        \    all_subs.update(crtsh_subs)\nexcept (json.JSONDecodeError, TypeError):\n    pass\n\nsubfinder_raw = '{{ steps.0.outputs.stdout | default(\"\", true) }}'\nfor line in subfinder_raw.strip().splitlines():\n\
+        \    line = line.strip()\n    if line and \".\" in line and not line.startswith(\"[\"):\n        all_subs.add(line.lower())\n\nfiltered = sorted(s for s in all_subs if s.endswith(f\".{domain}\"\
+        ) or s == domain)\n\nout_file = f\"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_subdomains.txt\"\nwith open(out_file, \"w\") as f:\n    for sub in filtered:\n        f.write(f\"{sub}\\n\")\n\nprint(f\"\
+        [+] Combined unique subdomains: {len(filtered)}\")\nfor s in filtered[:30]:\n    print(f\"    {s}\")\nif len(filtered) > 30:\n    print(f\"    ... and {len(filtered) - 30} more\")\n\nadd_outputs(subdomains_file=out_file,\
+        \ total_count=len(filtered))\n"
+      log-stdout: '{{ inputs.log_output | default(true) }}'

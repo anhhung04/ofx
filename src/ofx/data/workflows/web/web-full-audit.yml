@@ -141,6 +141,7 @@ jobs:
       ssl_certs: '{{ steps["collect-ssl"].outputs.ssl_certs | default("0", true) }}'
     steps:
       - task: testssl
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: testssl-scan
         retry: 2
         retry-delay: 5
@@ -162,7 +163,7 @@ jobs:
     needs:
       - fingerprint
     outputs:
-      dir_urls_file: '{{ steps["collect-dirs"].outputs.dir_urls_file | default("", true) }}'
+      dir_urls: '{{ steps["collect-dirs"].outputs.dir_urls | default("", true) }}'
       dir_count: '{{ steps["collect-dirs"].outputs.dir_count | default("", true) }}'
     steps:
       - task: feroxbuster
@@ -180,27 +181,24 @@ jobs:
           insecure: true
           auto_tune: true
           status_codes: 200,201,204,301,302,307,308,401,403,405,500
-        continue-on-error: true
+          continue-on-error: true
       - name: collect-dirs
         script: |
-          urls = set()
-          for item in {{ urls(steps["feroxbuster-deep"].outputs.typed_outputs) | default([], true) | tojson }}:
-              url = item.get('url', '')
-              if url:
-                  urls.add(url)
+           urls = set()
+           for item in {{ urls(steps["feroxbuster-deep"].outputs.typed_outputs) | default([], true) | tojson }}:
+               url = item.get('url', '')
+               if url:
+                   urls.add(url)
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_webaudit_dirs.txt', 'w') as tf:
-              tf.write('\n'.join(sorted(urls)))
-
-          add_outputs(dir_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_webaudit_dirs.txt", dir_count=len(urls))
-          print(f"Discovered {len(urls)} unique URLs/directories")
+           add_outputs(dir_urls='\n'.join(sorted(urls)), dir_count=len(urls))
+           print(f"Discovered {len(urls)} unique URLs/directories")
 
   crawl:
     name: Content Discovery
     needs:
       - fingerprint
     outputs:
-      crawled_file: '{{ steps["collect-crawled"].outputs.crawled_file | default("", true) }}'
+      crawled_urls: '{{ steps["collect-crawled"].outputs.crawled_urls | default("", true) }}'
       crawl_count: '{{ steps["collect-crawled"].outputs.crawl_count | default("", true) }}'
       js_findings: '{{ steps["collect-crawled"].outputs.js_findings | default("0", true) }}'
     steps:
@@ -216,6 +214,7 @@ jobs:
           known_files: all
         continue-on-error: true
       - task: waymore
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: waymore-archive
         retry: 2
         retry-delay: 5
@@ -223,6 +222,7 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: jsluice
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: jsluice-analysis
         retry: 2
         retry-delay: 5
@@ -231,32 +231,25 @@ jobs:
         continue-on-error: true
       - name: collect-crawled
         script: |
-          urls = set()
-          for source in [
-              {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
-              {{ urls(steps["waymore-archive"].outputs.typed_outputs) | default([], true) | tojson }},
-          ]:
-              for item in source:
-                  url = item.get('url', '')
-                  if url:
-                      urls.add(url)
+           urls = set()
+           for source in [
+               {{ urls(steps["katana-crawl"].outputs.typed_outputs) | default([], true) | tojson }},
+               {{ urls(steps["waymore-archive"].outputs.typed_outputs) | default([], true) | tojson }},
+           ]:
+               for item in source:
+                   url = item.get('url', '')
+                   if url:
+                       urls.add(url)
 
-          js_typed = {{ steps["jsluice-analysis"].outputs.typed_outputs | default([], true) | tojson }}
-          js_count = len(js_typed)
-          for item in js_typed:
-              url = item.get('url', '')
-              if url:
-                  urls.add(url)
+           js_typed = {{ steps["jsluice-analysis"].outputs.typed_outputs | default([], true) | tojson }}
+           js_count = len(js_typed)
+           for item in js_typed:
+               url = item.get('url', '')
+               if url:
+                   urls.add(url)
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_webaudit_crawled.txt', 'w') as tf:
-              tf.write('\n'.join(sorted(urls)))
-
-          add_outputs(
-              crawled_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_webaudit_crawled.txt",
-              crawl_count=len(urls),
-              js_findings=js_count,
-          )
-          print(f"Crawled {len(urls)} unique URLs, {js_count} JS findings")
+           add_outputs(crawled_urls='\n'.join(sorted(urls)), crawl_count=len(urls), js_findings=js_count)
+           print(f"Crawled {len(urls)} unique URLs, {js_count} JS findings")
 
   param-fuzz:
     name: Parameter Discovery & Fuzzing
@@ -264,7 +257,7 @@ jobs:
       - crawl
       - dir-brute
     outputs:
-      param_file: '{{ steps["collect-params"].outputs.param_file | default("", true) }}'
+      param_urls: '{{ steps["collect-params"].outputs.param_urls | default("", true) }}'
       param_count: '{{ steps["collect-params"].outputs.param_count | default("", true) }}'
     steps:
       - task: arjun
@@ -295,11 +288,8 @@ jobs:
                   if url and ('=' in url or '?' in url):
                       param_urls.add(url)
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_param_urls.txt', 'w') as f:
-              f.write('\n'.join(sorted(param_urls)))
-
-          add_outputs(param_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_param_urls.txt", param_count=len(param_urls))
-          print(f"Discovered {len(param_urls)} parameterized URLs")
+              add_outputs(param_urls='\n'.join(sorted(param_urls)), param_count=len(param_urls))
+              print(f"Discovered {len(param_urls)} parameterized URLs")
 
   vuln-scan:
     name: Vulnerability Scanning
@@ -332,7 +322,7 @@ jobs:
         retry-delay: 5
         run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_urls }}"
         continue-on-error: true
       - task: sqlmap
         log-command: "{{ inputs.log_command | default(true) }}"
@@ -341,7 +331,7 @@ jobs:
         retry-delay: 5
         run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_urls }}"
           batch: true
           level: 3
           risk: 2
@@ -354,11 +344,12 @@ jobs:
         retry-delay: 5
         run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_urls }}"
           batch: true
           level: 2
         continue-on-error: true
       - task: crlfuzz
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: crlf-scan
         retry: 2
         retry-delay: 5
@@ -366,20 +357,22 @@ jobs:
           target: "{{ jobs.fingerprint.outputs.live_urls | default(inputs.target, true) }}"
         continue-on-error: true
       - task: ssrfmap
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: ssrf-scan
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_urls }}"
         continue-on-error: true
       - task: tinja
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: ssti-scan
         retry: 2
         retry-delay: 5
         run_if: "{{ jobs['param-fuzz'].outputs.param_count | default(0, true) | int > 0 }}"
         with:
-          target: "{{ jobs['param-fuzz'].outputs.param_file }}"
+          target: "{{ jobs['param-fuzz'].outputs.param_urls }}"
         continue-on-error: true
       - name: collect-vulns
         script: |
@@ -422,6 +415,7 @@ jobs:
           tags: exposure,token,secret
         continue-on-error: true
       - task: trufflehog
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: trufflehog-scan
         retry: 2
         retry-delay: 5
@@ -429,6 +423,7 @@ jobs:
           target: "{{ inputs.target }}"
         continue-on-error: true
       - task: gitleaks
+        log-command: "{{ inputs.log_command | default(true) }}"
         name: gitleaks-scan
         retry: 2
         retry-delay: 5
@@ -497,7 +492,6 @@ jobs:
               print('No --project set, skipping file export')
           else:
 
-              # directories
               d = '{{ vars.project_web }}'
               Path(d).mkdir(parents=True, exist_ok=True)
               src = '''{{ jobs['dir-brute'].outputs.dir_urls_file | default('', true) }}'''
@@ -505,19 +499,16 @@ jobs:
                   shutil.copy2(src, Path(d) / 'directories.txt')
                   print('  [+] web/directories.txt')
 
-              # crawled URLs
               src = '''{{ jobs['crawl'].outputs.crawled_file | default('', true) }}'''
               if src and Path(src).is_file():
                   shutil.copy2(src, Path(d) / 'crawled-urls.txt')
                   print('  [+] web/crawled-urls.txt')
 
-              # param URLs
-              src = '''{{ jobs['param-fuzz'].outputs.param_file | default('', true) }}'''
+              src = '''{{ jobs['param-fuzz'].outputs.param_urls | default('', true) }}'''
               if src and Path(src).is_file():
                   shutil.copy2(src, Path(d) / 'param-urls.txt')
                   print('  [+] web/param-urls.txt')
 
-              # Auto-export typed outputs
               all_typed = []
               for typed in [
                   {{ jobs['fingerprint'].outputs.typed_outputs | default([], true) | tojson }},

@@ -1,7 +1,6 @@
 name: jwt-audit
-description: 'JWT security audit — analyzes JWT tokens for vulnerabilities including algorithm confusion, weak secrets, signature bypass, and claim manipulation.
-
-  '
+description: >
+  JWT security audit — analyzes JWT tokens for vulnerabilities including algorithm confusion, weak secrets, signature bypass, and claim manipulation.
 tags:
 - web
 - vuln
@@ -56,14 +55,12 @@ jobs:
         payload = {}
 
         try:
-            # Decode header
             header_b64 = parts[0] + '=' * (4 - len(parts[0]) % 4)
             header = json.loads(base64.urlsafe_b64decode(header_b64))
         except Exception:
             pass
 
         try:
-            # Decode payload
             payload_b64 = parts[1] + '=' * (4 - len(parts[1]) % 4)
             payload = json.loads(base64.urlsafe_b64decode(payload_b64))
         except Exception:
@@ -97,13 +94,7 @@ jobs:
       script: |
         jwt_vulns = {{ vulns(steps["jwt-all-tests"].outputs.typed_outputs) | default([], true) | tojson }}
 
-        with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_jwtaudit_vulns.txt', 'w') as tf:
-            findings = []
-            for v in jwt_vulns:
-                findings.append(v.get('name', 'unknown'))
-            tf.write('\n'.join(findings))
-
-        add_outputs(jwt_vuln_count=len(jwt_vulns), jwt_vulns_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_jwtaudit_vulns.txt")
+        add_outputs(jwt_vuln_count=len(jwt_vulns), jwt_vulns='\n'.join([v.get('name', 'unknown') for v in jwt_vulns]))
         print(f"JWT vulnerabilities found: {len(jwt_vulns)}")
         for v in jwt_vulns:
             print(f"  [!] {v.get('name', 'unknown')}")

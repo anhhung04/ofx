@@ -1,0 +1,183 @@
+name: dns-resolve
+description: >
+  DNS resolution and validation for discovered subdomains. Resolves hostnames to
+  IP addresses, checks CNAME records, validates DNS configurations, and detects
+  potential subdomain takeover vulnerabilities. Produces structured IP/subdomain
+  mapping for further network reconnaissance.
+tags:
+  - recon
+  - dns
+  - resolution
+  - takeover
+dispatch:
+  inputs:
+    subdomains_file:
+      required: true
+      type: string
+      description: File containing list of subdomains to resolve
+      alias: s
+    resolver:
+      type: string
+      default: /etc/resolv.conf
+      description: DNS resolver file or custom DNS server
+    threads:
+      type: number
+      default: 100
+      description: Concurrent DNS queries
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  resolved_file: '{{ jobs["resolve"].outputs.resolved_file | default("", true) }}'
+  resolved_count: '{{ jobs["resolve"].outputs.resolved_count | default("0", true) }}'
+  ips_file: '{{ jobs["resolve"].outputs.ips_file | default("", true) }}'
+  ip_count: '{{ jobs["resolve"].outputs.ip_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["resolve"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  resolve:
+    name: DNS Resolution
+    outputs:
+      resolved_file: '{{ steps["collect-dns"].outputs.resolved_file | default("", true) }}'
+      resolved_count: '{{ steps["collect-dns"].outputs.resolved_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-dns"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: dnsx
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: dnsx-resolve
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.subdomains_file }}"
+          a: true
+          cname: true
+          resp: true
+          resolver: "{{ inputs.resolver }}"
+          threads: "{{ inputs.threads }}"
+          json: true
+          silent: true
+        continue-on-error: true
+      - task: dnstake
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: dnstake-check
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.subdomains_file }}"
+          threads: "{{ inputs.threads }}"
+        continue-on-error: true
+      - name: collect-dns
+        script: |
+          import json
+          from pathlib import Path
+
+          dnsx_data = {{ steps["dnsx-resolve"].outputs.typed_outputs | default([], true) | tojson }}
+
+          dns_records = []
+          for item in dnsx_data:
+            host = item.get('host', '')
+            if not host:
+              continue
+
+            a_records = item.get('a', [])
+            for ip in a_records:
+              dns_records.append({
+                'subdomain': host,
+                'type': 'A',
+                'value': ip,
+                'ttl': item.get('ttl', 0)
+              })
+
+            cname = item.get('cname', '')
+            if cname:
+              dns_records.append({
+                'subdomain': host,
+                'type': 'CNAME',
+                'value': cname,
+                'ttl': item.get('ttl', 0)
+              })
+
+          takeover_data = {{ vulns(steps["dnstake-check"].outputs.typed_outputs) | default([], true) | tojson }}
+          takeovers = {}
+          for vuln in takeover_data:
+            host = vuln.get('host', '')
+            if host:
+              takeovers[host] = vuln.get('service', '')
+
+          for record in dns_records:
+            host = record['subdomain']
+            if host in takeovers:
+              record['potential_takeover'] = takeovers[host]
+
+          ip_to_hosts = {}
+          for record in dns_records:
+            if record['type'] == 'A':
+              ip = record['value']
+              host = record['subdomain']
+              if ip not in ip_to_hosts:
+                ip_to_hosts[ip] = set()
+              ip_to_hosts[ip].add(host)
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+            [f"{r['subdomain']} {r['type']} {r['value']}" for r in dns_records]
+          ))
+          unique_ips = sorted(ip_to_hosts.keys())
+          pass
+
+          add_outputs(
+            resolved_file=dns_file,
+            resolved_count=len(dns_records),
+            ips_file=ips_file,
+            ip_count=len(unique_ips),
+            typed_outputs=dns_records
+          )
+          print(f'DNS resolution: {len(dns_records)} records, {len(unique_ips)} unique IPs')
+          if takeovers:
+            print(f'  Potential takeovers: {len(takeovers)}')
+  takeover-report:
+    name: Takeover Candidates Report
+    needs:
+      - resolve
+    steps:
+      - name: report-takeovers
+        run: |
+          {% set typed = jobs.resolve.outputs.typed_outputs | default([], true) %}
+          {% set takeovers = [r for r in typed if r.get('potential_takeover')] %}
+
+          echo "=========================================="
+          echo " SUBDOMAIN TAKEOVER CANDIDATES"
+          echo "=========================================="
+          echo ""
+
+          {% if takeovers %}
+          {% for t in takeovers %}
+          echo "{{ loop.index }}. {{ t.subdomain }} -> {{ t.value }} ({{ t.potential_takeover }})"
+          {% endfor %}
+          {% else %}
+          echo "No potential takeover candidates found."
+          {% endif %}
+          echo ""
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+      - name: export-takeovers
+        script: |
+          project = '{{ vars.project_path | default("", true) }}'
+          if project:
+            typed = {{ jobs.resolve.outputs.typed_outputs | default([], true) | tojson }}
+            takeovers = [t for t in typed if t.get('potential_takeover')]
+            if takeovers:
+              Path(project).mkdir(parents=True, exist_ok=True)
+              (Path(project) / 'takeovers.txt').write_text(
+                '\\n'.join([f"{t['subdomain']} -> {t['value']} ({t['potential_takeover']})" for t in takeovers])
+              )
+              print(f'  [+] takeovers.txt ({len(takeovers)} candidates)')
+          else:
+            print('No --project set, skipping export')
+        continue-on-error: true

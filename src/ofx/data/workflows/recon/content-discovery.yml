@@ -1,0 +1,230 @@
+name: content-discovery
+description: >
+  Content discovery and directory brute-forcing on web targets. Uses multiple
+  tools (dirsearch, ffuf, feroxbuster) with different wordlists to discover
+  hidden files and directories. Runs tools in parallel and aggregates results.
+tags:
+  - recon
+  - web
+  - content
+  - bruteforce
+  - directories
+dispatch:
+  inputs:
+    targets:
+      required: true
+      type: string
+      description: Target URL(s) or file with URLs
+      alias: t
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/dirb/common.txt
+      description: Wordlist for brute-forcing
+    extensions:
+      type: string
+      default: "php,html,txt,json,js,bak,old,zip,tar.gz"
+      description: File extensions to append
+    threads:
+      type: number
+      default: 100
+      description: Concurrent threads
+    recursive:
+      type: string
+      default: "true"
+      description: Enable recursive scanning
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  paths_file: '{{ jobs["discover"].outputs.paths_file | default("", true) }}'
+  path_count: '{{ jobs["discover"].outputs.path_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["discover"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  discover:
+    name: Content Discovery
+    outputs:
+      paths_file: '{{ steps["merge-paths"].outputs.paths_file | default("", true) }}'
+      path_count: '{{ steps["merge-paths"].outputs.path_count | default("0", true) }}'
+      typed_outputs: '{{ steps["merge-paths"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: dirsearch
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: dirsearch-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          url: "{{ inputs.targets }}"
+          wordlist: "{{ inputs.wordlist }}"
+          extensions: "{{ inputs.extensions }}"
+          threads: "{{ inputs.threads }}"
+          recursive: "{{ inputs.recursive }}"
+          plain: true
+          output: "dirsearch_results.txt"
+        continue-on-error: true
+      - task: ffuf
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: ffuf-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          wordlist: "{{ inputs.wordlist }}"
+          extensions: "{{ inputs.extensions }}"
+          threads: "{{ inputs.threads }}"
+          recursion: "{{ inputs.recursive }}"
+          output: "ffuf_results.json"
+        continue-on-error: true
+      - task: feroxbuster
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: feroxbuster-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          wordlist: "{{ inputs.wordlist }}"
+          extensions: "{{ inputs.extensions }}"
+          threads: "{{ inputs.threads }}"
+          depth: "{{ '3' if inputs.recursive == 'true' else '1' }}"
+          json: true
+          output: "ferox_results.json"
+        continue-on-error: true
+      - name: merge-paths
+        script: |
+          import json
+          from pathlib import Path
+
+          all_paths = set()
+          typed_paths = []
+
+          dirsearch_file = Path('dirsearch_results.txt')
+          if dirsearch_file.exists():
+            for line in dirsearch_file.read_text().split('\\n'):
+              line = line.strip()
+              if line and line.startswith(('http://', 'https://')):
+                all_paths.add(line)
+                typed_paths.append({
+                  'url': line,
+                  'source': 'dirsearch',
+                  'status': 0
+                })
+
+          ffuf_file = Path('ffuf_results.json')
+          if ffuf_file.exists():
+            try:
+              data = json.loads(ffuf_file.read_text())
+              for result in data.get('results', []):
+                url = result.get('url', '')
+                status = result.get('status', 0)
+                if url:
+                  all_paths.add(url)
+                  typed_paths.append({
+                    'url': url,
+                    'source': 'ffuf',
+                    'status': status
+                  })
+            except json.JSONDecodeError:
+              pass
+
+          ferox_file = Path('ferox_results.json')
+          if ferox_file.exists():
+            try:
+              for line in ferox_file.read_text().split('\\n'):
+                if not line.strip():
+                  continue
+                data = json.loads(line)
+                url = data.get('url', '')
+                status = data.get('status', 0)
+                if url:
+                  all_paths.add(url)
+                  typed_paths.append({
+                    'url': url,
+                    'source': 'feroxbuster',
+                    'status': status
+                  })
+            except json.JSONDecodeError:
+              pass
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+
+          add_outputs(
+            paths_file=paths_file,
+            path_count=len(all_paths),
+            typed_outputs=typed_paths
+          )
+          print(f'Content discovery: {len(all_paths)} unique paths from all tools')
+  summary:
+    name: Discovery Summary
+    needs:
+      - discover
+    steps:
+      - name: report
+        run: |
+          {% set paths = jobs.discover.outputs.typed_outputs | default([], true) %}
+          {% set by_source = {} %}
+          {% for p in paths %}
+          {%   set src = p.source or 'unknown' %}
+          {%   if src not in by_source %}
+          {%     set _ = by_source.update({src: []}) %}
+          {%   endif %}
+          {%   set _ = by_source[src].append(p) %}
+          {% endfor %}
+
+          echo "=========================================="
+          echo " CONTENT DISCOVERY RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Total unique paths: {{ jobs.discover.outputs.path_count | default('0', true) }}"
+          {% for src, items in by_source.items()|sort %}
+          echo "  {{ src }}: {{ items|length }}"
+          {% endfor %}
+          {% if paths %}
+          {% set by_status = {} %}
+          {% for p in paths %}
+          {%   set status = p.status or 0 %}
+          {%   if status not in by_status %}
+          {%     set _ = by_status.update({status: []}) %}
+          {%   endif %}
+          {%   set _ = by_status[status].append(p) %}
+          {% endfor %}
+          echo ""
+          echo "By status code:"
+          {% for status in [200, 301, 302, 403, 401, 500] if status in by_status %}
+          echo "  {{ status }}: {{ by_status[status]|length }}"
+          {% endfor %}
+          {% endif %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+      - name: export-paths
+        script: |
+          from pathlib import Path
+          import shutil
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+            print('No --project set, skipping file export')
+          else:
+            d = f'{project}/web'
+            Path(d).mkdir(parents=True, exist_ok=True)
+
+            src = '{{ jobs.discover.outputs.paths_file | default("", true) }}'
+            if src and Path(src).is_file():
+              shutil.copy2(src, Path(d) / 'discovered_paths.txt')
+              print(f'  [+] web/discovered_paths.txt')
+
+            all_typed = {{ jobs.discover.outputs.typed_outputs | default([], true) | tojson }}
+            ctx = get_current_context()
+            if ctx and hasattr(ctx, 'export_typed_outputs'):
+              summaries = ctx.export_typed_outputs(project, all_typed)
+              for s in summaries:
+                print(f'  {s}')
+
+            print(f'Project export complete: {project}')
+        continue-on-error: true

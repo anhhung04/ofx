@@ -1,0 +1,160 @@
+name: docker-registry-enum
+description: >
+  Docker registry enumeration — discovers and inspects Docker registries, container
+  images, and container configuration for security issues. Scans for exposed
+  registries, misconfigured APIs, and vulnerable container images.
+tags:
+  - recon
+  - docker
+  - registry
+  - containers
+  - cloud
+dispatch:
+  inputs:
+    targets:
+      required: true
+      type: string
+      description: Target IP(s), URL(s), or file with targets
+      alias: t
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  registry_file: '{{ jobs["collect"].outputs.registry_file | default("", true) }}'
+  registry_count: '{{ jobs["collect"].outputs.registry_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["collect"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  discover:
+    name: Docker Registry Discovery
+    steps:
+      - task: nmap
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nmap-docker
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          ports: "2375,2376,5000,5001"
+          script: "docker-version,docker-images,banner"
+          json: true
+          output_prefix: "docker"
+        continue-on-error: true
+      - task: trivy
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: trivy-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          severity: "CRITICAL,HIGH,MEDIUM"
+          format: "json"
+        continue-on-error: true
+      - task: grype
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: grype-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          output: "json"
+        continue-on-error: true
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-docker
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          tags: "docker,registry,container,kubernetes"
+          severity: "critical,high,medium,low"
+          rate_limit: 50
+          json: true
+          silent: true
+        continue-on-error: true
+  collect:
+    name: Collect Results
+    needs:
+      - discover
+    outputs:
+      registry_file: '{{ steps["collect-docker"].outputs.registry_file | default("", true) }}'
+      registry_count: '{{ steps["collect-docker"].outputs.registry_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-docker"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - name: collect-docker
+        script: |
+          import json
+          from pathlib import Path
+
+          findings = []
+
+          nmap_data = {{ steps["nmap-docker"].outputs.typed_outputs | default([], true) | tojson }}
+          for host in nmap_data:
+            ip = host.get('ip', '')
+            for port in host.get('ports', []):
+              state = port.get('state', '')
+              if state == 'open':
+                scripts = port.get('scripts', {})
+                version_info = scripts.get('docker-version', {})
+                images = scripts.get('docker-images', [])
+
+                findings.append({
+                  'ip': ip,
+                  'port': port.get('port', 0),
+                  'service': 'docker-registry',
+                  'version': str(version_info.get('Version', '')),
+                  'api_version': str(version_info.get('ApiVersion', '')),
+                  'image_count': len(images) if isinstance(images, list) else 0,
+                  'source': 'nmap'
+                })
+
+          for vuln in {{ vulns(steps["nuclei-docker"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = vuln.get('host', '')
+            if host:
+              findings.append({
+                'ip': host,
+                'port': 0,
+                'service': 'docker-registry',
+                'name': vuln.get('name', ''),
+                'severity': vuln.get('severity', 'info'),
+                'source': 'nuclei'
+              })
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          registry_file = f'{out_dir}/ofx_docker_registries.txt'
+          Path(registry_file).write_text('\\n'.join(
+            [f"{f.get('ip', '')}:{f.get('port', '')} {f.get('version', '')}" for f in findings]
+          ))
+
+          add_outputs(
+            registry_file=registry_file,
+            registry_count=len(findings),
+            typed_outputs=findings
+          )
+          print(f'Docker registry enum: {len(findings)} registries/containers found')
+  summary:
+    name: Summary
+    needs:
+      - collect
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " DOCKER REGISTRY ENUMERATION RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Targets: {{ inputs.targets }}"
+          echo "Exposed registries: {{ jobs.collect.outputs.registry_count | default('0', true) }}"
+          echo ""
+          {% set findings = jobs.collect.outputs.typed_outputs | default([], true) %}
+          {% for f in findings[:20] %}
+          echo "  {{ f.ip }}:{{ f.port }} {{ f.get('version', '') }}"
+          {% endfor %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -1,0 +1,70 @@
+name: user-hunt
+description: >
+  User account search — searches for user accounts across online platforms using maigret (username hunting) and h8mail (email breach search).
+tags:
+- osint
+- user_account
+- leak
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable stdout output log files for steps when set to true/false.
+    target:
+      required: true
+      type: string
+      description: Username or email address to search
+      alias: t
+defaults:
+  store-creds: true
+jobs:
+  username-hunt:
+    name: Username Hunting
+    outputs:
+      accounts_found: '{{ steps["export-accounts"].outputs.accounts_found | default("", true) }}'
+      profile_urls: '{{ steps["export-accounts"].outputs.profile_urls | default("", true) }}'
+    steps:
+    - task: maigret
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: maigret-search
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - name: export-accounts
+      script: 'import json
+
+        accounts = {{ users(steps["maigret-search"].outputs.typed_outputs) | tojson }}
+
+        urls = {{ urls(steps["maigret-search"].outputs.typed_outputs) | tojson }}
+
+        add_outputs(accounts_found=len(accounts), profile_urls=len(urls))
+
+        print(f"Found {len(accounts)} accounts, {len(urls)} profile URLs")
+
+        '
+  email-breach:
+    name: Email Breach Search
+    outputs:
+      breaches_found: '{{ steps["export-breaches"].outputs.breaches_found | default("", true) }}'
+    steps:
+    - task: h8mail
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: breach-search
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - name: export-breaches
+      script: 'import json
+
+        users_found = {{ users(steps["breach-search"].outputs.typed_outputs) | tojson }}
+
+        add_outputs(breaches_found=len(users_found))
+
+        print(f"Found {len(users_found)} breach results")
+
+        '

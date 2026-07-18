@@ -149,7 +149,6 @@ jobs:
         print(f" Target: {{ inputs.target }}")
         print("=" * 60)
 
-        # Tech stack
         print("\n--- Technology Stack ---")
         tech_raw = """{{ jobs.fingerprint.outputs.tech_stack | default('{}', true) }}"""
         try:
@@ -165,7 +164,6 @@ jobs:
         print(f"  Server: {{ jobs.fingerprint.outputs.server }}")
         print(f"  WAF/CDN: {{ jobs.fingerprint.outputs.waf }}")
 
-        # Security headers
         print("\n--- Security Posture ---")
         missing = int("{{ jobs.security.outputs.missing_count | default('0', true) }}" or "0")
         audit_raw = """{{ jobs.security.outputs.security_audit | default('{}', true) }}"""
@@ -197,7 +195,6 @@ jobs:
             icon = "[+]" if value != "MISSING" else "[-]"
             print(f"  {icon} {header}")
 
-        # Robots
         robots = "{{ jobs.security.outputs.robots_content | default('', true) }}"
         if robots:
             print(f"\n--- robots.txt (preview) ---")

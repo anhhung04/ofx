@@ -1,0 +1,154 @@
+name: ssl-audit
+description: >
+  SSL/TLS security auditing. Uses testssl.sh for comprehensive protocol and cipher checks,
+  tlsx for certificate analysis and SAN extraction, and sslscan for cipher enumeration.
+  Detects Heartbleed, POODLE, BEAST, CRIME, ROBOT, and other TLS vulnerabilities.
+tags:
+- recon
+- ssl
+- tls
+- certificate
+- security
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target hostname or IP:port
+      alias: t
+    subdomains_file:
+      type: string
+      default: ''
+      description: File with subdomain list (scan all)
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  testssl-scan:
+    name: Comprehensive TLS Test (testssl.sh)
+    outputs:
+      testssl_file: '{{ steps["report-testssl"].outputs.testssl_file | default("", true) }}'
+      vuln_count: '{{ steps["report-testssl"].outputs.vuln_count | default("0", true) }}'
+      critical_count: '{{ steps["report-testssl"].outputs.critical_count | default("0", true) }}'
+    steps:
+    - task: testssl
+      log-command: '{{ inputs.log_command }}'
+      name: testssl-full
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.subdomains_file if inputs.subdomains_file else inputs.target }}'
+        protocols: true
+        vulnerabilities: true
+        server_defaults: true
+        headers: true
+      continue-on-error: true
+    - name: report-testssl
+      script: |
+        import json
+        from pathlib import Path
+
+        vulns = {{ vulns(steps["testssl-full"].outputs.typed_outputs) | default([], true) | tojson }}
+        certs = {{ steps["testssl-full"].outputs.typed_outputs | default([], true) | tojson }}
+
+        critical = [v for v in vulns if v.get('severity') == 'critical']
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(testssl_data=json.dumps({'vulnerabilities': vulns, 'certificates': certs}, indent=2, default=str, vuln_count=len(vulns), critical_count=len(critical))
+        print(f'Testssl: {len(vulns)} findings (C:{len(critical)})')
+        for v in critical[:10]:
+            print(f'  [CRITICAL] {v.get("name", "")} — {v.get("host", "")}')
+    needs: []
+  tlsx-scan:
+    name: Certificate Analysis (tlsx)
+    outputs:
+      cert_file: '{{ steps["report-cert"].outputs.cert_file | default("", true) }}'
+      san_count: '{{ steps["report-cert"].outputs.san_count | default("0", true) }}'
+      expired_count: '{{ steps["report-cert"].outputs.expired_count | default("0", true) }}'
+    steps:
+    - task: tlsx
+      log-command: '{{ inputs.log_command }}'
+      name: tlsx-cert
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.subdomains_file if inputs.subdomains_file else inputs.target }}'
+        san: true
+        port: 443
+        jarm: true
+        ja3: true
+        cipher: true
+        tls_version: tls12,tls13
+      continue-on-error: true
+    - name: report-cert
+      script: |
+        import json
+        from pathlib import Path
+
+        certs = {{ steps["tlsx-cert"].outputs.typed_outputs | default([], true) | tojson }}
+        subdomains = {{ subdomains(steps["tlsx-cert"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        expired = [c for c in certs if c.get('expired')]
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(cert_data=json.dumps({'certs': certs, 'subdomains_from_san': subdomains}, indent=2, default=str, san_count=len(subdomains), expired_count=len(expired))
+        print(f'tlsx: {len(subdomains)} subdomains from SANs, {len(expired)} expired certs')
+    needs: []
+  sslscan-detail:
+    name: Cipher Suite Analysis (sslscan)
+    needs:
+    - testssl-scan
+    steps:
+    - task: sslscan
+      log-command: '{{ inputs.log_command }}'
+      name: sslscan-ciphers
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        show_certificate: true
+        ssl2: true
+        ssl3: true
+        tls10: true
+        tls11: true
+        tls12: true
+        tls13: true
+      continue-on-error: true
+    - name: report-ciphers
+      script: |
+        vulns = {{ vulns(steps["sslscan-ciphers"].outputs.typed_outputs) | default([], true) | tojson }}
+        if vulns:
+            print(f'sslscan issues: {len(vulns)}')
+            for v in vulns[:5]:
+                print(f'  [{v.get("severity", "info").upper()}] {v.get("name", "")}')
+        else:
+            print('sslscan: OK (no weak ciphers)')
+    needs: []
+  summary:
+    name: SSL Audit Summary
+    needs:
+    - testssl-scan
+    - tlsx-scan
+    - sslscan-detail
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " SSL/TLS AUDIT: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "  Vulnerabilities: {{ jobs['testssl-scan'].outputs.vuln_count }}"
+        echo "  Critical: {{ jobs['testssl-scan'].outputs.critical_count }}"
+        echo "  Subdomains from SAN: {{ jobs['tlsx-scan'].outputs.san_count }}"
+        echo "  Expired certs: {{ jobs['tlsx-scan'].outputs.expired_count }}"
+        echo ""
+        echo "  Report: {{ jobs['testssl-scan'].outputs.testssl_file }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

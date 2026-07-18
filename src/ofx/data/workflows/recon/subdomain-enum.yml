@@ -1,0 +1,306 @@
+name: subdomain-enum
+description: >
+  Subdomain enumeration — discovers subdomains using multiple passive and active
+  sources. Combines results from subfinder, assetfinder, findomain, amass, certificate
+  transparency logs, and bruteforcing with puredns. Deduplicates and validates all
+  findings into a single comprehensive list.
+tags:
+  - recon
+  - subdomains
+  - dns
+  - enumeration
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+      alias: t
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/dns/namelist.txt
+      description: Wordlist for bruteforcing
+    bruteforce:
+      type: string
+      default: "true"
+      description: Enable bruteforce enumeration
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  all_subs_file: '{{ jobs["merge-all"].outputs.all_subs_file | default("", true) }}'
+  all_count: '{{ jobs["merge-all"].outputs.all_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["merge-all"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  passive-enum:
+    name: Passive Subdomain Discovery
+    outputs:
+      passive_subs_file: '{{ steps["merge-passive"].outputs.passive_subs_file | default("", true) }}'
+      passive_count: '{{ steps["merge-passive"].outputs.passive_count | default("0", true) }}'
+      typed_outputs: '{{ steps["merge-passive"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: subfinder
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: subfinder-passive
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          all: true
+          recursive: true
+        continue-on-error: true
+      - task: assetfinder
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: assetfinder-subdomains
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          recursive: true
+        continue-on-error: true
+      - task: findomain
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: findomain-subdomains
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: amass
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: amass-passive
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          passive: true
+          max_dns: 10000
+        continue-on-error: true
+      - name: crtsh-subdomains
+        script: |
+          import json
+          import requests
+          from pathlib import Path
+
+          domain = "{{ inputs.target }}"
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+          try:
+            url = f"https://crt.sh/?q=%.{domain}&output=json"
+            resp = requests.get(url, timeout=30)
+            if resp.status_code == 200:
+              data = resp.json()
+              subs = set()
+              for entry in data:
+                name = entry.get('name_value', '').lower()
+                for sub in name.split('\n'):
+                  sub = sub.strip()
+                  if sub and domain in sub:
+                    subs.add(sub)
+              subs_list = sorted(subs)
+              Path(crtsh_file).write_text('\\n'.join(subs_list))
+              subs_json = json.dumps([{'subdomain': s, 'source': 'crtsh'} for s in subs_list])
+              add_outputs(crtsh_subs=subs_json, crtsh_count=len(subs_list))
+            else:
+              add_outputs(crtsh_subs='[]', crtsh_count=0)
+          except Exception as e:
+            print(f"crtsh error: {e}")
+            add_outputs(crtsh_subs='[]', crtsh_count=0)
+        continue-on-error: true
+      - name: merge-passive
+        script: |
+          import json
+          from pathlib import Path
+
+          all_subs = set()
+
+          for item in {{ subdomains(steps["subfinder-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
+            all_subs.add(item.get('subdomain', '').lower().strip())
+
+          for item in {{ subdomains(steps["assetfinder-subdomains"].outputs.typed_outputs) | default([], true) | tojson }}:
+            all_subs.add(item.get('subdomain', '').lower().strip())
+
+          for item in {{ subdomains(steps["findomain-subdomains"].outputs.typed_outputs) | default([], true) | tojson }}:
+            all_subs.add(item.get('subdomain', '').lower().strip())
+
+          for item in {{ subdomains(steps["amass-passive"].outputs.typed_outputs) | default([], true) | tojson }}:
+            all_subs.add(item.get('subdomain', '').lower().strip())
+
+          crtsh_data = {{ steps["crtsh-subdomains"].outputs.crtsh_subs | default("[]", true) | from_json }}
+          for item in crtsh_data:
+            all_subs.add(item.get('subdomain', '').lower().strip())
+
+          unique_subs = sorted([s for s in all_subs if s and '.' in s])
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+
+          typed = [{'subdomain': s, 'source': 'passive'} for s in unique_subs]
+
+          add_outputs(
+            passive_subs_file=subs_file,
+            passive_count=len(unique_subs),
+            typed_outputs=typed
+          )
+          print(f'Passive enumeration: {len(unique_subs)} unique subdomains')
+    needs: []
+  active-enum:
+    name: Active Bruteforce Enumeration
+    outputs:
+      active_subs_file: '{{ steps["merge-active"].outputs.active_subs_file | default("", true) }}'
+      active_count: '{{ steps["merge-active"].outputs.active_count | default("0", true) }}'
+      typed_outputs: '{{ steps["merge-active"].outputs.typed_outputs | default([], true) }}'
+    needs:
+      - passive-enum
+    steps:
+      - task: puredns
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: puredns-brute
+        retry: 2
+        retry-delay: 5
+        run_if: "{{ inputs.bruteforce | default('true', true) == 'true' }}"
+        with:
+          target: "{{ inputs.target }}"
+          wordlist: "{{ inputs.wordlist }}"
+          rate: 10000
+          resolver: /etc/resolv.conf
+        continue-on-error: true
+      - task: dnsx
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: dnsx-validate
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs['passive-enum'].outputs.passive_subs_file }}"
+          resp: true
+          a: true
+          cname: true
+          json: true
+          silent: true
+        continue-on-error: true
+      - name: merge-active
+        script: |
+          import json
+          from pathlib import Path
+
+          brute_subs = set()
+          for item in {{ subdomains(steps["puredns-brute"].outputs.typed_outputs) | default([], true) | tojson }}:
+            brute_subs.add(item.get('subdomain', '').lower().strip())
+
+          dnsx_data = {{ steps["dnsx-validate"].outputs.typed_outputs | default([], true) | tojson }}
+          for item in dnsx_data:
+            if item.get('type') == 'A' or item.get('type') == 'CNAME':
+              host = item.get('host', '')
+              if host:
+                brute_subs.add(host.lower().strip())
+
+          unique_subs = sorted([s for s in brute_subs if s and '.' in s])
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+
+          typed = [{'subdomain': s, 'source': 'bruteforce'} for s in unique_subs]
+
+          add_outputs(
+            active_subs_file=subs_file,
+            active_count=len(unique_subs),
+            typed_outputs=typed
+          )
+          print(f'Active enumeration: {len(unique_subs)} additional subdomains')
+  merge-all:
+    name: Merge & Deduplicate All Subdomains
+    needs:
+      - passive-enum
+      - active-enum
+    outputs:
+      all_subs_file: '{{ steps["final-merge"].outputs.all_subs_file | default("", true) }}'
+      all_count: '{{ steps["final-merge"].outputs.all_count | default("0", true) }}'
+      typed_outputs: '{{ steps["final-merge"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - name: final-merge
+        script: |
+          import json
+          from pathlib import Path
+
+          passive = {{ subdomains(steps["passive-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+          active = {{ subdomains(steps["active-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+
+          subdomain_sources = {}
+          for item in passive + active:
+            sub = item.get('subdomain', '').lower().strip()
+            source = item.get('source', 'unknown')
+            if sub and '.' in sub:
+              if sub not in subdomain_sources:
+                subdomain_sources[sub] = set()
+              subdomain_sources[sub].add(source)
+
+          all_subs = sorted(subdomain_sources.keys())
+          typed = [
+            {
+              'subdomain': sub,
+              'sources': sorted(list(subdomain_sources[sub]))
+            }
+            for sub in all_subs
+          ]
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+
+          add_outputs(
+            all_subs_file=all_file,
+            all_count=len(all_subs),
+            typed_outputs=typed
+          )
+          print(f'Total unique subdomains: {len(all_subs)}')
+  summary:
+    name: Enumeration Summary
+    needs:
+      - merge-all
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " SUBDOMAIN ENUMERATION: {{ inputs.target }}"
+          echo "=========================================="
+          echo ""
+          echo "Passive sources: {{ jobs['passive-enum'].outputs.passive_count | default('0', true) }}"
+          echo "Active bruteforce: {{ jobs['active-enum'].outputs.active_count | default('0', true) }}"
+          echo "Total unique: {{ jobs['merge-all'].outputs.all_count | default('0', true) }}"
+          echo ""
+          echo "Output file: {{ jobs['merge-all'].outputs.all_subs_file | default('none', true) }}"
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+      - name: export-to-project
+        script: |
+          from pathlib import Path
+          import shutil
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+            print('No --project set, skipping file export')
+          else:
+            d = '{{ vars.project_subdomains }}' if '{{ vars.project_subdomains }}' else f'{project}/subdomains'
+            Path(d).mkdir(parents=True, exist_ok=True)
+
+            src = '{{ jobs["merge-all"].outputs.all_subs_file | default("", true) }}'
+            if src and Path(src).is_file():
+              shutil.copy2(src, Path(d) / 'all.txt')
+              print(f'  [+] subdomains/all.txt ({jobs["merge-all"].outputs.all_count} entries)')
+
+            all_typed = {{ jobs['merge-all'].outputs.typed_outputs | default([], true) | tojson }}
+            from ofx.runner.context import get_current_context
+            ctx = get_current_context()
+            if ctx and hasattr(ctx, 'export_typed_outputs'):
+              summaries = ctx.export_typed_outputs(project, all_typed)
+              for s in summaries:
+                print(f'  {s}')
+
+            print(f'Project export complete: {project}')
+        continue-on-error: true

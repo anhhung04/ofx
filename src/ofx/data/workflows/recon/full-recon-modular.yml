@@ -1,0 +1,273 @@
+name: full-recon-modular
+description: >
+  Comprehensive reconnaissance pipeline that chains all recon modules. Performs
+  OSINT gathering, subdomain enumeration, DNS resolution, port scanning, service
+  enumeration, HTTP probing, content discovery, vulnerability scanning, and
+  JavaScript analysis. Produces aggregated reports and structured output.
+tags:
+  - recon
+  - comprehensive
+  - full
+  - all-in-one
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com) or IP/CIDR range
+      alias: t
+    ports:
+      type: string
+      default: "top-1000"
+      description: Port range for scanning (top-100, top-1000, full, or custom)
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/dns/namelist.txt
+      description: Wordlist for subdomain bruteforce and content discovery
+    email_domain:
+      type: string
+      default: ""
+      description: Email domain if different from target
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  classify:
+    name: Classify Target
+    outputs:
+      target_type: '{{ steps["detect-type"].outputs.target_type | default("unknown", true) }}'
+      is_domain: '{{ steps["detect-type"].outputs.is_domain | default("false", true) }}'
+    steps:
+      - name: detect-type
+        script: |
+          import re
+          target = "{{ inputs.target }}"
+          ipv4_pattern = r'^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$'
+          cidr_pattern = r'^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/[0-9]{1,2}$'
+          is_ip = bool(re.match(ipv4_pattern, target))
+          is_cidr = bool(re.match(cidr_pattern, target))
+          is_domain = not (is_ip or is_cidr) and '.' in target and not target.startswith('http')
+          target_type = 'domain' if is_domain else ('cidr' if is_cidr else 'ip')
+          add_outputs(target_type=target_type, is_domain=str(is_domain).lower())
+  osint:
+    name: OSINT Gathering
+    needs:
+      - classify
+    run_if: "{{ jobs['classify'].outputs.is_domain == 'true' }}"
+    steps:
+      - name: run-osint
+        uses: osint-gather
+        run_with:
+          target: "{{ inputs.target }}"
+          email_domain: "{{ inputs.email_domain }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      email_count: '{{ steps["run-osint"].outputs.email_count | default("0", true) }}'
+      emails_file: '{{ steps["run-osint"].outputs.emails_file | default("", true) }}'
+      breach_count: '{{ steps["run-osint"].outputs.breach_count | default("0", true) }}'
+      breaches_file: '{{ steps["run-osint"].outputs.breaches_file | default("", true) }}'
+      github_count: '{{ steps["run-osint"].outputs.github_count | default("0", true) }}'
+      github_file: '{{ steps["run-osint"].outputs.github_file | default("", true) }}'
+  subdomains:
+    name: Subdomain Enumeration
+    needs:
+      - classify
+    run_if: "{{ jobs['classify'].outputs.is_domain == 'true' }}"
+    steps:
+      - name: run-subdomains
+        uses: subdomain-enum
+        run_with:
+          target: "{{ inputs.target }}"
+          wordlist: "{{ inputs.wordlist }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      all_subs_file: '{{ steps["run-subdomains"].outputs.all_subs_file | default("", true) }}'
+      all_count: '{{ steps["run-subdomains"].outputs.all_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-subdomains"].outputs.typed_outputs | default([], true) }}'
+  dns:
+    name: DNS Resolution
+    needs:
+      - subdomains
+    run_if: "{{ jobs['subdomains'].outputs.all_count | default(0, true) | int > 0 }}"
+    steps:
+      - name: run-dns
+        uses: dns-resolve
+        run_with:
+          subdomains_file: "{{ jobs['subdomains'].outputs.all_subs_file }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      resolved_file: '{{ steps["run-dns"].outputs.resolved_file | default("", true) }}'
+      resolved_count: '{{ steps["run-dns"].outputs.resolved_count | default("0", true) }}'
+      ips_file: '{{ steps["run-dns"].outputs.ips_file | default("", true) }}'
+      ip_count: '{{ steps["run-dns"].outputs.ip_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-dns"].outputs.typed_outputs | default([], true) }}'
+  ports:
+    name: Port Scanning
+    needs:
+      - classify
+      - dns
+    run_if: |
+      {%- if inputs.target | regex_search('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+') -%}
+      true
+      {%- else -%}
+      {{ jobs['dns'].outputs.ip_count | default(0, true) | int > 0 }}
+      {%- endif -%}
+    steps:
+      - name: run-ports
+        uses: port-scan
+        run_with:
+          targets: |
+            {%- if inputs.target | regex_search('[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+') -%}
+            {{ inputs.target }}
+            {%- else -%}
+            {{ jobs['dns'].outputs.ips_file | default(inputs.target, true) }}
+            {%- endif -%}
+          ports: "{{ inputs.ports }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      open_ports_file: '{{ steps["run-ports"].outputs.open_ports_file | default("", true) }}'
+      open_count: '{{ steps["run-ports"].outputs.open_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-ports"].outputs.typed_outputs | default([], true) }}'
+  services:
+    name: Service Enumeration
+    needs:
+      - ports
+    run_if: "{{ jobs['ports'].outputs.open_count | default(0, true) | int > 0 }}"
+    steps:
+      - name: run-services
+        uses: service-enum
+        run_with:
+          ports_file: "{{ jobs['ports'].outputs.open_ports_file }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      services_file: '{{ steps["run-services"].outputs.services_file | default("", true) }}'
+      service_count: '{{ steps["run-services"].outputs.service_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-services"].outputs.typed_outputs | default([], true) }}'
+  http:
+    name: HTTP Probing
+    needs:
+      - dns
+      - classify
+    run_if: "{{ jobs['subdomains'].outputs.all_count | default(0, true) | int > 0 }}"
+    steps:
+      - name: run-http
+        uses: http-probe
+        run_with:
+          target: "{{ jobs['subdomains'].outputs.all_subs_file | default(inputs.target, true) }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      live_urls_file: '{{ steps["run-http"].outputs.live_urls_file | default("", true) }}'
+      live_count: '{{ steps["run-http"].outputs.live_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-http"].outputs.typed_outputs | default([], true) }}'
+  content:
+    name: Content Discovery
+    needs:
+      - http
+    run_if: "{{ jobs['http'].outputs.live_count | default(0, true) | int > 0 }}"
+    steps:
+      - name: run-content
+        uses: content-discovery
+        run_with:
+          targets: "{{ jobs['http'].outputs.live_urls_file }}"
+          wordlist: "{{ inputs.wordlist }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      paths_file: '{{ steps["run-content"].outputs.paths_file | default("", true) }}'
+      path_count: '{{ steps["run-content"].outputs.path_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-content"].outputs.typed_outputs | default([], true) }}'
+  vulns:
+    name: Vulnerability Scanning
+    needs:
+      - http
+    run_if: "{{ jobs['http'].outputs.live_count | default(0, true) | int > 0 }}"
+    steps:
+      - name: run-vulns
+        uses: vuln-scan
+        run_with:
+          targets: "{{ jobs['http'].outputs.live_urls_file }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      all_vulns_file: '{{ steps["run-vulns"].outputs.all_vulns_file | default("", true) }}'
+      total_count: '{{ steps["run-vulns"].outputs.total_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-vulns"].outputs.typed_outputs | default([], true) }}'
+  js:
+    name: JavaScript Analysis
+    needs:
+      - http
+    run_if: "{{ jobs['http'].outputs.live_count | default(0, true) | int > 0 }}"
+    steps:
+      - name: run-js
+        uses: js-analysis
+        run_with:
+          targets: "{{ jobs['http'].outputs.live_urls_file }}"
+          log_command: "{{ inputs.log_command }}"
+          log_output: "{{ inputs.log_output }}"
+    outputs:
+      js_findings_file: '{{ steps["run-js"].outputs.js_findings_file | default("", true) }}'
+      endpoint_count: '{{ steps["run-js"].outputs.endpoint_count | default("0", true) }}'
+      secret_count: '{{ steps["run-js"].outputs.secret_count | default("0", true) }}'
+      typed_outputs: '{{ steps["run-js"].outputs.typed_outputs | default([], true) }}'
+  summary:
+    name: Final Summary Report
+    needs:
+      - osint
+      - subdomains
+      - dns
+      - ports
+      - services
+      - http
+      - content
+      - vulns
+      - js
+    steps:
+      - name: report
+        run: |
+          echo "============================================"
+          echo " FULL RECONNAISSANCE REPORT"
+          echo "============================================"
+          echo ""
+          echo "Target: {{ inputs.target }}"
+          echo ""
+          echo "--- OSINT ---"
+          echo "Emails: {{ jobs['osint'].outputs.email_count | default('0', true) }}"
+          echo "Breaches: {{ jobs['osint'].outputs.breach_count | default('0', true) }}"
+          echo "GitHub findings: {{ jobs['osint'].outputs.github_count | default('0', true) }}"
+          echo ""
+          echo "--- Subdomain Enumeration ---"
+          echo "Total subdomains: {{ jobs['subdomains'].outputs.all_count | default('0', true) }}"
+          echo "Unique IPs: {{ jobs['dns'].outputs.ip_count | default('0', true) }}"
+          echo ""
+          echo "--- Network Scanning ---"
+          echo "Open ports: {{ jobs['ports'].outputs.open_count | default('0', true) }}"
+          echo "Services identified: {{ jobs['services'].outputs.service_count | default('0', true) }}"
+          echo ""
+          echo "--- Web Services ---"
+          echo "Live HTTP services: {{ jobs['http'].outputs.live_count | default('0', true) }}"
+          echo "Discovered paths: {{ jobs['content'].outputs.path_count | default('0', true) }}"
+          echo ""
+          echo "--- Vulnerabilities ---"
+          echo "Total findings: {{ jobs['vulns'].outputs.total_count | default('0', true) }}"
+          echo ""
+          echo "--- JavaScript Analysis ---"
+          echo "Endpoints: {{ jobs['js'].outputs.endpoint_count | default('0', true) }}"
+          echo "Secrets detected: {{ jobs['js'].outputs.secret_count | default('0', true) }}"
+          echo ""
+          echo "============================================"
+          echo "All results saved to project: {{ vars.project_path | default('not set', true) }}"
+          echo "============================================"
+        log-stdout: "{{ inputs.log_output | default(true) }}"

@@ -1,0 +1,319 @@
+name: host-scan
+description: >
+  Comprehensive single-host security assessment. Takes a hostname, IP, or URL,
+  resolves it, performs full port scan (1-65535 via rustscan, targeted via nmap),
+  probes HTTP services, fingerprints technologies, captures screenshots, checks SSL/TLS,
+  performs secret/vuln scanning, and runs targeted injection tests. Designed as
+  a matrix-reusable building block for per-host parallel scanning.
+tags:
+- recon
+- host
+- scan
+- single
+- fingerprint
+- matrix
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target hostname, IP, or URL (e.g. https://api.target.com)
+      alias: t
+    ports:
+      type: string
+      default: '1-10000'
+      description: Port range to scan (default 1-10000)
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  resolve:
+    name: Target Resolution
+    outputs:
+      hostname: '{{ steps["resolve-host"].outputs.hostname | default("", true) }}'
+      ip: '{{ steps["resolve-host"].outputs.ip | default("", true) }}'
+      all_ips: '{{ steps["resolve-host"].outputs.all_ips | default("", true) }}'
+      is_ip: '{{ steps["resolve-host"].outputs.is_ip | default("false", true) }}'
+    steps:
+    - name: resolve-host
+      script: |
+        import socket
+        from urllib.parse import urlparse
+
+        raw = '{{ inputs.target }}'.strip()
+        target = raw
+
+        if '://' in target:
+            parsed = urlparse(target)
+            target = parsed.hostname or parsed.netloc.split(':')[0]
+        elif '/' in target:
+            target = target.split('/')[0]
+
+        if ':' in target:
+            target = target.rsplit(':', 1)[0]
+
+        is_ip = False
+        try:
+            socket.inet_pton(socket.AF_INET, target)
+            is_ip = True
+        except OSError:
+            try:
+                socket.inet_pton(socket.AF_INET6, target)
+                is_ip = True
+            except OSError:
+                pass
+
+        hostname = target
+
+        if not is_ip:
+            try:
+                results = socket.getaddrinfo(target, None, socket.AF_INET, socket.SOCK_STREAM)
+                ips = sorted(set(r[4][0] for r in results))
+            except socket.gaierror:
+                ips = []
+        else:
+            ips = [target]
+
+        if len(ips) == 1:
+            add_outputs(hostname=hostname, ip=ips[0], all_ips=ips[0], is_ip='true')
+            print(f'Resolved {hostname} → {ips[0]}')
+        else:
+            add_outputs(hostname=hostname, ip=ips[0], all_ips=','.join(ips), is_ip='true')
+            print(f'{hostname} resolves to {len(ips)} IPs: {", ".join(ips)}')
+    needs: []
+  port-scan:
+    name: Port Scanning
+    needs:
+    - resolve
+    outputs:
+      open_ports_file: '{{ steps["merge-ports"].outputs.open_ports_file | default("", true) }}'
+      open_port_count: '{{ steps["merge-ports"].outputs.open_port_count | default("0", true) }}'
+      http_targets: '{{ steps["merge-ports"].outputs.http_targets | default("", true) }}'
+    steps:
+    - task: rustscan
+      log-command: '{{ inputs.log_command }}'
+      name: rustscan-full
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["resolve"].outputs.ip }}'
+        range: '{{ inputs.ports }}'
+        batch_size: 4500
+        timeout: 1500
+      continue-on-error: true
+    - task: nmap
+      log-command: '{{ inputs.log_command }}'
+      name: nmap-service
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["resolve"].outputs.ip }}'
+        version_detection: true
+        scripts: default,safe
+        timing: 4
+      continue-on-error: true
+    - task: sslscan
+      log-command: '{{ inputs.log_command }}'
+      name: sslscan-check
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["resolve"].outputs.hostname }}'
+        show_certificate: true
+      continue-on-error: true
+    - name: merge-ports
+      script: |
+        import json
+        from pathlib import Path
+
+        all_ports = (
+            {{ ports(steps["rustscan-full"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ ports(steps["nmap-service"].outputs.typed_outputs) | default([], true) | tojson }}
+        )
+
+        seen = set()
+        port_lines = []
+        http_ports = set()
+        for p in all_ports:
+            key = f"{p.get('host', p.get('ip', ''))}:{p.get('port', '')}"
+            if key not in seen and p.get('port'):
+                seen.add(key)
+                port_lines.append(key)
+                svc = str(p.get('service', '')).lower()
+                port_num = int(p.get('port', 0))
+                if svc in ('http', 'https', 'http-proxy') or port_num in (80, 443, 8080, 8443, 8000, 8888, 3000, 5000):
+                    http_ports.add(port_num)
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        http_targets = []
+        hostname = '{{ jobs["resolve"].outputs.hostname }}'
+        for port in sorted(http_ports):
+            proto = 'https' if port in (443, 8443, 8443) else 'http'
+            http_targets.append(f'{proto}://{hostname}:{port}')
+
+        add_outputs(open_ports_file='\n'.join(sorted(port_lines, open_port_count=len(port_lines), http_targets='\n'.join(http_targets))
+        print(f'Open ports: {len(port_lines)}')
+        for pl in sorted(port_lines)[:20]:
+            print(f'  {pl}')
+    needs: []
+  web-probe:
+    name: Web Service Analysis
+    needs:
+    - port-scan
+    outputs:
+      live_url: '{{ steps["collect-web"].outputs.live_url | default("", true) }}'
+      technologies: '{{ steps["collect-web"].outputs.technologies | default("[]", true) }}'
+    steps:
+    - task: httpx
+      log-command: '{{ inputs.log_command }}'
+      name: httpx-probe
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["resolve"].outputs.hostname }}'
+        ports: 80,443,8080,8443,8000,8888,3000,5000
+        json: true
+        title: true
+        server: true
+        tech_detect: true
+        follow_redirects: true
+        timeout: 15
+      continue-on-error: true
+    - task: whatweb
+      log-command: '{{ inputs.log_command }}'
+      name: whatweb
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["resolve"].outputs.hostname }}'
+        aggression: 3
+      continue-on-error: true
+    - task: wafw00f
+      log-command: '{{ inputs.log_command }}'
+      name: wafw00f
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["resolve"].outputs.hostname }}'
+      continue-on-error: true
+    - task: searchsploit
+      log-command: '{{ inputs.log_command }}'
+      name: searchsploit
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["resolve"].outputs.hostname }}'
+      continue-on-error: true
+    - name: collect-web
+      script: |
+        import json
+        from pathlib import Path
+
+        probes = {{ steps["httpx-probe"].outputs.typed_outputs | default([], true) | tojson }}
+        live = [p for p in probes if p.get('url') and p.get('status_code')]
+        techs = {{ steps["whatweb"].outputs.typed_outputs | default([], true) | tojson }}
+        wafs = {{ vulns(steps["wafw00f"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        technologies = sorted({t.get('name', '') for t in techs if t.get('name')})
+        waf_names = sorted({w.get('name', '') for w in wafs if w.get('name')})
+
+        live_url = live[0]['url'] if live else ''
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+        report_file = f'{out_dir}/ofx_host_web.json'
+        Path(report_file).write_text(json.dumps({
+            'live': live, 'technologies': technologies, 'wafs': waf_names
+        }, indent=2, default=str))
+
+        add_outputs(live_url=live_url, technologies=json.dumps(technologies), report_file=report_file)
+        print(f'Web: {len(live)} live endpoints')
+        print(f'Technologies: {", ".join(technologies[:10])}')
+        if waf_names:
+            print(f'WAF: {", ".join(waf_names)}')
+    needs: []
+  vuln-scan:
+    name: Vulnerability Scanning
+    needs:
+    - web-probe
+    steps:
+    - task: nuclei
+      log-command: '{{ inputs.log_command }}'
+      name: nuclei-web
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["web-probe"].outputs.live_url | default(jobs["resolve"].outputs.hostname, true) }}'
+        severity: critical,high,medium
+      continue-on-error: true
+    - task: dalfox
+      log-command: '{{ inputs.log_command }}'
+      name: dalfox
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["web-probe"].outputs.live_url }}'
+      continue-on-error: true
+    - task: crlfuzz
+      log-command: "{{ inputs.log_command | default(true) }}"
+      name: crlfuzz
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["web-probe"].outputs.live_url }}'
+      continue-on-error: true
+    - name: collect-vulns
+      script: |
+        import json
+
+        all_vulns = (
+            {{ vulns(steps["nuclei-web"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["dalfox"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["crlfuzz"].outputs.typed_outputs) | default([], true) | tojson }}
+        )
+
+        critical = [v for v in all_vulns if v.get('severity') == 'critical']
+        high = [v for v in all_vulns if v.get('severity') == 'high']
+
+        add_outputs(vuln_count=len(all_vulns), critical_count=len(critical), high_count=len(high))
+        print(f'Vulnerabilities: {len(all_vulns)} (C:{len(critical)} H:{len(high)})')
+        for v in all_vulns[:10]:
+            print(f'  [{v.get("severity", "info").upper()}] {v.get("name", "")} — {v.get("host", "")}')
+    needs: []
+  summary:
+    name: Host Scan Summary
+    needs:
+    - resolve
+    - port-scan
+    - web-probe
+    - vuln-scan
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " HOST SCAN: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "Resolution:"
+        echo "  Hostname: {{ jobs['resolve'].outputs.hostname }}"
+        echo "  IP: {{ jobs['resolve'].outputs.ip }}"
+        echo "  All IPs: {{ jobs['resolve'].outputs.all_ips }}"
+        echo ""
+        echo "Ports:"
+        echo "  Open: {{ jobs['port-scan'].outputs.open_port_count }}"
+        echo ""
+        echo "Web:"
+        echo "  Live URL: {{ jobs['web-probe'].outputs.live_url }}"
+        echo ""
+        echo "Vulnerabilities:"
+        echo "  Total: {{ jobs['vuln-scan'].outputs.vuln_count }}"
+        echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+        echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

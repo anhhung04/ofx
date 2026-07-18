@@ -1,0 +1,80 @@
+name: ssl-deep
+description: >
+  Deep SSL/TLS analysis — comprehensive certificate chain validation,
+
+  cipher suite analysis, protocol version testing, vulnerability
+
+  checks (Heartbleed, ROBOT, DROWN, etc.), and compliance grading.
+tags:
+- ssl
+- tls
+- certificate
+- security
+- scan
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable stdout output log files for steps when set to true/false.
+    target:
+      required: true
+      type: string
+      description: Target hostname or IP:port
+      alias: t
+    port:
+      type: string
+      default: '443'
+      description: Target port
+jobs:
+  testssl:
+    name: TestSSL Analysis
+    steps:
+    - task: testssl
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: testssl-scan
+      with:
+        target: '{{ inputs.target }}:{{ inputs.port }}'
+      continue-on-error: true
+    needs: []
+  sshaudit:
+    name: SSH Audit
+    steps:
+    - task: ssh-audit
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: ssh-audit
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    needs: []
+  cert-details:
+    name: Certificate Details
+    outputs:
+      version: '{{ steps["cert-chain"].outputs.version | default("", true) }}'
+      cipher: '{{ steps["cert-chain"].outputs.cipher | default("", true) }}'
+      finding_count: '{{ steps["cert-chain"].outputs.finding_count | default("", true) }}'
+    steps:
+    - name: cert-chain
+      script: "import subprocess\nimport ssl\nimport socket\nimport json\nfrom datetime import datetime\n\nhost = '{{ inputs.target }}'\nport = int('{{ inputs.port }}')\n\nprint(f\"=== CERTIFICATE ANALYSIS:\
+        \ {host}:{port} ===\\n\")\n\nfindings = []\ntry:\n    ctx = ssl.create_default_context()\n    ctx.check_hostname = False\n    ctx.verify_mode = ssl.CERT_NONE\n\n    with socket.create_connection((host,\
+        \ port), timeout=10) as sock:\n        with ctx.wrap_socket(sock, server_hostname=host) as ssock:\n            cert = ssock.getpeercert(binary_form=False)\n            cipher = ssock.cipher()\n\
+        \            version = ssock.version()\n\n            der_cert = ssock.getpeercert(binary_form=True)\n\n    if cert:\n        subject = dict(x[0] for x in cert.get('subject', []))\n        issuer\
+        \ = dict(x[0] for x in cert.get('issuer', []))\n\n        print(f\"  Subject: {subject.get('commonName', '?')}\")\n        print(f\"  Issuer: {issuer.get('organizationName', '?')} / {issuer.get('commonName',\
+        \ '?')}\")\n        print(f\"  Serial: {cert.get('serialNumber', '?')}\")\n        print(f\"  Version: {version}\")\n        print(f\"  Cipher: {cipher}\")\n\n        not_before = cert.get('notBefore',\
+        \ '')\n        not_after = cert.get('notAfter', '')\n        print(f\"  Valid from: {not_before}\")\n        print(f\"  Valid until: {not_after}\")\n\n        try:\n            expiry = datetime.strptime(not_after,\
+        \ '%b %d %H:%M:%S %Y %Z')\n            days_left = (expiry - datetime.utcnow()).days\n            print(f\"  Days remaining: {days_left}\")\n            if days_left < 0:\n                findings.append('[CRITICAL]\
+        \ Certificate is EXPIRED')\n            elif days_left < 30:\n                findings.append(f'[HIGH] Certificate expires in {days_left} days')\n        except Exception:\n            pass\n\n\
+        \        sans = cert.get('subjectAltName', [])\n        if sans:\n            san_list = [v for _, v in sans]\n            print(f\"  SANs: {', '.join(san_list[:10])}\")\n            if '*' in str(sans):\n\
+        \                findings.append('[INFO] Wildcard certificate')\n\n        if cipher and cipher[0]:\n            if 'RC4' in cipher[0] or 'DES' in cipher[0] or 'NULL' in cipher[0]:\n           \
+        \     findings.append(f'[HIGH] Weak cipher: {cipher[0]}')\n            if 'CBC' in cipher[0]:\n                findings.append(f'[MEDIUM] CBC mode cipher: {cipher[0]}')\n\n        if version in\
+        \ ('SSLv2', 'SSLv3', 'TLSv1', 'TLSv1.1'):\n            findings.append(f'[HIGH] Outdated protocol: {version}')\n\n    add_outputs(version=version, cipher=cipher[0] if cipher else 'unknown', finding_count=len(findings))\n\
+        except Exception as e:\n    print(f\"  Connection error: {e}\")\n    findings.append(f'[ERROR] Cannot connect: {e}')\n\nprint(f\"\\n--- Findings ({len(findings)}) ---\")\nfor finding in findings:\n\
+        \    print(f\"  {finding}\")\n"
+      log-stdout: '{{ inputs.log_output | default(true) }}'
+      log-command: '{{ inputs.log_command | default(true) }}'
+      continue-on-error: true
+    needs: []

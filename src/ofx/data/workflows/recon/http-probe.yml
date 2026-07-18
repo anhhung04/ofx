@@ -1,0 +1,188 @@
+name: http-probe
+description: >
+  HTTP/HTTPS probing and web service fingerprinting. Takes a list of targets
+  (hosts, subdomains, or URLs) and identifies live web services, determines
+  technologies in use, detects WAFs, and captures screenshots. Useful for
+  discovering attack surface after subdomain enumeration.
+tags:
+  - recon
+  - web
+  - fingerprint
+  - httpx
+  - screenshot
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target file (list of hosts/subdomains) or single URL/host
+      alias: t
+    ports:
+      type: string
+      default: "80,443,8080,8443,8000,8888,3000,5000,7000,9000"
+      description: Ports to probe when target is hostname/IP
+    threads:
+      type: number
+      default: 100
+      description: Concurrent threads for httpx
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  live_urls_data: '{{ jobs["probe"].outputs.live_urls_data | default("", true) }}'
+  live_count: '{{ jobs["probe"].outputs.live_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["probe"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  probe:
+    name: HTTP Service Discovery
+    outputs:
+      live_urls_data: '{{ steps["collect-urls"].outputs.live_urls_data | default("", true) }}'
+      live_count: '{{ steps["collect-urls"].outputs.live_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-urls"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: httpx
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: httpx-probe
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          ports: "{{ inputs.ports }}"
+          json: true
+          title: true
+          server: true
+          tech_detect: true
+          status: true
+          follow_redirects: true
+          timeout: 10
+          rate_limit: "{{ inputs.threads }}"
+          silent: true
+        continue-on-error: true
+      - task: whatweb
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: whatweb-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          aggression: 1
+        continue-on-error: true
+      - task: wafw00f
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: waf-detection
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: gowitness
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: screenshot-capture
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          threads: 20
+        continue-on-error: true
+      - name: collect-urls
+        script: |
+          import json
+          from pathlib import Path
+
+          httpx_data = {{ steps["httpx-probe"].outputs.typed_outputs | default([], true) | tojson }}
+          live_urls = []
+
+          for item in httpx_data:
+            url = item.get('url', '')
+            status = item.get('status_code', 0)
+            if url and status > 0:
+              live_urls.append({
+                'url': url,
+                'status_code': status,
+                'title': item.get('title', ''),
+                'server': item.get('server', ''),
+                'tech': item.get('tech', []),
+                'content_type': item.get('content_type', '')
+              })
+
+          waf_data = {{ vulns(steps["waf-detection"].outputs.typed_outputs) | default([], true) | tojson }}
+          waf_by_url = {}
+          for waf in waf_data:
+            host = waf.get('host', '')
+            if host:
+              waf_by_url[host] = waf.get('name', '')
+
+          for url_obj in live_urls:
+            url = url_obj['url']
+            from urllib.parse import urlparse
+            host = urlparse(url).netloc
+            if host in waf_by_url:
+              url_obj['waf'] = waf_by_url[host]
+
+           add_outputs(
+             live_urls_data='\n'.join([u['url'] for u in live_urls]),
+             live_count=len(live_urls),
+             typed_outputs=live_urls
+           )
+          print(f'HTTP probe: {len(live_urls)} live services')
+          if live_urls:
+            print(f'  Sample: {live_urls[0]["url"]}')
+  summary:
+    name: Probe Summary
+    needs:
+      - probe
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " HTTP PROBE RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Live services: {{ jobs.probe.outputs.live_count | default('0', true) }}"
+          echo ""
+          echo "Top findings:"
+          {% set urls = jobs.probe.outputs.typed_outputs | default([], true) %}
+          {% for url in urls[:10] %}
+          echo "  {{ loop.index }}. {{ url.url }} ({{ url.status_code }})"
+          {%- if url.title %}[{{ url.title[:50] }}]{% endif %}
+          {%- if url.tech %} [{{ url.tech|join(', ') }}]{% endif %}
+          {% endfor %}
+          {% if urls|length > 10 %}
+          echo "  ... and {{ urls|length - 10 }} more"
+          {% endif %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+      - name: export-to-project
+        script: |
+          from pathlib import Path
+          import shutil
+          import json
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+            print('No --project set, skipping file export')
+          else:
+            d = f'{project}/web'
+            Path(d).mkdir(parents=True, exist_ok=True)
+
+            src = '{{ jobs.probe.outputs.live_urls_data | default("", true) }}'
+            if src and Path(src).is_file():
+              shutil.copy2(src, Path(d) / 'live_urls.txt')
+              print(f'  [+] web/live_urls.txt')
+
+            all_typed = {{ jobs.probe.outputs.typed_outputs | default([], true) | tojson }}
+            ctx = get_current_context()
+            if ctx and hasattr(ctx, 'export_typed_outputs'):
+              summaries = ctx.export_typed_outputs(project, all_typed)
+              for s in summaries:
+                print(f'  {s}')
+
+            print(f'Project export complete: {project}')
+        continue-on-error: true

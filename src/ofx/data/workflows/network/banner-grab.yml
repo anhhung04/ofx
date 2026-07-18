@@ -1,0 +1,194 @@
+name: banner-grab
+description: >
+  Service banner grabbing and enumeration. Connects to open ports and extracts
+  service banners, version information, and protocol-specific details.
+  Uses nmap -sV, netcat, curl HTTP headers, and protocol-specific handlers.
+tags:
+- recon
+- banner
+- fingerprint
+- service
+- version
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target host, IP, or port list (e.g. target.com:21,22,80,443)
+      alias: t
+    ports:
+      type: string
+      default: '21,22,23,25,53,80,110,135,139,143,443,445,993,995,1433,1521,3306,3389,5432,5900,6379,8080,8443,9200,27017'
+      description: Ports to scan for banners
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  nmap-version:
+    name: Nmap Version Detection
+    outputs:
+      version_file: '{{ steps["report-version"].outputs.version_file | default("", true) }}'
+      version_count: '{{ steps["report-version"].outputs.version_count | default("0", true) }}'
+    steps:
+    - task: nmap
+      log-command: '{{ inputs.log_command }}'
+      name: nmap-sV
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        port: '{{ inputs.ports }}'
+        version_detection: true
+        version_intensity: 7
+        timing: 4
+      continue-on-error: true
+    - name: report-version
+      script: |
+        import json
+        from pathlib import Path
+
+        services = {{ steps["nmap-sV"].outputs.typed_outputs | default([], true) | tojson }}
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(version_data=json.dumps(services, indent=2, default=str, version_count=len(services))
+        print(f'Version detection: {len(services)} services')
+        for s in services[:15]:
+            print(f'  {s.get("port", "")}/{s.get("protocol", "tcp")} — {s.get("service", "")} {s.get("version", "")} {s.get("product", "")}')
+    needs: []
+  http-headers:
+    name: HTTP Header Extraction
+    outputs:
+      http_headers_file: '{{ steps["report-http"].outputs.http_headers_file | default("", true) }}'
+    steps:
+    - task: whois
+      log-command: '{{ inputs.log_command }}'
+      name: headers-probe
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - name: report-http
+      script: |
+        import subprocess
+        import json
+        from pathlib import Path
+
+        raw_target = '{{ inputs.target }}'.strip()
+        target = raw_target
+
+        if '://' in target:
+            from urllib.parse import urlparse
+            parsed = urlparse(target)
+            target = f'{parsed.hostname}:{parsed.port or 80}'
+
+        hostname = target.split(':')[0]
+        port = int(target.split(':')[1]) if ':' in target else 80
+
+        headers = []
+        try:
+            proc = subprocess.run(['curl', '-sI', f'http://{target}'], capture_output=True, text=True, timeout=10)
+            if proc.returncode == 0:
+                lines = proc.stdout.splitlines()
+                headers = {'raw': proc.stdout, 'headers': {l.split(':', 1)[0]: l.split(':', 1)[1].strip() for l in lines if ':' in l}}
+        except Exception as e:
+            headers = {'error': str(e)}
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(http_headers_file=json.dumps(headers, indent=2)
+        print(f'HTTP headers from {hostname}:{port}')
+        if 'Server' in headers.get('headers', {}):
+            print(f'  Server: {headers["headers"]["Server"]}')
+    needs: []
+  manual-banners:
+    name: Manual Banner Grab
+    needs:
+    - nmap-version
+    steps:
+    - name: nc-banners
+      script: |
+        import subprocess
+        import json
+        from pathlib import Path
+
+        services = {
+            21: 'HELP',
+            22: 'banner',
+            23: 'help',
+            25: 'EHLO banner-25',
+            53: 'not-supported',
+            80: 'HEAD / HTTP/1.0',
+            443: 'not-supported',
+            110: 'quit',
+            139: 'not-supported',
+            143: 'noop',
+            445: 'not-supported',
+            993: 'not-supported',
+            995: 'not-supported',
+            1433: 'not-supported',
+            1521: 'not-supported',
+            3306: 'not-supported',
+            3389: 'not-supported',
+            5432: 'not-supported',
+            6379: 'PING',
+            8080: 'HEAD / HTTP/1.0',
+            27017: 'not-supported',
+        }
+
+        target = '{{ inputs.target }}'
+        ports = [int(p) for p in '{{ inputs.ports }}'.split(',')]
+
+        banners = {}
+        for port in ports:
+            if port not in services:
+                continue
+            cmd = services[port]
+            if cmd == 'not-supported':
+                continue
+            try:
+                result = subprocess.run(['nc', '-w', '3', '-w2', target, str(port)],
+                                        input=cmd, capture_output=True, text=True, timeout=10)
+                if result.stdout.strip():
+                    banners[port] = result.stdout.strip()
+            except Exception as e:
+                pass
+
+        import json
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(nc_data=json.dumps(banners, indent=2, banner_count=len(banners))
+        if banners:
+            print(f'Manual banners from {len(banners)} services:')
+            for port, banner in banners.items():
+                print(f'  {port}/{banner[:100]}...')
+
+    needs: []
+  summary:
+    name: Banner Summary
+    needs:
+    - nmap-version
+    - http-headers
+    - manual-banners
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " BANNER GRAB: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "  Version enumeration: {{ jobs['nmap-version'].outputs.version_count }} services"
+        echo ""
+        echo "  Output files:"
+        echo "    Version data: {{ jobs['nmap-version'].outputs.version_file }}"
+        echo "    HTTP headers: {{ jobs['http-headers'].outputs.http_headers_file }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

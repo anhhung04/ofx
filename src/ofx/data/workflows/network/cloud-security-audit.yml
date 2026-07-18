@@ -1,0 +1,74 @@
+name: cloud-security-audit
+description: >
+  Multi-cloud security audit using prowler and cloudfox.
+
+  Checks AWS/Azure/GCP for misconfigurations, IAM issues,
+
+  exposed services, and compliance violations.
+tags:
+- cloud
+- security
+- audit
+- aws
+- azure
+- gcp
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable stdout output log files for steps when set to true/false.
+    provider:
+      required: true
+      type: string
+      description: Cloud provider (aws, azure, gcp)
+      alias: p
+    profile:
+      type: string
+      default: ''
+      description: Cloud CLI profile name
+    services:
+      type: string
+      default: ''
+      description: Comma-separated services to scan (e.g. s3,iam,ec2)
+    severity:
+      type: string
+      default: ''
+      description: Minimum severity filter (info, low, medium, high, critical)
+jobs:
+  prowler-scan:
+    name: Prowler Cloud Audit
+    outputs:
+      finding_count: '{{ steps["prowler-audit"].outputs.finding_count | default("", true) }}'
+      typed_outputs: '{{ steps["prowler-audit"].outputs.typed_outputs | default([], true) }}'
+    steps:
+    - task: prowler
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: prowler-audit
+      with:
+        target: '{{ inputs.provider }}'
+        provider: '{{ inputs.provider }}'
+        profile: '{{ inputs.profile or "" }}'
+        services: '{{ inputs.services or "" }}'
+        severity: '{{ inputs.severity or "" }}'
+      continue-on-error: true
+    needs: []
+  cloudfox-enum:
+    name: CloudFox AWS Enumeration
+    run_if: '{{ inputs.provider == ''aws'' }}'
+    outputs:
+      finding_count: '{{ steps["cloudfox-scan"].outputs.finding_count | default("", true) }}'
+      typed_outputs: '{{ steps["cloudfox-scan"].outputs.typed_outputs | default([], true) }}'
+    steps:
+    - task: cloudfox
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: cloudfox-scan
+      with:
+        target: all-checks
+        profile: '{{ inputs.profile or "" }}'
+      continue-on-error: true
+    needs: []

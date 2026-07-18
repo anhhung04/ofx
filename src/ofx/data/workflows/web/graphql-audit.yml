@@ -68,14 +68,12 @@ jobs:
                     field_names = [f['name'] for f in fields[:5]]
                     print(f"  {t['name']} ({t['kind']}): {', '.join(field_names)}")
 
-                # Check for sensitive types
                 sensitive_keywords = ['user', 'admin', 'auth', 'token', 'password', 'secret', 'key', 'credential']
                 sensitive = [t for t in user_types if any(kw in t['name'].lower() for kw in sensitive_keywords)]
                 if sensitive:
                     findings.append(f'[HIGH] Sensitive types exposed: {", ".join(t["name"] for t in sensitive)}')
                     print(f"\n  [!] Sensitive types: {', '.join(t['name'] for t in sensitive)}")
 
-                # Check mutations
                 mutations = [t for t in types if t['name'] == schema.get('mutationType', {}).get('name')]
                 if mutations and mutations[0].get('fields'):
                     mut_names = [f['name'] for f in mutations[0]['fields']]
@@ -98,7 +96,6 @@ jobs:
         except Exception as e:
             print(f"  Error: {e}")
 
-        # Test common bypasses
         print(f"\n--- Bypass Attempts ---")
         bypass_queries = [
             ('GET param', f'{url}?query={{__schema{{types{{name}}}}}}'),

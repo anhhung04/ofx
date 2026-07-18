@@ -1,0 +1,130 @@
+name: xxe-scan
+description: >
+  XML External Entity (XXE) injection testing — scans for XXE vulnerabilities in
+  web applications that parse XML input. Tests for file read, SSRF via XXE, blind
+  XXE via OOB callbacks, and DTD-based attacks. Uses nuclei XXE templates with
+  optional interactsh callback for blind detection.
+tags:
+  - web
+  - xxe
+  - xml
+  - injection
+  - oob
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL or file with URLs
+      alias: t
+    callback:
+      type: string
+      default: ""
+      description: OOB callback URL (interactsh) for blind XXE detection
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  findings_file: '{{ jobs["collect"].outputs.findings_file | default("", true) }}'
+  finding_count: '{{ jobs["collect"].outputs.finding_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["collect"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  discover:
+    name: XXE Testing
+    steps:
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-xxe
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          tags: "xxe,xml,xxe-injection"
+          severity: "critical,high,medium"
+          rate_limit: 50
+          json: true
+          silent: true
+        continue-on-error: true
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-blind-xxe
+        retry: 2
+        retry-delay: 5
+        run_if: "{{ inputs.callback | default('', true) | length > 0 }}"
+        with:
+          target: "{{ inputs.target }}"
+          tags: "xxe,blind-xxe,oob"
+          severity: "critical,high,medium"
+          rate_limit: 30
+          json: true
+          silent: true
+        continue-on-error: true
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-file-read
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          tags: "xxe,file-read,lfi,arbitrary-file-read"
+          severity: "critical,high,medium"
+          rate_limit: 50
+          json: true
+          silent: true
+        continue-on-error: true
+  collect:
+    name: Collect Findings
+    needs:
+      - discover
+    outputs:
+      findings_file: '{{ steps["merge"].outputs.findings_file | default("", true) }}'
+      finding_count: '{{ steps["merge"].outputs.finding_count | default("0", true) }}'
+      typed_outputs: '{{ steps["merge"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - name: merge
+        script: |
+          import json
+          from pathlib import Path
+
+          all_findings = (
+            {{ vulns(steps["nuclei-xxe"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["nuclei-blind-xxe"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["nuclei-file-read"].outputs.typed_outputs) | default([], true) | tojson }}
+          )
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          findings_json = json.dumps(all_findings, indent=2, default=str)
+          add_outputs(
+            findings_json=findings_json,
+            finding_count=len(all_findings),
+            typed_outputs=all_findings
+          )
+          print(f'XXE scan: {len(all_findings)} findings')
+  summary:
+    name: Summary
+    needs:
+      - collect
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " XXE INJECTION TESTING RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Target: {{ inputs.target }}"
+          echo "Findings: {{ jobs.collect.outputs.finding_count | default('0', true) }}"
+          echo ""
+          {% set findings = jobs.collect.outputs.typed_outputs | default([], true) %}
+          {% for f in findings[:15] %}
+          echo "  [{{ f.severity | default('info') }}] {{ f.name | default('') }}"
+          echo "    {{ f.host | default('') }}"
+          {% endfor %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"

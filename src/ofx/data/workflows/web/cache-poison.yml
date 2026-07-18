@@ -27,7 +27,7 @@ jobs:
   discover:
     name: Discovery & Probing
     outputs:
-      live_file: '{{ steps["collect-cache-urls"].outputs.live_file | default("", true) }}'
+      live_urls: '{{ steps["collect-cache-urls"].outputs.live_urls | default("", true) }}'
       live_count: '{{ steps["collect-cache-urls"].outputs.live_count | default("", true) }}'
     steps:
       - task: httpx
@@ -42,18 +42,13 @@ jobs:
 
       - name: collect-cache-urls
         script: |
-          import json
-
           live_urls = set()
           httpx_out = {{ steps["probe-targets"].outputs.typed_outputs | tojson }}
           for item in httpx_out:
               if item.get('_type') == 'url' and item.get('status_code', 0) > 0:
                   live_urls.add(item['url'])
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cachepoison_live.txt', 'w') as f:
-              f.write('\n'.join(sorted(live_urls)))
-
-          add_outputs(live_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cachepoison_live.txt", live_count=len(live_urls))
+          add_outputs(live_urls='\n'.join(sorted(live_urls)), live_count=len(live_urls))
           print(f"Discovered {len(live_urls)} live URLs for cache poison testing")
 
   header-fuzz:
@@ -61,7 +56,7 @@ jobs:
     needs:
       - discover
     outputs:
-      findings_file: '{{ steps["collect-results"].outputs.findings_file | default("", true) }}'
+      findings: '{{ steps["collect-results"].outputs.findings | default("", true) }}'
       nuclei_count: '{{ steps["collect-results"].outputs.nuclei_count | default("", true) }}'
       ffuf_count: '{{ steps["collect-results"].outputs.ffuf_count | default("", true) }}'
       total_count: '{{ steps["collect-results"].outputs.total_count | default("", true) }}'
@@ -70,68 +65,59 @@ jobs:
         log-command: "{{ inputs.log_command | default(true) }}"
         name: nuclei-cache-poison
         with:
-          target: '{{ jobs.discover.outputs.live_file | default(inputs.target, true) }}'
+          target: '{{ jobs.discover.outputs.live_urls | default(inputs.target, true) }}'
           tags: cache-poisoning,web-cache
         continue-on-error: true
 
       - name: ffuf-unkeyed-headers
         log-command: "{{ inputs.log_command | default(true) }}"
         run: |
-          TARGETS="{{ jobs.discover.outputs.live_file | default(inputs.target, true) }}"
+          TARGETS="{{ jobs.discover.outputs.live_urls | default(inputs.target, true) }}"
           HEADERS="X-Forwarded-Host X-Original-URL X-Rewrite-URL X-Forwarded-Scheme X-Forwarded-Proto X-Host X-Forwarded-Server X-HTTP-Method-Override X-Amz-Website-Redirect-Location"
-          OUTFILE=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cachepoison_ffuf.txt"
-          > "$OUTFILE"
-          if [ -f "$TARGETS" ]; then
+          if printf '%s' "$TARGETS" | grep -q $'\n'; then
             while IFS= read -r url; do
               [ -z "$url" ] && continue
               for hdr in $HEADERS; do
-                result=$(ffuf -u "$url" -H "$hdr: evil.com" -mc 200,301,302 -s 2>/dev/null || true)
+                result=$(ffuf -u "$url" -H "$hdr: evil.com" -mc 200,301,302 -s 2>/dev/null | true)
                 if [ -n "$result" ]; then
-                  echo "$url | $hdr" >> "$OUTFILE"
+                  echo "$url | $hdr"
                 fi
               done
-            done < "$TARGETS"
+            done <<< "$TARGETS"
           else
             for hdr in $HEADERS; do
-              result=$(ffuf -u "$TARGETS" -H "$hdr: evil.com" -mc 200,301,302 -s 2>/dev/null || true)
+              result=$(ffuf -u "$TARGETS" -H "$hdr: evil.com" -mc 200,301,302 -s 2>/dev/null | true)
               if [ -n "$result" ]; then
-                echo "$TARGETS | $hdr" >> "$OUTFILE"
+                echo "$TARGETS | $hdr"
               fi
             done
           fi
-          echo "Unkeyed header results:"
-          cat "$OUTFILE" 2>/dev/null || echo "(none)"
         continue-on-error: true
 
       - name: collect-results
         script: |
-          import json
-
           nuclei_vulns = {{ vulns(steps["nuclei-cache-poison"].outputs.typed_outputs) | tojson }}
 
-          ffuf_findings = []
-          try:
-              with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cachepoison_ffuf.txt') as f:
-                  for line in f:
-                      line = line.strip()
-                      if line:
-                          ffuf_findings.append(line)
-          except FileNotFoundError:
-              pass
+          ffuf_lines = []
+          ffuf_stdout = """{{ steps["ffuf-unkeyed-headers"].outputs.stdout | default("", true) }}"""
+          for line in ffuf_stdout.splitlines():
+              line = line.strip()
+              if line:
+                  ffuf_lines.append(line)
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_cachepoison_findings.txt', 'w') as f:
-              for v in nuclei_vulns:
-                  name = v.get('name', 'unknown')
-                  url = v.get('url', v.get('host', ''))
-                  sev = v.get('severity', 'info')
-                  f.write(f"[nuclei] [{sev}] {name} - {url}\n")
-              for finding in ffuf_findings:
-                  f.write(f"[ffuf] Unkeyed header: {finding}\n")
+          findings_lines = []
+          for v in nuclei_vulns:
+              name = v.get('name', 'unknown')
+              url = v.get('url', v.get('host', ''))
+              sev = v.get('severity', 'info')
+              findings_lines.append(f"[nuclei] [{sev}] {name} - {url}")
+          for finding in ffuf_lines:
+              findings_lines.append(f"[ffuf] Unkeyed header: {finding}")
 
-          total = len(nuclei_vulns) + len(ffuf_findings)
+          total = len(nuclei_vulns) + len(ffuf_lines)
 
-          add_outputs(findings_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_cachepoison_findings.txt", nuclei_count=len(nuclei_vulns), ffuf_count=len(ffuf_findings), total_count=total)
-          print(f"Cache poison findings: {total} (nuclei: {len(nuclei_vulns)}, unkeyed headers: {len(ffuf_findings)})")
+          add_outputs(findings='\n'.join(findings_lines), nuclei_count=len(nuclei_vulns), ffuf_count=len(ffuf_lines), total_count=total)
+          print(f"Cache poison findings: {total} (nuclei: {len(nuclei_vulns)}, unkeyed headers: {len(ffuf_lines)})")
 
   summary:
     name: Summary
@@ -149,7 +135,7 @@ jobs:
           echo "Unkeyed headers: {{ jobs['header-fuzz'].outputs.ffuf_count }}"
           echo "Total findings: {{ jobs['header-fuzz'].outputs.total_count }}"
           echo ""
-          echo "Findings file: {{ jobs['header-fuzz'].outputs.findings_file }}"
+          echo "Findings file: {{ jobs['header-fuzz'].outputs.findings }}"
         log-stdout: "{{ inputs.log_output | default(true) }}"
 
       - name: export-to-project
@@ -163,7 +149,7 @@ jobs:
           else:
               d = Path(project) / 'vulns'
               d.mkdir(parents=True, exist_ok=True)
-              src = '''{{ jobs['header-fuzz'].outputs.findings_file | default('', true) }}'''
+              src = '''{{ jobs['header-fuzz'].outputs.findings | default('', true) }}'''
               if src and Path(src).is_file():
                   shutil.copy2(src, d / 'cache-poison-findings.txt')
                   print('  [+] vulns/cache-poison-findings.txt')

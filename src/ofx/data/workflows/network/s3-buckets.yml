@@ -1,0 +1,148 @@
+name: s3-buckets
+description: >
+  Cloud storage bucket enumeration — discovers and checks S3, GCS, and Azure Blob
+  buckets for public exposure, misconfigurations, and sensitive data. Uses s3scanner,
+  cloudfox, and nuclei cloud templates to identify vulnerable storage.
+tags:
+  - recon
+  - cloud
+  - s3
+  - bucket
+  - storage
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain, bucket name prefix, or URL
+      alias: t
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  buckets_file: '{{ jobs["collect"].outputs.buckets_file | default("", true) }}'
+  bucket_count: '{{ jobs["collect"].outputs.bucket_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["collect"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  discover:
+    name: Bucket Enumeration
+    outputs:
+      s3scanner_results: '{{ steps["s3scanner"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: s3scanner
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: s3scanner
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-buckets
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          tags: "s3,gcs,azure-blob,bucket,storage"
+          severity: "critical,high,medium"
+          rate_limit: 50
+          json: true
+          silent: true
+        continue-on-error: true
+      - task: cloudfox
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: cloudfox-buckets
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+  collect:
+    name: Collect Results
+    needs:
+      - discover
+    outputs:
+      buckets_file: '{{ steps["merge"].outputs.buckets_file | default("", true) }}'
+      bucket_count: '{{ steps["merge"].outputs.bucket_count | default("0", true) }}'
+      typed_outputs: '{{ steps["merge"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - name: merge
+        script: |
+          import json
+          from pathlib import Path
+
+          all_buckets = []
+          seen = set()
+
+          for item in {{ jobs["discover"].outputs.s3scanner_results | default([], true) | tojson }}:
+            bucket = item.get('bucket', '') or item.get('name', '')
+            if bucket and bucket not in seen:
+              seen.add(bucket)
+              all_buckets.append({
+                'bucket': bucket,
+                'status': item.get('status', 'unknown'),
+                'provider': 'AWS',
+                'source': 's3scanner'
+              })
+
+          for vuln in {{ vulns(steps["nuclei-buckets"].outputs.typed_outputs) | default([], true) | tojson }}:
+            name = vuln.get('host', '') or vuln.get('matched', '')
+            if name and name not in seen:
+              seen.add(name)
+              all_buckets.append({
+                'bucket': name,
+                'status': vuln.get('severity', 'info'),
+                'info': vuln.get('info', ''),
+                'source': 'nuclei'
+              })
+
+          cloudfox_data = {{ steps["cloudfox-buckets"].outputs.typed_outputs | default([], true) | tojson }}
+          for item in cloudfox_data:
+            bucket = item.get('name', '') or item.get('bucket', '')
+            if bucket and bucket not in seen:
+              seen.add(bucket)
+              all_buckets.append({
+                'bucket': bucket,
+                'status': item.get('status', 'unknown'),
+                'provider': item.get('provider', 'AWS'),
+                'source': 'cloudfox'
+              })
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          buckets_file = f'{out_dir}/ofx_s3_buckets.txt'
+          Path(buckets_file).write_text('\\n'.join([b['bucket'] for b in all_buckets]))
+
+          add_outputs(
+            buckets_file=buckets_file,
+            bucket_count=len(all_buckets),
+            typed_outputs=all_buckets
+          )
+          print(f'Bucket enum: {len(all_buckets)} buckets discovered')
+  summary:
+    name: Summary
+    needs:
+      - collect
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " CLOUD BUCKET ENUMERATION RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Target: {{ inputs.target }}"
+          echo "Buckets found: {{ jobs.collect.outputs.bucket_count | default('0', true) }}"
+          echo ""
+          {% set buckets = jobs.collect.outputs.typed_outputs | default([], true) %}
+          {% for b in buckets[:20] %}
+          echo "  {{ b.bucket }} [{{ b.status }}] ({{ b.source }})"
+          {% endfor %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"

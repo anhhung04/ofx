@@ -1,0 +1,191 @@
+name: backup-files
+description: >
+  Backup and configuration file discovery — scans for exposed backup files,
+  configuration files, database dumps, and version control artifacts. Identifies
+  files with extensions like .bak, .old, .sql, .zip, .tar.gz, .env, .conf, and
+  checks for exposed .git and .svn directories. Common low-hanging fruit for
+  bug bounty and penetration testing engagements.
+tags:
+  - recon
+  - backup
+  - config
+  - git
+  - svn
+  - discovery
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target URL or file with URLs
+      alias: t
+    extensions:
+      type: string
+      default: "bak,old,sql,zip,tar,gz,tar.gz,env,conf,config,ini,log,swp,save,orig,copy,tmp,db,sqlite,gz,bz2,7z,rar,jks,p12,pfx,key,crt,pem,csr,id_rsa,ppk"
+      description: File extensions to search for
+    threads:
+      type: number
+      default: 100
+      description: Concurrent threads
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  backup_file: '{{ jobs["collect"].outputs.backup_file | default("", true) }}'
+  backup_count: '{{ jobs["collect"].outputs.backup_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["collect"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  discover:
+    name: Backup File Discovery
+    steps:
+      - task: dirsearch
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: dirsearch-backups
+        retry: 2
+        retry-delay: 5
+        with:
+          url: "{{ inputs.target }}"
+          wordlist: /usr/share/wordlists/seclists/Discovery/Web-Content/CommonBackdoors-PHP.fuzz.txt
+          extensions: "{{ inputs.extensions }}"
+          threads: "{{ inputs.threads }}"
+          include_status: "200,201,204,301,302,307,401,403"
+          recursive: false
+          plain: true
+        continue-on-error: true
+      - task: ffuf
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: ffuf-backups
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}/FUZZ"
+          wordlist: /usr/share/wordlists/seclists/Discovery/Web-Content/raft-small-words.txt
+          extensions: "{{ inputs.extensions }}"
+          threads: "{{ inputs.threads }}"
+          fc: "404,403"
+          json: true
+        continue-on-error: true
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-git-svn
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          tags: "git,svn,backup,config,exposure"
+          severity: "critical,high,medium"
+          rate_limit: 50
+          json: true
+          silent: true
+        continue-on-error: true
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-backup-files
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          tags: "backup-files,backups,dotfiles,config-scan"
+          severity: "critical,high,medium,low,info"
+          rate_limit: 50
+          json: true
+          silent: true
+        continue-on-error: true
+  collect:
+    name: Collect and Merge
+    needs:
+      - discover
+    outputs:
+      backup_file: '{{ steps["merge"].outputs.backup_file | default("", true) }}'
+      backup_count: '{{ steps["merge"].outputs.backup_count | default("0", true) }}'
+      typed_outputs: '{{ steps["merge"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - name: merge
+        script: |
+          import json
+          from pathlib import Path
+
+          all_files = set()
+          findings = []
+
+          dirsearch_data = {{ steps["dirsearch-backups"].outputs.typed_outputs | default([], true) | tojson }}
+          for item in dirsearch_data:
+            url = item.get('url', '')
+            if url:
+              all_files.add(url)
+              findings.append({
+                'url': url,
+                'status': item.get('status', 0),
+                'source': 'dirsearch'
+              })
+
+          ffuf_data = {{ steps["ffuf-backups"].outputs.typed_outputs | default([], true) | tojson }}
+          for item in ffuf_data:
+            url = item.get('url', '')
+            if url:
+              all_files.add(url)
+              findings.append({
+                'url': url,
+                'status': item.get('status', 0),
+                'source': 'ffuf'
+              })
+
+          for vuln in {{ vulns(steps["nuclei-git-svn"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = vuln.get('host', '')
+            if host:
+              all_files.add(host)
+              findings.append({
+                'url': host,
+                'name': vuln.get('name', ''),
+                'severity': vuln.get('severity', 'info'),
+                'source': 'nuclei-git-svn'
+              })
+
+          for vuln in {{ vulns(steps["nuclei-backup-files"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = vuln.get('host', '')
+            if host:
+              all_files.add(host)
+              findings.append({
+                'url': host,
+                'name': vuln.get('name', ''),
+                'severity': vuln.get('severity', 'info'),
+                'source': 'nuclei-backup-files'
+              })
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          backup_file = f'{out_dir}/ofx_backup_files.txt'
+          Path(backup_file).write_text('\\n'.join(sorted(all_files)))
+
+          add_outputs(
+            backup_file=backup_file,
+            backup_count=len(all_files),
+            typed_outputs=findings
+          )
+          print(f'Backup files: {len(all_files)} exposed files discovered')
+  summary:
+    name: Summary
+    needs:
+      - collect
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " BACKUP FILE DISCOVERY RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Target: {{ inputs.target }}"
+          echo "Exposed files: {{ jobs.collect.outputs.backup_count | default('0', true) }}"
+          echo ""
+          {% set findings = jobs.collect.outputs.typed_outputs | default([], true) %}
+          {% for f in findings[:20] %}
+          echo "  {{ f.url }}"
+          {% endfor %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"

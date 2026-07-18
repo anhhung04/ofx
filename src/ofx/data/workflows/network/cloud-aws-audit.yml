@@ -1,0 +1,186 @@
+name: cloud-aws-audit
+description: >
+  AWS security audit — check S3 bucket permissions, IAM misconfigurations,
+  public EC2 instances, security groups, and credential exposure.
+  Uses prowler for comprehensive CIS benchmark checks, cloudfox for
+  AWS enumeration, pacu for exploitation testing, and s3scanner for
+  open bucket detection. Requires AWS CLI configured with valid credentials.
+tags:
+- cloud
+- aws
+- security
+- audit
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+    profile:
+      type: string
+      default: ''
+      description: AWS CLI profile name
+    region:
+      type: string
+      default: us-east-1
+      description: AWS region
+    services:
+      type: string
+      default: ''
+      description: Comma-separated AWS services to audit (empty = all)
+    severity:
+      type: string
+      default: ''
+      description: Minimum severity filter (info, low, medium, high, critical)
+defaults:
+  store-creds: true
+jobs:
+  identity-check:
+    name: AWS Identity & IAM Audit
+    outputs:
+      account: '{{ steps["collect-identity"].outputs.account | default("", true) }}'
+      iam_finding_count: '{{ steps["collect-identity"].outputs.iam_finding_count | default("0", true) }}'
+      user_count: '{{ steps["collect-identity"].outputs.user_count | default("0", true) }}'
+    steps:
+    - task: prowler
+      log-command: '{{ inputs.log_command }}'
+      name: prowler-iam
+      retry: 2
+      retry-delay: 5
+      with:
+        target: aws
+        provider: aws
+        profile: '{{ inputs.profile or "" }}'
+        services: '{{ inputs.services or "iam" }}'
+        severity: '{{ inputs.severity or "" }}'
+      continue-on-error: true
+    - name: collect-identity
+      script: |
+        import json
+        from pathlib import Path
+
+        iam_vulns = {{ vulns(steps["prowler-iam"].outputs.typed_outputs) | default([], true) | tojson }}
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        account = 'unknown'
+        for v in iam_vulns:
+            if v.get('account'):
+                account = v['account']
+                break
+
+        add_outputs(account=account, iam_finding_count=len(iam_vulns),
+                    user_count=len([v for v in iam_vulns if 'user' in v.get('name', '').lower()]))
+        print(f'IAM audit: {len(iam_vulns)} findings, account={account}')
+    needs: []
+  s3-audit:
+    name: S3 Bucket Security Audit
+    outputs:
+      bucket_count: '{{ steps["collect-s3"].outputs.bucket_count | default("0", true) }}'
+      public_bucket_count: '{{ steps["collect-s3"].outputs.public_bucket_count | default("0", true) }}'
+      finding_count: '{{ steps["collect-s3"].outputs.finding_count | default("0", true) }}'
+    steps:
+    - task: s3scanner
+      log-command: '{{ inputs.log_command }}'
+      name: s3-open-scan
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target if inputs.target else "aws" }}'
+        profile: '{{ inputs.profile or "" }}'
+      continue-on-error: true
+    - task: prowler
+      log-command: '{{ inputs.log_command }}'
+      name: prowler-s3
+      retry: 2
+      retry-delay: 5
+      with:
+        target: aws
+        provider: aws
+        profile: '{{ inputs.profile or "" }}'
+        services: s3
+        severity: '{{ inputs.severity or "" }}'
+      continue-on-error: true
+    - name: collect-s3
+      script: |
+        import json
+        from pathlib import Path
+
+        s3_vulns = {{ vulns(steps["prowler-s3"].outputs.typed_outputs) | default([], true) | tojson }}
+        open_vulns = {{ vulns(steps["s3-open-scan"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        public = len([v for v in s3_vulns if 'public' in v.get('name', '').lower() or 'open' in v.get('name', '').lower()])
+        public += len(open_vulns)
+
+        add_outputs(bucket_count=len(s3_vulns) + len(open_vulns),
+                    public_bucket_count=public,
+                    finding_count=len(s3_vulns) + len(open_vulns))
+        print(f'S3 audit: {len(s3_vulns)} prowler findings, {len(open_vulns)} open buckets, {public} public')
+    needs: []
+  ec2-sg-audit:
+    name: EC2 & Security Group Audit
+    outputs:
+      sg_count: '{{ steps["collect-sg"].outputs.sg_count | default("0", true) }}'
+      risky_sg_count: '{{ steps["collect-sg"].outputs.risky_sg_count | default("0", true) }}'
+      finding_count: '{{ steps["collect-sg"].outputs.finding_count | default("0", true) }}'
+    steps:
+    - task: cloudfox
+      log-command: '{{ inputs.log_command }}'
+      name: cloudfox-enum
+      retry: 2
+      retry-delay: 5
+      with:
+        target: all-checks
+        profile: '{{ inputs.profile or "" }}'
+      continue-on-error: true
+    - task: prowler
+      log-command: '{{ inputs.log_command }}'
+      name: prowler-ec2
+      retry: 2
+      retry-delay: 5
+      with:
+        target: aws
+        provider: aws
+        profile: '{{ inputs.profile or "" }}'
+        services: ec2
+        severity: '{{ inputs.severity or "" }}'
+      continue-on-error: true
+    - name: collect-sg
+      script: |
+        import json
+        from pathlib import Path
+
+        ec2_vulns = {{ vulns(steps["prowler-ec2"].outputs.typed_outputs) | default([], true) | tojson }}
+        cloudfox_vulns = {{ vulns(steps["cloudfox-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        risky = len([v for v in ec2_vulns if '0.0.0.0' in v.get('name', '') or 'public' in v.get('name', '').lower()])
+
+        add_outputs(sg_count=len(ec2_vulns), risky_sg_count=risky,
+                    finding_count=len(ec2_vulns) + len(cloudfox_vulns))
+        print(f'EC2/SG audit: {len(ec2_vulns)} findings, {risky} risky security groups')
+    needs: []
+  summary:
+    name: AWS Audit Summary
+    needs:
+    - identity-check
+    - s3-audit
+    - ec2-sg-audit
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " AWS SECURITY AUDIT: Profile={{ inputs.profile }}"
+        echo "======================================================"
+        echo ""
+        echo "  Account:        {{ jobs['identity-check'].outputs.account }}"
+        echo "  IAM findings:  {{ jobs['identity-check'].outputs.iam_finding_count }}"
+        echo "  IAM users:      {{ jobs['identity-check'].outputs.user_count }}"
+        echo "  S3 buckets:     {{ jobs['s3-audit'].outputs.bucket_count }}"
+        echo "  Public buckets: {{ jobs['s3-audit'].outputs.public_bucket_count }}"
+        echo "  Security groups:  {{ jobs['ec2-sg-audit'].outputs.sg_count }}"
+        echo "  Risky SGs:      {{ jobs['ec2-sg-audit'].outputs.risky_sg_count }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

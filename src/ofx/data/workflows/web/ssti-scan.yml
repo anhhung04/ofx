@@ -62,7 +62,6 @@ jobs:
 
           param_urls = set()
 
-          # From httpx — live URLs with params
           httpx_out = {{ steps["probe-targets"].outputs.typed_outputs | tojson }}
           for item in httpx_out:
               if item.get('_type') == 'url':
@@ -70,7 +69,6 @@ jobs:
                   if url and ('?' in url or '=' in url):
                       param_urls.add(url)
 
-          # From arjun — discovered params
           arjun_out = {{ steps["arjun-params"].outputs.typed_outputs | tojson }}
           for item in arjun_out:
               if item.get('_type') == 'url':
@@ -78,7 +76,6 @@ jobs:
                   if url:
                       param_urls.add(url)
 
-          # From paramspider
           ps_out = {{ steps["paramspider-mine"].outputs.typed_outputs | tojson }}
           for item in ps_out:
               if item.get('_type') == 'url':

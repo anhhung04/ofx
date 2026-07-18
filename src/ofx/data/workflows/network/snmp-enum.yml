@@ -1,0 +1,146 @@
+name: snmp-enum
+description: >
+  SNMP enumeration — scans for SNMP services and attempts information gathering
+  via SNMPv1/v2c community strings and SNMPv3. Extracts system information, network
+  interfaces, routing tables, and running processes using nmap NSE scripts.
+tags:
+  - recon
+  - snmp
+  - enumeration
+  - network
+dispatch:
+  inputs:
+    targets:
+      required: true
+      type: string
+      description: Target IP(s), CIDR range, or file with targets
+      alias: t
+    communities:
+      type: string
+      default: "public,private,internal,manager,admin,cisco,read,write,monitor"
+      description: SNMP community strings to test
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  snmp_file: '{{ jobs["collect"].outputs.snmp_file | default("", true) }}'
+  snmp_count: '{{ jobs["collect"].outputs.snmp_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["collect"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  discover:
+    name: SNMP Discovery
+    outputs:
+      nmap_snmp: '{{ steps["nmap-snmp"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: nmap
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nmap-snmp
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          ports: "161,162,199"
+          script: "snmp-info,snmp-interfaces,snmp-processes,snmp-sysdescr,snmp-netstat,snmp-brute"
+          version_intensity: 1
+          json: true
+          output_prefix: "snmp"
+        continue-on-error: true
+      - task: nuclei
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nuclei-snmp
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.targets }}"
+          tags: "snmp,udp-service,network"
+          severity: "info,low,medium,high"
+          rate_limit: 50
+          json: true
+          silent: true
+        continue-on-error: true
+  collect:
+    name: Collect Results
+    needs:
+      - discover
+    outputs:
+      snmp_file: '{{ steps["collect-snmp"].outputs.snmp_file | default("", true) }}'
+      snmp_count: '{{ steps["collect-snmp"].outputs.snmp_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-snmp"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - name: collect-snmp
+        script: |
+          import json
+          from pathlib import Path
+
+          snmp_hosts = []
+
+          nmap_data = {{ jobs["discover"].outputs.nmap_snmp | default([], true) | tojson }}
+          for host in nmap_data:
+            ip = host.get('ip', '')
+            for port in host.get('ports', []):
+              state = port.get('state', '')
+              if state == 'open':
+                scripts = port.get('scripts', {})
+                info = scripts.get('snmp-info', {})
+
+                snmp_hosts.append({
+                  'ip': ip,
+                  'port': port.get('port', 0),
+                  'service': port.get('service', 'snmp'),
+                  'sysdescr': info.get('systemDescription', '') if isinstance(info, dict) else str(info)[:200],
+                  'contact': info.get('systemContact', '') if isinstance(info, dict) else '',
+                  'source': 'nmap'
+                })
+
+          for vuln in {{ vulns(steps["nuclei-snmp"].outputs.typed_outputs) | default([], true) | tojson }}:
+            host = vuln.get('host', '')
+            if host:
+              snmp_hosts.append({
+                'ip': host,
+                'port': 161,
+                'service': 'snmp',
+                'name': vuln.get('name', ''),
+                'severity': vuln.get('severity', 'info'),
+                'source': 'nuclei'
+              })
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          snmp_file = f'{out_dir}/ofx_snmp_hosts.txt'
+          Path(snmp_file).write_text('\\n'.join(
+            [f"{h['ip']}:{h['port']} {h.get('sysdescr', '')[:80]}" for h in snmp_hosts]
+          ))
+
+          add_outputs(
+            snmp_file=snmp_file,
+            snmp_count=len(snmp_hosts),
+            typed_outputs=snmp_hosts
+          )
+          print(f'SNMP scan: {len(snmp_hosts)} hosts found')
+  summary:
+    name: Summary
+    needs:
+      - collect
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " SNMP ENUMERATION RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Targets: {{ inputs.targets }}"
+          echo "SNMP hosts: {{ jobs.collect.outputs.snmp_count | default('0', true) }}"
+          echo ""
+          {% set hosts = jobs.collect.outputs.typed_outputs | default([], true) %}
+          {% for h in hosts[:20] %}
+          echo "  {{ h.ip }}:{{ h.port }}"
+          {% if h.get('sysdescr') %}echo "    {{ h.sysdescr[:80] }}"{% endif %}
+          {% endfor %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"

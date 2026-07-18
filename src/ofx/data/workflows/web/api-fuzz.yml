@@ -68,7 +68,6 @@ jobs:
                       except Exception as e:
                           print(f"  {method}: Error - {e}")
 
-                  # Test without auth
                   if auth:
                       print(f"\n--- Without Auth ---")
                       for method in ['GET', 'POST']:
@@ -140,7 +139,6 @@ jobs:
                               findings.append(f'[LOW] Info leak: {h}: {val}')
                               print(f"  {h}: {val}")
 
-                      # CORS headers
                       cors = headers.get('Access-Control-Allow-Origin', '')
                       if cors == '*':
                           findings.append('[MEDIUM] CORS allows any origin (*)')

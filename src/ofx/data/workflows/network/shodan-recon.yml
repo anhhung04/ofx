@@ -1,0 +1,170 @@
+name: shodan-recon
+description: >
+  Shodan reconnaissance — search Shodan for exposed hosts matching a
+  target domain/IP or custom dork, then analyze discovered services.
+  Enriches results with subfinder subdomain discovery and dnsx resolution.
+tags:
+- recon
+- shodan
+- osint
+- search
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+    target:
+      required: true
+      type: string
+      description: Domain or IP address to search for
+      alias: t
+    dork:
+      type: string
+      default: ''
+      description: Custom Shodan dork (overrides auto-build from target)
+    pages:
+      type: string
+      default: '1'
+      description: Number of Shodan result pages to fetch
+    shodan_token:
+      type: string
+      default: ''
+      description: Shodan API token (or set in ~/.ofx/secrets)
+defaults:
+  store-creds: true
+jobs:
+  shodan-search:
+    name: Shodan Search
+    outputs:
+      raw_results: '{{ steps["query-shodan"].outputs.raw_results | default("", true) }}'
+      result_count: '{{ steps["query-shodan"].outputs.result_count | default("0", true) }}'
+    steps:
+    - name: query-shodan
+      continue-on-error: true
+      log-command: '{{ inputs.log_command | default(true) }}'
+      script: |
+        from ofx.api.search import Shodan
+        import json
+
+        target = "{{ inputs.target }}"
+        dork = "{{ inputs.dork }}"
+        pages = int("{{ inputs.pages }}")
+        token = "{{ inputs.shodan_token }}" or __secrets__.get("shodan_token", "")
+
+        if not dork:
+            dork = f"hostname:{target}" if not target.replace(".", "").isdigit() else f"ip:{target}"
+
+        print(f"[*] Shodan query: {dork} (pages={pages})")
+        client = Shodan(token=token) if token else Shodan()
+        results = client.search(dork, pages=pages)
+
+        results_list = sorted(results)
+        print(f"[+] Found {len(results_list)} host:port entries")
+        for entry in results_list[:20]:
+            print(f"    {entry}")
+        if len(results_list) > 20:
+            print(f"    ... and {len(results_list) - 20} more")
+
+        add_outputs(raw_results=json.dumps(results_list), result_count=len(results_list))
+    needs: []
+  enrich:
+    name: Enrich with DNS Resolution
+    needs:
+    - shodan-search
+    outputs:
+      unique_ips: '{{ steps["parse-enrich"].outputs.unique_ips | default("", true) }}'
+      unique_ports: '{{ steps["parse-enrich"].outputs.unique_ports | default("", true) }}'
+      services_file: '{{ steps["parse-enrich"].outputs.services_file | default("", true) }}'
+    steps:
+    - task: subfinder
+      log-command: '{{ inputs.log_command }}'
+      name: subfinder-enrich
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      continue-on-error: true
+    - task: dnsx
+      log-command: '{{ inputs.log_command }}'
+      name: dnsx-resolve
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        a: true
+        cname: true
+        resp: true
+      continue-on-error: true
+    - name: parse-enrich
+      script: |
+        import json
+
+        raw = '{{ jobs.shodan-search.outputs.raw_results }}'
+        results = json.loads(raw) if raw else []
+
+        ips = set()
+        ports = set()
+        services = {}
+
+        for entry in results:
+            if "]:" in entry:
+                ip = entry.rsplit("]:", 1)[0].lstrip("[")
+                port = int(entry.rsplit("]:", 1)[1])
+            elif ":" in entry:
+                ip, port = entry.rsplit(":", 1)
+                port = int(port)
+            else:
+                continue
+            ips.add(ip)
+            ports.add(port)
+            services.setdefault(ip, []).append(port)
+
+        sorted_ips = sorted(ips)
+        sorted_ports = sorted(ports)
+
+        print(f"[+] Unique IPs: {len(sorted_ips)}")
+        print(f"[+] Unique ports: {len(sorted_ports)}")
+
+        from collections import Counter
+        port_counts = Counter()
+        for entry in results:
+            p = entry.rsplit(":", 1)[-1]
+            try:
+                port_counts[int(p)] += 1
+            except ValueError:
+                pass
+
+        for port, count in port_counts.most_common(15):
+            print(f"   :{port} -> {count} hosts")
+
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_shodan_services.json"
+        with open(out_file, "w") as f:
+            json.dump({"ips": sorted_ips, "ports": sorted_ports, "services": services}, f, indent=2)
+
+        add_outputs(unique_ips=json.dumps(sorted_ips), unique_ports=json.dumps(sorted_ports),
+                    services_file=out_file)
+    needs: []
+  summary:
+    name: Shodan Summary
+    needs:
+    - shodan-search
+    - enrich
+    steps:
+    - name: display-summary
+      run: |
+        echo "======================================================"
+        echo " SHODAN RECON: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "  Query results: {{ jobs.shodan-search.outputs.result_count }} host:port entries"
+        echo "  Unique IPs:    {{ jobs.enrich.outputs.unique_ips }}"
+        echo "  Unique ports:  {{ jobs.enrich.outputs.unique_ports }}"
+        echo "  Services file: {{ jobs.enrich.outputs.services_file }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

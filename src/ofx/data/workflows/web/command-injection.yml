@@ -1,7 +1,6 @@
 name: command-injection
-description: 'Command injection testing — scans target URLs for OS command injection vulnerabilities using multiple techniques.
-
-  '
+description: >
+  Command injection testing — scans target URLs for OS command injection vulnerabilities using multiple techniques.
 tags:
 - web
 - vuln

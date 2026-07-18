@@ -56,10 +56,7 @@ jobs:
                   if item.get('_type') == 'url':
                       urls.add(item['url'])
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_urlcrawl_urls.txt', 'w') as tf:
-              tf.write('\n'.join(sorted(urls)))
-
-          add_outputs(crawled_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_urlcrawl_urls.txt", url_count=len(urls))
+          add_outputs(crawled_urls='\n'.join(sorted(urls)), url_count=len(urls))
           print(f"Crawled {len(urls)} unique URLs")
   probe:
     name: HTTP Probe

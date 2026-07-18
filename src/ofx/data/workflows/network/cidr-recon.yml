@@ -1,0 +1,225 @@
+name: cidr-recon
+description: >
+  CIDR/IP range reconnaissance. Discovers alive hosts via nmap -sn multi-probe
+  sweep (catches ICMP-blocking hosts) with fping fallback for ICMP-only speed,
+  performs port scanning with naabu and nmap, probes HTTP services,
+  runs nuclei vulnerability scan. Per-host parallelization via matrix strategy.
+  For internal network assessments and bug bounty IP ranges.
+tags:
+- recon
+- cidr
+- ip-range
+- internal
+- network
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target CIDR, IP range, or file with targets
+      alias: t
+    ports:
+      type: string
+      default: 'top-1000'
+      description: Ports to scan
+    discovery:
+      type: string
+      default: 'nmap'
+      description: Host discovery method — nmap (multi-probe, catches ICMP-blocking hosts, default) or fping (ICMP-only, fast for trusted networks)
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  host-discovery:
+    name: Host Discovery
+    outputs:
+      alive_hosts: '{{ steps["collect-alive"].outputs.alive_hosts | default("", true) }}'
+      alive_count: '{{ steps["collect-alive"].outputs.alive_count | default("0", true) }}'
+    steps:
+    - task: nmap
+      run_if: "{{ inputs.discovery == 'nmap' }}"
+      log-command: '{{ inputs.log_command }}'
+      name: ping-sweep
+      with:
+        target: '{{ inputs.target }}'
+        ping_scan: true
+        timing: 4
+      continue-on-error: true
+    - task: fping
+      run_if: "{{ inputs.discovery == 'fping' }}"
+      log-command: '{{ inputs.log_command }}'
+      name: fping-sweep
+      with:
+        target: '{{ inputs.target }}'
+        count: 2
+        timeout: 500
+      continue-on-error: true
+    - name: collect-alive
+      script: |
+        hosts = set()
+        for item in {{ ips(steps["ping-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
+            ip = item.get('ip', '')
+            if ip:
+                hosts.add(ip)
+        for item in {{ ips(steps["fping-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
+            ip = item.get('ip', '')
+            if ip:
+                hosts.add(ip)
+
+        hosts.discard('')
+        hosts_list = sorted(hosts)
+
+        add_outputs(alive_hosts='\n'.join(hosts_list), alive_count=len(hosts_list))
+        if hosts_list:
+            print(f'Host discovery: {len(hosts_list)} alive hosts')
+        else:
+            print('Host discovery: 0 alive hosts (network may block ICMP — try masscan for TCP-based discovery)')
+    needs: []
+  port-scan:
+    name: Port Scanning
+    needs:
+    - host-discovery
+    outputs:
+      port_targets: '{{ steps["merge-ports"].outputs.port_targets | default("", true) }}'
+      port_count: '{{ steps["merge-ports"].outputs.port_count | default("0", true) }}'
+      web_targets: '{{ steps["merge-ports"].outputs.web_targets | default("", true) }}'
+    steps:
+    - name: prep-targets
+      uses: target-file
+      with:
+        targets: '{{ jobs["host-discovery"].outputs.alive_hosts }}'
+        prefix: 'ofx_cidr_hosts'
+    - task: naabu
+      log-command: '{{ inputs.log_command }}'
+      name: naabu-scan
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ steps["prep-targets"].outputs.targets_file }}'
+        top_ports: '{{ inputs.ports }}'
+        rate: 1000
+      continue-on-error: true
+    - task: nmap
+      log-command: '{{ inputs.log_command }}'
+      name: nmap-detect
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ steps["prep-targets"].outputs.targets_file }}'
+        version_detection: true
+        top_ports: 100
+        timing: 4
+      continue-on-error: true
+    - name: merge-ports
+      script: |
+        all_ports = (
+            {{ ports(steps["naabu-scan"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ ports(steps["nmap-detect"].outputs.typed_outputs) | default([], true) | tojson }}
+        )
+
+        seen = set()
+        port_lines = []
+        web_targets = set()
+
+        for p in all_ports:
+            key = f"{p.get('host', '')}:{p.get('port', '')}"
+            if key not in seen and p.get('port'):
+                seen.add(key)
+                port_lines.append(key)
+                svc = str(p.get('service_name', p.get('service', ''))).lower()
+                port_num = int(p.get('port', 0))
+                if svc in ('http', 'https', 'http-proxy', 'ssl') or port_num in (80, 443, 8080, 8443, 8000):
+                    web_targets.add(f"{p.get('host')}:{p.get('port')}")
+
+        add_outputs(
+            port_targets='\n'.join(sorted(port_lines)),
+            port_count=len(port_lines),
+            web_targets='\n'.join(sorted(web_targets)),
+        )
+        print(f'Ports: {len(port_lines)} open, {len(web_targets)} potential web targets')
+    needs: []
+  http-probe:
+    name: HTTP Service Detection
+    needs:
+    - port-scan
+    outputs:
+      live_count: '{{ steps["report-http"].outputs.live_count | default("0", true) }}'
+    steps:
+    - task: httpx
+      log-command: '{{ inputs.log_command }}'
+      name: httpx-probe
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["port-scan"].outputs.web_targets }}'
+        json: true
+        title: true
+        tech_detect: true
+        follow_redirects: true
+        silent: true
+      continue-on-error: true
+    - name: report-http
+      script: |
+        probes = {{ steps["httpx-probe"].outputs.typed_outputs | default([], true) | tojson }}
+        live = [p for p in probes if p.get('status_code') and p.get('url')]
+
+        add_outputs(live_count=len(live))
+        print(f'HTTP probing: {len(live)} live services')
+        for p in live[:10]:
+            print(f"  {p.get('status_code')} {p.get('url')} [{p.get('tech', '?')}]")
+    needs: []
+  vuln-scan:
+    name: Vulnerability Scan
+    needs:
+    - http-probe
+    outputs:
+      vuln_count: '{{ steps["report-vulns"].outputs.vuln_count | default("0", true) }}'
+      critical_count: '{{ steps["report-vulns"].outputs.critical_count | default("0", true) }}'
+      high_count: '{{ steps["report-vulns"].outputs.high_count | default("0", true) }}'
+    steps:
+    - task: nuclei
+      log-command: '{{ inputs.log_command }}'
+      name: nuclei-scan
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        severity: critical,high,medium
+      continue-on-error: true
+    - name: report-vulns
+      script: |
+        vulns = {{ vulns(steps["nuclei-scan"].outputs.typed_outputs) | default([], true) | tojson }}
+        critical = [v for v in vulns if v.get('severity') == 'critical']
+        high = [v for v in vulns if v.get('severity') == 'high']
+
+        add_outputs(vuln_count=len(vulns), critical_count=len(critical), high_count=len(high))
+        print(f'Vuln scan: {len(vulns)} (C:{len(critical)} H:{len(high)})')
+    needs: []
+  summary:
+    name: CIDR Recon Summary
+    needs:
+    - host-discovery
+    - port-scan
+    - http-probe
+    - vuln-scan
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " CIDR RECON: {{ inputs.target }}"
+        echo "======================================================"
+        echo "  Alive hosts: {{ jobs['host-discovery'].outputs.alive_count }}"
+        echo "  Open ports: {{ jobs['port-scan'].outputs.port_count }}"
+        echo "  Live HTTP: {{ jobs['http-probe'].outputs.live_count }}"
+        echo "  Vulnerabilities: {{ jobs['vuln-scan'].outputs.vuln_count }}"
+        echo "    Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+        echo "    High: {{ jobs['vuln-scan'].outputs.high_count }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

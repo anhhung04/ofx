@@ -1,0 +1,131 @@
+name: phone-osint
+description: >
+  Phone number OSINT — identify carrier, location, line type, and
+  search for associated accounts and social media profiles using
+  maigret for username hunting and h8mail for breach data lookups.
+tags:
+- osint
+- phone
+- recon
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+    phone:
+      required: true
+      type: string
+      description: Phone number (with country code, e.g. +1234567890)
+      alias: t
+defaults:
+  store-creds: true
+jobs:
+  phone-analysis:
+    name: Phone Number Analysis
+    outputs:
+      number: '{{ steps["analyze-phone"].outputs.number | default("", true) }}'
+      country: '{{ steps["analyze-phone"].outputs.country | default("", true) }}'
+      valid: '{{ steps["analyze-phone"].outputs.valid | default("", true) }}'
+      carrier: '{{ steps["analyze-phone"].outputs.carrier | default("", true) }}'
+    steps:
+    - name: analyze-phone
+      script: |
+        import re
+
+        phone = '{{ inputs.phone }}'
+        phone_clean = re.sub(r'[^0-9+]', '', phone)
+
+        print(f"=== PHONE OSINT: {phone} ===\n")
+
+        results = {}
+        results['number'] = phone_clean
+
+        cc_map = {
+            '+1': 'US/CA', '+44': 'UK', '+33': 'FR', '+49': 'DE',
+            '+81': 'JP', '+86': 'CN', '+91': 'IN', '+61': 'AU',
+            '+7': 'RU', '+55': 'BR', '+34': 'ES', '+39': 'IT',
+        }
+        for prefix, country in sorted(cc_map.items(), key=lambda x: -len(x[0])):
+            if phone_clean.startswith(prefix):
+                results['country'] = country
+                results['country_code'] = prefix
+                break
+
+        print(f"  Number: {phone_clean}")
+        print(f"  Country: {results.get('country', 'Unknown')}")
+
+        try:
+            import phonenumbers
+            parsed = phonenumbers.parse(phone_clean)
+            from phonenumbers import geocoder, carrier, timezone
+            results['valid'] = str(phonenumbers.is_valid_number(parsed))
+            results['location'] = geocoder.description_for_number(parsed, 'en')
+            results['carrier'] = carrier.name_for_number(parsed, 'en')
+            results['type'] = str(phonenumbers.number_type(parsed))
+            print(f"  Valid: {results['valid']}")
+            print(f"  Location: {results['location']}")
+            print(f"  Carrier: {results['carrier']}")
+        except ImportError:
+            print("  [!] phonenumbers library not installed (pip install phonenumbers)")
+        except Exception as e:
+            print(f"  [!] Parse error: {e}")
+
+        print(f"\n--- Search Dorks ---")
+        dorks = [
+            f'"{phone_clean}"',
+            f'"{phone_clean}" site:linkedin.com',
+            f'"{phone_clean}" site:facebook.com',
+            f'intext:"{phone_clean}"',
+        ]
+        for d in dorks:
+            print(f"  Google: {d}")
+
+        add_outputs(**results)
+      log-command: '{{ inputs.log_command | default(true) }}'
+      continue-on-error: true
+    needs: []
+  breach-search:
+    name: Email/Breach Search via Phone
+    outputs:
+      breach_count: '{{ steps["collect-breaches"].outputs.breach_count | default("0", true) }}'
+    steps:
+    - task: h8mail
+      log-command: '{{ inputs.log_command }}'
+      name: h8mail-phone
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.phone }}'
+      continue-on-error: true
+    - name: collect-breaches
+      script: |
+        import json
+
+        breaches = {{ users(steps["h8mail-phone"].outputs.typed_outputs) | default([], true) | tojson }}
+        add_outputs(breach_count=len(breaches))
+        print(f'Breach search: {len(breaches)} results for phone number')
+    needs: []
+  summary:
+    name: Phone OSINT Summary
+    needs:
+    - phone-analysis
+    - breach-search
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " PHONE OSINT: {{ inputs.phone }}"
+        echo "======================================================"
+        echo ""
+        echo "  Number:   {{ jobs.phone-analysis.outputs.number }}"
+        echo "  Country:  {{ jobs.phone-analysis.outputs.country }}"
+        echo "  Valid:    {{ jobs.phone-analysis.outputs.valid }}"
+        echo "  Carrier:  {{ jobs.phone-analysis.outputs.carrier }}"
+        echo "  Breaches: {{ jobs.breach-search.outputs.breach_count }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

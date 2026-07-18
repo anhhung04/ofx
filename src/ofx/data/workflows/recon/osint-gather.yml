@@ -1,0 +1,336 @@
+name: osint-gather
+description: >
+  Open source intelligence (OSINT) gathering on a target domain or organization.
+  Collects emails, employee names, social media profiles, breach data, domain
+  registration information, GitHub repositories, and other publicly available data.
+tags:
+  - recon
+  - osint
+  - emails
+  - social
+  - breach
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain or organization name
+      alias: t
+    email_domain:
+      type: string
+      default: ""
+      description: Email domain if different from target
+    max_docs:
+      type: number
+      default: 50
+      description: Maximum documents to fetch per source
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  email_count: '{{ jobs["email-hunt"].outputs.email_count | default("0", true) }}'
+  emails_file: '{{ jobs["email-hunt"].outputs.emails_file | default("", true) }}'
+  breach_count: '{{ jobs["breach-data"].outputs.breach_count | default("0", true) }}'
+  breaches_file: '{{ jobs["breach-data"].outputs.breaches_file | default("", true) }}'
+  whois_count: '{{ jobs["domain-intel"].outputs.whois_count | default("0", true) }}'
+  whois_file: '{{ jobs["domain-intel"].outputs.whois_file | default("", true) }}'
+  github_count: '{{ jobs["github-recon"].outputs.github_count | default("0", true) }}'
+  github_file: '{{ jobs["github-recon"].outputs.github_file | default("", true) }}'
+jobs:
+  email-hunt:
+    name: Email Harvesting
+    outputs:
+      emails_file: '{{ steps["collect-emails"].outputs.emails_file | default("", true) }}'
+      email_count: '{{ steps["collect-emails"].outputs.email_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-emails"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: theharvester
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: harvester-emails
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          source: "all"
+          limit: "{{ inputs.max_docs }}"
+        continue-on-error: true
+      - name: collect-emails
+        script: |
+          import json
+          from pathlib import Path
+          import re
+
+          all_emails = set()
+          sources = {}
+
+          harvester_data = {{ steps["harvester-emails"].outputs.typed_outputs | default([], true) | tojson }}
+          for entry in harvester_data:
+            email = entry.get('email', '').lower()
+            if email and '@' in email:
+              all_emails.add(email)
+              sources.setdefault(email, []).append('theharvester')
+
+          typed = []
+          domain_target = "{{ inputs.target }}"
+          email_domain = "{{ inputs.email_domain }}" or domain_target
+          for email in sorted(all_emails):
+            if email_domain in email:
+              typed.append({
+                'email': email,
+                'sources': sorted(list(set(sources.get(email, []))))
+              })
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+
+          add_outputs(
+            emails_file=emails_file,
+            email_count=len(typed),
+            typed_outputs=typed
+          )
+          print(f'Email harvesting: {len(typed)} unique emails found')
+  breach-data:
+    name: Breach Data Collection
+    needs:
+      - email-hunt
+    outputs:
+      breaches_file: '{{ steps["collect-breaches"].outputs.breaches_file | default("", true) }}'
+      breach_count: '{{ steps["collect-breaches"].outputs.breach_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-breaches"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: h8mail
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: h8mail-check
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ jobs.email-hunt.outputs.emails_file | default('', true) }}"
+          format: "json"
+        continue-on-error: true
+      - name: collect-breaches
+        script: |
+          import json
+          from pathlib import Path
+
+          h8mail_data = {{ steps["h8mail-check"].outputs.typed_outputs | default([], true) | tojson }}
+
+          breaches = []
+          for entry in h8mail_data:
+            if entry.get('leaked', False) or entry.get('breaches'):
+              breaches.append({
+                'email': entry.get('email', ''),
+                'breaches': entry.get('breaches', []),
+                'password': entry.get('password', ''),
+                'source': entry.get('source', '')
+              })
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+
+          add_outputs(
+            breaches_file=breaches_file,
+            breach_count=len(breaches),
+            typed_outputs=breaches
+          )
+          print(f'Breach data: {len(breaches)} breached accounts found')
+  domain-intel:
+    name: Domain Intelligence
+    outputs:
+      whois_file: '{{ steps["collect-whois"].outputs.whois_file | default("", true) }}'
+      whois_count: '{{ steps["collect-whois"].outputs.whois_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-whois"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: whois
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: whois-lookup
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+        continue-on-error: true
+      - task: dnsrecon
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: dnsrecon-domain
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          type: "std,ptr"
+        continue-on-error: true
+      - task: amass
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: amass-intel
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          passive: true
+          max_dns: 10000
+        continue-on-error: true
+      - name: collect-whois
+        script: |
+          import json
+          from pathlib import Path
+
+          whois_data = {{ steps["whois-lookup"].outputs.typed_outputs | default([], true) | tojson }}
+
+          domain_intel = {
+            'domain': '{{ inputs.target }}',
+            'whois': whois_data[0] if whois_data else {},
+            'dns_records': {{ steps["dnsrecon-domain"].outputs.typed_outputs | default([], true) | tojson }},
+            'amass_findings': {{ steps["amass-intel"].outputs.typed_outputs | default([], true) | tojson }}
+          }
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+
+          summary_lines = []
+          for w in whois_data:
+            summary_lines.append(f"Registrar: {w.get('registrar', 'unknown')}")
+            summary_lines.append(f"Created: {w.get('creation_date', 'unknown')}")
+            summary_lines.append(f"Expires: {w.get('expiration_date', 'unknown')}")
+            summary_lines.append(f"Nameservers: {', '.join(w.get('name_servers', []))")
+          pass
+
+          add_outputs(
+            whois_file=intel_file,
+            whois_count=len(whois_data),
+            typed_outputs=[domain_intel]
+          )
+          print(f'Domain intel collected for {{ inputs.target }}')
+  github-recon:
+    name: GitHub Repository Discovery
+    outputs:
+      github_file: '{{ steps["collect-github"].outputs.github_file | default("", true) }}'
+      github_count: '{{ steps["collect-github"].outputs.github_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-github"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: theharvester
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: harvester-github
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          source: "github"
+          limit: 100
+        continue-on-error: true
+      - task: cariddi
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: cariddi-scan
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          info: true
+          secrets: true
+          errors: true
+        continue-on-error: true
+      - name: collect-github
+        script: |
+          import json
+          from pathlib import Path
+
+          harvester_data = {{ steps["harvester-github"].outputs.typed_outputs | default([], true) | tojson }}
+          cariddi_data = {{ steps["cariddi-scan"].outputs.typed_outputs | default([], true) | tojson }}
+
+          repos = set()
+          findings = []
+
+          for entry in harvester_data:
+            repo = entry.get('repository', '') or entry.get('name', '')
+            if repo:
+              repos.add(repo)
+              findings.append({**entry, 'source': 'theharvester'})
+
+          for entry in cariddi_data:
+            url = entry.get('url', '')
+            if 'github.com' in url:
+              parts = url.split('/')
+              if 'github.com' in parts:
+                idx = parts.index('github.com')
+                if len(parts) > idx + 2:
+                  repo = f"{parts[idx+1]}/{parts[idx+2]}"
+                  repos.add(repo)
+            findings.append({**entry, 'source': 'cariddi'})
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          pass
+          pass
+
+          add_outputs(
+            github_file=findings_file,
+            github_count=len(repos),
+            typed_outputs=findings
+          )
+          print(f'GitHub recon: {len(repos)} repositories discovered')
+  summary:
+    name: OSINT Summary
+    needs:
+      - email-hunt
+      - breach-data
+      - domain-intel
+      - github-recon
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " OSINT GATHERING SUMMARY"
+          echo "=========================================="
+          echo ""
+          echo "Emails collected: {{ jobs.email-hunt.outputs.email_count | default('0', true) }}"
+          echo "Breached accounts: {{ jobs.breach-data.outputs.breach_count | default('0', true) }}"
+          echo "GitHub repos: {{ jobs.github-recon.outputs.github_count | default('0', true) }}"
+          echo ""
+          echo "Output files:"
+          echo "  - {{ jobs.email-hunt.outputs.emails_file | default('none', true) }}"
+          echo "  - {{ jobs.breach-data.outputs.breaches_file | default('none', true) }}"
+          echo "  - {{ jobs.github-recon.outputs.github_file | default('none', true) }}"
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+      - name: export-osint
+        script: |
+          from pathlib import Path
+          import shutil
+          import json
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+            print('No --project set, skipping file export')
+          else:
+            d = f'{project}/osint'
+            Path(d).mkdir(parents=True, exist_ok=True)
+
+            exports = [
+              ('email-hunt', 'emails_file', 'emails.txt'),
+              ('breach-data', 'breaches_file', 'breaches.json'),
+              ('github-recon', 'github_file', 'github_findings.json'),
+              ('domain-intel', 'whois_file', 'domain_intel.json')
+            ]
+
+            for job_name, output_name, filename in exports:
+              src = '{{ jobs["' + job_name + '"].outputs.' + output_name + ' | default("", true) }}'
+              if src and Path(src).is_file():
+                shutil.copy2(src, Path(d) / filename)
+                print(f'  [+] osint/{filename}')
+
+            all_typed = []
+            for job in ['email-hunt', 'breach-data', 'github-recon', 'domain-intel']:
+              typed = {{ jobs[job].outputs.typed_outputs | default([], true) | tojson }}
+              all_typed.extend(typed)
+
+            ctx = get_current_context()
+            if ctx and hasattr(ctx, 'export_typed_outputs'):
+              summaries = ctx.export_typed_outputs(project, all_typed)
+              for s in summaries:
+                print(f'  {s}')
+
+            print(f'Project export complete: {project}')
+        continue-on-error: true

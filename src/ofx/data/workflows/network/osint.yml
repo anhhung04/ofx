@@ -1,0 +1,282 @@
+name: osint
+description: >
+  OSINT gathering — collects publicly available intelligence about a target including
+  emails, usernames, breach data, domain registration info, github repos,
+  employee names, and social media presence.
+tags:
+- recon
+- osint
+- email
+- breach
+- social
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+      alias: t
+    email_domain:
+      type: string
+      default: ''
+      description: Email domain if different from target
+    username:
+      type: string
+      default: ''
+      description: Specific username/name to investigate
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  domain-info:
+    name: Domain Intelligence
+    outputs:
+      whois_file: '{{ steps["collect-whois"].outputs.whois_file | default("", true) }}'
+      record_count: '{{ steps["collect-whois"].outputs.record_count | default("0", true) }}'
+    steps:
+    - task: whois
+      log-command: '{{ inputs.log_command }}'
+      name: whois-lookup
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: dnsrecon
+      log-command: '{{ inputs.log_command }}'
+      name: dnsrecon-enum
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        type: std,srv
+      continue-on-error: true
+    - name: collect-whois
+      script: |
+        import json
+        from pathlib import Path
+
+        records = {{ records(steps["dnsrecon-enum"].outputs.typed_outputs) | default([], true) | tojson }}
+        whois_data = {{ steps["whois-lookup"].outputs.typed_outputs | default([], true) | tojson }}
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(whois_file=json.dumps({'records': records, 'whois': whois_data}, indent=2, record_count=len(records))
+        print(f'Domain info: {len(records)} DNS records, {len(whois_data)} WHOIS fields')
+    needs: []
+  email-harvest:
+    name: Email Harvesting
+    outputs:
+      emails_file: '{{ steps["collect-emails"].outputs.emails_file | default("", true) }}'
+      email_count: '{{ steps["collect-emails"].outputs.email_count | default("0", true) }}'
+    steps:
+    - task: theharvester
+      log-command: '{{ inputs.log_command }}'
+      name: harvester-search
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.email_domain if inputs.email_domain else inputs.target }}'
+        source: all
+        limit: 500
+      continue-on-error: true
+    - name: collect-emails
+      script: |
+        import re
+        from pathlib import Path
+
+        emails = set()
+        email_domain = '{{ inputs.email_domain if inputs.email_domain else inputs.target }}'
+
+        for item in {{ users(steps["harvester-search"].outputs.typed_outputs) | default([], true) | tojson }}:
+            u = item.get('username', '')
+            if u and '@' in u:
+                emails.add(u.lower())
+
+        raw = '{{ steps["harvester-search"].outputs.stdout | default("", true) }}'
+        found = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', raw)
+        for e in found:
+            if email_domain.split('.')[-1] in e.split('@')[-1]:
+                emails.add(e.lower())
+
+        emails_list = sorted(emails)
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(emails_data='\n'.join(emails_list, email_count=len(emails_list))
+        print(f'Harvested {len(emails_list)} email addresses')
+        for e in emails_list[:10]:
+            print(f'  {e}')
+    needs: []
+  breach-search:
+    name: Breach Database Search
+    outputs:
+      breach_file: '{{ steps["collect-breaches"].outputs.breach_file | default("", true) }}'
+      breach_count: '{{ steps["collect-breaches"].outputs.breach_count | default("0", true) }}'
+      breached_emails: '{{ steps["collect-breaches"].outputs.breached_emails | default("0", true) }}'
+    needs:
+    - email-harvest
+    steps:
+    - task: h8mail
+      log-command: '{{ inputs.log_command }}'
+      name: h8mail-breach
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.email_domain if inputs.email_domain else inputs.target }}'
+      continue-on-error: true
+    - name: collect-breaches
+      script: |
+        import json
+        from pathlib import Path
+
+        breach_data = {{ users(steps["h8mail-breach"].outputs.typed_outputs) | default([], true) | tojson }}
+        breached_emails = {b.get('username', '') for b in breach_data if b.get('username') and '@' in b.get('username', '')}
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(breach_data=json.dumps(breach_data, indent=2, default=str, breach_count=len(breach_data), breached_emails=len(breached_emails))
+        print(f'Breach entries: {len(breach_data)} for {len(breached_emails)} emails')
+    needs: []
+  account-check:
+    name: Account Verification
+    outputs:
+      accounts_file: '{{ steps["collect-accounts"].outputs.accounts_file | default("", true) }}'
+      account_count: '{{ steps["collect-accounts"].outputs.account_count | default("0", true) }}'
+      services: '{{ steps["collect-accounts"].outputs.services | default("", true) }}'
+    needs:
+    - email-harvest
+    steps:
+    - task: holehe
+      log-command: '{{ inputs.log_command }}'
+      name: holehe-check
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.email_domain if inputs.email_domain else inputs.target }}'
+        only_used: true
+      continue-on-error: true
+    - name: collect-accounts
+      script: |
+        import json
+        from pathlib import Path
+
+        accounts = {{ users(steps["holehe-check"].outputs.typed_outputs) | default([], true) | tojson }}
+        services = sorted({a.get('host', '') for a in accounts if a.get('host')})
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(accounts_data=json.dumps(accounts, indent=2, default=str, account_count=len(accounts), services=','.join(services))
+        print(f'Email registered on {len(services)} services: {", ".join(services)}')
+    needs: []
+  social-recon:
+    name: Social Media & Username Search
+    outputs:
+      social_file: '{{ steps["collect-social"].outputs.social_file | default("", true) }}'
+      platform_count: '{{ steps["collect-social"].outputs.platform_count | default("0", true) }}'
+    steps:
+    - task: maigret
+      log-command: '{{ inputs.log_command }}'
+      name: maigret-search
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.username if inputs.username else inputs.target.split(".")[0] }}'
+      continue-on-error: true
+    - name: collect-social
+      script: |
+        import json
+        from pathlib import Path
+
+        social = {{ users(steps["maigret-search"].outputs.typed_outputs) | default([], true) | tojson }}
+        platforms = sorted({s.get('host', '') for s in social if s.get('host')})
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(social_data=json.dumps({'platforms': platforms, 'accounts': social}, indent=2, default=str, platform_count=len(platforms))
+        print(f'Social accounts: {len(social)} across {len(platforms)} platforms: {", ".join(platforms)}')
+    needs: []
+  github-recon:
+    name: GitHub Organization Recon
+    outputs:
+      repos_file: '{{ steps["collect-github"].outputs.repos_file | default("", true) }}'
+      repo_count: '{{ steps["collect-github"].outputs.repo_count | default("0", true) }}'
+    steps:
+    - task: theharvester
+      log-command: '{{ inputs.log_command }}'
+      name: github-dorks
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        source: github
+        limit: 200
+      continue-on-error: true
+    - task: cariddi
+      log-command: '{{ inputs.log_command }}'
+      name: cariddi-secrets
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        secrets: true
+        info: true
+        errors: true
+      continue-on-error: true
+    - name: collect-github
+      script: |
+        import json
+        from pathlib import Path
+
+        github_items = {{ steps["github-dorks"].outputs.typed_outputs | default([], true) | tojson }}
+        cariddi_items = {{ steps["cariddi-secrets"].outputs.typed_outputs | default([], true) | tojson }}
+
+        all_items = github_items + cariddi_items
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(repos_data=json.dumps(all_items, indent=2, default=str, repo_count=len(all_items))
+        print(f'GitHub/secret findings: {len(all_items)}')
+    needs: []
+  summary:
+    name: OSINT Summary
+    needs:
+    - domain-info
+    - email-harvest
+    - breach-search
+    - account-check
+    - social-recon
+    - github-recon
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " OSINT REPORT: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "--- Domain Intelligence ---"
+        echo "  DNS records: {{ jobs['domain-info'].outputs.record_count }}"
+        echo ""
+        echo "--- Email Harvesting ---"
+        echo "  Emails found: {{ jobs['email-harvest'].outputs.email_count }}"
+        echo ""
+        echo "--- Breach Data ---"
+        echo "  Breach entries: {{ jobs['breach-search'].outputs.breach_count }}"
+        echo "  Breached emails: {{ jobs['breach-search'].outputs.breached_emails }}"
+        echo ""
+        echo "--- Account Discovery ---"
+        echo "  Verified accounts: {{ jobs['account-check'].outputs.account_count }}"
+        echo "  Services: {{ jobs['account-check'].outputs.services }}"
+        echo ""
+        echo "--- Social Media ---"
+        echo "  Platforms: {{ jobs['social-recon'].outputs.platform_count }}"
+        echo ""
+        echo "--- GitHub/Code ---"
+        echo "  Findings: {{ jobs['github-recon'].outputs.repo_count }}"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

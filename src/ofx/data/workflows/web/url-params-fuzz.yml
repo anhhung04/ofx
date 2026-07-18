@@ -1,7 +1,6 @@
 name: url-params-fuzz
-description: 'URL parameter fuzzing — discovers hidden URL parameters using arjun, then fuzzes parameter values with ffuf.
-
-  '
+description: >
+  URL parameter fuzzing — discovers hidden URL parameters using arjun, then fuzzes parameter values with ffuf.
 tags:
 - http
 - fuzz
@@ -83,7 +82,7 @@ jobs:
       name: fuzz-params
       with:
         target: "{{ jobs.probe.outputs.live_url | default(inputs.target, true) }}?FUZZ=test"
-        wordlist: /usr/share/wordlists/dirb/common.txt
+        wordlist: "{{ inputs.wordlist or '/usr/share/wordlists/dirb/common.txt' }}"
         auto_calibration: true
         follow_redirect: true
       continue-on-error: true

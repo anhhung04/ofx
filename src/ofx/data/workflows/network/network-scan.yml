@@ -1,0 +1,227 @@
+name: network-scan
+description: >
+  Internal network scan — lightweight host discovery via fping with automatic nmap -sn ICMP
+  fallback, scanner-selectable port scan on alive hosts, default credential check via
+  naabu/brutus pipeline, then deep-scans each live host via host-scan matrix.
+tags:
+- recon
+- cidr
+- dns
+- network
+- internal
+- http
+- crawl
+- ssl
+- vuln
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: "true"
+    log_output:
+      type: string
+      default: "true"
+    target:
+      required: true
+      type: string
+      description: CIDR range (e.g. 192.168.1.0/24)
+      alias: t
+    scanner:
+      type: string
+      default: "naabu"
+      description: Port scanner — naabu (top-1000, no root, default), rustscan (full-range), gogo (fingerprint+vuln), masscan (REQUIRES ROOT)
+    ports:
+      type: string
+      default: ""
+      description: Override default ports
+    rate:
+      type: string
+      default: ""
+      description: Override packets-per-second rate
+defaults:
+  store-creds: true
+jobs:
+  host-discovery:
+    name: Host Discovery
+    outputs:
+      live_hosts: "{{ steps['collect-hosts'].outputs.live_hosts | default('', true) }}"
+      host_count: "{{ steps['collect-hosts'].outputs.host_count | default('0', true) }}"
+      live_hosts_json: "{{ steps['collect-hosts'].outputs.live_hosts_json | default('[]', true) }}"
+    steps:
+    - task: fping
+      log-command: "{{ inputs.log_command | default(true) }}"
+      name: fping-sweep
+      with:
+        target: "{{ inputs.target }}"
+        generate: true
+      continue-on-error: true
+    - task: nmap
+      log-command: "{{ inputs.log_command | default(true) }}"
+      name: nmap-ping-fallback
+      run_if: "{{ steps['fping-sweep'].outputs.typed_outputs | default([], true) | length == 0 }}"
+      with:
+        target: "{{ inputs.target }}"
+        ping_scan: true
+        timing: 4
+      continue-on-error: true
+    - name: collect-hosts
+      script: |
+        import json
+
+        hosts = set()
+        for item in {{ ips(steps["fping-sweep"].outputs.typed_outputs) | default([], true) | tojson }}:
+            if item.get('alive'):
+                hosts.add(item.get('ip', ''))
+        for item in {{ ips(steps["nmap-ping-fallback"].outputs.typed_outputs) | default([], true) | tojson }}:
+            ip = item.get('ip', '')
+            if ip:
+                hosts.add(ip)
+
+        hosts.discard('')
+        hosts_list = sorted(hosts)
+        if hosts_list:
+            print(f"Discovered {len(hosts_list)} live hosts")
+        else:
+            print("WARNING: No live hosts discovered (ICMP may be blocked)")
+
+        add_outputs(live_hosts='\n'.join(hosts_list), host_count=len(hosts_list), live_hosts_json=json.dumps(hosts_list))
+
+  port-sweep:
+    name: Port Sweep on Alive Hosts
+    needs:
+    - host-discovery
+    outputs:
+      port_count: "{{ steps['collect-ports'].outputs.port_count | default('0', true) }}"
+      hosts_with_ports: "{{ steps['collect-ports'].outputs.hosts_with_ports | default('', true) }}"
+    steps:
+    - name: prep-naabu-targets
+      uses: target-file
+      run_if: "{{ inputs.scanner == 'naabu' }}"
+      with:
+        targets: "{{ jobs['host-discovery'].outputs.live_hosts }}"
+        prefix: 'ofx_netscan_hosts'
+    - task: naabu
+      log-command: "{{ inputs.log_command | default(true) }}"
+      name: scanner-naabu
+      run_if: "{{ inputs.scanner == 'naabu' }}"
+      with:
+        target: "{{ steps['prep-naabu-targets'].outputs.targets_file }}"
+        top_ports: "{{ inputs.ports if inputs.ports else '1000' }}"
+        rate: "{{ inputs.rate | int if inputs.rate else 2000 }}"
+      continue-on-error: true
+    - name: prep-rustscan-targets
+      uses: target-file
+      run_if: "{{ inputs.scanner == 'rustscan' }}"
+      with:
+        targets: "{{ jobs['host-discovery'].outputs.live_hosts }}"
+        prefix: 'ofx_netscan_rustscan'
+    - task: rustscan
+      log-command: "{{ inputs.log_command | default(true) }}"
+      name: scanner-rustscan
+      run_if: "{{ inputs.scanner == 'rustscan' }}"
+      with:
+        target: "{{ steps['prep-rustscan-targets'].outputs.targets_file }}"
+        range: "{{ inputs.ports if inputs.ports else '1-65535' }}"
+        batch_size: 4500
+      continue-on-error: true
+    - task: gogo
+      log-command: "{{ inputs.log_command | default(true) }}"
+      name: scanner-gogo
+      run_if: "{{ inputs.scanner == 'gogo' }}"
+      with:
+        target: "{{ jobs['host-discovery'].outputs.live_hosts }}"
+        ports: "{{ inputs.ports if inputs.ports else 'top2,win,db' }}"
+        verbose: true
+      continue-on-error: true
+    - name: prep-masscan-targets
+      uses: target-file
+      run_if: "{{ inputs.scanner == 'masscan' }}"
+      with:
+        targets: "{{ jobs['host-discovery'].outputs.live_hosts }}"
+        prefix: 'ofx_netscan_masscan'
+    - task: masscan
+      log-command: "{{ inputs.log_command | default(true) }}"
+      name: scanner-masscan
+      run_if: "{{ inputs.scanner == 'masscan' }}"
+      with:
+        target: "{{ steps['prep-masscan-targets'].outputs.targets_file }}"
+        ports: "{{ inputs.ports if inputs.ports else '1-1000' }}"
+        rate: "{{ inputs.rate | int if inputs.rate else 10000 }}"
+      continue-on-error: true
+    - name: collect-ports
+      script: |
+        hosts_with_ports = set()
+        port_count = 0
+        for step_name in ["scanner-naabu", "scanner-rustscan", "scanner-gogo", "scanner-masscan"]:
+            try:
+                typed = {{ ports(steps[step_name].outputs.typed_outputs) | default([], true) | tojson }}
+            except Exception:
+                continue
+            for item in typed:
+                host = item.get('host') or item.get('ip', '')
+                if host and item.get('port'):
+                    hosts_with_ports.add(host)
+                    port_count += 1
+        add_outputs(port_count=port_count, hosts_with_ports=','.join(sorted(hosts_with_ports)))
+        print(f"Found {port_count} open ports across {len(hosts_with_ports)} hosts via {{ inputs.scanner }}")
+
+  default-cred-check:
+    name: Default Credential Check
+    needs:
+    - host-discovery
+    outputs:
+      cred_count: "{{ steps['parse-brutus'].outputs.cred_count | default('0', true) }}"
+    steps:
+    - name: run-pipeline
+      log-command: "{{ inputs.log_command | default(true) }}"
+      run: |
+        printf '%s\n' {{ jobs['host-discovery'].outputs.live_hosts | tojson }} | \
+          naabu -p 22,21,445,3306,5432,6379,3389,5900,27017,1433 -silent 2>/dev/null | \
+          brutus --json 2>/dev/null
+      continue-on-error: true
+    - name: parse-brutus
+      script: |
+        import json
+
+        creds = []
+        brutus_stdout = """{{ steps["run-pipeline"].outputs.stdout | default("", true) }}"""
+        for line in brutus_stdout.splitlines():
+                line = line.strip()
+                if not line or not line.startswith('{'):
+                    continue
+            try:
+                data = json.loads(line)
+                username = data.get('username', data.get('login', ''))
+                password = data.get('password', data.get('pass', ''))
+                host = data.get('host', data.get('ip', ''))
+                port = str(data.get('port', ''))
+                service = data.get('service', '')
+                if username:
+                    creds.append({'user': username, 'pass': password, 'host': f"{host}:{port}", 'service': service})
+            except json.JSONDecodeError:
+                continue
+        add_outputs(cred_count=len(creds))
+        if creds:
+            print(f"[!] Default credentials found: {len(creds)}")
+            for c in creds:
+                print(f"  [+] {c['host']} ({c['service']}): {c['user']}:{c['pass']}")
+        else:
+            print("[*] No default credentials found")
+      log-stdout: "{{ inputs.log_output | default(true) }}"
+
+  per-host-scan:
+    name: "Host scan: {{ matrix.target }}"
+    needs:
+    - host-discovery
+    - port-sweep
+    strategy:
+      matrix:
+        target: "{{ jobs['host-discovery'].outputs.live_hosts_json }}"
+      max_parallel: 8
+      fail_fast: false
+    steps:
+    - name: scan-host
+      log-command: "{{ inputs.log_command | default(true) }}"
+      uses: host-scan
+      with:
+        target: "{{ matrix.target }}"

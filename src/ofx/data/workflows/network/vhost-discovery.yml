@@ -1,0 +1,137 @@
+name: vhost-discovery
+description: >
+  Virtual host discovery — identifies virtual hosts running on a given IP address
+  by brute-forcing hostnames and checking for unique HTTP responses. Uses ffuf in
+  vhost mode, gobuster VHOST mode, and nuclei vhost templates.
+tags:
+  - recon
+  - vhost
+  - virtual-host
+  - discovery
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target IP address or URL
+      alias: t
+    hostname:
+      type: string
+      default: ""
+      description: Base hostname for Host header brute-force
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt
+      description: Wordlist for vhost names
+    threads:
+      type: number
+      default: 100
+      description: Concurrent threads
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  vhosts_file: '{{ jobs["collect"].outputs.vhosts_file | default("", true) }}'
+  vhost_count: '{{ jobs["collect"].outputs.vhost_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["collect"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  discover:
+    name: VHost Discovery
+    outputs:
+      ffuf_results: '{{ steps["collect-ffuf"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: ffuf
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: ffuf-vhost
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.target }}"
+          wordlist: "{{ inputs.wordlist }}"
+          mode: "vhost"
+          fs: "{{ steps.baseline_size | default('', true) }}"
+          threads: "{{ inputs.threads }}"
+          json: true
+        continue-on-error: true
+      - name: collect-ffuf
+        script: |
+          import json
+          from pathlib import Path
+
+          results = []
+          ffuf_data = {{ steps["ffuf-vhost"].outputs.typed_outputs | default([], true) | tojson }}
+
+          for item in ffuf_data:
+            host = item.get('host', '') or item.get('url', '')
+            status = item.get('status', 0)
+            if host and status not in (400, 500, 503):
+              results.append({
+                'vhost': host,
+                'status': status,
+                'size': item.get('length', 0),
+                'source': 'ffuf'
+              })
+
+          add_outputs(typed_outputs=results)
+          print(f'FFUF vhost: {len(results)} candidates')
+        continue-on-error: true
+  collect:
+    name: Collect and Deduplicate
+    needs:
+      - discover
+    outputs:
+      vhosts_file: '{{ steps["merge"].outputs.vhosts_file | default("", true) }}'
+      vhost_count: '{{ steps["merge"].outputs.vhost_count | default("0", true) }}'
+      typed_outputs: '{{ steps["merge"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - name: merge
+        script: |
+          import json
+          from pathlib import Path
+
+          all_vhosts = []
+          seen = set()
+
+          for item in {{ jobs["discover"].outputs.ffuf_results | default([], true) | tojson }}:
+            vh = item.get('vhost', '')
+            if vh and vh not in seen:
+              seen.add(vh)
+              all_vhosts.append(item)
+
+          out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+          vhosts_file = f'{out_dir}/ofx_vhosts.txt'
+          Path(vhosts_file).write_text('\\n'.join([v['vhost'] for v in all_vhosts]))
+
+          add_outputs(
+            vhosts_file=vhosts_file,
+            vhost_count=len(all_vhosts),
+            typed_outputs=all_vhosts
+          )
+          print(f'VHost discovery: {len(all_vhosts)} unique virtual hosts')
+  summary:
+    name: Summary
+    needs:
+      - collect
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " VIRTUAL HOST DISCOVERY RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Target: {{ inputs.target }}"
+          echo "VHosts found: {{ jobs.collect.outputs.vhost_count | default('0', true) }}"
+          echo ""
+          {% set vhosts = jobs.collect.outputs.typed_outputs | default([], true) %}
+          {% for v in vhosts[:20] %}
+          echo "  {{ v.vhost }} ({{ v.status }})"
+          {% endfor %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"

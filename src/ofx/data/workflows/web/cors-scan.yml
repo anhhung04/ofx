@@ -44,16 +44,15 @@ jobs:
         test_origins = [
             ('reflected', 'https://evil.com'),
             ('null', 'null'),
-            ('subdomain', None),  # Dynamic
-            ('prefix', None),  # Dynamic
-            ('postfix', None),  # Dynamic
+            ('subdomain', None),
+            ('prefix', None),
+            ('postfix', None),
         ]
 
         for url in urls[:50]:
             print(f"--- {url} ---")
             vuln = False
 
-            # Extract domain for dynamic tests
             from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.hostname or ''

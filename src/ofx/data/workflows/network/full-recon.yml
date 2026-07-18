@@ -1,0 +1,409 @@
+name: full-recon
+description: >
+  Comprehensive reconnaissance pipeline — orchestrates OSINT gathering,
+  subdomain enumeration, web probing and fingerprinting, vulnerability
+  scanning, port scanning, URL crawling, takeover detection, secret
+  hunting, and consolidated reporting.
+tags:
+- recon
+- comprehensive
+- full
+- osint
+- subdomain
+- web
+- vuln
+dispatch:
+  inputs:
+    target:
+      required: true
+      type: string
+      description: Target domain (e.g. example.com)
+      alias: t
+    email_domain:
+      type: string
+      default: ''
+      description: Email domain if different from target
+    wordlist:
+      type: string
+      default: ''
+      description: Custom subdomain wordlist
+    callback:
+      type: string
+      default: ''
+      description: OOB callback URL (interactsh) for blind testing
+    ports:
+      type: string
+      default: 'top-100'
+      description: Port scan mode (top-100, top-1000, full, or comma-separated)
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+defaults:
+  store-creds: true
+jobs:
+  osint:
+    name: OSINT Gathering
+    outputs:
+      emails_file: '{{ steps["report-osint"].outputs.emails_file | default("", true) }}'
+      email_count: '{{ steps["report-osint"].outputs.email_count | default("0", true) }}'
+      breach_count: '{{ steps["report-osint"].outputs.breach_count | default("0", true) }}'
+    steps:
+    - task: theharvester
+      log-command: '{{ inputs.log_command }}'
+      name: harvester
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.email_domain if inputs.email_domain else inputs.target }}'
+        source: all
+        limit: 500
+      continue-on-error: true
+    - task: whois
+      log-command: '{{ inputs.log_command }}'
+      name: whois
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: dnsrecon
+      log-command: '{{ inputs.log_command }}'
+      name: dnsrecon
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        type: std,srv
+      continue-on-error: true
+    - task: maigret
+      log-command: '{{ inputs.log_command }}'
+      name: maigret
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: h8mail
+      log-command: '{{ inputs.log_command }}'
+      name: h8mail
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.email_domain if inputs.email_domain else inputs.target }}'
+      continue-on-error: true
+    - name: report-osint
+      script: |
+        import json
+        import re
+        from pathlib import Path
+
+        emails = set()
+        email_domain = '{{ inputs.email_domain if inputs.email_domain else inputs.target }}'
+        for item in {{ users(steps["harvester"].outputs.typed_outputs) | default([], true) | tojson }}:
+            u = item.get('username', '')
+            if u and '@' in u:
+                emails.add(u.lower())
+
+        raw = '{{ steps["harvester"].outputs.stdout | default("", true) }}'
+        for e in re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', raw):
+            if email_domain.split('.')[-1] in e.split('@')[-1]:
+                emails.add(e.lower())
+
+        breach_data = {{ users(steps["h8mail"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(emails_data='\n'.join(sorted(emails, email_count=len(emails), breach_count=len(breach_data))
+        print(f'OSINT: {len(emails)} emails, {len(breach_data)} breach entries')
+    needs: []
+  subdomain-enum:
+    name: Subdomain Enumeration
+    outputs:
+      all_subs_file: '{{ steps["report-subdomains"].outputs.all_subs_file | default("", true) }}'
+      all_count: '{{ steps["report-subdomains"].outputs.all_count | default("0", true) }}'
+      unique_ips: '{{ steps["report-subdomains"].outputs.unique_ips | default("0", true) }}'
+    needs:
+    - osint
+    steps:
+    - task: subfinder
+      log-command: '{{ inputs.log_command }}'
+      name: subfinder
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      continue-on-error: true
+    - task: assetfinder
+      log-command: '{{ inputs.log_command }}'
+      name: assetfinder
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: findomain
+      log-command: '{{ inputs.log_command }}'
+      name: findomain
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: amass
+      log-command: '{{ inputs.log_command }}'
+      name: amass
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        active: false
+      continue-on-error: true
+    - name: crtsh
+      script: |
+        from ofx.api.recon import crtsh_subdomains_sync
+        import json
+        from pathlib import Path
+
+        try:
+            subs = crtsh_subdomains_sync("{{ inputs.target }}", timeout=30.0)
+        except:
+            subs = []
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+        add_outputs(crtsh_subs=json.dumps(subs), crtsh_count=len(subs))
+      continue-on-error: true
+    - task: puredns
+      log-command: '{{ inputs.log_command }}'
+      name: puredns-brute
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        wordlist: '{{ inputs.wordlist if inputs.wordlist else "/usr/share/wordlists/dns/namelist.txt" }}'
+        rate: 10000
+      continue-on-error: true
+    - name: merge-subdomains
+      script: |
+        from pathlib import Path
+
+        subs = {{ subdomains(steps["subfinder"].outputs.typed_outputs) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["assetfinder"].outputs.typed_outputs) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["findomain"].outputs.typed_outputs) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["amass"].outputs.typed_outputs) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["crtsh"].outputs.crtsh_subs | default("[]", true) | from_json) | default([], true) | tojson }}
+        subs += {{ subdomains(steps["puredns-brute"].outputs.typed_outputs) | default([], true) | tojson }}
+
+        unique = sorted(set(subs))
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(all_subs_file='\n'.join(unique, all_count=len(unique), all_subs_json=json.dumps(unique))
+        print(f'Subdomain enum: {len(unique)} unique subdomains')
+    - name: report-subdomains
+      script: |
+        import json
+        from pathlib import Path
+
+        all_subs = json.loads('{{ steps["merge-subdomains"].outputs.all_subs_json | default("[]", true) }}')
+
+        import subprocess
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+        sub_file = f'{out_dir}/ofx_sub_all.txt'
+        sub_file_write = Path(sub_file)
+        sub_file_write.write_text('\n'.join(all_subs))
+
+        unique_ips_count = 0
+        add_outputs(all_subs_file=sub_file, all_count=len(all_subs), unique_ips=str(unique_ips_count))
+    needs: []
+  web-probe:
+    name: Web Probing & Fingerprinting
+    needs:
+    - subdomain-enum
+    outputs:
+      live_urls_file: '{{ steps["merge-probe"].outputs.live_urls_file | default("", true) }}'
+      live_count: '{{ steps["merge-probe"].outputs.live_count | default("0", true) }}'
+    steps:
+    - task: httpx
+      log-command: '{{ inputs.log_command }}'
+      name: httpx-probe
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["subdomain-enum"].outputs.all_subs_file }}'
+        ports: 80,443,8080,8443,8000,8888,3000,5000,7000,9000
+        json: true
+        title: true
+        server: true
+        tech_detect: true
+        status: true
+        follow_redirects: true
+        timeout: 10
+        rate_limit: 50
+        silent: true
+      continue-on-error: true
+    - task: whatweb
+      log-command: '{{ inputs.log_command }}'
+      name: whatweb
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["subdomain-enum"].outputs.all_subs_file }}'
+        aggression: 1
+      continue-on-error: true
+    - task: wafw00f
+      log-command: '{{ inputs.log_command }}'
+      name: wafw00f
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["subdomain-enum"].outputs.all_subs_file }}'
+      continue-on-error: true
+    - task: gowitness
+      log-command: '{{ inputs.log_command }}'
+      name: gowitness
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["subdomain-enum"].outputs.all_subs_file }}'
+      continue-on-error: true
+    - name: merge-probe
+      script: |
+        import json
+        from pathlib import Path
+
+        probes = {{ steps["httpx-probe"].outputs.typed_outputs | default([], true) | tojson }}
+        live = [p for p in probes if p.get('status_code') and p.get('url')]
+
+        live_urls = [l['url'] for l in live]
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(live_urls_file='\n'.join(live_urls, live_count=len(live), live_json=json.dumps(live, default=str))
+        print(f'Web probe: {len(live)} live HTTP services')
+
+        waf = {{ vulns(steps["wafw00f"].outputs.typed_outputs) | default([], true) | tojson }}
+        waf_names = sorted({w.get('name', '') for w in waf if w.get('name')})
+        if waf_names:
+            print(f'WAFs: {", ".join(waf_names)}')
+    needs: []
+  vuln-scan:
+    name: Vulnerability Scanning
+    needs:
+    - web-probe
+    outputs:
+      nuclei_count: '{{ steps["report-vuln"].outputs.nuclei_count | default("0", true) }}'
+      critical_count: '{{ steps["report-vuln"].outputs.critical_count | default("0", true) }}'
+      high_count: '{{ steps["report-vuln"].outputs.high_count | default("0", true) }}'
+    steps:
+    - task: nuclei
+      log-command: '{{ inputs.log_command }}'
+      name: nuclei-web
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["web-probe"].outputs.live_urls_file }}'
+        severity: critical,high,medium
+      continue-on-error: true
+    - task: nuclei
+      log-command: '{{ inputs.log_command }}'
+      name: nuclei-takeover
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["subdomain-enum"].outputs.all_subs_file }}'
+        tags: subdomain-takeover,takeover
+      continue-on-error: true
+    - task: nuclei
+      log-command: '{{ inputs.log_command }}'
+      name: nuclei-exposure
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["web-probe"].outputs.live_urls_file }}'
+        tags: exposure,token,secret,api-key
+      continue-on-error: true
+    - task: dalfox
+      log-command: '{{ inputs.log_command }}'
+      name: dalfox
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["web-probe"].outputs.live_urls_file }}'
+      continue-on-error: true
+    - task: crlfuzz
+      log-command: '{{ inputs.log_command }}'
+      name: crlfuzz
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["web-probe"].outputs.live_urls_file }}'
+      continue-on-error: true
+    - task: subzy
+      log-command: '{{ inputs.log_command }}'
+      name: subzy-takeover
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ jobs["subdomain-enum"].outputs.all_subs_file }}'
+      continue-on-error: true
+    - name: report-vuln
+      script: |
+        import json
+        from pathlib import Path
+
+        all_vulns = (
+            {{ vulns(steps["nuclei-web"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["nuclei-takeover"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["nuclei-exposure"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["dalfox"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["crlfuzz"].outputs.typed_outputs) | default([], true) | tojson }} +
+            {{ vulns(steps["subzy-takeover"].outputs.typed_outputs) | default([], true) | tojson }}
+        )
+
+        critical = [v for v in all_vulns if v.get('severity') == 'critical']
+        high = [v for v in all_vulns if v.get('severity') == 'high']
+
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(nuclei_count=len(all_vulns), critical_count=len(critical), high_count=len(high), vuln_data=json.dumps(all_vulns, indent=2, default=str)
+        print(f'Vuln scan: {len(all_vulns)} findings (C:{len(critical)} H:{len(high)})')
+        for v in critical[:10]:
+            print(f'  [CRITICAL] {v.get("host", "")} — {v.get("name", "")} [{v.get("info", "")}]')
+    needs: []
+  summary:
+    name: Final Report
+    needs:
+    - osint
+    - subdomain-enum
+    - web-probe
+    - vuln-scan
+    steps:
+    - name: report
+      run: |
+        echo "======================================================"
+        echo " FULL RECON REPORT: {{ inputs.target }}"
+        echo "======================================================"
+        echo ""
+        echo "--- OSINT ---"
+        echo "  Emails: {{ jobs['osint'].outputs.email_count }}"
+        echo "  Breach entries: {{ jobs['osint'].outputs.breach_count }}"
+        echo ""
+        echo "--- Subdomain Enum ---"
+        echo "  Total subdomains: {{ jobs['subdomain-enum'].outputs.all_count }}"
+        echo "  Unique IPs: {{ jobs['subdomain-enum'].outputs.unique_ips }}"
+        echo ""
+        echo "--- Web Probe ---"
+        echo "  Live HTTP services: {{ jobs['web-probe'].outputs.live_count }}"
+        echo ""
+        echo "--- Vulnerability Scan ---"
+        echo "  Total findings: {{ jobs['vuln-scan'].outputs.nuclei_count }}"
+        echo "  Critical: {{ jobs['vuln-scan'].outputs.critical_count }}"
+        echo "  High: {{ jobs['vuln-scan'].outputs.high_count }}"
+        echo ""
+        echo "  Output directory: \$OFX_RUN_DIR"
+        echo "======================================================"
+      log-stdout: '{{ inputs.log_output }}'

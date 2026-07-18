@@ -1,0 +1,164 @@
+name: service-enum
+description: >
+  Service enumeration and version detection for discovered services. Uses nmap
+  service/version detection, NSE scripts, and specialized enumerators to identify
+  running services, their versions, and potential vulnerabilities. Outputs structured
+  data about each service for further analysis.
+tags:
+  - recon
+  - services
+  - enumeration
+  - version-detection
+dispatch:
+  inputs:
+    ports_file:
+      required: true
+      type: string
+      description: File with IP:port pairs to enumerate
+      alias: p
+    intensity:
+      type: number
+      default: 6
+      description: Nmap version detection intensity (0-9)
+    threads:
+      type: number
+      default: 10
+      description: Parallel threads
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command logging
+    log_output:
+      type: string
+      default: "true"
+      description: Enable output logging
+defaults:
+  store-creds: false
+outputs:
+  services: '{{ jobs["enumerate"].outputs.services | default("", true) }}'
+  service_count: '{{ jobs["enumerate"].outputs.service_count | default("0", true) }}'
+  typed_outputs: '{{ jobs["enumerate"].outputs.typed_outputs | default([], true) }}'
+jobs:
+  enumerate:
+    name: Service Enumeration
+    outputs:
+      services: '{{ steps["collect-services"].outputs.services | default("", true) }}'
+      service_count: '{{ steps["collect-services"].outputs.service_count | default("0", true) }}'
+      typed_outputs: '{{ steps["collect-services"].outputs.typed_outputs | default([], true) }}'
+    steps:
+      - task: nmap
+        log-command: "{{ inputs.log_command | default(true) }}"
+        name: nmap-service
+        retry: 2
+        retry-delay: 5
+        with:
+          target: "{{ inputs.ports_file }}"
+          ports: "{{ '1-65535' }}"
+          version_intensity: "{{ inputs.intensity }}"
+          script: "banner,discovery,vuln"
+          json: true
+          output_prefix: "services"
+        continue-on-error: true
+      - name: collect-services
+        script: |
+          import json
+          from pathlib import Path
+
+          nmap_data = {{ steps["nmap-service"].outputs.typed_outputs | default([], true) | tojson }}
+
+          services = []
+          for host in nmap_data:
+            ip = host.get('ip', '')
+            for port in host.get('ports', []):
+              service = {
+                'ip': ip,
+                'port': port.get('port', 0),
+                'protocol': port.get('protocol', 'tcp'),
+                'state': port.get('state', ''),
+                'service': port.get('service', ''),
+                'version': port.get('version', ''),
+                'product': port.get('product', ''),
+                'extrainfo': port.get('extrainfo', ''),
+                'cpe': port.get('cpe', ''),
+                'scripts': port.get('scripts', {})
+              }
+              services.append(service)
+
+          seen = set()
+          unique_services = []
+          for s in services:
+            key = (s['ip'], s['port'], s['service'])
+            if key not in seen:
+              seen.add(key)
+              unique_services.append(s)
+
+           add_outputs(
+             services='\n'.join([f"{s['ip']}:{s['port']} {s['service']} {s['version']}" for s in unique_services]),
+             service_count=len(unique_services),
+             typed_outputs=unique_services
+           )
+          print(f'Service enumeration: {len(unique_services)} services identified')
+          service_types = {}
+          for s in unique_services:
+            name = s['service'] or 'unknown'
+            service_types[name] = service_types.get(name, 0) + 1
+          for svc, count in sorted(service_types.items(), key=lambda x: x[1], reverse=True)[:10]:
+            print(f'  {svc}: {count}')
+  summary:
+    name: Enumeration Summary
+    needs:
+      - enumerate
+    steps:
+      - name: report
+        run: |
+          echo "=========================================="
+          echo " SERVICE ENUMERATION RESULTS"
+          echo "=========================================="
+          echo ""
+          echo "Services found: {{ jobs.enumerate.outputs.service_count | default('0', true) }}"
+          echo ""
+          {% set services = jobs.enumerate.outputs.typed_outputs | default([], true) %}
+          {% if services %}
+          {% set by_service = {} %}
+          {% for s in services %}
+          {%   set name = s.service or 'unknown' %}
+          {%   if name not in by_service %}
+          {%     set _ = by_service.update({name: []}) %}
+          {%   endif %}
+          {%   set _ = by_service[name].append(s) %}
+          {% endfor %}
+          {% for svc, items in by_service.items()|sort(attribute='key') %}
+          {%   set count = items|length %}
+          {% if count > 0 %}
+          echo "{{ svc }}: {{ count }} instance{{ 's' if count != 1 else '' }}"
+          {% endif %}
+          {% endfor %}
+          {% endif %}
+          echo "=========================================="
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+      - name: export-services
+        script: |
+          from pathlib import Path
+          import shutil
+
+          project = '{{ vars.project_path | default("", true) }}'
+          if not project:
+            print('No --project set, skipping file export')
+          else:
+            d = f'{project}/services'
+            Path(d).mkdir(parents=True, exist_ok=True)
+
+            src = '{{ jobs.enumerate.outputs.services | default("", true) }}'
+            if src and Path(src).is_file():
+              shutil.copy2(src, Path(d) / 'services.txt')
+              print(f'  [+] services/services.txt')
+
+            all_typed = {{ jobs.enumerate.outputs.typed_outputs | default([], true) | tojson }}
+            ctx = get_current_context()
+            if ctx and hasattr(ctx, 'export_typed_outputs'):
+              summaries = ctx.export_typed_outputs(project, all_typed)
+              for s in summaries:
+                print(f'  {s}')
+
+            print(f'Project export complete: {project}')
+        continue-on-error: true

@@ -1,7 +1,6 @@
 name: url-vuln
-description: 'URL vulnerability scan — scans URLs for XSS, injection, and other web vulnerabilities using dalfox and nuclei.
-
-  '
+description: >
+  URL vulnerability scan — scans URLs for XSS, injection, and other web vulnerabilities using dalfox and nuclei.
 tags:
 - http
 - vuln

@@ -1,0 +1,297 @@
+name: docker-lab
+description: |
+  Spin up a disposable Docker Compose security lab environment with
+  common vulnerable targets (DVWA, Juice Shop, Metasploitable, etc.)
+  for authorized penetration testing practice. Supports custom
+  compose files and automatic teardown.
+tags:
+  - setup
+  - docker
+  - lab
+  - training
+  - environment
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: "true"
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: "true"
+      description: Enable stdout output log files for steps when set to true/false.
+    lab_name:
+      type: string
+      default: "ofx-lab"
+      description: Project name for the Docker Compose lab
+      alias: n
+    compose_file:
+      type: string
+      default: ""
+      description: Path to custom docker-compose.yml (generates default lab if empty)
+    targets:
+      type: string
+      default: "juice-shop,dvwa"
+      description: Comma-separated list of pre-configured targets to include
+    network:
+      type: string
+      default: "172.20.0.0/24"
+      description: Subnet for the lab network
+    expose_ports:
+      type: boolean
+      default: true
+      description: Expose container ports on host interfaces
+    auto_teardown:
+      type: boolean
+      default: false
+      description: Automatically destroy lab after workflow completes
+    teardown_delay:
+      type: number
+      default: 3600
+      description: Seconds to wait before teardown (only if auto_teardown is true)
+
+jobs:
+  validate:
+    name: Validate Prerequisites
+    outputs:
+      docker_version: '{{ steps["check-docker"].outputs.docker_version | default("unknown", true) }}'
+      compose_version: '{{ steps["check-compose"].outputs.compose_version | default("unknown", true) }}'
+      lab_dir: '{{ steps["prepare-dir"].outputs.lab_dir | default("", true) }}'
+    steps:
+      - name: check-docker
+        run: |
+          if ! command -v docker >/dev/null 2>&1; then
+            echo "ERROR: Docker is not installed"
+            exit 1
+          fi
+          DOCKER_VERSION=$(docker --version 2>/dev/null | head -1)
+          echo "docker_version=$DOCKER_VERSION" >> "$OFX_OUTPUTS"
+          echo "Docker: $DOCKER_VERSION"
+        continue-on-error: true
+
+      - name: check-compose
+        run: |
+          COMPOSE_VERSION=""
+          if docker compose version >/dev/null 2>&1; then
+            COMPOSE_VERSION=$(docker compose version --short 2>/dev/null || echo "plugin")
+          elif command -v docker-compose >/dev/null 2>&1; then
+            COMPOSE_VERSION=$(docker-compose --version 2>/dev/null | head -1)
+          else
+            echo "WARNING: docker compose plugin not found (will try docker-compose)"
+          fi
+          echo "compose_version=$COMPOSE_VERSION" >> "$OFX_OUTPUTS"
+          echo "Compose: $COMPOSE_VERSION"
+
+      - name: prepare-dir
+        script: |
+          import os, tempfile, shutil, pathlib
+          lab_dir = pathlib.Path(tempfile.mkdtemp(prefix="ofx_lab_"))
+          lab_dir.chmod(0o755)
+          add_outputs(lab_dir=str(lab_dir))
+          print(f"Lab directory: {lab_dir}")
+
+  generate-compose:
+    name: Generate Docker Compose Configuration
+    needs:
+      - validate
+    outputs:
+      compose_path: '{{ steps["write-compose"].outputs.compose_path | default("", true) }}'
+      target_list: '{{ steps["write-compose"].outputs.target_list | default("", true) }}'
+    steps:
+      - name: write-compose
+        script: |
+          import os, json, pathlib
+
+          lab_dir = pathlib.Path("{{ jobs.validate.outputs.lab_dir }}")
+          compose_file_input = "{{ inputs.compose_file }}"
+
+          if compose_file_input and pathlib.Path(compose_file_input).exists():
+              compose_path = pathlib.Path(compose_file_input)
+              shutil.copy(compose_path, lab_dir / "docker-compose.yml")
+              add_outputs(compose_path=str(lab_dir / "docker-compose.yml"), target_list="custom")
+              print(f"Using custom compose file: {compose_path}")
+          else:
+              targets = [t.strip() for t in "{{ inputs.targets }}".split(",") if t.strip()]
+              network_subnet = "{{ inputs.network }}"
+              expose = "{{ inputs.expose_ports }}" == "true"
+
+              services = {}
+              target_info = {
+                  "juice-shop": {"image": "bkimminich/juice-shop:latest", "port": 3000, "desc": "OWASP Juice Shop"},
+                  "dvwa": {"image": "vulnerables/web-dvwa:latest", "port": 80, "desc": "Damn Vulnerable Web App"},
+                  "metasploitable2": {"image": "tleemcjr/metasploitable2:latest", "port": 80, "desc": "Metasploitable 2"},
+                  "mutillidae": {"image": "citizenstig/nowasp:latest", "port": 80, "desc": "Mutillidae"},
+                  "webgoat": {"image": "webgoat/goatandwolf:latest", "port": 8080, "desc": "WebGoat"},
+                  "vulnbank": {"image": "vulnbank/vulnbank:latest", "port": 8080, "desc": "VulnBank"},
+              }
+
+              for target in targets:
+                  info = target_info.get(target)
+                  if info:
+                      port_key = f"{'%04d' % info['port']}"
+                      services[target] = {
+                          "image": info["image"],
+                          "container_name": f"{target}",
+                          "networks": {"lab-net": {}},
+                          "restart": "unless-stopped",
+                      }
+                      if expose:
+                          services[target]["ports"] = [f"{info['port']}:{info['port']}"]
+
+              compose = {
+                  "version": "3.9",
+                  "services": services,
+                  "networks": {
+                      "lab-net": {
+                          "driver": "bridge",
+                          "ipam": {
+                              "config": [{"subnet": network_subnet}]
+                          }
+                      }
+                  }
+              }
+
+              compose_yaml = json.dumps(compose, indent=2)
+
+              # Convert JSON-like dict to proper YAML manually for simple case
+              import yaml
+              compose_path = lab_dir / "docker-compose.yml"
+              compose_path.write_text(yaml.dump(compose, default_flow_style=False, sort_keys=False))
+
+              target_desc = ", ".join(
+                  f"{t} ({target_info[t]['desc']})" for t in targets if t in target_info
+              )
+              add_outputs(compose_path=str(compose_path), target_list=target_desc)
+              print(f"Generated lab with: {target_desc}")
+              print(f"Compose file: {compose_path}")
+
+  launch-lab:
+    name: Launch Lab Environment
+    needs:
+      - generate-compose
+    outputs:
+      containers: '{{ steps["launch"].outputs.containers | default("0", true) }}'
+      endpoints: '{{ steps["collect-endpoints"].outputs.endpoints | default("", true) }}'
+    steps:
+      - name: launch
+        run: |
+          set -euo pipefail
+          cd "{{ jobs.generate-compose.outputs.compose_path | dirname }}"
+
+          COMPOSE_CMD="docker compose"
+          if ! docker compose version >/dev/null 2>&1; then
+            COMPOSE_CMD="docker-compose"
+          fi
+
+          echo "[*] Pulling images..."
+          $COMPOSE_CMD pull -q 2>/dev/null || true
+
+          echo "[*] Starting lab..."
+          $COMPOSE_CMD -p "{{ inputs.lab_name }}" up -d --wait --wait-timeout 120 2>&1
+
+          RUNNING=$(docker ps --filter "name={{ inputs.lab_name }}" --format '{{ '{{.Names}}' }}' | wc -l)
+          echo "containers=$RUNNING" >> "$OFX_OUTPUTS"
+          echo "Running containers: $RUNNING"
+        retry: 2
+        retry-delay: 10
+
+      - name: collect-endpoints
+        script: |
+          import subprocess, json
+
+          lab_name = "{{ inputs.lab_name }}"
+          result = subprocess.run(
+              ["docker", "ps", "--filter", f"name={lab_name}", "--format", "{{ '{{json .}}' }}"],
+              capture_output=True, text=True
+          )
+
+          endpoints = []
+          for line in result.stdout.strip().splitlines():
+              if not line.strip():
+                  continue
+              try:
+                  data = json.loads(line)
+                  name = data.get("Names", "")
+                  ports = data.get("Ports", "")
+                  status = data.get("Status", "unknown")
+                  endpoints.append(f"{name}: {ports} [{status}]")
+              except json.JSONDecodeError:
+                  continue
+
+          add_outputs(endpoints="\n".join(endpoints))
+          for ep in endpoints:
+              print(f"  {ep}")
+
+  verify:
+    name: Verify Lab Health
+    needs:
+      - launch-lab
+    outputs:
+      healthy: '{{ steps["health-check"].outputs.healthy | default("0", true) }}'
+      failed: '{{ steps["health-check"].outputs.failed | default("0", true) }}'
+    steps:
+      - name: health-check
+        run: |
+          HEALTHY=0
+          FAILED=0
+          for c in $(docker ps --filter "name={{ inputs.lab_name }}" --format '{{ '{{.Names}}' }}'); do
+            STATE=$(docker inspect -f '{{ '{{.State.Health.Status}}' }}' "$c" 2>/dev/null || echo "no-healthcheck")
+            if [ "$STATE" = "healthy" ] || [ "$STATE" = "no-healthcheck" ]; then
+              echo "  [OK] $c ($STATE)"
+              HEALTHY=$((HEALTHY + 1))
+            else
+              echo "  [!!] $c ($STATE)"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+          echo "healthy=$HEALTHY" >> "$OFX_OUTPUTS"
+          echo "failed=$FAILED" >> "$OFX_OUTPUTS"
+          echo ""
+          echo "Healthy: $HEALTHY, Issues: $FAILED"
+        continue-on-error: true
+
+  summary:
+    name: Lab Summary
+    needs:
+      - verify
+    steps:
+      - name: print-info
+        run: |
+          echo "============================================"
+          echo " DOCKER LAB: {{ inputs.lab_name }}"
+          echo "============================================"
+          echo ""
+          echo "Targets: {{ jobs['generate-compose'].outputs.target_list }}"
+          echo "Containers: {{ jobs['launch-lab'].outputs.containers }}"
+          echo "Healthy: {{ jobs['verify'].outputs.healthy }}"
+          echo ""
+          echo "Endpoints:"
+          echo "{{ jobs['launch-lab'].outputs.endpoints }}"
+          echo ""
+          echo "Management:"
+          echo "  docker compose -p {{ inputs.lab_name }} ps"
+          echo "  docker compose -p {{ inputs.lab_name }} logs -f"
+          echo "  docker compose -p {{ inputs.lab_name }} down"
+          echo ""
+          echo "Compose file: {{ jobs['generate-compose'].outputs.compose_path }}"
+          echo "============================================"
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+
+  teardown:
+    name: Teardown Lab
+    needs:
+      - verify
+    run_if: "{{ inputs.auto_teardown }}"
+    steps:
+      - name: wait-and-destroy
+        run: |
+          echo "[*] Waiting {{ inputs.teardown_delay }}s before teardown..."
+          sleep {{ inputs.teardown_delay }}
+          cd "$(dirname "{{ jobs['generate-compose'].outputs.compose_path }}")"
+          COMPOSE_CMD="docker compose"
+          if ! docker compose version >/dev/null 2>&1; then
+            COMPOSE_CMD="docker-compose"
+          fi
+          $COMPOSE_CMD -p "{{ inputs.lab_name }}" down -v --remove-orphans 2>/dev/null
+          echo "[+] Lab '{{ inputs.lab_name }}' destroyed"
+        log-stdout: "{{ inputs.log_output | default(true) }}"

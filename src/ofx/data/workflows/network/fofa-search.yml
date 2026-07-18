@@ -1,0 +1,200 @@
+name: fofa-search
+description: >
+  FOFA search engine query — search for internet-facing assets using
+  FOFA dorks, parse and deduplicate results, and produce a summary report.
+  Uses subfinder for additional subdomain enrichment and dnsx for resolution.
+tags:
+- recon
+- fofa
+- search
+- assets
+- osint
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+    dork:
+      required: true
+      type: string
+      description: FOFA query dork (e.g. title="login" && country="US")
+      alias: q
+    pages:
+      type: string
+      default: '1'
+      description: Number of result pages to fetch (each ~100 results)
+    target:
+      type: string
+      default: ''
+      description: Optional target domain for subfinder enrichment
+call:
+  secrets:
+    fofa_user:
+      required: true
+    fofa_token:
+      required: true
+defaults:
+  store-creds: true
+jobs:
+  fofa-search:
+    name: Execute FOFA Search
+    outputs:
+      raw_file: '{{ steps["fofa-query"].outputs.raw_file | default("", true) }}'
+      raw_count: '{{ steps["fofa-query"].outputs.raw_count | default("0", true) }}'
+    steps:
+    - name: fofa-query
+      continue-on-error: true
+      log-command: '{{ inputs.log_command | default(true) }}'
+      script: |
+        from ofx.api.search.fofa import Fofa
+        import json
+
+        dork = """{{ inputs.dork }}"""
+        pages = int("{{ inputs.pages }}")
+        user = "{{ secrets.fofa_user }}"
+        token = "{{ secrets.fofa_token }}"
+
+        print(f"[*] FOFA search: {dork}")
+        print(f"    Pages: {pages}")
+
+        client = Fofa(user=user, token=token)
+        results = client.search(dork, pages=pages)
+
+        raw_list = sorted(results)
+        out_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fofa_raw.json"
+        with open(out_file, "w") as f:
+            json.dump(raw_list, f, indent=2)
+
+        print(f"[+] Retrieved {len(raw_list)} results")
+        for url in raw_list[:20]:
+            print(f"    {url}")
+        if len(raw_list) > 20:
+            print(f"    ... ({len(raw_list) - 20} more)")
+
+        add_outputs(raw_file=out_file, raw_count=len(raw_list))
+    needs: []
+  enrich:
+    name: Enrich with Subfinder & DNS
+    needs:
+    - fofa-search
+    run_if: '{{ inputs.target != "" }}'
+    outputs:
+      dedup_file: '{{ steps["collect-enrich"].outputs.dedup_file | default("", true) }}'
+      dedup_count: '{{ steps["collect-enrich"].outputs.dedup_count | default("0", true) }}'
+      hosts_file: '{{ steps["collect-enrich"].outputs.hosts_file | default("", true) }}'
+    steps:
+    - task: subfinder
+      log-command: '{{ inputs.log_command }}'
+      name: subfinder-enrich
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        all: true
+      continue-on-error: true
+    - task: dnsx
+      log-command: '{{ inputs.log_command }}'
+      name: dnsx-resolve
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        a: true
+        cname: true
+      continue-on-error: true
+    - name: collect-enrich
+      script: |
+        from pathlib import Path
+        import json
+        from urllib.parse import urlparse
+
+        raw_file = "{{ jobs.fofa-search.outputs.raw_file }}"
+        raw_list = json.loads(Path(raw_file).read_text()) if Path(raw_file).is_file() else []
+
+        seen = set()
+        deduped = []
+        hosts = set()
+        for url in raw_list:
+            normalized = url.rstrip("/").lower()
+            if normalized not in seen:
+                seen.add(normalized)
+                deduped.append(url)
+                try:
+                    parsed = urlparse(url)
+                    host = parsed.hostname or ""
+                    if host:
+                        hosts.add(host)
+                except Exception:
+                    pass
+
+        dedup_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fofa_dedup.txt"
+        with open(dedup_file, "w") as f:
+            for url in deduped:
+                f.write(f"{url}\n")
+
+        hosts_file = f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_fofa_hosts.txt"
+        with open(hosts_file, "w") as f:
+            for h in sorted(hosts):
+                f.write(f"{h}\n")
+
+        removed = len(raw_list) - len(deduped)
+        print(f"[+] Deduplicated: {len(raw_list)} -> {len(deduped)} ({removed} duplicates removed)")
+        print(f"    Unique hosts: {len(hosts)}")
+
+        add_outputs(dedup_file=dedup_file, dedup_count=len(deduped), hosts_file=hosts_file)
+    needs: []
+  report:
+    name: FOFA Summary Report
+    needs:
+    - fofa-search
+    - enrich
+    steps:
+    - name: fofa-summary
+      script: |
+        from pathlib import Path
+        from urllib.parse import urlparse
+        from collections import Counter
+
+        print("=" * 60)
+        print(" FOFA SEARCH REPORT")
+        print("=" * 60)
+
+        dork = """{{ inputs.dork }}"""
+        print(f"\n  Dork:    {dork}")
+        print(f"  Pages:   {{ inputs.pages }}")
+        print(f"  Raw:     {{ jobs.fofa-search.outputs.raw_count }} results")
+        print(f"  Unique:  {{ jobs.enrich.outputs.dedup_count }} results")
+
+        dedup_file = "{{ jobs.enrich.outputs.dedup_file }}"
+        protocols = Counter()
+        ports = Counter()
+        try:
+            for line in Path(dedup_file).read_text().splitlines():
+                url = line.strip()
+                if url:
+                    parsed = urlparse(url)
+                    protocols[parsed.scheme or "unknown"] += 1
+                    port = parsed.port
+                    if port:
+                        ports[port] += 1
+        except Exception:
+            pass
+
+        if protocols:
+            print(f"\n--- Protocol Distribution ---")
+            for proto, cnt in protocols.most_common(10):
+                print(f"    {proto:<10}: {cnt}")
+
+        if ports:
+            print(f"\n--- Top Ports ---")
+            for port, cnt in ports.most_common(15):
+                print(f"    {port:<10}: {cnt}")
+
+        print(f"\n[*] Full results: {{ jobs.enrich.outputs.dedup_file }}")
+        print(f"[*] Hosts list:   {{ jobs.enrich.outputs.hosts_file }}")
+      log-stdout: '{{ inputs.log_output }}'

@@ -65,7 +65,6 @@ jobs:
           js_urls = set()
           all_urls = set()
 
-          # From katana
           katana_out = {{ steps["katana-js-crawl"].outputs.typed_outputs | tojson }}
           for item in katana_out:
               if item.get('_type') == 'url':
@@ -75,7 +74,6 @@ jobs:
                       if url.endswith('.js') or '.js?' in url or '/js/' in url:
                           js_urls.add(url)
 
-          # From gau
           gau_out = {{ steps["gau-archive"].outputs.typed_outputs | tojson }}
           for item in gau_out:
               if item.get('_type') == 'url':
@@ -85,12 +83,7 @@ jobs:
                       if url.endswith('.js') or '.js?' in url or '/js/' in url:
                           js_urls.add(url)
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_jsanalysis_jsurls.txt', 'w') as f:
-              f.write('\n'.join(sorted(js_urls)))
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_jsanalysis_allurls.txt', 'w') as f:
-              f.write('\n'.join(sorted(all_urls)))
-
-          add_outputs(js_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_jsanalysis_jsurls.txt", all_urls_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_jsanalysis_allurls.txt", js_count=len(js_urls), url_count=len(all_urls))
+          add_outputs(js_urls='\n'.join(sorted(js_urls)), all_urls='\n'.join(sorted(all_urls)), js_count=len(js_urls), url_count=len(all_urls))
           print(f"Found {len(js_urls)} JS files from {len(all_urls)} total URLs")
 
   analyze-js:

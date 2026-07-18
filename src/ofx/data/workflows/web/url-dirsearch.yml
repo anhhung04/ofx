@@ -74,10 +74,7 @@ jobs:
               if url:
                   urls.add(url)
 
-          with open(f'{os.environ.get("OFX_RUN_DIR", "/tmp")}/ofx_dir_urls.txt', 'w') as f:
-              f.write('\n'.join(sorted(urls)))
-
-          add_outputs(found_file=f"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_dir_urls.txt", url_count=len(urls))
+          add_outputs(found_urls='\n'.join(sorted(urls)), url_count=len(urls))
           print(f"Found {len(urls)} URLs")
   crawl-dirs:
     name: Crawl Discovered Directories

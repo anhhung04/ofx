@@ -1,0 +1,79 @@
+name: supply-chain
+description: >
+  Software supply chain security audit — scan project dependencies
+
+  for known vulnerabilities, generate SBOM, check for typosquatting,
+
+  and audit lockfile integrity.
+tags:
+- supply-chain
+- sbom
+- vulnerability
+- dependency
+- audit
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable stdout output log files for steps when set to true/false.
+    target:
+      required: true
+      type: string
+      description: Project directory to scan
+      alias: t
+jobs:
+  sbom:
+    name: SBOM Generation
+    outputs:
+      sbom_file: '{{ steps["generate-sbom"].outputs.sbom_file | default("", true) }}'
+      pkg_managers: '{{ steps["generate-sbom"].outputs.pkg_managers | default("", true) }}'
+    steps:
+    - name: generate-sbom
+      log-command: '{{ inputs.log_command | default(true) }}'
+      run: "echo \"[+] Generating SBOM for {{ inputs.target }}...\"\n\ncd \"{{ inputs.target }}\"\n\nif command -v syft &>/dev/null; then\n  syft dir:. -o spdx-json > ${OFX_RUN_DIR:-/tmp}/ofx_sbom.json\
+        \ 2>/dev/null\n  echo \"sbom_file=${OFX_RUN_DIR:-/tmp}/ofx_sbom.json\" >> {{ env.OFX_OUTPUTS }}\n  echo \"[+] SBOM generated (syft → SPDX)\"\nelif command -v cyclonedx-py &>/dev/null; then\n  cyclonedx-py\
+        \ environment -o ${OFX_RUN_DIR:-/tmp}/ofx_sbom.json 2>/dev/null\n  echo \"sbom_file=${OFX_RUN_DIR:-/tmp}/ofx_sbom.json\" >> {{ env.OFX_OUTPUTS }}\n  echo \"[+] SBOM generated (cyclonedx-py)\"\n\
+        else\n  echo \"[-] No SBOM tool found (install syft or cyclonedx-py)\"\nfi\n\nMANAGERS=\"\"\n[ -f \"package-lock.json\" ] && MANAGERS=\"$MANAGERS npm\"\n[ -f \"yarn.lock\" ] && MANAGERS=\"$MANAGERS\
+        \ yarn\"\n[ -f \"pnpm-lock.yaml\" ] && MANAGERS=\"$MANAGERS pnpm\"\n[ -f \"requirements.txt\" ] && MANAGERS=\"$MANAGERS pip\"\n[ -f \"Pipfile.lock\" ] && MANAGERS=\"$MANAGERS pipenv\"\n[ -f \"poetry.lock\"\
+        \ ] && MANAGERS=\"$MANAGERS poetry\"\n[ -f \"uv.lock\" ] && MANAGERS=\"$MANAGERS uv\"\n[ -f \"go.sum\" ] && MANAGERS=\"$MANAGERS go\"\n[ -f \"Cargo.lock\" ] && MANAGERS=\"$MANAGERS cargo\"\n[ -f\
+        \ \"Gemfile.lock\" ] && MANAGERS=\"$MANAGERS bundler\"\n[ -f \"composer.lock\" ] && MANAGERS=\"$MANAGERS composer\"\necho \"pkg_managers=$MANAGERS\" >> {{ env.OFX_OUTPUTS }}\necho \"[+] Detected:\
+        \ $MANAGERS\"\n"
+      continue-on-error: true
+    needs: []
+  vuln-scan:
+    name: Dependency Vulnerability Scan
+    steps:
+    - task: grype
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: grype-scan
+      with:
+        target: dir:{{ inputs.target }}
+      continue-on-error: true
+    - task: trivy
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: trivy-fs
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    needs: []
+  secret-scan:
+    name: Secret Detection in Dependencies
+    steps:
+    - task: gitleaks
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: gitleaks-scan
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: trufflehog
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: trufflehog-scan
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    needs: []

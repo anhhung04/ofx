@@ -1,0 +1,135 @@
+name: url-scan
+description: >
+  Comprehensive URL security assessment — combines crawling, fuzzing, parameter discovery, and vulnerability scanning for thorough web application testing.
+tags:
+- http
+- crawl
+- fuzz
+- vuln
+- secrets
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command log entries for steps when set to true/false.
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable stdout output log files for steps when set to true/false.
+    target:
+      required: true
+      type: string
+      description: Target URL (e.g. https://example.com)
+      alias: t
+    wordlist:
+      type: string
+      default: /usr/share/wordlists/dirb/common.txt
+      description: Wordlist for fuzzing
+jobs:
+  url-crawl:
+    name: URL Crawling
+    outputs:
+      urls_file: '{{ steps["collect-urls"].outputs.urls_file | default("", true) }}'
+      url_count: '{{ steps["collect-urls"].outputs.url_count | default("", true) }}'
+    steps:
+    - task: katana
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: katana-crawl
+      with:
+        target: '{{ inputs.target }}'
+        depth: 3
+        js_crawl: true
+        known_files: all
+      continue-on-error: true
+    - task: gau
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: gau-passive
+      with:
+        target: '{{ inputs.target }}'
+      continue-on-error: true
+    - task: httpx
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: probe-crawled
+      with:
+        target: '{{ inputs.target }}'
+        tech_detect: true
+        status_code: true
+        follow_redirects: true
+      continue-on-error: true
+    - name: collect-urls
+      script: "urls = set()\nfor step_name in [\"katana-crawl\", \"gau-passive\", \"probe-crawled\"]:\n    step_data = {{ steps | tojson }}\n    typed = step_data.get(step_name, {}).get('outputs', {}).get('typed_outputs',\
+        \ [])\n    for item in typed:\n        if item.get('_type') == 'url':\n            urls.add(item['url'])\n\nwith open(f'{\"{{ env.OFX_RUN_DIR | default('/tmp', true) }}\"}/ofx_urlscan_urls.txt',\
+        \ 'w') as tf:\n    tf.write('\\n'.join(sorted(urls)))\n\nadd_outputs(urls_file=f\"{os.environ.get('OFX_RUN_DIR', '/tmp')}/ofx_urlscan_urls.txt\", url_count=len(urls))\n"
+  url-fuzz:
+    name: URL Fuzzing
+    needs:
+    - url-crawl
+    steps:
+    - task: feroxbuster
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: feroxbuster-fuzz
+      with:
+        target: '{{ jobs[''url-crawl''].outputs.urls_file | default(inputs.target, true) }}'
+        wordlist: '{{ inputs.wordlist }}'
+        depth: 2
+        threads: 50
+        smart: true
+        extract_links: true
+        auto_tune: true
+      continue-on-error: true
+  param-fuzz:
+    name: Parameter Discovery
+    needs:
+    - url-crawl
+    steps:
+    - task: arjun
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: param-discovery
+      with:
+        target: '{{ jobs[''url-crawl''].outputs.urls_file | default(inputs.target, true) }}'
+      continue-on-error: true
+  vuln-scan:
+    name: Vulnerability Scanning
+    needs:
+    - url-fuzz
+    - param-fuzz
+    steps:
+    - task: nuclei
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: nuclei-scan
+      with:
+        target: '{{ jobs[''url-crawl''].outputs.urls_file | default(inputs.target, true) }}'
+        severity: critical,high,medium
+        exclude_tags: network,ssl,file,dns,osint,token-spray,headers
+      continue-on-error: true
+    - task: dalfox
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: xss-scan
+      with:
+        target: '{{ jobs[''url-crawl''].outputs.urls_file | default(inputs.target, true) }}'
+      continue-on-error: true
+    - task: nuclei
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: secret-scan
+      with:
+        target: '{{ inputs.target }}'
+        tags: exposure,token,secret
+      continue-on-error: true
+    - task: cariddi
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: cariddi-crawl
+      with:
+        target: '{{ inputs.target }}'
+        secrets: true
+        errors: true
+        info: true
+        depth: 2
+      continue-on-error: true
+    - task: whatweb
+      log-command: '{{ inputs.log_command | default(true) }}'
+      name: whatweb-fingerprint
+      with:
+        target: '{{ inputs.target }}'
+        aggression: 3
+      continue-on-error: true

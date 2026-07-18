@@ -1,0 +1,126 @@
+name: domain-permutations
+description: >
+  Domain permutation and typosquatting detector — uses gotator to generate
+  lookalike domains, resolves them via dnsx for DNS verification, and
+  reports which are registered. Useful for brand protection and phishing detection.
+tags:
+- recon
+- domain
+- typosquatting
+- phishing
+- dns
+dispatch:
+  inputs:
+    log_command:
+      type: string
+      default: 'true'
+      description: Enable command logging
+    log_output:
+      type: string
+      default: 'true'
+      description: Enable output logging
+    target:
+      required: true
+      type: string
+      description: Target domain to check (e.g. example.com)
+      alias: t
+    permutations_level:
+      type: string
+      default: '2'
+      description: Permutation depth level (1-3)
+defaults:
+  store-creds: true
+jobs:
+  generate-perms:
+    name: Generate Domain Permutations
+    outputs:
+      perms_file: '{{ steps["collect-perms"].outputs.perms_file | default("", true) }}'
+      perm_count: '{{ steps["collect-perms"].outputs.perm_count | default("0", true) }}'
+    steps:
+    - task: gotator
+      log-command: '{{ inputs.log_command }}'
+      name: gotator-perm
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ inputs.target }}'
+        depth: '{{ inputs.permutations_level }}'
+      continue-on-error: true
+    - name: collect-perms
+      script: |
+        import json
+        from pathlib import Path
+
+        perms = {{ subdomains(steps["gotator-perm"].outputs.typed_outputs) | default([], true) | tojson }}
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        add_outputs(perms_data='\n'.join(sorted(perms, perm_count=len(perms))
+        print(f'Generated {len(perms)} domain permutations for {{ inputs.target }}')
+    needs: []
+  resolve-domains:
+    name: DNS Resolution of Permutations
+    needs:
+    - generate-perms
+    outputs:
+      registered_file: '{{ steps["collect-registered"].outputs.registered_file | default("", true) }}'
+      registered_count: '{{ steps["collect-registered"].outputs.registered_count | default("0", true) }}'
+      hosts_file: '{{ steps["collect-registered"].outputs.hosts_file | default("", true) }}'
+    steps:
+    - task: dnsx
+      log-command: '{{ inputs.log_command }}'
+      name: dnsx-resolve-perms
+      retry: 2
+      retry-delay: 5
+      with:
+        target: '{{ steps["gotator-perm"].outputs.stdout | default(inputs.target, true) }}'
+        a: true
+        cname: true
+        resp: true
+      continue-on-error: true
+    - name: collect-registered
+      script: |
+        import json
+        from pathlib import Path
+
+        resolved = {{ subdomains(steps["dnsx-resolve-perms"].outputs.typed_outputs) | default([], true) | tojson }}
+        out_dir = os.environ.get('OFX_RUN_DIR', '/tmp')
+
+        registered = sorted(set(resolved))
+
+        add_outputs(registered_data='\n'.join(registered, registered_count=len(registered), hosts_data='\n'.join(registered)
+        print(f'Resolved {len(registered)} registered permutation domains')
+    needs: []
+  report:
+    name: Typosquatting Report
+    needs:
+    - generate-perms
+    - resolve-domains
+    steps:
+    - name: display-report
+      script: |
+        from pathlib import Path
+
+        perm_count = int("{{ jobs.generate-perms.outputs.perm_count }}" or "0")
+        registered_count = int("{{ jobs.resolve-domains.outputs.registered_count }}" or "0")
+
+        print("=" * 60)
+        print(" DOMAIN TYPOSQUATTING REPORT")
+        print(f" Target: {{ inputs.target }}")
+        print("=" * 60)
+        print(f"  Permutations generated: {perm_count}")
+        print(f"  Domains registered:    {registered_count}")
+
+        if registered_count > 0:
+            print(f"\n--- Registered Lookalike Domains ---")
+            reg_file = "{{ jobs.resolve-domains.outputs.registered_file }}"
+            try:
+                for line in Path(reg_file).read_text().splitlines():
+                    if line.strip():
+                        print(f"  [!] {line.strip()}")
+            except Exception:
+                pass
+            print(f"\n[!] WARNING: {registered_count} typosquatting domain(s) appear registered")
+            print("    These could be used for phishing or brand impersonation")
+        else:
+            print("\n  [+] No registered lookalike domains found")
+      log-stdout: '{{ inputs.log_output }}'

