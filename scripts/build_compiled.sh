@@ -156,7 +156,7 @@ else:
     abi_tag = abi_tag.replace('cpython_', 'cp')
 platform_tag = sysconfig.get_platform().replace('-', '_').replace('.', '_')
 if platform_tag.startswith('linux_'):
-    platform_tag = f'manylinux_2_17_{platform_tag.removeprefix("linux_")}'
+    platform_tag = f"manylinux_2_17_{platform_tag.removeprefix('linux_')}"
 
 wheel_name = f'{name}-{version}-{python_tag}-{abi_tag}-{platform_tag}'
 wheel_path = dist_dir / f'{wheel_name}.whl'
