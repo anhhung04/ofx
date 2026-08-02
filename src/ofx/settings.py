@@ -137,6 +137,7 @@ def _gh_cli_token() -> str:
             capture_output=True,
             text=True,
             timeout=5,
+            start_new_session=True,
         )
         if result.returncode == 0:
             return result.stdout.strip()

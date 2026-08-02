@@ -261,6 +261,7 @@ class SSHHandler:
                 check=True,
                 capture_output=True,
                 text=True,
+                start_new_session=True,
             )
         except (FileNotFoundError, subprocess.CalledProcessError):
             cmd = (
@@ -284,6 +285,7 @@ class SSHHandler:
                 check=True,
                 capture_output=True,
                 text=True,
+                start_new_session=True,
             )
 
     def sync(self, local_path: Path) -> None:
@@ -323,6 +325,7 @@ class SSHHandler:
                 check=True,
                 capture_output=True,
                 text=True,
+                start_new_session=True,
             )
             logger.info("Successfully synced to %s (rsync)", remote_uri)
             if result.stdout:
@@ -369,6 +372,7 @@ class SSHHandler:
                 ],
                 check=True,
                 capture_output=True,
+                start_new_session=True,
             )
         except FileNotFoundError:
             raise RuntimeError(

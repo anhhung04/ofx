@@ -553,7 +553,7 @@ class PostSSH(PostRunnerBase):
             cmd.extend(["-o", "IdentitiesOnly=yes"])
         target = f"{self.user}@{self.host}" if self.user else self.host
         cmd.append(target)
-        subprocess.run(cmd, check=False)
+        subprocess.run(cmd, check=False, start_new_session=True)
 
     @staticmethod
     def _sanitize_for_log(text: str) -> str:

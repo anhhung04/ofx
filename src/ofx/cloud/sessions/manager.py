@@ -1786,6 +1786,7 @@ def _decrypt_at_rest_openssl(
             capture_output=True,
             text=True,
             timeout=120,
+            start_new_session=True,
         )
         if result.returncode != 0:
             raise RuntimeError(
