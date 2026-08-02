@@ -37,10 +37,6 @@ jobs:
   build-compiled:
     needs: test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +46,7 @@ jobs:
         run: |
           docker buildx build \
             -f Dockerfile.compile \
-            --build-arg PYTHON_VERSION=${{ matrix.python }} \
+            --build-arg PYTHON_VERSION=3.13 \
             --platform linux/amd64 \
             --target=export \
             --output type=local,dest=dist \
@@ -58,7 +54,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: compiled-py${{ matrix.python }}-amd64
+          name: compiled-py3.13-amd64
           path: dist/*.whl
 
   release:

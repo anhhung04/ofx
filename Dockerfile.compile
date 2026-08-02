@@ -26,10 +26,10 @@ WORKDIR /build
 COPY . .
 
 # Install dependencies including Cython
-RUN uv sync --extra compile --no-dev --python "python${PYTHON_VERSION}"
+RUN uv sync --extra compile --no-dev --python "python${PYTHON_VERSION}" --no-managed-python
 
 # Compile and build wheel
-RUN uv run --extra compile ./scripts/build_compiled.sh
+RUN uv run --python "python${PYTHON_VERSION}" --no-managed-python --extra compile ./scripts/build_compiled.sh
 
 # Export stage — only the wheel
 FROM scratch AS export
