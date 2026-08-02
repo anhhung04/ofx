@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.10.14"
+version = "0.10.15"
 description = "Offensive Flow Executor — red team automation toolkit for composing complex attack chains with YAML workflows"
 readme = "README.md"
 license = { text = "MIT" }

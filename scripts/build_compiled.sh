@@ -173,12 +173,16 @@ with zipfile.ZipFile(wheel_path, 'w', zipfile.ZIP_STORED, allowZip64=True) as wh
         records.append((arcname, f'sha256={h}', str(len(data))))
 
     # METADATA
-    metadata = f'''Metadata-Version: 2.1
-Name: {name}
-Version: {version}
-Summary: Offensive Flow Executor
-Requires-Python: >=3.12
-'''
+    metadata_lines = [
+        'Metadata-Version: 2.1',
+        f'Name: {name}',
+        f'Version: {version}',
+        'Summary: Offensive Flow Executor',
+        'Requires-Python: >=3.12',
+    ]
+    for requirement in __import__('tomllib').loads(pyproject)['project']['dependencies']:
+        metadata_lines.append(f'Requires-Dist: {requirement}')
+    metadata = '\n'.join(metadata_lines) + '\n'
     whl.writestr(f'{dist_info}/METADATA', metadata)
     h = hashlib.sha256(metadata.encode()).hexdigest()
     records.append((f'{dist_info}/METADATA', f'sha256={h}', str(len(metadata.encode()))))
