@@ -4,121 +4,107 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release (e.g., 0.3.1)"
-        required: true
 
-env:
-  PYTHON_VERSION: "3.12"
+permissions:
+  contents: read
 
 jobs:
-  build-wheel:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - type: pure
-            platform: ""
-            python: "3.12"
-          - type: compiled
-            platform: linux/amd64
-            python: "3.12"
-          - type: compiled
-            platform: linux/amd64
-            python: "3.13"
-          - type: compiled
-            platform: linux/amd64
-            python: "3.14"
-          - type: compiled
-            platform: linux/arm64
-            python: "3.12"
-          - type: compiled
-            platform: linux/arm64
-            python: "3.13"
-          - type: compiled
-            platform: linux/arm64
-            python: "3.14"
+  test:
+    uses: ./.github/workflows/tests.yml
 
+  build-pure:
+    needs: test
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
-        if: matrix.type == 'pure'
-        uses: astral-sh/setup-uv@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
 
-      - name: Set up Python
-        if: matrix.type == 'pure'
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
+          python-version: "3.12"
 
-      - name: Build pure wheel + sdist
-        if: matrix.type == 'pure'
+      - name: Build wheel and source archive
         run: uv build --out-dir dist
 
-      - name: Set up QEMU (for ARM64)
-        if: matrix.type == 'compiled' && matrix.platform == 'linux/arm64'
-        uses: docker/setup-qemu-action@v3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pure-packages
+          path: dist/*
 
-      - name: Set up Docker Buildx
-        if: matrix.type == 'compiled'
-        uses: docker/setup-buildx-action@v3
+  build-compiled:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
 
       - name: Build compiled wheel
-        if: matrix.type == 'compiled'
         run: |
           docker buildx build \
             -f Dockerfile.compile \
             --build-arg PYTHON_VERSION=${{ matrix.python }} \
-            --platform ${{ matrix.platform }} \
+            --platform linux/amd64 \
             --target=export \
             --output type=local,dest=dist \
             .
 
-      - name: Upload packages
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: python-wheel-${{ matrix.type }}-py${{ matrix.python }}-${{ matrix.platform == 'linux/arm64' && 'arm64' || matrix.platform == 'linux/amd64' && 'amd64' || 'pure' }}
-          path: |
-            dist/*.whl
-            dist/*.tar.gz
+          name: compiled-py${{ matrix.python }}-amd64
+          path: dist/*.whl
 
   release:
-    needs: [build-wheel]
+    needs: [build-pure, build-compiled]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          path: release
+          merge-multiple: true
 
-      - name: Prepare release files
-        run: |
-          mkdir -p release
-          find artifacts -type f \( -name "*.whl" -o -name "*.tar.gz" \) \
-            -exec cp {} release/ \;
-          ls -la release/
-
-      - name: Generate checksums
+      - name: Generate checksums and install links
+        env:
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
           cd release
-          sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          sha256sum *.whl *.tar.gz > SHA256SUMS.txt
+          version="${TAG#v}"
+          base="https://github.com/${REPOSITORY}/releases/download/${TAG}"
+          cat > RELEASE.md <<EOF
+          ## Install
 
-      - name: Create Release
+          Universal wheel:
+
+          \`pip install ${base}/ofx-${version}-py3-none-any.whl\`
+
+          Source archive:
+
+          \`pip install ${base}/ofx-${version}.tar.gz\`
+
+          ## Assets
+          EOF
+          for file in *.whl *.tar.gz SHA256SUMS.txt; do
+            printf -- '- [%s](%s/%s)\n' "$file" "$base" "$file" >> RELEASE.md
+          done
+
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          body_path: release/RELEASE.md
           files: |
-            release/*
+            release/*.whl
+            release/*.tar.gz
+            release/SHA256SUMS.txt
           generate_release_notes: true
-          draft: false
           prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
