@@ -1,6 +1,6 @@
 [project]
 name = "ofx"
-version = "0.10.3"
+version = "0.1.0"
 description = "Offensive Flow Executor — red team automation toolkit for composing complex attack chains with YAML workflows"
 readme = "README.md"
 license = { text = "MIT" }
@@ -102,6 +102,9 @@ ai = [
 compile = [
   "cython>=3.0.0",
   "setuptools>=69.0.0",
+]
+all = [
+  "ofx[test,docs,redis,memcached,etcd,interactsh,digitalocean,aws,cloud,winrm,ssh,ai,compile]",
 ]
 
 [project.scripts]

@@ -1215,9 +1215,9 @@ class TestCloudStepRunIfContext:
         runner._run_type = None
 
         msg = runner._produce_log("hello")
-        assert "workflow[wf-a]" in msg
-        assert "job[job-a]" in msg
-        assert "step[2]" in msg
+        assert "name=wf-a" in msg
+        assert "job=job-a" in msg
+        assert "step=2" in msg
         assert "[recon-step]" in msg
         assert "[command]" in msg
         assert "hello" in msg

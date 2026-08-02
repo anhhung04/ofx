@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from ofx.runner.context import RunContext
-from ofx.runner.context import context_for_step
 from ofx.runner.executors.cloud import CloudExecutor
 
 class _Provider:

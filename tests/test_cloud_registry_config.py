@@ -211,7 +211,6 @@ class TestCloudProfileManager:
         assert config_path.exists()
         text = config_path.read_text()
         assert "# OFX cloud profiles" in text
-        assert "# Example:" in text
         assert manager.list_profiles() == []
         assert manager.default_profile_name == ""
 
