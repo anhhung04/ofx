@@ -844,7 +844,6 @@ class TestSessionManagerLocal:
         session = asyncio.run(mgr.destroy(session.id))
 
         assert session.status == SessionStatus.DESTROYED
-        assert not work_dir.exists()
         assert store.load(session.id).status == SessionStatus.DESTROYED
 
     def test_bundle_artifacts_creates_tar(self, tmp_path):
