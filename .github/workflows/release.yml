@@ -47,10 +47,16 @@ jobs:
     steps:
       - uses: https://github.com/actions/checkout@v4
 
+      - name: Set up Python
+        if: matrix.type == 'pure'
+        uses: https://github.com/actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
       - name: Build pure wheel
         if: matrix.type == 'pure'
         run: |
-          pip install build
+          python -m pip install build
           python -m build --wheel
 
       - name: Set up QEMU (for ARM64)
